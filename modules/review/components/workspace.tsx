@@ -10,7 +10,8 @@ import { Select } from "@/components/ui/select";
 import { relativeTime } from "@/lib/relative-time";
 import { CheckIcon, CloseIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
-import { addNote, deleteNote, editNote, getPlaybackUrl, setNoteResolved } from "@/app/(dashboard)/shorts/[id]/review/actions";
+import { addNote, deleteNote, editNote, setNoteResolved } from "@/app/(dashboard)/shorts/[id]/review/actions";
+import { playbackUrl, prefetchPlayback } from "../lib/playback";
 import { formatBytes, formatTime } from "../lib/limits";
 import type { Person, ReviewNote, VideoVersion } from "../lib/queries";
 import { ReviewPlayer, type PlayerHandle } from "./player";
@@ -111,10 +112,10 @@ export function ReviewWorkspace({
     setSrc(null);
     setSrcError(null);
     if (!versionId) return;
-    void getPlaybackUrl(versionId).then((res) => {
+    void playbackUrl(versionId).then((res) => {
       if (cancelled) return;
-      if (res.error !== undefined) setSrcError(res.error);
-      else setSrc(res.url);
+      if (res.url) setSrc(res.url);
+      else setSrcError(res.error ?? "Couldn't open the video.");
     });
     return () => {
       cancelled = true;
@@ -122,6 +123,12 @@ export function ReviewWorkspace({
   }, [versionId]);
 
   const refresh = useCallback(() => startRefresh(() => router.refresh()), [router]);
+
+  // Links for every version, up front: switching versions is instant.
+  const liveIds = live.map((v) => v.id).join(",");
+  useEffect(() => {
+    if (liveIds) prefetchPlayback(liveIds.split(","));
+  }, [liveIds]);
 
   // Live updates from everyone else.
   useEffect(() => {
@@ -382,6 +389,14 @@ export function ReviewWorkspace({
               <span className="hidden md:inline"> · Space play · J/L 5s · , . frame · C note · N notes</span>
             </p>
           </>
+        ) : versionId || versions.length > 0 || refreshing ? (
+          // A video is on its way (just uploaded, or still loading): skeleton, never "No video yet".
+          <div role="status" aria-label="Loading the video" className="rounded-2xl overflow-hidden bg-black ring-1 ring-white/5">
+            <div className="h-[50vh] lg:h-[min(72vh,780px)] flex items-center justify-center">
+              <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
+            </div>
+            <div className="h-[84px] bg-[#0f0e0c]" />
+          </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-line/25 bg-surface/50 px-6 py-14 text-center">
             <p className="text-[15px] font-semibold">No video yet</p>
@@ -781,8 +796,8 @@ function NoteThread({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-[12px]">
-          <span className="font-semibold text-ink truncate">{n.author?.name ?? "Someone"}</span>
-          <span className="text-ink-soft whitespace-nowrap">
+          <span className="font-semibold text-ink-soft truncate">{n.author?.name ?? "Someone"}</span>
+          <span className="text-ink-faint whitespace-nowrap">
             {n.pending ? "posting…" : relativeTime(n.createdAt)}
             {n.editedAt ? " · edited" : ""}
           </span>
@@ -824,7 +839,7 @@ function NoteThread({
             className="mt-1 w-full rounded-lg border border-line/15 bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-amber"
           />
         ) : (
-          <p className={`mt-0.5 text-[13.5px] leading-relaxed whitespace-pre-wrap break-words ${n.pending ? "text-ink-soft" : "text-ink"}`}>{n.body}</p>
+          <p className={`mt-0.5 text-[13px] leading-relaxed whitespace-pre-wrap break-words ${n.pending ? "text-ink-soft" : "text-ink/85"}`}>{n.body}</p>
         )}
       </div>
     </div>
@@ -833,15 +848,16 @@ function NoteThread({
   return (
     <li
       id={`note-${note.id}`}
-      className={`group rounded-xl px-3 py-3 transition-[background,box-shadow,opacity] duration-300 ${note.pending ? "animate-[modalin_.25s_var(--ease-out)]" : ""} ${
-        highlighted ? "ring-1 ring-amber/50" : ""
-      } ${note.resolvedAt ? "opacity-60" : ""} ${!active ? "hover:bg-surface-2/60" : ""}`}
+      className={`group rounded-xl px-3 py-3 transition-[background,opacity] duration-300 ${note.pending ? "animate-[modalin_.25s_var(--ease-out)]" : ""} ${
+        note.resolvedAt ? "opacity-60" : ""
+      } ${!active && !highlighted ? "hover:bg-surface-2/60" : ""}`}
       style={
-        active
+        active || highlighted
           ? {
-              // "You are here": the same soft gradient as Sponsor / Big rows.
-              background: "linear-gradient(90deg, rgb(var(--amber) / 0.16), rgb(var(--amber) / 0.04) 70%)",
-              boxShadow: "inset 3px 0 0 rgb(var(--amber))",
+              // "You are here" (or just clicked): a soft tint, no border.
+              background: active
+                ? "linear-gradient(90deg, rgb(var(--amber) / 0.15), rgb(var(--amber) / 0.03) 75%)"
+                : "rgb(var(--amber) / 0.07)",
             }
           : undefined
       }

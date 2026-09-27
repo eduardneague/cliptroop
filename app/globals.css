@@ -219,6 +219,12 @@ body {
 }
 
 /* Pages rise in when you navigate. */
+/* Timeline marker: a ring pulses out when clicked. */
+@keyframes marker-ping {
+  0% { box-shadow: 0 0 0 0 rgb(var(--amber) / 0.7); }
+  100% { box-shadow: 0 0 0 12px rgb(var(--amber) / 0); }
+}
+
 /* Bottom sheet rises; top popup drops in. */
 @keyframes sheetup {
   from { transform: translateY(100%); }
@@ -265,8 +271,11 @@ body {
 [class*="animate-[toastin"] { animation-timing-function: var(--ease-out) !important; animation-duration: 0.42s !important; }
 
 /* A tiny press-in on buttons, like iOS. */
+/* Uses the separate "scale" property, not "transform", so it adds to a
+   button's own positioning (e.g. centered timeline markers) instead of
+   replacing it, which made those jump when clicked. */
 button:not(:disabled):active,
-a.press:active { transform: scale(0.97); }
+a.press:active { scale: 0.97; }
 button { transition-timing-function: var(--ease-out); }
 
 /* Switch knobs move with a little spring. */
@@ -282,7 +291,7 @@ html[data-motion="off"] *::after {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
-html[data-motion="off"] button:active { transform: none; }
+html[data-motion="off"] button:active { scale: none; }
 @media (prefers-reduced-motion: reduce) {
   html:not([data-motion="on"]) *,
   html:not([data-motion="on"]) *::before,
@@ -293,5 +302,5 @@ html[data-motion="off"] button:active { transform: none; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  html:not([data-motion="on"]) button:active { transform: none; }
+  html:not([data-motion="on"]) button:active { scale: none; }
 }
