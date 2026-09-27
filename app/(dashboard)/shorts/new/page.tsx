@@ -30,7 +30,8 @@ export default async function NewShortPage() {
 
   await refreshShortQueue(currentTeam.id);
   const [people, planned, settings, nextSlot, limits, queueStart] = await Promise.all([
-    master ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
+    // Masters and schedulers pick the people (scripters, editor, reviewer, scheduler).
+    master || roles.includes("publisher") ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
     listPlannedDates(currentTeam.id),
     getShortSettings(currentTeam.id),
     getNextShortSlot(currentTeam.id),
@@ -51,7 +52,7 @@ export default async function NewShortPage() {
 
       {canCreate ? (
         <NewShortForm
-          canAssignPeople={master}
+          canAssignPeople={master || roles.includes("publisher")}
           people={people}
           planned={planned}
           settings={settings}

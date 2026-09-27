@@ -70,7 +70,7 @@ export function WorkflowActions({
   } else if (stage === "editing") {
     if (perms.canSubmitForReview) {
       primary = <MarkDoneButton shortId={id} number={number} disabled={!hasFrameio} />;
-      if (!hasFrameio) hint = "Add the Frame.io link in Final file first.";
+      if (!hasFrameio) hint = "Upload the video first.";
     }
     else hint = `${editorName ?? "The editor"} is editing this.`;
   } else if (stage === "review") {

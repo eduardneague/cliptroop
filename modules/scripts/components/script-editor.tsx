@@ -108,6 +108,7 @@ export function ScriptEditor({
   backHref,
   backLabel,
   lastEdited,
+  topBarExtra,
 }: {
   scriptId: string;
   teamId: string;
@@ -119,6 +120,8 @@ export function ScriptEditor({
   backHref: string;
   backLabel: string;
   lastEdited: string | null;
+  /** Extra controls for the top bar (e.g. the short's scripters). */
+  topBarExtra?: React.ReactNode;
 }) {
   const toast = useToast();
   const [status, setStatus] = useState<Status>("saved");
@@ -420,6 +423,7 @@ export function ScriptEditor({
         ) : (
           <span className="text-[12px] font-semibold text-ink-soft">View only</span>
         )}
+        {topBarExtra}
         <button
           type="button"
           onClick={togglePaper}

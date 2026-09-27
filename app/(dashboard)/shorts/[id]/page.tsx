@@ -29,7 +29,8 @@ import { ChangesCard } from "./changes-card";
 import { SettingsButton } from "./settings-button";
 import { ScriptCard } from "@/modules/scripts/components/script-card";
 import { getShortScript } from "@/modules/scripts/lib/queries";
-import { FinalFileCard } from "./final-file-card";
+import { VideoCard } from "@/modules/review/components/video-card";
+import { listNotes, listVersions } from "@/modules/review/lib/queries";
 import { ShortTypeTag } from "@/modules/short-videos/components/short-type";
 import { MobileCollapse } from "@/components/ui/mobile-collapse";
 
@@ -57,20 +58,25 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
     scheduleMode: short.scheduleMode,
   });
 
-  const [people, planned, settings, limits, queueStart, script] = await Promise.all([
-    // Everyone sees the writers' names; masters/schedulers also pick people.
+  const [people, planned, settings, limits, queueStart, script, versions, notes] = await Promise.all([
+    // Everyone sees the scripters' names; masters/schedulers also pick people.
     listTeamPeople(short.teamId),
     perms.canEditBasics ? listPlannedDates(short.teamId) : Promise.resolve([]),
     getShortSettings(short.teamId),
     perms.canEditBasics ? listDayLimits(short.teamId) : Promise.resolve({}),
     perms.canEditBasics ? getQueueStart(short.teamId) : Promise.resolve(null),
     getShortScript(short.id),
+    listVersions(short.id),
+    listNotes(short.id),
   ]);
+  const latestVersion = versions.find((v) => !v.deleted) ?? null;
+  const openNotes = latestVersion
+    ? notes.filter((n) => n.versionId === latestVersion.id && !n.parentId && !n.resolvedAt).length
+    : 0;
+  const canUploadVideo =
+    perms.isMaster || roles.includes("publisher") || (!!membership && short.editor?.memberId === membership.teamMemberId);
 
   const currentIndex = SHORT_STAGES.indexOf(short.stage);
-  // On phones, show the thing to act on (review, fixes, posting) first.
-  const actionFirst =
-    short.stage === "review" || short.stage === "ready" || short.stage === "posted" || (short.stage === "editing" && !!short.reviewNote);
   const settingsData = {
     id: short.id,
     number: short.number,
@@ -86,7 +92,7 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
     editorId: short.editor?.memberId ?? null,
     reviewerId: short.reviewer?.memberId ?? null,
     schedulerId: short.scheduler?.memberId ?? null,
-    writerIds: short.writerIds,
+    scripterIds: short.scripterIds,
   };
   const lastChanges = short.events.find((e) => e.kind === "stage" && e.fromStage === "review" && e.toStage === "editing") ?? null;
   const overdue = isOverdue(short.plannedDate, short.stage);
@@ -186,52 +192,64 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
         hasEditor={!!short.editor}
         editorName={short.editor?.name ?? null}
         reviewerName={short.reviewer?.name ?? null}
-        hasFrameio={short.hasFrameio}
+        hasFrameio={!!latestVersion || short.hasFrameio}
       />
 
       {/* Phones: one column. When it's time to post, the Posted card comes first. */}
       <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5 sm:gap-6">
-        <div className={`space-y-6 min-w-0 ${actionFirst ? "order-2 lg:order-none" : ""}`}>
+        {/* Below lg the two columns dissolve ("contents") and every card is
+            placed on its own: action box, final file, script, activity last. */}
+        <div className="contents lg:block lg:space-y-6 min-w-0">
+          <div className={short.stage === "script" ? "order-1 lg:order-none" : "order-4 lg:order-none"}>
           <ScriptCard
             href={`/shorts/${short.id}/script`}
             script={script}
-            // Masters, plus this short's writers.
-            canEdit={perms.isMaster || (!!membership && short.writerIds.includes(membership.teamMemberId))}
+            // Masters, plus this short's scripters.
+            canEdit={perms.isMaster || (!!membership && short.scripterIds.includes(membership.teamMemberId))}
             prominent={short.stage === "script"}
-            writers={people.filter((p) => short.writerIds.includes(p.memberId))}
+            scripters={people.filter((p) => short.scripterIds.includes(p.memberId))}
           />
+          </div>
 
-          {(short.stage === "editing" || short.stage === "ready" || short.stage === "posted") && (
-            <FinalFileCard
-              id={short.id}
-              link={short.fileLink}
-              canEdit={perms.canEditFileLink && short.stage === "editing"}
-              hint={
-                short.stage === "editing"
-                  ? "Paste the Frame.io link here, then mark editing done."
-                  : "Download the final video from here to post it."
-              }
-            />
+          {short.stage !== "script" && (
+            <div className="order-3 lg:order-none">
+              <VideoCard
+                shortId={short.id}
+                teamId={short.teamId}
+                versions={versions}
+                openNotes={openNotes}
+                canUpload={canUploadVideo && short.stage !== "posted"}
+                prominent={short.stage === "editing"}
+                legacyLink={short.fileLink}
+              />
+            </div>
           )}
         </div>
 
-        <div className={`space-y-5 sm:space-y-6 ${actionFirst ? "order-1 lg:order-none" : ""}`}>
+        <div className="contents lg:block lg:space-y-6">
           {/* The right column follows the stage:
               Review → orange review box · Editing after a review → what to fix
               · Ready / Posted → Posted · otherwise → Post to. */}
           {short.stage === "review" && (
+            <div className="order-2 lg:order-none">
             <ReviewCard
               id={short.id}
               number={short.number}
               link={short.fileLink}
+              latestVersion={latestVersion?.number ?? null}
+              openNotes={openNotes}
               canReview={perms.canReview}
               reviewerName={short.reviewer?.name ?? null}
             />
+            </div>
           )}
           {short.stage === "editing" && short.reviewNote && (
-            <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
+            <div className="order-2 lg:order-none">
+              <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
+            </div>
           )}
           {(short.stage === "ready" || short.stage === "posted") && (
+            <div className="order-2 lg:order-none">
             <PostingCard
               id={short.id}
               platforms={short.platforms}
@@ -239,8 +257,9 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
               canPost={perms.isMaster || roles.includes("publisher")}
               stageAllowsPosting
             />
+            </div>
           )}
-          <MobileCollapse label="Activity" count={short.events.length}>
+          <MobileCollapse label="Activity" count={short.events.length} className="order-9 lg:order-none">
             <ActivityCard events={short.events} />
           </MobileCollapse>
         </div>

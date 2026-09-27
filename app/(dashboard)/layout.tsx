@@ -62,7 +62,7 @@ export default async function DashboardLayout({
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <MotionSync enabled={profile?.animations_enabled ?? true} />
+        <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         <div className="min-h-screen flex">
           <Sidebar
             teams={teams}

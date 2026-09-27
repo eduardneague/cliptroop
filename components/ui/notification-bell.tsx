@@ -48,6 +48,9 @@ export type NotificationItem = {
     readyToEdit?: boolean;
     roleLabel?: string;
     suffix?: string;
+    at?: string;
+    reply?: boolean;
+    version?: number | null;
   } | null;
 };
 
@@ -163,6 +166,14 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> made you the editor on <ShortRef m={m} />
           {m.readyToEdit ? ". It's ready to edit." : "."}
+        </>
+      );
+    case "short_review_note":
+      return (
+        <>
+          <b>{m.actor?.name}</b> {m.reply ? "replied to your note" : "left a note"}
+          {m.at} on <ShortRef m={m} />
+          {m.version ? ` v${m.version}` : ""}.
         </>
       );
     case "short_role_assigned":

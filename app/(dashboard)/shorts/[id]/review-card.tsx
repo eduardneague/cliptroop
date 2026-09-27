@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { reviewShort } from "../actions";
 import { useAction } from "@/lib/hooks/use-action";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { CheckIcon, ExternalIcon } from "@/components/ui/icons";
 
 /**
- * In review: the Frame.io link first (one click to open), then Approve or
+ * In review: the video first (one click to open the review), then Approve or
  * Needs changes. Orange so it stands out as the thing to do right now.
  */
 export function ReviewCard({
@@ -16,10 +17,15 @@ export function ReviewCard({
   link,
   canReview,
   reviewerName,
+  latestVersion = null,
+  openNotes = 0,
 }: {
   id: string;
   number: number;
   link: string | null;
+  /** Latest uploaded version number (in-app review), if any. */
+  latestVersion?: number | null;
+  openNotes?: number;
   canReview: boolean;
   reviewerName: string | null;
 }) {
@@ -53,7 +59,22 @@ export function ReviewCard({
     <section className="rounded-2xl border border-amber bg-amber/10 p-5">
       <h2 className="text-[12px] font-bold uppercase tracking-wide text-amber mb-3">In review</h2>
 
-      {link ? (
+      {latestVersion ? (
+        <Link
+          href={`/shorts/${id}/review`}
+          className="group flex items-center gap-3 rounded-xl bg-surface border border-line/15 px-3.5 py-3 mb-4 hover:border-green transition-colors"
+        >
+          <span className="w-9 h-9 rounded-lg bg-green text-white flex items-center justify-center flex-shrink-0">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" /></svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[13.5px] font-bold text-ink">Open review · v{latestVersion}</span>
+            <span className="block text-[11.5px] text-ink-soft">
+              {openNotes ? `${openNotes} open note${openNotes === 1 ? "" : "s"}` : "No open notes"}
+            </span>
+          </span>
+        </Link>
+      ) : link ? (
         <a
           href={link}
           target="_blank"
@@ -69,7 +90,7 @@ export function ReviewCard({
           </span>
         </a>
       ) : (
-        <p className="text-[13px] text-ink mb-4">No Frame.io link yet.</p>
+        <p className="text-[13px] text-ink mb-4">No video uploaded yet.</p>
       )}
 
       {!canReview ? (

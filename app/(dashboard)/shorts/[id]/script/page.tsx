@@ -6,7 +6,8 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { relativeTime } from "@/lib/relative-time";
 import { ArrowLeftIcon } from "@/components/ui/icons";
-import { getShortDetail } from "@/modules/short-videos/lib/queries";
+import { getShortDetail, listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { getOrCreateShortScript } from "@/modules/scripts/lib/queries";
 import { ScriptEditor } from "@/modules/scripts/components/script-editor";
 
@@ -24,10 +25,12 @@ export default async function ShortScriptPage({ params }: { params: Promise<{ id
   const supabase = await createClient();
   const membership = await getMembership(supabase, short.teamId);
   const roles = membership?.roles ?? [];
-  // Masters, plus this short's writers (default writer + anyone added).
-  const canEdit = isMaster(roles) || (!!membership && short.writerIds.includes(membership.teamMemberId));
+  // Masters, plus this short's scripters (default scripter + anyone added).
+  const canEdit = isMaster(roles) || (!!membership && short.scripterIds.includes(membership.teamMemberId));
 
-  const script = await getOrCreateShortScript(id, canEdit);
+  const [script, people] = await Promise.all([getOrCreateShortScript(id, canEdit), listTeamPeople(short.teamId)]);
+  // Masters and schedulers decide who the scripters are.
+  const canManageScripters = isMaster(roles) || roles.includes("publisher");
 
   if (!script) {
     return (
@@ -54,6 +57,15 @@ export default async function ShortScriptPage({ params }: { params: Promise<{ id
       number={short.number}
       backHref={`/shorts/${id}`}
       backLabel="Back to the short"
+      topBarExtra={
+        <ScriptersButton
+          shortId={id}
+          number={short.number}
+          people={people}
+          scripterIds={short.scripterIds}
+          canManage={canManageScripters}
+        />
+      }
       lastEdited={
         script.updatedBy && script.version > 1
           ? `Last edited by ${script.updatedBy.name}, ${relativeTime(script.updatedAt)}`

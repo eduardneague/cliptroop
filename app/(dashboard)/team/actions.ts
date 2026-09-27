@@ -519,7 +519,7 @@ export async function updateShortSettings(
     defaultEditor: string | null;
     defaultReviewer: string | null;
     defaultScheduler: string | null;
-    defaultWriter: string | null;
+    defaultScripter: string | null;
   }
 ) {
   const check = await requireMaster(teamId);
@@ -548,7 +548,7 @@ export async function updateShortSettings(
       default_short_editor_member_id: input.defaultEditor || null,
       default_short_reviewer_member_id: input.defaultReviewer || null,
       default_short_scheduler_member_id: input.defaultScheduler || null,
-      default_short_scripter_member_id: input.defaultWriter || null,
+      default_short_scripter_member_id: input.defaultScripter || null,
     })
     .eq("id", teamId);
 

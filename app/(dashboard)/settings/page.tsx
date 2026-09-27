@@ -1,4 +1,4 @@
-import { AnimationsToggle } from "@/components/ui/motion";
+import { AnimationsChoice } from "@/components/ui/motion";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -133,9 +133,9 @@ export default async function SettingsPage() {
         <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
           <div>
             <div className="text-[13.5px] font-semibold">Animations</div>
-            <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. Saved to your account.</div>
+            <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. &ldquo;Match device&rdquo; turns them off if your device asks for less motion.</div>
           </div>
-          <AnimationsToggle enabled={profile?.animations_enabled ?? true} />
+          <AnimationsChoice pref={(profile?.animations_enabled as boolean | null) ?? null} />
         </div>
       </section>
 

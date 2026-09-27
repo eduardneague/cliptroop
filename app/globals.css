@@ -219,6 +219,16 @@ body {
 }
 
 /* Pages rise in when you navigate. */
+/* Bottom sheet rises; top popup drops in. */
+@keyframes sheetup {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes sheetdown {
+  from { opacity: 0; transform: translateY(-16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
 /* Ends on "transform: none" (not translateY(0)): a leftover transform
    would make fixed popups inside the page position against the page. */
 @keyframes page-in {
@@ -228,7 +238,10 @@ body {
 /* "backwards", not "both": after the animation the element goes back to
    its own style (no transform at all). Keeping the end state leaves an
    identity transform behind, which traps position:fixed popups. */
-.motion-page { animation: page-in 0.42s var(--ease-out) backwards; }
+/* On the children, not the wrapper: each page shows a loading skeleton
+   first, and the real content replaces it a moment later. Children
+   animate whenever they're inserted, so the real content rises in too. */
+.motion-page > * { animation: page-in 0.42s var(--ease-out) backwards; }
 
 /* Lists and tables cascade in. */
 @keyframes rise-in {
@@ -271,12 +284,14 @@ html[data-motion="off"] *::after {
 }
 html[data-motion="off"] button:active { transform: none; }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  html:not([data-motion="on"]) *,
+  html:not([data-motion="on"]) *::before,
+  html:not([data-motion="on"]) *::after {
     animation-duration: 0.01ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  button:active { transform: none; }
+  html:not([data-motion="on"]) button:active { transform: none; }
 }

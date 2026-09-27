@@ -11,14 +11,14 @@ export function ScriptCard({
   script,
   canEdit,
   prominent,
-  writers = [],
+  scripters = [],
 }: {
   href: string;
   script: ScriptRow | null;
   canEdit: boolean;
   /** Script stage: make it the obvious next thing. */
   prominent: boolean;
-  writers?: { memberId: string; name: string; avatarUrl: string | null; color: string }[];
+  scripters?: { memberId: string; name: string; avatarUrl: string | null; color: string }[];
 }) {
   const hasText = !!script && script.wordCount > 0;
   const preview = script?.text.replace(/\s+/g, " ").trim().slice(0, 220) ?? "";
@@ -46,12 +46,12 @@ export function ScriptCard({
       )}
 
       <div className="flex items-center gap-2 mt-3 text-[12px] text-ink-soft">
-        <span className="font-semibold">Writers</span>
-        {writers.length === 0 ? (
-          <span>None yet. Add them in Settings.</span>
+        <span className="font-semibold">Scripters</span>
+        {scripters.length === 0 ? (
+          <span>None yet.</span>
         ) : (
           <span className="flex items-center gap-1.5 flex-wrap">
-            {writers.map((w) => (
+            {scripters.map((w) => (
               <span key={w.memberId} className="inline-flex items-center gap-1">
                 <PersonAvatar name={w.name} avatarUrl={w.avatarUrl} color={w.color} className="w-5 h-5 text-[8.5px]" />
                 <span className="text-ink">{w.name}</span>

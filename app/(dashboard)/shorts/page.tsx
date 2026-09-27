@@ -112,7 +112,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       editorId: x.editor?.memberId ?? null,
       reviewerId: x.reviewer?.memberId ?? null,
       schedulerId: x.scheduler?.memberId ?? null,
-      writerIds: x.writerIds,
+      scripterIds: x.scripterIds,
     },
     ctx: settingsCtx,
   });

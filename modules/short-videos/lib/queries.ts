@@ -39,7 +39,7 @@ export type ShortListItem = {
   caption: string | null;
   fileLink: string | null;
   /** team_member ids of the people who may write this short's script. */
-  writerIds: string[];
+  scripterIds: string[];
   /** Final file is a Frame.io link (required before "Mark editing done"). */
   hasFrameio: boolean;
   platforms: Platform[];
@@ -71,7 +71,7 @@ const PEOPLE_SELECT =
 const LIST_SELECT =
   "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, " +
   PEOPLE_SELECT +
-  ", short_video_posts(platform), short_scripters(team_member_id)";
+  ", short_video_posts(platform), short_scripters(team_member_id), short_video_versions!short_video_versions_short_id_fkey(count)";
 
 type RawEditor = { id: string; user_id: string | null; profiles: ProfileRow | ProfileRow[] } | null;
 
@@ -112,9 +112,12 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
     caption: (r.caption as string | null) ?? null,
-    hasFrameio: isFrameioLink(r.file_link as string | null),
+    // "Has a video": any uploaded version, or (legacy) a Frame.io link.
+    hasFrameio:
+      isFrameioLink(r.file_link as string | null) ||
+      (((r.short_video_versions as { count: number }[] | undefined)?.[0]?.count ?? 0) > 0),
     fileLink: (r.file_link as string | null) ?? null,
-    writerIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
+    scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
     hasFileLink: !!r.file_link,
   }));
 }
@@ -197,7 +200,7 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
     hasFrameio: isFrameioLink(r.file_link as string | null),
     hasFileLink: !!r.file_link,
     fileLink: (r.file_link as string | null) ?? null,
-    writerIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
+    scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
     caption: (r.caption as string | null) ?? null,
     reviewNote: (r.review_note as string | null) ?? null,
     createdAt: r.created_at as string,
@@ -279,7 +282,7 @@ export type ShortTeamSettings = {
   defaultEditor: string | null;
   defaultReviewer: string | null;
   defaultScheduler: string | null;
-  defaultWriter: string | null;
+  defaultScripter: string | null;
 };
 
 export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
@@ -300,7 +303,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultEditor: (data?.default_short_editor_member_id as string | null) ?? null,
     defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
-    defaultWriter: (data?.default_short_scripter_member_id as string | null) ?? null,
+    defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
   };
 }
 

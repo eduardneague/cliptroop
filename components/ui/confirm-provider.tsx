@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 type ConfirmOptions = {
   title: string;
@@ -25,10 +25,36 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const confirmBtn = useRef<HTMLButtonElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+
   function close(result: boolean) {
     state?.resolve(result);
     setState(null);
   }
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
+  // Esc cancels, Enter confirms (focus starts on the confirm button), and
+  // focus goes back afterwards. Captured first so Esc doesn't also close
+  // a popup underneath.
+  useEffect(() => {
+    if (!state) return;
+    opener.current = document.activeElement as HTMLElement | null;
+    requestAnimationFrame(() => confirmBtn.current?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeRef.current(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      opener.current?.focus?.();
+    };
+  }, [state]);
 
   return (
     <ConfirmContext.Provider value={confirm}>
@@ -39,10 +65,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           onClick={() => close(false)}
         >
           <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
             className="w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="font-display text-lg font-semibold mb-1.5">
+            <h2 id="confirm-title" className="font-display text-lg font-semibold mb-1.5">
               {state.opts.title}
             </h2>
             {state.opts.description && (
@@ -58,6 +87,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 Cancel
               </button>
               <button
+                ref={confirmBtn}
                 onClick={() => close(true)}
                 className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 ${
                   state.opts.danger ? "bg-red" : "bg-amber"

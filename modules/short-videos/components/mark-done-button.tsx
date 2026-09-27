@@ -15,7 +15,7 @@ export function MarkDoneButton({
   shortId: string;
   number: number;
   compact?: boolean;
-  /** Locked until the final file is a Frame.io link. */
+  /** Locked until a video is uploaded (or a Frame.io link is set). */
   disabled?: boolean;
 }) {
   const confirm = useConfirm();
@@ -39,7 +39,7 @@ export function MarkDoneButton({
       type="button"
       onClick={handleClick}
       disabled={submit.pending || disabled}
-      title={disabled ? "Add the Frame.io link in Final file first" : undefined}
+      title={disabled ? "Upload the video first" : undefined}
       className={`relative z-10 inline-flex items-center gap-1 rounded-lg bg-amber text-white font-bold disabled:opacity-45 disabled:cursor-not-allowed hover:brightness-110 transition-[filter] ${
         compact ? "text-[11px] px-2 py-1" : "text-[13px] px-3.5 h-9"
       }`}

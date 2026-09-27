@@ -26,7 +26,7 @@ export function ShortSettingsForm({
   const [editor, setEditor] = useState(settings.defaultEditor);
   const [reviewer, setReviewer] = useState(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState(settings.defaultScheduler);
-  const [writer, setWriter] = useState(settings.defaultWriter);
+  const [scripter, setScripter] = useState(settings.defaultScripter);
 
   const zones = useMemo(() => {
     try {
@@ -46,7 +46,7 @@ export function ShortSettingsForm({
     editor !== settings.defaultEditor ||
     reviewer !== settings.defaultReviewer ||
     scheduler !== settings.defaultScheduler ||
-    writer !== settings.defaultWriter;
+    scripter !== settings.defaultScripter;
   const rhythmChanged =
     perDay !== settings.perDay ||
     weekends !== settings.weekends ||
@@ -127,8 +127,8 @@ export function ShortSettingsForm({
         <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Default people for new shorts</div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <div className="text-[11px] text-ink-faint mb-1">Writer</div>
-            <PersonSelect kind="scripter" people={people} value={writer} onChange={setWriter} />
+            <div className="text-[11px] text-ink-faint mb-1">Scripter</div>
+            <PersonSelect kind="scripter" people={people} value={scripter} onChange={setScripter} />
           </div>
           <div>
             <div className="text-[11px] text-ink-faint mb-1">Editor</div>
@@ -159,7 +159,7 @@ export function ShortSettingsForm({
               defaultEditor: editor,
               defaultReviewer: reviewer,
               defaultScheduler: scheduler,
-              defaultWriter: writer,
+              defaultScripter: scripter,
             })
           }
           className="rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] disabled:opacity-40 hover:brightness-110 transition-[filter]"

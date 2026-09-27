@@ -133,6 +133,8 @@ export async function createShort(input: {
   caption: string;
   /** Leave out to use the team default. */
   shortType?: ShortType;
+  /** Scripters to start with (masters/schedulers). Leave out for the team default. */
+  scripterIds?: string[];
   captionEnabled?: boolean;
 }): Promise<Result<{ id: string; plannedDate: string | null; number: number }>> {
   const { supabase, user } = await requireUser();
@@ -199,6 +201,29 @@ export async function createShort(input: {
 
   if (error || !data) {
     return { error: friendlyDbError(error, "Couldn't create the short. Try again.") };
+  }
+
+  // Scripters: the database already added the team default; make the
+  // list exactly what was chosen on the form.
+  if (Array.isArray(input.scripterIds) && (master || roles.includes("publisher"))) {
+    const wanted = Array.from(new Set(input.scripterIds.filter((x) => typeof x === "string" && /^[0-9a-f-]{36}$/.test(x)))).slice(0, 20);
+    const { data: current } = await supabase.from("short_scripters").select("team_member_id").eq("short_id", data.id);
+    const have = new Set((current ?? []).map((r) => r.team_member_id as string));
+    const remove = [...have].filter((m) => !wanted.includes(m));
+    const add = wanted.filter((m) => !have.has(m));
+    if (remove.length) await supabase.from("short_scripters").delete().eq("short_id", data.id).in("team_member_id", remove);
+    if (add.length) {
+      await supabase.from("short_scripters").insert(add.map((m) => ({ short_id: data.id, team_member_id: m })));
+      const actor = await actorMeta(supabase, user.id);
+      const recipients = await Promise.all(add.map((m) => editorUserId(supabase, m)));
+      await notifyMany(recipients, user.id, (recipient_id) => ({
+        recipient_id,
+        short_id: data.id,
+        kind: "short_role_assigned",
+        metadata: { actor, ...shortMeta(data), roleLabel: "scripter", suffix: ". You can edit its script." },
+        body: `${actor.name} made you a scripter on #${data.entry_number} "${data.title}".`,
+      }));
+    }
   }
 
   // The queue assigns Auto dates right after the insert — read it back.
@@ -677,11 +702,11 @@ export async function setShortDayLimit(
 }
 
 // ---------------------------------------------------------------------------
-// Writers (master / scheduler)
+// Scripters (master / scheduler)
 // ---------------------------------------------------------------------------
 
-/** Add or remove someone who may write this short's script. */
-export async function setShortWriter(id: string, memberId: string, add: boolean): Promise<Result> {
+/** Add or remove a scripter: someone who may edit this short's script. */
+export async function setShortScripter(id: string, memberId: string, add: boolean): Promise<Result> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
 
@@ -691,7 +716,7 @@ export async function setShortWriter(id: string, memberId: string, add: boolean)
   if (add) {
     const { error } = await supabase.from("short_scripters").insert({ short_id: id, team_member_id: memberId });
     if (error && error.code !== "23505") {
-      return { error: friendlyDbError(error, "Couldn't add the writer. Only the master or a scheduler can.") };
+      return { error: friendlyDbError(error, "Couldn't add the scripter. Only the master or a scheduler can.") };
     }
     const recipient = await editorUserId(supabase, memberId);
     const actor = await actorMeta(supabase, user.id);
@@ -699,12 +724,12 @@ export async function setShortWriter(id: string, memberId: string, add: boolean)
       recipient_id,
       short_id: id,
       kind: "short_role_assigned",
-      metadata: { actor, ...shortMeta(short), roleLabel: "writer", suffix: ". You can edit its script." },
-      body: `${actor.name} made you a writer on #${short.entry_number} "${short.title}".`,
+      metadata: { actor, ...shortMeta(short), roleLabel: "scripter", suffix: ". You can edit its script." },
+      body: `${actor.name} made you a scripter on #${short.entry_number} "${short.title}".`,
     }));
   } else {
     const { error } = await supabase.from("short_scripters").delete().eq("short_id", id).eq("team_member_id", memberId);
-    if (error) return { error: friendlyDbError(error, "Couldn't remove the writer. Only the master or a scheduler can.") };
+    if (error) return { error: friendlyDbError(error, "Couldn't remove the scripter. Only the master or a scheduler can.") };
   }
 
   revalidateShort(id);

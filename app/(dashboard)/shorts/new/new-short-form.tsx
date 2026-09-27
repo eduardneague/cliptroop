@@ -6,6 +6,7 @@ import { createShort } from "../actions";
 import { useToast } from "@/components/ui/toast-provider";
 import { PLATFORMS, YOUTUBE_TITLE_LIMIT, type Platform, type ShortType } from "@/modules/short-videos/lib/constants";
 import { ShortTypePicker, Switch } from "@/modules/short-videos/components/short-type";
+import { ScripterPicker } from "@/modules/short-videos/components/scripter-picker";
 import type { DatedShort, ShortTeamSettings, TeamPerson } from "@/modules/short-videos/lib/queries";
 import { ScheduleField, type ScheduleValue } from "@/modules/short-videos/components/schedule-field";
 import { PlatformPicker } from "@/modules/short-videos/components/platform-picker";
@@ -51,6 +52,7 @@ export function NewShortForm({
   const [editor, setEditor] = useState<string | null>(settings.defaultEditor);
   const [reviewer, setReviewer] = useState<string | null>(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState<string | null>(settings.defaultScheduler);
+  const [scripterIds, setScripterIds] = useState<string[]>(settings.defaultScripter ? [settings.defaultScripter] : []);
   const [platforms, setPlatforms] = useState<Platform[]>([...PLATFORMS]);
   const [caption, setCaption] = useState("");
   // Captions are automatic for normal shorts; switch on only for special ones.
@@ -77,6 +79,7 @@ export function NewShortForm({
         caption,
         captionEnabled: captionOn,
         shortType,
+        ...(canAssignPeople ? { scripterIds } : {}),
       });
       if (!("id" in res) || !res.id) {
         const message = res.error ?? "Couldn't create the short. Try again.";
@@ -151,6 +154,16 @@ export function NewShortForm({
 
       {canAssignPeople ? (
         <div className="grid gap-5 sm:grid-cols-3">
+          <div className="sm:col-span-3">
+            <Label>Scripters</Label>
+            <ScripterPicker
+              people={people}
+              value={scripterIds}
+              onAdd={(m) => setScripterIds((ids) => [...ids.filter((x) => x !== m), m])}
+              onRemove={(m) => setScripterIds((ids) => ids.filter((x) => x !== m))}
+            />
+            <p className="mt-1.5 text-[11.5px] text-ink-faint">Only these people (and masters) can edit the script.</p>
+          </div>
           <div>
             <Label>Editor</Label>
             <PersonSelect kind="editor" people={people} value={editor} onChange={setEditor} />
@@ -168,7 +181,7 @@ export function NewShortForm({
           </p>
         </div>
       ) : (
-        <p className="text-[12.5px] text-ink-faint">The editor, reviewer and scheduler come from your team&rsquo;s defaults.</p>
+        <p className="text-[12.5px] text-ink-faint">The scripter, editor, reviewer and scheduler come from your team&rsquo;s defaults.</p>
       )}
 
       <div>

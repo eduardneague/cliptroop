@@ -18,7 +18,7 @@ const EMPTY: Record<PersonKind, string> = {
   editor: "No editor yet",
   reviewer: "Any master",
   scheduler: "Any scheduler",
-  scripter: "No default writer",
+  scripter: "No default scripter",
 };
 
 /** Build the option list for a role picker (shared with the table's editor cell). */
