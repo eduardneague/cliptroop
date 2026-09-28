@@ -33,3 +33,5 @@ supabase/scratch/
 
 # copied from node_modules by scripts/copy-vendor.mjs (postinstall)
 /public/vendor/
+
+certificates

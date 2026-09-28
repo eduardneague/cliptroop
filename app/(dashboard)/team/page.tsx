@@ -20,6 +20,11 @@ import { RoleColorPicker } from "./role-color-picker";
 import { TransferOwnership } from "./transfer-ownership";
 import { DeleteTeamButton } from "./delete-team-button";
 import { ShortSettingsForm } from "./short-settings";
+import { Suspense } from "react";
+import { ConnectedAccounts } from "./connected-accounts";
+import { PROVIDERS } from "@/lib/social/providers";
+import { socialKeyConfigured } from "@/lib/social/crypto";
+
 import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
 
 export default async function TeamPage() {
@@ -51,6 +56,29 @@ export default async function TeamPage() {
     ]),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
+  const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
+
+  // Connected accounts: safe columns only (tokens can't be read by
+  // clients at all); the history is visible to masters and schedulers.
+  const [{ data: socialRows }, { data: socialHistory }] = await Promise.all([
+    supabase
+      .from("social_accounts")
+      .select("platform, display_name, username, avatar_url, status, last_error, connected_at")
+      .eq("team_id", currentTeam.id),
+    canManageSocial
+      ? supabase
+          .from("social_audit_log")
+          .select("id, platform, action, detail, created_at, actor:profiles!social_audit_log_actor_id_fkey(username, full_name, email)")
+          .eq("team_id", currentTeam.id)
+          .order("created_at", { ascending: false })
+          .limit(8)
+      : Promise.resolve({ data: null }),
+  ]);
+  const socialConfigured = {
+    youtube: PROVIDERS.youtube.configured() && socialKeyConfigured(),
+    instagram: PROVIDERS.instagram.configured() && socialKeyConfigured(),
+    tiktok: PROVIDERS.tiktok.configured() && socialKeyConfigured(),
+  };
   const [shortSettings, shortPeople] = userIsMaster
     ? await Promise.all([getShortSettings(currentTeam.id), listTeamPeople(currentTeam.id)])
     : [null, []];
@@ -213,6 +241,46 @@ export default async function TeamPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section id="connected-accounts" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
+        <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">
+          Connected accounts
+        </h2>
+        <p className="text-[12px] text-ink-soft mb-5">
+          Where approved shorts get posted. Sign-ins are stored encrypted and never leave the server.
+        </p>
+        <Suspense>
+          <ConnectedAccounts
+            teamId={currentTeam.id}
+            canManage={canManageSocial}
+            configured={socialConfigured}
+            accounts={(socialRows ?? []).map((r) => ({
+              platform: r.platform as "youtube" | "instagram" | "tiktok",
+              displayName: (r.display_name as string | null) ?? null,
+              username: (r.username as string | null) ?? null,
+              avatarUrl: (r.avatar_url as string | null) ?? null,
+              status: r.status as "active" | "needs_reconnect",
+              lastError: (r.last_error as string | null) ?? null,
+              connectedAt: r.connected_at as string,
+            }))}
+            history={
+              socialHistory
+                ? socialHistory.map((h) => {
+                    const a = (Array.isArray(h.actor) ? h.actor[0] : h.actor) as { username: string | null; full_name: string | null; email: string | null } | null;
+                    return {
+                      id: h.id as number,
+                      platform: h.platform as string,
+                      action: h.action as string,
+                      actor: a ? displayName(a.username, a.full_name, a.email) : null,
+                      account: ((h.detail as { account?: string } | null)?.account ?? null) as string | null,
+                      at: h.created_at as string,
+                    };
+                  })
+                : null
+            }
+          />
+        </Suspense>
       </section>
 
       {userIsMaster && (

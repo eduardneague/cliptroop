@@ -50,6 +50,8 @@ export type NotificationItem = {
     suffix?: string;
     at?: string;
     reply?: boolean;
+    account?: string;
+    platform?: string;
     version?: number | null;
   } | null;
 };
@@ -166,6 +168,12 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> made you the editor on <ShortRef m={m} />
           {m.readyToEdit ? ". It's ready to edit." : "."}
+        </>
+      );
+    case "social_reconnect":
+      return (
+        <>
+          <b>{m.account}</b> needs reconnecting. Go to Team → Connected accounts.
         </>
       );
     case "short_review_note":

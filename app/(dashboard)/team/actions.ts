@@ -561,3 +561,45 @@ export async function updateShortSettings(
   revalidatePath("/shorts");
   return { success: true };
 }
+
+/**
+ * Disconnect a social account: revoke our access at the platform where
+ * it allows it, delete the stored tokens, and record it.
+ */
+export async function disconnectSocialAccount(teamId: string, platform: string) {
+  const { isSocialPlatform, PROVIDERS } = await import("@/lib/social/providers");
+  const { requireSocialManager } = await import("@/lib/social/access");
+  const { decryptToken } = await import("@/lib/social/crypto");
+  const { logSocial } = await import("@/lib/social/tokens");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+
+  if (!isSocialPlatform(platform)) return { error: "Unknown platform." };
+  const access = await requireSocialManager(teamId);
+  if (!access.user) return { error: "Your session expired. Sign in again." };
+  if (!access.ok) return { error: "Only the master or a scheduler can disconnect accounts." };
+
+  const admin = createAdminClient();
+  const { data: row } = await admin
+    .from("social_accounts")
+    .select("id, access_token_enc, refresh_token_enc, username, display_name")
+    .eq("team_id", teamId)
+    .eq("platform", platform)
+    .maybeSingle();
+  if (!row) return { error: "That account isn't connected." };
+
+  // Best effort: even if the platform is unreachable, we still forget the tokens.
+  try {
+    await PROVIDERS[platform].revoke({
+      accessToken: decryptToken(row.access_token_enc as string),
+      refreshToken: row.refresh_token_enc ? decryptToken(row.refresh_token_enc as string) : null,
+    });
+  } catch {
+    /* ignore */
+  }
+  const { error } = await admin.from("social_accounts").delete().eq("id", row.id);
+  if (error) return { error: "Couldn't disconnect. Try again." };
+  await logSocial(teamId, platform, "disconnected", access.user.id, { account: row.username ?? row.display_name });
+
+  revalidatePath("/team");
+  return { success: true };
+}

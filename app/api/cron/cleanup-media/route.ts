@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { refreshExpiring } from "@/lib/social/tokens";
 
 /**
- * Daily cleanup of review videos (Vercel Cron, see vercel.json).
- *   * Old versions (not the approved one): deleted 30 days after posting.
- *   * The approved version: deleted 90 days after posting.
- *   * Shorts marked "Keep" are never cleaned up.
+ * Daily upkeep (Vercel Cron, see vercel.json):
+ *   * Videos: every version of a short (the approved one too) is deleted
+ *     2 days after the short is fully posted. Shorts marked "Keep" are
+ *     never cleaned up.
+ *   * Connected accounts: sign-ins that expire soon are refreshed.
  * Protected by CRON_SECRET: Vercel sends it as "Authorization: Bearer …".
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const DAY = 24 * 60 * 60 * 1000;
-const DRAFT_DAYS = 30;
-const FINAL_DAYS = 90;
+const KEEP_DAYS = 2;
 
 function authorized(header: string | null) {
   const secret = process.env.CRON_SECRET;
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
     if (times.length === 0) continue;
     const postedAt = Math.max(...times);
     const age = now - postedAt;
-    if (age < DRAFT_DAYS * DAY) continue;
+    if (age < KEEP_DAYS * DAY) continue;
 
     const { data: versions } = await admin
       .from("short_video_versions")
@@ -56,9 +57,7 @@ export async function GET(request: Request) {
       .eq("short_id", s.id)
       .is("deleted_at", null);
 
-    const due = (versions ?? []).filter((v) =>
-      v.id === s.approved_version_id ? age >= FINAL_DAYS * DAY : true
-    );
+    const due = versions ?? [];
     if (due.length === 0) continue;
 
     const { error: rmError } = await admin.storage.from("review-videos").remove(due.map((v) => v.storage_path as string));
@@ -73,5 +72,8 @@ export async function GET(request: Request) {
     removed += due.length;
   }
 
-  return NextResponse.json({ ok: true, removed, failed });
+  // Keep connected accounts signed in (Instagram lasts 60 days, TikTok a year).
+  const tokens = await refreshExpiring().catch(() => ({ refreshed: 0, failed: -1 }));
+
+  return NextResponse.json({ ok: true, removed, failed, tokens });
 }
