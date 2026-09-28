@@ -12,6 +12,5 @@ export const config = {
      * session gets refreshed on every navigation.
      */
     // vendor/ = public library files (e.g. the Word export), cacheable.
-    "/((?!_next/static|_next/image|favicon.ico|vendor/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+"/((?!_next/static|_next/image|favicon.ico|vendor/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)",  ],
 };
