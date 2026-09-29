@@ -44,9 +44,23 @@ export function diagnose(h: Health): Finding[] {
   if (call) {
     const s = call.status;
     const body = call.body ?? "";
-    if (s && s >= 200 && s < 300) {
-      out.push({ level: "ok", title: "The app answers the timer", detail: "The last call worked." });
-    } else if (s === 401 && /unauthorized/i.test(body)) {
+    const age = minsAgo(call.at);
+    const when = age < 1 ? "just now" : age < 60 ? `${Math.round(age)} min ago` : `${Math.round(age / 60)}h ago`;
+    const ok = !!s && s >= 200 && s < 300;
+    // An old failure may already be fixed: say so, and suggest a fresh test.
+    if (!ok && age > 5) {
+      out.push({
+        level: "warn",
+        title: `Last call to the app failed (${when})`,
+        detail: `${explain(s, body, call.error)} This result may be out of date: press "Test the timer" to check again.`,
+      });
+      return withRuns(out, h);
+    }
+    if (ok) {
+      out.push({ level: "ok", title: "The app answers the timer", detail: `The last call worked (${when}).` });
+      return withRuns(out, h);
+    }
+    if (s === 401 && /unauthorized/i.test(body)) {
       out.push({ level: "error", title: "The passwords don't match", detail: "CRON_SECRET in Vercel and cron_secret in Supabase Vault must be exactly the same. Update one, then redeploy." });
     } else if ((s === 401 || s === 403) && /vercel/i.test(body)) {
       out.push({ level: "error", title: "Vercel is blocking the timer", detail: "Turn off Vercel Authentication (Settings → Deployment Protection) for this site." });
@@ -59,7 +73,20 @@ export function diagnose(h: Health): Finding[] {
     }
   }
 
+  return withRuns(out, h);
+}
+
+function withRuns(out: Finding[], h: Health) {
   const run = h.runs[0];
   if (run?.error) out.push({ level: "error", title: "The last posting run failed", detail: run.error });
   return out;
+}
+
+/** One sentence for what an HTTP answer means. */
+function explain(s: number | null, body: string, err: string | null) {
+  if (s === 401 && /unauthorized/i.test(body)) return "The passwords didn't match.";
+  if ((s === 401 || s === 403) && /vercel/i.test(body)) return "Vercel Authentication blocked it.";
+  if (s === 404) return "The address wasn't found.";
+  if (!s) return err ?? "No answer.";
+  return `HTTP ${s}.`;
 }

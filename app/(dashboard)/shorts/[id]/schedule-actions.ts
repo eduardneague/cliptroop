@@ -9,6 +9,7 @@ import { getAccessToken } from "@/lib/social/tokens";
 import { tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
 import { PublishError } from "@/lib/social/publishers/common";
 import { runDuePosts } from "@/lib/social/worker";
+import { YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 
 type Result<T = object> = ({ error?: undefined } & T) | { error: string };
 type Platform = "youtube" | "instagram" | "tiktok";
@@ -237,15 +238,25 @@ export async function cancelPost(postId: string): Promise<Result> {
   const m = await manager(post.team_id as string);
   if (!m.user) return { error: "Your session expired. Sign in again." };
   if (!m.ok) return { error: "Only the master or a scheduler can cancel posts." };
-  if (post.platform === "youtube" && post.external_id) {
-    return { error: "It's already uploaded to YouTube and scheduled there. Delete or change it in YouTube Studio." };
-  }
-  if (!["scheduled", "failed"].includes(post.status as string)) {
-    return { error: "It's already being posted and can't be cancelled now." };
-  }
   const admin = createAdminClient();
-  await admin.from("social_posts").update({ status: "cancelled", locked_until: null, updated_at: new Date().toISOString() }).eq("id", postId).in("status", ["scheduled", "failed"]);
-  await admin.from("social_post_events").insert({ post_id: postId, team_id: post.team_id, kind: "cancelled", message: "Cancelled", actor_id: m.user.id });
+  let message = "Cancelled";
+  if (post.platform === "youtube" && post.external_id) {
+    // Uploaded and scheduled on YouTube: delete it there, before it goes live.
+    if (post.status !== "waiting") return { error: "It's already live on YouTube, so it can't be cancelled here." };
+    const yt = await youtubeAccess(post.team_id as string);
+    if ("error" in yt) return { error: yt.error };
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${encodeURIComponent(post.external_id as string)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${yt.token}` },
+      cache: "no-store",
+    }).catch(() => null);
+    if (!res || (!res.ok && res.status !== 404)) return { error: "YouTube didn't delete the video. Try again, or delete it in YouTube Studio." };
+    message = "Cancelled and deleted from YouTube";
+  } else if (!["scheduled", "failed"].includes(post.status as string)) {
+    return { error: "It's being posted right now and can't be cancelled." };
+  }
+  await admin.from("social_posts").update({ status: "cancelled", locked_until: null, updated_at: new Date().toISOString() }).eq("id", postId);
+  await admin.from("social_post_events").insert({ post_id: postId, team_id: post.team_id, kind: "cancelled", message, actor_id: m.user.id });
   revalidatePath(`/shorts/${post.short_id}`);
   return {};
 }
@@ -343,4 +354,139 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
     })
   );
   return { checks };
+}
+
+
+/** A YouTube token that may edit videos (needs the newer permission). */
+async function youtubeAccess(teamId: string): Promise<{ token: string } | { error: string }> {
+  const admin = createAdminClient();
+  const { data: acc } = await admin.from("social_accounts").select("id, scopes").eq("team_id", teamId).eq("platform", "youtube").maybeSingle();
+  if (!acc) return { error: "YouTube isn't connected." };
+  if (!((acc.scopes as string[]) ?? []).includes(YOUTUBE_EDIT_SCOPE)) {
+    return { error: "Reconnect YouTube once (Team → Connected accounts) so VPlanner can change scheduled videos." };
+  }
+  try {
+    return { token: await getAccessToken(acc.id as string) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't sign in to YouTube." };
+  }
+}
+
+/**
+ * Change when a post goes live. Instagram/TikTok: any time before they're
+ * sent. YouTube: before upload, or after upload while it's still
+ * scheduled on YouTube (changed there directly).
+ */
+export async function changePostTime(postId: string, atIso: string): Promise<Result> {
+  if (!UUID.test(postId)) return { error: "Post not found." };
+  const at = new Date(atIso);
+  if (Number.isNaN(at.getTime())) return { error: "Pick a valid time." };
+  if (at.getTime() < Date.now() + 2 * 60_000) return { error: "Pick a time at least a few minutes from now." };
+  if (at.getTime() > Date.now() + 180 * 86_400_000) return { error: "Schedule within the next 6 months." };
+
+  const supabase = await createClient();
+  const { data: post } = await supabase
+    .from("social_posts")
+    .select("id, team_id, short_id, platform, status, step, external_id, options")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) return { error: "Post not found." };
+  const m = await manager(post.team_id as string);
+  if (!m.user) return { error: "Your session expired. Sign in again." };
+  if (!m.ok) return { error: "Only the master or a scheduler can change the time." };
+
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  if (post.status === "published") return { error: "It's already published." };
+
+  if (post.platform === "youtube" && post.external_id) {
+    if (post.status !== "waiting") return { error: "It's being processed right now. Try again in a minute." };
+    const yt = await youtubeAccess(post.team_id as string);
+    if ("error" in yt) return { error: yt.error };
+    const o = (post.options ?? {}) as { madeForKids?: boolean };
+    const res = await fetch("https://www.googleapis.com/youtube/v3/videos?part=status", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${yt.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: post.external_id,
+        status: { privacyStatus: "private", publishAt: at.toISOString(), selfDeclaredMadeForKids: !!o.madeForKids },
+      }),
+      cache: "no-store",
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const j = res ? ((await res.json().catch(() => ({}))) as { error?: { message?: string } }) : {};
+      return { error: `YouTube didn't accept the new time${j.error?.message ? `: ${j.error.message}` : "."}` };
+    }
+    await admin
+      .from("social_posts")
+      .update({ scheduled_at: at.toISOString(), next_attempt_at: new Date(at.getTime() + 2 * 60_000).toISOString(), note: `Scheduled on YouTube for ${at.toISOString()}.`, updated_at: now })
+      .eq("id", postId);
+  } else {
+    if (post.status === "uploading" || post.status === "processing") return { error: "It's being posted right now." };
+    if (!["scheduled", "failed"].includes(post.status as string)) return { error: "This post can't be moved now." };
+    await admin
+      .from("social_posts")
+      .update({
+        scheduled_at: at.toISOString(),
+        // YouTube uploads straight away; the others wait for the new time.
+        next_attempt_at: post.platform === "youtube" ? now : at.toISOString(),
+        status: "scheduled",
+        attempts: 0,
+        last_error: null,
+        updated_at: now,
+      })
+      .eq("id", postId);
+  }
+  await admin.from("social_post_events").insert({
+    post_id: postId,
+    team_id: post.team_id,
+    kind: "rescheduled",
+    message: `Time changed to ${at.toISOString()}`,
+    actor_id: m.user.id,
+  });
+  revalidatePath(`/shorts/${post.short_id}`);
+  revalidatePath("/posting");
+  return {};
+}
+
+/** Just the posting status of one short (for light live updates). */
+export async function getPostingState(shortId: string) {
+  if (!UUID.test(shortId)) return { posts: [], events: [] };
+  const supabase = await createClient();
+  const [{ data: posts }, { data: events }] = await Promise.all([
+    supabase
+      .from("social_posts")
+      .select("id, platform, status, step, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")
+      .eq("short_id", shortId)
+      .neq("status", "cancelled"),
+    supabase
+      .from("social_post_events")
+      .select("id, post_id, kind, message, created_at, social_posts!inner(short_id)")
+      .eq("social_posts.short_id", shortId)
+      .order("created_at", { ascending: true }),
+  ]);
+  return {
+    posts: (posts ?? []).map((p) => ({
+      id: p.id as string,
+      platform: p.platform as Platform,
+      status: p.status as string,
+      step: (p.step as string) ?? undefined,
+      progress: (p.progress as number) ?? 0,
+      scheduledAt: p.scheduled_at as string,
+      lastError: (p.last_error as string | null) ?? null,
+      attempts: (p.attempts as number) ?? 0,
+      nextAttemptAt: p.next_attempt_at as string,
+      permalink: (p.permalink as string | null) ?? null,
+      note: (p.note as string | null) ?? null,
+      externalId: (p.external_id as string | null) ?? null,
+      options: (p.options as Record<string, unknown>) ?? {},
+    })),
+    events: (events ?? []).map((e) => ({
+      id: e.id as number,
+      postId: e.post_id as string,
+      kind: e.kind as string,
+      message: (e.message as string) ?? "",
+      at: e.created_at as string,
+    })),
+  };
 }

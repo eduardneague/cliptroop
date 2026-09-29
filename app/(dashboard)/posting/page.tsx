@@ -6,7 +6,7 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { diagnose, type Health } from "@/lib/social/health";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { AutoRefresh, RunNowButton, When } from "./client-bits";
+import { AutoRefresh, RunNowButton, TestTimerButton, When } from "./client-bits";
 
 export const metadata: Metadata = { title: "Posting" };
 
@@ -130,7 +130,10 @@ export default async function PostingPage() {
 
       {manager && (
         <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
-          <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-3">Health</h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Health</h2>
+            <TestTimerButton teamId={currentTeam.id} />
+          </div>
           <ul className="space-y-2.5">
             {findings.length === 0 && <li className="text-[13px] text-ink-soft">No activity yet. Schedule a post and this fills in within a minute.</li>}
             {findings.map((f, i) => (

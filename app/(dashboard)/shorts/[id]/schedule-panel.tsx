@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
@@ -10,11 +10,14 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { relativeTime } from "@/lib/relative-time";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
+import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
 import {
   cancelPost,
+  changePostTime,
   checkBeforeScheduling,
+  getPostingState,
   getTikTokCreatorInfo,
   type Preflight,
   retryPost,
@@ -78,6 +81,68 @@ function tomorrow() {
 const field = "w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-[13.5px] outline-none focus:ring-2 focus:ring-amber";
 const label = "block text-[11.5px] font-semibold text-ink-soft mb-1.5";
 
+function RetryIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 11a8 8 0 1 0-2.3 5.6" />
+      <path d="M20 4v7h-7" />
+    </svg>
+  );
+}
+
+/** Small labelled action button, easy to hit on phones. */
+function Action({
+  onClick,
+  href,
+  icon,
+  children,
+  tone = "default",
+  disabled,
+}: {
+  onClick?: () => void;
+  href?: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  tone?: "default" | "primary" | "danger" | "link";
+  disabled?: boolean;
+}) {
+  const cls = `inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-semibold transition-colors disabled:opacity-50 ${
+    tone === "primary"
+      ? "bg-amber text-white hover:brightness-110"
+      : tone === "danger"
+        ? "text-ink-soft hover:text-red hover:bg-red/10"
+        : tone === "link"
+          ? "text-amber hover:bg-amber/10"
+          : "text-ink-soft hover:text-ink hover:bg-surface-2"
+  }`;
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+        {icon}
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} className={cls}>
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+function chip(post: PostInfo | null, now: number) {
+  if (!post) return null;
+  const late = post.status === "scheduled" && Date.parse(post.nextAttemptAt) < now - 3 * 60_000;
+  if (post.status === "failed") return { text: "Failed", cls: "bg-red/15 text-red" };
+  if (late) return { text: "Late", cls: "bg-amber/15 text-amber" };
+  if (post.status === "published") return { text: "Published", cls: "bg-green/15 text-green" };
+  if (post.status === "uploading") return { text: `Uploading ${post.progress}%`, cls: "bg-amber/15 text-amber", spin: true };
+  if (post.status === "processing") return { text: "Processing", cls: "bg-amber/15 text-amber", spin: true };
+  if (post.status === "waiting") return { text: post.platform === "youtube" ? "Scheduled on YouTube" : "Waiting", cls: "bg-violet/15 text-violet" };
+  return { text: "Scheduled", extra: ` · ${new Date(post.scheduledAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}`, cls: "bg-surface-2 text-ink" };
+}
+
 export function SchedulePanel({
   shortId,
   teamId,
@@ -102,7 +167,7 @@ export function SchedulePanel({
   caption: string;
   plannedDate: string | null;
   platforms: Platform[];
-  /** Facebook is planned: it's shared from Instagram automatically. */
+  /** Facebook is planned: it posts together with Instagram. */
   hasFacebook: boolean;
   /** The team's default YouTube description. */
   youtubeDescription: string;
@@ -117,24 +182,40 @@ export function SchedulePanel({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const confirm = useConfirm();
   const [pending, start] = useTransition();
   const [running, setRunning] = useState(false);
+  const now = useNow(15_000);
 
-  const active = posts.filter((p) => p.status !== "cancelled");
+  // Live status: only the posting data is fetched (not the whole page).
+  const [live, setLive] = useState({ posts, events });
+  useEffect(() => setLive({ posts, events }), [posts, events]);
+  const prev = useRef(live);
+  const refresh = useCallback(async () => {
+    const next = await getPostingState(shortId);
+    const newlyPublished = next.posts.some((p) => p.status === "published" && prev.current.posts.find((x) => x.id === p.id)?.status !== "published");
+    prev.current = next;
+    setLive(next);
+    // Publishing can move the short to Posted: refresh the page once.
+    if (newlyPublished) router.refresh();
+  }, [shortId, router]);
+
+  const active = live.posts.filter((p) => p.status !== "cancelled");
+  const moving =
+    active.some((p) => ["uploading", "processing", "waiting"].includes(p.status)) ||
+    active.some((p) => p.status === "scheduled" && Date.parse(p.nextAttemptAt) - Date.now() < 5 * 60_000);
+  useEffect(() => {
+    if (!active.length) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, moving ? 4000 : 30_000);
+    return () => clearInterval(t);
+  }, [active.length, moving, refresh]);
+
   const postFor = (p: Platform) => active.find((x) => x.platform === p) ?? null;
   const account = (p: Platform) => accounts.find((a) => a.platform === p) ?? null;
   const [editing, setEditing] = useState<Record<string, boolean>>({});
 
-  // Live status: refresh every few seconds while anything is moving.
-  const moving = active.some((p) => ACTIVE.includes(p.status));
-  useEffect(() => {
-    if (!moving) return;
-    const t = setInterval(() => router.refresh(), 5000);
-    return () => clearInterval(t);
-  }, [moving, router]);
-
-  // ---- form state (one per platform that can be scheduled) ----------------
+  // ---- form state ----------------------------------------------------------
   const initialDate = plannedDate ?? tomorrow();
   const [include, setInclude] = useState<Record<Platform, boolean>>({ youtube: true, instagram: true, tiktok: true });
   const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({
@@ -169,7 +250,6 @@ export function SchedulePanel({
     return canManage && account(p)?.status === "active" && (!post || ((post.status === "scheduled" || post.status === "failed") && editing[p]));
   });
   const needsTikTok = formPlatforms.includes("tiktok");
-
   useEffect(() => {
     if (!needsTikTok || creator) return;
     void getTikTokCreatorInfo(teamId).then((r) => {
@@ -183,20 +263,13 @@ export function SchedulePanel({
 
   function problems(): string | null {
     if (chosen.length === 0) return "Pick at least one platform.";
-    if (chosen.includes("youtube")) {
-      if (!yt.title.trim()) return "YouTube needs a title.";
-      if (yt.madeForKids === null) return "Choose whether the YouTube video is made for kids.";
-    }
+    if (chosen.includes("youtube") && !yt.title.trim()) return "YouTube needs a title.";
     if (chosen.includes("tiktok")) {
       if (!creator) return creatorError ?? "Loading your TikTok account…";
       if (!tt.privacy) return "Choose who can see the TikTok post.";
       if (tt.commercial && !tt.yourBrand && !tt.brandedContent) return "For commercial content, tick Your brand, Branded content or both.";
       if (tt.commercial && tt.brandedContent && tt.privacy === "SELF_ONLY") return "Branded content can't be private on TikTok.";
       if (tooLong) return `TikTok allows up to ${creator.maxDurationSec}s for this account.`;
-    }
-    for (const p of chosen) {
-      const t = new Date(localIso(when[p].date, when[p].time));
-      if (Number.isNaN(t.getTime())) return `Pick a valid time for ${NAME[p]}.`;
     }
     return null;
   }
@@ -216,14 +289,12 @@ export function SchedulePanel({
       setChecks([]);
     } else setChecks(r.checks);
   }
-
   function submit() {
     const issue = problems();
     if (issue) return toast.error(issue);
     setReviewing(true);
     void runChecks();
   }
-
   function confirmSchedule() {
     if (!allGood) return;
     const entries: ScheduleEntry[] = chosen.map((p) => {
@@ -238,11 +309,13 @@ export function SchedulePanel({
       toast.success(`Scheduled ${r.scheduled} post${r.scheduled === 1 ? "" : "s"}`);
       setEditing({});
       setReviewing(false);
-      router.refresh();
+      await refresh();
     });
   }
 
   async function markByHand(platform: string, posted: boolean) {
+    // Facebook goes together with Instagram.
+    if (platform === "instagram" && hasFacebook) await setShortPlatformPosted(shortId, "facebook" as never, posted);
     const r = await setShortPlatformPosted(shortId, platform as never, posted);
     if (r && "error" in r && r.error) toast.error(r.error);
     else {
@@ -252,9 +325,11 @@ export function SchedulePanel({
   }
   const byHand = (p: string) => manualPosts.find((m) => m.platform === p) ?? null;
 
+  const withFacebook = (p: Platform) => p === "instagram" && hasFacebook;
+
   return (
-    <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-5 space-y-3">
+      <div className="flex items-center justify-between gap-3 px-1">
         <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Posting</h2>
         {isDev && canManage && active.some((p) => ACTIVE.includes(p.status)) && (
           <button
@@ -267,10 +342,10 @@ export function SchedulePanel({
               if (r.error !== undefined) toast.error(r.error);
               else {
                 toast.success(r.claimed ? `Processed ${r.claimed} post${r.claimed === 1 ? "" : "s"}` : "Nothing due right now");
-                router.refresh();
+                await refresh();
               }
             }}
-            className="rounded-lg border border-dashed border-amber/60 text-amber px-2.5 h-7 text-[11.5px] font-bold disabled:opacity-50"
+            className="rounded-lg border border-dashed border-amber/60 text-amber px-2.5 h-8 text-[11.5px] font-bold disabled:opacity-50"
             title="Only on staging and your computer"
           >
             {running ? "Running…" : "Run due posts now"}
@@ -282,93 +357,106 @@ export function SchedulePanel({
         const post = postFor(p);
         const acc = account(p);
         const showForm = formPlatforms.includes(p);
+        const c = !showForm ? chip(post, now) : null;
         return (
-          <div key={p} className="rounded-xl border border-line/10 bg-surface-2/40 p-3.5">
-            <div className="flex items-center gap-2.5 mb-2">
-              <PlatformIcon platform={p} className="w-6 h-6 rounded-md" />
-              <span className="text-[13.5px] font-semibold">{NAME[p]}</span>
-              {acc && <span className="text-[12px] text-ink-soft truncate">· {acc.name}</span>}
-              <span className="flex-1" />
+          <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30">
+            <div className="flex items-center gap-3 px-3.5 sm:px-4 py-3">
+              <span className="flex items-center -space-x-1.5 flex-shrink-0">
+                <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
+                {withFacebook(p) && <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg ring-2 ring-surface" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-semibold leading-tight truncate">
+                  {NAME[p]}
+                  {withFacebook(p) && <span className="hidden sm:inline font-normal text-ink-soft whitespace-nowrap"> + Facebook</span>}
+                </div>
+                <div className="text-[12px] text-ink-soft truncate">
+                  {acc ? acc.name : "Not connected"}
+                  {withFacebook(p) && (
+                    <>
+                      <span className="sm:hidden"> · + Facebook</span>
+                      <span className="hidden sm:inline"> · Facebook posts at the same time</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {c && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[11.5px] font-bold whitespace-nowrap ${c.cls}`}>
+                  {"spin" in c && c.spin && <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                  {c.text}
+                  {"extra" in c && c.extra && <span className="hidden sm:inline">{c.extra}</span>}
+                </span>
+              )}
               {showForm && !post && (
-                <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft cursor-pointer">
-                  <input type="checkbox" checked={include[p]} onChange={(e) => setInclude((s) => ({ ...s, [p]: e.target.checked }))} className="accent-[rgb(var(--amber))]" />
-                  Post
-                </label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={include[p]}
+                  aria-label={`Post to ${NAME[p]}`}
+                  onClick={() => setInclude((s) => ({ ...s, [p]: !s[p] }))}
+                  className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+                  style={{ background: include[p] ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}
+                >
+                  <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${include[p] ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                </button>
               )}
             </div>
 
-            {!acc ? (
-              byHand(p) ? (
-                <div className="flex items-center gap-3 text-[12.5px]">
-                  <span className="font-semibold text-green">Marked as posted</span>
-                  <span className="text-ink-soft">{relativeTime(byHand(p)!.postedAt)}</span>
-                  {canManage && (
-                    <button type="button" onClick={() => void markByHand(p, false)} className="font-semibold text-ink-soft hover:text-ink">Undo</button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <p className="text-[12.5px] text-ink-soft">Not connected. Connect it in Team → Connected accounts to post automatically.</p>
-                  {canManage && (
-                    <button type="button" onClick={() => void markByHand(p, true)} className="rounded-lg border border-line/15 px-3 h-8 text-[12px] font-semibold hover:border-line/30">
-                      Mark as posted
-                    </button>
-                  )}
-                </div>
-              )
-            ) : acc.status !== "active" ? (
-              <p className="text-[12.5px] text-amber">Needs reconnecting in Team → Connected accounts.</p>
-            ) : post && !showForm ? (
-              <StatusView
-                post={post}
-                account={acc}
-                events={events.filter((e) => e.postId === post.id)}
-                canManage={canManage}
-                onEdit={() => setEditing((s) => ({ ...s, [p]: true }))}
-                onChanged={() => router.refresh()}
-              />
-            ) : showForm && include[p] ? (
-              <div className="space-y-3">
-                <When value={when[p]} onChange={(v) => setWhen((s) => ({ ...s, [p]: v }))} />
-                {p === "youtube" && <YouTubeFields v={yt} set={setYt} />}
-                {p === "instagram" && (
-                  <div>
-                    <span className={label}>Caption</span>
-                    <textarea value={ig.caption} maxLength={2200} rows={3} onChange={(e) => setIg({ caption: e.target.value })} className={field} />
+            <div className="px-3.5 sm:px-4 pb-3.5">
+              {!acc ? (
+                byHand(p) ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[12.5px] font-semibold text-green">✓ Marked as posted</span>
+                    <span className="text-[12px] text-ink-soft">{relativeTime(byHand(p)!.postedAt)}</span>
+                    {canManage && (
+                      <Action onClick={() => void markByHand(p, false)} icon={<CloseIcon className="w-3.5 h-3.5" />}>
+                        Undo
+                      </Action>
+                    )}
                   </div>
-                )}
-                {p === "tiktok" && (
-                  <TikTokFields v={tt} set={setTt} creator={creator} error={creatorError} tooLong={tooLong} />
-                )}
-              </div>
-            ) : !canManage ? (
-              <p className="text-[12.5px] text-ink-soft">Not scheduled yet.</p>
-            ) : null}
+                ) : (
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-[12.5px] text-ink-soft">Connect it in Team → Connected accounts to post automatically.</p>
+                    {canManage && (
+                      <Action onClick={() => void markByHand(p, true)} icon={<span className="text-[13px] leading-none">✓</span>}>
+                        Mark as posted
+                      </Action>
+                    )}
+                  </div>
+                )
+              ) : acc.status !== "active" ? (
+                <p className="text-[12.5px] text-amber">Needs reconnecting in Team → Connected accounts.</p>
+              ) : post && !showForm ? (
+                <StatusView
+                  post={post}
+                  account={acc}
+                  events={live.events.filter((e) => e.postId === post.id)}
+                  canManage={canManage}
+                  facebookPosted={withFacebook(p) ? !!byHand("facebook") : null}
+                  onEdit={() => setEditing((s) => ({ ...s, [p]: true }))}
+                  onChanged={refresh}
+                />
+              ) : showForm && include[p] ? (
+                <div className="space-y-3 pt-1">
+                  <When value={when[p]} onChange={(v) => setWhen((s) => ({ ...s, [p]: v }))} />
+                  {p === "youtube" && <YouTubeFields v={yt} set={setYt} />}
+                  {p === "instagram" && (
+                    <div>
+                      <span className={label}>Caption</span>
+                      <textarea value={ig.caption} maxLength={2200} rows={3} onChange={(e) => setIg({ caption: e.target.value })} className={field} />
+                    </div>
+                  )}
+                  {p === "tiktok" && <TikTokFields v={tt} set={setTt} creator={creator} error={creatorError} tooLong={tooLong} />}
+                </div>
+              ) : showForm ? (
+                <p className="text-[12.5px] text-ink-soft">Not posting to {NAME[p]}.</p>
+              ) : !canManage ? (
+                <p className="text-[12.5px] text-ink-soft">Not scheduled yet.</p>
+              ) : null}
+            </div>
           </div>
         );
       })}
-
-      {hasFacebook && (
-        <div className="rounded-xl border border-line/10 bg-surface-2/40 p-3.5 flex items-center gap-2.5 flex-wrap">
-          <PlatformIcon platform="facebook" className="w-6 h-6 rounded-md" />
-          <span className="text-[13.5px] font-semibold">Facebook</span>
-          {byHand("facebook") ? (
-            <span className="text-[12.5px] font-semibold text-green">Posted · shared from Instagram</span>
-          ) : (
-            <span className="text-[12.5px] text-ink-soft">Shares automatically when Instagram posts</span>
-          )}
-          <span className="flex-1" />
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => void markByHand("facebook", !byHand("facebook"))}
-              className="text-[12px] font-semibold text-ink-soft hover:text-ink"
-            >
-              {byHand("facebook") ? "Undo" : "Mark as posted"}
-            </button>
-          )}
-        </div>
-      )}
 
       <Dialog
         open={reviewing}
@@ -390,7 +478,7 @@ export function SchedulePanel({
               onClick={confirmSchedule}
               disabled={pending || !allGood}
               title={!allGood ? "Every check has to pass first" : undefined}
-              className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-50"
             >
               {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
               Schedule
@@ -405,34 +493,34 @@ export function SchedulePanel({
               p === "youtube"
                 ? `Uploads now · YouTube publishes it (${yt.visibility})`
                 : p === "instagram"
-                  ? "Posted as a Reel at this time"
+                  ? hasFacebook
+                    ? "Posted as a Reel · Facebook at the same time"
+                    : "Posted as a Reel at this time"
                   : `Posted at this time · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
+            const ck = checks?.find((x) => x.platform === p);
             return (
               <li key={p} className="flex items-center gap-3 px-3.5 py-3 bg-surface-2/30">
-                <PlatformIcon platform={p} className="w-8 h-8 rounded-lg flex-shrink-0" />
+                <span className="flex items-center -space-x-1.5 flex-shrink-0">
+                  <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
+                  {withFacebook(p) && <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg ring-2 ring-surface" />}
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[13.5px] font-semibold truncate">
-                    {NAME[p]} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
+                    {NAME[p]}
+                    {withFacebook(p) ? " + Facebook" : ""} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
                   </div>
                   <div className="text-[11.5px] text-ink-soft truncate">{detail}</div>
-                  {(() => {
-                    const c = checks?.find((x) => x.platform === p);
-                    if (checking || !checks) {
-                      return (
-                        <div className="mt-1 inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
-                          <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                          Checking…
-                        </div>
-                      );
-                    }
-                    if (!c) return null;
-                    return (
-                      <div className={`mt-1 text-[11.5px] font-semibold ${c.ok ? "text-green" : "text-red"}`}>
-                        {c.ok ? "✓ " : "✗ "}
-                        {c.message}
-                      </div>
-                    );
-                  })()}
+                  {checking || !checks ? (
+                    <div className="mt-1 inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
+                      <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                      Checking…
+                    </div>
+                  ) : ck ? (
+                    <div className={`mt-1 text-[11.5px] font-semibold ${ck.ok ? "text-green" : "text-red"}`}>
+                      {ck.ok ? "✓ " : "✗ "}
+                      {ck.message}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
@@ -441,28 +529,19 @@ export function SchedulePanel({
               </li>
             );
           })}
-          {hasFacebook && chosen.includes("instagram") && (
-            <li className="flex items-center gap-3 px-3.5 py-3">
-              <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg flex-shrink-0" />
-              <div className="text-[12.5px] text-ink-soft">Facebook gets it automatically from Instagram.</div>
-            </li>
-          )}
         </ul>
-        {chosen.includes("tiktok") && (
-          <p className="mt-3 text-[11.5px] text-ink-soft">The video will be posted to TikTok with the settings you chose.</p>
-        )}
+        {chosen.includes("tiktok") && <p className="mt-3 text-[11.5px] text-ink-soft">The video will be posted to TikTok with the settings you chose.</p>}
       </Dialog>
 
       {formPlatforms.length > 0 && (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex justify-end px-1">
           <button
             type="button"
             onClick={submit}
-            disabled={pending}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-50"
+            disabled={pending || chosen.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber text-white font-bold px-6 h-11 text-[14px] w-full sm:w-auto disabled:opacity-50"
           >
-            {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
-            Schedule
+            Schedule{chosen.length > 1 ? ` ${chosen.length} posts` : ""}
           </button>
         </div>
       )}
@@ -778,6 +857,7 @@ function StatusView({
   events,
   canManage,
   account,
+  facebookPosted,
   onEdit,
   onChanged,
 }: {
@@ -785,30 +865,30 @@ function StatusView({
   events: PostEvent[];
   canManage: boolean;
   account: AccountInfo | null;
+  /** Instagram card only: whether Facebook is marked posted too. */
+  facebookPosted: boolean | null;
   onEdit: () => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
   const now = useNow();
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   const steps = stepsFor(post, events, now);
-
-  const links: { href: string; text: string }[] = [];
-  if (post.platform === "youtube" && post.externalId) {
-    links.push({ href: `https://studio.youtube.com/video/${post.externalId}/edit`, text: "Open in YouTube Studio" });
-    links.push({ href: `https://youtube.com/shorts/${post.externalId}`, text: "Watch" });
-  }
-  if (post.platform === "instagram") {
-    if (post.permalink) links.push({ href: post.permalink, text: "Open post" });
-    else if (account?.username) links.push({ href: `https://www.instagram.com/${account.username.replace(/^@/, "")}/`, text: "Open profile" });
-  }
-  if (post.platform === "tiktok") links.push({ href: "https://www.tiktok.com/tiktokstudio/content", text: "Open TikTok Studio" });
+  const ytScheduled = post.platform === "youtube" && !!post.externalId && post.status === "waiting";
+  const beforeSend = post.status === "scheduled" || post.status === "failed";
+  const canMove = canManage && (ytScheduled || (beforeSend && !(post.platform === "youtube" && post.externalId)));
 
   async function act(kind: "cancel" | "retry") {
     if (kind === "cancel") {
-      const ok = await confirm({ title: `Cancel the ${NAME[post.platform]} post?`, confirmLabel: "Cancel post", danger: true });
+      const ok = await confirm({
+        title: `Cancel the ${NAME[post.platform]} post?`,
+        description: ytScheduled ? "It's already scheduled on YouTube: it will be deleted from YouTube." : undefined,
+        confirmLabel: "Cancel post",
+        danger: true,
+      });
       if (!ok) return;
     }
     setBusy(true);
@@ -817,17 +897,17 @@ function StatusView({
     if (r.error !== undefined) toast.error(r.error);
     else {
       toast.success(kind === "cancel" ? "Cancelled" : "Retrying now");
-      onChanged();
+      await onChanged();
     }
   }
 
   const dot = (st: StepView["state"]) =>
     st === "done" ? (
-      <span className="w-5 h-5 rounded-full bg-green text-white flex items-center justify-center text-[11px] font-bold">✓</span>
+      <span className="flex w-5 h-5 rounded-full bg-green text-white items-center justify-center text-[11px] font-bold">✓</span>
     ) : st === "failed" ? (
-      <span className="w-5 h-5 rounded-full bg-red text-white flex items-center justify-center text-[11px] font-bold">!</span>
+      <span className="flex w-5 h-5 rounded-full bg-red text-white items-center justify-center text-[11px] font-bold">!</span>
     ) : st === "late" ? (
-      <span className="w-5 h-5 rounded-full bg-amber text-white flex items-center justify-center text-[11px] font-bold">!</span>
+      <span className="flex w-5 h-5 rounded-full bg-amber text-white items-center justify-center text-[11px] font-bold">!</span>
     ) : st === "current" ? (
       <span className="block w-5 h-5 rounded-full border-2 border-amber border-t-transparent animate-spin" />
     ) : (
@@ -836,15 +916,13 @@ function StatusView({
 
   return (
     <div className="space-y-3">
-      <ol className="space-y-0">
+      <ol className="pt-1">
         {steps.map((st, i) => (
           <li key={i} className="relative flex gap-3 pb-3 last:pb-0">
-            {i < steps.length - 1 && (
-              <span className={`absolute left-[9px] top-6 bottom-0 w-0.5 ${st.state === "done" ? "bg-green/60" : "bg-line/15"}`} aria-hidden />
-            )}
+            {i < steps.length - 1 && <span className={`absolute left-[9px] top-6 bottom-0 w-0.5 ${st.state === "done" ? "bg-green/50" : "bg-line/15"}`} aria-hidden />}
             <span className="relative z-10 mt-0.5 flex-shrink-0">{dot(st.state)}</span>
             <div className="min-w-0 flex-1">
-              <div className={`text-[13px] font-semibold ${st.state === "todo" ? "text-ink-faint" : "text-ink"}`}>
+              <div className={`text-[13px] font-semibold leading-snug ${st.state === "todo" ? "text-ink-faint" : "text-ink"}`}>
                 {st.label}
                 {st.at && st.state === "done" && <span className="ml-1.5 font-normal text-[11.5px] text-ink-soft">{relativeTime(st.at)}</span>}
               </div>
@@ -868,44 +946,131 @@ function StatusView({
           </li>
         ))}
       </ol>
+      {facebookPosted && <p className="text-[12px] font-semibold text-green">✓ Facebook posted (shared from Instagram)</p>}
 
-      <div className="flex items-center gap-3 flex-wrap">
-        {links.map((l) => (
-          <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-amber hover:underline">
-            {l.text} ↗
-          </a>
-        ))}
-        <span className="flex-1" />
-        {canManage && (post.status === "scheduled" || post.status === "failed") && !(post.platform === "youtube" && post.externalId) && (
-          <>
-            <button type="button" onClick={onEdit} className="text-[12px] font-semibold text-ink-soft hover:text-ink">Edit</button>
-            <button type="button" disabled={busy} onClick={() => void act("cancel")} className="text-[12px] font-semibold text-ink-soft hover:text-red">Cancel</button>
-          </>
+      <div className="flex flex-wrap items-center gap-1 -mx-1.5">
+        {post.platform === "youtube" && post.externalId && (
+          <Action href={`https://studio.youtube.com/video/${post.externalId}/edit`} icon={<ExternalIcon className="w-3.5 h-3.5" />} tone="link">
+            YouTube Studio
+          </Action>
         )}
+        {post.platform === "youtube" && post.externalId && post.status === "published" && (
+          <Action href={`https://youtube.com/shorts/${post.externalId}`} icon={<ExternalIcon className="w-3.5 h-3.5" />} tone="link">
+            Watch
+          </Action>
+        )}
+        {post.platform === "instagram" && (post.permalink || account?.username) && (
+          <Action
+            href={post.permalink ?? `https://www.instagram.com/${String(account?.username ?? "").replace(/^@/, "")}/`}
+            icon={<ExternalIcon className="w-3.5 h-3.5" />}
+            tone="link"
+          >
+            {post.permalink ? "Open post" : "Profile"}
+          </Action>
+        )}
+        {post.platform === "tiktok" && (
+          <Action href="https://www.tiktok.com/tiktokstudio/content" icon={<ExternalIcon className="w-3.5 h-3.5" />} tone="link">
+            TikTok Studio
+          </Action>
+        )}
+        <span className="flex-1" />
         {canManage && post.status === "failed" && (
-          <button type="button" disabled={busy} onClick={() => void act("retry")} className="rounded-lg bg-amber text-white px-3 h-8 text-[12px] font-bold disabled:opacity-50">
+          <Action onClick={() => void act("retry")} disabled={busy} icon={<RetryIcon className="w-3.5 h-3.5" />} tone="primary">
             {busy ? "Retrying…" : "Retry"}
-          </button>
+          </Action>
+        )}
+        {canMove && (
+          <Action onClick={() => setTimeOpen(true)} icon={<ClockIcon className="w-3.5 h-3.5" />}>
+            Change time
+          </Action>
+        )}
+        {canManage && beforeSend && !(post.platform === "youtube" && post.externalId) && (
+          <Action onClick={onEdit} icon={<EditIcon className="w-3.5 h-3.5" />}>
+            Edit
+          </Action>
+        )}
+        {canManage && (beforeSend || ytScheduled) && (
+          <Action onClick={() => void act("cancel")} disabled={busy} icon={<CloseIcon className="w-3.5 h-3.5" />} tone="danger">
+            Cancel
+          </Action>
+        )}
+        {events.length > 0 && (
+          <Action onClick={() => setLogOpen((o) => !o)} icon={<ListIcon className="w-3.5 h-3.5" />}>
+            {logOpen ? "Hide log" : "Log"}
+          </Action>
         )}
       </div>
 
-      {events.length > 0 && (
-        <div>
-          <button type="button" onClick={() => setOpen((o) => !o)} className="text-[11.5px] font-semibold text-ink-soft hover:text-ink">
-            {open ? "Hide full log" : `Full log (${events.length})`}
-          </button>
-          {open && (
-            <ol className="mt-1.5 space-y-1 border-l border-line/15 pl-3">
-              {events.map((e) => (
-                <li key={e.id} className="text-[12px] text-ink-soft">
-                  <span className={e.kind === "failed" ? "text-red" : e.kind === "retry" ? "text-amber" : "text-ink"}>{e.message}</span> ·{" "}
-                  {new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
+      {logOpen && (
+        <ol className="space-y-1.5 rounded-xl bg-surface-2/50 p-3">
+          {events.map((e) => (
+            <li key={e.id} className="flex gap-2 text-[12px]">
+              <span className="text-ink-faint tabular-nums whitespace-nowrap">
+                {new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+              <span className={e.kind === "failed" ? "text-red" : e.kind === "retry" ? "text-amber" : "text-ink"}>{e.message}</span>
+            </li>
+          ))}
+        </ol>
       )}
+
+      <ChangeTimeDialog
+        open={timeOpen}
+        post={post}
+        onClose={() => setTimeOpen(false)}
+        onSaved={async () => {
+          setTimeOpen(false);
+          await onChanged();
+        }}
+      />
     </div>
+  );
+}
+
+function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; post: PostInfo; onClose: () => void; onSaved: () => Promise<void> }) {
+  const toast = useToast();
+  const d = new Date(post.scheduledAt);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [value, setValue] = useState({
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 15) * 15)}`,
+  });
+  const [saving, setSaving] = useState(false);
+  return (
+    <Dialog
+      open={open}
+      onClose={() => !saving && onClose()}
+      title={`Change the ${NAME[post.platform]} time`}
+      description={
+        post.platform === "youtube" && post.externalId
+          ? "It's already scheduled on YouTube: the new time is changed there directly."
+          : "It will be posted at the new time instead."
+      }
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              const r = await changePostTime(post.id, localIso(value.date, value.time));
+              setSaving(false);
+              if (r.error !== undefined) return toast.error(r.error);
+              toast.success("Time changed");
+              await onSaved();
+            }}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60"
+          >
+            {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+            Save
+          </button>
+        </>
+      }
+    >
+      <When value={value} onChange={setValue} />
+    </Dialog>
   );
 }

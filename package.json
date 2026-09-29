@@ -1,10 +1,9 @@
 {
   "name": "vplanner",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:https": "next dev --turbopack --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

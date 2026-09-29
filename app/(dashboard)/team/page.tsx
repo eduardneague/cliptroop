@@ -20,6 +20,7 @@ import { RoleColorPicker } from "./role-color-picker";
 import { TransferOwnership } from "./transfer-ownership";
 import { DeleteTeamButton } from "./delete-team-button";
 import { ShortSettingsForm } from "./short-settings";
+import { APP_VERSION_LABEL } from "@/lib/version";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
 import { PROVIDERS } from "@/lib/social/providers";
@@ -337,6 +338,7 @@ export default async function TeamPage() {
           </div>
         </section>
       )}
+      <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">VPlanner {APP_VERSION_LABEL}</p>
     </div>
   );
 }

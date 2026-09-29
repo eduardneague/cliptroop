@@ -83,10 +83,13 @@ async function call(url: string, init: RequestInit & { form?: Record<string, str
 // YouTube (Google)
 // ---------------------------------------------------------------------------
 
+// upload: post videos. force-ssl: change a scheduled video's time or
+// delete it before it goes live (also covers reading the channel).
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/youtube.upload",
-  "https://www.googleapis.com/auth/youtube.readonly",
+  "https://www.googleapis.com/auth/youtube.force-ssl",
 ];
+export const YOUTUBE_EDIT_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
 
 const youtube: Provider = {
   name: "YouTube",

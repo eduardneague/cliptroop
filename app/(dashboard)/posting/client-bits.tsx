@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { runDuePostsNow } from "@/app/(dashboard)/shorts/[id]/schedule-actions";
+import { testTimer } from "./actions";
 
 /** Keeps the page live while anything is scheduled or moving. */
 export function AutoRefresh({ active }: { active: boolean }) {
@@ -55,6 +56,33 @@ export function RunNowButton() {
       title="Only on staging and your computer"
     >
       {busy ? "Running…" : "Run due posts now"}
+    </button>
+  );
+}
+
+/** Makes Supabase call the site now, like the timer, then shows the result. */
+export function TestTimerButton({ teamId }: { teamId: string }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const r = await testTimer(teamId);
+        setBusy(false);
+        if (r.error) toast.error(r.error);
+        else {
+          toast.success("Test sent. Health shows the fresh result.");
+          router.refresh();
+        }
+      }}
+      className="inline-flex items-center gap-2 rounded-lg border border-line/15 px-3 h-9 text-[12.5px] font-semibold hover:border-line/30 disabled:opacity-60"
+    >
+      {busy && <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+      {busy ? "Testing…" : "Test the timer"}
     </button>
   );
 }
