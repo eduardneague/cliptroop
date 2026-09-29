@@ -919,7 +919,9 @@ function StatusView({
     setBusy(true);
     const r = kind === "cancel" ? await cancelPost(post.id) : await retryPost(post.id);
     setBusy(false);
-    if (r.error !== undefined) toast.error(r.error);
+    if (r.error !== undefined && "reconnect" in r && r.reconnect) {
+      toast.error("Reconnect YouTube once (Team → Connected accounts) to cancel videos already on YouTube.");
+    } else if (r.error !== undefined) toast.error(r.error);
     else {
       toast.success(kind === "cancel" ? "Cancelled" : "Retrying now");
       await onChanged();
@@ -1052,6 +1054,24 @@ function StatusView({
   );
 }
 
+/** YouTube connected before the "change scheduled videos" permission existed. */
+function ReconnectNotice() {
+  return (
+    <div className="mt-4 rounded-xl border border-amber/40 bg-amber/10 p-3.5 flex items-start gap-3 animate-[modalin_.2s_var(--ease-out)]">
+      <PlatformIcon platform="youtube" className="w-7 h-7 rounded-lg flex-shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-semibold">Reconnect YouTube once</div>
+        <p className="text-[12.5px] text-ink-soft mt-0.5">
+          YouTube was connected before VPlanner could change scheduled videos. Reconnect it to allow that. It only takes a moment.
+        </p>
+        <Link href="/team#connected-accounts" className="mt-2.5 inline-flex items-center rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px]">
+          Reconnect YouTube
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; post: PostInfo; onClose: () => void; onSaved: () => Promise<void> }) {
   const toast = useToast();
   const d = new Date(post.scheduledAt);
@@ -1063,6 +1083,7 @@ function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; pos
     time: fitTime(safeDate, `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 15) * 15)}`),
   });
   const [saving, setSaving] = useState(false);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
   return (
     <Dialog
       open={open}
@@ -1085,7 +1106,10 @@ function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; pos
               setSaving(true);
               const r = await changePostTime(post.id, localIso(value.date, value.time));
               setSaving(false);
-              if (r.error !== undefined) return toast.error(r.error);
+              if (r.error !== undefined) {
+                if (r.reconnect) return setNeedsReconnect(true);
+                return toast.error(r.error);
+              }
               toast.success("Time changed");
               await onSaved();
             }}
@@ -1098,6 +1122,7 @@ function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; pos
       }
     >
       <When value={value} onChange={setValue} />
+      {needsReconnect && <ReconnectNotice />}
     </Dialog>
   );
 }

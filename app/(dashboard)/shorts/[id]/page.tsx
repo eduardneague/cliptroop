@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
-import { ArrowLeftIcon, CheckIcon, AlertIcon } from "@/components/ui/icons";
-import { ScrollToCurrent } from "@/components/ui/scroll-to-current";
+import { ArrowLeftIcon, AlertIcon } from "@/components/ui/icons";
 import {
   getShortDetail,
   getShortSettings,
@@ -15,7 +14,6 @@ import {
 } from "@/modules/short-videos/lib/queries";
 import { shortPermissions } from "@/modules/short-videos/lib/permissions";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
-import { STAGE_STATE_COLOR } from "@/modules/long-videos/lib/stages";
 import { formatShortDate, isOverdue, relativeDay } from "@/modules/short-videos/lib/dates";
 import { ShortStagePill } from "@/modules/short-videos/components/stage-pill";
 import { ShortsRealtime } from "@/modules/short-videos/components/shorts-realtime";
@@ -27,6 +25,7 @@ import { ReviewCard } from "./review-card";
 import { ChangesCard } from "./changes-card";
 import { SettingsButton } from "./settings-button";
 import { SchedulePanel } from "./schedule-panel";
+import { StageTracker } from "./stage-tracker";
 import { ScriptCard } from "@/modules/scripts/components/script-card";
 import { getShortScript } from "@/modules/scripts/lib/queries";
 import { VideoCard } from "@/modules/review/components/video-card";
@@ -116,7 +115,6 @@ export default async function ShortPage({
   const canUploadVideo =
     perms.isMaster || roles.includes("publisher") || (!!membership && short.editor?.memberId === membership.teamMemberId);
 
-  const currentIndex = SHORT_STAGES.indexOf(short.stage);
   const settingsData = {
     id: short.id,
     number: short.number,
@@ -187,46 +185,7 @@ export default async function ShortPage({
         {short.createdBy && <span className="hidden sm:inline text-ink-faint">Created by {short.createdBy.name}</span>}
       </div>
 
-      {/* Stage tracker — same state colors as long videos */}
-      <ScrollToCurrent className="flex items-center mb-6 overflow-x-auto no-scrollbar pb-1">
-        {SHORT_STAGES.map((s, i) => {
-          const allDone = short.stage === "posted";
-          const state = allDone || i < currentIndex ? "done" : i === currentIndex ? "current" : "upcoming";
-          const c = STAGE_STATE_COLOR[state];
-          const on = state !== "upcoming";
-          return (
-            <div key={s} className="flex items-center flex-shrink-0" data-current={state === "current" ? "true" : undefined}>
-              <StepLink
-                href={state === "upcoming" ? null : s === short.stage ? `/shorts/${short.id}` : `/shorts/${short.id}?view=${s}`}
-                selected={s === shown}
-                label={SHORT_STAGE_LABELS[s]}
-              >
-                <div
-                  className={`rounded-full flex items-center justify-center font-bold border-2 ${
-                    state === "current" ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"
-                  }`}
-                  style={{
-                    borderColor: on ? c : "rgb(var(--line) / 0.2)",
-                    background: on ? c : "transparent",
-                    color: on ? "#fff" : "rgb(var(--ink-faint))",
-                  }}
-                >
-                  {state === "done" ? <CheckIcon className="w-4 h-4" /> : i + 1}
-                </div>
-                <span className={`text-[10.5px] font-bold whitespace-nowrap ${on ? "text-ink" : "text-ink-faint"}`}>
-                  {SHORT_STAGE_LABELS[s]}
-                </span>
-              </StepLink>
-              {i < SHORT_STAGES.length - 1 && (
-                <div
-                  className="w-6 sm:w-10 h-[2px] mb-5"
-                  style={{ background: allDone || i + 1 <= currentIndex ? STAGE_STATE_COLOR.done : "rgb(var(--line) / 0.15)" }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </ScrollToCurrent>
+      <StageTracker shortId={short.id} stage={short.stage} shown={shown} viewing={!!viewStage} />
 
       {viewStage && (
         <div className="mb-5 flex items-center gap-3 flex-wrap rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 animate-[modalin_.2s_var(--ease-out)]">
@@ -366,19 +325,5 @@ export default async function ShortPage({
         </div>
       </div>
     </div>
-  );
-}
-
-
-/** A step in the tracker: done/current steps are links to look back at them. */
-function StepLink({ href, selected, label, children }: { href: string | null; selected: boolean; label: string; children: React.ReactNode }) {
-  const cls = `flex flex-col items-center gap-1.5 min-w-[78px] rounded-xl py-1.5 transition-colors ${
-    selected ? "bg-surface-2 ring-1 ring-line/20" : href ? "hover:bg-surface-2/60" : ""
-  }`;
-  if (!href) return <div className={cls}>{children}</div>;
-  return (
-    <Link href={href} scroll={false} className={cls} aria-label={`View the ${label} step`} aria-current={selected ? "step" : undefined}>
-      {children}
-    </Link>
   );
 }

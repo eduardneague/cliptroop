@@ -11,7 +11,7 @@ import { PublishError } from "@/lib/social/publishers/common";
 import { runDuePosts } from "@/lib/social/worker";
 import { YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 
-type Result<T = object> = ({ error?: undefined } & T) | { error: string };
+type Result<T = object> = ({ error?: undefined } & T) | { error: string; reconnect?: boolean };
 
 /** Posts must be at least this far ahead, so there's always time to change them. */
 const MIN_LEAD_MINUTES = 15;
@@ -250,7 +250,7 @@ export async function cancelPost(postId: string): Promise<Result> {
     // Uploaded and scheduled on YouTube: delete it there, before it goes live.
     if (post.status !== "waiting") return { error: "It's already live on YouTube, so it can't be cancelled here." };
     const yt = await youtubeAccess(post.team_id as string);
-    if ("error" in yt) return { error: yt.error };
+    if ("error" in yt) return { error: yt.error, reconnect: yt.reconnect };
     const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${encodeURIComponent(post.external_id as string)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${yt.token}` },
@@ -364,12 +364,12 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
 
 
 /** A YouTube token that may edit videos (needs the newer permission). */
-async function youtubeAccess(teamId: string): Promise<{ token: string } | { error: string }> {
+async function youtubeAccess(teamId: string): Promise<{ token: string } | { error: string; reconnect?: boolean }> {
   const admin = createAdminClient();
   const { data: acc } = await admin.from("social_accounts").select("id, scopes").eq("team_id", teamId).eq("platform", "youtube").maybeSingle();
   if (!acc) return { error: "YouTube isn't connected." };
   if (!((acc.scopes as string[]) ?? []).includes(YOUTUBE_EDIT_SCOPE)) {
-    return { error: "Reconnect YouTube once (Team → Connected accounts) so VPlanner can change scheduled videos." };
+    return { error: "YouTube needs one more permission to change scheduled videos.", reconnect: true };
   }
   try {
     return { token: await getAccessToken(acc.id as string) };
@@ -408,7 +408,7 @@ export async function changePostTime(postId: string, atIso: string): Promise<Res
   if (post.platform === "youtube" && post.external_id) {
     if (post.status !== "waiting") return { error: "It's being processed right now. Try again in a minute." };
     const yt = await youtubeAccess(post.team_id as string);
-    if ("error" in yt) return { error: yt.error };
+    if ("error" in yt) return { error: yt.error, reconnect: yt.reconnect };
     const o = (post.options ?? {}) as { madeForKids?: boolean };
     const res = await fetch("https://www.googleapis.com/youtube/v3/videos?part=status", {
       method: "PUT",

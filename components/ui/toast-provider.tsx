@@ -39,7 +39,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <div
-        className="fixed bottom-5 right-5 left-5 sm:left-auto z-[200] flex flex-col gap-2 items-end pointer-events-none"
+        // Phones: top of the screen, so a toast never covers a popup's buttons
+        // (bottom sheets live at the bottom). Larger screens: bottom-right.
+        className="fixed left-3 right-3 sm:left-auto sm:right-5 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] sm:top-auto sm:bottom-5 z-[200] flex flex-col gap-2 items-stretch sm:items-end pointer-events-none"
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
         aria-live="polite"
       >

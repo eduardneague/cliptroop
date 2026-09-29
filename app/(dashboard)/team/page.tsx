@@ -23,7 +23,7 @@ import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
-import { PROVIDERS } from "@/lib/social/providers";
+import { PROVIDERS, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
@@ -64,7 +64,7 @@ export default async function TeamPage() {
   const [{ data: socialRows }, { data: socialHistory }] = await Promise.all([
     supabase
       .from("social_accounts")
-      .select("platform, display_name, username, avatar_url, status, last_error, connected_at")
+      .select("platform, display_name, username, avatar_url, status, last_error, connected_at, scopes")
       .eq("team_id", currentTeam.id),
     canManageSocial
       ? supabase
@@ -264,6 +264,9 @@ export default async function TeamPage() {
               status: r.status as "active" | "needs_reconnect",
               lastError: (r.last_error as string | null) ?? null,
               connectedAt: r.connected_at as string,
+              // YouTube connected before "change scheduled videos" existed.
+              missingPermission:
+                r.platform === "youtube" && !((r.scopes as string[] | null) ?? []).includes(YOUTUBE_EDIT_SCOPE),
             }))}
             history={
               socialHistory

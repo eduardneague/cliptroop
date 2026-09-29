@@ -17,6 +17,8 @@ export type AccountView = {
   status: "active" | "needs_reconnect";
   lastError: string | null;
   connectedAt: string;
+  /** Connected, but missing a permission added later (YouTube). */
+  missingPermission?: boolean;
 };
 export type HistoryView = { id: number; platform: string; action: string; actor: string | null; account: string | null; at: string };
 
@@ -134,10 +136,13 @@ export function ConnectedAccounts({
                 <p className="text-[12.5px] text-ink-soft">{META[p].hint}</p>
               )}
               {needs && a?.lastError && <p className="text-[12px] text-amber">{a.lastError}</p>}
+              {!needs && a?.missingPermission && (
+                <p className="text-[12px] text-amber">Reconnect once to allow changing and cancelling videos already scheduled on YouTube.</p>
+              )}
 
               {canManage && (
                 <div className="flex items-center gap-2 mt-auto">
-                  {(!a || needs) && (
+                  {(!a || needs || a.missingPermission) && (
                     <a
                       href={configured[p] ? `/api/social/${p}/connect?team=${teamId}` : undefined}
                       aria-disabled={!configured[p]}
@@ -153,6 +158,11 @@ export function ConnectedAccounts({
                     >
                       {busy === p && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
                       {a ? "Reconnect" : "Connect"}
+                    </a>
+                  )}
+                  {a && !needs && !a.missingPermission && configured[p] && (
+                    <a href={`/api/social/${p}/connect?team=${teamId}`} className="rounded-lg px-3 h-9 inline-flex items-center text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+                      Reconnect
                     </a>
                   )}
                   {a && (

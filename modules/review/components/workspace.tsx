@@ -102,6 +102,23 @@ export function ReviewWorkspace({
     if (!versionId && latest) setVersionId(latest.id);
   }, [latest, versionId]);
 
+  // Just uploaded a version that isn't in the page data yet: keep
+  // refreshing (up to 5 times) until it arrives, never leave a stale page.
+  const waitingFor = versionId && !versions.some((v) => v.id === versionId) ? versionId : null;
+  const waitTries = useRef(0);
+  useEffect(() => {
+    if (!waitingFor) {
+      waitTries.current = 0;
+      return;
+    }
+    if (waitTries.current >= 5) return;
+    const t = setTimeout(() => {
+      waitTries.current += 1;
+      router.refresh();
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [waitingFor, versions, router]);
+
   // Notes shown while saving disappear once the fresh list has arrived.
   useEffect(() => {
     if (!refreshing) setPending([]);
