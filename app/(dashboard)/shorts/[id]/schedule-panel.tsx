@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
@@ -13,7 +14,9 @@ import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
 import {
   cancelPost,
+  checkBeforeScheduling,
   getTikTokCreatorInfo,
+  type Preflight,
   retryPost,
   runDuePostsNow,
   schedulePosts,
@@ -25,11 +28,13 @@ type Platform = "youtube" | "instagram" | "tiktok";
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
 const ACTIVE = ["scheduled", "uploading", "processing", "waiting"];
 
-export type AccountInfo = { platform: Platform; name: string; avatarUrl: string | null; status: "active" | "needs_reconnect" };
+export type AccountInfo = { platform: Platform; name: string; username?: string | null; avatarUrl: string | null; status: "active" | "needs_reconnect" };
 export type PostInfo = {
   id: string;
   platform: Platform;
   status: string;
+  /** Where the post is in its process (start, upload, status, publish, check, done). */
+  step?: string;
   progress: number;
   scheduledAt: string;
   lastError: string | null;
@@ -197,14 +202,30 @@ export function SchedulePanel({
   }
 
   const [reviewing, setReviewing] = useState(false);
+  const [checks, setChecks] = useState<Preflight[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const allGood = !!checks && checks.length > 0 && checks.every((c) => c.ok);
+
+  async function runChecks() {
+    setChecking(true);
+    setChecks(null);
+    const r = await checkBeforeScheduling(shortId, chosen);
+    setChecking(false);
+    if (r.error !== undefined) {
+      toast.error(r.error);
+      setChecks([]);
+    } else setChecks(r.checks);
+  }
 
   function submit() {
     const issue = problems();
     if (issue) return toast.error(issue);
     setReviewing(true);
+    void runChecks();
   }
 
   function confirmSchedule() {
+    if (!allGood) return;
     const entries: ScheduleEntry[] = chosen.map((p) => {
       const at = localIso(when[p].date, when[p].time);
       if (p === "youtube") return { platform: "youtube", at, options: yt };
@@ -300,6 +321,7 @@ export function SchedulePanel({
             ) : post && !showForm ? (
               <StatusView
                 post={post}
+                account={acc}
                 events={events.filter((e) => e.postId === post.id)}
                 canManage={canManage}
                 onEdit={() => setEditing((s) => ({ ...s, [p]: true }))}
@@ -352,16 +374,22 @@ export function SchedulePanel({
         open={reviewing}
         onClose={() => !pending && setReviewing(false)}
         title={`Schedule ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} posts`}?`}
-        description="Check when each one goes live."
+        description={checking ? "Checking each account…" : allGood ? "All checks passed. Check when each one goes live." : checks ? "Fix the issues below first." : "Check when each one goes live."}
         footer={
           <>
             <button type="button" onClick={() => setReviewing(false)} disabled={pending} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
               Cancel
             </button>
+            {checks && !allGood && !checking && (
+              <button type="button" onClick={() => void runChecks()} className="rounded-lg border border-line/15 px-4 h-10 text-[13.5px] font-semibold hover:border-line/30">
+                Check again
+              </button>
+            )}
             <button
               type="button"
               onClick={confirmSchedule}
-              disabled={pending}
+              disabled={pending || !allGood}
+              title={!allGood ? "Every check has to pass first" : undefined}
               className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60"
             >
               {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
@@ -387,6 +415,24 @@ export function SchedulePanel({
                     {NAME[p]} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
                   </div>
                   <div className="text-[11.5px] text-ink-soft truncate">{detail}</div>
+                  {(() => {
+                    const c = checks?.find((x) => x.platform === p);
+                    if (checking || !checks) {
+                      return (
+                        <div className="mt-1 inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
+                          <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                          Checking…
+                        </div>
+                      );
+                    }
+                    if (!c) return null;
+                    return (
+                      <div className={`mt-1 text-[11.5px] font-semibold ${c.ok ? "text-green" : "text-red"}`}>
+                        {c.ok ? "✓ " : "✗ "}
+                        {c.message}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
@@ -658,43 +704,107 @@ function TikTokFields({
   );
 }
 
+type StepView = { label: string; state: "done" | "current" | "todo" | "failed" | "late"; detail?: string | null; at?: string | null };
+
+function useNow(ms = 30_000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+function countdown(iso: string, now: number) {
+  const m = Math.round((Date.parse(iso) - now) / 60_000);
+  if (m <= 0) return "any moment now";
+  if (m < 60) return `in ${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `in ${h}h ${m % 60}m` : `in ${Math.round(h / 24)} days`;
+}
+
+/** The steps for one platform, from where the post is right now. */
+function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] {
+  const at = (kinds: string[]) => [...events].reverse().find((e) => kinds.includes(e.kind))?.at ?? null;
+  const when = fmt(post.scheduledAt);
+  const late = post.status === "scheduled" && Date.parse(post.nextAttemptAt) < now - 3 * 60_000;
+  const failed = post.status === "failed";
+  const retrying = post.attempts > 0 && ACTIVE.includes(post.status);
+  const bad = (i: number, current: number): StepView["state"] =>
+    i === current ? (failed ? "failed" : late || retrying ? "late" : "current") : i < current ? "done" : "todo";
+  const errDetail = (fallback: string | null) =>
+    failed || retrying ? post.lastError : late ? "Hasn't started yet. Check the Posting page for why." : fallback;
+
+  // How far along it is (index of the current step; 4 = all done).
+  let current: number;
+  if (post.platform === "youtube") {
+    current = post.status === "published" ? 4 : post.status === "waiting" || post.step === "check" ? 3 : 1;
+    return [
+      { label: "Scheduled in VPlanner", state: "done", at: at(["scheduled", "rescheduled"]) },
+      {
+        label: "Upload to YouTube",
+        state: bad(1, current),
+        detail: current === 1 ? errDetail(post.status === "uploading" ? `${post.progress}% uploaded` : "Starts within a minute") : null,
+        at: current > 1 ? at(["uploaded"]) : null,
+      },
+      { label: `Scheduled on YouTube for ${when}`, state: current > 2 ? "done" : "todo", detail: current === 3 ? "You can see it in YouTube Studio now." : null, at: current > 2 ? at(["uploaded"]) : null },
+      {
+        label: "Published",
+        state: current === 4 ? "done" : current === 3 && failed ? "failed" : "todo",
+        detail: current === 4 ? post.note : current === 3 ? `YouTube publishes it ${countdown(post.scheduledAt, now)}` : null,
+        at: at(["published"]),
+      },
+    ];
+  }
+
+  const name = post.platform === "instagram" ? "Instagram" : "TikTok";
+  const step = post.status === "published" ? "done" : post.step ?? (post.status === "uploading" ? "upload" : post.status === "scheduled" ? "start" : "status");
+  current = step === "done" ? 4 : step === "status" || step === "publish" ? 2 : 1;
+  return [
+    { label: "Scheduled in VPlanner", state: "done", detail: current === 1 && post.status === "scheduled" ? `${name} can't hold scheduled posts, so VPlanner keeps it and sends it at ${when}.` : null, at: at(["scheduled", "rescheduled"]) },
+    {
+      label: post.platform === "instagram" ? `Sent to Instagram at ${when}` : `Uploaded to TikTok at ${when}`,
+      state: bad(1, current),
+      detail: current === 1 ? errDetail(post.status === "uploading" ? `${post.progress}% uploaded` : `Sends ${countdown(post.scheduledAt, now)}`) : null,
+      at: current > 1 ? at(["started", "uploaded"]) : null,
+    },
+    { label: `${name} processes it`, state: bad(2, current), detail: current === 2 ? errDetail("Usually takes under a minute") : null },
+    { label: "Published", state: current === 4 ? "done" : "todo", detail: current === 4 ? post.note : null, at: at(["published"]) },
+  ];
+}
+
 function StatusView({
   post,
   events,
   canManage,
+  account,
   onEdit,
   onChanged,
 }: {
   post: PostInfo;
   events: PostEvent[];
   canManage: boolean;
+  account: AccountInfo | null;
   onEdit: () => void;
   onChanged: () => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const now = useNow();
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const retrying = post.attempts > 0 && ACTIVE.includes(post.status);
+  const steps = stepsFor(post, events, now);
 
-  const badge = useMemo(() => {
-    switch (post.status) {
-      case "scheduled":
-        return { text: `Scheduled · ${fmt(post.scheduledAt)}`, cls: "bg-surface-2 text-ink" };
-      case "uploading":
-        return { text: `Uploading · ${post.progress}%`, cls: "bg-amber/15 text-amber" };
-      case "processing":
-        return { text: "Processing", cls: "bg-amber/15 text-amber" };
-      case "waiting":
-        return { text: post.platform === "youtube" ? `Uploaded · publishes ${fmt(post.scheduledAt)}` : "Waiting", cls: "bg-violet/15 text-violet" };
-      case "published":
-        return { text: "Published", cls: "bg-green/15 text-green" };
-      case "failed":
-        return { text: "Failed", cls: "bg-red/15 text-red" };
-      default:
-        return { text: post.status, cls: "bg-surface-2 text-ink-soft" };
-    }
-  }, [post]);
+  const links: { href: string; text: string }[] = [];
+  if (post.platform === "youtube" && post.externalId) {
+    links.push({ href: `https://studio.youtube.com/video/${post.externalId}/edit`, text: "Open in YouTube Studio" });
+    links.push({ href: `https://youtube.com/shorts/${post.externalId}`, text: "Watch" });
+  }
+  if (post.platform === "instagram") {
+    if (post.permalink) links.push({ href: post.permalink, text: "Open post" });
+    else if (account?.username) links.push({ href: `https://www.instagram.com/${account.username.replace(/^@/, "")}/`, text: "Open profile" });
+  }
+  if (post.platform === "tiktok") links.push({ href: "https://www.tiktok.com/tiktokstudio/content", text: "Open TikTok Studio" });
 
   async function act(kind: "cancel" | "retry") {
     if (kind === "cancel") {
@@ -711,20 +821,60 @@ function StatusView({
     }
   }
 
+  const dot = (st: StepView["state"]) =>
+    st === "done" ? (
+      <span className="w-5 h-5 rounded-full bg-green text-white flex items-center justify-center text-[11px] font-bold">✓</span>
+    ) : st === "failed" ? (
+      <span className="w-5 h-5 rounded-full bg-red text-white flex items-center justify-center text-[11px] font-bold">!</span>
+    ) : st === "late" ? (
+      <span className="w-5 h-5 rounded-full bg-amber text-white flex items-center justify-center text-[11px] font-bold">!</span>
+    ) : st === "current" ? (
+      <span className="block w-5 h-5 rounded-full border-2 border-amber border-t-transparent animate-spin" />
+    ) : (
+      <span className="block w-5 h-5 rounded-full border-2 border-line/25" />
+    );
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[12px] font-bold ${badge.cls}`}>
-          {ACTIVE.includes(post.status) && post.status !== "scheduled" && post.status !== "waiting" && (
-            <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-          )}
-          {badge.text}
-        </span>
-        {post.permalink && (
-          <a href={post.permalink} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-amber underline">
-            Open post
+    <div className="space-y-3">
+      <ol className="space-y-0">
+        {steps.map((st, i) => (
+          <li key={i} className="relative flex gap-3 pb-3 last:pb-0">
+            {i < steps.length - 1 && (
+              <span className={`absolute left-[9px] top-6 bottom-0 w-0.5 ${st.state === "done" ? "bg-green/60" : "bg-line/15"}`} aria-hidden />
+            )}
+            <span className="relative z-10 mt-0.5 flex-shrink-0">{dot(st.state)}</span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-[13px] font-semibold ${st.state === "todo" ? "text-ink-faint" : "text-ink"}`}>
+                {st.label}
+                {st.at && st.state === "done" && <span className="ml-1.5 font-normal text-[11.5px] text-ink-soft">{relativeTime(st.at)}</span>}
+              </div>
+              {st.detail && (
+                <div className={`text-[12px] mt-0.5 ${st.state === "failed" ? "text-red" : st.state === "late" ? "text-amber" : "text-ink-soft"}`}>
+                  {st.detail}
+                  {st.state === "late" && post.status !== "failed" && (
+                    <>
+                      {" "}
+                      <Link href="/posting" className="underline font-semibold">Posting page</Link>
+                    </>
+                  )}
+                </div>
+              )}
+              {st.state === "current" && post.status === "uploading" && i === 1 && (
+                <div className="mt-1.5 h-1.5 rounded-full bg-surface-2 overflow-hidden max-w-xs">
+                  <div className="h-full bg-amber transition-[width] duration-500" style={{ width: `${post.progress}%` }} />
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        {links.map((l) => (
+          <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-amber hover:underline">
+            {l.text} ↗
           </a>
-        )}
+        ))}
         <span className="flex-1" />
         {canManage && (post.status === "scheduled" || post.status === "failed") && !(post.platform === "youtube" && post.externalId) && (
           <>
@@ -734,34 +884,22 @@ function StatusView({
         )}
         {canManage && post.status === "failed" && (
           <button type="button" disabled={busy} onClick={() => void act("retry")} className="rounded-lg bg-amber text-white px-3 h-8 text-[12px] font-bold disabled:opacity-50">
-            Retry
+            {busy ? "Retrying…" : "Retry"}
           </button>
         )}
       </div>
 
-      {post.status === "uploading" && (
-        <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
-          <div className="h-full bg-amber transition-[width] duration-500" style={{ width: `${post.progress}%` }} />
-        </div>
-      )}
-      {post.note && <p className="text-[12.5px] text-ink-soft">{post.note}</p>}
-      {post.lastError && (
-        <p className={`text-[12.5px] ${post.status === "failed" ? "text-red" : "text-amber"}`}>
-          {post.lastError}
-          {retrying ? ` Next try ${relativeTime(post.nextAttemptAt)}.` : ""}
-        </p>
-      )}
-
       {events.length > 0 && (
         <div>
           <button type="button" onClick={() => setOpen((o) => !o)} className="text-[11.5px] font-semibold text-ink-soft hover:text-ink">
-            {open ? "Hide history" : `History (${events.length})`}
+            {open ? "Hide full log" : `Full log (${events.length})`}
           </button>
           {open && (
             <ol className="mt-1.5 space-y-1 border-l border-line/15 pl-3">
               {events.map((e) => (
                 <li key={e.id} className="text-[12px] text-ink-soft">
-                  <span className="text-ink">{e.message}</span> · {relativeTime(e.at)}
+                  <span className={e.kind === "failed" ? "text-red" : e.kind === "retry" ? "text-amber" : "text-ink"}>{e.message}</span> ·{" "}
+                  {new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                 </li>
               ))}
             </ol>

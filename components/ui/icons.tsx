@@ -590,3 +590,13 @@ export function DocumentIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** Paper plane: the Posting page. */
+export function PostingIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M21 3 3.8 10.2c-.8.3-.8 1.4 0 1.7L10 14l2.1 6.2c.3.8 1.4.8 1.7 0L21 3Z" />
+      <path d="M21 3 10 14" />
+    </Svg>
+  );
+}

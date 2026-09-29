@@ -79,7 +79,7 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
         supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status").eq("team_id", short.teamId),
         supabase
           .from("social_posts")
-          .select("id, platform, status, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")
+          .select("id, platform, status, step, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")
           .eq("short_id", short.id)
           .neq("status", "cancelled"),
         supabase.from("teams").select("post_time_youtube, post_time_instagram, post_time_tiktok").eq("id", short.teamId).maybeSingle(),
@@ -244,6 +244,7 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
                 accounts={(socialAccounts ?? []).map((a) => ({
                   platform: a.platform as "youtube" | "instagram" | "tiktok",
                   name: (a.display_name as string | null) ?? (a.username as string | null) ?? "Connected account",
+                  username: (a.username as string | null) ?? null,
                   avatarUrl: (a.avatar_url as string | null) ?? null,
                   status: a.status as "active" | "needs_reconnect",
                 }))}
@@ -251,6 +252,7 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
                   id: p.id as string,
                   platform: p.platform as "youtube" | "instagram" | "tiktok",
                   status: p.status as string,
+                  step: (p.step as string) ?? undefined,
                   progress: (p.progress as number) ?? 0,
                   scheduledAt: p.scheduled_at as string,
                   lastError: (p.last_error as string | null) ?? null,

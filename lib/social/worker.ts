@@ -164,11 +164,18 @@ async function runOne(row: Claimed, deadline: number) {
  * Move every due post forward, within a time budget. Called every minute
  * by the Supabase timer (and by "Run due posts now" when testing).
  */
-export async function runDuePosts(budgetMs = 45_000) {
-  const deadline = Date.now() + budgetMs;
+export async function runDuePosts(budgetMs = 45_000, source: "timer" | "manual" = "timer") {
+  const started = Date.now();
+  const deadline = started + budgetMs;
   const admin = createAdminClient();
+  // Every run is recorded, so the Posting page can show the app is alive.
+  const record = (claimed: number, error: string | null) =>
+    admin.from("posting_runs").insert({ source, claimed, duration_ms: Date.now() - started, error });
   const { data, error } = await admin.rpc("claim_social_posts", { p_limit: 5 });
-  if (error) return { claimed: 0, error: error.message };
+  if (error) {
+    await record(0, error.message);
+    return { claimed: 0, error: error.message };
+  }
   const posts = (data ?? []) as Claimed[];
   for (const post of posts) {
     if (Date.now() > deadline - 10_000) {
@@ -178,5 +185,6 @@ export async function runDuePosts(budgetMs = 45_000) {
     }
     await runOne(post, deadline);
   }
+  await record(posts.length, null);
   return { claimed: posts.length };
 }

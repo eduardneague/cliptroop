@@ -276,7 +276,71 @@ export async function runDuePostsNow(shortId: string): Promise<Result<{ claimed:
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
-  const r = await runDuePosts(50_000);
-  revalidatePath(`/shorts/${shortId}`);
+  const r = await runDuePosts(50_000, "manual");
+  if (UUID.test(shortId)) revalidatePath(`/shorts/${shortId}`);
+  revalidatePath("/posting");
   return { claimed: r.claimed ?? 0 };
+}
+
+
+export type Preflight = { platform: Platform; ok: boolean; message: string };
+
+/**
+ * Live checks right before scheduling, one per platform: the sign-in
+ * works, the account is the right kind, TikTok's options allow it, and
+ * the video file is there. Nothing is scheduled if any check fails.
+ */
+export async function checkBeforeScheduling(shortId: string, platforms: Platform[]): Promise<Result<{ checks: Preflight[] }>> {
+  if (!UUID.test(shortId)) return { error: "Short not found." };
+  const supabase = await createClient();
+  const { data: short } = await supabase.from("short_videos").select("id, team_id, approved_version_id").eq("id", shortId).maybeSingle();
+  if (!short) return { error: "Short not found." };
+  const m = await manager(short.team_id as string);
+  if (!m.user) return { error: "Your session expired. Sign in again." };
+  if (!m.ok) return { error: "Only the master or a scheduler can schedule posts." };
+
+  const admin = createAdminClient();
+  const versionQuery = short.approved_version_id
+    ? admin.from("short_video_versions").select("storage_path, size_bytes, duration_sec, deleted_at").eq("id", short.approved_version_id).maybeSingle()
+    : admin.from("short_video_versions").select("storage_path, size_bytes, duration_sec, deleted_at").eq("short_id", shortId).is("deleted_at", null).order("version_number", { ascending: false }).limit(1).maybeSingle();
+  const { data: version } = await versionQuery;
+  let fileOk = !!version && !version.deleted_at;
+  if (fileOk) {
+    const { data: signed } = await admin.storage.from("review-videos").createSignedUrl(version!.storage_path as string, 60);
+    const head = signed?.signedUrl ? await fetch(signed.signedUrl, { method: "HEAD", cache: "no-store" }).catch(() => null) : null;
+    fileOk = !!head?.ok;
+  }
+  const duration = version?.duration_sec === null || version?.duration_sec === undefined ? null : Number(version.duration_sec);
+  const { data: accounts } = await admin.from("social_accounts").select("id, platform, status").eq("team_id", short.team_id);
+
+  const checks = await Promise.all(
+    platforms.map(async (platform): Promise<Preflight> => {
+      if (!fileOk) return { platform, ok: false, message: "The video file is missing. Upload the video again." };
+      const account = (accounts ?? []).find((a) => a.platform === platform);
+      if (!account) return { platform, ok: false, message: "Not connected. Connect it in Team → Connected accounts." };
+      if (account.status !== "active") return { platform, ok: false, message: "Needs reconnecting in Team → Connected accounts." };
+      try {
+        const token = await getAccessToken(account.id as string);
+        if (platform === "youtube") {
+          const r = await fetch("https://www.googleapis.com/youtube/v3/channels?part=id&mine=true", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          if (!r.ok) return { platform, ok: false, message: `YouTube refused the sign-in (HTTP ${r.status}). Reconnect YouTube.` };
+          return { platform, ok: true, message: "Signed in. It uploads right away and YouTube publishes it at your time." };
+        }
+        if (platform === "instagram") {
+          const r = await fetch(`https://graph.instagram.com/v23.0/me?fields=account_type,username&access_token=${encodeURIComponent(token)}`, { cache: "no-store" });
+          const j = (await r.json().catch(() => ({}))) as { account_type?: string; username?: string };
+          if (!r.ok) return { platform, ok: false, message: "Instagram refused the sign-in. Reconnect Instagram." };
+          if (j.account_type && !/business|creator/i.test(j.account_type)) return { platform, ok: false, message: "The Instagram account must be Professional (Business or Creator)." };
+          return { platform, ok: true, message: `Signed in as @${j.username ?? "account"}. VPlanner sends it at your time.` };
+        }
+        const d = await tiktokCall("/post/publish/creator_info/query/", token, {});
+        const max = Number(d.max_video_post_duration_sec ?? 0);
+        if (max && duration && duration > max) return { platform, ok: false, message: `This account can post up to ${max}s; the video is ${Math.round(duration)}s.` };
+        return { platform, ok: true, message: `Signed in as ${String(d.creator_nickname ?? "account")}. VPlanner sends it at your time.` };
+      } catch (e) {
+        return { platform, ok: false, message: e instanceof Error ? e.message : "Couldn't check this account." };
+      }
+    })
+  );
+  return { checks };
 }
