@@ -51,6 +51,14 @@ export async function GET(request: Request) {
     const age = now - postedAt;
     if (age < KEEP_DAYS * DAY) continue;
 
+    // Never while a post still needs the file (scheduled, running or failed).
+    const { count: open } = await admin
+      .from("social_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("short_id", s.id)
+      .not("status", "in", "(published,cancelled)");
+    if ((open ?? 0) > 0) continue;
+
     const { data: versions } = await admin
       .from("short_video_versions")
       .select("id, storage_path")

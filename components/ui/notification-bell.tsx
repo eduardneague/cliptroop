@@ -52,6 +52,8 @@ export type NotificationItem = {
     reply?: boolean;
     account?: string;
     platform?: string;
+    ok?: boolean;
+    message?: string;
     version?: number | null;
   } | null;
 };
@@ -168,6 +170,16 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> made you the editor on <ShortRef m={m} />
           {m.readyToEdit ? ". It's ready to edit." : "."}
+        </>
+      );
+    case "social_post":
+      return m.ok ? (
+        <>
+          <ShortRef m={m} /> is live on <b>{m.platform === "youtube" ? "YouTube" : m.platform === "instagram" ? "Instagram" : "TikTok"}</b>.
+        </>
+      ) : (
+        <>
+          <ShortRef m={m} /> couldn&rsquo;t post to <b>{m.platform === "youtube" ? "YouTube" : m.platform === "instagram" ? "Instagram" : "TikTok"}</b>: {m.message}
         </>
       );
     case "social_reconnect":

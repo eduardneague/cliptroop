@@ -27,6 +27,7 @@ import { ActivityCard } from "./activity-card";
 import { ReviewCard } from "./review-card";
 import { ChangesCard } from "./changes-card";
 import { SettingsButton } from "./settings-button";
+import { SchedulePanel } from "./schedule-panel";
 import { ScriptCard } from "@/modules/scripts/components/script-card";
 import { getShortScript } from "@/modules/scripts/lib/queries";
 import { VideoCard } from "@/modules/review/components/video-card";
@@ -70,6 +71,29 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
     listNotes(short.id),
   ]);
   const latestVersion = versions.find((v) => !v.deleted) ?? null;
+
+  // Automatic posting (approved shorts): accounts, this short's posts and
+  // their history, the team's default times. Safe columns only.
+  const posting = short.stage === "ready" || short.stage === "posted";
+  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }] = posting
+    ? await Promise.all([
+        supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status").eq("team_id", short.teamId),
+        supabase
+          .from("social_posts")
+          .select("id, platform, status, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")
+          .eq("short_id", short.id)
+          .neq("status", "cancelled"),
+        supabase.from("teams").select("post_time_youtube, post_time_instagram, post_time_tiktok").eq("id", short.teamId).maybeSingle(),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
+  const { data: socialEvents } =
+    socialPosts && socialPosts.length
+      ? await supabase
+          .from("social_post_events")
+          .select("id, post_id, kind, message, created_at")
+          .in("post_id", socialPosts.map((p) => p.id as string))
+          .order("created_at", { ascending: true })
+      : { data: [] };
   const openNotes = latestVersion
     ? notes.filter((n) => n.versionId === latestVersion.id && !n.parentId && !n.resolvedAt).length
     : 0;
@@ -246,6 +270,53 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
           {short.stage === "editing" && short.reviewNote && (
             <div className="order-2 lg:order-none">
               <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
+            </div>
+          )}
+          {posting && (
+            <div className="order-2 lg:order-none">
+              <SchedulePanel
+                shortId={short.id}
+                teamId={short.teamId}
+                title={short.title}
+                caption={short.captionEnabled ? short.caption ?? "" : ""}
+                plannedDate={short.plannedDate}
+                platforms={short.platforms.filter((x): x is "youtube" | "instagram" | "tiktok" => x === "youtube" || x === "instagram" || x === "tiktok")}
+                videoDuration={latestVersion?.duration ?? null}
+                defaultTimes={{
+                  youtube: String(postTimes?.post_time_youtube ?? "17:00").slice(0, 5),
+                  instagram: String(postTimes?.post_time_instagram ?? "18:00").slice(0, 5),
+                  tiktok: String(postTimes?.post_time_tiktok ?? "19:00").slice(0, 5),
+                }}
+                accounts={(socialAccounts ?? []).map((a) => ({
+                  platform: a.platform as "youtube" | "instagram" | "tiktok",
+                  name: (a.display_name as string | null) ?? (a.username as string | null) ?? "Connected account",
+                  avatarUrl: (a.avatar_url as string | null) ?? null,
+                  status: a.status as "active" | "needs_reconnect",
+                }))}
+                posts={(socialPosts ?? []).map((p) => ({
+                  id: p.id as string,
+                  platform: p.platform as "youtube" | "instagram" | "tiktok",
+                  status: p.status as string,
+                  progress: (p.progress as number) ?? 0,
+                  scheduledAt: p.scheduled_at as string,
+                  lastError: (p.last_error as string | null) ?? null,
+                  attempts: (p.attempts as number) ?? 0,
+                  nextAttemptAt: p.next_attempt_at as string,
+                  permalink: (p.permalink as string | null) ?? null,
+                  note: (p.note as string | null) ?? null,
+                  externalId: (p.external_id as string | null) ?? null,
+                  options: (p.options as Record<string, unknown>) ?? {},
+                }))}
+                events={(socialEvents ?? []).map((e) => ({
+                  id: e.id as number,
+                  postId: e.post_id as string,
+                  kind: e.kind as string,
+                  message: (e.message as string) ?? "",
+                  at: e.created_at as string,
+                }))}
+                canManage={perms.isMaster || roles.includes("publisher")}
+                isDev={process.env.VERCEL_ENV !== "production"}
+              />
             </div>
           )}
           {(short.stage === "ready" || short.stage === "posted") && (
