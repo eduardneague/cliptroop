@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { relativeTime } from "@/lib/relative-time";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import { ChevronDownIcon } from "@/components/ui/icons";
 
 export type AccountView = {
   platform: "youtube" | "instagram" | "tiktok";
@@ -173,9 +174,14 @@ export function ConnectedAccounts({
       </div>
 
       {history && history.length > 0 && (
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-2">History</div>
-          <ol className="space-y-1.5">
+        <details className="group rounded-xl border border-line/10">
+          <summary className="flex items-center gap-2 px-3.5 py-2.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">History</span>
+            <span className="rounded-full bg-surface-2 px-2 h-5 inline-flex items-center text-[11px] font-bold text-ink-soft tabular-nums">{history.length}</span>
+            <span className="flex-1" />
+            <ChevronDownIcon className="w-4 h-4 text-ink-soft transition-transform duration-200 group-open:rotate-180" />
+          </summary>
+          <ol className="space-y-1.5 px-3.5 pb-3">
             {history.map((h) => (
               <li key={h.id} className="flex items-center gap-2 text-[12.5px] text-ink-soft">
                 <PlatformIcon platform={h.platform as AccountView["platform"]} className="w-4 h-4 rounded" />
@@ -190,7 +196,7 @@ export function ConnectedAccounts({
               </li>
             ))}
           </ol>
-        </div>
+        </details>
       )}
     </div>
   );

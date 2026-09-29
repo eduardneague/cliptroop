@@ -3,14 +3,18 @@ import { PLATFORM_META, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/co
 import type { ShortEvent } from "@/modules/short-videos/lib/queries";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 
-function describe(e: ShortEvent): React.ReactNode {
+function describe(e: ShortEvent, auto: boolean): React.ReactNode {
   switch (e.kind) {
     case "created":
       return "created this short";
     case "editor":
       return "changed the editor";
     case "posted":
-      return <>marked it posted on <b>{e.platform ? PLATFORM_META[e.platform].name : "a platform"}</b></>;
+      return (
+        <>
+          {auto ? "posted it on" : "marked it posted on"} <b>{e.platform ? PLATFORM_META[e.platform].name : "a platform"}</b>
+        </>
+      );
     case "unposted":
       return <>unmarked <b>{e.platform ? PLATFORM_META[e.platform].name : "a platform"}</b></>;
     case "stage":
@@ -43,10 +47,16 @@ export function ActivityCard({ events }: { events: ShortEvent[] }) {
               {e.actor ? (
                 <PersonAvatar name={e.actor.name} avatarUrl={e.actor.avatarUrl} color={e.actor.color} className="w-6 h-6 text-[9px] ring-2 ring-surface" />
               ) : (
-                <span className="w-6 h-6 rounded-full bg-surface-2 ring-2 ring-surface flex-shrink-0" />
+                // No person: VPlanner did it automatically (e.g. posting).
+                <span
+                  className="w-6 h-6 rounded-full bg-amber text-white ring-2 ring-surface flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                  aria-hidden
+                >
+                  V
+                </span>
               )}
               <div className="min-w-0 text-[12.5px] leading-snug pt-0.5">
-                <span className="font-semibold">{e.actor?.name ?? "Someone"}</span> {describe(e)}
+                <span className="font-semibold">{e.actor?.name ?? "VPlanner"}</span> {describe(e, !e.actor)}
                 {e.note && (
                   <p className="mt-1 rounded-lg bg-amber/10 text-ink px-2.5 py-1.5 text-[12px] whitespace-pre-wrap">{e.note}</p>
                 )}

@@ -12,6 +12,9 @@ import { runDuePosts } from "@/lib/social/worker";
 import { YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 
 type Result<T = object> = ({ error?: undefined } & T) | { error: string };
+
+/** Posts must be at least this far ahead, so there's always time to change them. */
+const MIN_LEAD_MINUTES = 15;
 type Platform = "youtube" | "instagram" | "tiktok";
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -123,6 +126,9 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
     const at = new Date(e.at);
     if (Number.isNaN(at.getTime())) return { error: `Pick a valid time for ${NAME[e.platform]}.` };
     if (at.getTime() > Date.now() + 180 * 86_400_000) return { error: "Schedule within the next 6 months." };
+    if (at.getTime() < Date.now() + MIN_LEAD_MINUTES * 60_000) {
+      return { error: `Pick a time at least ${MIN_LEAD_MINUTES} minutes from now for ${NAME[e.platform]}.` };
+    }
 
     if (e.platform === "youtube") {
       const o = e.options;
@@ -381,7 +387,7 @@ export async function changePostTime(postId: string, atIso: string): Promise<Res
   if (!UUID.test(postId)) return { error: "Post not found." };
   const at = new Date(atIso);
   if (Number.isNaN(at.getTime())) return { error: "Pick a valid time." };
-  if (at.getTime() < Date.now() + 2 * 60_000) return { error: "Pick a time at least a few minutes from now." };
+  if (at.getTime() < Date.now() + MIN_LEAD_MINUTES * 60_000) return { error: `Pick a time at least ${MIN_LEAD_MINUTES} minutes from now.` };
   if (at.getTime() > Date.now() + 180 * 86_400_000) return { error: "Schedule within the next 6 months." };
 
   const supabase = await createClient();

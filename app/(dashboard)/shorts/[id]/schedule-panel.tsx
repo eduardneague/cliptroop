@@ -66,6 +66,25 @@ const TIMES = Array.from({ length: 96 }, (_, i) => {
   return { value: `${h}:${m}`, label: `${h}:${m}` };
 });
 
+/** Posts must be at least 15 minutes ahead (the server checks this too). */
+const MIN_LEAD_MS = 15 * 60_000;
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+/** The times you can still pick on a date (today: from 15 minutes from now). */
+function allowedTimes(date: string) {
+  if (date !== todayStr()) return TIMES;
+  const earliest = Date.now() + MIN_LEAD_MS;
+  return TIMES.filter((t) => new Date(`${date}T${t.value}:00`).getTime() >= earliest);
+}
+/** Keep a chosen time if allowed, otherwise the next allowed slot. */
+function fitTime(date: string, time: string) {
+  const list = allowedTimes(date);
+  if (list.some((t) => t.value === time)) return time;
+  return list[0]?.value ?? time;
+}
+
 function localIso(date: string, time: string) {
   // The date and time are in the viewer's local time zone.
   return new Date(`${date}T${time}:00`).toISOString();
@@ -219,9 +238,9 @@ export function SchedulePanel({
   const initialDate = plannedDate ?? tomorrow();
   const [include, setInclude] = useState<Record<Platform, boolean>>({ youtube: true, instagram: true, tiktok: true });
   const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({
-    youtube: { date: initialDate, time: defaultTimes.youtube },
-    instagram: { date: initialDate, time: defaultTimes.instagram },
-    tiktok: { date: initialDate, time: defaultTimes.tiktok },
+    youtube: { date: initialDate, time: fitTime(initialDate, defaultTimes.youtube) },
+    instagram: { date: initialDate, time: fitTime(initialDate, defaultTimes.instagram) },
+    tiktok: { date: initialDate, time: fitTime(initialDate, defaultTimes.tiktok) },
   });
   // The short's title goes in by default everywhere (plus its caption, if it has one).
   const defaultCaption = caption ? `${title}\n\n${caption}` : title;
@@ -263,6 +282,11 @@ export function SchedulePanel({
 
   function problems(): string | null {
     if (chosen.length === 0) return "Pick at least one platform.";
+    for (const p of chosen) {
+      if (new Date(localIso(when[p].date, when[p].time)).getTime() < Date.now() + MIN_LEAD_MS) {
+        return `${NAME[p]}: pick a time at least 15 minutes from now.`;
+      }
+    }
     if (chosen.includes("youtube") && !yt.title.trim()) return "YouTube needs a title.";
     if (chosen.includes("tiktok")) {
       if (!creator) return creatorError ?? "Loading your TikTok account…";
@@ -550,20 +574,21 @@ export function SchedulePanel({
 }
 
 function When({ value, onChange }: { value: { date: string; time: string }; onChange: (v: { date: string; time: string }) => void }) {
+  const options = allowedTimes(value.date);
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <DatePicker
         value={value.date}
-        onChange={(d) => onChange({ ...value, date: d })}
+        onChange={(d) => onChange({ date: d, time: fitTime(d, value.time) })}
         ariaLabel="Post date"
         triggerClassName="inline-flex items-center rounded-lg border border-line/15 bg-surface px-3 h-10 text-[13.5px] font-semibold hover:border-line/30"
       >
         {new Date(`${value.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
       </DatePicker>
       <div className="w-28">
-        <Select value={value.time} onChange={(t) => t && onChange({ ...value, time: t })} options={TIMES} ariaLabel="Post time" menuMinWidth={120} />
+        <Select value={value.time} onChange={(t) => t && onChange({ ...value, time: t })} options={options} ariaLabel="Post time" menuMinWidth={120} />
       </div>
-      <span className="text-[11.5px] text-ink-soft">your time</span>
+      <span className="text-[11.5px] text-ink-soft">{options.length === 0 ? "Pick a later day" : "your time · at least 15 min ahead"}</span>
     </div>
   );
 }
@@ -1031,9 +1056,11 @@ function ChangeTimeDialog({ open, post, onClose, onSaved }: { open: boolean; pos
   const toast = useToast();
   const d = new Date(post.scheduledAt);
   const pad = (n: number) => String(n).padStart(2, "0");
+  const startDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const safeDate = startDate < todayStr() ? todayStr() : startDate;
   const [value, setValue] = useState({
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 15) * 15)}`,
+    date: safeDate,
+    time: fitTime(safeDate, `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 15) * 15)}`),
   });
   const [saving, setSaving] = useState(false);
   return (

@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotifications } from "@/lib/notify";
+import { appUrl, emailConfigured, sendAlertEmail } from "@/lib/email";
 import { getAccessToken } from "./tokens";
 import { ProviderError } from "./providers";
 import { PublishError, type PostRow, type StepResult } from "./publishers/common";
@@ -24,15 +25,30 @@ async function notify(post: Claimed, ok: boolean, message: string) {
   const recipients = new Set<string>();
   if (post.created_by) recipients.add(post.created_by);
   if (!ok) {
-    const { data: masters } = await admin
+    // Failures reach every master and scheduler (not just who scheduled it).
+    const { data: people } = await admin
       .from("team_members")
       .select("user_id, member_roles!inner(role)")
       .eq("team_id", post.team_id)
       .eq("status", "active")
-      .eq("member_roles.role", "master");
-    (masters ?? []).forEach((m) => m.user_id && recipients.add(m.user_id as string));
+      .in("member_roles.role", ["master", "publisher"]);
+    (people ?? []).forEach((m) => m.user_id && recipients.add(m.user_id as string));
   }
   const ref = short ? `#${short.entry_number} "${short.title}"` : "A short";
+
+  // Failures also go out by email, with a link straight to the short.
+  if (!ok && emailConfigured() && recipients.size) {
+    const { data: profiles } = await admin.from("profiles").select("email").in("id", [...recipients]);
+    const to = (profiles ?? []).map((p) => p.email as string | null).filter((e): e is string => !!e);
+    const r = await sendAlertEmail({
+      to,
+      subject: `${short ? `#${short.entry_number} ` : ""}couldn't post to ${NAME[post.platform]}`,
+      message: `${ref} didn't post to ${NAME[post.platform]}: ${message} Open it to see the details and retry.`,
+      linkText: "Open the short",
+      href: `${appUrl()}/shorts/${post.short_id}`,
+    });
+    await event(post.id, post.team_id, "note", r.sent ? `Alert emailed to ${to.length} ${to.length === 1 ? "person" : "people"}` : "Alert email couldn't be sent");
+  }
   await Promise.all(
     [...recipients].map((recipient_id) =>
       sendNotifications({

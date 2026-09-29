@@ -14,6 +14,7 @@ import { BellIcon } from "./icons";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
+import { ShortsIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 
 type Actor = { name: string; avatarUrl: string | null };
@@ -87,23 +88,44 @@ function actionableStatus(n: NotificationItem): string | null {
 // notifications with no metadata, which keeps the old simple dot.
 function LeadingVisual({ n }: { n: NotificationItem }) {
   const m = n.metadata;
-  if (!m) return null;
+  // What it's about: a short (vertical icon) or a long video (horizontal),
+  // the same icons as in search.
+  const TypeIcon = n.short_id ? ShortsIcon : n.project_id ? VideoIcon : null;
+  const failed = m?.ok === false;
 
-  if (m.actor) {
+  if (m?.actor) {
     return (
-      <span
-        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
-        style={{ background: "#888" }}
-      >
-        {m.actor.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={m.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initialsFor(m.actor.name)
+      <span className="relative flex-shrink-0">
+        <span
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden"
+          style={{ background: "#888" }}
+        >
+          {m.actor.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img loading="lazy" decoding="async" src={m.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            initialsFor(m.actor.name)
+          )}
+        </span>
+        {TypeIcon && (
+          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-[5px] bg-surface ring-1 ring-line/20 flex items-center justify-center text-ink-soft">
+            <TypeIcon className="w-2.5 h-2.5" />
+          </span>
         )}
       </span>
     );
   }
+  if (TypeIcon && (!m || !m.team)) {
+    return (
+      <span
+        className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${failed ? "bg-red/15 text-red" : "bg-surface-2 text-ink-soft"}`}
+        aria-label={n.short_id ? "Short video" : "Long video"}
+      >
+        <TypeIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  if (!m) return null;
   if (m.team) {
     return (
       <span

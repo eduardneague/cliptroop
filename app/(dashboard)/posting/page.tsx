@@ -6,7 +6,9 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { diagnose, type Health } from "@/lib/social/health";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { AutoRefresh, RunNowButton, TestTimerButton, When } from "./client-bits";
+import { ChevronDownIcon } from "@/components/ui/icons";
+import { AutoRefresh, RunNowButton, TestEmailButton, TestTimerButton, When } from "./client-bits";
+import { APP_CHANNEL } from "@/lib/version";
 
 export const metadata: Metadata = { title: "Posting" };
 
@@ -107,15 +109,35 @@ export default async function PostingPage() {
     );
   };
 
-  const group = (title: string, list: Row[], empty: string, tone = "") =>
-    (
-      <section className="rounded-2xl border border-line/10 bg-surface overflow-hidden">
-        <h2 className={`px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wide ${tone || "text-ink-soft"}`}>
-          {title} <span className="text-ink-faint">{list.length}</span>
-        </h2>
-        {list.length ? <ul className="divide-y divide-line/10">{list.map(row)}</ul> : <p className="px-4 pb-4 text-[13px] text-ink-soft">{empty}</p>}
-      </section>
+  // Each section is a dropdown. "Needs attention" turns red when it has anything.
+  const group = (title: string, list: Row[], empty: string, opts: { open?: boolean; danger?: boolean } = {}) => {
+    const danger = opts.danger && list.length > 0;
+    return (
+      <details
+        open={opts.open}
+        className={`group rounded-2xl border overflow-hidden ${danger ? "border-red/50 bg-red/[0.07]" : "border-line/10 bg-surface"}`}
+      >
+        <summary className="flex items-center gap-2 px-4 py-3.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+          {danger && <span className="w-2 h-2 rounded-full bg-red animate-pulse" aria-hidden />}
+          <span className={`text-[11.5px] font-bold uppercase tracking-wide ${danger ? "text-red" : "text-ink-soft"}`}>{title}</span>
+          <span
+            className={`rounded-full px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${
+              danger ? "bg-red text-white" : "bg-surface-2 text-ink-soft"
+            }`}
+          >
+            {list.length}
+          </span>
+          <span className="flex-1" />
+          <ChevronDownIcon className="w-4 h-4 text-ink-soft transition-transform duration-200 group-open:rotate-180" />
+        </summary>
+        {list.length ? (
+          <ul className={`divide-y border-t ${danger ? "divide-red/15 border-red/20" : "divide-line/10 border-line/10"}`}>{list.map(row)}</ul>
+        ) : (
+          <p className="px-4 pb-4 text-[13px] text-ink-soft">{empty}</p>
+        )}
+      </details>
     );
+  };
 
   return (
     <div className="px-4 sm:px-8 py-6 max-w-5xl mx-auto space-y-5">
@@ -125,7 +147,11 @@ export default async function PostingPage() {
           <h1 className="text-[28px] font-display font-semibold">Posting</h1>
           <p className="text-[13px] text-ink-soft">Everything scheduled, in progress and posted, and whether the system behind it is healthy.</p>
         </div>
-        {manager && process.env.VERCEL_ENV !== "production" && <RunNowButton />}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Staging only. */}
+          {manager && APP_CHANNEL === "E" && <TestEmailButton teamId={currentTeam.id} />}
+          {manager && process.env.VERCEL_ENV !== "production" && <RunNowButton />}
+        </div>
       </div>
 
       {manager && (
@@ -173,9 +199,9 @@ export default async function PostingPage() {
         </section>
       )}
 
-      {group("Needs attention", attention, "Nothing needs attention.", attention.length ? "text-red" : "")}
-      {group("In progress", moving, "Nothing is uploading right now.")}
-      {group("Upcoming", upcoming, "Nothing scheduled. Approve a short and schedule it from its page.")}
+      {group("Needs attention", attention, "Nothing needs attention.", { open: attention.length > 0, danger: true })}
+      {group("In progress", moving, "Nothing is uploading right now.", { open: true })}
+      {group("Upcoming", upcoming, "Nothing scheduled. Approve a short and schedule it from its page.", { open: true })}
       {group("Published recently", published, "Nothing posted yet.")}
     </div>
   );
