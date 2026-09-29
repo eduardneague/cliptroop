@@ -28,8 +28,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!access.ok) return back(`social_error=forbidden&platform=${platform}`);
 
   const state = b64url(randomBytes(32));
+  // 48 random bytes → 64 URL-safe characters (TikTok and the standard
+  // both allow 43–128 of [A-Za-z0-9-._~]).
   const verifier = provider.usesPkce ? b64url(randomBytes(48)) : null;
-  const challenge = verifier ? b64url(createHash("sha256").update(verifier).digest()) : null;
+  const digest = verifier ? createHash("sha256").update(verifier).digest() : null;
+  // Google: standard base64url. TikTok: its own variant, hex.
+  const challenge = digest ? (provider.pkceEncoding === "hex" ? digest.toString("hex") : b64url(digest)) : null;
 
   const admin = createAdminClient();
   // Tidy up abandoned attempts, then remember this one.

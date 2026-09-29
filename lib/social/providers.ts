@@ -35,8 +35,10 @@ export class ProviderError extends Error {}
 type Provider = {
   name: string;
   configured: () => boolean;
-  /** Google supports PKCE; Instagram and TikTok (web) rely on `state`. */
+  /** PKCE: Google (standard base64url) and TikTok (hex; TikTok's own
+      variant, now required for web too). Instagram relies on `state`. */
   usesPkce: boolean;
+  pkceEncoding?: "base64url" | "hex";
   authorizeUrl: (a: { state: string; challenge: string | null; redirectUri: string }) => string;
   exchange: (a: { code: string; verifier: string | null; redirectUri: string }) => Promise<TokenSet>;
   profile: (accessToken: string) => Promise<AccountProfile>;
@@ -251,8 +253,9 @@ function tiktokTokens(t: Record<string, unknown>): TokenSet {
 const tiktok: Provider = {
   name: "TikTok",
   configured: () => !!env("TIKTOK_CLIENT_KEY") && !!env("TIKTOK_CLIENT_SECRET"),
-  usesPkce: false,
-  authorizeUrl: ({ state, redirectUri }) =>
+  usesPkce: true,
+  pkceEncoding: "hex",
+  authorizeUrl: ({ state, challenge, redirectUri }) =>
     "https://www.tiktok.com/v2/auth/authorize/?" +
     new URLSearchParams({
       client_key: env("TIKTOK_CLIENT_KEY"),
@@ -260,8 +263,9 @@ const tiktok: Provider = {
       scope: TIKTOK_SCOPES.join(","),
       redirect_uri: redirectUri,
       state,
+      ...(challenge ? { code_challenge: challenge, code_challenge_method: "S256" } : {}),
     }),
-  exchange: async ({ code, redirectUri }) => {
+  exchange: async ({ code, verifier, redirectUri }) => {
     const t = await call("https://open.tiktokapis.com/v2/oauth/token/", {
       form: {
         client_key: env("TIKTOK_CLIENT_KEY"),
@@ -269,6 +273,7 @@ const tiktok: Provider = {
         code,
         grant_type: "authorization_code",
         redirect_uri: redirectUri,
+        ...(verifier ? { code_verifier: verifier } : {}),
       },
     });
     if (t.error) throw new ProviderError(String(t.error_description ?? t.error));
