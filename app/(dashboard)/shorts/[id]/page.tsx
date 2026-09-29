@@ -22,7 +22,6 @@ import { ShortsRealtime } from "@/modules/short-videos/components/shorts-realtim
 import { ShortTitle } from "./short-title";
 import { DeleteShortButton } from "./delete-short-button";
 import { WorkflowActions } from "./workflow-actions";
-import { PostingCard } from "./posting-card";
 import { ActivityCard } from "./activity-card";
 import { ReviewCard } from "./review-card";
 import { ChangesCard } from "./changes-card";
@@ -224,6 +223,56 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
         {/* Below lg the two columns dissolve ("contents") and every card is
             placed on its own: action box, final file, script, activity last. */}
         <div className="contents lg:block lg:space-y-6 min-w-0">
+          {posting && (
+            <div className="order-2 lg:order-none">
+              <SchedulePanel
+                shortId={short.id}
+                teamId={short.teamId}
+                title={short.title}
+                caption={short.captionEnabled ? short.caption ?? "" : ""}
+                plannedDate={short.plannedDate}
+                platforms={short.platforms.filter((x): x is "youtube" | "instagram" | "tiktok" => x === "youtube" || x === "instagram" || x === "tiktok")}
+                hasFacebook={short.platforms.includes("facebook")}
+                youtubeDescription={settings.youtubeDescription}
+                manualPosts={short.posts.map((x) => ({ platform: x.platform, url: x.url, postedAt: x.postedAt }))}
+                videoDuration={latestVersion?.duration ?? null}
+                defaultTimes={{
+                  youtube: String(postTimes?.post_time_youtube ?? "17:00").slice(0, 5),
+                  instagram: String(postTimes?.post_time_instagram ?? "18:00").slice(0, 5),
+                  tiktok: String(postTimes?.post_time_tiktok ?? "19:00").slice(0, 5),
+                }}
+                accounts={(socialAccounts ?? []).map((a) => ({
+                  platform: a.platform as "youtube" | "instagram" | "tiktok",
+                  name: (a.display_name as string | null) ?? (a.username as string | null) ?? "Connected account",
+                  avatarUrl: (a.avatar_url as string | null) ?? null,
+                  status: a.status as "active" | "needs_reconnect",
+                }))}
+                posts={(socialPosts ?? []).map((p) => ({
+                  id: p.id as string,
+                  platform: p.platform as "youtube" | "instagram" | "tiktok",
+                  status: p.status as string,
+                  progress: (p.progress as number) ?? 0,
+                  scheduledAt: p.scheduled_at as string,
+                  lastError: (p.last_error as string | null) ?? null,
+                  attempts: (p.attempts as number) ?? 0,
+                  nextAttemptAt: p.next_attempt_at as string,
+                  permalink: (p.permalink as string | null) ?? null,
+                  note: (p.note as string | null) ?? null,
+                  externalId: (p.external_id as string | null) ?? null,
+                  options: (p.options as Record<string, unknown>) ?? {},
+                }))}
+                events={(socialEvents ?? []).map((e) => ({
+                  id: e.id as number,
+                  postId: e.post_id as string,
+                  kind: e.kind as string,
+                  message: (e.message as string) ?? "",
+                  at: e.created_at as string,
+                }))}
+                canManage={perms.isMaster || roles.includes("publisher")}
+                isDev={process.env.VERCEL_ENV !== "production"}
+              />
+            </div>
+          )}
           <div className={short.stage === "script" ? "order-1 lg:order-none" : "order-4 lg:order-none"}>
           <ScriptCard
             href={`/shorts/${short.id}/script`}
@@ -272,64 +321,7 @@ export default async function ShortPage({ params }: { params: Promise<{ id: stri
               <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
             </div>
           )}
-          {posting && (
-            <div className="order-2 lg:order-none">
-              <SchedulePanel
-                shortId={short.id}
-                teamId={short.teamId}
-                title={short.title}
-                caption={short.captionEnabled ? short.caption ?? "" : ""}
-                plannedDate={short.plannedDate}
-                platforms={short.platforms.filter((x): x is "youtube" | "instagram" | "tiktok" => x === "youtube" || x === "instagram" || x === "tiktok")}
-                videoDuration={latestVersion?.duration ?? null}
-                defaultTimes={{
-                  youtube: String(postTimes?.post_time_youtube ?? "17:00").slice(0, 5),
-                  instagram: String(postTimes?.post_time_instagram ?? "18:00").slice(0, 5),
-                  tiktok: String(postTimes?.post_time_tiktok ?? "19:00").slice(0, 5),
-                }}
-                accounts={(socialAccounts ?? []).map((a) => ({
-                  platform: a.platform as "youtube" | "instagram" | "tiktok",
-                  name: (a.display_name as string | null) ?? (a.username as string | null) ?? "Connected account",
-                  avatarUrl: (a.avatar_url as string | null) ?? null,
-                  status: a.status as "active" | "needs_reconnect",
-                }))}
-                posts={(socialPosts ?? []).map((p) => ({
-                  id: p.id as string,
-                  platform: p.platform as "youtube" | "instagram" | "tiktok",
-                  status: p.status as string,
-                  progress: (p.progress as number) ?? 0,
-                  scheduledAt: p.scheduled_at as string,
-                  lastError: (p.last_error as string | null) ?? null,
-                  attempts: (p.attempts as number) ?? 0,
-                  nextAttemptAt: p.next_attempt_at as string,
-                  permalink: (p.permalink as string | null) ?? null,
-                  note: (p.note as string | null) ?? null,
-                  externalId: (p.external_id as string | null) ?? null,
-                  options: (p.options as Record<string, unknown>) ?? {},
-                }))}
-                events={(socialEvents ?? []).map((e) => ({
-                  id: e.id as number,
-                  postId: e.post_id as string,
-                  kind: e.kind as string,
-                  message: (e.message as string) ?? "",
-                  at: e.created_at as string,
-                }))}
-                canManage={perms.isMaster || roles.includes("publisher")}
-                isDev={process.env.VERCEL_ENV !== "production"}
-              />
-            </div>
-          )}
-          {(short.stage === "ready" || short.stage === "posted") && (
-            <div className="order-2 lg:order-none">
-            <PostingCard
-              id={short.id}
-              platforms={short.platforms}
-              posts={short.posts}
-              canPost={perms.isMaster || roles.includes("publisher")}
-              stageAllowsPosting
-            />
-            </div>
-          )}
+
           <MobileCollapse label="Activity" count={short.events.length} className="order-9 lg:order-none">
             <ActivityCard events={short.events} />
           </MobileCollapse>

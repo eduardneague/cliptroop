@@ -27,6 +27,7 @@ export function ShortSettingsForm({
   const [reviewer, setReviewer] = useState(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState(settings.defaultScheduler);
   const [scripter, setScripter] = useState(settings.defaultScripter);
+  const [ytDescription, setYtDescription] = useState(settings.youtubeDescription);
 
   const zones = useMemo(() => {
     try {
@@ -46,7 +47,8 @@ export function ShortSettingsForm({
     editor !== settings.defaultEditor ||
     reviewer !== settings.defaultReviewer ||
     scheduler !== settings.defaultScheduler ||
-    scripter !== settings.defaultScripter;
+    scripter !== settings.defaultScripter ||
+    ytDescription !== settings.youtubeDescription;
   const rhythmChanged =
     perDay !== settings.perDay ||
     weekends !== settings.weekends ||
@@ -124,6 +126,22 @@ export function ShortSettingsForm({
       </div>
 
       <div>
+        <div className="flex items-baseline justify-between gap-3 mb-1.5">
+          <div className="text-[11.5px] font-semibold text-ink-soft">YouTube description</div>
+          <div className="text-[11px] text-ink-faint tabular-nums">{ytDescription.length}/5000</div>
+        </div>
+        <textarea
+          value={ytDescription}
+          onChange={(e) => setYtDescription(e.target.value)}
+          maxLength={5000}
+          rows={4}
+          placeholder="Links, socials, hashtags… used for every YouTube post."
+          className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-[13.5px] outline-none focus:ring-2 focus:ring-amber resize-y"
+        />
+        <p className="mt-1 text-[11.5px] text-ink-faint">Filled in automatically every time a short is scheduled to YouTube.</p>
+      </div>
+
+      <div>
         <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Default people for new shorts</div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -160,6 +178,7 @@ export function ShortSettingsForm({
               defaultReviewer: reviewer,
               defaultScheduler: scheduler,
               defaultScripter: scripter,
+              youtubeDescription: ytDescription,
             })
           }
           className="rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] disabled:opacity-40 hover:brightness-110 transition-[filter]"

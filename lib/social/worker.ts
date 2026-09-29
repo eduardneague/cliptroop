@@ -52,6 +52,19 @@ async function markPosted(post: Claimed, permalink: string | null) {
     .from("short_video_posts")
     .upsert({ short_id: post.short_id, platform: post.platform, post_url: permalink }, { onConflict: "short_id,platform", ignoreDuplicates: true });
   if (error) await event(post.id, post.team_id, "note", `Posted, but couldn't mark it on the short: ${error.message}`);
+
+  // Instagram shares Reels to Facebook automatically (account setting), so
+  // Facebook counts as posted too, if the short lists it. Can be undone by hand.
+  if (post.platform === "instagram") {
+    const admin = createAdminClient();
+    const { data: short } = await admin.from("short_videos").select("platforms").eq("id", post.short_id).maybeSingle();
+    if ((short?.platforms as string[] | undefined)?.includes("facebook")) {
+      const { error: fb } = await admin
+        .from("short_video_posts")
+        .upsert({ short_id: post.short_id, platform: "facebook", post_url: null }, { onConflict: "short_id,platform", ignoreDuplicates: true });
+      if (!fb) await event(post.id, post.team_id, "note", "Facebook marked as posted (shared from Instagram)");
+    }
+  }
 }
 
 async function save(post: Claimed, r: StepResult, keepLock: boolean) {

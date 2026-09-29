@@ -520,6 +520,7 @@ export async function updateShortSettings(
     defaultReviewer: string | null;
     defaultScheduler: string | null;
     defaultScripter: string | null;
+    youtubeDescription: string;
   }
 ) {
   const check = await requireMaster(teamId);
@@ -549,6 +550,7 @@ export async function updateShortSettings(
       default_short_reviewer_member_id: input.defaultReviewer || null,
       default_short_scheduler_member_id: input.defaultScheduler || null,
       default_short_scripter_member_id: input.defaultScripter || null,
+      default_youtube_description: String(input.youtubeDescription ?? "").slice(0, 5000),
     })
     .eq("id", teamId);
 

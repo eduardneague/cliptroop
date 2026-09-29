@@ -283,6 +283,8 @@ export type ShortTeamSettings = {
   defaultReviewer: string | null;
   defaultScheduler: string | null;
   defaultScripter: string | null;
+  /** Filled into every YouTube description when scheduling. */
+  youtubeDescription: string;
 };
 
 export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
@@ -290,7 +292,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
   const { data } = await supabase
     .from("teams")
     .select(
-      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id"
+      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description"
     )
     .eq("id", teamId)
     .maybeSingle();
@@ -304,6 +306,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
     defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
+    youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
   };
 }
 

@@ -9,6 +9,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { relativeTime } from "@/lib/relative-time";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
+import { Dialog } from "@/components/ui/dialog";
+import { setShortPlatformPosted } from "../actions";
 import {
   cancelPost,
   getTikTokCreatorInfo,
@@ -39,6 +41,8 @@ export type PostInfo = {
   options: Record<string, unknown>;
 };
 export type PostEvent = { id: number; postId: string; kind: string; message: string; at: string };
+/** Platforms marked posted on the short (by hand or automatically). */
+export type ManualPost = { platform: string; url: string | null; postedAt: string };
 
 const TIKTOK_PRIVACY: Record<string, string> = {
   PUBLIC_TO_EVERYONE: "Everyone",
@@ -47,9 +51,10 @@ const TIKTOK_PRIVACY: Record<string, string> = {
   SELF_ONLY: "Only me",
 };
 
-const TIMES = Array.from({ length: 48 }, (_, i) => {
-  const h = String(Math.floor(i / 2)).padStart(2, "0");
-  const m = i % 2 ? "30" : "00";
+// Every 15 minutes: 00:00, 00:15, 00:30 …
+const TIMES = Array.from({ length: 96 }, (_, i) => {
+  const h = String(Math.floor(i / 4)).padStart(2, "0");
+  const m = String((i % 4) * 15).padStart(2, "0");
   return { value: `${h}:${m}`, label: `${h}:${m}` };
 });
 
@@ -75,6 +80,9 @@ export function SchedulePanel({
   caption,
   plannedDate,
   platforms,
+  hasFacebook,
+  youtubeDescription,
+  manualPosts,
   videoDuration,
   defaultTimes,
   accounts,
@@ -89,6 +97,11 @@ export function SchedulePanel({
   caption: string;
   plannedDate: string | null;
   platforms: Platform[];
+  /** Facebook is planned: it's shared from Instagram automatically. */
+  hasFacebook: boolean;
+  /** The team's default YouTube description. */
+  youtubeDescription: string;
+  manualPosts: ManualPost[];
   videoDuration: number | null;
   defaultTimes: Record<Platform, string>;
   accounts: AccountInfo[];
@@ -124,10 +137,17 @@ export function SchedulePanel({
     instagram: { date: initialDate, time: defaultTimes.instagram },
     tiktok: { date: initialDate, time: defaultTimes.tiktok },
   });
-  const [yt, setYt] = useState({ title: title.slice(0, 100), description: caption, madeForKids: null as boolean | null, visibility: "public" as "public" | "unlisted" | "private" });
-  const [ig, setIg] = useState({ caption });
+  // The short's title goes in by default everywhere (plus its caption, if it has one).
+  const defaultCaption = caption ? `${title}\n\n${caption}` : title;
+  const [yt, setYt] = useState({
+    title: title.slice(0, 100),
+    description: youtubeDescription,
+    madeForKids: false as boolean | null,
+    visibility: "public" as "public" | "unlisted" | "private",
+  });
+  const [ig, setIg] = useState({ caption: defaultCaption });
   const [tt, setTt] = useState({
-    caption,
+    caption: defaultCaption,
     privacy: "",
     allowComments: false,
     allowDuet: false,
@@ -176,16 +196,15 @@ export function SchedulePanel({
     return null;
   }
 
-  async function submit() {
+  const [reviewing, setReviewing] = useState(false);
+
+  function submit() {
     const issue = problems();
     if (issue) return toast.error(issue);
-    const list = chosen.map((p) => `${NAME[p]}: ${fmt(localIso(when[p].date, when[p].time))}`).join("\n");
-    const ok = await confirm({
-      title: `Schedule ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} posts`}?`,
-      description: list + (chosen.includes("tiktok") ? "\n\nThe video will be posted to TikTok with the settings you chose." : ""),
-      confirmLabel: "Schedule",
-    });
-    if (!ok) return;
+    setReviewing(true);
+  }
+
+  function confirmSchedule() {
     const entries: ScheduleEntry[] = chosen.map((p) => {
       const at = localIso(when[p].date, when[p].time);
       if (p === "youtube") return { platform: "youtube", at, options: yt };
@@ -197,9 +216,20 @@ export function SchedulePanel({
       if (r.error !== undefined) return toast.error(r.error);
       toast.success(`Scheduled ${r.scheduled} post${r.scheduled === 1 ? "" : "s"}`);
       setEditing({});
+      setReviewing(false);
       router.refresh();
     });
   }
+
+  async function markByHand(platform: string, posted: boolean) {
+    const r = await setShortPlatformPosted(shortId, platform as never, posted);
+    if (r && "error" in r && r.error) toast.error(r.error);
+    else {
+      toast.success(posted ? "Marked as posted" : "Unmarked");
+      router.refresh();
+    }
+  }
+  const byHand = (p: string) => manualPosts.find((m) => m.platform === p) ?? null;
 
   return (
     <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 space-y-4">
@@ -247,7 +277,24 @@ export function SchedulePanel({
             </div>
 
             {!acc ? (
-              <p className="text-[12.5px] text-ink-soft">Not connected. Connect it in Team → Connected accounts, or mark it posted by hand below.</p>
+              byHand(p) ? (
+                <div className="flex items-center gap-3 text-[12.5px]">
+                  <span className="font-semibold text-green">Marked as posted</span>
+                  <span className="text-ink-soft">{relativeTime(byHand(p)!.postedAt)}</span>
+                  {canManage && (
+                    <button type="button" onClick={() => void markByHand(p, false)} className="font-semibold text-ink-soft hover:text-ink">Undo</button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-[12.5px] text-ink-soft">Not connected. Connect it in Team → Connected accounts to post automatically.</p>
+                  {canManage && (
+                    <button type="button" onClick={() => void markByHand(p, true)} className="rounded-lg border border-line/15 px-3 h-8 text-[12px] font-semibold hover:border-line/30">
+                      Mark as posted
+                    </button>
+                  )}
+                </div>
+              )
             ) : acc.status !== "active" ? (
               <p className="text-[12.5px] text-amber">Needs reconnecting in Team → Connected accounts.</p>
             ) : post && !showForm ? (
@@ -279,11 +326,92 @@ export function SchedulePanel({
         );
       })}
 
+      {hasFacebook && (
+        <div className="rounded-xl border border-line/10 bg-surface-2/40 p-3.5 flex items-center gap-2.5 flex-wrap">
+          <PlatformIcon platform="facebook" className="w-6 h-6 rounded-md" />
+          <span className="text-[13.5px] font-semibold">Facebook</span>
+          {byHand("facebook") ? (
+            <span className="text-[12.5px] font-semibold text-green">Posted · shared from Instagram</span>
+          ) : (
+            <span className="text-[12.5px] text-ink-soft">Shares automatically when Instagram posts</span>
+          )}
+          <span className="flex-1" />
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => void markByHand("facebook", !byHand("facebook"))}
+              className="text-[12px] font-semibold text-ink-soft hover:text-ink"
+            >
+              {byHand("facebook") ? "Undo" : "Mark as posted"}
+            </button>
+          )}
+        </div>
+      )}
+
+      <Dialog
+        open={reviewing}
+        onClose={() => !pending && setReviewing(false)}
+        title={`Schedule ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} posts`}?`}
+        description="Check when each one goes live."
+        footer={
+          <>
+            <button type="button" onClick={() => setReviewing(false)} disabled={pending} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmSchedule}
+              disabled={pending}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60"
+            >
+              {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+              Schedule
+            </button>
+          </>
+        }
+      >
+        <ul className="divide-y divide-line/10 rounded-xl border border-line/10 overflow-hidden">
+          {chosen.map((p) => {
+            const at = new Date(localIso(when[p].date, when[p].time));
+            const detail =
+              p === "youtube"
+                ? `Uploads now · YouTube publishes it (${yt.visibility})`
+                : p === "instagram"
+                  ? "Posted as a Reel at this time"
+                  : `Posted at this time · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
+            return (
+              <li key={p} className="flex items-center gap-3 px-3.5 py-3 bg-surface-2/30">
+                <PlatformIcon platform={p} className="w-8 h-8 rounded-lg flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold truncate">
+                    {NAME[p]} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
+                  </div>
+                  <div className="text-[11.5px] text-ink-soft truncate">{detail}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
+                  <div className="text-[11.5px] text-ink-soft">{at.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</div>
+                </div>
+              </li>
+            );
+          })}
+          {hasFacebook && chosen.includes("instagram") && (
+            <li className="flex items-center gap-3 px-3.5 py-3">
+              <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg flex-shrink-0" />
+              <div className="text-[12.5px] text-ink-soft">Facebook gets it automatically from Instagram.</div>
+            </li>
+          )}
+        </ul>
+        {chosen.includes("tiktok") && (
+          <p className="mt-3 text-[11.5px] text-ink-soft">The video will be posted to TikTok with the settings you chose.</p>
+        )}
+      </Dialog>
+
       {formPlatforms.length > 0 && (
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={() => void submit()}
+            onClick={submit}
             disabled={pending}
             className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-50"
           >
@@ -333,26 +461,7 @@ function YouTubeFields({
         <textarea value={v.description} maxLength={5000} rows={3} onChange={(e) => set((s) => ({ ...s, description: e.target.value }))} className={field} />
       </div>
       <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <span className={label}>Made for kids?</span>
-          <div className="flex gap-1.5" role="radiogroup" aria-label="Made for kids">
-            {([
-              [false, "No"],
-              [true, "Yes"],
-            ] as const).map(([val, text]) => (
-              <button
-                key={text}
-                type="button"
-                role="radio"
-                aria-checked={v.madeForKids === val}
-                onClick={() => set((s) => ({ ...s, madeForKids: val }))}
-                className={`rounded-lg border px-3 h-9 text-[13px] font-semibold ${v.madeForKids === val ? "border-amber bg-amber/10 text-amber" : "border-line/15 text-ink-soft"}`}
-              >
-                {text}
-              </button>
-            ))}
-          </div>
-        </div>
+        <KidsSetting value={!!v.madeForKids} onChange={(val) => set((s) => ({ ...s, madeForKids: val }))} />
         <div className="w-40">
           <span className={label}>Visibility</span>
           <Select
@@ -368,6 +477,62 @@ function YouTubeFields({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * "Made for kids" is No by default. Changing it is an exception, so it
+ * goes through a popup explaining what it switches off.
+ */
+function KidsSetting({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <div>
+      <span className={label}>Audience</span>
+      <div className="flex items-center gap-2 h-9">
+        <span className={`text-[13px] font-semibold ${value ? "text-amber" : "text-ink"}`}>{value ? "Made for kids" : "Not made for kids"}</span>
+        <button
+          type="button"
+          onClick={() => (value ? onChange(false) : setAsking(true))}
+          className="rounded-md border border-line/15 px-2 h-7 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30"
+        >
+          {value ? "Change back" : "Change"}
+        </button>
+      </div>
+      <Dialog
+        open={asking}
+        onClose={() => setAsking(false)}
+        title="Mark this video as made for kids?"
+        footer={
+          <>
+            <button type="button" onClick={() => setAsking(false)} className="rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px]">
+              Keep: not for kids
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(true);
+                setAsking(false);
+              }}
+              className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+            >
+              Mark as made for kids
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-2.5 text-[13.5px] leading-relaxed">
+          <p>Only choose this if the video is really aimed at children (for example, it features kids&rsquo; characters, toys or nursery content). YouTube requires it by law in that case.</p>
+          <p className="font-semibold">For &ldquo;made for kids&rdquo; videos, YouTube turns off:</p>
+          <ul className="list-disc pl-5 space-y-1 text-ink-soft">
+            <li>Comments, and the notification bell for subscribers</li>
+            <li>Personalized ads, which usually means much lower revenue</li>
+            <li>The mini-player, &ldquo;Save to playlist&rdquo; and some other features</li>
+          </ul>
+          <p className="text-ink-soft">Your normal videos should stay &ldquo;Not made for kids&rdquo;.</p>
+        </div>
+      </Dialog>
+    </div>
   );
 }
 
