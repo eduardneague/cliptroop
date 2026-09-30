@@ -64,3 +64,23 @@ export async function getOrCreateShortScript(shortId: string, canEdit: boolean):
   }
   return toRow(data as unknown as Record<string, unknown>);
 }
+
+/** The long video's script (RLS: teammates only). Cached per request. */
+export const getLongScript = cache(async (projectId: string): Promise<ScriptRow | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.from("scripts").select(SELECT).eq("long_video_id", projectId).maybeSingle();
+  return data ? toRow(data as unknown as Record<string, unknown>) : null;
+});
+
+/** Same as shorts: create the empty script the first time an editor opens it. */
+export async function getOrCreateLongScript(projectId: string, canEdit: boolean): Promise<ScriptRow | null> {
+  const existing = await getLongScript(projectId);
+  if (existing || !canEdit) return existing;
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("scripts").insert({ long_video_id: projectId }).select(SELECT).single();
+  if (error) {
+    const { data: again } = await supabase.from("scripts").select(SELECT).eq("long_video_id", projectId).maybeSingle();
+    return again ? toRow(again as unknown as Record<string, unknown>) : null;
+  }
+  return toRow(data as unknown as Record<string, unknown>);
+}

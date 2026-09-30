@@ -22,6 +22,7 @@ import { DeleteTeamButton } from "./delete-team-button";
 import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
 import { KindColorsForm } from "./kind-colors-form";
+import { LongSettingsForm } from "./long-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
@@ -60,7 +61,11 @@ export default async function TeamPage() {
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
-  const { data: teamColors } = await supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle();
+  const [{ data: teamColors }, { data: longDefaults }, longPeople] = await Promise.all([
+    supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle(),
+    supabase.from("teams").select("default_long_description, default_long_scripter_member_id").eq("id", currentTeam.id).maybeSingle(),
+    userIsMaster ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
+  ]);
 
   // Connected accounts: safe columns only (tokens can't be read by
   // clients at all); the history is visible to masters and schedulers.
@@ -289,6 +294,19 @@ export default async function TeamPage() {
           />
         </Suspense>
       </section>
+
+      {userIsMaster && (
+        <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Long videos</h2>
+          <p className="text-[12px] text-ink-soft mb-5">What every new long video starts with.</p>
+          <LongSettingsForm
+            teamId={currentTeam.id}
+            description={(longDefaults?.default_long_description as string | undefined) ?? ""}
+            scripter={(longDefaults?.default_long_scripter_member_id as string | null | undefined) ?? null}
+            people={longPeople}
+          />
+        </section>
+      )}
 
       {userIsMaster && (
         <section className="rounded-xl border border-line/10 bg-surface p-6">

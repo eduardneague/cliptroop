@@ -18,9 +18,13 @@ export function ScriptersButton({
   people,
   scripterIds,
   canManage,
+  action = setShortScripter,
 }: {
+  /** The short's (or long video's) id. */
   shortId: string;
   number: number;
+  /** How to save a change: shorts by default; long videos pass their own. */
+  action?: (id: string, memberId: string, add: boolean) => Promise<{ error?: string } | object>;
   people: TeamPerson[];
   scripterIds: string[];
   canManage: boolean;
@@ -29,7 +33,7 @@ export function ScriptersButton({
   const [ids, setIds] = useState(scripterIds);
   useEffect(() => setIds(scripterIds), [scripterIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = useAction(setShortScripter, {
+  const save = useAction(action as typeof setShortScripter, {
     success: (_id, _m, add) => (add ? "Scripter added. They've been notified." : "Scripter removed."),
     onError: () => setIds(scripterIds),
   });

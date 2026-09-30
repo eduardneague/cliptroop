@@ -621,3 +621,18 @@ export async function updateTeamColors(teamId: string, shortColor: string, longC
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+/** Team → Long videos: default description and default scripter (masters). */
+export async function updateLongSettings(teamId: string, input: { description: string; scripter: string | null }) {
+  const description = String(input.description ?? "");
+  if (description.length > 5000) return { error: "Descriptions can be up to 5,000 characters." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .update({ default_long_description: description, default_long_scripter_member_id: input.scripter || null })
+    .eq("id", teamId)
+    .select("id");
+  if (error || !data?.length) return { error: "Only the master can change these settings." };
+  revalidatePath("/team");
+  return { success: true };
+}

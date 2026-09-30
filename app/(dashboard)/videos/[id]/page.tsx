@@ -23,17 +23,16 @@ import { postComment } from "./actions";
 import type { Metadata } from "next";
 import { getProject } from "@/modules/long-videos/lib/queries";
 import { LinkPendingIndicator } from "@/components/ui/link-pending";
-import { ScrollToCurrent } from "@/components/ui/scroll-to-current";
+import { LongStepBar } from "./step-bar";
+import { DescriptionEditor, EditPanel, FilmPanel, PostPanel, ReviewPanel } from "./step-panels";
+import { ScriptCard } from "@/modules/scripts/components/script-card";
+import { getLongScript } from "@/modules/scripts/lib/queries";
+import { listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
+import { setLongScripter } from "./actions";
 
-const TABS: PipelineStage[] = [
-  "ideate",
-  "research",
-  "script",
-  "film",
-  "edit",
-  "package",
-  "publish",
-];
+// The steps ARE the tabs.
+const TABS: PipelineStage[] = STAGE_ORDER;
 
 export async function generateMetadata({
   params,
@@ -54,9 +53,6 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
-  const tab: PipelineStage = TABS.includes(tabParam as PipelineStage)
-    ? (tabParam as PipelineStage)
-    : "ideate";
 
   const supabase = await createClient();
 
@@ -66,6 +62,8 @@ export default async function ProjectDetailPage({
   const [project, currentUser] = await Promise.all([getProject(id), getCachedUser()]);
   if (!project) notFound();
   const teamId: string = project.team_id;
+  // Opens on the video's current step (any step can be opened any time).
+  const tab: PipelineStage = TABS.includes(tabParam as PipelineStage) ? (tabParam as PipelineStage) : (project.stage as PipelineStage);
 
   // Everything below depends only on the project id / team id, so it all
   // runs in parallel — one round of waiting instead of a chain.
@@ -79,6 +77,11 @@ export default async function ProjectDetailPage({
     { data: thumbnailRows },
     { data: attachmentRows },
     { data: otherDated },
+    { data: postRows },
+    { data: scripterRows },
+    { data: teamDefaults },
+    script,
+    people,
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -120,9 +123,28 @@ export default async function ProjectDetailPage({
       .eq("team_id", teamId)
       .neq("id", id)
       .not("expected_date", "is", null),
+    supabase.from("long_video_posts").select("platform, url, posted_at, posted_by").eq("project_id", id),
+    supabase.from("long_video_scripters").select("team_member_id").eq("project_id", id),
+    supabase.from("teams").select("default_long_description").eq("id", teamId).maybeSingle(),
+    getLongScript(id),
+    listTeamPeople(teamId),
   ]);
+  // Package: the Studio's winner (or first variation) for the summary card.
+  const { data: packageRows } = await supabase
+    .from("package_entries")
+    .select("title, thumbnail_storage_path, is_winner")
+    .eq("project_id", id)
+    .order("position");
+  const packageCount = packageRows?.length ?? 0;
+  const winner = packageRows?.find((r) => r.is_winner) ?? null;
+  const shown = winner ?? packageRows?.[0] ?? null;
+  const winnerUrl = shown?.thumbnail_storage_path
+    ? (await supabase.storage.from("package-thumbs").createSignedUrl(shown.thumbnail_storage_path as string, 3600)).data?.signedUrl ?? null
+    : null;
 
   const userIsMaster = isMaster(membership?.roles ?? []);
+  const myRoles = membership?.roles ?? [];
+  const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
 
   const memberColors = ["#E8630D", "#178C7C", "#3159C9", "#6B4FD6", "#B84070", "#B4890E", "#2B9757"];
   const membersById = new Map(
@@ -174,6 +196,7 @@ export default async function ProjectDetailPage({
     url: thumbnailBase + t.storage_path,
   }));
 
+  const nameOf = (userId: string | null | undefined) => (userId ? peopleByUserId.get(userId)?.name ?? null : null);
   const updatedByName = project.updated_by
     ? peopleByUserId.get(project.updated_by)?.name ?? null
     : null;
@@ -261,92 +284,16 @@ export default async function ProjectDetailPage({
         />
       </div>
 
-      {/* Stage actions */}
-      <div className="flex items-center gap-2 flex-wrap mb-6">
-        {project.stage === "done" ? (
-          <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-teal/15 text-teal">
-            Finished
-          </span>
-        ) : userIsMaster ? (
-          <>
-            {currentIndex > 0 && (
-              <RegressStageButton
-                projectId={project.id}
-                prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]}
-              />
-            )}
-            {nextStage && (
-              <AdvanceStageButton
-                projectId={project.id}
-                nextLabel={STAGE_LABELS[nextStage as PipelineStage]}
-              />
-            )}
-          </>
-        ) : (
-          <span className="text-[12px] text-ink-faint">Only the master can move this project</span>
-        )}
-      </div>
+      {/* The steps are the tabs: every step can be opened at any time. */}
+      <LongStepBar projectId={id} stage={project.stage as PipelineStage} tab={tab} />
 
-      {/* Stage tracker */}
-      <ScrollToCurrent className="flex items-center mb-8 overflow-x-auto no-scrollbar pb-1 scroll-smooth">
-        {STAGE_ORDER.map((s, i) => {
-          const state = stageState(s, project.stage as PipelineStage);
-          const isDone = state === "done";
-          const isCurrent = state === "current";
-          const stepColor = STAGE_STATE_COLOR[state];
-          return (
-            <div key={s} className="flex items-center flex-shrink-0" data-current={isCurrent ? "true" : undefined}>
-              <div className="flex flex-col items-center gap-1.5 min-w-[74px]">
-                <div
-                  className={`rounded-full flex items-center justify-center font-bold border-2 transition-all ${
-                    isCurrent ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"
-                  }`}
-                  style={{
-                    borderColor: isDone || isCurrent ? stepColor : "rgb(var(--line) / 0.2)",
-                    background: isDone || isCurrent ? stepColor : "transparent",
-                    color: isDone || isCurrent ? "#fff" : "rgb(var(--ink-faint))",
-                  }}
-                >
-                  {isDone ? <CheckIcon className="w-4 h-4" /> : i + 1}
-                </div>
-                <span className={`text-[10px] font-bold ${isDone || isCurrent ? "text-ink" : "text-ink-faint"}`}>
-                  {STAGE_LABELS[s]}
-                </span>
-              </div>
-              {i < STAGE_ORDER.length - 1 && (
-                <div
-                  className="w-8 h-[2px] mb-4 flex-shrink-0"
-                  style={{
-                    background:
-                      stageState(STAGE_ORDER[i + 1], project.stage as PipelineStage) !== "upcoming"
-                        ? STAGE_STATE_COLOR.done
-                        : "rgb(var(--line) / 0.15)",
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </ScrollToCurrent>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-line/10 mb-6 overflow-x-auto no-scrollbar">
-        {TABS.map((t) => (
-          <Link
-            key={t}
-            href={`/videos/${id}?tab=${t}`}
-            scroll={false}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
-              tab === t
-                ? "border-amber text-amber"
-                : "border-transparent text-ink-faint hover:text-ink"
-            }`}
-          >
-            {STAGE_LABELS[t]}
-            <LinkPendingIndicator />
-          </Link>
-        ))}
-      </div>
+      {/* Master: move the video by hand (the step buttons move it too). */}
+      {project.stage !== "done" && userIsMaster && (
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          {currentIndex > 0 && <RegressStageButton projectId={project.id} prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]} />}
+          {nextStage && <AdvanceStageButton projectId={project.id} nextLabel={STAGE_LABELS[nextStage as PipelineStage]} />}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* Main tab content */}
@@ -419,17 +366,111 @@ export default async function ProjectDetailPage({
               </div>
             </div>
           ) : (
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">
-                Assigned · {STAGE_LABELS[tab]}
-              </div>
-              <AssigneeRow
-                projectId={id}
-                stage={tab}
-                isMaster={userIsMaster}
-                assignees={assigneesForTab}
-                eligible={eligibleForTab}
-              />
+            <div className="space-y-6">
+              {tab !== "done" && (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">Assigned · {STAGE_LABELS[tab]}</div>
+                  <AssigneeRow projectId={id} stage={tab} isMaster={userIsMaster} assignees={assigneesForTab} eligible={eligibleForTab} />
+                </div>
+              )}
+              {tab === "research" && (
+                <p className="text-[14px] text-ink-soft">Research happens in this step&rsquo;s chat: links, findings and questions.</p>
+              )}
+              {tab === "script" && (
+                <div className="space-y-3">
+                  <ScriptCard
+                    href={`/videos/${id}/script`}
+                    script={script}
+                    canEdit={userIsMaster || (!!membership && scripterIds.includes(membership.teamMemberId))}
+                    prominent={project.stage === "script"}
+                    scripters={people.filter((p) => scripterIds.includes(p.memberId))}
+                  />
+                  {userIsMaster && (
+                    <ScriptersButton shortId={id} number={project.entry_number} people={people} scripterIds={scripterIds} canManage action={setLongScripter} />
+                  )}
+                </div>
+              )}
+              {tab === "film" && (
+                <FilmPanel
+                  projectId={id}
+                  isCurrent={project.stage === "film"}
+                  canAct={userIsMaster || myRoles.includes("filmer")}
+                  filmedAt={project.filmed_at}
+                  filmedBy={nameOf(project.filmed_by)}
+                  nasPath={project.nas_path}
+                />
+              )}
+              {tab === "edit" && (
+                <EditPanel
+                  projectId={id}
+                  isCurrent={project.stage === "edit"}
+                  canAct={userIsMaster || myRoles.includes("editor")}
+                  editedAt={project.edited_at}
+                  editedBy={nameOf(project.edited_by)}
+                  editNote={project.edit_note}
+                  reviewNote={project.review_note}
+                  nasPath={project.nas_path}
+                />
+              )}
+              {tab === "review" && (
+                <ReviewPanel
+                  projectId={id}
+                  isCurrent={project.stage === "review"}
+                  canReview={userIsMaster}
+                  editedAt={project.edited_at}
+                  editedBy={nameOf(project.edited_by)}
+                  editNote={project.edit_note}
+                  reviewedAt={project.reviewed_at}
+                  reviewedBy={nameOf(project.reviewed_by)}
+                  approved={STAGE_ORDER.indexOf(project.stage as PipelineStage) > STAGE_ORDER.indexOf("review")}
+                />
+              )}
+              {tab === "package" && (
+                <Link
+                  href={`/videos/${id}/studio`}
+                  className="group flex items-center gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
+                >
+                  <span className="w-40 aspect-video rounded-lg overflow-hidden bg-surface-2 flex-shrink-0 flex items-center justify-center">
+                    {winnerUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={winnerUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Thumbnail Studio</span>
+                    <span className="block text-[15px] font-semibold mt-0.5 truncate">{winner?.title ?? "Add your thumbnails and titles"}</span>
+                    <span className="block text-[12.5px] text-ink-soft mt-0.5">
+                      {packageCount ? `${packageCount} variation${packageCount === 1 ? "" : "s"}${winner ? " · winner picked" : " · no winner yet"}` : "Preview them on YouTube: home, search, mobile, TV…"}
+                    </span>
+                  </span>
+                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open</span>
+                </Link>
+              )}
+              {tab === "package" && (
+                <DescriptionEditor
+                  projectId={id}
+                  value={project.description ?? null}
+                  teamDefault={(teamDefaults?.default_long_description as string | undefined) ?? ""}
+                  canEdit={canActOnStage(membership, "package")}
+                />
+              )}
+              {(tab === "publish" || tab === "done") && (
+                <PostPanel
+                  projectId={id}
+                  isCurrent={project.stage === "publish" || project.stage === "done"}
+                  canAct={userIsMaster || myRoles.includes("publisher")}
+                  isMaster={userIsMaster}
+                  platforms={(project.platforms as string[] | null) ?? ["youtube"]}
+                  posts={(postRows ?? []).map((r) => ({
+                    platform: r.platform as string,
+                    url: (r.url as string | null) ?? null,
+                    postedAt: r.posted_at as string,
+                    postedBy: nameOf(r.posted_by as string | null),
+                  }))}
+                />
+              )}
             </div>
           )}
         </div>

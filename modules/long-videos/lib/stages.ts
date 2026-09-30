@@ -6,9 +6,10 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   script: "Script",
   film: "Film",
   edit: "Edit",
+  review: "Review",
   package: "Package",
-  publish: "Publish",
-  done: "Done",
+  publish: "Post",
+  done: "Posted",
 };
 
 export const STAGE_ORDER: PipelineStage[] = [
@@ -17,6 +18,7 @@ export const STAGE_ORDER: PipelineStage[] = [
   "script",
   "film",
   "edit",
+  "review",
   "package",
   "publish",
   "done",
