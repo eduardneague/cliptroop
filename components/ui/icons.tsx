@@ -272,11 +272,12 @@ export function HomeIcon(p: IconProps) {
   );
 }
 
+/** A long video: a solid landscape (16:9) card with a centered play triangle. */
+/** Long videos: a solid landscape (16:9) card, play triangle cut out and centred. */
 export function VideoIcon(p: IconProps) {
   return (
-    <Svg {...p}>
-      <rect x="2.75" y="5" width="18.5" height="14" rx="3" />
-      <path d="m10 9.25 4.75 2.75L10 14.75Z" fill="currentColor" />
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d="M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z" />
     </Svg>
   );
 }
@@ -413,11 +414,19 @@ export function UserIcon(p: IconProps) {
 }
 
 /** Vertical frame with a play mark — short-form video. */
+/**
+ * A short: a solid portrait (9:16) card with the play triangle cut out,
+ * centered on its centroid so it looks centered.
+ */
+/**
+ * Shorts: a solid portrait (9:16) card with the play triangle cut out.
+ * The triangle's centre of balance sits exactly on the card's centre,
+ * which is what makes it look centred.
+ */
 export function ShortsIcon(p: IconProps) {
   return (
-    <Svg {...p}>
-      <rect x="6.5" y="2.75" width="11" height="18.5" rx="2.75" />
-      <path d="m10.5 9.5 4 2.5-4 2.5Z" fill="currentColor" />
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d="M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z" />
     </Svg>
   );
 }

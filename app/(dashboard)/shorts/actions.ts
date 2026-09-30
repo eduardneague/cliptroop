@@ -111,8 +111,11 @@ function notifyMany(
   return sendNotifications(unique.map(build));
 }
 
+/** Every page that shows shorts: the list, the calendar, posting. */
 function revalidateShort(id?: string) {
   revalidatePath("/shorts");
+  revalidatePath("/calendar");
+  revalidatePath("/posting");
   if (id) revalidatePath(`/shorts/${id}`);
 }
 
@@ -653,7 +656,7 @@ export async function deleteShort(
     vacated = { teamId: before.team_id as string, day: before.planned_date as string, keep: Math.max(0, dayCount - 1) };
   }
 
-  revalidatePath("/shorts");
+  revalidateShort();
   return { vacated };
 }
 
@@ -697,7 +700,7 @@ export async function setShortDayLimit(
     }
   }
 
-  revalidatePath("/shorts");
+  revalidateShort();
   return {};
 }
 

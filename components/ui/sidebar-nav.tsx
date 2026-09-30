@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav-items";
 
+/** Shorts and long videos always show in their own colors. */
+const KIND_COLOR: Record<string, string> = { "/shorts": "text-short", "/videos": "text-long" };
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -28,7 +31,7 @@ export function SidebarNav() {
           >
             <Icon
               className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
-                isActive(pathname, href) ? "text-amber" : "text-ink-faint group-hover:text-ink-soft"
+                KIND_COLOR[href] ?? (isActive(pathname, href) ? "text-amber" : "text-ink-faint group-hover:text-ink-soft")
               }`}
             />
             {label}
@@ -66,7 +69,7 @@ export function BottomNavItems() {
               className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] text-ink-faint/60"
               aria-disabled
             >
-              <Icon className="w-[22px] h-[22px]" />
+              <Icon className={`w-[22px] h-[22px] ${KIND_COLOR[href] ?? ""}`} />
               <span className="text-[10px] font-semibold">{shortLabel}</span>
             </div>
           );
@@ -85,7 +88,7 @@ export function BottomNavItems() {
                 active ? "opacity-100" : "opacity-0"
               }`}
             />
-            <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2 : 1.75} />
+            <Icon className={`w-[22px] h-[22px] ${KIND_COLOR[href] ?? ""}`} strokeWidth={active ? 2 : 1.75} />
             <span className="text-[10px] font-semibold">{shortLabel}</span>
           </Link>
         );

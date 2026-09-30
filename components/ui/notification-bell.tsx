@@ -108,7 +108,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
           )}
         </span>
         {TypeIcon && (
-          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-[5px] bg-surface ring-1 ring-line/20 flex items-center justify-center text-ink-soft">
+          <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-[5px] bg-surface ring-1 ring-line/20 flex items-center justify-center ${n.short_id ? "text-short" : "text-long"}`}>
             <TypeIcon className="w-2.5 h-2.5" />
           </span>
         )}
@@ -118,7 +118,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   if (TypeIcon && (!m || !m.team)) {
     return (
       <span
-        className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${failed ? "bg-red/15 text-red" : "bg-surface-2 text-ink-soft"}`}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${failed ? "bg-red/15 text-red" : n.short_id ? "bg-short/15 text-short" : "bg-long/15 text-long"}`}
         aria-label={n.short_id ? "Short video" : "Long video"}
       >
         <TypeIcon className="w-4 h-4" />

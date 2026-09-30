@@ -26,6 +26,8 @@ const config: Config = {
         teal: "rgb(var(--teal) / <alpha-value>)",
         blue: "rgb(var(--blue) / <alpha-value>)",
         violet: "rgb(var(--violet) / <alpha-value>)",
+        short: "rgb(var(--short) / <alpha-value>)",
+        long: "rgb(var(--long) / <alpha-value>)",
         pink: "rgb(var(--pink) / <alpha-value>)",
         gold: "rgb(var(--gold) / <alpha-value>)",
         green: "rgb(var(--green) / <alpha-value>)",

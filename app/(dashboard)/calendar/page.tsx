@@ -6,6 +6,7 @@ import { isMaster } from "@/lib/permissions/roles";
 import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
 import { SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { CalendarView, type CalItem } from "./calendar-view";
+import { getShortSettings, listDayLimits, listShorts } from "@/modules/short-videos/lib/queries";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -61,13 +62,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const rollingEnd = iso(new Date(Date.parse(`${today}T00:00:00Z`) + 36 * 86_400_000));
   const start = grid.start;
   const end = focus.slice(0, 7) === today.slice(0, 7) && rollingEnd > grid.end ? rollingEnd : grid.end;
-  const [{ data: shorts }, { data: longs }] = await Promise.all([
+
+  // The same short list as the Shorts table, so both always agree.
+  const [allShorts, settings, dayLimits, { data: posts }, { data: longs }] = await Promise.all([
+    listShorts(currentTeam.id),
+    getShortSettings(currentTeam.id),
+    listDayLimits(currentTeam.id),
     supabase
-      .from("short_videos")
-      .select("id, entry_number, title, planned_date, stage, schedule_mode, pin_kind, short_type, social_posts!social_posts_short_id_fkey(platform, status, scheduled_at)")
+      .from("social_posts")
+      .select("short_id, platform, status, scheduled_at, permalink, external_id")
       .eq("team_id", currentTeam.id)
-      .gte("planned_date", start)
-      .lte("planned_date", end),
+      .neq("status", "cancelled"),
     supabase
       .from("long_video_projects")
       .select("id, entry_number, title, stage, expected_date")
@@ -75,23 +80,40 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .gte("expected_date", start)
       .lte("expected_date", end),
   ]);
+  const postsByShort = new Map<string, CalItem["posts"]>();
+  for (const p of posts ?? []) {
+    const list = postsByShort.get(p.short_id as string) ?? [];
+    list.push({
+      platform: p.platform as string,
+      status: p.status as string,
+      at: p.scheduled_at as string,
+      link:
+        (p.permalink as string | null) ??
+        (p.platform === "youtube" && p.external_id ? `https://studio.youtube.com/video/${p.external_id}/edit` : null),
+    });
+    postsByShort.set(p.short_id as string, list);
+  }
 
   const items: CalItem[] = [
-    ...(shorts ?? []).map((s) => {
-      const posts = ((s.social_posts as { platform: string; status: string; scheduled_at: string }[]) ?? []).filter((p) => p.status !== "cancelled");
-      return {
+    ...allShorts
+      .filter((s) => s.plannedDate && s.plannedDate >= start && s.plannedDate <= end)
+      .map((s) => ({
         kind: "short" as const,
-        id: s.id as string,
-        number: s.entry_number as number,
-        title: s.title as string,
-        date: s.planned_date as string,
-        stageLabel: SHORT_STAGE_LABELS[s.stage as keyof typeof SHORT_STAGE_LABELS] ?? String(s.stage),
+        id: s.id,
+        number: s.number,
+        title: s.title,
+        date: s.plannedDate as string,
+        stageLabel: SHORT_STAGE_LABELS[s.stage] ?? String(s.stage),
         done: s.stage === "posted",
-        shortType: (s.short_type as "filler" | "sponsorship" | "big") ?? "filler",
-        pinKind: (s.schedule_mode === "pinned" ? (s.pin_kind as "anchor" | "oneoff" | null) : null) ?? null,
-        posts: posts.map((p) => ({ platform: p.platform, status: p.status, at: p.scheduled_at })),
-      };
-    }),
+        shortType: s.shortType,
+        pinKind: s.scheduleMode === "pinned" ? s.pinKind : null,
+        auto: s.scheduleMode === "auto",
+        queuePosition: s.queuePosition,
+        platforms: s.platforms as string[],
+        postedPlatforms: s.postedPlatforms as string[],
+        editor: s.editor ? { name: s.editor.name, avatarUrl: s.editor.avatarUrl, color: s.editor.color } : null,
+        posts: postsByShort.get(s.id) ?? [],
+      })),
     ...(longs ?? []).map((l) => ({
       kind: "long" as const,
       id: l.id as string,
@@ -102,12 +124,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       done: l.stage === "done",
       shortType: null,
       pinKind: null,
+      auto: false,
+      queuePosition: 0,
+      platforms: ["youtube"],
+      postedPlatforms: [],
+      editor: null,
       posts: [],
     })),
   ];
 
   return (
-    <div className="px-3 sm:px-8 py-6 max-w-[1400px] mx-auto">
+    <div className="px-3 sm:px-6 lg:px-8 py-6">
       <CalendarView
         items={items}
         focus={focus}
@@ -115,6 +142,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         teamId={currentTeam.id}
         canManage={canManage}
         isMaster={master}
+        capacity={{ perDay: settings.perDay, weekends: settings.weekends, limits: dayLimits }}
       />
     </div>
   );

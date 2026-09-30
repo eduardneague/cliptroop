@@ -106,6 +106,10 @@ export async function updateTypeTheme(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -136,6 +140,10 @@ export async function updateExpectedDate(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -177,6 +185,10 @@ export async function updateIdeateField(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true, updatedAt: new Date().toISOString() };
 }
 
@@ -228,6 +240,10 @@ export async function regressStage(projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -288,6 +304,10 @@ export async function advanceStage(projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -343,6 +363,10 @@ export async function assignMember(
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
 }
 
@@ -358,6 +382,10 @@ export async function removeAssignee(projectId: string, assigneeRowId: string) {
   if (error) return { error: "Couldn't unassign. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
 }
 
@@ -488,6 +516,10 @@ export async function postComment(
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return {};
 }
 
@@ -503,5 +535,9 @@ export async function deleteComment(commentId: string, projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
 }

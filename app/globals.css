@@ -23,6 +23,10 @@
   --teal: 21 130 115;
   --blue: 47 86 194;
   --violet: 103 76 209;
+  /* Content kinds: shorts (indigo) and long videos (teal), everywhere.
+     Neither belongs to a platform brand. Change both lines to re-theme. */
+  --short: 79 70 229;
+  --long: 13 148 136;
   --pink: 178 61 107;
   --gold: 173 131 13;
   --green: 43 151 87;
@@ -45,6 +49,9 @@
   /* Accent/stage colors are NOT redefined here on purpose — they stay
      identical to :root in both themes. Only structural tokens
      (background/text/surface) actually need to invert for dark mode. */
+  /* Brighter kind colours on dark backgrounds. */
+  --short: 129 140 248;
+  --long: 45 212 191;
 }
 
 body {
