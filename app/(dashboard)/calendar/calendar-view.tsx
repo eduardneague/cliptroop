@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast-provider";
-import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { DayLimitControl } from "@/modules/short-videos/components/day-limit-control";
-import { moveShortInQueue, setShortDayLimit, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
+import { moveShortAuto, moveShortInQueue, setShortDayLimit, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
 import { updateExpectedDate } from "@/app/(dashboard)/videos/[id]/actions";
 
 export type CalItem = {
@@ -114,7 +114,11 @@ export function CalendarView({
   const limitFor = (day: string) =>
     day in capacity.limits ? capacity.limits[day] : !capacity.weekends && [0, 6].includes(parse(day).getUTCDay()) ? 0 : capacity.perDay;
 
-  const go = (d: string, v: View = view) => router.push(`/calendar?d=${d}&view=${v}`, { scroll: false });
+  // Month-to-month navigation shows a skeleton while the next month loads.
+  const [navigating, startNav] = useTransition();
+  const go = (d: string, v: View = view) => startNav(() => router.push(`/calendar?d=${d}&view=${v}`, { scroll: false }));
+  const [onlyMonth, setOnlyMonth] = useState(false);
+  const [picker, setPicker] = useState(false);
   const title =
     view === "week"
       ? `${nice(mondayOf(focus), { month: "short", day: "numeric" })} – ${nice(addDays(mondayOf(focus), 6), { month: "short", day: "numeric", year: "numeric" })}`
@@ -124,7 +128,7 @@ export function CalendarView({
   const [quick, setQuick] = useState<CalItem | null>(null);
   const [dayOpen, setDayOpen] = useState<string | null>(null);
   const [pending, setPending] = useState<
-    | { type: "move"; item: CalItem; to: string; raise: boolean }
+    | { type: "move"; item: CalItem; to: string; raise: boolean; keepAuto: boolean }
     | { type: "reorder"; item: CalItem; target: CalItem; steps: number }
     | null
   >(null);
@@ -148,7 +152,7 @@ export function CalendarView({
     if (reason) return toast.error(reason);
     if (to < today) return toast.error("Pick today or a later day.");
     const over = it.kind === "short" && shortsOn(to, it.id).length + 1 > limitFor(to);
-    setPending({ type: "move", item: it, to, raise: over });
+    setPending({ type: "move", item: it, to, raise: over, keepAuto: it.kind === "short" && it.auto });
   }
   function askReorder(it: CalItem, target: CalItem) {
     const reason = blockedReason(it);
@@ -164,18 +168,28 @@ export function CalendarView({
     if (!pending) return;
     start(async () => {
       if (pending.type === "move") {
-        const { item, to, raise } = pending;
+        const { item, to, raise, keepAuto } = pending;
         if (item.kind === "short" && raise) {
           const r = await setShortDayLimit(teamId, to, shortsOn(to, item.id).length + 1);
           if (r && "error" in r && r.error) return void toast.error(r.error);
         }
-        const r =
-          item.kind === "short"
-            ? await updateShortDetails(item.id, { planned_date: to, pin_kind: isMaster && item.pinKind === "anchor" ? "anchor" : "oneoff" })
-            : await updateExpectedDate(item.id, teamId, to);
-        if (r && "error" in r && r.error) return void toast.error(r.error);
-        setItems((list) => list.map((x) => (x.id === item.id ? { ...x, date: to, auto: false } : x)));
-        toast.success(`Moved to ${nice(to)}`);
+        if (item.kind === "short" && keepAuto) {
+          // Stays automatic: the queue places it on that day if there's room.
+          const r = await moveShortAuto(item.id, to);
+          if (r.error) return void toast.error(r.error);
+          const landed = r.landed ?? to;
+          setItems((list) => list.map((x) => (x.id === item.id ? { ...x, date: landed } : x)));
+          if (landed === to) toast.success(`Moved to ${nice(to)} · still automatic`);
+          else toast.success(`${nice(to)} was full, so the queue put it on ${nice(landed)}`);
+        } else {
+          const r =
+            item.kind === "short"
+              ? await updateShortDetails(item.id, { planned_date: to, pin_kind: isMaster && item.pinKind === "anchor" ? "anchor" : "oneoff" })
+              : await updateExpectedDate(item.id, teamId, to);
+          if (r && "error" in r && r.error) return void toast.error(r.error);
+          setItems((list) => list.map((x) => (x.id === item.id ? { ...x, date: to, auto: false } : x)));
+          toast.success(`Moved to ${nice(to)}`);
+        }
       } else {
         const { item, steps } = pending;
         const dir = steps > 0 ? 1 : -1;
@@ -328,6 +342,9 @@ export function CalendarView({
         </button>
         {day === today && <span className={`text-[10.5px] font-extrabold tracking-[0.12em] text-amber ${big ? "" : "hidden sm:inline"}`}>TODAY</span>}
         <span className={`flex-1 ${big ? "" : "hidden sm:block"}`} />
+        {(byDay.get(day) ?? []).some((x) => x.kind === "long") && (
+          <span className={`w-2 h-2 rounded-full bg-long ${big ? "" : "hidden sm:inline-block"}`} title="A long video is planned" />
+        )}
         {day >= today && (
           <span className={big ? "" : "hidden sm:inline-flex"}>
             <CapacityDots count={count} limit={limit} />
@@ -341,7 +358,28 @@ export function CalendarView({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2 flex-wrap">
-        <h1 className="text-[26px] sm:text-[32px] font-display font-semibold mr-2 leading-tight">{title}</h1>
+        <div className="relative mr-2">
+          <button
+            type="button"
+            onClick={() => setPicker((o) => !o)}
+            aria-expanded={picker}
+            className="flex items-center gap-2 rounded-lg -mx-1 px-1 hover:bg-surface-2/60 transition-colors"
+            title="Jump to a month"
+          >
+            <h1 className="text-[26px] sm:text-[32px] font-display font-semibold leading-tight">{title}</h1>
+            <ChevronDownIcon className={`w-5 h-5 text-ink-soft transition-transform ${picker ? "rotate-180" : ""}`} />
+          </button>
+          {picker && (
+            <MonthPicker
+              focus={focus}
+              onPick={(d) => {
+                setPicker(false);
+                go(d, view === "week" ? "month" : view);
+              }}
+              onClose={() => setPicker(false)}
+            />
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button type="button" aria-label="Previous" onClick={() => go(view === "week" ? addDays(focus, -7) : shiftMonth(focus, -1))} className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
             <ArrowLeftIcon className="w-4 h-4" />
@@ -376,11 +414,30 @@ export function CalendarView({
         <Filter on={showShorts} set={setShowShorts} icon={<KindIcon kind="short" className="w-3.5 h-3.5" />} tone="short">Shorts</Filter>
         <Filter on={showLong} set={setShowLong} icon={<KindIcon kind="long" className="w-3.5 h-3.5" />} tone="long">Long videos</Filter>
         <Filter on={hidePosted} set={setHidePosted}>Hide posted</Filter>
+        {view === "month" && (
+          <Filter on={onlyMonth} set={setOnlyMonth}>
+            This month only
+          </Filter>
+        )}
         {canManage && <span className="hidden md:inline text-ink-soft ml-1">Click to preview · drag to move or reorder · you&rsquo;ll confirm first</span>}
       </div>
 
-      {view === "month" && (
-        <div className="rounded-2xl border border-line/15 overflow-hidden bg-surface">
+      {navigating && (
+        <div className="rounded-2xl border border-line/15 overflow-hidden bg-surface" role="status" aria-label="Loading">
+          <div className="grid grid-cols-7">
+            {Array.from({ length: 42 }, (_, i) => (
+              <div key={i} className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-2 border-line/15 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""}`}>
+                <div className="w-7 h-7 rounded-full bg-surface-2 animate-pulse" />
+                {i % 3 === 0 && <div className="hidden sm:block mt-2 h-7 rounded-lg bg-surface-2 animate-pulse" style={{ animationDelay: `${(i % 7) * 60}ms` }} />}
+                {i % 5 === 0 && <div className="hidden sm:block mt-1 h-7 w-3/4 rounded-lg bg-surface-2 animate-pulse" style={{ animationDelay: `${(i % 7) * 60 + 80}ms` }} />}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "month" && !navigating && (
+        <div className="rounded-2xl border border-line/15 overflow-hidden bg-surface animate-[modalin_.25s_var(--ease-out)]" key={focus.slice(0, 7)}>
           <div className="grid grid-cols-7 border-b border-line/15 bg-surface-2/40">
             {WEEKDAYS.map((w, i) => (
               <div key={w} className={`px-3 py-2.5 text-[12px] font-bold uppercase tracking-wide ${i >= 5 ? "text-ink-soft" : "text-ink"}`}>
@@ -392,6 +449,9 @@ export function CalendarView({
           <div className="grid grid-cols-7">
             {monthGrid(focus).map((day, i) => {
               const inMonth = day.slice(0, 7) === focus.slice(0, 7);
+              if (onlyMonth && !inMonth) {
+                return <div key={day} className={`min-h-[3.4rem] sm:min-h-[9.5rem] border-line/15 bg-surface-2/25 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""}`} aria-hidden />;
+              }
               const list = byDay.get(day) ?? [];
               return (
                 <div
@@ -465,7 +525,7 @@ export function CalendarView({
         </div>
       )}
 
-      {(view === "week" || view === "agenda") && (
+      {(view === "week" || view === "agenda") && !navigating && (
         <DayRows
           days={
             view === "week"
@@ -600,8 +660,31 @@ export function CalendarView({
                   </div>
                 );
               })()}
+            {pending.item.kind === "short" && pending.item.auto && (
+              <div className="space-y-1.5" role="radiogroup" aria-label="How to move it">
+                {([
+                  [true, "Keep it automatic", "The queue puts it on that day if there's room, otherwise the next free day. Recommended."],
+                  [false, "Pin it to this date", "It gets a fixed date (one-off); the queue fills in around it."],
+                ] as const).map(([val, label, hint]) => (
+                  <label
+                    key={label}
+                    className={`flex items-start gap-2.5 rounded-xl border p-3 cursor-pointer transition-colors ${
+                      pending.keepAuto === val ? "border-amber bg-amber/10" : "border-line/15 hover:border-line/30"
+                    }`}
+                  >
+                    <input type="radio" checked={pending.keepAuto === val} onChange={() => setPending({ ...pending, keepAuto: val })} className="mt-0.5 accent-[rgb(var(--amber))]" />
+                    <span>
+                      <span className="block text-[13.5px] font-semibold">{label}</span>
+                      <span className="block text-[12px] text-ink-soft">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
             <p className="text-[12.5px] text-ink-soft">
-              {pending.item.kind === "long"
+              {pending.item.kind === "short" && pending.item.auto
+                ? "Numbers update to match the new order."
+                : pending.item.kind === "long"
                 ? "Changes its expected date."
                 : isMaster && pending.item.pinKind === "anchor"
                   ? "It stays the queue start: the automatic shorts after it move with it. Numbers update to match the new order."
@@ -634,7 +717,7 @@ function CapacityDots({ count, limit, label = false }: { count: number; limit: n
       title={`${count} of ${limit} short${limit === 1 ? "" : "s"}${over ? ` · ${over} over` : full ? " · full" : ""}`}
     >
       {Array.from({ length: limit }, (_, i) => (
-        <span key={i} className={`w-2 h-2 rounded-full ${i < count ? "bg-amber" : "border border-amber/60"}`} />
+        <span key={i} className={`w-2 h-2 rounded-full ${i < count ? "bg-short" : "border border-short/60"}`} />
       ))}
       {Array.from({ length: Math.min(over, 3) }, (_, i) => (
         <span key={`o${i}`} className="w-2 h-2 rounded-full bg-red" />
@@ -734,7 +817,7 @@ function Chip({
     >
       <KindIcon kind={it.kind} className={lg ? "w-[18px] h-[18px]" : "w-4 h-4"} />
       <span className="font-mono text-[0.9em] text-ink-soft flex-shrink-0">#{it.number}</span>
-      <span className={`truncate font-semibold ${it.done ? "line-through decoration-1" : ""}`}>{it.title}</span>
+      <span className={`truncate font-semibold ${it.done ? "text-ink-soft" : ""}`}>{it.title}</span>
       <span className="flex-1" />
       {lg && time && <span className="tabular-nums text-ink-soft flex-shrink-0">{time}</span>}
       {it.posts.length > 0 && (
@@ -744,7 +827,17 @@ function Chip({
           ))}
         </span>
       )}
-      {lg && <span className={`text-[12px] flex-shrink-0 hidden sm:inline ${overdue ? "font-bold" : "text-ink-soft"}`}>{overdue ? "Overdue" : it.stageLabel}</span>}
+      {lg && !it.done && <span className={`text-[12px] flex-shrink-0 hidden sm:inline ${overdue ? "font-bold" : "text-ink-soft"}`}>{overdue ? "Overdue" : it.stageLabel}</span>}
+      {it.done && (
+        // Posted: the same teal check as a finished step in the step bar.
+        <span
+          className={`${lg ? "w-5 h-5" : "w-4 h-4"} rounded-full flex items-center justify-center text-white flex-shrink-0`}
+          style={{ background: "rgb(var(--teal))" }}
+          aria-label="Posted"
+        >
+          <CheckIcon className={lg ? "w-3 h-3" : "w-2.5 h-2.5"} />
+        </span>
+      )}
     </button>
   );
 }
@@ -939,5 +1032,61 @@ function QuickView({
         {canManage && blocked && <p className="text-[12.5px] text-ink-soft">{blocked}</p>}
       </div>
     </Dialog>
+  );
+}
+
+/** Jump to any month: year arrows and a grid of months. */
+function MonthPicker({ focus, onPick, onClose }: { focus: string; onPick: (d: string) => void; onClose: () => void }) {
+  const [year, setYear] = useState(Number(focus.slice(0, 4)));
+  const current = focus.slice(0, 7);
+  const thisMonth = localToday().slice(0, 7);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest("[data-month-picker]")) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [onClose]);
+  return (
+    <div
+      data-month-picker
+      className="absolute left-0 top-[calc(100%+6px)] z-40 w-[300px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.15s_var(--ease-out)]"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={() => setYear((y) => y - 1)} aria-label="Previous year" className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+          <ArrowLeftIcon className="w-4 h-4" />
+        </button>
+        <span className="text-[16px] font-bold tabular-nums">{year}</span>
+        <button type="button" onClick={() => setYear((y) => y + 1)} aria-label="Next year" className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+          <ArrowRightIcon className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {Array.from({ length: 12 }, (_, m) => {
+          const key = `${year}-${String(m + 1).padStart(2, "0")}`;
+          const label = new Date(Date.UTC(year, m, 1)).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onPick(`${key}-01`)}
+              className={`h-10 rounded-lg text-[13.5px] font-semibold transition-colors ${
+                key === current ? "bg-amber text-white" : key === thisMonth ? "ring-1 ring-amber text-ink hover:bg-surface-2" : "text-ink hover:bg-surface-2"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={() => onPick(localToday())} className="mt-2 w-full h-9 rounded-lg text-[13px] font-semibold text-amber hover:bg-amber/10">
+        This month
+      </button>
+    </div>
   );
 }

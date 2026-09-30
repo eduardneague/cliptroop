@@ -21,6 +21,8 @@ import { TransferOwnership } from "./transfer-ownership";
 import { DeleteTeamButton } from "./delete-team-button";
 import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
+import { KindColorsForm } from "./kind-colors-form";
+import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
 import { PROVIDERS, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
@@ -58,6 +60,7 @@ export default async function TeamPage() {
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
+  const { data: teamColors } = await supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle();
 
   // Connected accounts: safe columns only (tokens can't be read by
   // clients at all); the history is visible to masters and schedulers.
@@ -286,6 +289,18 @@ export default async function TeamPage() {
           />
         </Suspense>
       </section>
+
+      {userIsMaster && (
+        <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Colors</h2>
+          <p className="text-[12px] text-ink-soft mb-5">The colours for shorts and long videos, used everywhere in the app.</p>
+          <KindColorsForm
+            teamId={currentTeam.id}
+            short={(teamColors?.short_color as string | undefined) ?? DEFAULT_SHORT_COLOR}
+            long={(teamColors?.long_color as string | undefined) ?? DEFAULT_LONG_COLOR}
+          />
+        </section>
+      )}
 
       {userIsMaster && (
         <section className="rounded-xl border border-line/10 bg-surface p-6">

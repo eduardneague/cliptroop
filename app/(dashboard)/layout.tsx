@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { getTeamsAndCurrent } from "@/lib/teams";
+import { kindColorCss } from "@/lib/kind-colors";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileTopBar, MobileBottomNav } from "@/components/ui/mobile-nav";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -48,6 +49,9 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
+  const { data: teamColors } = currentTeam
+    ? await supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle()
+    : { data: null };
 
   const resolvedName = displayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
   const resolvedEmail = profile?.email ?? user?.email ?? "";
@@ -64,6 +68,8 @@ export default async function DashboardLayout({
     <ToastProvider>
       <ConfirmProvider>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
+        {/* The team's colours for shorts and long videos, everywhere. */}
+        <style>{kindColorCss(teamColors?.short_color as string | undefined, teamColors?.long_color as string | undefined)}</style>
         <div className="min-h-screen flex">
           <Sidebar
             teams={teams}

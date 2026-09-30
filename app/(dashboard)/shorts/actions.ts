@@ -739,3 +739,16 @@ export async function setShortScripter(id: string, memberId: string, add: boolea
   return {};
 }
 
+
+/**
+ * Calendar: move an automatic short to a day while keeping it automatic.
+ * It lands on that day if there's room, otherwise on the next free day.
+ */
+export async function moveShortAuto(id: string, day: string): Promise<{ error?: string; landed?: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { error: "Pick a valid day." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("move_short_auto", { p_short: id, p_day: day });
+  if (error) return { error: error.code === "42501" || error.code === "23514" || error.code === "P0002" ? error.message : "Couldn't move it. Try again." };
+  revalidateShort(id);
+  return { landed: data as string };
+}

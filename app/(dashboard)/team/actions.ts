@@ -605,3 +605,19 @@ export async function disconnectSocialAccount(teamId: string, platform: string) 
   revalidatePath("/team");
   return { success: true };
 }
+
+/** The team's colours for shorts and long videos (masters). */
+export async function updateTeamColors(teamId: string, shortColor: string, longColor: string) {
+  const hex = /^#[0-9a-fA-F]{6}$/;
+  if (!hex.test(shortColor) || !hex.test(longColor)) return { error: "Pick valid colours." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .update({ short_color: shortColor.toUpperCase(), long_color: longColor.toUpperCase() })
+    .eq("id", teamId)
+    .select("id");
+  if (error || !data?.length) return { error: "Only the master can change the team's colours." };
+  // Colours are used on every page.
+  revalidatePath("/", "layout");
+  return { success: true };
+}
