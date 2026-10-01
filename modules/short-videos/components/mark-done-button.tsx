@@ -15,7 +15,7 @@ export function MarkDoneButton({
   shortId: string;
   number: number;
   compact?: boolean;
-  /** Locked until a video is uploaded (or a Frame.io link is set). */
+  /** Locked until a video is uploaded. */
   disabled?: boolean;
 }) {
   const confirm = useConfirm();

@@ -313,9 +313,30 @@ export function PostPanel({
   posts: { platform: string; url: string | null; postedAt: string; postedBy: string | null }[];
 }) {
   const { pending, run } = useStep();
+  const confirm = useConfirm();
   const [links, setLinks] = useState<Record<string, string>>(Object.fromEntries(posts.map((p) => [p.platform, p.url ?? ""])));
   const done = platforms.filter((p) => posts.some((x) => x.platform === p)).length;
   const all = done === platforms.length;
+
+  /** Every switch asks first: the last one moves the video to Posted. */
+  async function toggle(pid: string, name: string, posted: boolean) {
+    const last = !posted && done === platforms.length - 1;
+    const ok = await confirm(
+      posted
+        ? {
+            title: `Unmark ${name}?`,
+            description: all ? "The video moves back from Posted to the Post step." : "It goes back to not posted.",
+            confirmLabel: "Unmark",
+          }
+        : {
+            title: `Mark it posted on ${name}?`,
+            description: last ? "That's the last platform: the video moves to Posted." : `${platforms.length - done - 1} platform${platforms.length - done - 1 === 1 ? "" : "s"} left after this one.`,
+            confirmLabel: last ? "Mark posted · move to Posted" : "Mark posted",
+          }
+    );
+    if (!ok) return;
+    run(() => setLongPosted(projectId, pid, !posted, links[pid] ?? ""), posted ? "Unmarked" : last ? "Posted everywhere" : `Marked posted on ${name}`);
+  }
   return (
     <div className="space-y-4">
       {isMaster && (
@@ -378,7 +399,7 @@ export function PostPanel({
                     aria-checked={!!post}
                     aria-label={`Posted on ${meta?.name ?? pid}`}
                     disabled={!isCurrent || !canAct || pending}
-                    onClick={() => run(() => setLongPosted(projectId, pid, !post, links[pid] ?? ""), post ? "Unmarked" : `Marked posted on ${meta?.name ?? pid}`)}
+                    onClick={() => void toggle(pid, meta?.name ?? pid, !!post)}
                     className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50"
                     style={{ background: post ? "rgb(var(--green))" : "rgb(var(--line) / 0.25)" }}
                   >

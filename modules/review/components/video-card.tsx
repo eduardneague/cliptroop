@@ -17,7 +17,6 @@ export function VideoCard({
   openNotes,
   canUpload,
   prominent,
-  legacyLink,
 }: {
   shortId: string;
   teamId: string;
@@ -25,8 +24,6 @@ export function VideoCard({
   openNotes: number;
   canUpload: boolean;
   prominent: boolean;
-  /** A Frame.io link from before in-app review, if any. */
-  legacyLink: string | null;
 }) {
   const router = useRouter();
   const latest = versions.find((v) => !v.deleted) ?? null;
@@ -80,11 +77,6 @@ export function VideoCard({
             {versions.length > 1 ? ` · ${versions.length} versions` : ""}
           </span>
         </p>
-      ) : legacyLink ? (
-        <a href={legacyLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-ink hover:underline">
-          <ExternalIcon className="w-4 h-4 text-green" />
-          Frame.io link (from before in-app review)
-        </a>
       ) : (
         <p className="text-[13.5px] text-ink-soft">{canUpload ? "No video yet. Upload the first version." : "The editor will upload the video here."}</p>
       )}

@@ -538,7 +538,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
                 <div className="hidden md:block">
                   {canMarkDone ? (
-                    <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasFrameio} />
+                    <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
                   ) : (
                     <ShortStagePill stage={s.stage} />
                   )}
@@ -570,7 +570,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                   </div>
                   {canMarkDone && (
                     <span className="md:hidden">
-                      <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasFrameio} />
+                      <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
                     </span>
                   )}
                 </div>
@@ -632,7 +632,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                 </div>
                 {canMarkDone && (
                   <div className="relative z-10">
-                    <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasFrameio} />
+                    <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
                   </div>
                 )}
               </div>

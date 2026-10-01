@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { platform } = await params;
   const q = request.nextUrl.searchParams;
   const back = (query: string) => {
-    const res = NextResponse.redirect(new URL(`/team?${query}#connected-accounts`, request.url));
+    const res = NextResponse.redirect(new URL(`/team?tab=accounts&${query}#connected-accounts`, request.url));
     res.headers.set("Cache-Control", "private, no-store");
     return res;
   };

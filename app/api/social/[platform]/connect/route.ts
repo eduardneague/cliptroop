@@ -17,7 +17,7 @@ const b64url = (b: Buffer) => b.toString("base64url");
 export async function GET(request: NextRequest, { params }: { params: Promise<{ platform: string }> }) {
   const { platform } = await params;
   const teamId = request.nextUrl.searchParams.get("team") ?? "";
-  const back = (q: string) => NextResponse.redirect(new URL(`/team?${q}#connected-accounts`, request.url));
+  const back = (q: string) => NextResponse.redirect(new URL(`/team?tab=accounts&${q}#connected-accounts`, request.url));
 
   if (!isSocialPlatform(platform) || !UUID.test(teamId)) return back("social_error=bad_request");
   const provider = PROVIDERS[platform];

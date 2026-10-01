@@ -3,7 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
 import type { RoleId } from "@/lib/permissions/roles";
-import { isFrameioLink, type Platform, type ShortStage, type ShortType } from "./constants";
+import { type Platform, type ShortStage, type ShortType } from "./constants";
 
 type ProfileRow = {
   username: string | null;
@@ -40,8 +40,8 @@ export type ShortListItem = {
   fileLink: string | null;
   /** team_member ids of the people who may write this short's script. */
   scripterIds: string[];
-  /** Final file is a Frame.io link (required before "Mark editing done"). */
-  hasFrameio: boolean;
+  /** A video version has been uploaded (required before "Mark editing done"). */
+  hasVideo: boolean;
   platforms: Platform[];
   postedPlatforms: Platform[];
   editor: ShortEditor | null;
@@ -112,9 +112,8 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
     caption: (r.caption as string | null) ?? null,
-    // "Has a video": any uploaded version, or (legacy) a Frame.io link.
-    hasFrameio:
-      isFrameioLink(r.file_link as string | null) ||
+    // "Has a video": any uploaded version.
+    hasVideo:
       (((r.short_video_versions as { count: number }[] | undefined)?.[0]?.count ?? 0) > 0),
     fileLink: (r.file_link as string | null) ?? null,
     scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
@@ -197,7 +196,7 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
     scheduler: toEditor(r.scheduler as RawEditor),
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
-    hasFrameio: isFrameioLink(r.file_link as string | null),
+    hasVideo: false,
     hasFileLink: !!r.file_link,
     fileLink: (r.file_link as string | null) ?? null,
     scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),

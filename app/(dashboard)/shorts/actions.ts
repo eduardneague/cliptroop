@@ -752,3 +752,13 @@ export async function moveShortAuto(id: string, day: string): Promise<{ error?: 
   revalidateShort(id);
   return { landed: data as string };
 }
+
+/** Calendar: two shorts trade places (drop one onto another on a different day). */
+export async function swapShorts(a: string, b: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("swap_shorts", { p_a: a, p_b: b });
+  if (error) return { error: ["42501", "23514", "P0002"].includes(error.code ?? "") ? error.message : "Couldn't swap them. Try again." };
+  revalidateShort(a);
+  revalidateShort(b);
+  return {};
+}

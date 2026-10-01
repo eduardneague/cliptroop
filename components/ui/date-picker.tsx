@@ -34,7 +34,7 @@ export type DayInfo = { count: number; limit: number } | null;
  *   ←/→ day · ↑/↓ week · PageUp/PageDown month · Home/End week start/end
  *   Enter/Space pick · Esc close
  * Optional `dayInfo` draws load dots under each day (e.g. shorts planned
- * vs the per-day limit) — red when the day is full.
+ * vs the per-day limit), in the team's shorts colour: hollow = planned, solid = full.
  */
 export function DatePicker({
   value,
@@ -264,8 +264,9 @@ export function DatePicker({
                         {Array.from({ length: Math.min(info.count, 4) }).map((_, i) => (
                           <span
                             key={i}
-                            className={`w-[4px] h-[4px] rounded-full ${
-                              selected ? "bg-white" : full ? "bg-red" : "bg-amber"
+                            className={`w-[5px] h-[5px] rounded-full ${
+                              // Shape, not shade: hollow = planned, solid = full (team shorts colour).
+                              selected ? (full ? "bg-white" : "border border-white") : full ? "bg-short" : "border-[1.5px] border-short"
                             }`}
                           />
                         ))}
@@ -299,10 +300,10 @@ export function DatePicker({
               {dayInfo && !onClear && (
                 <span className="flex items-center gap-2 text-[11px] text-ink-soft">
                   <span className="inline-flex items-center gap-1">
-                    <span className="w-[5px] h-[5px] rounded-full bg-amber" /> planned
+                    <span className="w-[7px] h-[7px] rounded-full border-[1.5px] border-short" /> planned
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="w-[5px] h-[5px] rounded-full bg-red" /> full
+                    <span className="w-[7px] h-[7px] rounded-full bg-short" /> full
                   </span>
                 </span>
               )}

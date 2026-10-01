@@ -136,11 +136,13 @@ export default async function ProjectDetailPage({
     .eq("project_id", id)
     .order("position");
   const packageCount = packageRows?.length ?? 0;
-  const winner = packageRows?.find((r) => r.is_winner) ?? null;
-  const shown = winner ?? packageRows?.[0] ?? null;
-  const winnerUrl = shown?.thumbnail_storage_path
-    ? (await supabase.storage.from("package-thumbs").createSignedUrl(shown.thumbnail_storage_path as string, 3600)).data?.signedUrl ?? null
-    : null;
+  const winners = (packageRows ?? []).filter((r) => r.is_winner);
+  const winner = winners[0] ?? null;
+  // Up to 3 winners (A/B test); otherwise the first variation.
+  const cardRows = winners.length ? winners : (packageRows ?? []).slice(0, 1);
+  const cardPaths = cardRows.map((r) => r.thumbnail_storage_path as string | null).filter((x): x is string => !!x);
+  const { data: cardSigned } = cardPaths.length ? await supabase.storage.from("package-thumbs").createSignedUrls(cardPaths, 3600) : { data: [] };
+  const cardUrls = (cardSigned ?? []).map((d) => d.signedUrl).filter(Boolean) as string[];
 
   const userIsMaster = isMaster(membership?.roles ?? []);
   const myRoles = membership?.roles ?? [];
@@ -287,6 +289,23 @@ export default async function ProjectDetailPage({
       {/* The steps are the tabs: every step can be opened at any time. */}
       <LongStepBar projectId={id} stage={project.stage as PipelineStage} tab={tab} />
 
+      {/* Looking at another step: one click back to where the video is. */}
+      {tab !== project.stage && (
+        <div className="mb-5 flex items-center gap-3 flex-wrap rounded-xl border border-amber/40 bg-amber/10 px-4 py-2.5 animate-[modalin_.2s_var(--ease-out)]">
+          <span className="text-[13.5px]">
+            Viewing the <b>{STAGE_LABELS[tab]}</b> step. This video is in <b>{STAGE_LABELS[project.stage as PipelineStage]}</b>.
+          </span>
+          <span className="flex-1" />
+          <Link
+            href={`/videos/${id}?tab=${project.stage}`}
+            scroll={false}
+            className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 inline-flex items-center text-[13px] hover:brightness-110"
+          >
+            Go to {STAGE_LABELS[project.stage as PipelineStage]}
+          </Link>
+        </div>
+      )}
+
       {/* Master: move the video by hand (the step buttons move it too). */}
       {project.stage !== "done" && userIsMaster && (
         <div className="flex items-center gap-2 flex-wrap mb-6">
@@ -374,7 +393,17 @@ export default async function ProjectDetailPage({
                 </div>
               )}
               {tab === "research" && (
-                <p className="text-[14px] text-ink-soft">Research happens in this step&rsquo;s chat: links, findings and questions.</p>
+                <Link
+                  href={`/videos/${id}/script?kind=research`}
+                  className="group flex items-center gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-4 hover:border-amber transition-colors"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Research</span>
+                    <span className="block text-[15px] font-semibold mt-0.5">Research documents</span>
+                    <span className="block text-[12.5px] text-ink-soft mt-0.5">Same editor as the script. Open it next to the script with Side by side.</span>
+                  </span>
+                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open</span>
+                </Link>
               )}
               {tab === "script" && (
                 <div className="space-y-3">
@@ -430,19 +459,25 @@ export default async function ProjectDetailPage({
                   href={`/videos/${id}/studio`}
                   className="group flex items-center gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
                 >
-                  <span className="w-40 aspect-video rounded-lg overflow-hidden bg-surface-2 flex-shrink-0 flex items-center justify-center">
-                    {winnerUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={winnerUrl} alt="" className="w-full h-full object-cover" />
+                  <span className="flex gap-1.5 flex-shrink-0">
+                    {cardUrls.length ? (
+                      cardUrls.map((u) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={u} src={u} alt="" className={`${cardUrls.length > 1 ? "w-24" : "w-40"} aspect-video rounded-lg object-cover bg-surface-2`} />
+                      ))
                     ) : (
-                      <span className="text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
+                      <span className="w-40 aspect-video rounded-lg bg-surface-2 flex items-center justify-center text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Thumbnail Studio</span>
                     <span className="block text-[15px] font-semibold mt-0.5 truncate">{winner?.title ?? "Add your thumbnails and titles"}</span>
                     <span className="block text-[12.5px] text-ink-soft mt-0.5">
-                      {packageCount ? `${packageCount} variation${packageCount === 1 ? "" : "s"}${winner ? " · winner picked" : " · no winner yet"}` : "Preview them on YouTube: home, search, mobile, TV…"}
+                      {packageCount
+                        ? `${packageCount} variation${packageCount === 1 ? "" : "s"} · ${
+                            winners.length > 1 ? `A/B test · ${winners.length} winners` : winners.length ? "winner picked" : "no winner yet"
+                          }`
+                        : "Preview them on YouTube: home, search, mobile, TV…"}
                     </span>
                   </span>
                   <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open</span>

@@ -141,42 +141,47 @@ export function ConnectedAccounts({
               )}
 
               {canManage && (
-                <div className="flex items-center gap-2 mt-auto">
-                  {(!a || needs || a.missingPermission) && (
-                    <a
-                      href={configured[p] ? `/api/social/${p}/connect?team=${teamId}` : undefined}
-                      aria-disabled={!configured[p]}
-                      onClick={(e) => {
-                        if (!configured[p]) {
-                          e.preventDefault();
-                          toast.error(`${META[p].name} ${ERRORS.not_configured}`);
-                        } else setBusy(p);
-                      }}
-                      className={`press inline-flex items-center gap-1.5 rounded-lg px-3.5 h-9 text-[13px] font-bold ${
-                        configured[p] ? "bg-amber text-white hover:brightness-110" : "bg-surface-2 text-ink-faint cursor-not-allowed"
-                      }`}
-                    >
-                      {busy === p && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
-                      {a ? "Reconnect" : "Connect"}
-                    </a>
-                  )}
-                  {a && !needs && !a.missingPermission && configured[p] && (
-                    <a href={`/api/social/${p}/connect?team=${teamId}`} className="rounded-lg px-3 h-9 inline-flex items-center text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
-                      Reconnect
-                    </a>
-                  )}
+                <>
+                {/* Two equal buttons (or one full-width Connect): never wider than the card. */}
+                <div className={`grid gap-2 mt-auto ${a ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {(() => {
+                    const urgent = !a || needs || a.missingPermission;
+                    return (
+                      <a
+                        href={configured[p] ? `/api/social/${p}/connect?team=${teamId}` : undefined}
+                        aria-disabled={!configured[p]}
+                        onClick={(e) => {
+                          if (!configured[p]) {
+                            e.preventDefault();
+                            toast.error(`${META[p].name} ${ERRORS.not_configured}`);
+                          } else setBusy(p);
+                        }}
+                        className={`press min-w-0 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 h-9 text-[12.5px] font-bold whitespace-nowrap transition-colors ${
+                          !configured[p]
+                            ? "bg-surface-2 text-ink-faint cursor-not-allowed"
+                            : urgent
+                              ? "bg-amber text-white hover:brightness-110"
+                              : "border border-line/20 text-ink hover:border-line/40 hover:bg-surface-2"
+                        }`}
+                      >
+                        {busy === p && <span className="w-3.5 h-3.5 rounded-full border-2 border-current/40 border-t-current animate-spin" />}
+                        {a ? "Reconnect" : "Connect"}
+                      </a>
+                    );
+                  })()}
                   {a && (
                     <button
                       type="button"
                       onClick={() => void disconnect(p)}
                       disabled={busy === p}
-                      className="rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
+                      className="min-w-0 rounded-lg px-2 h-9 text-[12.5px] font-semibold whitespace-nowrap border border-line/20 text-ink-soft hover:text-red hover:border-red/40 hover:bg-red/10 transition-colors"
                     >
                       {busy === p ? "Disconnecting…" : "Disconnect"}
                     </button>
                   )}
-                  {!configured[p] && !a && <span className="text-[11.5px] text-ink-faint">Keys not added yet</span>}
                 </div>
+                {!configured[p] && !a && <span className="text-[11.5px] text-ink-faint">Keys not added yet</span>}
+                </>
               )}
             </div>
           );

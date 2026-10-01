@@ -11,7 +11,7 @@ import { KindIcon } from "@/components/ui/kind-icon";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { DayLimitControl } from "@/modules/short-videos/components/day-limit-control";
-import { moveShortAuto, moveShortInQueue, setShortDayLimit, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
+import { moveShortAuto, moveShortInQueue, setShortDayLimit, swapShorts, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
 import { updateExpectedDate } from "@/app/(dashboard)/videos/[id]/actions";
 
 export type CalItem = {
@@ -130,6 +130,7 @@ export function CalendarView({
   const [pending, setPending] = useState<
     | { type: "move"; item: CalItem; to: string; raise: boolean; keepAuto: boolean }
     | { type: "reorder"; item: CalItem; target: CalItem; steps: number }
+    | { type: "swap"; item: CalItem; target: CalItem }
     | null
   >(null);
   const [saving, start] = useTransition();
@@ -137,6 +138,8 @@ export function CalendarView({
   // Live reorder preview: the dragged short and the short it would take the place of.
   const [drag, setDrag] = useState<CalItem | null>(null);
   const [overItem, setOverItem] = useState<string | null>(null);
+  // Cross-day: the short a dragged short would swap places with.
+  const [swapTarget, setSwapTarget] = useState<string | null>(null);
   // Phones: the day picked in the compact month grid.
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -190,6 +193,10 @@ export function CalendarView({
           setItems((list) => list.map((x) => (x.id === item.id ? { ...x, date: to, auto: false } : x)));
           toast.success(`Moved to ${nice(to)}`);
         }
+      } else if (pending.type === "swap") {
+        const r = await swapShorts(pending.item.id, pending.target.id);
+        if (r.error) return void toast.error(r.error);
+        toast.success(`Swapped #${pending.item.number} and #${pending.target.number}`);
       } else {
         const { item, steps } = pending;
         const dir = steps > 0 ? 1 : -1;
@@ -225,8 +232,40 @@ export function CalendarView({
   const endDrag = () => {
     setDrag(null);
     setOverItem(null);
+    setSwapTarget(null);
     setDragOver(null);
   };
+
+  /** Drop a short onto a short on ANOTHER day: they swap places. */
+  function askSwap(it: CalItem, target: CalItem) {
+    const reason = blockedReason(it) ?? (target.done ? "That short is already posted." : target.posts.length ? "That short has scheduled posts." : null);
+    if (reason) return toast.error(reason);
+    setPending({ type: "swap", item: it, target });
+  }
+  const swapProps = (target: CalItem) =>
+    canManage
+      ? {
+          onDragOver: (e: React.DragEvent) => {
+            // Same day is a reorder (the list handles it); other days swap.
+            if (!drag || drag.kind !== "short" || target.kind !== "short" || drag.date === target.date || drag.id === target.id) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (swapTarget !== target.id) setSwapTarget(target.id);
+            if (dragOver) setDragOver(null);
+          },
+          onDragLeave: (e: React.DragEvent) => {
+            if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setSwapTarget((t) => (t === target.id ? null : t));
+          },
+          onDrop: (e: React.DragEvent) => {
+            if (!drag || drag.kind !== "short" || target.kind !== "short" || drag.date === target.date || drag.id === target.id) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const it = drag;
+            endDrag();
+            askSwap(it, target);
+          },
+        }
+      : {};
 
   /** How many slots a card slides while a same-day short is dragged over the list. */
   const shiftFor = (it: CalItem) => {
@@ -314,6 +353,8 @@ export function CalendarView({
       shift={shiftFor(it)}
       gapPx={gapPx}
       ghost={drag?.id === it.id}
+      swapTarget={swapTarget === it.id}
+      swapProps={swapProps(it)}
       onOpen={() => setQuick(it)}
       onDragStart={onDragStartItem(it)}
       onDragEnd={endDrag}
@@ -592,6 +633,7 @@ export function CalendarView({
         canManage={canManage}
         blockedReason={blockedReason}
         dayShorts={quick ? shortsOn(quick.date).sort((a, b) => a.queuePosition - b.queuePosition) : []}
+        dayInfo={(d) => ({ count: shortsOn(d, quick?.id).length, limit: limitFor(d) })}
         onClose={() => setQuick(null)}
         onMove={askMove}
         onReorder={askReorder}
@@ -601,7 +643,15 @@ export function CalendarView({
       <Dialog
         open={!!pending}
         onClose={() => !saving && setPending(null)}
-        title={!pending ? "" : pending.type === "move" ? `Move #${pending.item.number}?` : `Change the order of ${nice(pending.item.date)}?`}
+        title={
+          !pending
+            ? ""
+            : pending.type === "move"
+              ? `Move #${pending.item.number}?`
+              : pending.type === "swap"
+                ? `Swap #${pending.item.number} and #${pending.target.number}?`
+                : `Change the order of ${nice(pending.item.date)}?`
+        }
         footer={
           <>
             <button type="button" onClick={() => setPending(null)} disabled={saving} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
@@ -609,7 +659,7 @@ export function CalendarView({
             </button>
             <button type="button" onClick={confirm} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60">
               {saving && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
-              {pending?.type === "reorder" ? "Change order" : "Move"}
+              {pending?.type === "reorder" ? "Change order" : pending?.type === "swap" ? "Swap" : "Move"}
             </button>
           </>
         }
@@ -692,6 +742,33 @@ export function CalendarView({
             </p>
           </div>
         )}
+        {pending?.type === "swap" && (
+          <div className="space-y-2.5">
+            {[
+              [pending.item, pending.target.date],
+              [pending.target, pending.item.date],
+            ].map(([it, to]) => {
+              const x = it as CalItem;
+              return (
+                <div key={x.id} className="flex items-center gap-3 rounded-xl bg-surface-2/60 px-4 py-3">
+                  <KindIcon kind="short" />
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+                    #{x.number} {x.title}
+                  </span>
+                  <span className="text-[13px] text-ink-soft whitespace-nowrap">{nice(x.date)}</span>
+                  <ArrowRightIcon className="w-4 h-4 text-ink-soft flex-shrink-0" />
+                  <span className="text-[13px] font-semibold text-amber whitespace-nowrap">{nice(to as string)}</span>
+                </div>
+              );
+            })}
+            <p className="text-[12.5px] text-ink-soft">
+              {pending.item.auto && pending.target.auto
+                ? "Both stay automatic: they just trade places in the queue."
+                : "They trade their scheduling: each takes the other's date (automatic or fixed)."}{" "}
+              Numbers update to match.
+            </p>
+          </div>
+        )}
         {pending?.type === "reorder" && (
           <div className="space-y-3">
             <p className="text-[14px]">
@@ -768,6 +845,8 @@ function Chip({
   shift,
   gapPx,
   ghost,
+  swapTarget,
+  swapProps,
   onOpen,
   onDragStart,
   onDragEnd,
@@ -781,6 +860,9 @@ function Chip({
   gapPx: number;
   /** The card being dragged: shown faded in its new slot. */
   ghost: boolean;
+  /** A short from another day is hovering: dropping swaps them. */
+  swapTarget: boolean;
+  swapProps: object;
   onOpen: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
@@ -798,13 +880,14 @@ function Chip({
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      {...swapProps}
       data-short-id={it.kind === "short" ? it.id : undefined}
       title={`#${it.number} ${it.title}`}
       className={`w-full text-left flex items-center gap-2 rounded-lg transition-[transform,opacity,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
         lg ? "px-3 py-2.5 text-[14px]" : "px-2 py-1.5 text-[12.5px]"
       } ${
         overdue ? "bg-red/10 text-red hover:bg-red/15" : tinted ? "text-ink" : it.done ? "bg-surface-2/50 text-ink-soft" : "bg-surface-2 text-ink hover:bg-line/10"
-      } ${ghost ? "opacity-40" : ""} ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      } ${ghost ? "opacity-40" : ""} ${swapTarget ? "ring-2 ring-amber ring-offset-2 ring-offset-surface scale-[1.02]" : ""} ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
       style={{
         transform: shift ? `translateY(calc(${shift} * (100% + ${gapPx}px)))` : undefined,
         ...(tinted
@@ -912,6 +995,7 @@ function QuickView({
   onClose,
   onMove,
   onReorder,
+  dayInfo,
 }: {
   item: CalItem | null;
   today: string;
@@ -921,6 +1005,8 @@ function QuickView({
   onClose: () => void;
   onMove: (it: CalItem, to: string) => void;
   onReorder: (it: CalItem, target: CalItem) => void;
+  /** Shorts planned vs the limit, for the Move picker's dots. */
+  dayInfo: (date: string) => { count: number; limit: number };
 }) {
   if (!item) return null;
   const overdue = !item.done && item.date < today;
@@ -940,6 +1026,7 @@ function QuickView({
             <DatePicker
               value={item.date}
               onChange={(d) => onMove(item, d)}
+              dayInfo={dayInfo}
               ariaLabel="Move to another day"
               triggerClassName="rounded-lg border border-line/20 px-4 h-10 text-[13.5px] font-semibold hover:border-line/40"
             >

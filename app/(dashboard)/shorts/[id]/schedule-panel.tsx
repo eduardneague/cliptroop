@@ -1064,7 +1064,7 @@ function ReconnectNotice() {
         <p className="text-[12.5px] text-ink-soft mt-0.5">
           YouTube was connected before VPlanner could change scheduled videos. Reconnect it to allow that. It only takes a moment.
         </p>
-        <Link href="/team#connected-accounts" className="mt-2.5 inline-flex items-center rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px]">
+        <Link href="/team?tab=accounts" className="mt-2.5 inline-flex items-center rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px]">
           Reconnect YouTube
         </Link>
       </div>

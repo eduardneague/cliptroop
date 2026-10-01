@@ -207,7 +207,7 @@ export default async function ShortPage({
         hasEditor={!!short.editor}
         editorName={short.editor?.name ?? null}
         reviewerName={short.reviewer?.name ?? null}
-        hasFrameio={!!latestVersion || short.hasFrameio}
+        hasVideo={!!latestVersion || short.hasVideo}
       />}
 
       {/* Phones: one column. When it's time to post, the Posted card comes first. */}
@@ -290,7 +290,6 @@ export default async function ShortPage({
                 // Uploading only while editing (not in review or later, not while looking back).
                 canUpload={canUploadVideo && short.stage === "editing" && !viewStage}
                 prominent={short.stage === "editing" && !viewStage}
-                legacyLink={short.fileLink}
               />
             </div>
           )}

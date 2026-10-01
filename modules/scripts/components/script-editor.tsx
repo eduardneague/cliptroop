@@ -40,6 +40,7 @@ import {
   UnderlineIcon,
   UndoIcon,
 } from "@/components/ui/icons";
+import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark } from "../lib/anchors";
 import { ScriptImage } from "./script-image";
 import { countWords, EMPTY_DOC, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
 
@@ -109,6 +110,15 @@ export function ScriptEditor({
   backLabel,
   lastEdited,
   topBarExtra,
+  docName,
+  leftRail,
+  rightPanel,
+  comments = [],
+  activeCommentId = null,
+  onAddComment,
+  onCommentClick,
+  copySources = [],
+  onCopyFrom,
 }: {
   scriptId: string;
   teamId: string;
@@ -122,12 +132,41 @@ export function ScriptEditor({
   lastEdited: string | null;
   /** Extra controls for the top bar (e.g. the short's scripters). */
   topBarExtra?: React.ReactNode;
+  /** The document's name (e.g. "Review"), shown in the top bar. */
+  docName?: string;
+  /** Left: the documents list (a strip on phones). */
+  leftRail?: React.ReactNode;
+  /** Right: side-by-side document or comments (a sheet on phones). */
+  rightPanel?: React.ReactNode;
+  /** Inline comments (anyone on the team can add them). */
+  comments?: CommentMark[];
+  activeCommentId?: string | null;
+  onAddComment?: (quote: string, occurrence: number, body: string) => Promise<string | null>;
+  onCommentClick?: (id: string) => void;
+  /** "Copy from…" when this document is empty. */
+  copySources?: { id: string; name: string }[];
+  onCopyFrom?: (id: string) => Promise<Record<string, unknown> | null>;
 }) {
   const toast = useToast();
   const [status, setStatus] = useState<Status>("saved");
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
-  const [view, setView] = useState<"strip" | "pages">("strip");
+  const [view, setView] = useState<"strip" | "pages" | "spread">("strip");
+  // Spread (pages side by side) is a desktop view; phones fall back to Pages.
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const shown = view === "spread" && !wide ? "pages" : view;
+  const [spreadPages, setSpreadPages] = useState(1);
+  // Spread zoom: at least two pages fit across (never below 45%).
+  const [spreadScale, setSpreadScale] = useState(1);
+  const scaleRef = useRef(1);
+  const areaRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [pageLayout, setPageLayout] = useState({ pageH: 1123, pages: 1 });
@@ -142,13 +181,14 @@ export function ScriptEditor({
   // from this, so clicks and no-op edits never trigger a save.
   const savedJsonRef = useRef<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null }>({ comments, active: activeCommentId });
 
   useEffect(() => {
     try {
       const v = localStorage.getItem(PAPER_KEY);
       if (v === "light" || v === "dark") setPaper(v);
       const w = localStorage.getItem(VIEW_KEY);
-      if (w === "strip" || w === "pages") setView(w);
+      if (w === "strip" || w === "pages" || w === "spread") setView(w);
     } catch {
       /* private mode: stay light */
     }
@@ -260,6 +300,7 @@ export function ScriptEditor({
       TaskItem.configure({ nested: true }),
       ScriptImage,
       CharacterCount,
+      CommentHighlights(() => commentStateRef.current),
       Placeholder.configure({ placeholder: canEdit ? "Start writing the script…" : "No script written yet." }),
     ],
     content: isEmptyDoc(initialContent) ? EMPTY_DOC : initialContent,
@@ -302,6 +343,48 @@ export function ScriptEditor({
   });
   editorRef.current = editor;
 
+  // Comments changed (or another one is active): redraw the highlights.
+  useEffect(() => {
+    commentStateRef.current = { comments, active: activeCommentId };
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(commentKey, true));
+  }, [comments, activeCommentId, editor]);
+  // Jump to the comment picked in the list.
+  useEffect(() => {
+    if (!editor || !activeCommentId) return;
+    const c = comments.find((x) => x.id === activeCommentId);
+    const r = c ? findQuote(editor.state.doc, c.quote, c.occurrence) : null;
+    if (!r) return;
+    const node = editor.view.domAtPos(r.from).node as HTMLElement;
+    (node.nodeType === 1 ? node : node.parentElement)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeCommentId, comments, editor]);
+
+  // Selecting text shows a floating "Comment" button (even when view-only).
+  const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editor || !onAddComment) return;
+    const update = () => {
+      const { from, to, empty } = editor.state.selection;
+      const $from = editor.state.doc.resolve(from);
+      const $to = editor.state.doc.resolve(to);
+      if (empty || !$from.sameParent($to)) {
+        if (draft === null) setSel(null);
+        return;
+      }
+      const quote = editor.state.doc.textBetween(from, to, "\u0000").slice(0, 500);
+      if (!quote.trim()) return setSel(null);
+      const box = paperRef.current?.getBoundingClientRect();
+      const end = editor.view.coordsAtPos(to);
+      if (!box) return;
+      const z = scaleRef.current;
+      setSel({ quote, occurrence: occurrenceAt(editor.state.doc, quote, from), top: (end.bottom - box.top) / z + 6, left: Math.min((end.left - box.left) / z, box.width / z - 140) });
+    };
+    editor.on("selectionUpdate", update);
+    return () => {
+      editor.off("selectionUpdate", update);
+    };
+  }, [editor, onAddComment, draft]);
+
   // Save shortcut, unsaved-changes warning, and a final save when leaving.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -327,7 +410,7 @@ export function ScriptEditor({
 
   // Pages view: work out how many A4 sheets the script fills.
   useEffect(() => {
-    if (view !== "pages") return;
+    if (shown !== "pages") return;
     const paperEl = paperRef.current;
     const contentEl = contentRef.current;
     if (!paperEl || !contentEl) return;
@@ -344,9 +427,53 @@ export function ScriptEditor({
     ro.observe(paperEl);
     ro.observe(contentEl);
     return () => ro.disconnect();
-  }, [view]);
+  }, [shown]);
 
-  function chooseView(v: "strip" | "pages") {
+  // Spread: pages side by side (CSS columns, each column one A4 page).
+  useEffect(() => {
+    if (shown !== "spread" || !editor) return;
+    const paperEl = paperRef.current;
+    const contentEl = contentRef.current;
+    if (!paperEl || !contentEl) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        paperEl.style.width = `${SPREAD_STEP * 60}px`;
+        const last = contentEl.querySelector(".ProseMirror")?.lastElementChild as HTMLElement | null;
+        // offsetLeft is in the page's own (unzoomed) coordinates.
+        const right = last ? last.offsetLeft + last.offsetWidth : SPREAD_PAGE;
+        const pages = Math.max(1, Math.ceil((right - SPREAD_PAD + 1) / SPREAD_STEP));
+        paperEl.style.width = `${pages * SPREAD_STEP - SPREAD_GAP}px`;
+        setSpreadPages(pages);
+      });
+    };
+    measure();
+    editor.on("update", measure);
+    window.addEventListener("resize", measure);
+    // Zoom so two pages fit the space next to the documents / side panel.
+    const area = areaRef.current;
+    const fit = () => {
+      if (!area) return;
+      const avail = area.clientWidth - 48;
+      const scale = Math.max(0.45, Math.min(1, avail / (2 * SPREAD_STEP - SPREAD_GAP)));
+      scaleRef.current = scale;
+      setSpreadScale(scale);
+    };
+    fit();
+    const ro = area ? new ResizeObserver(fit) : null;
+    if (area) ro?.observe(area);
+    return () => {
+      cancelAnimationFrame(raf);
+      editor.off("update", measure);
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+      paperEl.style.width = "";
+      scaleRef.current = 1;
+    };
+  }, [shown, editor]);
+
+  function chooseView(v: "strip" | "pages" | "spread") {
     setView(v);
     try {
       localStorage.setItem(VIEW_KEY, v);
@@ -386,15 +513,17 @@ export function ScriptEditor({
         <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
           <span className="font-mono text-ink-soft mr-1.5">#{number}</span>
           {title}
+          {docName && <span className="ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft">{docName}</span>}
         </div>
         <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
           {words} words · about {spokenLength(words)}
-          {view === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : ""}
+          {shown === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : shown === "spread" ? ` · ${spreadPages} page${spreadPages === 1 ? "" : "s"}` : ""}
         </span>
         <div role="radiogroup" aria-label="View" className="hidden sm:flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
           {([
             ["strip", "Strip"],
             ["pages", "Pages"],
+            ["spread", "Spread"],
           ] as const).map(([v, label]) => (
             <button
               key={v}
@@ -402,7 +531,8 @@ export function ScriptEditor({
               role="radio"
               aria-checked={view === v}
               onClick={() => chooseView(v)}
-              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${
+              title={v === "spread" ? "Pages side by side" : v === "pages" ? "Pages one under another" : "One long page"}
+              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${v === "spread" ? "hidden lg:block" : ""} ${
                 view === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"
               }`}
             >
@@ -478,21 +608,47 @@ export function ScriptEditor({
         }}
       />
 
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+      {leftRail && <div className="no-print lg:w-56 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
       {/* Paper */}
-      <div className="flex-1 px-3 sm:px-6 py-6 sm:py-10">
+      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-6 py-6 sm:py-10 ${shown === "spread" ? "overflow-x-auto" : ""}`}>
+        <div style={shown === "spread" ? { width: (spreadPages * SPREAD_STEP - SPREAD_GAP) * spreadScale, height: SPREAD_PAGE_H * spreadScale } : undefined}>
         <div
           ref={paperRef}
           data-paper={paper}
-          data-view={view}
-          style={view === "pages" ? { minHeight: pageLayout.pages * pageLayout.pageH } : undefined}
-          className={`script-paper script-print relative isolate mx-auto w-full border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] transition-colors ${
-            view === "pages"
-              ? "max-w-[794px] rounded-md px-6 sm:px-[72px] py-10 sm:py-[72px]"
-              : "max-w-3xl rounded-2xl px-5 sm:px-14 py-8 sm:py-14"
+          data-view={shown}
+          style={
+            shown === "pages"
+              ? { minHeight: pageLayout.pages * pageLayout.pageH }
+              : shown === "spread"
+                ? {
+                    height: SPREAD_PAGE_H,
+                    padding: SPREAD_PAD,
+                    columnWidth: SPREAD_PAGE - SPREAD_PAD * 2,
+                    columnGap: SPREAD_PAD * 2 + SPREAD_GAP,
+                    columnFill: "auto",
+                    // The app's background between pages.
+                    backgroundImage: `linear-gradient(to right, transparent 0 ${SPREAD_PAGE}px, rgb(var(--paper)) ${SPREAD_PAGE}px ${SPREAD_STEP}px)`,
+                    backgroundSize: `${SPREAD_STEP}px 100%`,
+                    transform: spreadScale !== 1 ? `scale(${spreadScale})` : undefined,
+                    transformOrigin: "top left",
+                  }
+                : undefined
+          }
+          onClick={(e) => {
+            const id = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]")?.dataset.commentId;
+            if (id) onCommentClick?.(id);
+          }}
+          className={`script-paper script-print relative isolate transition-colors ${
+            shown === "spread"
+              ? "rounded-md"
+              : `mx-auto w-full border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] ${
+                  shown === "pages" ? "max-w-[794px] rounded-md px-6 sm:px-[72px] py-10 sm:py-[72px]" : "max-w-3xl rounded-2xl px-5 sm:px-14 py-8 sm:py-14"
+                }`
           }`}
         >
           {/* Pages view: where each A4 sheet ends. Drawn behind the text. */}
-          {view === "pages" &&
+          {shown === "pages" &&
             Array.from({ length: pageLayout.pages - 1 }, (_, i) => (
               <div
                 key={i}
@@ -518,20 +674,119 @@ export function ScriptEditor({
               >
                 Use template
               </button>
+              {onCopyFrom && copySources.length > 0 && (
+                <select
+                  defaultValue=""
+                  onChange={async (e) => {
+                    const id = e.target.value;
+                    e.target.value = "";
+                    if (!id) return;
+                    const content = await onCopyFrom(id);
+                    if (content && editor) editor.commands.setContent(content, { emitUpdate: true });
+                  }}
+                  className="rounded-lg border px-2 h-8 text-[12.5px] font-semibold bg-transparent script-soft-border"
+                  aria-label="Copy from another document"
+                >
+                  <option value="">Copy from…</option>
+                  {copySources.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
           <div ref={contentRef}>
             <EditorContent editor={editor} />
           </div>
+          {sel && onAddComment && (
+            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
+              {draft === null ? (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setDraft("")}
+                  className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] shadow-lg animate-[modalin_.12s_var(--ease-out)]"
+                >
+                  Comment
+                </button>
+              ) : (
+                <div className="w-[280px] rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 space-y-2 animate-[modalin_.12s_var(--ease-out)]">
+                  <div className="text-[11.5px] text-ink-soft truncate">“{sel.quote}”</div>
+                  <textarea
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Escape") {
+                        setDraft(null);
+                        setSel(null);
+                      }
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) {
+                        const err = await onAddComment(sel.quote, sel.occurrence, draft);
+                        if (err) toast.error(err);
+                        else {
+                          setDraft(null);
+                          setSel(null);
+                        }
+                      }
+                    }}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="Your comment…"
+                    className="w-full rounded-lg border border-line/15 bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:ring-2 focus:ring-amber"
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft(null);
+                        setSel(null);
+                      }}
+                      className="rounded-lg px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!draft.trim()}
+                      onClick={async () => {
+                        const err = await onAddComment(sel.quote, sel.occurrence, draft);
+                        if (err) toast.error(err);
+                        else {
+                          setDraft(null);
+                          setSel(null);
+                        }
+                      }}
+                      className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] disabled:opacity-50"
+                    >
+                      Comment
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         </div>
         <p className="no-print mx-auto max-w-3xl mt-3 px-1 text-[11.5px] text-ink-soft md:hidden">
           {words} words · about {spokenLength(words)}
         </p>
         {lastEdited && <p className="no-print mx-auto max-w-3xl mt-1 px-1 text-[11.5px] text-ink-soft">{lastEdited}</p>}
       </div>
+      {rightPanel}
+      </div>
     </div>
   );
 }
+
+// Spread view: A4 at 96 dpi, 72px margins, 32px between pages.
+const SPREAD_PAGE = 794;
+const SPREAD_PAGE_H = 1123;
+const SPREAD_PAD = 72;
+const SPREAD_GAP = 32;
+const SPREAD_STEP = SPREAD_PAGE + SPREAD_GAP;
 
 // ---------------------------------------------------------------------------
 

@@ -61,12 +61,13 @@ export async function deleteVariant(id: string): Promise<Result> {
   return {};
 }
 
-export async function pickWinner(id: string, projectId: string): Promise<Result> {
+/** Mark / unmark a winner (up to 3 per video, for A/B testing). */
+export async function toggleWinner(id: string, projectId: string): Promise<Result<{ winner: boolean }>> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc("set_package_winner", { p_entry: id });
-  if (error) return { error: error.code === "42501" ? error.message : "Couldn't pick it. Try again." };
+  const { data, error } = await supabase.rpc("toggle_package_winner", { p_entry: id });
+  if (error) return { error: ["42501", "23514"].includes(error.code ?? "") ? error.message : "Couldn't update it. Try again." };
   refresh(projectId);
-  return {};
+  return { winner: !!data };
 }
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ import type { DatedShort, TeamPerson } from "../lib/queries";
 import { assignShortPerson, setShortScripter } from "@/app/(dashboard)/shorts/actions";
 import { ScripterPicker } from "./scripter-picker";
 import { PersonSelect, type PersonKind } from "./person-select";
-import { FinalFileField } from "./final-file-field";
 import { formatShortDate } from "../lib/dates";
 import { ScheduleField, type ScheduleValue } from "./schedule-field";
 import { ShortTypePicker, Switch } from "./short-type";
@@ -209,10 +208,6 @@ export function ShortSettingsDialog({
             save.run(short.id, { platforms: next });
           }}
         />
-      </Section>
-
-      <Section label="Final file">
-        <FinalFileField id={short.id} link={short.fileLink} canEdit />
       </Section>
 
       <Section label="Caption">

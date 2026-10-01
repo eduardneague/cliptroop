@@ -6,9 +6,17 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { ArrowLeftIcon, CloseIcon, ExpandIcon, PlusIcon, StarIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, CloseIcon, ExpandIcon, GridIcon, ImageIcon, PlusIcon, SettingsIcon, StarIcon } from "@/components/ui/icons";
+
+function ShuffleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+    </svg>
+  );
+}
 import type { LibraryVideo, StudioData, Variant } from "../lib/queries";
-import { deleteVariant, importLibrary, pickWinner, registerVariant, renameVariant } from "@/app/(dashboard)/videos/[id]/studio/actions";
+import { deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
 import { HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
 
 const VIEWS: { id: MockView; label: string }[] = [
@@ -116,6 +124,7 @@ export function Studio({ data }: { data: StudioData }) {
   const [variants, setVariants] = useState<Variant[]>(data.variants);
   useEffect(() => setVariants(data.variants), [data.variants]);
   const [activeId, setActiveId] = useState<string | null>(data.variants.find((v) => v.winner)?.id ?? data.variants[0]?.id ?? null);
+  // Compare starts with the winners (A/B candidates) when there are any.
   useEffect(() => {
     if (!activeId || !variants.some((v) => v.id === activeId)) setActiveId(variants[0]?.id ?? null);
   }, [variants, activeId]);
@@ -135,8 +144,13 @@ export function Studio({ data }: { data: StudioData }) {
   const stage = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // A fresh arrangement on each visit (after hydration).
-  useEffect(() => setSeed(Math.floor(Math.random() * 1e9)), []);
+  // A fresh arrangement on each visit (after hydration). Phones open on the Mobile layout.
+  const [canFullscreen, setCanFullscreen] = useState(false);
+  useEffect(() => {
+    setSeed(Math.floor(Math.random() * 1e9));
+    if (window.matchMedia("(max-width: 639px)").matches) setView("mobile");
+    setCanFullscreen(!!document.fullscreenEnabled);
+  }, []);
 
   const others = useMemo(() => {
     const lib = data.library.length ? shuffled(data.library, seed).map(libCard) : FILLER;
@@ -246,13 +260,17 @@ export function Studio({ data }: { data: StudioData }) {
       router.refresh();
     }
   }
+  /** Up to 3 winners, for A/B testing. */
   async function crown(v: Variant) {
-    setVariants((vs) => vs.map((x) => ({ ...x, winner: x.id === v.id })));
-    const r = await pickWinner(v.id, project.id);
+    if (!v.winner && variants.filter((x) => x.winner).length >= 3) {
+      return toast.error("Pick up to 3 winners (for A/B testing). Unpick one first.");
+    }
+    setVariants((vs) => vs.map((x) => (x.id === v.id ? { ...x, winner: !x.winner } : x)));
+    const r = await toggleWinner(v.id, project.id);
     if (r.error !== undefined) {
       toast.error(r.error);
       router.refresh();
-    } else toast.success("Winner picked");
+    } else toast.success(r.winner ? "Marked as a winner" : "Unpicked");
   }
   async function runImport() {
     setImporting(true);
@@ -296,7 +314,7 @@ export function Studio({ data }: { data: StudioData }) {
     `px-3 h-8 rounded-md text-[12.5px] font-semibold whitespace-nowrap transition-colors ${on ? "bg-surface-2 text-ink shadow-sm" : "text-ink-soft hover:text-ink"}`;
 
   return (
-    <div className="px-3 sm:px-6 py-4 space-y-4">
+    <div className="px-2.5 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
       {/* Top bar */}
       <div className="flex items-center gap-2 flex-wrap">
         <Link href={`/videos/${project.id}?tab=package`} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink mr-1">
@@ -305,14 +323,14 @@ export function Studio({ data }: { data: StudioData }) {
         </Link>
         <h1 className="text-[20px] sm:text-[24px] font-display font-semibold mr-2">Thumbnail Studio</h1>
         <span className="flex-1" />
-        <div className="flex items-center rounded-lg border border-line/15 p-0.5 overflow-x-auto no-scrollbar max-w-full" role="radiogroup" aria-label="Layout">
+        <div className="flex items-center rounded-lg border border-line/15 p-0.5 overflow-x-auto no-scrollbar w-full sm:w-auto max-w-full" role="radiogroup" aria-label="Layout">
           {VIEWS.map((v) => (
             <button key={v.id} type="button" role="radio" aria-checked={view === v.id} onClick={() => setView(v.id)} className={seg(view === v.id)}>
               {v.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center rounded-lg border border-line/15 p-0.5" role="radiogroup" aria-label="Theme">
+        <div className="flex items-center rounded-lg border border-line/15 p-0.5 w-full sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none" role="radiogroup" aria-label="Theme">
           {(["light", "dark", "both"] as const).map((t) => (
             <button key={t} type="button" role="radio" aria-checked={theme === t} onClick={() => setTheme(t)} disabled={view === "tv"} className={`${seg(theme === t)} capitalize disabled:opacity-40`}>
               {t}
@@ -325,26 +343,35 @@ export function Studio({ data }: { data: StudioData }) {
           type="button"
           onClick={() => {
             setCompare((c) => !c);
-            if (!compareIds.length) setCompareIds(variants.slice(0, 3).map((v) => v.id));
+            if (!compareIds.length) {
+              const winners = variants.filter((v) => v.winner).map((v) => v.id);
+              setCompareIds(winners.length > 1 ? winners : variants.slice(0, 3).map((v) => v.id));
+            }
           }}
           aria-pressed={compare}
-          className={`rounded-lg border px-3 h-9 text-[13px] font-semibold transition-colors ${compare ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[13px] font-semibold transition-colors ${compare ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+          aria-label="Compare"
         >
-          Compare
+          <GridIcon className="w-4 h-4" />
+          <span className="hidden sm:inline">Compare</span>
         </button>
-        <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1e9))} className="rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" title="Shortcut: R">
-          Randomize
+        <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1e9))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" title="Shortcut: R" aria-label="Randomize">
+          <ShuffleIcon className="w-4 h-4" />
+          <span className="hidden sm:inline">Randomize</span>
         </button>
-        <button type="button" onClick={fullscreen} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" title="Shortcut: F">
-          <ExpandIcon className="w-3.5 h-3.5" />
-          Fullscreen
-        </button>
+        {canFullscreen && (
+          <button type="button" onClick={fullscreen} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" title="Shortcut: F" aria-label="Fullscreen">
+            <ExpandIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Fullscreen</span>
+          </button>
+        )}
         <div className="relative">
-          <button type="button" onClick={() => setPanel((p) => (p === "details" ? null : "details"))} className="rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40">
-            Details
+          <button type="button" onClick={() => setPanel((p) => (p === "details" ? null : "details"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Details">
+            <SettingsIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Details</span>
           </button>
           {panel === "details" && (
-            <div className="absolute z-40 left-0 top-[calc(100%+6px)] w-[280px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-2.5 animate-[modalin_.15s_var(--ease-out)]">
+            <div className="fixed sm:absolute z-50 inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+6px)] sm:w-[280px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-2.5 animate-[modalin_.15s_var(--ease-out)]">
               {(
                 [
                   ["views", "Views"],
@@ -362,11 +389,12 @@ export function Studio({ data }: { data: StudioData }) {
           )}
         </div>
         <div className="relative">
-          <button type="button" onClick={() => setPanel((p) => (p === "library" ? null : "library"))} className="rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40">
-            Library · {data.library.length}
+          <button type="button" onClick={() => setPanel((p) => (p === "library" ? null : "library"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Library">
+            <ImageIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Library</span> · {data.library.length}
           </button>
           {panel === "library" && (
-            <div className="absolute z-40 right-0 sm:left-0 sm:right-auto top-[calc(100%+6px)] w-[300px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-3 animate-[modalin_.15s_var(--ease-out)]">
+            <div className="fixed sm:absolute z-50 inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+6px)] sm:w-[300px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-3 animate-[modalin_.15s_var(--ease-out)]">
               <p className="text-[12.5px] text-ink-soft">
                 {data.library.length ? `${data.library.length} popular videos, stored in VPlanner so previews load instantly.` : "No placeholder videos yet."} Import YouTube&rsquo;s current most popular videos, including Science &amp; Tech.
               </p>
@@ -391,7 +419,8 @@ export function Studio({ data }: { data: StudioData }) {
         <span className="hidden lg:inline text-[12px] text-ink-faint ml-1">← → switch · R randomize · F fullscreen · D dark/light · C compare</span>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] items-start">
+      {/* minmax(0, 1fr): the swipeable strip must never widen the column past the screen. */}
+      <div className="grid gap-3 sm:gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)] items-start">
         {/* Variations */}
         <aside
           onDragOver={(e) => {
@@ -405,10 +434,15 @@ export function Studio({ data }: { data: StudioData }) {
             setDragOver(false);
             void addFiles(e.dataTransfer.files);
           }}
-          className={`rounded-2xl border bg-surface p-2.5 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto transition-colors ${dragOver ? "border-amber bg-amber/5" : "border-line/10"}`}
+          className={`min-w-0 rounded-2xl border bg-surface p-2.5 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto transition-colors ${dragOver ? "border-amber bg-amber/5" : "border-line/10"}`}
         >
           <div className="flex items-center justify-between px-1.5 pb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Variations · {variants.length}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">
+              Variations · {variants.length}
+              <span className={`ml-2 normal-case tracking-normal ${variants.some((v) => v.winner) ? "text-amber" : ""}`}>
+                ★ Winners {variants.filter((v) => v.winner).length}/3
+              </span>
+            </span>
             {compare && <span className="text-[11px] text-amber font-semibold">Tick to compare</span>}
           </div>
           <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible no-scrollbar pb-1">
@@ -418,7 +452,7 @@ export function Studio({ data }: { data: StudioData }) {
               return (
                 <div
                   key={v.id}
-                  className={`flex-shrink-0 w-[220px] lg:w-auto rounded-xl border p-2 transition-colors ${on ? "border-amber bg-amber/[0.07]" : "border-line/10 hover:border-line/25"}`}
+                  className={`flex-shrink-0 w-[168px] sm:w-[220px] lg:w-auto rounded-xl border p-2 transition-colors ${on ? "border-amber bg-amber/[0.07]" : "border-line/10 hover:border-line/25"}`}
                 >
                   <button type="button" onClick={() => setActiveId(v.id)} className="relative block w-full aspect-video rounded-lg overflow-hidden bg-surface-2" aria-label={`Show variation ${i + 1}`}>
                     {v.url && (
@@ -464,11 +498,12 @@ export function Studio({ data }: { data: StudioData }) {
                       <button
                         type="button"
                         onClick={() => void crown(v)}
-                        disabled={v.winner}
-                        className={`inline-flex items-center gap-1 rounded-md px-2 h-7 text-[11.5px] font-semibold ${v.winner ? "text-amber" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
+                        aria-pressed={v.winner}
+                        title={v.winner ? "Unpick" : "Up to 3 winners for A/B testing"}
+                        className={`inline-flex items-center gap-1 rounded-md px-2 h-7 text-[11.5px] font-semibold ${v.winner ? "text-amber hover:bg-amber/10" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
                       >
-                        <StarIcon className="w-3.5 h-3.5" />
-                        {v.winner ? "Winner" : "Make winner"}
+                        <StarIcon className="w-3.5 h-3.5" filled={v.winner} />
+                        {v.winner ? "Winner ✓" : "Make winner"}
                       </button>
                       <span className="flex-1" />
                       <button type="button" onClick={() => void remove(v)} className="rounded-md w-7 h-7 flex items-center justify-center text-ink-soft hover:text-red hover:bg-red/10" aria-label="Delete">
@@ -483,7 +518,7 @@ export function Studio({ data }: { data: StudioData }) {
               <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
-                className="flex-shrink-0 w-[220px] lg:w-auto min-h-[120px] rounded-xl border-2 border-dashed border-line/25 hover:border-amber text-ink-soft hover:text-ink flex flex-col items-center justify-center gap-1.5 text-[13px] font-semibold transition-colors"
+                className="flex-shrink-0 w-[168px] sm:w-[220px] lg:w-auto min-h-[120px] rounded-xl border-2 border-dashed border-line/25 hover:border-amber text-ink-soft hover:text-ink flex flex-col items-center justify-center gap-1.5 text-[13px] font-semibold transition-colors"
               >
                 <PlusIcon className="w-5 h-5" />
                 Add thumbnails
@@ -521,7 +556,7 @@ export function Studio({ data }: { data: StudioData }) {
               ))}
             </div>
           ) : (
-            <div className={`grid gap-3 p-3 ${themes.length === 2 ? "2xl:grid-cols-2" : ""}`}>
+            <div className={`grid gap-3 p-2 sm:p-3 ${themes.length === 2 ? "2xl:grid-cols-2" : ""}`}>
               {themes.map((t) => (
                 <div key={t} className="rounded-xl overflow-hidden border border-line/10">
                   {renderView(active, t)}
