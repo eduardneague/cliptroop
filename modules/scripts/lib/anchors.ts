@@ -62,7 +62,7 @@ export function occurrenceAt(doc: PMNode, quote: string, from: number): number {
   return seen;
 }
 
-export type CommentMark = { id: string; quote: string; occurrence: number; resolved: boolean };
+export type CommentMark = { id: string; quote: string; occurrence: number; resolved: boolean; color?: string };
 export const commentKey = new PluginKey("script-comments");
 
 /** Draws open comments as highlights (decorations only: the text is untouched). */
@@ -85,6 +85,7 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
                     Decoration.inline(r.from, r.to, {
                       class: c.id === active ? "script-comment script-comment-active" : "script-comment",
                       "data-comment-id": c.id,
+                      ...(c.color ? { style: `--comment-color: ${c.color}` } : {}),
                     })
                   );
                 }

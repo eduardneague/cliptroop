@@ -314,14 +314,16 @@ html[data-motion="off"] button:active { scale: none; }
 
 /* Inline script comments (drawn over the text, never stored in it). */
 .script-comment {
-  background: color-mix(in srgb, rgb(var(--amber)) 22%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, rgb(var(--amber)) 70%, transparent);
+  /* Each comment in its role colour (falls back to amber). */
+  --c: var(--comment-color, rgb(var(--amber)));
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--c) 75%, transparent);
   border-radius: 2px;
   cursor: pointer;
   transition: background-color .15s ease;
 }
 .script-comment:hover,
 .script-comment-active {
-  background: color-mix(in srgb, rgb(var(--amber)) 38%, transparent);
-  border-bottom-color: rgb(var(--amber));
+  background: color-mix(in srgb, var(--c) 38%, transparent);
+  border-bottom-color: var(--c);
 }

@@ -39,6 +39,7 @@ import {
   SunIcon,
   UnderlineIcon,
   UndoIcon,
+  MoreIcon,
 } from "@/components/ui/icons";
 import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark } from "../lib/anchors";
 import { ScriptImage } from "./script-image";
@@ -113,6 +114,9 @@ export function ScriptEditor({
   docName,
   leftRail,
   rightPanel,
+  sideBySide,
+  mobileDocs,
+  renderCommentPopover,
   comments = [],
   activeCommentId = null,
   onAddComment,
@@ -136,12 +140,18 @@ export function ScriptEditor({
   docName?: string;
   /** Left: the documents list (a strip on phones). */
   leftRail?: React.ReactNode;
-  /** Right: side-by-side document or comments (a sheet on phones). */
+  /** Right: extra panel (a sheet on phones). */
   rightPanel?: React.ReactNode;
+  /** Another document shown as an equal page next to this one (desktop). */
+  sideBySide?: React.ReactNode;
+  /** Phones / tablets: the documents dropdown next to the title. */
+  mobileDocs?: React.ReactNode;
+  /** The popover shown when a highlighted comment is clicked. */
+  renderCommentPopover?: (id: string, close: () => void) => React.ReactNode;
   /** Inline comments (anyone on the team can add them). */
   comments?: CommentMark[];
   activeCommentId?: string | null;
-  onAddComment?: (quote: string, occurrence: number, body: string) => Promise<string | null>;
+  onAddComment?: (quote: string, occurrence: number, body: string, kind: "comment" | "edit_idea") => Promise<string | null>;
   onCommentClick?: (id: string) => void;
   /** "Copy from…" when this document is empty. */
   copySources?: { id: string; name: string }[];
@@ -161,12 +171,16 @@ export function ScriptEditor({
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-  const shown = view === "spread" && !wide ? "pages" : view;
+  // Spread is desktop-only, and never together with side by side.
+  const shown = view === "spread" && (!wide || sideBySide) ? "pages" : view;
+  // Spread: a 2-column grid of A4 pages (1 2 / 3 4 …), as many as the text needs.
   const [spreadPages, setSpreadPages] = useState(1);
-  // Spread zoom: at least two pages fit across (never below 45%).
-  const [spreadScale, setSpreadScale] = useState(1);
+  const [spreadHtml, setSpreadHtml] = useState("");
+  const [gridW, setGridW] = useState(0);
+  const [jumpTo, setJumpTo] = useState<number | null>(null);
   const scaleRef = useRef(1);
   const areaRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [pageLayout, setPageLayout] = useState({ pageH: 1123, pages: 1 });
@@ -361,6 +375,8 @@ export function ScriptEditor({
   // Selecting text shows a floating "Comment" button (even when view-only).
   const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
+  const [draftKind, setDraftKind] = useState<"comment" | "edit_idea">("comment");
+  const [pop, setPop] = useState<{ id: string; top: number; left: number } | null>(null);
   useEffect(() => {
     if (!editor || !onAddComment) return;
     const update = () => {
@@ -429,49 +445,33 @@ export function ScriptEditor({
     return () => ro.disconnect();
   }, [shown]);
 
-  // Spread: pages side by side (CSS columns, each column one A4 page).
   useEffect(() => {
     if (shown !== "spread" || !editor) return;
-    const paperEl = paperRef.current;
-    const contentEl = contentRef.current;
-    if (!paperEl || !contentEl) return;
-    let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        paperEl.style.width = `${SPREAD_STEP * 60}px`;
-        const last = contentEl.querySelector(".ProseMirror")?.lastElementChild as HTMLElement | null;
-        // offsetLeft is in the page's own (unzoomed) coordinates.
-        const right = last ? last.offsetLeft + last.offsetWidth : SPREAD_PAGE;
-        const pages = Math.max(1, Math.ceil((right - SPREAD_PAD + 1) / SPREAD_STEP));
-        paperEl.style.width = `${pages * SPREAD_STEP - SPREAD_GAP}px`;
-        setSpreadPages(pages);
-      });
+    const update = () => {
+      setSpreadHtml(editor.getHTML());
+      const h = contentRef.current?.scrollHeight ?? 0;
+      setSpreadPages(Math.max(1, Math.ceil(h / SPREAD_BODY_H)));
     };
-    measure();
-    editor.on("update", measure);
-    window.addEventListener("resize", measure);
-    // Zoom so two pages fit the space next to the documents / side panel.
-    const area = areaRef.current;
-    const fit = () => {
-      if (!area) return;
-      const avail = area.clientWidth - 48;
-      const scale = Math.max(0.45, Math.min(1, avail / (2 * SPREAD_STEP - SPREAD_GAP)));
-      scaleRef.current = scale;
-      setSpreadScale(scale);
-    };
-    fit();
-    const ro = area ? new ResizeObserver(fit) : null;
-    if (area) ro?.observe(area);
+    update();
+    editor.on("update", update);
+    const ro = new ResizeObserver(() => setGridW(gridRef.current?.clientWidth ?? 0));
+    if (gridRef.current) ro.observe(gridRef.current);
+    setGridW(gridRef.current?.clientWidth ?? 0);
     return () => {
-      cancelAnimationFrame(raf);
-      editor.off("update", measure);
-      window.removeEventListener("resize", measure);
-      ro?.disconnect();
-      paperEl.style.width = "";
-      scaleRef.current = 1;
+      editor.off("update", update);
+      ro.disconnect();
     };
   }, [shown, editor]);
+  // Clicking a page in Spread opens it in Pages view, scrolled to that page.
+  useEffect(() => {
+    if (jumpTo === null || shown !== "pages") return;
+    const t = setTimeout(() => {
+      const el = paperRef.current;
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY + jumpTo * pageLayout.pageH - 140, behavior: "smooth" });
+      setJumpTo(null);
+    }, 120);
+    return () => clearTimeout(t);
+  }, [jumpTo, shown, pageLayout.pageH]);
 
   function chooseView(v: "strip" | "pages" | "spread") {
     setView(v);
@@ -492,7 +492,18 @@ export function ScriptEditor({
     }
   }
 
-  const empty = useEditorState({ editor, selector: (s) => (s.editor ? s.editor.isEmpty : true) });
+  const empty = useEditorState({
+    editor,
+    selector: (s) => {
+      if (!s.editor) return true;
+      let image = false;
+      s.editor.state.doc.descendants((n) => {
+        if (n.type.name === "scriptImage" || n.type.name === "image") image = true;
+        return !image;
+      });
+      return !image && s.editor.state.doc.textContent.trim() === "";
+    },
+  });
 
   const statusText: Record<Status, string> = {
     saved: "Saved",
@@ -505,7 +516,7 @@ export function ScriptEditor({
   return (
     <div className="script-print-root min-h-[calc(100dvh-3.5rem)] flex flex-col">
       {/* Top bar */}
-      <div className="no-print flex items-center gap-3 px-4 sm:px-6 h-14 border-b border-line/10 bg-paper/90 backdrop-blur sticky top-14 z-20">
+      <div className="no-print flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b border-line/10 bg-paper/90 backdrop-blur sm:sticky sm:top-14 z-20">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink flex-shrink-0">
           <ArrowLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{backLabel}</span>
@@ -513,8 +524,9 @@ export function ScriptEditor({
         <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
           <span className="font-mono text-ink-soft mr-1.5">#{number}</span>
           {title}
-          {docName && <span className="ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft">{docName}</span>}
+          {docName && <span className={`ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft ${mobileDocs ? "hidden lg:inline" : ""}`}>{docName}</span>}
         </div>
+        {mobileDocs && <div className="lg:hidden flex-shrink-0">{mobileDocs}</div>}
         <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
           {words} words · about {spokenLength(words)}
           {shown === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : shown === "spread" ? ` · ${spreadPages} page${spreadPages === 1 ? "" : "s"}` : ""}
@@ -531,8 +543,9 @@ export function ScriptEditor({
               role="radio"
               aria-checked={view === v}
               onClick={() => chooseView(v)}
-              title={v === "spread" ? "Pages side by side" : v === "pages" ? "Pages one under another" : "One long page"}
-              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${v === "spread" ? "hidden lg:block" : ""} ${
+              disabled={v === "spread" && !!sideBySide}
+              title={v === "spread" ? (sideBySide ? "Close side by side to use Spread" : "Pages side by side") : v === "pages" ? "Pages one under another" : "One long page"}
+              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-35 ${v === "spread" ? "hidden lg:block" : ""} ${
                 view === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"
               }`}
             >
@@ -553,16 +566,29 @@ export function ScriptEditor({
         ) : (
           <span className="text-[12px] font-semibold text-ink-soft">View only</span>
         )}
-        {topBarExtra}
+        <span className="hidden sm:contents">{topBarExtra}</span>
+        <MobileMenu
+          view={view}
+          onView={chooseView}
+          paper={paper}
+          onPaper={togglePaper}
+          onDocx={async () => {
+            if (!editor) return;
+            const { exportScriptDocx } = await import("../lib/export-docx");
+            await exportScriptDocx(editor.getJSON() as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
+          }}
+          onPdf={() => window.print()}
+        />
         <button
           type="button"
           onClick={togglePaper}
           aria-label={paper === "light" ? "Dark paper" : "Light paper"}
           title={paper === "light" ? "Dark paper" : "Light paper"}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
+          className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
         >
           {paper === "light" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
         </button>
+        <span className="hidden sm:contents">
         <ExportMenu
           onDocx={async () => {
             if (!editor) return;
@@ -573,6 +599,7 @@ export function ScriptEditor({
           }}
           onPdf={() => window.print()}
         />
+        </span>
       </div>
 
       {status === "conflict" && (
@@ -609,10 +636,43 @@ export function ScriptEditor({
       />
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-      {leftRail && <div className="no-print lg:w-56 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
+      {leftRail && <div className="no-print hidden lg:block lg:w-60 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
       {/* Paper */}
-      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-6 py-6 sm:py-10 ${shown === "spread" ? "overflow-x-auto" : ""}`}>
-        <div style={shown === "spread" ? { width: (spreadPages * SPREAD_STEP - SPREAD_GAP) * spreadScale, height: SPREAD_PAGE_H * spreadScale } : undefined}>
+      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10 ${shown === "spread" ? "overflow-x-auto" : ""} ${sideBySide ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start" : ""}`}>
+        <div className="min-w-0">
+        {sideBySide && <div className="hidden lg:flex h-8 mb-2 items-center text-[12px] font-bold uppercase tracking-wide text-ink-soft">{docName ?? "Script"}</div>}
+        {shown === "spread" && (
+          <div ref={gridRef} className="grid grid-cols-2 gap-6 xl:gap-8 mx-auto max-w-[1700px]">
+            {Array.from({ length: spreadPages }, (_, i) => {
+              const scale = gridW ? (gridW - 32) / 2 / SPREAD_PAGE : 0.5;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    chooseView("pages");
+                    setJumpTo(i);
+                  }}
+                  title="Edit this page"
+                  className="group relative text-left rounded-md overflow-hidden shadow-[0_10px_40px_-20px_rgb(0_0_0/0.45)] ring-1 ring-line/10 hover:ring-2 hover:ring-amber transition-shadow"
+                  style={{ aspectRatio: `${SPREAD_PAGE} / ${SPREAD_PAGE_H}` }}
+                >
+                  <div
+                    data-paper={paper}
+                    className="script-paper absolute left-0 top-0"
+                    style={{ width: SPREAD_PAGE, height: SPREAD_PAGE_H, padding: SPREAD_PAD, transform: `scale(${scale})`, transformOrigin: "top left" }}
+                  >
+                    <div style={{ height: SPREAD_BODY_H, overflow: "hidden", position: "relative" }}>
+                      <div className="script-doc" style={{ position: "absolute", left: 0, right: 0, top: -i * SPREAD_BODY_H }} dangerouslySetInnerHTML={{ __html: spreadHtml }} />
+                    </div>
+                  </div>
+                  <span className="absolute right-2 bottom-2 rounded bg-black/55 text-white text-[11px] font-bold px-1.5 py-0.5">{i + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className={shown === "spread" ? "absolute -left-[10000px] top-0 w-[794px] opacity-0 pointer-events-none" : undefined} aria-hidden={shown === "spread" || undefined}>
         <div
           ref={paperRef}
           data-paper={paper}
@@ -621,23 +681,20 @@ export function ScriptEditor({
             shown === "pages"
               ? { minHeight: pageLayout.pages * pageLayout.pageH }
               : shown === "spread"
-                ? {
-                    height: SPREAD_PAGE_H,
-                    padding: SPREAD_PAD,
-                    columnWidth: SPREAD_PAGE - SPREAD_PAD * 2,
-                    columnGap: SPREAD_PAD * 2 + SPREAD_GAP,
-                    columnFill: "auto",
-                    // The app's background between pages.
-                    backgroundImage: `linear-gradient(to right, transparent 0 ${SPREAD_PAGE}px, rgb(var(--paper)) ${SPREAD_PAGE}px ${SPREAD_STEP}px)`,
-                    backgroundSize: `${SPREAD_STEP}px 100%`,
-                    transform: spreadScale !== 1 ? `scale(${spreadScale})` : undefined,
-                    transformOrigin: "top left",
-                  }
+                ? { width: SPREAD_PAGE, padding: SPREAD_PAD }
                 : undefined
           }
           onClick={(e) => {
-            const id = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]")?.dataset.commentId;
-            if (id) onCommentClick?.(id);
+            const el = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]");
+            const id = el?.dataset.commentId;
+            if (!id) return setPop(null);
+            // The comment opens right where you clicked.
+            const box = paperRef.current?.getBoundingClientRect();
+            const r = el!.getBoundingClientRect();
+            if (box && renderCommentPopover) {
+              const z = scaleRef.current;
+              setPop({ id, top: (r.bottom - box.top) / z + 6, left: Math.max(8, Math.min((r.left - box.left) / z, box.width / z - 300)) });
+            } else onCommentClick?.(id);
           }}
           className={`script-paper script-print relative isolate transition-colors ${
             shown === "spread"
@@ -664,9 +721,9 @@ export function ScriptEditor({
             #{number} {title}
           </h1>
           {canEdit && empty && (
-            <div className="no-print mb-6 flex items-center gap-3 rounded-xl border border-dashed px-4 py-3 script-soft-border">
+            <div className="no-print mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3 script-soft-border">
               <DocumentIcon className="w-5 h-5 script-soft flex-shrink-0" />
-              <p className="text-[13px] script-soft flex-1">Start from a Hook, Body and Call to action outline?</p>
+              <p className="text-[13px] script-soft flex-1 min-w-[180px]">Start from a Hook, Body and Call to action outline?</p>
               <button
                 type="button"
                 onClick={() => editor?.commands.setContent(SCRIPT_TEMPLATE, { emitUpdate: true })}
@@ -700,19 +757,36 @@ export function ScriptEditor({
           <div ref={contentRef}>
             <EditorContent editor={editor} />
           </div>
+          {pop && renderCommentPopover && (
+            <div className="no-print absolute z-30 w-[300px]" style={{ top: pop.top, left: pop.left }}>
+              {renderCommentPopover(pop.id, () => setPop(null))}
+            </div>
+          )}
           {sel && onAddComment && (
             <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
               {draft === null ? (
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setDraft("")}
-                  className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] shadow-lg animate-[modalin_.12s_var(--ease-out)]"
-                >
-                  Comment
-                </button>
+                <div className="flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1 animate-[modalin_.12s_var(--ease-out)]">
+                  {([
+                    ["comment", "Comment"],
+                    ["edit_idea", "Editing idea"],
+                  ] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setDraftKind(k);
+                        setDraft("");
+                      }}
+                      className={`rounded-lg px-3 h-8 text-[12.5px] font-bold whitespace-nowrap ${k === "comment" ? "bg-amber text-white" : "text-ink hover:bg-surface-2"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <div className="w-[280px] rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 space-y-2 animate-[modalin_.12s_var(--ease-out)]">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">{draftKind === "edit_idea" ? "Editing idea" : "Comment"}</div>
                   <div className="text-[11.5px] text-ink-soft truncate">“{sel.quote}”</div>
                   <textarea
                     autoFocus
@@ -724,7 +798,7 @@ export function ScriptEditor({
                         setSel(null);
                       }
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) {
-                        const err = await onAddComment(sel.quote, sel.occurrence, draft);
+                        const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind);
                         if (err) toast.error(err);
                         else {
                           setDraft(null);
@@ -734,7 +808,7 @@ export function ScriptEditor({
                     }}
                     rows={3}
                     maxLength={2000}
-                    placeholder="Your comment…"
+                    placeholder={draftKind === "edit_idea" ? "Your editing idea…" : "Your comment…"}
                     className="w-full rounded-lg border border-line/15 bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:ring-2 focus:ring-amber"
                   />
                   <div className="flex justify-end gap-1.5">
@@ -752,7 +826,7 @@ export function ScriptEditor({
                       type="button"
                       disabled={!draft.trim()}
                       onClick={async () => {
-                        const err = await onAddComment(sel.quote, sel.occurrence, draft);
+                        const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind);
                         if (err) toast.error(err);
                         else {
                           setDraft(null);
@@ -775,22 +849,24 @@ export function ScriptEditor({
         </p>
         {lastEdited && <p className="no-print mx-auto max-w-3xl mt-1 px-1 text-[11.5px] text-ink-soft">{lastEdited}</p>}
       </div>
+      {sideBySide && <div className="hidden lg:block min-w-0">{sideBySide}</div>}
+      </div>
       {rightPanel}
       </div>
     </div>
   );
 }
 
-// Spread view: A4 at 96 dpi, 72px margins, 32px between pages.
+// Spread view: A4 at 96 dpi with 72px margins.
 const SPREAD_PAGE = 794;
 const SPREAD_PAGE_H = 1123;
 const SPREAD_PAD = 72;
-const SPREAD_GAP = 32;
-const SPREAD_STEP = SPREAD_PAGE + SPREAD_GAP;
+const SPREAD_BODY_H = SPREAD_PAGE_H - SPREAD_PAD * 2;
 
 // ---------------------------------------------------------------------------
 
 function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () => void; uploading: number }) {
+  const [more, setMore] = useState(false);
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -856,10 +932,10 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="no-print sticky top-28 z-10 border-b border-line/10 bg-paper/95 backdrop-blur"
+      className="no-print sticky top-14 sm:top-28 z-10 border-b border-line/10 bg-paper/95 backdrop-blur"
     >
-      <div className="mx-auto max-w-5xl px-3 sm:px-6 py-1.5 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
-        <div className="w-36 flex-shrink-0 mr-1">
+      <div className="mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
+        <div className="w-28 sm:w-36 flex-shrink-0 mr-1">
           <Select
             value={s!.block}
             onChange={(v) => {
@@ -867,10 +943,10 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
               else c().toggleHeading({ level: Number(v?.slice(1)) as 1 | 2 | 3 }).run();
             }}
             options={[
-              { value: "p", label: "Text" },
-              { value: "h1", label: "Heading 1" },
-              { value: "h2", label: "Heading 2" },
-              { value: "h3", label: "Heading 3" },
+              { value: "p", label: "Text · Ctrl+Alt+0" },
+              { value: "h1", label: "Heading 1 · Ctrl+Alt+1" },
+              { value: "h2", label: "Heading 2 · Ctrl+Alt+2" },
+              { value: "h3", label: "Heading 3 · Ctrl+Alt+3" },
             ]}
             ariaLabel="Text style"
             menuMinWidth={170}
@@ -885,6 +961,7 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
         <B label="Underline" shortcut="Ctrl+U" on={s!.underline} onClick={() => c().toggleUnderline().run()}>
           <UnderlineIcon className="w-4 h-4" />
         </B>
+        <span className="hidden sm:contents">
         <B label="Strikethrough" shortcut="Ctrl+Shift+S" on={s!.strike} onClick={() => c().toggleStrike().run()}>
           <StrikeIcon className="w-4 h-4" />
         </B>
@@ -928,7 +1005,70 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
         <B label="Redo" shortcut="Ctrl+Shift+Z" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
           <RedoIcon className="w-4 h-4" />
         </B>
+        </span>
+        {/* Phones: everything else in one sheet (no sideways scrolling). */}
+        <span className="flex-1 sm:hidden" />
+        <span className="sm:hidden">
+          <B label="Bullet list" on={s!.bullet} onClick={() => c().toggleBulletList().run()}>
+            <ListBulletIcon className="w-4 h-4" />
+          </B>
+        </span>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setMore(true)}
+          className="sm:hidden h-9 px-2.5 rounded-lg text-[12.5px] font-bold text-ink-soft hover:text-ink hover:bg-surface-2"
+        >
+          More
+        </button>
       </div>
+      {more && (
+        <div className="sm:hidden fixed inset-0 z-50" onClick={() => setMore(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface border-t border-line/15 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[modalin_.15s_var(--ease-out)]" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-3">Format</div>
+            <div className="grid grid-cols-6 gap-1.5 [&_button]:w-full [&_button]:h-11">
+              <B label="Strikethrough" on={s!.strike} onClick={() => c().toggleStrike().run()}>
+                <StrikeIcon className="w-4 h-4" />
+              </B>
+              <B label="Highlight" on={s!.highlight} onClick={() => c().toggleHighlight().run()}>
+                <HighlighterIcon className="w-4 h-4" />
+              </B>
+              <B label="Numbered list" on={s!.ordered} onClick={() => c().toggleOrderedList().run()}>
+                <ListNumberIcon className="w-4 h-4" />
+              </B>
+              <B label="Checklist" on={s!.task} onClick={() => c().toggleTaskList().run()}>
+                <ListCheckIcon className="w-4 h-4" />
+              </B>
+              <B label="Quote" on={s!.quote} onClick={() => c().toggleBlockquote().run()}>
+                <QuoteIcon className="w-4 h-4" />
+              </B>
+              <B label="Add image" onClick={() => { setMore(false); onImage(); }}>
+                <ImageIcon className="w-4 h-4" />
+              </B>
+              <B label="Align left" on={s!.left} onClick={() => c().setTextAlign("left").run()}>
+                <AlignLeftIcon className="w-4 h-4" />
+              </B>
+              <B label="Center" on={s!.center} onClick={() => c().setTextAlign("center").run()}>
+                <AlignCenterIcon className="w-4 h-4" />
+              </B>
+              <B label="Align right" on={s!.right} onClick={() => c().setTextAlign("right").run()}>
+                <AlignRightIcon className="w-4 h-4" />
+              </B>
+              <span className="col-span-1 flex items-center justify-center"><LinkButton editor={editor} active={s!.link} /></span>
+              <B label="Undo" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
+                <UndoIcon className="w-4 h-4" />
+              </B>
+              <B label="Redo" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
+                <RedoIcon className="w-4 h-4" />
+              </B>
+            </div>
+            <button type="button" onClick={() => setMore(false)} className="mt-3 w-full h-11 rounded-xl text-[14px] font-semibold text-ink-soft hover:bg-surface-2">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1142,6 +1282,63 @@ function ExportMenu({ onDocx, onPdf }: { onDocx: () => void; onPdf: () => void }
             PDF
             <span className="block text-[11px] text-ink-soft">Opens print. Choose &ldquo;Save as PDF&rdquo;.</span>
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Phones: views, paper and export in one menu (the top bar is narrow). */
+function MobileMenu({
+  view,
+  onView,
+  paper,
+  onPaper,
+  onDocx,
+  onPdf,
+}: {
+  view: "strip" | "pages" | "spread";
+  onView: (v: "strip" | "pages" | "spread") => void;
+  paper: "light" | "dark";
+  onPaper: () => void;
+  onDocx: () => void;
+  onPdf: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const item = "w-full text-left px-4 h-11 text-[14px] font-semibold flex items-center justify-between hover:bg-surface-2";
+  return (
+    <div className="sm:hidden">
+      <button type="button" onClick={() => setOpen(true)} aria-label="More" className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+        <MoreIcon className="w-5 h-5" />
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface border-t border-line/15 pb-[env(safe-area-inset-bottom)] animate-[modalin_.15s_var(--ease-out)]" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">View</div>
+            {([
+              ["strip", "One long page"],
+              ["pages", "Pages"],
+            ] as const).map(([v, label]) => (
+              <button key={v} type="button" className={item} onClick={() => { onView(v); setOpen(false); }}>
+                {label}
+                {view === v && <CheckIcon className="w-4 h-4 text-amber" />}
+              </button>
+            ))}
+            <div className="h-px bg-line/10 my-1" />
+            <button type="button" className={item} onClick={() => { onPaper(); setOpen(false); }}>
+              {paper === "light" ? "Dark paper" : "Light paper"}
+            </button>
+            <button type="button" className={item} onClick={() => { onDocx(); setOpen(false); }}>
+              Export as Word
+            </button>
+            <button type="button" className={item} onClick={() => { onPdf(); setOpen(false); }}>
+              Print / PDF
+            </button>
+            <button type="button" className={`${item} justify-center text-ink-soft`} onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
         </div>
       )}
     </div>

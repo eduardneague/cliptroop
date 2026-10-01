@@ -29,12 +29,15 @@ export function MemberManager({
   roleColors,
   isSelf,
   viewerIsOwner,
+  readOnly = false,
 }: {
   teamId: string;
   member: MemberRow;
   roleColors: Record<RoleId, string>;
   isSelf: boolean;
   viewerIsOwner: boolean;
+  /** Non-masters see the card without the edit buttons. */
+  readOnly?: boolean;
 }) {
   const memberIsMaster = member.roles.includes("master");
   // Only the owner can remove a Master from the team.
@@ -75,74 +78,77 @@ export function MemberManager({
     });
   }
 
+  const dirty = draftRoles.length !== member.roles.length || draftRoles.some((r) => !member.roles.includes(r));
   return (
-    <div className="border-b border-line/10 last:border-none">
-      <div className="flex items-center gap-3 py-3 flex-wrap">
-        <MemberAvatarLink
-          userId={member.userId}
-          username={member.username}
-          name={member.name}
-          avatarUrl={member.avatarUrl}
-          color={member.color}
-        />
-        <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold flex items-center gap-1.5">
-            <MemberNameLink userId={member.userId} username={member.username} name={member.name} />
-            {member.isOwner && <span className="inline-flex items-center gap-1 text-amber text-[11px] font-semibold"><StarIcon filled className="w-3 h-3" /> Owner</span>}
-            {member.status === "invited" && (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-ink-faint bg-surface-2 px-1.5 py-0.5 rounded">
-                Invited
+    <div className={`rounded-2xl border bg-surface p-4 transition-colors ${open ? "border-amber/50" : "border-line/15 hover:border-line/30"}`}>
+      <div className="flex items-start gap-3">
+        <MemberAvatarLink userId={member.userId} username={member.username} name={member.name} avatarUrl={member.avatarUrl} color={member.color} size="w-11 h-11 text-[14px]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[15px] font-semibold truncate">
+              <MemberNameLink userId={member.userId} username={member.username} name={member.name} />
+            </span>
+            {member.isOwner && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber/12 text-amber px-2 h-5 text-[10.5px] font-bold">
+                <StarIcon filled className="w-3 h-3" /> Owner
               </span>
             )}
+            {isSelf && <span className="rounded-full bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold">You</span>}
+            {member.status === "invited" && <span className="rounded-full bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold uppercase">Invited</span>}
           </div>
-          <div className="text-[11.5px] text-ink-faint">{member.email}</div>
-        </div>
-        <div className="flex flex-wrap gap-1 ml-1">
-          {member.roles.length === 0 && (
-            <span className="text-[11px] text-ink-faint">No role</span>
-          )}
-          {member.roles.map((r) => (
-            <span
-              key={r}
-              className="text-[10.5px] font-bold px-1.5 py-0.5 rounded border"
-              style={{
-                color: roleColors[r],
-                borderColor: `color-mix(in srgb, ${roleColors[r]} 45%, transparent)`,
-                background: `color-mix(in srgb, ${roleColors[r]} 12%, transparent)`,
-              }}
-            >
-              {ROLES.find((role) => role.id === r)?.name}
-            </span>
-          ))}
-        </div>
-        <div className="ml-auto flex gap-2">
-          {isSelf ? (
-            <span className="text-[11px] text-ink-faint">This is you</span>
-          ) : (
-            <>
-              <button
-                onClick={() => setOpen((o) => !o)}
-                className="text-[11.5px] font-semibold text-ink-soft hover:text-ink"
-              >
-                {open ? "Close" : "Manage"}
-              </button>
-              {canKick && (
-                <button
-                  onClick={handleKick}
-                  disabled={pending}
-                  className="text-[11.5px] font-semibold text-ink-soft hover:text-red disabled:opacity-40"
-                >
-                  Remove
-                </button>
-              )}
-            </>
-          )}
+          <div className="text-[12.5px] text-ink-soft truncate">{member.email}</div>
         </div>
       </div>
 
-      {open && !isSelf && (
-        <div className="pb-4 pl-11">
-          <div className="flex flex-wrap gap-1.5 mb-2">
+      {/* Roles, each in its colour */}
+      <div className="flex flex-wrap gap-1.5 mt-3.5">
+        {member.roles.length === 0 ? (
+          <span className="text-[12px] text-ink-faint">No roles yet</span>
+        ) : (
+          member.roles.map((r) => (
+            <span
+              key={r}
+              className="inline-flex items-center gap-1.5 rounded-full pl-2 pr-2.5 h-7 text-[12px] font-semibold"
+              style={{ background: `color-mix(in srgb, ${roleColors[r]} 14%, transparent)`, color: roleColors[r] }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleColors[r] }} />
+              {ROLES.find((x) => x.id === r)?.name ?? r}
+            </span>
+          ))
+        )}
+      </div>
+
+      {!isSelf && !readOnly && (
+        <div className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-line/10">
+          <button
+            type="button"
+            onClick={() => {
+              setDraftRoles(member.roles);
+              setOpen((o) => !o);
+            }}
+            aria-expanded={open}
+            className="rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40 hover:bg-surface-2"
+          >
+            {open ? "Close" : "Edit roles"}
+          </button>
+          <span className="flex-1" />
+          {canKick && (
+            <button
+              type="button"
+              onClick={() => void handleKick()}
+              disabled={pending}
+              className="rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-red hover:border-red/40 hover:bg-red/10 disabled:opacity-40"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 rounded-xl bg-surface-2/50 p-3 animate-[modalin_.15s_var(--ease-out)]">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-2">Roles</div>
+          <div className="flex flex-wrap gap-1.5">
             {ROLES.map((r) => {
               const active = draftRoles.includes(r.id);
               const ownerLocked = r.id === "master" && member.isOwner;
@@ -152,34 +158,35 @@ export function MemberManager({
                   key={r.id}
                   type="button"
                   disabled={locked}
+                  aria-pressed={active}
                   onClick={() => !locked && toggleRole(r.id)}
-                  title={
-                    ownerLocked
-                      ? "The team owner is always Master"
-                      : locked
-                        ? "Only the team owner can grant or remove Master"
-                        : undefined
-                  }
-                  className={`rounded-full px-3 py-1 text-[11.5px] font-semibold border transition-colors ${
-                    active ? "text-white" : "border-line/15 text-ink-soft"
+                  title={ownerLocked ? "The team owner is always Master" : locked ? "Only the team owner can grant or remove Master" : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-all ${
+                    active ? "text-white shadow-sm" : "border-line/20 text-ink-soft hover:text-ink hover:border-line/40"
                   } ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={active ? { background: roleColors[r.id], borderColor: roleColors[r.id] } : undefined}
                 >
-                  <span className="inline-flex items-center gap-1">
-                    {r.name}
-                    {locked && <LockIcon className="w-3 h-3" />}
-                  </span>
+                  {!active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleColors[r.id] }} />}
+                  {r.name}
+                  {locked && <LockIcon className="w-3 h-3" />}
                 </button>
               );
             })}
           </div>
-          <button
-            onClick={saveRoles}
-            disabled={pending}
-            className="rounded-lg bg-amber text-white text-[12px] font-semibold px-3.5 py-1.5 disabled:opacity-50"
-          >
-            {pending ? "Saving…" : "Save roles"}
-          </button>
+          <div className="flex justify-end gap-2 mt-3">
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveRoles}
+              disabled={pending || !dirty}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-4 h-9 text-[13px] disabled:opacity-45"
+            >
+              {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+              Save roles
+            </button>
+          </div>
         </div>
       )}
     </div>

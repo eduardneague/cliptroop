@@ -11,6 +11,10 @@ import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
+import { getRoleColors } from "@/lib/permissions/team-role-colors";
+
+// Always fresh: documents change while you work (never show a stale copy).
+export const dynamic = "force-dynamic";
 import { setLongScripter } from "../actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -64,7 +68,7 @@ export default async function LongScriptPage({
     );
   }
   const sideItem = docs.find((d) => d.id === sideParam && d.id !== current.id);
-  const [doc, side, comments] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id)]);
+  const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, project.team_id), getRoleColors(supabase, project.team_id)]);
   if (!doc) notFound();
 
   return (
@@ -76,6 +80,7 @@ export default async function LongScriptPage({
       canCreate={{ script: canEditScript, research: canEditResearch }}
       side={side}
       comments={comments}
+      roleColors={roleColors}
       title={project.title}
       number={project.entry_number}
       backHref={`/videos/${id}?tab=${doc.kind === "research" ? "research" : "script"}`}

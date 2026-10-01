@@ -74,13 +74,16 @@ function useStep() {
   const [pending, start] = useTransition();
   const toast = useToast();
   const router = useRouter();
-  const run = (fn: () => Promise<{ error?: string }>, ok: string) =>
+  /** Runs a step action; `goTo` opens the step the video moved to. */
+  const run = (fn: () => Promise<{ error?: string; stage?: string }>, ok: string, goTo?: string) =>
     start(async () => {
       const r = await fn();
       if (r.error) toast.error(r.error);
       else {
         toast.success(ok);
-        router.refresh();
+        const target = goTo ?? (r.stage === "done" || r.stage === "publish" ? r.stage : undefined);
+        if (target) router.push(`?tab=${target}`, { scroll: false });
+        else router.refresh();
       }
     });
   return { pending, run };
@@ -124,7 +127,7 @@ export function FilmPanel({
           disabled={pending}
           onClick={async () => {
             if (!(await confirm({ title: "Filmed and uploaded to the NAS?", description: "It moves to Edit and the editor is notified.", confirmLabel: "Yes, it's on the NAS" }))) return;
-            run(() => markFilmed(projectId, path), "Marked as filmed");
+            run(() => markFilmed(projectId, path), "Marked as filmed", "edit");
           }}
           className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14px] disabled:opacity-60"
         >
@@ -191,7 +194,7 @@ export function EditPanel({
             disabled={pending}
             onClick={async () => {
               if (!(await confirm({ title: "Mark editing complete?", description: "It moves to Review and the master is notified.", confirmLabel: "Editing complete" }))) return;
-              run(() => markEdited(projectId, note), "Editing marked complete");
+              run(() => markEdited(projectId, note), "Editing marked complete", "review");
             }}
             className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14px] disabled:opacity-60"
           >
@@ -255,7 +258,7 @@ export function ReviewPanel({
                 disabled={pending}
                 onClick={async () => {
                   if (!(await confirm({ title: "Approve the edit?", description: "It moves to Package.", confirmLabel: "Approve" }))) return;
-                  run(() => reviewLong(projectId, true, ""), "Approved");
+                  run(() => reviewLong(projectId, true, ""), "Approved", "package");
                 }}
                 className="inline-flex items-center gap-2 rounded-xl text-white font-bold px-5 h-11 text-[14px] disabled:opacity-60"
                 style={{ background: "rgb(var(--green))" }}
@@ -274,7 +277,7 @@ export function ReviewPanel({
                 <button
                   type="button"
                   disabled={pending || !note.trim()}
-                  onClick={() => run(() => reviewLong(projectId, false, note), "Sent back to the editor")}
+                  onClick={() => run(() => reviewLong(projectId, false, note), "Sent back to the editor", "edit")}
                   className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14px] disabled:opacity-50"
                 >
                   {pending && <Spinner />}

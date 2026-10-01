@@ -10,6 +10,10 @@ import { getShortDetail, listTeamPeople } from "@/modules/short-videos/lib/queri
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
+import { getRoleColors } from "@/lib/permissions/team-role-colors";
+
+// Always fresh: documents change while you work (never show a stale copy).
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -52,7 +56,7 @@ export default async function ShortScriptPage({
     );
   }
   const sideItem = docs.find((d) => d.id === sideParam && d.id !== current.id);
-  const [doc, side, comments] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id)]);
+  const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, short.teamId), getRoleColors(supabase, short.teamId)]);
   if (!doc) notFound();
 
   return (
@@ -64,6 +68,7 @@ export default async function ShortScriptPage({
       canCreate={{ script: canEdit, research: false }}
       side={side}
       comments={comments}
+      roleColors={roleColors}
       title={short.title}
       number={short.number}
       backHref={`/shorts/${id}`}

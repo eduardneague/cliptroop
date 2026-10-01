@@ -19,6 +19,10 @@ export type ScriptRow = {
 export type DocListItem = { id: string; kind: DocKind; name: string; position: number; wordCount: number; updatedAt: string };
 export type ScriptComment = {
   id: string;
+  /** "comment" or "edit_idea" (Editing idea). */
+  kind: "comment" | "edit_idea";
+  /** The author's roles in the team (for the colour). */
+  authorRoles: string[];
   quote: string;
   occurrence: number;
   body: string;
@@ -87,27 +91,16 @@ export const getLongScript = cache((projectId: string) => mainScript({ long: pro
 
 /**
  * The first time someone who may edit opens the workspace: create the
- * default documents (Script · Review · Staging, + Research for long
- * videos). Existing videos with a single script get Review and Staging
- * once; anything deleted later stays deleted.
+ * default documents (Script · Review · Staging, + Research for long videos)
+ * in one locked database step, so two pages opening at once never collide.
+ * Then read the list fresh.
  */
-export async function ensureDefaultDocs(owner: DocOwner, can: { script: boolean; research: boolean }) {
-  const docs = await listDocs(owner);
-  const [c, v] = col(owner);
-  const scripts = docs.filter((d) => d.kind === "script");
-  const rows: Record<string, unknown>[] = [];
-  if (can.script && scripts.length <= 1) {
-    const names = scripts.map((d) => d.name);
-    (["Script", "Review", "Staging"] as const).forEach((name, i) => {
-      if (!(scripts.length === 1 && i === 0) && !names.includes(name)) rows.push({ [c]: v, kind: "script", name, position: i + 1 });
-    });
-  }
-  if (can.research && "long" in owner && !docs.some((d) => d.kind === "research")) {
-    rows.push({ [c]: v, kind: "research", name: "Research", position: 1 });
-  }
-  if (!rows.length) return docs;
+export async function ensureDefaultDocs(owner: DocOwner, can: { script: boolean; research: boolean }): Promise<DocListItem[]> {
   const supabase = await createClient();
-  await supabase.from("scripts").insert(rows);
+  if (can.script || can.research) {
+    await supabase.rpc("ensure_script_docs", { p_short: "short" in owner ? owner.short : null, p_long: "long" in owner ? owner.long : null });
+  }
+  const [c, v] = col(owner);
   const { data } = await supabase.from("scripts").select("id, kind, name, position, word_count, updated_at").eq(c, v).order("kind", { ascending: false }).order("position");
   return (data ?? []).map((d) => ({
     id: d.id as string,
@@ -129,18 +122,24 @@ export async function getOrCreateLongScript(projectId: string, canEdit: boolean)
   return getLongScript(projectId);
 }
 
-export async function listComments(scriptId: string): Promise<ScriptComment[]> {
+export async function listComments(scriptId: string, teamId: string): Promise<ScriptComment[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("script_comments")
-    .select("id, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)")
-    .eq("script_id", scriptId)
-    .order("created_at");
+  const [{ data }, { data: members }] = await Promise.all([
+    supabase
+      .from("script_comments")
+      .select("id, kind, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)")
+      .eq("script_id", scriptId)
+      .order("created_at"),
+    supabase.from("team_members").select("user_id, member_roles(role)").eq("team_id", teamId).eq("status", "active"),
+  ]);
+  const rolesOf = new Map((members ?? []).map((m) => [m.user_id as string, ((m.member_roles as { role: string }[]) ?? []).map((r) => r.role)]));
   return (data ?? []).map((c) => {
     const p = (Array.isArray(c.author) ? c.author[0] : c.author) as Profile;
     const id = c.author_id as string | null;
     return {
       id: c.id as string,
+      kind: ((c.kind as "comment" | "edit_idea") ?? "comment"),
+      authorRoles: id ? rolesOf.get(id) ?? [] : [],
       quote: c.quote as string,
       occurrence: (c.occurrence as number) ?? 0,
       body: c.body as string,

@@ -140,65 +140,32 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
 
       {tab === "members" && (
         <div className="space-y-6">
-        {/* Members */}
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
-          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
-            Members ({memberRows.length})
-          </h2>
-          <div>
-            {memberRows.map((m) =>
-              userIsMaster ? (
-                <MemberManager
-                  key={m.teamMemberId}
-                  teamId={currentTeam.id}
-                  member={m}
-                  roleColors={roleColors}
-                  isSelf={m.userId === currentUser?.id}
-                  viewerIsOwner={viewerIsOwner}
-                />
-              ) : (
-                <div key={m.teamMemberId} className="flex items-center gap-3 py-3 border-b border-line/10 last:border-none flex-wrap">
-                  <MemberAvatarLink
-                    userId={m.userId}
-                    username={m.username}
-                    name={m.name}
-                    avatarUrl={m.avatarUrl}
-                    color={m.color}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13.5px] font-semibold flex items-center gap-1.5 min-w-0">
-                      <MemberNameLink userId={m.userId} username={m.username} name={m.name} />
-                      {m.isOwner && <span className="inline-flex items-center gap-1 text-amber text-[11px] font-semibold"><StarIcon filled className="w-3 h-3" /> Owner</span>}
-                    </div>
-                    <div className="text-[11.5px] text-ink-faint">{m.email}</div>
-                  </div>
-                  <div className="flex flex-wrap gap-1 w-full sm:w-auto">
-                    {m.roles.length === 0 ? (
-                      <span className="text-[10.5px] text-ink-faint">No roles</span>
-                    ) : (
-                      m.roles.map((r) => {
-                        const c = roleColors[r] ?? "#999";
-                        const roleName = ROLES.find((role) => role.id === r)?.name ?? r;
-                        return (
-                          <span
-                            key={r}
-                            className="text-[10.5px] font-bold px-2 py-0.5 rounded-full"
-                            style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
-                          >
-                            {roleName}
-                          </span>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-
+        {/* Members: cards on the left, inviting on the right */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+          <section>
+            <div className="flex items-baseline gap-2 mb-3">
+              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Members</h2>
+              <span className="text-[12.5px] text-ink-faint">{memberRows.length}</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+            {memberRows.map((m) => (
+              <MemberManager
+                key={m.teamMemberId}
+                teamId={currentTeam.id}
+                member={m}
+                roleColors={roleColors}
+                isSelf={m.userId === currentUser?.id}
+                viewerIsOwner={viewerIsOwner}
+                readOnly={!userIsMaster}
+              />
+            ))}
+            </div>
+          </section>
           {userIsMaster && (
-            <div className="mt-5 pt-5 border-t border-line/10">
-              <h3 className="text-[12px] font-bold text-ink-soft mb-3">Invite to this team</h3>
+          <section className="rounded-2xl border border-line/15 bg-surface p-5 lg:sticky lg:top-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Invite people</h2>
+            <p className="text-[12.5px] text-ink-soft mb-4">Find someone with a VPlanner account and invite them to this team.</p>
+            <div className="space-y-4">
               <PendingInvitesList
                 teamId={currentTeam.id}
                 invites={(pendingInvites ?? []).map((inv) => {
@@ -217,8 +184,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               />
               <InviteSearch teamId={currentTeam.id} />
             </div>
+          </section>
           )}
-        </section>
+        </div>
         </div>
       )}
 

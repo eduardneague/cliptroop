@@ -116,7 +116,7 @@ export async function getDocContent(id: string): Promise<DocResult<{ content: Re
   return { content: (data.content as Record<string, unknown>) ?? {} };
 }
 
-export async function addComment(input: { scriptId: string; quote: string; occurrence: number; body: string }): Promise<DocResult<{ id: string }>> {
+export async function addComment(input: { scriptId: string; quote: string; occurrence: number; body: string; kind?: "comment" | "edit_idea" }): Promise<DocResult<{ id: string }>> {
   const quote = String(input.quote ?? "").slice(0, 500);
   const body = String(input.body ?? "").trim();
   if (!quote.trim()) return { error: "Select some text first." };
@@ -125,7 +125,7 @@ export async function addComment(input: { scriptId: string; quote: string; occur
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("script_comments")
-    .insert({ script_id: input.scriptId, quote, occurrence: Math.max(0, Math.floor(input.occurrence) || 0), body })
+    .insert({ script_id: input.scriptId, quote, occurrence: Math.max(0, Math.floor(input.occurrence) || 0), body, kind: input.kind === "edit_idea" ? "edit_idea" : "comment" })
     .select("id, scripts(short_video_id, long_video_id)")
     .single();
   if (error || !data) return { error: "Couldn't add the comment." };

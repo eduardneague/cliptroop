@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { advanceStage, regressStage } from "./actions";
+import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { ArrowRightIcon, ArrowLeftIcon } from "@/components/ui/icons";
@@ -9,13 +10,17 @@ import { ArrowRightIcon, ArrowLeftIcon } from "@/components/ui/icons";
 export function AdvanceStageButton({
   projectId,
   nextLabel,
+  nextStage,
 }: {
   projectId: string;
   nextLabel: string;
+  /** Opens this step's tab after moving (you follow the video). */
+  nextStage?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const confirm = useConfirm();
   const toast = useToast();
+  const router = useRouter();
 
   async function handleClick() {
     const ok = await confirm({
@@ -27,7 +32,10 @@ export function AdvanceStageButton({
     startTransition(async () => {
       const result = await advanceStage(projectId);
       if (result?.error) toast.error(result.error);
-      else toast.success(`Moved to ${nextLabel}`);
+      else {
+        toast.success(`Moved to ${nextLabel}`);
+        if (nextStage) router.push(`/videos/${projectId}?tab=${nextStage}`, { scroll: false });
+      }
     });
   }
 
@@ -49,13 +57,16 @@ export function AdvanceStageButton({
 export function RegressStageButton({
   projectId,
   prevLabel,
+  prevStage,
 }: {
   projectId: string;
   prevLabel: string;
+  prevStage?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const confirm = useConfirm();
   const toast = useToast();
+  const router = useRouter();
 
   async function handleClick() {
     const ok = await confirm({
@@ -68,7 +79,10 @@ export function RegressStageButton({
     startTransition(async () => {
       const result = await regressStage(projectId);
       if (result?.error) toast.error(result.error);
-      else toast.success(`Moved back to ${prevLabel}`);
+      else {
+        toast.success(`Moved back to ${prevLabel}`);
+        if (prevStage) router.push(`/videos/${projectId}?tab=${prevStage}`, { scroll: false });
+      }
     });
   }
 

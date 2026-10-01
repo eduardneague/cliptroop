@@ -309,8 +309,8 @@ export default async function ProjectDetailPage({
       {/* Master: move the video by hand (the step buttons move it too). */}
       {project.stage !== "done" && userIsMaster && (
         <div className="flex items-center gap-2 flex-wrap mb-6">
-          {currentIndex > 0 && <RegressStageButton projectId={project.id} prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]} />}
-          {nextStage && <AdvanceStageButton projectId={project.id} nextLabel={STAGE_LABELS[nextStage as PipelineStage]} />}
+          {currentIndex > 0 && <RegressStageButton projectId={project.id} prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]} prevStage={STAGE_ORDER[currentIndex - 1]} />}
+          {nextStage && <AdvanceStageButton projectId={project.id} nextLabel={STAGE_LABELS[nextStage as PipelineStage]} nextStage={nextStage as string} />}
         </div>
       )}
 

@@ -32,6 +32,9 @@ export type CalItem = {
   postedPlatforms: string[];
   editor: { name: string; avatarUrl: string | null; color: string } | null;
   posts: { platform: string; status: string; at: string; link: string | null }[];
+  /** Long videos: the winning thumbnail and who's assigned (per step). */
+  thumb?: string | null;
+  assignees?: { name: string; avatarUrl: string | null; color: string; stage: string }[];
 };
 type View = "month" | "week" | "agenda";
 type Capacity = { perDay: number; weekends: boolean; limits: Record<string, number> };
@@ -1042,6 +1045,16 @@ function QuickView({
       }
     >
       <div className="space-y-4">
+        {item.kind === "long" && (
+          <div className="aspect-video w-full rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+            {item.thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.thumb} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[12.5px] text-ink-soft">No thumbnail picked yet</span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2.5 flex-wrap">
           <KindIcon kind={item.kind} tile className="w-4 h-4" />
           <span className={`rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold ${item.done ? "bg-green/15 text-green" : "bg-surface-2 text-ink"}`}>{item.stageLabel}</span>
@@ -1070,6 +1083,41 @@ function QuickView({
           )}
         </dl>
 
+        {item.kind === "long" && (
+          <div>
+            <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2">Where it posts</div>
+            <div className="flex flex-wrap gap-1.5">
+              {item.platforms.map((p) => {
+                const posted = item.postedPlatforms.includes(p);
+                return (
+                  <span key={p} className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-2.5 h-8 text-[12.5px] font-semibold ${posted ? "border-green/40 text-green" : "border-line/20 text-ink"}`}>
+                    <PlatformIcon platform={p as "youtube"} className="w-6 h-6 rounded-full" />
+                    {PLATFORM_NAME[p] ?? p}
+                    {posted && " ✓"}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {item.kind === "long" && (
+          <div>
+            <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2">People</div>
+            {item.assignees?.length ? (
+              <ul className="grid gap-1.5 sm:grid-cols-2">
+                {item.assignees.map((a, i) => (
+                  <li key={i} className="flex items-center gap-2 rounded-lg bg-surface-2/60 px-2.5 py-1.5 min-w-0">
+                    <PersonAvatar name={a.name} avatarUrl={a.avatarUrl} color={a.color} className="w-6 h-6 text-[9px]" />
+                    <span className="text-[13px] font-semibold truncate">{a.name}</span>
+                    <span className="ml-auto text-[11.5px] text-ink-soft whitespace-nowrap">{a.stage}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-ink-soft">Nobody assigned yet.</p>
+            )}
+          </div>
+        )}
         {item.kind === "short" && (
           <div>
             <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2">Where it posts</div>
