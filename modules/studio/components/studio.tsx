@@ -16,6 +16,7 @@ function ShuffleIcon({ className }: { className?: string }) {
   );
 }
 import type { LibraryVideo, StudioData, Variant } from "../lib/queries";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
 import { HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
 
@@ -142,6 +143,8 @@ export function Studio({ data }: { data: StudioData }) {
   const [region, setRegion] = useState("US");
   const [importing, setImporting] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
+  const detailsBtn = useRef<HTMLButtonElement>(null);
+  const libraryBtn = useRef<HTMLButtonElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // A fresh arrangement on each visit (after hydration). Phones open on the Mobile layout.
@@ -366,12 +369,12 @@ export function Studio({ data }: { data: StudioData }) {
           </button>
         )}
         <div className="relative">
-          <button type="button" onClick={() => setPanel((p) => (p === "details" ? null : "details"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Details">
+          <button ref={detailsBtn} type="button" onClick={() => setPanel((p) => (p === "details" ? null : "details"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Details">
             <SettingsIcon className="w-4 h-4" />
             <span className="hidden sm:inline">Details</span>
           </button>
-          {panel === "details" && (
-            <div className="fixed sm:absolute z-50 inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+6px)] sm:w-[280px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-2.5 animate-[modalin_.15s_var(--ease-out)]">
+<AnchoredMenu open={panel === "details"} onClose={() => setPanel(null)} anchor={detailsBtn} width={280} align="left" label="details">
+            <div className="p-3.5 space-y-2.5">
               {(
                 [
                   ["views", "Views"],
@@ -386,15 +389,15 @@ export function Studio({ data }: { data: StudioData }) {
                 </label>
               ))}
             </div>
-          )}
+          </AnchoredMenu>
         </div>
         <div className="relative">
-          <button type="button" onClick={() => setPanel((p) => (p === "library" ? null : "library"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Library">
+          <button ref={libraryBtn} type="button" onClick={() => setPanel((p) => (p === "library" ? null : "library"))} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40" aria-label="Library">
             <ImageIcon className="w-4 h-4" />
             <span className="hidden sm:inline">Library</span> · {data.library.length}
           </button>
-          {panel === "library" && (
-            <div className="fixed sm:absolute z-50 inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[calc(100%+6px)] sm:w-[300px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-3 animate-[modalin_.15s_var(--ease-out)]">
+<AnchoredMenu open={panel === "library"} onClose={() => setPanel(null)} anchor={libraryBtn} width={300} align="left" label="library">
+            <div className="p-3.5 space-y-2.5">
               <p className="text-[12.5px] text-ink-soft">
                 {data.library.length ? `${data.library.length} popular videos, stored in VPlanner so previews load instantly.` : "No placeholder videos yet."} Import YouTube&rsquo;s current most popular videos, including Science &amp; Tech.
               </p>
@@ -414,7 +417,7 @@ export function Studio({ data }: { data: StudioData }) {
                 <p className="text-[12px] text-ink-soft">Only the master or a packager can import.</p>
               )}
             </div>
-          )}
+          </AnchoredMenu>
         </div>
         <span className="hidden lg:inline text-[12px] text-ink-faint ml-1">← → switch · R randomize · F fullscreen · D dark/light · C compare</span>
       </div>

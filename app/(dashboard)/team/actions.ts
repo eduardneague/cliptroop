@@ -623,13 +623,28 @@ export async function updateTeamColors(teamId: string, shortColor: string, longC
 }
 
 /** Team → Long videos: default description and default scripter (masters). */
-export async function updateLongSettings(teamId: string, input: { description: string; scripter: string | null }) {
+export async function updateLongSettings(
+  teamId: string,
+  input: { description: string; scripter: string | null; people?: Partial<Record<"researcher" | "filmer" | "editor" | "packager" | "publisher", string | null>> }
+) {
   const description = String(input.description ?? "");
   if (description.length > 5000) return { error: "Descriptions can be up to 5,000 characters." };
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("teams")
-    .update({ default_long_description: description, default_long_scripter_member_id: input.scripter || null })
+    .update({
+      default_long_description: description,
+      default_long_scripter_member_id: input.scripter || null,
+      ...(input.people
+        ? {
+            default_long_researcher_id: input.people.researcher || null,
+            default_long_filmer_id: input.people.filmer || null,
+            default_long_editor_id: input.people.editor || null,
+            default_long_packager_id: input.people.packager || null,
+            default_long_publisher_id: input.people.publisher || null,
+          }
+        : {}),
+    })
     .eq("id", teamId)
     .select("id");
   if (error || !data?.length) return { error: "Only the master can change these settings." };

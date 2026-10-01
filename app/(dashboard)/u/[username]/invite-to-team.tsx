@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { useToast } from "@/components/ui/toast-provider";
 import { inviteExistingUser } from "@/app/(dashboard)/team/actions";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
@@ -13,21 +14,16 @@ export function InviteToTeam({ userId, name, teams }: { userId: string; name: st
   const [team, setTeam] = useState(teams[0]?.id ?? "");
   const [roles, setRoles] = useState<RoleId[]>([]);
   const [pending, start] = useTransition();
-  useEffect(() => {
-    if (!open) return;
-    const off = (e: MouseEvent) => !(e.target as HTMLElement).closest("[data-invite-menu]") && setOpen(false);
-    document.addEventListener("mousedown", off);
-    return () => document.removeEventListener("mousedown", off);
-  }, [open]);
+  const btn = useRef<HTMLButtonElement>(null);
   if (!teams.length) return null;
   return (
     <div className="relative" data-invite-menu>
-      <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] hover:brightness-110">
+      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] hover:brightness-110">
         <PlusIcon className="w-4 h-4" />
         Invite to team
       </button>
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-[290px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3.5 space-y-3 animate-[modalin_.15s_var(--ease-out)]">
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={300} label="Invite to team">
+        <div className="p-3.5 space-y-3">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">Team</div>
             <div className="space-y-1">
@@ -78,7 +74,7 @@ export function InviteToTeam({ userId, name, teams }: { userId: string; name: st
             {pending ? "Inviting…" : "Send invite"}
           </button>
         </div>
-      )}
+      </AnchoredMenu>
     </div>
   );
 }

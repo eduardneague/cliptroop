@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
@@ -122,6 +123,7 @@ export function CalendarView({
   const go = (d: string, v: View = view) => startNav(() => router.push(`/calendar?d=${d}&view=${v}`, { scroll: false }));
   const [onlyMonth, setOnlyMonth] = useState(false);
   const [picker, setPicker] = useState(false);
+  const pickerBtn = useRef<HTMLButtonElement>(null);
   const title =
     view === "week"
       ? `${nice(mondayOf(focus), { month: "short", day: "numeric" })} – ${nice(addDays(mondayOf(focus), 6), { month: "short", day: "numeric", year: "numeric" })}`
@@ -404,6 +406,7 @@ export function CalendarView({
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative mr-2">
           <button
+            ref={pickerBtn}
             type="button"
             onClick={() => setPicker((o) => !o)}
             aria-expanded={picker}
@@ -413,16 +416,15 @@ export function CalendarView({
             <h1 className="text-[26px] sm:text-[32px] font-display font-semibold leading-tight">{title}</h1>
             <ChevronDownIcon className={`w-5 h-5 text-ink-soft transition-transform ${picker ? "rotate-180" : ""}`} />
           </button>
-          {picker && (
+          <AnchoredMenu open={picker} onClose={() => setPicker(false)} anchor={pickerBtn} width={300} align="left" label="Jump to a month">
             <MonthPicker
               focus={focus}
               onPick={(d) => {
                 setPicker(false);
                 go(d, view === "week" ? "month" : view);
               }}
-              onClose={() => setPicker(false)}
             />
-          )}
+          </AnchoredMenu>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" aria-label="Previous" onClick={() => go(view === "week" ? addDays(focus, -7) : shiftMonth(focus, -1))} className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
@@ -1045,61 +1047,58 @@ function QuickView({
       }
     >
       <div className="space-y-4">
-        {item.kind === "long" && (
-          <div className="aspect-video w-full rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
-            {item.thumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.thumb} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-[12.5px] text-ink-soft">No thumbnail picked yet</span>
+        <div className={item.kind === "long" ? "grid gap-4 sm:grid-cols-[minmax(0,15rem)_1fr] items-start" : ""}>
+          {item.kind === "long" && (
+            <div className="aspect-video w-full rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+              {item.thumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.thumb} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[12px] text-ink-soft px-3 text-center">No thumbnail picked yet</span>
+              )}
+            </div>
+          )}
+          <div className="space-y-3 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <KindIcon kind={item.kind} tile className="w-4 h-4" />
+              <span className={`rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold ${item.done ? "bg-green/15 text-green" : "bg-surface-2 text-ink"}`}>{item.stageLabel}</span>
+              {item.shortType && item.shortType !== "filler" && (
+                <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold" style={{ background: `color-mix(in srgb, ${ACCENT[item.shortType]} 18%, transparent)`, color: ACCENT[item.shortType] }}>
+                  {item.shortType === "sponsorship" ? "Sponsor" : "Big"}
+                </span>
+              )}
+              {overdue && <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold bg-red/15 text-red">Overdue</span>}
+            </div>
+            {/* Date and where it posts, side by side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">Date</div>
+                <div className="text-[14px] font-semibold">{nice(item.date, { weekday: "short", month: "short", day: "numeric" })}</div>
+                <div className="text-[12px] text-ink-soft">{dateKind}</div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1">Posts to</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {item.platforms.map((p) => {
+                    const posted = item.postedPlatforms.includes(p) || item.posts.some((x) => x.platform === p && x.status === "published");
+                    return (
+                      <span key={p} title={`${PLATFORM_NAME[p] ?? p}${posted ? " · posted" : ""}`} className={`inline-flex rounded-full ${posted ? "ring-2 ring-green ring-offset-1 ring-offset-surface" : ""}`}>
+                        <PlatformIcon platform={p as "youtube"} className="w-7 h-7 rounded-full" />
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {item.editor && (
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="text-ink-soft">Editor</span>
+                <PersonAvatar name={item.editor.name} avatarUrl={item.editor.avatarUrl} color={item.editor.color} className="w-6 h-6 text-[9px]" />
+                <span className="font-semibold">{item.editor.name}</span>
+              </div>
             )}
           </div>
-        )}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <KindIcon kind={item.kind} tile className="w-4 h-4" />
-          <span className={`rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold ${item.done ? "bg-green/15 text-green" : "bg-surface-2 text-ink"}`}>{item.stageLabel}</span>
-          {item.shortType && item.shortType !== "filler" && (
-            <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold" style={{ background: `color-mix(in srgb, ${ACCENT[item.shortType]} 18%, transparent)`, color: ACCENT[item.shortType] }}>
-              {item.shortType === "sponsorship" ? "Sponsor" : "Big"}
-            </span>
-          )}
-          {overdue && <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold bg-red/15 text-red">Overdue</span>}
         </div>
-
-        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2 text-[13.5px]">
-          <dt className="text-ink-soft">Date</dt>
-          <dd className="font-semibold">
-            {nice(item.date, { weekday: "long", month: "long", day: "numeric" })}
-            <span className="block text-[12px] font-normal text-ink-soft">{dateKind}</span>
-          </dd>
-          {item.editor && (
-            <>
-              <dt className="text-ink-soft">Editor</dt>
-              <dd className="flex items-center gap-2 font-semibold">
-                <PersonAvatar name={item.editor.name} avatarUrl={item.editor.avatarUrl} color={item.editor.color} className="w-6 h-6 text-[9px]" />
-                {item.editor.name}
-              </dd>
-            </>
-          )}
-        </dl>
-
-        {item.kind === "long" && (
-          <div>
-            <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2">Where it posts</div>
-            <div className="flex flex-wrap gap-1.5">
-              {item.platforms.map((p) => {
-                const posted = item.postedPlatforms.includes(p);
-                return (
-                  <span key={p} className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-2.5 h-8 text-[12.5px] font-semibold ${posted ? "border-green/40 text-green" : "border-line/20 text-ink"}`}>
-                    <PlatformIcon platform={p as "youtube"} className="w-6 h-6 rounded-full" />
-                    {PLATFORM_NAME[p] ?? p}
-                    {posted && " ✓"}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
         {item.kind === "long" && (
           <div>
             <div className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2">People</div>
@@ -1171,27 +1170,12 @@ function QuickView({
 }
 
 /** Jump to any month: year arrows and a grid of months. */
-function MonthPicker({ focus, onPick, onClose }: { focus: string; onPick: (d: string) => void; onClose: () => void }) {
+function MonthPicker({ focus, onPick }: { focus: string; onPick: (d: string) => void }) {
   const [year, setYear] = useState(Number(focus.slice(0, 4)));
   const current = focus.slice(0, 7);
   const thisMonth = localToday().slice(0, 7);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const onDown = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest("[data-month-picker]")) onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [onClose]);
   return (
-    <div
-      data-month-picker
-      className="absolute left-0 top-[calc(100%+6px)] z-40 w-[300px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.15s_var(--ease-out)]"
-    >
+    <div className="p-3">
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={() => setYear((y) => y - 1)} aria-label="Previous year" className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
           <ArrowLeftIcon className="w-4 h-4" />

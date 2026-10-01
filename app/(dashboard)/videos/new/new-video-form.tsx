@@ -3,248 +3,243 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { createProject } from "./actions";
-import { ArrowLeftIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, CloseIcon, PlusIcon } from "@/components/ui/icons";
+import { DatePicker } from "@/components/ui/date-picker";
+import { KindIcon } from "@/components/ui/kind-icon";
+import { PersonSelect, type PersonKind } from "@/modules/short-videos/components/person-select";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 
 const TYPES = ["Hub", "Help", "Hero"];
+const STEPS: { stage: "research" | "script" | "film" | "edit" | "package" | "publish"; label: string; kind: PersonKind }[] = [
+  { stage: "research", label: "Researcher", kind: "researcher" },
+  { stage: "script", label: "Scripter", kind: "scripter" },
+  { stage: "film", label: "Filmer", kind: "filmer" },
+  { stage: "edit", label: "Editor", kind: "editor" },
+  { stage: "package", label: "Packager", kind: "packager" },
+  { stage: "publish", label: "Scheduler", kind: "scheduler" },
+];
+const PLATFORMS = [
+  { id: "youtube", name: "YouTube" },
+  { id: "facebook", name: "Facebook" },
+  { id: "instagram", name: "Instagram" },
+  { id: "tiktok", name: "TikTok" },
+];
 
-export function NewVideoForm() {
-  const [state, formAction, pending] = useActionState(
-    createProject,
-    undefined
+const field = "w-full rounded-xl border border-line/15 bg-surface px-3.5 h-11 text-[14px] outline-none focus:ring-2 focus:ring-amber transition-shadow";
+const label = "block text-[12px] font-semibold text-ink-soft mb-1.5";
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-line/10 bg-surface p-5 sm:p-6 space-y-4">
+      <div>
+        <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">{title}</h2>
+        {hint && <p className="text-[12.5px] text-ink-faint mt-0.5">{hint}</p>}
+      </div>
+      {children}
+    </section>
   );
+}
 
-  // Every field lives in React state, not just the DOM. That's the fix
-  // for the actual bug: relying on the browser to remember uncontrolled
-  // input values across a failed-submission re-render is fragile — this
-  // way nothing typed can ever be lost, no matter what re-renders.
+/**
+ * New long video: the Ideate template (titles, type, theme, hook), when,
+ * who works on each step (pre-filled with the team defaults) and where it
+ * goes. Every field lives in state, so nothing typed is ever lost if the
+ * submission fails.
+ */
+export function NewVideoForm({
+  people,
+  defaults,
+}: {
+  people: TeamPerson[];
+  defaults: Record<"research" | "script" | "film" | "edit" | "package" | "publish", string | null>;
+}) {
+  const [state, formAction, pending] = useActionState(createProject, undefined);
   const [types, setTypes] = useState<string[]>([]);
   const [theme, setTheme] = useState("");
   const [subtheme, setSubtheme] = useState("");
-  const [titles, setTitles] = useState<string[]>(["", "", ""]);
+  const [titles, setTitles] = useState<string[]>(["", ""]);
   const [picked, setPicked] = useState(0);
   const [hook, setHook] = useState("");
-  const [expectedDate, setExpectedDate] = useState("");
+  const [date, setDate] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
-  const [budgetNotes, setBudgetNotes] = useState("");
-
-  function toggleType(t: string) {
-    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
-  }
-  function updateTitle(i: number, value: string) {
-    setTitles((cur) => cur.map((t, idx) => (idx === i ? value : t)));
-  }
+  const [budget, setBudget] = useState("");
+  const [crew, setCrew] = useState(defaults);
+  const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
 
   return (
-    <div className="p-4 sm:p-8 max-w-2xl">
-      <Link
-        href="/videos"
-        className="flex items-center gap-1.5 text-sm text-ink-faint hover:text-ink mb-5"
-      >
+    <div className="px-4 sm:px-8 py-6 sm:py-8 max-w-3xl mx-auto">
+      <Link href="/videos" className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink mb-4">
         <ArrowLeftIcon className="w-3.5 h-3.5" />
         Long videos
       </Link>
+      <div className="flex items-center gap-3 mb-6">
+        <KindIcon kind="long" tile className="w-5 h-5" />
+        <h1 className="text-[26px] sm:text-[30px] font-display font-semibold leading-tight">New long video</h1>
+      </div>
 
-      <h1 className="font-display text-3xl font-semibold mb-1.5">
-        New video idea
-      </h1>
-      <p className="text-sm text-ink-soft mb-8">
-        Starts in Ideate. Everyone on the team can pitch an idea. The
-        master reviews and moves it forward.
-      </p>
-
-      <form action={formAction} className="space-y-7">
-        <div>
-          <label className="block text-xs font-semibold text-ink-soft mb-2">
-            Type
-          </label>
-          <div className="flex gap-2">
-            {TYPES.map((t) => (
-              <label
-                key={t}
-                className="flex items-center gap-1.5 rounded-lg border border-line/15 px-3 py-1.5 text-sm font-medium cursor-pointer has-[:checked]:border-amber has-[:checked]:bg-amber/10 has-[:checked]:text-amber transition-colors"
-              >
+      <form action={formAction} className="space-y-5">
+        <Section title="Titles" hint="2 to 5 options. Pick the main one: it becomes the video's name.">
+          <div className="space-y-2">
+            {titles.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPicked(i)}
+                  aria-pressed={picked === i}
+                  title="Use as the main title"
+                  className={`flex-shrink-0 rounded-lg px-2.5 h-11 text-[12px] font-bold transition-colors ${picked === i ? "bg-amber text-white" : "border border-line/20 text-ink-soft hover:text-ink"}`}
+                >
+                  {picked === i ? "Main" : i + 1}
+                </button>
                 <input
-                  type="checkbox"
-                  name="type"
+                  name="titles"
                   value={t}
-                  checked={types.includes(t)}
-                  onChange={() => toggleType(t)}
-                  className="sr-only"
+                  onChange={(e) => setTitles((all) => all.map((x, j) => (j === i ? e.target.value : x)))}
+                  maxLength={100}
+                  placeholder={i === 0 ? "I Tested a $200 Fake iPhone…" : "Another title"}
+                  className={field}
                 />
-                {t}
-              </label>
+                {titles.length > 2 && (
+                  <button
+                    type="button"
+                    aria-label="Remove this title"
+                    onClick={() => {
+                      setTitles((all) => all.filter((_, j) => j !== i));
+                      setPicked((p) => (p === i ? 0 : p > i ? p - 1 : p));
+                    }}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0"
+                  >
+                    <CloseIcon className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="theme"
-              className="block text-xs font-semibold text-ink-soft mb-1.5"
-            >
-              Theme
-            </label>
-            <input
-              id="theme"
-              name="theme"
-              type="text"
-              required
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-              placeholder="TECH"
-              className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="subtheme"
-              className="block text-xs font-semibold text-ink-soft mb-1.5"
-            >
-              Subtheme
-            </label>
-            <input
-              id="subtheme"
-              name="subtheme"
-              type="text"
-              value={subtheme}
-              onChange={(e) => setSubtheme(e.target.value)}
-              placeholder="Scam Help"
-              className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber"
-            />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-semibold text-ink-soft">
-              Titles (2 to 5, star your favorite)
-            </label>
+            <input type="hidden" name="pickedTitle" value={picked} />
             {titles.length < 5 && (
-              <button
-                type="button"
-                onClick={() => setTitles((cur) => [...cur, ""])}
-                className="text-xs font-semibold text-amber"
-              >
-                + Add another
+              <button type="button" onClick={() => setTitles((t) => [...t, ""])} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-line/25 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink">
+                <PlusIcon className="w-3.5 h-3.5" />
+                Add a title
               </button>
             )}
           </div>
-          <div className="space-y-2">
-            {titles.map((titleValue, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="pickedTitle"
-                  value={i}
-                  checked={picked === i}
-                  onChange={() => setPicked(i)}
-                  className="accent-amber flex-shrink-0"
-                  aria-label={`Use title ${i + 1} as the main title`}
-                />
-                <input
-                  name="titles"
-                  type="text"
-                  required={i < 2}
-                  value={titleValue}
-                  onChange={(e) => updateTitle(i, e.target.value)}
-                  placeholder={`Title option ${i + 1}`}
-                  className="flex-1 rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber"
-                />
+        </Section>
+
+        <Section title="Idea">
+          <div>
+            <span className={label}>Type</span>
+            <div className="flex flex-wrap gap-2">
+              {TYPES.map((t) => (
+                <label key={t} className={`cursor-pointer rounded-full border px-4 h-10 inline-flex items-center text-[13.5px] font-semibold transition-colors ${types.includes(t) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
+                  <input type="checkbox" name="type" value={t} checked={types.includes(t)} onChange={() => setTypes((all) => (all.includes(t) ? all.filter((x) => x !== t) : [...all, t]))} className="sr-only" />
+                  {t}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className={label}>Theme</span>
+              <input name="theme" value={theme} onChange={(e) => setTheme(e.target.value)} placeholder="TECH" className={field} />
+            </label>
+            <label className="block">
+              <span className={label}>Subtheme (optional)</span>
+              <input name="subtheme" value={subtheme} onChange={(e) => setSubtheme(e.target.value)} placeholder="Scam help" className={field} />
+            </label>
+          </div>
+          <label className="block">
+            <span className={label}>Hook</span>
+            <textarea
+              name="hook"
+              value={hook}
+              onChange={(e) => setHook(e.target.value)}
+              rows={3}
+              placeholder="This is an iPhone 17 Pro Max, and this is another one. One of them is fake…"
+              className={`${field} h-auto py-3 resize-y`}
+            />
+          </label>
+        </Section>
+
+        <Section title="When and where">
+          <div>
+            <span className={label}>Expected date (optional)</span>
+            <input type="hidden" name="expected_date" value={date ?? ""} />
+            <div className="flex items-center gap-2">
+              <DatePicker value={date ?? ""} onChange={setDate} ariaLabel="Expected date" triggerClassName={`${field} text-left inline-flex items-center w-auto px-4`}>
+                {date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Pick a date"}
+              </DatePicker>
+              {date && (
+                <button type="button" onClick={() => setDate(null)} className="text-[13px] font-semibold text-ink-soft hover:text-ink">
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+          <div>
+            <span className={label}>Where it goes</span>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORMS.map((p) => {
+                const on = platforms.includes(p.id);
+                return (
+                  <label key={p.id} className={`cursor-pointer inline-flex items-center gap-2 rounded-full border pl-1.5 pr-3.5 h-10 text-[13.5px] font-semibold transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
+                    <input
+                      type="checkbox"
+                      name="platforms"
+                      value={p.id}
+                      checked={on}
+                      onChange={() => setPlatforms((all) => (all.includes(p.id) ? (all.length > 1 ? all.filter((x) => x !== p.id) : all) : [...all, p.id]))}
+                      className="sr-only"
+                    />
+                    <PlatformIcon platform={p.id as "youtube"} className={`w-7 h-7 rounded-full ${on ? "" : "opacity-50 grayscale"}`} />
+                    {p.name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </Section>
+
+        <Section title="People" hint="Pre-filled with the team's defaults (Team → Defaults). They're notified when their step starts.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {STEPS.map((s) => (
+              <div key={s.stage}>
+                <span className={label}>{s.label}</span>
+                <PersonSelect kind={s.kind} people={people} value={crew[s.stage]} onChange={(v) => setCrew((c) => ({ ...c, [s.stage]: v }))} />
+                <input type="hidden" name={`person_${s.stage}`} value={crew[s.stage] ?? ""} />
               </div>
             ))}
           </div>
-        </div>
+        </Section>
 
-        <div>
-          <label
-            htmlFor="hook"
-            className="block text-xs font-semibold text-ink-soft mb-1.5"
-          >
-            Hook
+        <Section title="Notes" hint="Optional.">
+          <label className="block">
+            <span className={label}>Notes</span>
+            <textarea name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="EDU: must research fake iPhones" className={`${field} h-auto py-3 resize-y`} />
           </label>
-          <textarea
-            id="hook"
-            name="hook"
-            required
-            rows={3}
-            value={hook}
-            onChange={(e) => setHook(e.target.value)}
-            placeholder="What's the first thing said on screen?"
-            className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber resize-none"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="expected_date"
-            className="block text-xs font-semibold text-ink-soft mb-1.5"
-          >
-            Expected date
+          <label className="block">
+            <span className={label}>Budget</span>
+            <textarea name="budget_notes" value={budget} onChange={(e) => setBudget(e.target.value)} rows={2} placeholder="Fake iPhone 17 Pro Max: 1000 to 1500 RON" className={`${field} h-auto py-3 resize-y`} />
           </label>
-          <input
-            id="expected_date"
-            name="expected_date"
-            type="date"
-            value={expectedDate}
-            onChange={(e) => setExpectedDate(e.target.value)}
-            className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber"
-          />
-        </div>
-
-        <p className="text-[11.5px] text-ink-faint -mt-3">
-          You&rsquo;ll add at least 2 thumbnail sketches after creating it.
-        </p>
-
-        <div>
-          <label
-            htmlFor="notes"
-            className="block text-xs font-semibold text-ink-soft mb-1.5"
-          >
-            Notes <span className="text-ink-faint font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber resize-none"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="budget_notes"
-            className="block text-xs font-semibold text-ink-soft mb-1.5"
-          >
-            Budget needed{" "}
-            <span className="text-ink-faint font-normal">
-              (optional, but add at least a rough idea)
-            </span>
-          </label>
-          <textarea
-            id="budget_notes"
-            name="budget_notes"
-            rows={2}
-            value={budgetNotes}
-            onChange={(e) => setBudgetNotes(e.target.value)}
-            placeholder="e.g. Fake iPhone 17 Pro Max: 1000–1500 RON"
-            className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber resize-none"
-          />
-        </div>
+        </Section>
 
         {state?.error && (
-          <p className="text-sm text-red font-medium">{state.error}</p>
+          <p role="alert" className="rounded-xl border border-red/30 bg-red/10 text-red text-[13.5px] px-4 py-3">
+            {state.error}
+          </p>
         )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex items-center rounded-lg bg-amber text-white font-semibold px-5 py-2.5 text-sm disabled:opacity-50 hover:brightness-110 transition-[filter]"
-        >
-          {pending ? "Creating…" : "Create project"}
-        </button>
+        <div className="flex items-center gap-2 sticky bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] lg:bottom-4 z-10">
+          <button
+            type="submit"
+            disabled={pending}
+            className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-6 h-12 text-[15px] shadow-[0_10px_30px_-10px_rgb(var(--amber)/0.7)] hover:brightness-105 disabled:opacity-60"
+          >
+            {pending && <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+            Create video
+          </button>
+          <Link href="/videos" className="rounded-xl border border-line/15 bg-surface px-5 h-12 inline-flex items-center text-[14px] font-semibold text-ink-soft hover:text-ink">
+            Cancel
+          </Link>
+        </div>
       </form>
     </div>
   );

@@ -18,6 +18,7 @@ import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
 import { findQuote } from "../lib/anchors";
 import { addComment, createDoc, deleteComment, deleteDoc, getDocContent, renameDoc, resolveComment, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 
 type Owner = { short: string } | { long: string };
 
@@ -135,7 +136,7 @@ export function ScriptWorkspace({
           />
         </>
       }
-      leftRail={<DocRail owner={owner} docs={docs} current={doc.id} canCreate={canCreate} canEdit={canEdit} href={(id) => href({ doc: id })} roleColors={roleColors} />}
+      leftRail={<DocRail owner={owner} docs={docs} current={doc.id} sideId={sideOpen ? side?.id ?? null : null} canCreate={canCreate} canEdit={canEdit} href={(id) => href({ doc: id })} roleColors={roleColors} />}
       sideBySide={
         sideOpen && side ? (
           <SidePage
@@ -149,7 +150,7 @@ export function ScriptWorkspace({
           />
         ) : undefined
       }
-      mobileDocs={<MobileDocs owner={owner} docs={docs} current={doc} canCreate={canCreate} href={(id) => href({ doc: id })} roleColors={roleColors} />}
+      mobileDocs={<MobileDocs owner={owner} docs={docs} current={doc} canCreate={canCreate} href={(id) => href({ doc: id })} roleColors={roleColors} sideId={sideOpen ? side?.id ?? null : null} />}
       renderCommentPopover={(id, close) => {
         const c = comments.find((x) => x.id === id);
         if (!c) return null;
@@ -222,10 +223,13 @@ function DocRail({
   canEdit,
   href,
   roleColors,
+  sideId,
 }: {
   owner: Owner;
   docs: DocListItem[];
   current: string;
+  /** Open on the right: shown, but not openable on the left too. */
+  sideId: string | null;
   canCreate: { script: boolean; research: boolean };
   canEdit: boolean;
   href: (id: string) => string;
@@ -261,7 +265,13 @@ function DocRail({
               .filter((d) => d.kind === g.kind)
               .map((d) => (
                 <div key={d.id} className="group relative flex-shrink-0">
-                  {renaming === d.id ? (
+                  {d.id === sideId ? (
+                    <div className="flex items-center gap-2.5 rounded-lg pl-3 pr-3 h-9 lg:h-10 text-[13.5px] whitespace-nowrap text-ink-faint cursor-default" title="Open on the right">
+                      <span aria-hidden className="w-2 h-2 rounded-full flex-shrink-0 opacity-60" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
+                      <span className="truncate">{d.name}</span>
+                      <span className="hidden lg:inline ml-auto text-[10.5px] font-bold uppercase">On the right</span>
+                    </div>
+                  ) : renaming === d.id ? (
                     <input
                       autoFocus
                       defaultValue={d.name}
@@ -473,6 +483,7 @@ function MobileDocs({
   canCreate,
   href,
   roleColors,
+  sideId,
 }: {
   owner: Owner;
   docs: DocListItem[];
@@ -480,8 +491,10 @@ function MobileDocs({
   canCreate: { script: boolean; research: boolean };
   href: (id: string) => string;
   roleColors: Record<string, string>;
+  sideId: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   const router = useRouter();
   const [adding, setAdding] = useState<"script" | "research" | null>(null);
   const DOT: Record<string, string | undefined> = { Script: roleColors.scripter, Review: roleColors.master, Staging: roleColors.editor, Research: roleColors.researcher };
@@ -491,15 +504,13 @@ function MobileDocs({
   ];
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-9 text-[13px] font-bold max-w-[9.5rem]">
+      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-9 text-[13px] font-bold max-w-[9.5rem]">
         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[current.name] ?? "rgb(var(--line) / .4)" }} />
         <span className="truncate">{current.name}</span>
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
-      {open && (
-        <div className="fixed inset-0 z-50" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl bg-surface border-t border-line/15 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] animate-[modalin_.15s_var(--ease-out)]" onClick={(e) => e.stopPropagation()}>
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="Documents">
+          <div className="p-2">
             {groups.map((g) => (
               <div key={g.kind} className="mb-2">
                 <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-soft">{g.label}</div>
@@ -509,11 +520,12 @@ function MobileDocs({
                     <button
                       key={d.id}
                       type="button"
+                      disabled={d.id === sideId}
                       onClick={() => {
                         setOpen(false);
                         router.push(href(d.id), { scroll: false });
                       }}
-                      className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] ${d.id === current.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
+                      className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === current.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
                     >
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
                       <span className="truncate">{d.name}</span>
@@ -529,8 +541,7 @@ function MobileDocs({
               </div>
             ))}
           </div>
-        </div>
-      )}
+      </AnchoredMenu>
       <AddDocDialog
         kind={adding}
         owner={owner}
@@ -556,6 +567,19 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
   const version = useRef(side.version);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<"saved" | "saving" | "unsaved" | "conflict">("saved");
+  // Dark / light paper follows the main page.
+  const [paper, setPaper] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("vp:script-paper");
+      if (v === "light" || v === "dark") setPaper(v);
+    } catch {
+      /* private mode */
+    }
+    const on = (e: Event) => setPaper((e as CustomEvent<"light" | "dark">).detail);
+    window.addEventListener("vp-paper", on);
+    return () => window.removeEventListener("vp-paper", on);
+  }, []);
   const editor = useEditor(
     {
       immediatelyRender: false,
@@ -608,7 +632,7 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
           <CloseIcon className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div data-paper="light" className="script-paper mx-auto w-full max-w-[794px] rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] px-6 sm:px-[72px] py-10 sm:py-[72px] min-h-[60vh]">
+      <div data-paper={paper} className="script-paper mx-auto w-full max-w-[794px] rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] px-6 sm:px-[72px] py-10 sm:py-[72px] min-h-[60vh] transition-colors">
         <EditorContent editor={editor} />
       </div>
     </div>

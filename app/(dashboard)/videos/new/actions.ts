@@ -82,5 +82,21 @@ export async function createProject(
   }));
   await supabase.from("project_titles").insert(titleRows);
 
+  // People per step (pre-filled with the team's defaults on the form).
+  const STEPS = ["research", "script", "film", "edit", "package", "publish"] as const;
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const picks = STEPS.map((stage) => ({ stage, member: String(formData.get(`person_${stage}`) ?? "") })).filter((x) => UUID.test(x.member));
+  if (picks.length) {
+    await supabase.from("project_assignees").insert(picks.map((x) => ({ project_id: project.id, stage: x.stage, team_member_id: x.member })));
+  }
+  // The chosen scripter IS the video's scripter (replaces the team default if different).
+  const scripter = String(formData.get("person_script") ?? "");
+  await supabase.from("long_video_scripters").delete().eq("project_id", project.id).neq("team_member_id", UUID.test(scripter) ? scripter : "00000000-0000-0000-0000-000000000000");
+  if (UUID.test(scripter)) await supabase.from("long_video_scripters").upsert({ project_id: project.id, team_member_id: scripter }, { onConflict: "project_id,team_member_id", ignoreDuplicates: true });
+
+  // Where it goes.
+  const platforms = formData.getAll("platforms").map(String).filter((x) => ["youtube", "facebook", "instagram", "tiktok"].includes(x));
+  if (platforms.length) await supabase.from("long_video_projects").update({ platforms }).eq("id", project.id);
+
   redirect(`/videos/${project.id}`);
 }

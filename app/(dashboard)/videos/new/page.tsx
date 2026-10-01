@@ -6,6 +6,7 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { ArrowLeftIcon } from "@/components/ui/icons";
 import { NewVideoForm } from "./new-video-form";
+import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 
 export const metadata: Metadata = { title: "New long video" };
 
@@ -17,7 +18,29 @@ export default async function NewVideoProjectPage() {
 
   const membership = await getMembership(supabase, currentTeam.id);
   const roles = membership?.roles ?? [];
-  if (isMaster(roles) || roles.includes("publisher")) return <NewVideoForm />;
+  if (isMaster(roles) || roles.includes("publisher")) {
+    const [people, { data: d }] = await Promise.all([
+      listTeamPeople(currentTeam.id),
+      supabase
+        .from("teams")
+        .select("default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id")
+        .eq("id", currentTeam.id)
+        .maybeSingle(),
+    ]);
+    return (
+      <NewVideoForm
+        people={people}
+        defaults={{
+          research: (d?.default_long_researcher_id as string | null) ?? null,
+          script: (d?.default_long_scripter_member_id as string | null) ?? null,
+          film: (d?.default_long_filmer_id as string | null) ?? null,
+          edit: (d?.default_long_editor_id as string | null) ?? null,
+          package: (d?.default_long_packager_id as string | null) ?? null,
+          publish: (d?.default_long_publisher_id as string | null) ?? null,
+        }}
+      />
+    );
+  }
 
   return (
     <div className="p-4 sm:p-8 max-w-2xl">

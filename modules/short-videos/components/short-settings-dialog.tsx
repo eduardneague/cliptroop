@@ -107,7 +107,7 @@ export function ShortSettingsDialog({
     scripter.run(short.id, memberId, add);
   }
 
-  function setPerson(kind: Exclude<PersonKind, "scripter">, memberId: string | null) {
+  function setPerson(kind: "editor" | "reviewer" | "scheduler", memberId: string | null) {
     setWho((w) => ({ ...w, [kind]: memberId }));
     assign.run(short.id, kind, memberId);
   }

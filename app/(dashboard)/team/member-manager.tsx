@@ -80,8 +80,9 @@ export function MemberManager({
 
   const dirty = draftRoles.length !== member.roles.length || draftRoles.some((r) => !member.roles.includes(r));
   return (
-    <div className={`rounded-2xl border bg-surface p-4 transition-colors ${open ? "border-amber/50" : "border-line/15 hover:border-line/30"}`}>
-      <div className="flex items-start gap-3">
+    <div className={`px-4 sm:px-5 py-4 transition-colors ${open ? "bg-amber/[0.04]" : "hover:bg-surface-2/40"}`}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="flex items-center gap-3 min-w-0 w-full sm:w-72 sm:flex-none">
         <MemberAvatarLink userId={member.userId} username={member.username} name={member.name} avatarUrl={member.avatarUrl} color={member.color} size="w-11 h-11 text-[14px]" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -98,10 +99,10 @@ export function MemberManager({
           </div>
           <div className="text-[12.5px] text-ink-soft truncate">{member.email}</div>
         </div>
-      </div>
+        </div>
 
       {/* Roles, each in its colour */}
-      <div className="flex flex-wrap gap-1.5 mt-3.5">
+      <div className="flex flex-wrap gap-1.5 order-3 sm:order-none w-full sm:w-auto sm:flex-1">
         {member.roles.length === 0 ? (
           <span className="text-[12px] text-ink-faint">No roles yet</span>
         ) : (
@@ -119,7 +120,7 @@ export function MemberManager({
       </div>
 
       {!isSelf && !readOnly && (
-        <div className="flex items-center gap-2 mt-3.5 pt-3.5 border-t border-line/10">
+        <div className="flex items-center gap-2 order-4 sm:order-none w-full sm:w-auto justify-end sm:ml-auto">
           <button
             type="button"
             onClick={() => {
@@ -131,7 +132,6 @@ export function MemberManager({
           >
             {open ? "Close" : "Edit roles"}
           </button>
-          <span className="flex-1" />
           {canKick && (
             <button
               type="button"
@@ -145,6 +145,7 @@ export function MemberManager({
         </div>
       )}
 
+      </div>
       {open && (
         <div className="mt-3 rounded-xl bg-surface-2/50 p-3 animate-[modalin_.15s_var(--ease-out)]">
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-2">Roles</div>

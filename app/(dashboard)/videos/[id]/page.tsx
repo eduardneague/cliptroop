@@ -211,6 +211,7 @@ export default async function ProjectDetailPage({
   const currentIndex = STAGE_ORDER.indexOf(project.stage as PipelineStage);
   const nextStage = STAGE_ORDER[currentIndex + 1];
 
+  const filmAssignees = (assigneeRows ?? []).filter((a) => a.stage === "film").map((a) => a.team_member_id as string);
   const assigneesForTab = (assigneeRows ?? [])
     .filter((a) => a.stage === tab)
     .map((a) => {
@@ -423,7 +424,11 @@ export default async function ProjectDetailPage({
                 <FilmPanel
                   projectId={id}
                   isCurrent={project.stage === "film"}
-                  canAct={userIsMaster || myRoles.includes("filmer")}
+                  canAct={
+                    userIsMaster ||
+                    // The assigned filmer (or any filmer if nobody is assigned), like the database rule.
+                    (filmAssignees.length ? !!membership && filmAssignees.includes(membership.teamMemberId) : myRoles.includes("filmer"))
+                  }
                   filmedAt={project.filmed_at}
                   filmedBy={nameOf(project.filmed_by)}
                   nasPath={project.nas_path}

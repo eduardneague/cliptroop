@@ -41,6 +41,7 @@ import {
   UndoIcon,
   MoreIcon,
 } from "@/components/ui/icons";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark } from "../lib/anchors";
 import { ScriptImage } from "./script-image";
 import { countWords, EMPTY_DOC, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
@@ -161,26 +162,11 @@ export function ScriptEditor({
   const [status, setStatus] = useState<Status>("saved");
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
-  const [view, setView] = useState<"strip" | "pages" | "spread">("strip");
-  // Spread (pages side by side) is a desktop view; phones fall back to Pages.
-  const [wide, setWide] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const on = () => setWide(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  // Spread is desktop-only, and never together with side by side.
-  const shown = view === "spread" && (!wide || sideBySide) ? "pages" : view;
-  // Spread: a 2-column grid of A4 pages (1 2 / 3 4 …), as many as the text needs.
-  const [spreadPages, setSpreadPages] = useState(1);
-  const [spreadHtml, setSpreadHtml] = useState("");
-  const [gridW, setGridW] = useState(0);
-  const [jumpTo, setJumpTo] = useState<number | null>(null);
+  const [view, setView] = useState<"strip" | "pages">("strip");
+  const shown = view;
   const scaleRef = useRef(1);
   const areaRef = useRef<HTMLDivElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [pageLayout, setPageLayout] = useState({ pageH: 1123, pages: 1 });
@@ -202,7 +188,8 @@ export function ScriptEditor({
       const v = localStorage.getItem(PAPER_KEY);
       if (v === "light" || v === "dark") setPaper(v);
       const w = localStorage.getItem(VIEW_KEY);
-      if (w === "strip" || w === "pages" || w === "spread") setView(w);
+      if (w === "strip" || w === "pages") setView(w);
+      else if (w === "spread") setView("pages");
     } catch {
       /* private mode: stay light */
     }
@@ -445,35 +432,7 @@ export function ScriptEditor({
     return () => ro.disconnect();
   }, [shown]);
 
-  useEffect(() => {
-    if (shown !== "spread" || !editor) return;
-    const update = () => {
-      setSpreadHtml(editor.getHTML());
-      const h = contentRef.current?.scrollHeight ?? 0;
-      setSpreadPages(Math.max(1, Math.ceil(h / SPREAD_BODY_H)));
-    };
-    update();
-    editor.on("update", update);
-    const ro = new ResizeObserver(() => setGridW(gridRef.current?.clientWidth ?? 0));
-    if (gridRef.current) ro.observe(gridRef.current);
-    setGridW(gridRef.current?.clientWidth ?? 0);
-    return () => {
-      editor.off("update", update);
-      ro.disconnect();
-    };
-  }, [shown, editor]);
-  // Clicking a page in Spread opens it in Pages view, scrolled to that page.
-  useEffect(() => {
-    if (jumpTo === null || shown !== "pages") return;
-    const t = setTimeout(() => {
-      const el = paperRef.current;
-      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY + jumpTo * pageLayout.pageH - 140, behavior: "smooth" });
-      setJumpTo(null);
-    }, 120);
-    return () => clearTimeout(t);
-  }, [jumpTo, shown, pageLayout.pageH]);
-
-  function chooseView(v: "strip" | "pages" | "spread") {
+  function chooseView(v: "strip" | "pages") {
     setView(v);
     try {
       localStorage.setItem(VIEW_KEY, v);
@@ -485,6 +444,8 @@ export function ScriptEditor({
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
     setPaper(next);
+    // The side-by-side page follows.
+    window.dispatchEvent(new CustomEvent("vp-paper", { detail: next }));
     try {
       localStorage.setItem(PAPER_KEY, next);
     } catch {
@@ -529,13 +490,12 @@ export function ScriptEditor({
         {mobileDocs && <div className="lg:hidden flex-shrink-0">{mobileDocs}</div>}
         <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
           {words} words · about {spokenLength(words)}
-          {shown === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : shown === "spread" ? ` · ${spreadPages} page${spreadPages === 1 ? "" : "s"}` : ""}
+          {shown === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : ""}
         </span>
         <div role="radiogroup" aria-label="View" className="hidden sm:flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
           {([
             ["strip", "Strip"],
             ["pages", "Pages"],
-            ["spread", "Spread"],
           ] as const).map(([v, label]) => (
             <button
               key={v}
@@ -543,9 +503,8 @@ export function ScriptEditor({
               role="radio"
               aria-checked={view === v}
               onClick={() => chooseView(v)}
-              disabled={v === "spread" && !!sideBySide}
-              title={v === "spread" ? (sideBySide ? "Close side by side to use Spread" : "Pages side by side") : v === "pages" ? "Pages one under another" : "One long page"}
-              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors disabled:opacity-35 ${v === "spread" ? "hidden lg:block" : ""} ${
+              title={v === "pages" ? "Pages one under another" : "One long page"}
+              className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${
                 view === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"
               }`}
             >
@@ -638,51 +597,16 @@ export function ScriptEditor({
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       {leftRail && <div className="no-print hidden lg:block lg:w-60 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
       {/* Paper */}
-      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10 ${shown === "spread" ? "overflow-x-auto" : ""} ${sideBySide ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start" : ""}`}>
+      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10 ${sideBySide ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start" : ""}`}>
         <div className="min-w-0">
         {sideBySide && <div className="hidden lg:flex h-8 mb-2 items-center text-[12px] font-bold uppercase tracking-wide text-ink-soft">{docName ?? "Script"}</div>}
-        {shown === "spread" && (
-          <div ref={gridRef} className="grid grid-cols-2 gap-6 xl:gap-8 mx-auto max-w-[1700px]">
-            {Array.from({ length: spreadPages }, (_, i) => {
-              const scale = gridW ? (gridW - 32) / 2 / SPREAD_PAGE : 0.5;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    chooseView("pages");
-                    setJumpTo(i);
-                  }}
-                  title="Edit this page"
-                  className="group relative text-left rounded-md overflow-hidden shadow-[0_10px_40px_-20px_rgb(0_0_0/0.45)] ring-1 ring-line/10 hover:ring-2 hover:ring-amber transition-shadow"
-                  style={{ aspectRatio: `${SPREAD_PAGE} / ${SPREAD_PAGE_H}` }}
-                >
-                  <div
-                    data-paper={paper}
-                    className="script-paper absolute left-0 top-0"
-                    style={{ width: SPREAD_PAGE, height: SPREAD_PAGE_H, padding: SPREAD_PAD, transform: `scale(${scale})`, transformOrigin: "top left" }}
-                  >
-                    <div style={{ height: SPREAD_BODY_H, overflow: "hidden", position: "relative" }}>
-                      <div className="script-doc" style={{ position: "absolute", left: 0, right: 0, top: -i * SPREAD_BODY_H }} dangerouslySetInnerHTML={{ __html: spreadHtml }} />
-                    </div>
-                  </div>
-                  <span className="absolute right-2 bottom-2 rounded bg-black/55 text-white text-[11px] font-bold px-1.5 py-0.5">{i + 1}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className={shown === "spread" ? "absolute -left-[10000px] top-0 w-[794px] opacity-0 pointer-events-none" : undefined} aria-hidden={shown === "spread" || undefined}>
+
         <div
           ref={paperRef}
           data-paper={paper}
           data-view={shown}
           style={
-            shown === "pages"
-              ? { minHeight: pageLayout.pages * pageLayout.pageH }
-              : shown === "spread"
-                ? { width: SPREAD_PAGE, padding: SPREAD_PAD }
-                : undefined
+            shown === "pages" ? { minHeight: pageLayout.pages * pageLayout.pageH } : undefined
           }
           onClick={(e) => {
             const el = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]");
@@ -696,12 +620,8 @@ export function ScriptEditor({
               setPop({ id, top: (r.bottom - box.top) / z + 6, left: Math.max(8, Math.min((r.left - box.left) / z, box.width / z - 300)) });
             } else onCommentClick?.(id);
           }}
-          className={`script-paper script-print relative isolate transition-colors ${
-            shown === "spread"
-              ? "rounded-md"
-              : `mx-auto w-full border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] ${
-                  shown === "pages" ? "max-w-[794px] rounded-md px-6 sm:px-[72px] py-10 sm:py-[72px]" : "max-w-3xl rounded-2xl px-5 sm:px-14 py-8 sm:py-14"
-                }`
+          className={`script-paper script-print relative isolate transition-colors mx-auto w-full border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] ${
+            shown === "pages" ? "max-w-[794px] rounded-md px-6 sm:px-[72px] py-10 sm:py-[72px]" : "max-w-3xl rounded-2xl px-5 sm:px-14 py-8 sm:py-14"
           }`}
         >
           {/* Pages view: where each A4 sheet ends. Drawn behind the text. */}
@@ -843,7 +763,6 @@ export function ScriptEditor({
             </div>
           )}
         </div>
-        </div>
         <p className="no-print mx-auto max-w-3xl mt-3 px-1 text-[11.5px] text-ink-soft md:hidden">
           {words} words · about {spokenLength(words)}
         </p>
@@ -857,16 +776,13 @@ export function ScriptEditor({
   );
 }
 
-// Spread view: A4 at 96 dpi with 72px margins.
-const SPREAD_PAGE = 794;
-const SPREAD_PAGE_H = 1123;
-const SPREAD_PAD = 72;
-const SPREAD_BODY_H = SPREAD_PAGE_H - SPREAD_PAD * 2;
+
 
 // ---------------------------------------------------------------------------
 
 function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () => void; uploading: number }) {
   const [more, setMore] = useState(false);
+  const moreBtn = useRef<HTMLButtonElement>(null);
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -1014,18 +930,18 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
           </B>
         </span>
         <button
+          ref={moreBtn}
           type="button"
+          aria-expanded={more}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setMore(true)}
+          onClick={() => setMore((m) => !m)}
           className="sm:hidden h-9 px-2.5 rounded-lg text-[12.5px] font-bold text-ink-soft hover:text-ink hover:bg-surface-2"
         >
           More
         </button>
       </div>
-      {more && (
-        <div className="sm:hidden fixed inset-0 z-50" onClick={() => setMore(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface border-t border-line/15 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[modalin_.15s_var(--ease-out)]" onClick={(e) => e.stopPropagation()}>
+      <AnchoredMenu open={more} onClose={() => setMore(false)} anchor={moreBtn} label="Format">
+        <div className="p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-3">Format</div>
             <div className="grid grid-cols-6 gap-1.5 [&_button]:w-full [&_button]:h-11">
               <B label="Strikethrough" on={s!.strike} onClick={() => c().toggleStrike().run()}>
@@ -1063,12 +979,8 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
                 <RedoIcon className="w-4 h-4" />
               </B>
             </div>
-            <button type="button" onClick={() => setMore(false)} className="mt-3 w-full h-11 rounded-xl text-[14px] font-semibold text-ink-soft hover:bg-surface-2">
-              Done
-            </button>
-          </div>
         </div>
-      )}
+      </AnchoredMenu>
     </div>
   );
 }
@@ -1297,50 +1209,49 @@ function MobileMenu({
   onDocx,
   onPdf,
 }: {
-  view: "strip" | "pages" | "spread";
-  onView: (v: "strip" | "pages" | "spread") => void;
+  view: "strip" | "pages";
+  onView: (v: "strip" | "pages") => void;
   paper: "light" | "dark";
   onPaper: () => void;
   onDocx: () => void;
   onPdf: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
   const item = "w-full text-left px-4 h-11 text-[14px] font-semibold flex items-center justify-between hover:bg-surface-2";
+  const run = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
   return (
     <div className="sm:hidden">
-      <button type="button" onClick={() => setOpen(true)} aria-label="More" className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-label="More" aria-expanded={open} className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
         <MoreIcon className="w-5 h-5" />
       </button>
-      {open && (
-        <div className="fixed inset-0 z-50" onClick={() => setOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-surface border-t border-line/15 pb-[env(safe-area-inset-bottom)] animate-[modalin_.15s_var(--ease-out)]" onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">View</div>
-            {([
-              ["strip", "One long page"],
-              ["pages", "Pages"],
-            ] as const).map(([v, label]) => (
-              <button key={v} type="button" className={item} onClick={() => { onView(v); setOpen(false); }}>
-                {label}
-                {view === v && <CheckIcon className="w-4 h-4 text-amber" />}
-              </button>
-            ))}
-            <div className="h-px bg-line/10 my-1" />
-            <button type="button" className={item} onClick={() => { onPaper(); setOpen(false); }}>
-              {paper === "light" ? "Dark paper" : "Light paper"}
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="More">
+        <div className="py-1.5">
+          <div className="px-4 pt-1.5 pb-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">View</div>
+          {([
+            ["strip", "One long page"],
+            ["pages", "Pages"],
+          ] as const).map(([v, label]) => (
+            <button key={v} type="button" className={item} onClick={run(() => onView(v))}>
+              {label}
+              {view === v && <CheckIcon className="w-4 h-4 text-amber" />}
             </button>
-            <button type="button" className={item} onClick={() => { onDocx(); setOpen(false); }}>
-              Export as Word
-            </button>
-            <button type="button" className={item} onClick={() => { onPdf(); setOpen(false); }}>
-              Print / PDF
-            </button>
-            <button type="button" className={`${item} justify-center text-ink-soft`} onClick={() => setOpen(false)}>
-              Close
-            </button>
-          </div>
+          ))}
+          <div className="h-px bg-line/10 my-1" />
+          <button type="button" className={item} onClick={run(onPaper)}>
+            {paper === "light" ? "Dark paper" : "Light paper"}
+          </button>
+          <button type="button" className={item} onClick={run(onDocx)}>
+            Export as Word
+          </button>
+          <button type="button" className={item} onClick={run(onPdf)}>
+            Print / PDF
+          </button>
         </div>
-      )}
+      </AnchoredMenu>
     </div>
   );
 }

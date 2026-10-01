@@ -23,6 +23,7 @@ import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
 import { KindColorsForm } from "./kind-colors-form";
 import { TeamTabs } from "./team-tabs";
+import { MembersHeader } from "./invite-toggle";
 import { LongSettingsForm } from "./long-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
@@ -69,7 +70,11 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
   const [{ data: teamColors }, { data: longDefaults }, longPeople] = await Promise.all([
     supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle(),
-    supabase.from("teams").select("default_long_description, default_long_scripter_member_id").eq("id", currentTeam.id).maybeSingle(),
+    supabase
+      .from("teams")
+      .select("default_long_description, default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id")
+      .eq("id", currentTeam.id)
+      .maybeSingle(),
     userIsMaster ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
   ]);
 
@@ -140,32 +145,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
 
       {tab === "members" && (
         <div className="space-y-6">
-        {/* Members: cards on the left, inviting on the right */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
-          <section>
-            <div className="flex items-baseline gap-2 mb-3">
-              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Members</h2>
-              <span className="text-[12.5px] text-ink-faint">{memberRows.length}</span>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-            {memberRows.map((m) => (
-              <MemberManager
-                key={m.teamMemberId}
-                teamId={currentTeam.id}
-                member={m}
-                roleColors={roleColors}
-                isSelf={m.userId === currentUser?.id}
-                viewerIsOwner={viewerIsOwner}
-                readOnly={!userIsMaster}
-              />
-            ))}
-            </div>
-          </section>
-          {userIsMaster && (
-          <section className="rounded-2xl border border-line/15 bg-surface p-5 lg:sticky lg:top-20">
-            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Invite people</h2>
-            <p className="text-[12.5px] text-ink-soft mb-4">Find someone with a VPlanner account and invite them to this team.</p>
-            <div className="space-y-4">
+        {/* Members: one list; "Invite people" right in the header */}
+        <section>
+          <MembersHeader count={memberRows.length} canInvite={userIsMaster}>
               <PendingInvitesList
                 teamId={currentTeam.id}
                 invites={(pendingInvites ?? []).map((inv) => {
@@ -183,10 +165,21 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 })}
               />
               <InviteSearch teamId={currentTeam.id} />
-            </div>
-          </section>
-          )}
-        </div>
+          </MembersHeader>
+          <div className="rounded-2xl border border-line/15 bg-surface divide-y divide-line/10 overflow-hidden">
+            {memberRows.map((m) => (
+              <MemberManager
+                key={m.teamMemberId}
+                teamId={currentTeam.id}
+                member={m}
+                roleColors={roleColors}
+                isSelf={m.userId === currentUser?.id}
+                viewerIsOwner={viewerIsOwner}
+                readOnly={!userIsMaster}
+              />
+            ))}
+          </div>
+        </section>
         </div>
       )}
 
@@ -215,6 +208,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               teamId={currentTeam.id}
               description={(longDefaults?.default_long_description as string | undefined) ?? ""}
               scripter={(longDefaults?.default_long_scripter_member_id as string | null | undefined) ?? null}
+            defaults={{
+              researcher: (longDefaults?.default_long_researcher_id as string | null) ?? null,
+              filmer: (longDefaults?.default_long_filmer_id as string | null) ?? null,
+              editor: (longDefaults?.default_long_editor_id as string | null) ?? null,
+              packager: (longDefaults?.default_long_packager_id as string | null) ?? null,
+              publisher: (longDefaults?.default_long_publisher_id as string | null) ?? null,
+            }}
               people={longPeople}
             />
           </section>

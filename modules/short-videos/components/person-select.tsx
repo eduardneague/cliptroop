@@ -5,13 +5,16 @@ import type { RoleId } from "@/lib/permissions/roles";
 import type { TeamPerson } from "../lib/queries";
 import { PersonAvatar } from "./person-chip";
 
-export type PersonKind = "editor" | "reviewer" | "scheduler" | "scripter";
+export type PersonKind = "editor" | "reviewer" | "scheduler" | "scripter" | "researcher" | "filmer" | "packager";
 
 const ROLE_FOR: Record<PersonKind, RoleId[]> = {
   editor: ["editor", "master"], // masters can take on any job
   reviewer: ["master"],
   scheduler: ["publisher", "master"],
   scripter: ["scripter", "master"],
+  researcher: ["researcher", "master"],
+  filmer: ["filmer", "master"],
+  packager: ["packager", "master"],
 };
 
 const EMPTY: Record<PersonKind, string> = {
@@ -19,7 +22,11 @@ const EMPTY: Record<PersonKind, string> = {
   reviewer: "Any master",
   scheduler: "Any scheduler",
   scripter: "No default scripter",
+  researcher: "No researcher yet",
+  filmer: "No filmer yet",
+  packager: "No packager yet",
 };
+const GROUP: Partial<Record<PersonKind, string>> = { researcher: "Researchers", filmer: "Filmers", packager: "Packagers" };
 
 /** Build the option list for a role picker (shared with the table's editor cell). */
 export function personOptions(kind: PersonKind, people: TeamPerson[], currentId: string | null): SelectOption[] {
@@ -56,7 +63,9 @@ export function personOptions(kind: PersonKind, people: TeamPerson[], currentId:
             ? p.roles.includes("editor") ? "Editors" : "Masters"
             : kind === "scripter"
               ? p.roles.includes("scripter") ? "Scripters" : "Masters"
-              : p.roles.includes("publisher") ? "Schedulers" : "Masters"
+              : GROUP[kind]
+                ? p.roles.includes(ROLE_FOR[kind][0]) ? GROUP[kind]! : "Masters"
+                : p.roles.includes("publisher") ? "Schedulers" : "Masters"
       )
     ),
     ...others.map((p) => toOption(p, "Teammates")),
