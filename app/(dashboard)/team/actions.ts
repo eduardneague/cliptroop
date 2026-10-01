@@ -647,7 +647,11 @@ export async function updateLongSettings(
     })
     .eq("id", teamId)
     .select("id");
-  if (error || !data?.length) return { error: "Only the master can change these settings." };
+  if (error?.code === "42703" || error?.code === "PGRST204") {
+    return { error: "The database is missing the newest update: run migration 0052 in Supabase, then save again." };
+  }
+  if (error) return { error: `Couldn't save: ${error.message}` };
+  if (!data?.length) return { error: "Only the master can change these settings." };
   revalidatePath("/team");
   return { success: true };
 }

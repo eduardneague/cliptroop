@@ -85,8 +85,10 @@ export function DatePicker({
     if (disabled) return;
     const t = iso(new Date());
     setToday(t);
-    setCursor(value ?? t);
-    setViewMonth((value ?? t).slice(0, 7));
+    // An empty or invalid value means "no date yet": open on today.
+    const v = value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : t;
+    setCursor(v);
+    setViewMonth(v.slice(0, 7));
     place();
     setOpen(true);
   }

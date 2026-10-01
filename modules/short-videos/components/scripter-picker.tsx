@@ -4,7 +4,7 @@ import { Select } from "@/components/ui/select";
 import { CloseIcon } from "@/components/ui/icons";
 import type { TeamPerson } from "../lib/queries";
 import { PersonAvatar } from "./person-chip";
-import { personOptions } from "./person-select";
+import { type PersonKind, personOptions } from "./person-select";
 
 /**
  * The short's scripters as removable chips, plus "+ Add scripter" (people
@@ -18,6 +18,11 @@ export function ScripterPicker({
   onRemove,
   disabled,
   size = "md",
+  kind = "scripter",
+  noun,
+  readOnly = false,
+  max,
+  emptyHint,
 }: {
   people: TeamPerson[];
   value: string[];
@@ -25,9 +30,20 @@ export function ScripterPicker({
   onRemove: (memberId: string) => void;
   disabled?: boolean;
   size?: "sm" | "md";
+  /** Which role this picks (filters the list); the same picker everywhere. */
+  kind?: PersonKind;
+  /** "scripter", "editor"… (defaults from the kind). */
+  noun?: string;
+  /** Show the chips only (no add / remove). */
+  readOnly?: boolean;
+  /** At most this many (1 = a single person: remove, then add someone else). */
+  max?: number;
+  /** Shown next to the add button when nobody is picked (e.g. "Any master"). */
+  emptyHint?: string;
 }) {
+  const word = noun ?? (kind === "scheduler" ? "scheduler" : kind === "reviewer" ? "reviewer" : kind);
   const chosen = value.map((id) => people.find((p) => p.memberId === id)).filter(Boolean) as TeamPerson[];
-  const options = personOptions("scripter", people, null).filter((o) => !value.includes(o.value));
+  const options = personOptions(kind, people, null).filter((o) => !value.includes(o.value));
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -38,30 +54,31 @@ export function ScripterPicker({
         >
           <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} />
           <span className={`${size === "sm" ? "text-[12px]" : "text-[13px]"} font-semibold`}>{p.name}</span>
-          <button
+          {!readOnly && <button
             type="button"
             disabled={disabled}
             onClick={() => onRemove(p.memberId)}
-            aria-label={`Remove ${p.name} as a scripter`}
+            aria-label={`Remove ${p.name} as ${word}`}
             className="w-6 h-6 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-40"
           >
             <CloseIcon className="w-3 h-3" />
-          </button>
+          </button>}
         </span>
       ))}
-      {options.length > 0 && (
+      {!readOnly && options.length > 0 && (max === undefined || chosen.length < max) && (
         <Select
           variant="pill"
           value={null}
           disabled={disabled}
           onChange={(m) => m && onAdd(m)}
           options={options}
-          renderValue={() => <span>+ Add scripter</span>}
-          ariaLabel="Add a scripter"
+          renderValue={() => <span>+ Add {word}</span>}
+          ariaLabel={`Add a ${word}`}
         />
       )}
-      {chosen.length === 0 && options.length === 0 && (
-        <span className="text-[12.5px] text-ink-soft">Nobody on the team has the Scripter role yet.</span>
+      {chosen.length === 0 && emptyHint && !readOnly && options.length > 0 && <span className="text-[12px] text-ink-faint">{emptyHint}</span>}
+      {chosen.length === 0 && (readOnly || options.length === 0) && (
+        <span className="text-[12.5px] text-ink-soft">{readOnly ? "Nobody yet." : `Nobody on the team can be a ${word} yet.`}</span>
       )}
     </div>
   );

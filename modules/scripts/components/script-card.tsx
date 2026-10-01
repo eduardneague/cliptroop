@@ -12,6 +12,7 @@ export function ScriptCard({
   canEdit,
   prominent,
   scripters = [],
+  showScripters = true,
 }: {
   href: string;
   script: ScriptRow | null;
@@ -19,6 +20,8 @@ export function ScriptCard({
   /** Script stage: make it the obvious next thing. */
   prominent: boolean;
   scripters?: { memberId: string; name: string; avatarUrl: string | null; color: string }[];
+  /** Hide the Scripters line when the page already shows a scripters control. */
+  showScripters?: boolean;
 }) {
   const hasText = !!script && script.wordCount > 0;
   const preview = script?.text.replace(/\s+/g, " ").trim().slice(0, 220) ?? "";
@@ -45,6 +48,7 @@ export function ScriptCard({
         <p className="text-[13.5px] text-ink-soft">{canEdit ? "Nothing written yet." : "No script written yet."}</p>
       )}
 
+      {showScripters && (
       <div className="flex items-center gap-2 mt-3 text-[12px] text-ink-soft">
         <span className="font-semibold">Scripters</span>
         {scripters.length === 0 ? (
@@ -60,6 +64,7 @@ export function ScriptCard({
           </span>
         )}
       </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
         {script?.updatedBy && hasText ? (

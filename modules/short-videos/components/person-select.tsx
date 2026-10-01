@@ -1,5 +1,6 @@
 "use client";
 
+import { ScripterPicker } from "./scripter-picker";
 import { Select, type SelectOption } from "@/components/ui/select";
 import type { RoleId } from "@/lib/permissions/roles";
 import type { TeamPerson } from "../lib/queries";
@@ -78,6 +79,10 @@ export function personOptions(kind: PersonKind, people: TeamPerson[], currentId:
  *   reviewer  → Masters first, then anyone on the team
  * Whoever is currently set is always listed, even if their roles changed.
  */
+/**
+ * Pick ONE person for a role: the same chip component as every other
+ * assignment in the app (avatar chip with ×, or "+ Add …" when empty).
+ */
 export function PersonSelect({
   kind,
   people,
@@ -92,13 +97,15 @@ export function PersonSelect({
   disabled?: boolean;
 }) {
   return (
-    <Select
-      value={value}
-      onChange={onChange}
-      options={personOptions(kind, people, value)}
-      emptyOption={EMPTY[kind]}
+    <ScripterPicker
+      people={people}
+      value={value ? [value] : []}
+      kind={kind}
+      max={1}
       disabled={disabled}
-      ariaLabel={kind[0].toUpperCase() + kind.slice(1)}
+      emptyHint={kind === "reviewer" ? "Any master" : kind === "scheduler" ? "Any scheduler" : undefined}
+      onAdd={(id) => onChange(id)}
+      onRemove={() => onChange(null)}
     />
   );
 }

@@ -641,13 +641,17 @@ export function ScriptEditor({
             #{number} {title}
           </h1>
           {canEdit && empty && (
-            <div className="no-print mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-dashed px-4 py-3 script-soft-border">
-              <DocumentIcon className="w-5 h-5 script-soft flex-shrink-0" />
-              <p className="text-[13px] script-soft flex-1 min-w-[180px]">Start from a Hook, Body and Call to action outline?</p>
+            <div className="no-print mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-dashed px-4 py-3.5 script-soft-border">
+              {/* Phones: the text on its own line, the buttons underneath. */}
+              <div className="flex items-start sm:items-center gap-2.5 flex-1 min-w-0">
+                <DocumentIcon className="w-5 h-5 script-soft flex-shrink-0 mt-0.5 sm:mt-0" />
+                <p className="text-[13px] script-soft leading-snug">Start from a Hook, Body and Call to action outline?</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => editor?.commands.setContent(SCRIPT_TEMPLATE, { emitUpdate: true })}
-                className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px]"
+                className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] whitespace-nowrap"
               >
                 Use template
               </button>
@@ -672,6 +676,7 @@ export function ScriptEditor({
                   ))}
                 </select>
               )}
+              </div>
             </div>
           )}
           <div ref={contentRef}>

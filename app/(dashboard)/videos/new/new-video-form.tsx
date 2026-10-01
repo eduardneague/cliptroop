@@ -88,7 +88,7 @@ export function NewVideoForm({
                   onClick={() => setPicked(i)}
                   aria-pressed={picked === i}
                   title="Use as the main title"
-                  className={`flex-shrink-0 rounded-lg px-2.5 h-11 text-[12px] font-bold transition-colors ${picked === i ? "bg-amber text-white" : "border border-line/20 text-ink-soft hover:text-ink"}`}
+                  className={`flex-shrink-0 w-14 h-11 rounded-lg text-[12px] font-bold transition-colors ${picked === i ? "bg-amber text-white" : "border border-line/20 text-ink-soft hover:text-ink"}`}
                 >
                   {picked === i ? "Main" : i + 1}
                 </button>
@@ -165,7 +165,7 @@ export function NewVideoForm({
             <span className={label}>Expected date (optional)</span>
             <input type="hidden" name="expected_date" value={date ?? ""} />
             <div className="flex items-center gap-2">
-              <DatePicker value={date ?? ""} onChange={setDate} ariaLabel="Expected date" triggerClassName={`${field} text-left inline-flex items-center w-auto px-4`}>
+              <DatePicker value={date} onChange={setDate} ariaLabel="Expected date" triggerClassName={`${field} text-left inline-flex items-center w-auto px-4`}>
                 {date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Pick a date"}
               </DatePicker>
               {date && (

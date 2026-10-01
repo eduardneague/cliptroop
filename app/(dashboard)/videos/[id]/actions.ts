@@ -662,6 +662,9 @@ export async function setLongScripter(projectId: string, memberId: string, add: 
     ? await supabase.from("long_video_scripters").insert({ project_id: projectId, team_member_id: memberId })
     : await supabase.from("long_video_scripters").delete().eq("project_id", projectId).eq("team_member_id", memberId);
   if (error && error.code !== "23505") return { error: "Only the master can change the scripters." };
+  // The scripters are also the Script step's people (tagging notifies them).
+  if (add) await assignMember(projectId, "script", memberId);
+  else await supabase.from("project_assignees").delete().eq("project_id", projectId).eq("stage", "script").eq("team_member_id", memberId);
   revalidatePath(`/videos/${projectId}`);
   revalidatePath(`/videos/${projectId}/script`);
   return {};

@@ -11,7 +11,8 @@ import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { buildMentionCatalog } from "@/lib/mentions";
 import { CheckIcon, ArrowLeftIcon } from "@/components/ui/icons";
 import { AdvanceStageButton, RegressStageButton } from "./advance-button";
-import { AssigneeRow } from "./assignee-row";
+import { AssigneeRow, ScriptersRow } from "./assignee-row";
+import { LongVideoSettings } from "./settings-dialog";
 import { TitleList } from "./title-list";
 import { ThumbnailUploader } from "./thumbnail-uploader";
 import { InlineEditable } from "./inline-editable";
@@ -260,7 +261,26 @@ export default async function ProjectDetailPage({
           {project.title}
         </h1>
         {userIsMaster && (
-          <div className="flex-shrink-0 pt-0.5">
+          <div className="flex-shrink-0 pt-0.5 flex items-center gap-1">
+            <LongVideoSettings
+              projectId={id}
+              teamId={teamId}
+              videoType={project.video_type ?? []}
+              theme={project.theme ?? ""}
+              subtheme={project.subtheme}
+              expectedDate={project.expected_date}
+              platforms={(project.platforms as string[] | null) ?? ["youtube"]}
+              people={people}
+              scripterIds={scripterIds}
+              assignees={Object.fromEntries(
+                ["research", "film", "edit", "package", "publish"].map((st) => [
+                  st,
+                  (assigneeRows ?? [])
+                    .filter((a) => a.stage === st)
+                    .map((a) => ({ rowId: a.id, teamMemberId: a.team_member_id, name: membersById.get(a.team_member_id)?.name ?? "Unknown", color: membersById.get(a.team_member_id)?.color ?? "#999" })),
+                ])
+              )}
+            />
             <DeleteProjectButton projectId={id} teamId={teamId} projectTitle={project.title} />
           </div>
         )}
@@ -319,23 +339,43 @@ export default async function ProjectDetailPage({
         {/* Main tab content */}
         <div className="rounded-xl border border-line/10 bg-surface p-6">
           {tab === "ideate" ? (
-            <div className="space-y-5">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Titles
+            <div className="space-y-4">
+              {/* The idea template, at a glance */}
+              {(() => {
+                const checks = [
+                  { label: "2+ titles", ok: (titles ?? []).length >= 2 },
+                  { label: "Hook", ok: !!project.hook?.trim() },
+                  { label: "2–5 thumbnail sketches", ok: thumbnails.length >= 2 },
+                  { label: "Budget", ok: !!project.budget_notes?.trim() },
+                ];
+                const done = checks.filter((c) => c.ok).length;
+                return (
+                  <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 flex items-center gap-3 flex-wrap">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Idea checklist</span>
+                    {checks.map((c) => (
+                      <span
+                        key={c.label}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[12px] font-semibold ${c.ok ? "bg-green/12 text-green" : "bg-surface-2 text-ink-soft"}`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${c.ok ? "bg-green text-white" : "border border-line/30"}`}>{c.ok ? "✓" : ""}</span>
+                        {c.label}
+                      </span>
+                    ))}
+                    <span className="ml-auto text-[12px] font-bold tabular-nums text-ink-soft">{done}/{checks.length}</span>
+                  </div>
+                );
+              })()}
+
+              <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Titles</h3>
+                  <span className="text-[12px] text-ink-faint">{(titles ?? []).length} option{(titles ?? []).length === 1 ? "" : "s"} · ★ marks the main one</span>
                 </div>
-                <TitleList
-                  projectId={id}
-                  teamId={teamId}
-                  titles={titles ?? []}
-                  canPick={userIsMaster}
-                  canEditText={canActOnStage(membership, "ideate")}
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Hook
-                </div>
+                <TitleList projectId={id} teamId={teamId} titles={titles ?? []} canPick={userIsMaster} canEditText={canActOnStage(membership, "ideate")} />
+              </section>
+
+              <section className="rounded-2xl border border-amber/25 bg-amber/[0.05] p-4 sm:p-5">
+                <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-amber mb-2.5">Hook</h3>
                 <InlineEditable
                   projectId={id}
                   teamId={teamId}
@@ -347,50 +387,37 @@ export default async function ProjectDetailPage({
                   lastEditedBy={updatedByName}
                   emphasize
                 />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Notes
+              </section>
+
+              <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Thumbnail sketches</h3>
+                  <span className={`text-[12px] font-semibold ${thumbnails.length >= 2 && thumbnails.length <= 5 ? "text-green" : "text-ink-faint"}`}>{thumbnails.length} of 2–5</span>
                 </div>
-                <InlineEditable
-                  projectId={id}
-                  teamId={teamId}
-                  field="notes"
-                  value={project.notes}
-                  canEdit={canActOnStage(membership, "ideate")}
-                  placeholder="Add a note (optional)"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Budget needed
-                </div>
-                <InlineEditable
-                  projectId={id}
-                  teamId={teamId}
-                  field="budget_notes"
-                  value={project.budget_notes}
-                  canEdit={canActOnStage(membership, "ideate")}
-                  placeholder="Add a rough budget estimate"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Thumbnail sketches
-                </div>
-                <ThumbnailUploader
-                  projectId={id}
-                  thumbnails={thumbnails}
-                  canEdit={canActOnStage(membership, "ideate")}
-                />
+                <ThumbnailUploader projectId={id} thumbnails={thumbnails} canEdit={canActOnStage(membership, "ideate")} />
+              </section>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-2.5">Budget</h3>
+                  <InlineEditable projectId={id} teamId={teamId} field="budget_notes" value={project.budget_notes} canEdit={canActOnStage(membership, "ideate")} placeholder="A rough estimate, links to what to buy…" />
+                </section>
+                <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-2.5">Notes</h3>
+                  <InlineEditable projectId={id} teamId={teamId} field="notes" value={project.notes} canEdit={canActOnStage(membership, "ideate")} placeholder="Anything else (optional)" />
+                </section>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
               {tab !== "done" && (
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">Assigned · {STAGE_LABELS[tab]}</div>
-                  <AssigneeRow projectId={id} stage={tab} isMaster={userIsMaster} assignees={assigneesForTab} eligible={eligibleForTab} />
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">{tab === "script" ? "Scripters" : `People · ${STAGE_LABELS[tab]}`}</div>
+                  {tab === "script" ? (
+                    <ScriptersRow projectId={id} people={people} scripterIds={scripterIds} isMaster={userIsMaster} />
+                  ) : (
+                    <AssigneeRow projectId={id} stage={tab} isMaster={userIsMaster} assignees={assigneesForTab} people={people} />
+                  )}
                 </div>
               )}
               {tab === "research" && (
@@ -413,11 +440,8 @@ export default async function ProjectDetailPage({
                     script={script}
                     canEdit={userIsMaster || (!!membership && scripterIds.includes(membership.teamMemberId))}
                     prominent={project.stage === "script"}
-                    scripters={people.filter((p) => scripterIds.includes(p.memberId))}
+                    showScripters={false}
                   />
-                  {userIsMaster && (
-                    <ScriptersButton shortId={id} number={project.entry_number} people={people} scripterIds={scripterIds} canManage action={setLongScripter} />
-                  )}
                 </div>
               )}
               {tab === "film" && (
@@ -462,16 +486,16 @@ export default async function ProjectDetailPage({
               {tab === "package" && (
                 <Link
                   href={`/videos/${id}/studio`}
-                  className="group flex items-center gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
+                  className="group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
                 >
-                  <span className="flex gap-1.5 flex-shrink-0">
+                  <span className="flex gap-1.5 flex-shrink-0 [&>img]:flex-1 sm:[&>img]:flex-none">
                     {cardUrls.length ? (
                       cardUrls.map((u) => (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img key={u} src={u} alt="" className={`${cardUrls.length > 1 ? "w-24" : "w-40"} aspect-video rounded-lg object-cover bg-surface-2`} />
                       ))
                     ) : (
-                      <span className="w-40 aspect-video rounded-lg bg-surface-2 flex items-center justify-center text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
+                      <span className="w-full sm:w-40 aspect-video rounded-lg bg-surface-2 flex items-center justify-center text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -485,7 +509,7 @@ export default async function ProjectDetailPage({
                         : "Preview them on YouTube: home, search, mobile, TV…"}
                     </span>
                   </span>
-                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open</span>
+                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center justify-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open Thumbnail Studio</span>
                 </Link>
               )}
               {tab === "package" && (
