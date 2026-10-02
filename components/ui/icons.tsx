@@ -609,3 +609,109 @@ export function PostingIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** Six dots: drag to move. */
+export function GripIcon(p: IconProps) {
+  return (
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <circle cx="9" cy="6" r="1.6" />
+      <circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" />
+      <circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" />
+      <circle cx="15" cy="18" r="1.6" />
+    </Svg>
+  );
+}
+
+/** A flag: priority. */
+export function FlagIcon({ filled, ...p }: IconProps & { filled?: boolean }) {
+  return (
+    <Svg {...p} fill={filled ? "currentColor" : "none"}>
+      <path d="M5 21V4.5M5 4.5h11.5l-2 4 2 4H5" />
+    </Svg>
+  );
+}
+
+export function ChevronLeftIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m15 6-6 6 6 6" />
+    </Svg>
+  );
+}
+
+/** Speaker: sounds on (waves) or off (a cross). */
+export function SoundIcon({ off, ...p }: IconProps & { off?: boolean }) {
+  return (
+    <Svg {...p}>
+      <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z" />
+      {off ? <path d="m16 9.5 5 5M21 9.5l-5 5" /> : <path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />}
+    </Svg>
+  );
+}
+
+/** Four tiles filling a square: "fill empty space". */
+export function FillIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="3.5" width="9" height="7" rx="1.5" />
+      <rect x="14.5" y="3.5" width="6" height="7" rx="1.5" />
+      <rect x="3.5" y="12.5" width="5" height="8" rx="1.5" />
+      <rect x="10.5" y="12.5" width="10" height="8" rx="1.5" />
+    </Svg>
+  );
+}
+
+/** Two short diagonal strokes in a corner: drag to resize. */
+export function ResizeCornerIcon(p: IconProps) {
+  return (
+    <Svg {...p} strokeWidth={p.strokeWidth ?? 2}>
+      <path d="M19 11 11 19M19 16l-3 3" />
+    </Svg>
+  );
+}
+
+/** Meetings: two speech bubbles (a call / a chat). */
+export function MeetingIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 5.5h10a1.5 1.5 0 0 1 1.5 1.5v5.5A1.5 1.5 0 0 1 14 14H9l-3.5 3v-3H4a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 4 5.5Z" />
+      <path d="M18 9h2a1.5 1.5 0 0 1 1.5 1.5V16a1.5 1.5 0 0 1-1.5 1.5h-1.5V20L15 17.5h-3.5" />
+    </Svg>
+  );
+}
+
+/** Analytics: three rising bars on a baseline. */
+export function AnalyticsIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 20h16" />
+      <rect x="5.5" y="12" width="3.5" height="5.5" rx="1" />
+      <rect x="10.25" y="8" width="3.5" height="9.5" rx="1" />
+      <rect x="15" y="4.5" width="3.5" height="13" rx="1" />
+    </Svg>
+  );
+}
+
+/** "More" in the phone bar: a 2×2 grid of rounded squares. */
+export function AppsIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" />
+    </Svg>
+  );
+}
+
+/** Log out: a door with an arrow leaving. */
+export function LogoutIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14" />
+      <path d="M10.5 12h10M17 8.5l3.5 3.5-3.5 3.5" />
+    </Svg>
+  );
+}

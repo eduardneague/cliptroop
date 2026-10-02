@@ -17,6 +17,7 @@ import type { Person, ReviewNote, VideoVersion } from "../lib/queries";
 import { ReviewPlayer, type PlayerHandle } from "./player";
 import { VersionUploader } from "./uploader";
 import { CompareView } from "./compare";
+import { sounds } from "@/lib/sounds";
 
 type Filter = "open" | "all";
 type Pending = { tempId: string; versionId: string; parentId: string | null; body: string; time: number | null };
@@ -572,7 +573,10 @@ function Composer({
     setBusy(true);
     const ok = await onPost(draft, atTime ? moment : null);
     setBusy(false);
-    if (ok) setDraft("");
+    if (ok) {
+      setDraft("");
+      sounds.send();
+    }
   }
 
   return (
@@ -796,6 +800,7 @@ function NoteThread({
     const ok = await onReply(note.id, reply);
     setSending(false);
     if (ok) {
+      sounds.send();
       setReply("");
       setReplying(false);
     }

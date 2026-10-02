@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { readLayout } from "./layout";
 
 type R<T = object> = ({ error?: undefined } & T) | { error: string };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,10 +70,12 @@ export async function reorderTodos(ids: string[]): Promise<R> {
 
 /** Your dashboard: which widgets, in what order, how big, their settings. */
 export async function saveLayout(layout: unknown): Promise<R> {
-  const l = layout as { v?: number; widgets?: unknown[] };
-  if (!l || l.v !== 1 || !Array.isArray(l.widgets) || l.widgets.length > 40 || JSON.stringify(l).length > 20_000) {
+  const raw = layout as { v?: number; widgets?: unknown[] };
+  if (!raw || raw.v !== 2 || !Array.isArray(raw.widgets) || raw.widgets.length > 40 || JSON.stringify(raw).length > 20_000) {
     return { error: "That layout couldn't be saved." };
   }
+  // Store only the cleaned version (known widgets, valid places and sizes).
+  const l = readLayout(raw);
   const supabase = await createClient();
   const {
     data: { user },

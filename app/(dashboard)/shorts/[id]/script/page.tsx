@@ -11,6 +11,7 @@ import { ScriptersButton } from "@/modules/short-videos/components/scripters-but
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
+import { mentionPeople } from "@/modules/scripts/lib/mention-people";
 
 // Always fresh: documents change while you work (never show a stale copy).
 export const dynamic = "force-dynamic";
@@ -59,6 +60,16 @@ export default async function ShortScriptPage({
   const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, short.teamId), getRoleColors(supabase, short.teamId)]);
   if (!doc) notFound();
 
+  // Who does what on this short (for @mention suggestions).
+  const jobs: Record<string, string[]> = {};
+  const job = (memberId: string | undefined | null, label: string) => {
+    if (memberId) jobs[memberId] = [...(jobs[memberId] ?? []), label];
+  };
+  short.scripterIds.forEach((m) => job(m, "Scripter"));
+  job(short.editor?.memberId, "Editor");
+  job(short.reviewer?.memberId, "Reviewer");
+  job(short.scheduler?.memberId, "Scheduler");
+
   return (
     <ScriptWorkspace
       owner={{ short: id }}
@@ -69,6 +80,7 @@ export default async function ShortScriptPage({
       side={side}
       comments={comments}
       roleColors={roleColors}
+      people={mentionPeople(people, jobs)}
       title={short.title}
       number={short.number}
       backHref={`/shorts/${id}`}

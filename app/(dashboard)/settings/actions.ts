@@ -86,6 +86,18 @@ export async function updateTeamsVisibility(visible: boolean) {
   return { success: true };
 }
 
+/** Small UI sounds for this account (Settings → Preferences). */
+export async function setSounds(on: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { error } = await supabase.from("profiles").update({ sounds_enabled: !!on }).eq("id", user.id);
+  if (error) return { error: "Couldn't save that setting. Try again." };
+  return { success: true };
+}
+
 /** Animations for this account: null = match the device, true = on, false = off. */
 export async function setAnimations(enabled: boolean | null) {
   const supabase = await createClient();

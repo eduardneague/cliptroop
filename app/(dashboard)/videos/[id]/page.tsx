@@ -77,7 +77,6 @@ export default async function ProjectDetailPage({
     { data: comments },
     { data: thumbnailRows },
     { data: attachmentRows },
-    { data: otherDated },
     { data: postRows },
     { data: scripterRows },
     { data: teamDefaults },
@@ -117,13 +116,6 @@ export default async function ProjectDetailPage({
       .select("id, comment_id, file_name, file_path, file_size, mime_type, project_comments!inner(project_id, stage)")
       .eq("project_comments.project_id", id)
       .eq("project_comments.stage", tab),
-    // Other long videos' dates — dots in the date picker.
-    supabase
-      .from("long_video_projects")
-      .select("expected_date")
-      .eq("team_id", teamId)
-      .neq("id", id)
-      .not("expected_date", "is", null),
     supabase.from("long_video_posts").select("platform, url, posted_at, posted_by").eq("project_id", id),
     supabase.from("long_video_scripters").select("team_member_id").eq("project_id", id),
     supabase.from("teams").select("default_long_description").eq("id", teamId).maybeSingle(),
@@ -303,7 +295,6 @@ export default async function ProjectDetailPage({
           teamId={teamId}
           date={project.expected_date}
           canEdit={canActOnStage(membership, "ideate")}
-          otherDates={(otherDated ?? []).map((r) => r.expected_date as string)}
         />
       </div>
 

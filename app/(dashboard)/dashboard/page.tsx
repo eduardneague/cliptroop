@@ -6,6 +6,7 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { listDone, listMyTasks, listPostsAroundToday, listTeamCards, listTodos, listUpcoming } from "@/modules/dashboard/lib/queries";
 import { readLayout } from "@/modules/dashboard/layout";
 import { DashboardStudio } from "@/modules/dashboard/components/studio";
+import { listMeetings } from "@/modules/meetings/lib/queries";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -40,7 +41,7 @@ export default async function DashboardPage() {
   const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
   const t = new Date();
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts] = await Promise.all([
+  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings] = await Promise.all([
     listMyTasks(currentTeam.id),
     listDone(since),
     listTodos(),
@@ -48,6 +49,7 @@ export default async function DashboardPage() {
     supabase.from("profiles").select("username, full_name, dashboard_layout").eq("id", user?.id ?? "").maybeSingle(),
     listUpcoming(currentTeam.id, today),
     listPostsAroundToday(currentTeam.id),
+    listMeetings(currentTeam.id, { from: new Date(Date.now() - 12 * 3_600_000).toISOString(), limit: 5 }),
   ]);
   const name = ((profile?.full_name as string | null) || (profile?.username as string | null) || "there").split(" ")[0];
 
@@ -55,7 +57,7 @@ export default async function DashboardPage() {
     <DashboardStudio
       name={name}
       initial={readLayout(profile?.dashboard_layout)}
-      data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts }}
+      data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts, meetings }}
     />
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Brand } from "@/components/ui/clip-logo";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -40,7 +41,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-2xl border border-line/10 bg-surface p-8 shadow-sm">
-        <div className="text-sm font-bold tracking-wide text-amber mb-6">VPlanner</div>
+        <Brand className="mb-6" />
         <h1 className="font-display text-2xl font-semibold mb-2">Set a new password</h1>
         <p className="text-sm text-ink-soft mb-7">
           Choose a new password for your account.

@@ -14,6 +14,7 @@ import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { DayLimitControl } from "@/modules/short-videos/components/day-limit-control";
 import { moveShortAuto, moveShortInQueue, setShortDayLimit, swapShorts, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
 import { updateExpectedDate } from "@/app/(dashboard)/videos/[id]/actions";
+import { sounds } from "@/lib/sounds";
 
 export type CalItem = {
   kind: "short" | "long";
@@ -37,6 +38,8 @@ export type CalItem = {
   thumb?: string | null;
   assignees?: { name: string; avatarUrl: string | null; color: string; stage: string }[];
 };
+/** A meeting on the calendar (shown on the viewer's own local day). */
+export type CalMeeting = { id: string; title: string; at: string; durationMin: number; location: string; cancelled: boolean };
 type View = "month" | "week" | "agenda";
 type Capacity = { perDay: number; weekends: boolean; limits: Record<string, number> };
 
@@ -78,8 +81,10 @@ export function CalendarView({
   canManage,
   isMaster,
   capacity,
+  meetings = [],
 }: {
   items: CalItem[];
+  meetings?: CalMeeting[];
   focus: string;
   view: View | null;
   teamId: string;
@@ -101,6 +106,19 @@ export function CalendarView({
 
   const [showShorts, setShowShorts] = useState(true);
   const [showLong, setShowLong] = useState(true);
+  const [showMeetings, setShowMeetings] = useState(true);
+  // Meetings go on the viewer's own local day: worked out in the browser.
+  const [meetingDays, setMeetingDays] = useState<Map<string, CalMeeting[]>>(new Map());
+  useEffect(() => {
+    const m = new Map<string, CalMeeting[]>();
+    const day = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+    for (const x of meetings) m.set(day(x.at), [...(m.get(day(x.at)) ?? []), x]);
+    setMeetingDays(m);
+  }, [meetings]);
+  const meetingsOn = (d: string) => (showMeetings ? meetingDays.get(d) ?? [] : []);
   const [hidePosted, setHidePosted] = useState(false);
   const visible = useMemo(
     () => items.filter((i) => (i.kind === "short" ? showShorts : showLong) && !(hidePosted && i.done)),
@@ -231,6 +249,7 @@ export function CalendarView({
     }
     e.dataTransfer.setData("text/vplanner-id", it.id);
     e.dataTransfer.effectAllowed = "move";
+    sounds.lift();
     // Let the browser take its drag snapshot before the card starts sliding.
     requestAnimationFrame(() => setDrag(it));
   };
@@ -267,6 +286,7 @@ export function CalendarView({
             e.stopPropagation();
             const it = drag;
             endDrag();
+            sounds.drop();
             askSwap(it, target);
           },
         }
@@ -326,6 +346,7 @@ export function CalendarView({
             const target = overItem ? items.find((x) => x.id === overItem) : null;
             endDrag();
             if (!it) return;
+            sounds.drop();
             if (target && it.date === day && it.kind === "short" && target.kind === "short") askReorder(it, target);
             else askMove(it, day);
           },
@@ -344,7 +365,10 @@ export function CalendarView({
             e.preventDefault();
             setDragOver(null);
             const it = dragged(e);
-            if (it) askMove(it, day);
+            if (it) {
+              sounds.drop();
+              askMove(it, day);
+            }
           },
         }
       : {};
@@ -459,6 +483,7 @@ export function CalendarView({
       <div className="flex items-center gap-2 flex-wrap text-[13px]">
         <Filter on={showShorts} set={setShowShorts} icon={<KindIcon kind="short" className="w-3.5 h-3.5" />} tone="short">Shorts</Filter>
         <Filter on={showLong} set={setShowLong} icon={<KindIcon kind="long" className="w-3.5 h-3.5" />} tone="long">Long videos</Filter>
+        <Filter on={showMeetings} set={setShowMeetings} icon={<span className="w-2.5 h-2.5 rounded-full bg-violet" />} tone="meeting">Meetings</Filter>
         <Filter on={hidePosted} set={setHidePosted}>Hide posted</Filter>
         {view === "month" && (
           <Filter on={onlyMonth} set={setOnlyMonth}>
@@ -473,9 +498,9 @@ export function CalendarView({
           <div className="grid grid-cols-7">
             {Array.from({ length: 42 }, (_, i) => (
               <div key={i} className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-2 border-line/15 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""}`}>
-                <div className="w-7 h-7 rounded-full bg-surface-2 animate-pulse" />
-                {i % 3 === 0 && <div className="hidden sm:block mt-2 h-7 rounded-lg bg-surface-2 animate-pulse" style={{ animationDelay: `${(i % 7) * 60}ms` }} />}
-                {i % 5 === 0 && <div className="hidden sm:block mt-1 h-7 w-3/4 rounded-lg bg-surface-2 animate-pulse" style={{ animationDelay: `${(i % 7) * 60 + 80}ms` }} />}
+                <div className="skeleton w-7 h-7 rounded-full" />
+                {i % 3 === 0 && <div className="skeleton hidden sm:block mt-2 h-7 rounded-lg" />}
+                {i % 5 === 0 && <div className="skeleton hidden sm:block mt-1 h-7 w-3/4 rounded-lg" />}
               </div>
             ))}
           </div>
@@ -513,12 +538,18 @@ export function CalendarView({
                   <div className="mb-1.5">{dayHeader(day)}</div>
                   {/* Phones: just markers; the day's list shows below the grid. */}
                   <div className="sm:hidden flex items-center justify-center gap-0.5 min-h-[8px]">
+                    {meetingsOn(day).slice(0, 1).map((m) => (
+                      <span key={m.id} className={`w-1.5 h-1.5 rounded-full bg-violet ${m.cancelled ? "opacity-40" : ""}`} />
+                    ))}
                     {list.slice(0, 3).map((it) => (
                       <span key={it.id} className={`w-1.5 h-1.5 rounded-[1.5px] ${it.done ? "opacity-40" : ""} ${it.kind === "short" ? "bg-short" : "bg-long"}`} />
                     ))}
                     {list.length > 3 && <span className="text-[9px] font-bold text-ink-soft leading-none">+</span>}
                   </div>
                   <div className="hidden sm:block relative space-y-1" {...listDrop(day)}>
+                    {meetingsOn(day).slice(0, 2).map((m) => (
+                      <MeetingChip key={m.id} m={m} />
+                    ))}
                     {list.slice(0, 3).map((it) => chip(it, "sm"))}
                     {list.length > 3 && (
                       <button type="button" onClick={() => setDayOpen(day)} className="w-full text-left px-2 py-0.5 text-[12px] font-bold text-ink-soft hover:text-ink">
@@ -548,8 +579,11 @@ export function CalendarView({
                   {day >= today && (cap.limit > 0 || cap.count > 0) && <CapacityDots count={cap.count} limit={cap.limit} label />}
                 </div>
                 <div className="p-2.5 space-y-2">
+                  {meetingsOn(day).map((m) => (
+                    <MeetingChip key={m.id} m={m} size="lg" />
+                  ))}
                   {list.map((it) => chip(it, "lg", 8))}
-                  {!list.length && <p className="px-1.5 py-2 text-[13.5px] text-ink-soft">Nothing planned.</p>}
+                  {!list.length && !meetingsOn(day).length && <p className="px-1.5 py-2 text-[13.5px] text-ink-soft">Nothing planned.</p>}
                 </div>
                 {canManage && day >= today && (cap.limit > 0 || cap.count > 0) && (
                   <div className="px-4 pb-3">
@@ -577,12 +611,13 @@ export function CalendarView({
             view === "week"
               ? Array.from({ length: 7 }, (_, i) => addDays(mondayOf(focus), i))
               : focus.slice(0, 7) === today.slice(0, 7)
-                ? Array.from({ length: 36 }, (_, i) => addDays(today, i)).filter((d) => byDay.get(d)?.length || d === today)
-                : monthGrid(focus).filter((d) => d.slice(0, 7) === focus.slice(0, 7) && byDay.get(d)?.length)
+                ? Array.from({ length: 36 }, (_, i) => addDays(today, i)).filter((d) => byDay.get(d)?.length || meetingsOn(d).length || d === today)
+                : monthGrid(focus).filter((d) => d.slice(0, 7) === focus.slice(0, 7) && (byDay.get(d)?.length || meetingsOn(d).length))
           }
           showEmpty={view === "week"}
           today={today}
           byDay={byDay}
+          meetingsOn={meetingsOn}
           dayDrop={dayDrop}
           dragOver={dragOver}
           chip={chip}
@@ -814,6 +849,40 @@ function CapacityDots({ count, limit, label = false }: { count: number; limit: n
   );
 }
 
+/** A meeting on the calendar: its time and name, in the meetings colour. Opens the meeting. */
+function MeetingChip({ m, size = "sm" }: { m: CalMeeting; size?: "sm" | "lg" }) {
+  const time = new Date(m.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (size === "sm")
+    return (
+      <Link
+        href={`/meetings/${m.id}`}
+        title={`${m.title} · ${time} · ${m.location}`}
+        className={`flex items-center gap-1.5 rounded-md bg-violet/10 text-violet px-1.5 py-[3px] text-[11.5px] font-semibold hover:bg-violet/15 transition-colors ${m.cancelled ? "opacity-50 line-through" : ""}`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-violet flex-shrink-0" />
+        <span className="tabular-nums flex-shrink-0">{time}</span>
+        <span className="truncate text-ink">{m.title}</span>
+      </Link>
+    );
+  return (
+    <Link
+      href={`/meetings/${m.id}`}
+      className={`flex items-center gap-3 rounded-xl border border-violet/25 bg-violet/[0.06] px-3 py-2.5 hover:border-violet/50 transition-colors ${m.cancelled ? "opacity-60" : ""}`}
+    >
+      <span className="w-8 h-8 rounded-lg bg-violet/15 text-violet flex items-center justify-center flex-shrink-0" aria-hidden>
+        <span className="w-2.5 h-2.5 rounded-full bg-violet" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-[13.5px] font-semibold truncate ${m.cancelled ? "line-through" : ""}`}>{m.title}</span>
+        <span className="block text-[12px] text-ink-soft truncate">
+          Meeting · {time} · {m.location}
+          {m.cancelled ? " · cancelled" : ""}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
 function Filter({
   on,
   set,
@@ -824,10 +893,11 @@ function Filter({
   on: boolean;
   set: (v: boolean) => void;
   icon?: React.ReactNode;
-  tone?: "short" | "long";
+  tone?: "short" | "long" | "meeting";
   children: React.ReactNode;
 }) {
-  const onCls = tone === "short" ? "border-short/50 bg-short/10 text-ink" : tone === "long" ? "border-long/50 bg-long/10 text-ink" : "border-amber/50 bg-amber/10 text-ink";
+  const onCls =
+    tone === "short" ? "border-short/50 bg-short/10 text-ink" : tone === "long" ? "border-long/50 bg-long/10 text-ink" : tone === "meeting" ? "border-violet/50 bg-violet/10 text-ink" : "border-amber/50 bg-amber/10 text-ink";
   return (
     <button
       type="button"
@@ -935,6 +1005,7 @@ function DayRows({
   showEmpty,
   today,
   byDay,
+  meetingsOn,
   dayDrop,
   dragOver,
   chip,
@@ -945,6 +1016,7 @@ function DayRows({
   showEmpty: boolean;
   today: string;
   byDay: Map<string, CalItem[]>;
+  meetingsOn: (day: string) => CalMeeting[];
   dayDrop: (day: string) => object;
   dragOver: string | null;
   chip: (it: CalItem, size: "sm" | "lg") => React.ReactNode;
@@ -981,8 +1053,11 @@ function DayRows({
               )}
             </div>
             <div className="flex-1 p-2.5 grid gap-2 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 content-start min-h-[3.5rem]">
+              {meetingsOn(day).map((m) => (
+                <MeetingChip key={m.id} m={m} size="lg" />
+              ))}
               {list.map((it) => chip(it, "lg"))}
-              {!list.length && showEmpty && <p className="px-1 py-2 text-[13px] text-ink-soft">Nothing planned.</p>}
+              {!list.length && !meetingsOn(day).length && showEmpty && <p className="px-1 py-2 text-[13px] text-ink-soft">Nothing planned.</p>}
             </div>
           </section>
         );

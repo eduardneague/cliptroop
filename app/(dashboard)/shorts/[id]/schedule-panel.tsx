@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateChip } from "@/components/ui/date-picker";
 import { relativeTime } from "@/lib/relative-time";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
@@ -649,14 +649,7 @@ function When({ value, onChange }: { value: { date: string; time: string }; onCh
   const options = allowedTimes(value.date);
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <DatePicker
-        value={value.date}
-        onChange={(d) => onChange({ date: d, time: fitTime(d, value.time) })}
-        ariaLabel="Post date"
-        triggerClassName="inline-flex items-center rounded-lg border border-line/15 bg-surface px-3 h-10 text-[13.5px] font-semibold hover:border-line/30"
-      >
-        {new Date(`${value.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-      </DatePicker>
+      <DateChip value={value.date} onChange={(d) => onChange({ date: d, time: fitTime(d, value.time) })} ariaLabel="Post date" />
       <div className="w-28">
         <Select value={value.time} onChange={(t) => t && onChange({ ...value, time: t })} options={options} ariaLabel="Post time" menuMinWidth={120} />
       </div>
@@ -786,8 +779,8 @@ function TikTokFields({
   if (!creator) {
     return (
       <div className="space-y-2" role="status" aria-label="Loading your TikTok account">
-        <div className="h-9 w-48 rounded-lg bg-surface-2 animate-pulse" />
-        <div className="h-20 w-full rounded-lg bg-surface-2 animate-pulse" />
+        <div className="skeleton h-9 w-48 rounded-lg" />
+        <div className="skeleton h-20 w-full rounded-lg" />
       </div>
     );
   }

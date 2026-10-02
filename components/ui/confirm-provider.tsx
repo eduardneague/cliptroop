@@ -1,11 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { sounds } from "@/lib/sounds";
 
 type ConfirmOptions = {
   title: string;
   description?: string;
   confirmLabel?: string;
+  /** The other button (default "Cancel"), e.g. "Keep it" when confirming a cancel. */
+  cancelLabel?: string;
   danger?: boolean;
 };
 
@@ -22,6 +25,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const confirm = useCallback<ConfirmAPI>((opts) => {
     return new Promise<boolean>((resolve) => {
       setState({ opts, resolve });
+      sounds.ask();
     });
   }, []);
 
@@ -84,7 +88,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => close(false)}
                 className="rounded-lg border border-line/15 px-3.5 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink transition-colors"
               >
-                Cancel
+                {state.opts.cancelLabel ?? "Cancel"}
               </button>
               <button
                 ref={confirmBtn}

@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { createProject } from "./actions";
 import { ArrowLeftIcon, CloseIcon, PlusIcon } from "@/components/ui/icons";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateChip } from "@/components/ui/date-picker";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PersonSelect, type PersonKind } from "@/modules/short-videos/components/person-select";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
@@ -164,16 +164,7 @@ export function NewVideoForm({
           <div>
             <span className={label}>Expected date (optional)</span>
             <input type="hidden" name="expected_date" value={date ?? ""} />
-            <div className="flex items-center gap-2">
-              <DatePicker value={date} onChange={setDate} ariaLabel="Expected date" triggerClassName={`${field} text-left inline-flex items-center w-auto px-4`}>
-                {date ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Pick a date"}
-              </DatePicker>
-              {date && (
-                <button type="button" onClick={() => setDate(null)} className="text-[13px] font-semibold text-ink-soft hover:text-ink">
-                  Clear
-                </button>
-              )}
-            </div>
+            <DateChip value={date} onChange={setDate} onClear={() => setDate(null)} ariaLabel="Expected date" />
           </div>
           <div>
             <span className={label}>Where it goes</span>

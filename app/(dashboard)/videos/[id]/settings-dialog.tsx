@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateChip } from "@/components/ui/date-picker";
 import { SettingsIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
@@ -133,14 +133,12 @@ export function LongVideoSettings({
           <section className="grid gap-4 sm:grid-cols-2 pt-5 border-t border-line/10">
             <div>
               <span className={label}>Expected date</span>
-              <DatePicker
+              <DateChip
                 value={expectedDate}
                 onChange={(d) => run(() => updateExpectedDate(projectId, teamId, d), "Date changed")}
+                onClear={() => run(() => updateExpectedDate(projectId, teamId, ""), "Date cleared")}
                 ariaLabel="Expected date"
-                triggerClassName={`${field} text-left inline-flex items-center`}
-              >
-                {expectedDate ? new Date(`${expectedDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Pick a date"}
-              </DatePicker>
+              />
             </div>
             <div>
               <span className={label}>Where it goes</span>

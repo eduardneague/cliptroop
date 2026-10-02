@@ -33,7 +33,7 @@ export function AdvanceStageButton({
       const result = await advanceStage(projectId);
       if (result?.error) toast.error(result.error);
       else {
-        toast.success(`Moved to ${nextLabel}`);
+        toast.success(`Moved to ${nextLabel}`, { sound: "advance" });
         if (nextStage) router.push(`/videos/${projectId}?tab=${nextStage}`, { scroll: false });
       }
     });

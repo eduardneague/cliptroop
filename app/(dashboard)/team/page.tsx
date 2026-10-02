@@ -32,6 +32,7 @@ import { PROVIDERS, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { WhatsNewButton } from "@/components/ui/whats-new";
 
 const TEAM_TABS = ["members", "defaults", "accounts", "appearance", "team"] as const;
 type TeamTab = (typeof TEAM_TABS)[number];
@@ -368,7 +369,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">VPlanner {APP_VERSION_LABEL}</p>
+      <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">
+        VPlanner {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" />
+      </p>
     </div>
   );
 }

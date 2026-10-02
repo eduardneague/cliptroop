@@ -32,6 +32,33 @@ export type AccountProfile = {
 
 export class ProviderError extends Error {}
 
+/*
+ * Analytics ("stats") permissions, asked for on top of posting. Which
+ * platforms ask for them is set in SOCIAL_STATS_PLATFORMS (comma list,
+ * default "youtube"): a platform's developer app must have these
+ * permissions turned on first, or its sign-in fails. Instagram:
+ * instagram_business_manage_insights. TikTok: user.info.stats + video.list.
+ * Accounts connected before need to be reconnected once to get them.
+ */
+export const STATS_SCOPES: Record<SocialPlatform, string[]> = {
+  youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
+  instagram: ["instagram_business_manage_insights"],
+  tiktok: ["user.info.stats", "video.list"],
+};
+export function statsEnabled(p: SocialPlatform) {
+  const raw = process.env.SOCIAL_STATS_PLATFORMS ?? "youtube";
+  return raw
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .includes(p);
+}
+/** This account's sign-in includes the analytics permissions (the revenue one isn't required). */
+export function hasStatsScopes(p: SocialPlatform, scopes: string[]) {
+  const need = p === "youtube" ? [STATS_SCOPES.youtube[0]] : STATS_SCOPES[p];
+  return need.every((s) => scopes.includes(s));
+}
+const withStats = (p: SocialPlatform, base: string[]) => (statsEnabled(p) ? [...base, ...STATS_SCOPES[p]] : base);
+
 type Provider = {
   name: string;
   configured: () => boolean;
@@ -101,7 +128,7 @@ const youtube: Provider = {
       client_id: env("GOOGLE_CLIENT_ID"),
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: GOOGLE_SCOPES.join(" "),
+      scope: withStats("youtube", GOOGLE_SCOPES).join(" "),
       access_type: "offline", // gives a refresh token
       prompt: "consent", // …every time, so reconnecting always works
       include_granted_scopes: "true",
@@ -179,7 +206,7 @@ const instagram: Provider = {
       client_id: env("INSTAGRAM_APP_ID"),
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: IG_SCOPES.join(","),
+      scope: withStats("instagram", IG_SCOPES).join(","),
       state,
     }),
   exchange: async ({ code, redirectUri }) => {
@@ -207,7 +234,7 @@ const instagram: Provider = {
       refreshToken: null,
       expiresAt: inSeconds(long.expires_in),
       refreshExpiresAt: null,
-      scopes: Array.isArray(perms) ? (perms as string[]) : String(perms ?? IG_SCOPES.join(",")).split(",").filter(Boolean),
+      scopes: Array.isArray(perms) ? (perms as string[]) : String(perms ?? withStats("instagram", IG_SCOPES).join(",")).split(",").filter(Boolean),
     };
   },
   profile: async (accessToken) => {
@@ -230,7 +257,7 @@ const instagram: Provider = {
     const t = await call(
       "https://graph.instagram.com/refresh_access_token?" + new URLSearchParams({ grant_type: "ig_refresh_token", access_token: accessToken })
     );
-    return { accessToken: String(t.access_token), refreshToken: null, expiresAt: inSeconds(t.expires_in), refreshExpiresAt: null, scopes: IG_SCOPES };
+    return { accessToken: String(t.access_token), refreshToken: null, expiresAt: inSeconds(t.expires_in), refreshExpiresAt: null, scopes: withStats("instagram", IG_SCOPES) };
   },
   // Instagram has no revoke endpoint for this API: removing the app is
   // done in Instagram's settings. We delete our copy of the token.
@@ -263,7 +290,7 @@ const tiktok: Provider = {
     new URLSearchParams({
       client_key: env("TIKTOK_CLIENT_KEY"),
       response_type: "code",
-      scope: TIKTOK_SCOPES.join(","),
+      scope: withStats("tiktok", TIKTOK_SCOPES).join(","),
       redirect_uri: redirectUri,
       state,
       ...(challenge ? { code_challenge: challenge, code_challenge_method: "S256" } : {}),

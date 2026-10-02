@@ -11,6 +11,7 @@ import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
+import { mentionPeople } from "@/modules/scripts/lib/mention-people";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 
 // Always fresh: documents change while you work (never show a stale copy).
@@ -41,10 +42,11 @@ export default async function LongScriptPage({
   if (!project) notFound();
 
   const supabase = await createClient();
-  const [membership, { data: scripterRows }, people] = await Promise.all([
+  const [membership, { data: scripterRows }, people, { data: assigneeRows }] = await Promise.all([
     getMembership(supabase, project.team_id),
     supabase.from("long_video_scripters").select("team_member_id").eq("project_id", id),
     listTeamPeople(project.team_id),
+    supabase.from("project_assignees").select("stage, team_member_id").eq("project_id", id),
   ]);
   const roles = membership?.roles ?? [];
   const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
@@ -71,6 +73,15 @@ export default async function LongScriptPage({
   const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, project.team_id), getRoleColors(supabase, project.team_id)]);
   if (!doc) notFound();
 
+  // Who does what on this video (for @mention suggestions).
+  const STEP_JOB: Record<string, string> = { ideate: "Ideas", research: "Researcher", script: "Scripter", film: "Filmer", edit: "Editor", review: "Reviewer", package: "Packager", publish: "Scheduler" };
+  const jobs: Record<string, string[]> = {};
+  const job = (memberId: string, label: string) => {
+    if (!(jobs[memberId] ?? []).includes(label)) jobs[memberId] = [...(jobs[memberId] ?? []), label];
+  };
+  scripterIds.forEach((m) => job(m, "Scripter"));
+  (assigneeRows ?? []).forEach((r) => STEP_JOB[r.stage as string] && job(r.team_member_id as string, STEP_JOB[r.stage as string]));
+
   return (
     <ScriptWorkspace
       owner={{ long: id }}
@@ -81,6 +92,7 @@ export default async function LongScriptPage({
       side={side}
       comments={comments}
       roleColors={roleColors}
+      people={mentionPeople(people, jobs)}
       title={project.title}
       number={project.entry_number}
       backHref={`/videos/${id}?tab=${doc.kind === "research" ? "research" : "script"}`}

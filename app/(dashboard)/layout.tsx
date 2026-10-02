@@ -12,6 +12,10 @@ import { NotificationBell } from "@/components/ui/notification-bell";
 import { GlobalSearch } from "@/components/search/global-search";
 import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
+import { SoundSync } from "@/components/ui/sound-sync";
+import { WhatsNewHost } from "@/components/ui/whats-new";
+import { Brand } from "@/components/ui/clip-logo";
+import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
 import { signOut } from "./actions";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
@@ -38,7 +42,7 @@ export default async function DashboardLayout({
   const [{ data: profile }, { teams, currentTeam }, { data: notifications }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, full_name, email, avatar_url, animations_enabled")
+      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled")
       .eq("id", user!.id)
       .single(),
     getTeamsAndCurrent(supabase),
@@ -68,6 +72,7 @@ export default async function DashboardLayout({
     <ToastProvider>
       <ConfirmProvider>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
+        <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
         {/* The team's colours for shorts and long videos, everywhere. */}
         <style>{kindColorCss(teamColors?.short_color as string | undefined, teamColors?.long_color as string | undefined)}</style>
         <div className="min-h-screen flex">
@@ -86,7 +91,9 @@ export default async function DashboardLayout({
                 brand on the left, search icon + actions on the right. */}
             <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
               <span className="flex items-center gap-2 min-w-0">
-                <span className="font-display font-semibold text-[14px] tracking-tight md:hidden">VPlanner</span>
+                <Link href="/dashboard" aria-label="VPlanner home" className="md:hidden">
+                  <Brand className="[&_.font-display]:text-[15px]" />
+                </Link>
                 {/* Staging only: so it's always obvious you're not on the real app. */}
                 {APP_CHANNEL === "E" && (
                   <span
@@ -130,6 +137,7 @@ export default async function DashboardLayout({
             <MobileBottomNav />
           </div>
         </div>
+        <WhatsNewHost />
       </ConfirmProvider>
     </ToastProvider>
   );

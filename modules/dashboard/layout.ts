@@ -1,57 +1,119 @@
-/** Dashboard Studio: which widgets, in what order, how big, their settings. */
-export type WidgetType = "tasks" | "contributions" | "todo" | "teams" | "clock" | "minicalendar" | "upcomingShorts" | "upcomingLongs" | "pipeline" | "posting" | "weather";
-export type Size = "s" | "m" | "l" | "w";
-export type WidgetInstance = { id: string; type: WidgetType; size: Size; settings?: Record<string, unknown> };
-export type Layout = { v: 1; widgets: WidgetInstance[] };
+/** Dashboard Studio: which widgets, where, how big, their settings. */
+import { COLS, compact, firstFit, type Box, type Limits } from "./grid";
 
-/** Every widget once per dashboard. */
-export const CATALOG: Record<WidgetType, { name: string; description: string; sizes: Size[]; size: Size }> = {
-  tasks: { name: "My tasks", description: "Everything you need to do, today and coming up.", sizes: ["m", "l", "w"], size: "l" },
-  contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", sizes: ["l", "w"], size: "w" },
-  todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", sizes: ["s", "m", "l"], size: "s" },
-  teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", sizes: ["s", "m"], size: "s" },
-  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", sizes: ["s", "m"], size: "s" },
-  upcomingLongs: { name: "Upcoming long videos", description: "Long videos in progress, with thumbnails and dates.", sizes: ["s", "m", "l"], size: "s" },
-  pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", sizes: ["m", "l", "w"], size: "m" },
-  posting: { name: "Posting today", description: "Today's scheduled posts and anything that failed.", sizes: ["s", "m"], size: "s" },
-  clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", sizes: ["s", "m"], size: "s" },
-  minicalendar: { name: "Mini calendar", description: "This month with shorts and long videos marked.", sizes: ["s", "m"], size: "s" },
-  weather: { name: "Weather", description: "Now and the next 5 days, for your city.", sizes: ["s", "m"], size: "s" },
+export type WidgetType = "tasks" | "contributions" | "todo" | "teams" | "clock" | "minicalendar" | "upcomingShorts" | "upcomingLongs" | "pipeline" | "posting" | "weather" | "meetings";
+
+/**
+ * One widget on the 12 column grid: x/y = column/row of its top-left
+ * corner, w/h = columns/rows it covers. `fixed` = you sized it yourself,
+ * so "Fill empty space" leaves it at exactly that size.
+ */
+export type WidgetInstance = { id: string; type: WidgetType; x: number; y: number; w: number; h: number; fixed?: boolean; settings?: Record<string, unknown> };
+export type Layout = { v: 2; widgets: WidgetInstance[]; fill: boolean; sounds: boolean };
+
+type Meta = { name: string; description: string; w: number; h: number; limits: Limits; bare?: boolean; settings?: Record<string, unknown> };
+
+/** Every widget once per dashboard. w/h = size when added. */
+export const CATALOG: Record<WidgetType, Meta> = {
+  tasks: { name: "My tasks", description: "What you need to do: overdue, today, coming up.", w: 4, h: 6, limits: { minW: 3, minH: 3, maxW: 12, maxH: 12 } },
+  teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 6 } },
+  clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } },
+  posting: { name: "Posting today", description: "Today's scheduled posts and anything that failed.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } },
+  todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } },
+  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } },
+  minicalendar: { name: "Calendar", description: "This month with shorts and long videos marked.", w: 2, h: 4, limits: { minW: 2, minH: 4, maxW: 4, maxH: 8 } },
+  upcomingLongs: { name: "Long videos", description: "Long videos in progress, with thumbnails and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } },
+  contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", w: 6, h: 3, limits: { minW: 4, minH: 3, maxW: 12, maxH: 5 }, settings: { color: "#22c55e", scope: "all" } },
+  pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } },
+  meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } },
+  weather: { name: "Weather", description: "Now and the next days, for your city.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 4 }, bare: true, settings: { units: "c" } },
 };
 
-/** Column span per size: phones 1 column, tablets 2, desktop 12. */
-export const SPAN: Record<Size, string> = {
-  s: "md:col-span-1 lg:col-span-4",
-  m: "md:col-span-1 lg:col-span-6",
-  l: "md:col-span-2 lg:col-span-8",
-  w: "md:col-span-2 lg:col-span-12",
-};
-export const SIZE_LABEL: Record<Size, string> = { s: "Small", m: "Medium", l: "Large", w: "Wide" };
+export const LIMITS_BY_TYPE = Object.fromEntries(Object.entries(CATALOG).map(([k, v]) => [k, v.limits])) as Record<WidgetType, Limits>;
 
+/** The arrangement from the team's favourite screenshot (6 columns there, 12 here). */
 export const DEFAULT_LAYOUT: Layout = {
-  v: 1,
+  v: 2,
+  fill: true,
+  sounds: true,
   widgets: [
-    { id: "w-tasks", type: "tasks", size: "l" },
-    { id: "w-teams", type: "teams", size: "s" },
-    { id: "w-contrib", type: "contributions", size: "w", settings: { color: "#22c55e", scope: "all" } },
-    { id: "w-shorts", type: "upcomingShorts", size: "s" },
-    { id: "w-longs", type: "upcomingLongs", size: "s" },
-    { id: "w-posting", type: "posting", size: "s" },
-    { id: "w-pipeline", type: "pipeline", size: "m" },
-    { id: "w-todo", type: "todo", size: "m" },
-    { id: "w-clock", type: "clock", size: "s", settings: { h24: true, secondHand: true } },
-    { id: "w-cal", type: "minicalendar", size: "s" },
-    { id: "w-weather", type: "weather", size: "s", settings: { units: "c" } },
+    { id: "w-tasks", type: "tasks", x: 0, y: 0, w: 4, h: 6 },
+    { id: "w-teams", type: "teams", x: 4, y: 0, w: 2, h: 2 },
+    { id: "w-clock", type: "clock", x: 6, y: 0, w: 2, h: 2, settings: { h24: true, secondHand: true } },
+    { id: "w-posting", type: "posting", x: 8, y: 0, w: 2, h: 2 },
+    { id: "w-todo", type: "todo", x: 10, y: 0, w: 2, h: 4 },
+    { id: "w-shorts", type: "upcomingShorts", x: 4, y: 2, w: 2, h: 4 },
+    { id: "w-cal", type: "minicalendar", x: 6, y: 2, w: 2, h: 4 },
+    { id: "w-longs", type: "upcomingLongs", x: 8, y: 4, w: 4, h: 3 },
+    { id: "w-contrib", type: "contributions", x: 0, y: 6, w: 6, h: 3, settings: { color: "#22c55e", scope: "all" } },
+    { id: "w-meetings", type: "meetings", x: 8, y: 7, w: 4, h: 2 },
+    { id: "w-pipeline", type: "pipeline", x: 0, y: 9, w: 12, h: 4 },
   ],
 };
 
-/** A saved layout, cleaned up (unknown widgets dropped, sizes kept valid). */
+export const toBox = (w: WidgetInstance): Box => ({ i: w.id, x: w.x, y: w.y, w: w.w, h: w.h });
+export const limitsFor = (widgets: WidgetInstance[]) => Object.fromEntries(widgets.map((w) => [w.id, CATALOG[w.type].limits])) as Record<string, Limits>;
+
+/** Puts boxes (from the engine) back onto the widgets. */
+export function applyBoxes(widgets: WidgetInstance[], boxes: Box[]): WidgetInstance[] {
+  const m = new Map(boxes.map((b) => [b.i, b]));
+  return widgets.map((w) => {
+    const b = m.get(w.id);
+    return b ? { ...w, x: b.x, y: b.y, w: b.w, h: b.h } : w;
+  });
+}
+
+/** Adds a widget in the first free spot that fits. */
+export function addWidget(l: Layout, type: WidgetType): { layout: Layout; id: string } {
+  const meta = CATALOG[type];
+  const id = `w-${type}-${Date.now().toString(36)}`;
+  const spot = firstFit(l.widgets.map(toBox), id, meta.w, meta.h);
+  const widgets = [...l.widgets, { id, type, x: spot.x, y: spot.y, w: spot.w, h: spot.h, settings: meta.settings ? { ...meta.settings } : {} }];
+  return { layout: { ...l, widgets: applyBoxes(widgets, compact(widgets.map(toBox))) }, id };
+}
+
+const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+
+/**
+ * A saved layout, cleaned up: unknown widgets dropped, one of each type,
+ * sizes inside their limits, nothing overlapping. Old layouts (v1: an
+ * order + S/M/L sizes) become the default arrangement with your widgets
+ * and settings kept.
+ */
 export function readLayout(raw: unknown): Layout {
-  const l = raw as Layout | null;
-  if (!l || l.v !== 1 || !Array.isArray(l.widgets)) return DEFAULT_LAYOUT;
+  const l = raw as { v?: number; widgets?: unknown[]; fill?: unknown; sounds?: unknown } | null;
+  if (!l || !Array.isArray(l.widgets)) return DEFAULT_LAYOUT;
   const seen = new Set<string>();
-  const widgets = l.widgets
-    .filter((w) => w && typeof w.id === "string" && w.type in CATALOG && !seen.has(w.type) && (seen.add(w.type), true))
-    .map((w) => ({ ...w, size: CATALOG[w.type].sizes.includes(w.size) ? w.size : CATALOG[w.type].size }));
-  return { v: 1, widgets };
+  const ok = (l.widgets as Partial<WidgetInstance>[]).filter(
+    (w) => w && typeof w.id === "string" && typeof w.type === "string" && w.type in CATALOG && !seen.has(w.type) && (seen.add(w.type), true)
+  ) as WidgetInstance[];
+
+  if (l.v === 1) {
+    const kept = new Map(ok.map((w) => [w.type, w]));
+    let out: Layout = { ...DEFAULT_LAYOUT, widgets: DEFAULT_LAYOUT.widgets.filter((d) => kept.has(d.type)).map((d) => ({ ...d, settings: kept.get(d.type)?.settings ?? d.settings })) };
+    for (const w of ok)
+      if (!out.widgets.some((d) => d.type === w.type)) {
+        const r = addWidget(out, w.type);
+        out = { ...r.layout, widgets: r.layout.widgets.map((x) => (x.id === r.id ? { ...x, settings: w.settings ?? x.settings } : x)) };
+      }
+    return out;
+  }
+  if (l.v !== 2) return DEFAULT_LAYOUT;
+
+  const widgets: WidgetInstance[] = ok.map((w) => {
+    const lim = CATALOG[w.type].limits;
+    const ww = Math.max(lim.minW, Math.min(lim.maxW, Math.round(num(w.w, CATALOG[w.type].w))));
+    return {
+      id: w.id,
+      type: w.type,
+      w: ww,
+      h: Math.max(lim.minH, Math.min(lim.maxH, Math.round(num(w.h, CATALOG[w.type].h)))),
+      x: Math.max(0, Math.min(COLS - ww, Math.round(num(w.x, 0)))),
+      y: Math.max(0, Math.round(num(w.y, 0))),
+      fixed: w.fixed === true || undefined,
+      settings: w.settings && typeof w.settings === "object" ? w.settings : undefined,
+    };
+  });
+  // Overlaps (hand-edited or from an old bug) are pushed apart.
+  return { v: 2, fill: l.fill !== false, sounds: l.sounds !== false, widgets: applyBoxes(widgets, compact(widgets.map(toBox))) };
 }

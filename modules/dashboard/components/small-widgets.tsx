@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { switchTeam } from "@/app/(dashboard)/actions";
-import { getPlannedDays, type PlannedDay } from "@/app/(dashboard)/calendar/planned-days";
+import { MonthCalendar } from "@/components/ui/month-calendar";
 import type { TeamCard } from "../lib/queries";
+import { useBox } from "./widget-box";
 import { localDay } from "./tasks-widget";
 
-function Face({ m, className = "w-7 h-7 text-[10px]" }: { m: TeamCard["members"][number]; className?: string }) {
+function Face({ m, className = "w-5 h-5 text-[9px]" }: { m: TeamCard["members"][number]; className?: string }) {
   return m.avatarUrl ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={m.avatarUrl} alt={m.name} title={m.name} className={`${className} rounded-full object-cover ring-2 ring-surface`} />
@@ -21,13 +23,13 @@ function Face({ m, className = "w-7 h-7 text-[10px]" }: { m: TeamCard["members"]
 }
 
 /** Overlapping profile pictures: up to 5, then "+N" (opens everyone). */
-export function AvatarStack({ team, onMore }: { team: TeamCard; onMore: () => void }) {
-  const shown = team.members.slice(0, 5);
+export function AvatarStack({ team, onMore, max = 5 }: { team: TeamCard; onMore: () => void; max?: number }) {
+  const shown = team.members.slice(0, max);
   const extra = team.members.length - shown.length;
   return (
     <div className="flex items-center">
       {shown.map((m, i) => (
-        <span key={m.id} className={i ? "-ml-2" : ""} style={{ zIndex: 10 - i }}>
+        <span key={m.id} className={i ? "-ml-1.5" : ""} style={{ zIndex: 10 - i }}>
           <Face m={m} />
         </span>
       ))}
@@ -38,7 +40,7 @@ export function AvatarStack({ team, onMore }: { team: TeamCard; onMore: () => vo
             e.stopPropagation();
             onMore();
           }}
-          className="-ml-2 h-7 min-w-7 px-1.5 rounded-full ring-2 ring-surface bg-surface-2 text-[11px] font-bold text-ink-soft hover:text-ink"
+          className="-ml-1.5 h-5 min-w-5 px-1 rounded-full ring-2 ring-surface bg-surface-2 text-[9.5px] font-bold text-ink-soft hover:text-ink"
         >
           +{extra}
         </button>
@@ -51,8 +53,13 @@ export function TeamsWidget({ teams, currentTeamId }: { teams: TeamCard[]; curre
   const router = useRouter();
   const [pending, start] = useTransition();
   const [members, setMembers] = useState<TeamCard | null>(null);
+  const box = useBox();
+  const go = (id: string) => start(async () => {
+    await switchTeam(id);
+    router.refresh();
+  });
   return (
-    <div className="space-y-2">
+    <div className={`h-full overflow-y-auto -mx-1 motion-stagger ${pending ? "opacity-60" : ""}`}>
       {teams.map((t) => {
         const current = t.id === currentTeamId;
         return (
@@ -60,28 +67,28 @@ export function TeamsWidget({ teams, currentTeamId }: { teams: TeamCard[]; curre
             key={t.id}
             role="button"
             tabIndex={0}
-            onClick={() => !current && start(async () => { await switchTeam(t.id); router.refresh(); })}
-            onKeyDown={(e) => e.key === "Enter" && !current && start(async () => { await switchTeam(t.id); router.refresh(); })}
-            className={`rounded-xl border p-3 transition-colors ${current ? "border-amber/50 bg-amber/[0.05]" : "border-line/10 hover:border-line/30 cursor-pointer"} ${pending ? "opacity-60" : ""}`}
+            aria-current={current || undefined}
+            title={current ? `${t.name} (current team)` : `Switch to ${t.name}`}
+            onClick={() => !current && go(t.id)}
+            onKeyDown={(e) => e.key === "Enter" && !current && go(t.id)}
+            className={`flex items-center gap-2 rounded-md px-1 py-1 transition-colors ${current ? "bg-amber/[0.07]" : "hover:bg-surface-2/70 cursor-pointer"}`}
           >
-            <div className="flex items-center gap-2.5 mb-2.5">
-              {t.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={t.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />
-              ) : (
-                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[11px] font-bold" style={{ background: t.color }}>
-                  {t.name.slice(0, 1).toUpperCase()}
-                </span>
-              )}
-              <span className="text-[14px] font-semibold truncate flex-1">{t.name}</span>
-              {current && <span className="rounded-md bg-amber/15 text-amber px-1.5 h-5 inline-flex items-center text-[10.5px] font-bold">Current</span>}
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <AvatarStack team={t} onMore={() => setMembers(t)} />
-              <button type="button" onClick={(e) => { e.stopPropagation(); setMembers(t); }} className="text-[11.5px] text-ink-soft hover:text-ink">
+            {t.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={t.logoUrl} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
+            ) : (
+              <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: t.color }}>
+                {t.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block text-[12.5px] font-semibold truncate">{t.name}</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setMembers(t); }} className="block max-w-full truncate text-[10.5px] text-ink-faint hover:text-ink">
+                {current && box.w >= 200 ? "Current · " : ""}
                 {t.members.length} member{t.members.length === 1 ? "" : "s"}
               </button>
-            </div>
+            </span>
+            {box.w >= 210 && <AvatarStack team={t} max={box.w >= 300 ? 5 : 3} onMore={() => setMembers(t)} />}
           </div>
         );
       })}
@@ -143,90 +150,32 @@ export function ClockWidget({ settings }: { settings?: Record<string, unknown> }
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  if (!now) return <div className="h-[120px]" />;
+  const box = useBox();
+  if (!now) return <div className="h-full" />;
+  // Wide: face beside the time. Tall: face above it. Small: just the time.
+  const face = Math.min(box.h, 150);
+  const side = box.w >= face + 120;
+  const stacked = !side && box.h >= Math.min(box.w, 140) + 64;
+  const big = Math.max(22, Math.min(40, Math.round(Math.min(box.w / 5, box.h / 3.2))));
   return (
-    <div className="flex items-center gap-4 sm:gap-5">
-      <div className="w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0">
-        <AnalogClock now={now} seconds={secondHand} />
-      </div>
+    <div className={`h-full flex items-center ${side ? "gap-3" : stacked ? "flex-col justify-center gap-2 text-center" : "justify-center text-center"}`}>
+      {(side || stacked) && (
+        <div className="flex-shrink-0" style={{ width: stacked ? Math.min(box.w, box.h - 64, 150) : face, height: stacked ? Math.min(box.w, box.h - 64, 150) : face }}>
+          <AnalogClock now={now} seconds={secondHand} />
+        </div>
+      )}
       <div className="min-w-0">
-        <div className="font-display text-[34px] sm:text-[40px] font-semibold leading-none tabular-nums tracking-tight">
+        <div className="font-display font-semibold leading-none tabular-nums tracking-tight" style={{ fontSize: side || stacked ? Math.min(big, 30) : big }}>
           {now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: !h24 })}
         </div>
-        <div className="text-[13.5px] text-ink-soft mt-2 leading-snug">{now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
-        <div className="text-[12px] text-ink-faint">{Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}</div>
+        <div className="text-[12px] text-ink-soft mt-1.5 leading-tight truncate">{now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
+        <div className="text-[10.5px] text-ink-faint truncate">{Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}</div>
       </div>
     </div>
   );
 }
 
+/** The dashboard Calendar: THE calendar (same as every date picker), filling the widget. A day opens it in the big calendar. */
 export function MiniCalendarWidget() {
-  const [month, setMonth] = useState(() => localDay().slice(0, 7));
-  const [planned, setPlanned] = useState<Record<string, PlannedDay>>({});
-  const days = useMemo(() => {
-    const first = new Date(`${month}-01T00:00:00`);
-    const start = new Date(first);
-    start.setDate(1 - ((first.getDay() + 6) % 7));
-    return Array.from({ length: 42 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      return localDay(d);
-    });
-  }, [month]);
-  useEffect(() => {
-    let alive = true;
-    getPlannedDays(days[0], days[41]).then((r) => alive && setPlanned(r)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [days]);
-  const today = localDay();
-  const shift = (n: number) => {
-    const d = new Date(`${month}-01T00:00:00`);
-    d.setMonth(d.getMonth() + n);
-    setMonth(localDay(d).slice(0, 7));
-  };
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <button type="button" onClick={() => shift(-1)} aria-label="Previous month" className="w-7 h-7 rounded-md text-ink-soft hover:text-ink hover:bg-surface-2">‹</button>
-        <span className="text-[13.5px] font-semibold">{new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
-        <button type="button" onClick={() => shift(1)} aria-label="Next month" className="w-7 h-7 rounded-md text-ink-soft hover:text-ink hover:bg-surface-2">›</button>
-      </div>
-      <div className="grid grid-cols-7 text-center text-[10.5px] font-bold text-ink-faint mb-1">
-        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-          <span key={i}>{d}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-0.5">
-        {days.map((d) => {
-          const p = planned[d];
-          const s = p?.shorts.length ?? 0;
-          const l = p?.longs.length ?? 0;
-          return (
-            <Link
-              key={d}
-              href={`/calendar?date=${d}`}
-              title={s + l ? `${s} short${s === 1 ? "" : "s"}, ${l} long video${l === 1 ? "" : "s"}` : undefined}
-              className={`relative h-9 rounded-lg flex items-center justify-center text-[12.5px] tabular-nums transition-colors hover:bg-surface-2 ${
-                d === today ? "bg-amber text-white font-bold hover:bg-amber" : d.slice(0, 7) === month ? "text-ink" : "text-ink-faint"
-              }`}
-            >
-              {Number(d.slice(8))}
-              {s + l > 0 && (
-                <span className="absolute bottom-1 flex gap-[2px]">
-                  {Array.from({ length: Math.min(s, l ? 1 : 2) }).map((_, i) => (
-                    <span key={`s${i}`} className={`w-1 h-1 rounded-[1px] ${d === today ? "bg-white" : "bg-short"}`} />
-                  ))}
-                  {Array.from({ length: Math.min(l, s ? 1 : 2) }).map((_, i) => (
-                    <span key={`l${i}`} className={`w-1 h-1 rounded-[1px] ${d === today ? "bg-white" : "bg-long"}`} />
-                  ))}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return <MonthCalendar fit hrefFor={(d) => `/calendar?d=${d}`} />;
 }

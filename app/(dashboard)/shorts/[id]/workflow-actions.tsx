@@ -38,6 +38,7 @@ export function WorkflowActions({
 
   const toEditing = useAction(sendShortToEditing, {
     success: `Sent to editing. ${editorName ?? "the editor"} has been notified`,
+    sound: "advance",
   });
   async function handleSendToEditing() {
     const ok = await confirm({
@@ -109,6 +110,7 @@ function MoveToMenu({ id, stage }: { id: string; stage: ShortStage }) {
   useMenuKeyboard(open, menuRef, triggerRef, closeMenu);
   const move = useAction(moveShortStage, {
     success: (_id, to) => `Moved to ${SHORT_STAGE_LABELS[to]}`,
+    sound: "advance",
   });
 
   useEffect(() => {

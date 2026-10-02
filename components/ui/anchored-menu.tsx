@@ -80,7 +80,7 @@ export function AnchoredMenu({
       ref={panel}
       role="menu"
       aria-label={label}
-      className="fixed z-[70] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overscroll-contain animate-[modalin_.14s_var(--ease-out)]"
+      className="fixed z-[70] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain animate-[modalin_.14s_var(--ease-out)]"
       style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
     >
       {children}

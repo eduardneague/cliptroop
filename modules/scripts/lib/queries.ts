@@ -29,6 +29,8 @@ export type ScriptComment = {
   createdAt: string;
   resolved: boolean;
   author: { id: string; name: string; avatarUrl: string | null; color: string } | null;
+  /** A drawing attached to the idea (Sketch Studio), public URL + size. */
+  sketch: { url: string; w: number; h: number } | null;
 };
 /** A short or a long video. */
 export type DocOwner = { short: string } | { long: string };
@@ -124,14 +126,14 @@ export async function getOrCreateLongScript(projectId: string, canEdit: boolean)
 
 export async function listComments(scriptId: string, teamId: string): Promise<ScriptComment[]> {
   const supabase = await createClient();
-  const [{ data }, { data: members }] = await Promise.all([
-    supabase
-      .from("script_comments")
-      .select("id, kind, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)")
-      .eq("script_id", scriptId)
-      .order("created_at"),
+  const base = "id, kind, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)";
+  const read = (cols: string) => supabase.from("script_comments").select(cols).eq("script_id", scriptId).order("created_at");
+  const [first, { data: members }] = await Promise.all([
+    read(`${base}, sketch_path, sketch_w, sketch_h`),
     supabase.from("team_members").select("user_id, member_roles(role)").eq("team_id", teamId).eq("status", "active"),
   ]);
+  // Before migration 0056 the sketch columns don't exist yet: read without them.
+  const data = (first.error ? (await read(base)).data : first.data) as unknown as Record<string, unknown>[] | null;
   const rolesOf = new Map((members ?? []).map((m) => [m.user_id as string, ((m.member_roles as { role: string }[]) ?? []).map((r) => r.role)]));
   return (data ?? []).map((c) => {
     const p = (Array.isArray(c.author) ? c.author[0] : c.author) as Profile;
@@ -146,6 +148,9 @@ export async function listComments(scriptId: string, teamId: string): Promise<Sc
       createdAt: c.created_at as string,
       resolved: !!c.resolved_at,
       author: id ? { id, name: displayName(p?.username, p?.full_name, p?.email), avatarUrl: p?.avatar_url ?? null, color: colorForId(id) } : null,
+      sketch: c.sketch_path
+        ? { url: supabase.storage.from("script-sketches").getPublicUrl(c.sketch_path as string).data.publicUrl, w: (c.sketch_w as number) ?? 800, h: (c.sketch_h as number) ?? 600 }
+        : null,
     };
   });
 }

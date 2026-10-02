@@ -66,7 +66,10 @@ export type CommentMark = { id: string; quote: string; occurrence: number; resol
 export const commentKey = new PluginKey("script-comments");
 
 /** Draws open comments as highlights (decorations only: the text is untouched). */
-export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null }) {
+/** The comment being written right now: its text gets a "writing…" placeholder. */
+export type PendingMark = { quote: string; occurrence: number; kind: "comment" | "edit_idea" } | null;
+
+export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null; pending?: PendingMark }) {
   return Extension.create({
     name: "commentHighlights",
     addProseMirrorPlugins() {
@@ -75,8 +78,29 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
           key: commentKey,
           props: {
             decorations(state) {
-              const { comments, active } = get();
+              const { comments, active, pending } = get();
               const decos: Decoration[] = [];
+              if (pending) {
+                const r = findQuote(state.doc, pending.quote, pending.occurrence);
+                if (r) {
+                  const color = pending.kind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))";
+                  decos.push(Decoration.inline(r.from, r.to, { class: "script-comment-pending", style: `--comment-color: ${color}` }));
+                  decos.push(
+                    Decoration.widget(
+                      r.to,
+                      () => {
+                        const tag = document.createElement("span");
+                        tag.className = "script-pending-tag no-print";
+                        tag.style.setProperty("--comment-color", color);
+                        tag.textContent = pending.kind === "edit_idea" ? "Writing an idea…" : "Writing a comment…";
+                        tag.contentEditable = "false";
+                        return tag;
+                      },
+                      { side: 1, key: `pending-${pending.kind}`, ignoreSelection: true }
+                    )
+                  );
+                }
+              }
               for (const c of comments) {
                 if (c.resolved) continue;
                 const r = findQuote(state.doc, c.quote, c.occurrence);

@@ -1,11 +1,13 @@
 "use client";
 
 import { AlertIcon, CheckIcon } from "./icons";
+import { sounds, type SoundName } from "@/lib/sounds";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 
 export type ToastAction = { label: string; onClick: () => void };
-type ToastOptions = { action?: ToastAction; duration?: number };
+/** sound: a different sound than the default (success/error), or false for none. */
+type ToastOptions = { action?: ToastAction; duration?: number; sound?: SoundName | false };
 type Toast = { id: number; kind: "success" | "error"; message: string; action?: ToastAction };
 type ToastAPI = {
   success: (message: string, opts?: ToastOptions) => void;
@@ -24,6 +26,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (kind: Toast["kind"], message: string, opts?: ToastOptions) => {
       const id = ++idRef.current;
       setToasts((t) => [...t, { id, kind, message, action: opts?.action }]);
+      const sound = opts?.sound ?? (kind === "error" ? "error" : "success");
+      if (sound) sounds[sound]();
       // Toasts with an action stay long enough to actually use it.
       setTimeout(() => dismiss(id), opts?.duration ?? (opts?.action ? 9000 : 4200));
     },

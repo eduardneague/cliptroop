@@ -101,7 +101,7 @@ export function FiltersMenu({ sections, chips }: { sections: FilterSection[]; ch
             role="menu"
             aria-label="Filters"
             style={{ top: pos.top, left: pos.left }}
-            className="fixed z-[80] w-[280px] max-h-[70vh] overflow-y-auto overscroll-contain rounded-xl border border-line/15 bg-surface shadow-2xl p-1 animate-[modalin_.12s_ease]"
+            className="fixed z-[80] w-[280px] max-h-[70vh] overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-line/15 bg-surface shadow-2xl p-1 animate-[modalin_.12s_ease]"
           >
             {sections.map((sec, i) => (
               <div key={sec.title} className={i > 0 ? "mt-1 pt-1 border-t border-line/10" : ""}>

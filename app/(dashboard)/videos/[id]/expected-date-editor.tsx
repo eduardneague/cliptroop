@@ -17,13 +17,11 @@ export function ExpectedDateEditor({
   teamId,
   date,
   canEdit,
-  otherDates = [],
 }: {
   projectId: string;
   teamId: string;
   date: string | null;
   canEdit: boolean;
-  otherDates?: string[];
 }) {
   const [shown, setShown] = useState(date);
   useEffect(() => setShown(date), [date]);
@@ -33,9 +31,6 @@ export function ExpectedDateEditor({
     success: (_p, _t, d) => (d ? `Expected date set to ${formatDate(d)}` : "Expected date cleared"),
     onError: () => setShown(date),
   });
-
-  const counts = new Map<string, number>();
-  otherDates.forEach((d) => counts.set(d, (counts.get(d) ?? 0) + 1));
 
   const face = (
     <>
@@ -58,7 +53,6 @@ export function ExpectedDateEditor({
       value={shown}
       onChange={(d) => d !== shown && save.run(projectId, teamId, d)}
       onClear={() => save.run(projectId, teamId, "")}
-      dayInfo={(d) => ({ count: counts.get(d) ?? 0, limit: 99 })}
       ariaLabel="Expected date"
       disabled={save.pending}
       triggerClassName={`${cls} cursor-pointer hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber`}

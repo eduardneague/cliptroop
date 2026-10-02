@@ -64,7 +64,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const end = focus.slice(0, 7) === today.slice(0, 7) && rollingEnd > grid.end ? rollingEnd : grid.end;
 
   // The same short list as the Shorts table, so both always agree.
-  const [allShorts, settings, dayLimits, { data: posts }, { data: longs }] = await Promise.all([
+  const edge = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString();
+  const [allShorts, settings, dayLimits, { data: posts }, { data: longs }, { data: meetingRows }] = await Promise.all([
     listShorts(currentTeam.id),
     getShortSettings(currentTeam.id),
     listDayLimits(currentTeam.id),
@@ -79,6 +80,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       .eq("team_id", currentTeam.id)
       .gte("expected_date", start)
       .lte("expected_date", end),
+    // Meetings (a day's margin each side: the browser puts them on its local day).
+    supabase.from("meetings").select("id, title, starts_at, duration_min, location, status").eq("team_id", currentTeam.id).gte("starts_at", edge(start, -1)).lt("starts_at", edge(end, 2)).order("starts_at"),
   ]);
 
   // Long videos: winning thumbnail, posted platforms and assigned people (one batch).
@@ -167,6 +170,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         canManage={canManage}
         isMaster={master}
         capacity={{ perDay: settings.perDay, weekends: settings.weekends, limits: dayLimits }}
+        meetings={(meetingRows ?? []).map((m) => ({
+          id: m.id as string,
+          title: m.title as string,
+          at: m.starts_at as string,
+          durationMin: m.duration_min as number,
+          location: (m.location as string) || "Discord",
+          cancelled: m.status === "cancelled",
+        }))}
       />
     </div>
   );

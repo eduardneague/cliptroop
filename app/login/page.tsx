@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { login } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { Brand } from "@/components/ui/clip-logo";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState(login, undefined);
@@ -51,9 +52,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-2xl border border-line/10 bg-surface p-8 shadow-sm">
         <div className="mb-7">
-          <div className="text-sm font-bold tracking-wide text-amber">
-            VPlanner
-          </div>
+          <Brand />
           <h1 className="font-display text-3xl font-semibold mt-3">
             {mode === "signin" ? "Sign in" : "Reset your password"}
           </h1>

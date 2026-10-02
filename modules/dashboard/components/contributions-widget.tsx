@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { KindIcon } from "@/components/ui/kind-icon";
 import type { Done } from "../lib/queries";
 import { localDay } from "./tasks-widget";
+import { CountUp } from "@/components/ui/count-up";
 
 const LEVEL_MIX = [0, 30, 55, 78, 100];
 const level = (n: number) => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4);
@@ -17,12 +18,16 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
   const scope = (settings?.scope as string) === "team" ? "team" : "all";
   const [open, setOpen] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  // Squares grow to fill the card (12–28px); narrow cards scroll instead.
-  const [cell, setCell] = useState(12);
+  // Squares fit the card both ways (8–16px); very narrow cards scroll instead.
+  const [cell, setCell] = useState(10);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const fit = () => setCell(Math.max(12, Math.min(28, Math.floor((el.clientWidth - 36) / 53) - 3)));
+    const fit = () => {
+      const byWidth = Math.floor((el.clientWidth - 30) / 53) - 3;
+      const byHeight = Math.floor((el.clientHeight - 16) / 7) - 3;
+      setCell(Math.max(8, Math.min(16, byWidth, byHeight)));
+    };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
@@ -62,29 +67,71 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
   }, []);
   const today = localDay();
   const total = items.length;
+  // Streaks: days in a row with at least one finished task.
+  const { streak, best, week } = useMemo(() => {
+    const has = (d: Date) => (byDay.get(localDay(d))?.length ?? 0) > 0;
+    const d = new Date();
+    if (!has(d)) d.setDate(d.getDate() - 1); // today not started yet: count from yesterday
+    let streak = 0;
+    while (has(d) && streak < 400) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    }
+    let best = 0;
+    let run = 0;
+    for (const col of weeks)
+      for (const day of col) {
+        run = (byDay.get(day)?.length ?? 0) > 0 ? run + 1 : 0;
+        best = Math.max(best, run);
+      }
+    const mon = new Date();
+    mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+    const from = localDay(mon);
+    let week = 0;
+    for (const [k, v] of byDay) if (k >= from) week += v.length;
+    return { streak, best, week };
+  }, [byDay, weeks]);
   useEffect(() => {
     scroller.current?.scrollTo({ left: scroller.current.scrollWidth });
   }, []);
 
+
   const shade = (n: number) =>
     n ? `color-mix(in srgb, ${color} ${LEVEL_MIX[level(n)]}%, rgb(var(--surface-2)))` : "rgb(var(--line) / 0.12)";
-
+  const stat = (n: number, label: string) => (
+    <span className="whitespace-nowrap">
+      <b className="text-ink tabular-nums">
+        <CountUp value={n} />
+      </b>{" "}
+      {label}
+    </span>
+  );
   return (
-    <div>
-      <div className="text-[13px] text-ink-soft mb-3">
-        <b className="text-ink">{total}</b> task{total === 1 ? "" : "s"} finished in the last year{scope === "team" ? " in this team" : ""}
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[11.5px] text-ink-soft mb-1.5 flex-shrink-0">
+        {stat(total, `done this year${scope === "team" ? " here" : ""}`)}
+        {stat(week, "this week")}
+        {stat(streak, "day streak")}
+        {stat(best, "best streak")}
+        <span className="ml-auto hidden sm:flex items-center gap-1 text-[10.5px] text-ink-faint">
+          Less
+          {[0, 1, 2, 4, 7].map((n) => (
+            <span key={n} className="w-2.5 h-2.5 rounded-[2px]" style={{ background: shade(n) }} />
+          ))}
+          More
+        </span>
       </div>
-      <div ref={scroller} className="overflow-x-auto no-scrollbar">
-        <div className="inline-grid gap-y-1" style={{ gridTemplateColumns: "auto 1fr" }}>
+      <div ref={scroller} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden no-scrollbar">
+        <div className="grid w-max mx-auto gap-y-1" style={{ gridTemplateColumns: "auto 1fr" }}>
           <span />
-          <div className="relative h-4 text-[11px] text-ink-soft" style={{ width: weeks.length * step }}>
+          <div className="relative h-3.5 text-[10px] leading-none text-ink-faint" style={{ width: weeks.length * step }}>
             {months.map((m) => (
               <span key={m.col} className="absolute" style={{ left: m.col * step }}>
                 {m.label}
               </span>
             ))}
           </div>
-          <div className="grid grid-rows-7 gap-[3px] pr-2 text-[10.5px] text-ink-soft">
+          <div className="grid grid-rows-7 gap-[3px] pr-1.5 text-[9.5px] leading-none text-ink-faint">
             {["Mon", "", "Wed", "", "Fri", "", ""].map((d, i) => (
               <span key={i} className="flex items-center" style={{ height: cell }}>
                 {d}
@@ -93,7 +140,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
           </div>
           <div className="flex gap-[3px]">
             {weeks.map((col, w) => (
-              <div key={w} className="grid grid-rows-7 gap-[3px]">
+              <div key={w} className="contrib-col grid grid-rows-7 gap-[3px]" style={{ animationDelay: `${w * 11}ms` }}>
                 {col.map((d) => {
                   const n = byDay.get(d)?.length ?? 0;
                   const future = d > today;
@@ -104,7 +151,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
                       disabled={future}
                       onClick={() => setOpen(d)}
                       title={`${n || "No"} task${n === 1 ? "" : "s"} on ${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`}
-                      className={`rounded-[3px] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${future ? "opacity-0 pointer-events-none" : ""} ${d === today ? "ring-1 ring-ink/40" : ""}`}
+                      className={`rounded-[2px] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${future ? "opacity-0 pointer-events-none" : ""} ${d === today ? "ring-1 ring-ink/40" : ""}`}
                       style={{ background: shade(n), width: cell, height: cell }}
                     />
                   );
@@ -113,13 +160,6 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
             ))}
           </div>
         </div>
-      </div>
-      <div className="flex items-center justify-end gap-1.5 mt-3 text-[11px] text-ink-soft">
-        Less
-        {[0, 1, 2, 4, 7].map((n) => (
-          <span key={n} className="w-3 h-3 rounded-[3px]" style={{ background: shade(n) }} />
-        ))}
-        More
       </div>
 
       <Dialog

@@ -14,8 +14,9 @@ import { BellIcon } from "./icons";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
-import { ShortsIcon, VideoIcon } from "@/components/ui/icons";
+import { ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { sounds } from "@/lib/sounds";
 
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
@@ -56,6 +57,16 @@ export type NotificationItem = {
     ok?: boolean;
     message?: string;
     version?: number | null;
+    /** Where the notification leads (e.g. a script comment). */
+    href?: string;
+    /** Meetings */
+    meetingTitle?: string;
+    startsAt?: string;
+    location?: string;
+    when?: string;
+    dueDate?: string | null;
+    docName?: string;
+    commentKind?: "comment" | "edit_idea";
   } | null;
 };
 
@@ -93,6 +104,13 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   const TypeIcon = n.short_id ? ShortsIcon : n.project_id ? VideoIcon : null;
   const failed = m?.ok === false;
 
+  if (n.kind?.startsWith("meeting") && !m?.actor) {
+    return (
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-violet/15 text-violet" aria-label="Meeting">
+        <UsersIcon className="w-4 h-4" />
+      </span>
+    );
+  }
   if (m?.actor) {
     return (
       <span className="relative flex-shrink-0">
@@ -152,6 +170,12 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
     );
   }
   return null;
+}
+
+/** "Sat, Oct 10, 18:00" in your own time zone (the list only renders in the browser). */
+function meetingWhen(iso: string) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}, ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 // Rich, structured body — bold names/teams, colored role pills — for
@@ -316,6 +340,35 @@ function RichBody({ n }: { n: NotificationItem }) {
           . You have work to do.
         </>
       );
+    case "script_mention":
+      return (
+        <>
+          <b>{m.actor?.name}</b> mentioned you in {m.commentKind === "edit_idea" ? "an editing idea" : "a comment"} on <ShortRef m={m} />
+          {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
+    case "meeting_scheduled":
+    case "meeting_changed":
+    case "meeting_cancelled":
+      return (
+        <>
+          <b>{m.actor?.name}</b> {n.kind === "meeting_scheduled" ? "invited you to" : n.kind === "meeting_changed" ? "moved" : "cancelled"} <b>{m.meetingTitle}</b>
+          {m.startsAt && n.kind !== "meeting_cancelled" ? <span className="text-ink-soft"> · {meetingWhen(m.startsAt)}{m.location ? `, ${m.location}` : ""}</span> : null}
+        </>
+      );
+    case "meeting_reminder":
+      return (
+        <>
+          <b>{m.meetingTitle}</b> starts {m.when}
+          {m.startsAt ? <span className="text-ink-soft"> · {meetingWhen(m.startsAt)}{m.location ? `, ${m.location}` : ""}</span> : null}
+        </>
+      );
+    case "meeting_action":
+      return (
+        <>
+          <b>{m.actor?.name}</b> gave you an action item from <b>{m.meetingTitle}</b>: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
     case "mention":
       return (
         <>
@@ -398,6 +451,7 @@ export function NotificationBell({
           ) {
             router.refresh();
           }
+          if (payload.eventType === "INSERT") sounds.notify();
           setItems((cur) => {
             if (payload.eventType === "INSERT") {
               return [row, ...cur.filter((n) => n.id !== id)].slice(0, 50);
@@ -453,7 +507,10 @@ export function NotificationBell({
     if (isActionable(n)) return; // handled by its own Accept/Decline buttons
     setOpen(false);
     if (!n.is_read) markReadLocally(n.id);
-    if (n.short_id) {
+    // Some notifications lead somewhere specific (a comment in a script).
+    if (n.metadata?.href?.startsWith("/")) {
+      router.push(n.metadata.href);
+    } else if (n.short_id) {
       router.push(`/shorts/${n.short_id}`);
     } else if (n.project_id) {
       router.push(n.stage ? `/videos/${n.project_id}?tab=${n.stage}` : `/videos/${n.project_id}`);
@@ -538,7 +595,7 @@ export function NotificationBell({
               </button>
             )}
           </div>
-          <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overscroll-contain styled-scroll">
+          <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {items.length === 0 ? (
               <div className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
                 Nothing yet.

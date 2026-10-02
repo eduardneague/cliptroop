@@ -102,7 +102,7 @@ export function Dialog({
             <CloseIcon className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain styled-scroll px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4">{children}</div>
         {footer && (
           <div
             className="px-5 py-3 border-t border-line/10 flex justify-end gap-2"

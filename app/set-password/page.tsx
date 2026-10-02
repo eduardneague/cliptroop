@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateProfile, updateAvatar } from "@/app/(dashboard)/settings/actions";
 import { initialsFor } from "@/lib/avatar";
+import { Brand } from "@/components/ui/clip-logo";
 
 export default function SetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -86,7 +87,7 @@ export default function SetPasswordPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-line/10 bg-surface p-8 shadow-sm">
-        <div className="text-sm font-bold tracking-wide text-amber mb-6">VPlanner</div>
+        <Brand className="mb-6" />
         <h1 className="font-display text-2xl font-semibold mb-2">
           Set up your account
         </h1>

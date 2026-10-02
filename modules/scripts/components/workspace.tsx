@@ -20,6 +20,9 @@ import { findQuote } from "../lib/anchors";
 import { addComment, createDoc, deleteComment, deleteDoc, getDocContent, renameDoc, resolveComment, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
+import { Lightbox } from "@/components/ui/lightbox";
+import { MentionText } from "./comment-composer";
+import type { MentionPerson } from "../lib/mention-people";
 
 type Owner = { short: string } | { long: string };
 
@@ -43,6 +46,7 @@ export function ScriptWorkspace({
   topBarExtra,
   lastEdited,
   roleColors,
+  people = [],
 }: {
   owner: Owner;
   docs: DocListItem[];
@@ -59,13 +63,25 @@ export function ScriptWorkspace({
   lastEdited: string | null;
   /** The team's role colours (dots, comment colours). */
   roleColors: Record<string, string>;
+  /** Teammates for @mentions, with what they do on this video. */
+  people?: MentionPerson[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
   const [sideOpen, setSideOpen] = useState(!!side);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [active, setActive] = useState<string | null>(null);
+  // ?comment=<id> (from a notification): open the comments on that one.
+  const linked = params.get("comment");
+  const [chatOpen, setChatOpen] = useState(!!linked && comments.some((c) => c.id === linked));
+  const [active, setActive] = useState<string | null>(linked && comments.some((c) => c.id === linked) ? linked : null);
+  const [zoomed, setZoomed] = useState<ScriptComment | null>(null);
+  useEffect(() => {
+    if (linked && comments.some((c) => c.id === linked)) {
+      setChatOpen(true);
+      setActive(linked);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked]);
   const colorOf = (c: ScriptComment) => commentColor(c, roleColors);
   const open = comments.filter((c) => !c.resolved).length;
 
@@ -84,6 +100,7 @@ export function ScriptWorkspace({
   );
 
   return (
+    <>
     <ScriptEditor
       key={doc.id}
       scriptId={doc.id}
@@ -103,8 +120,10 @@ export function ScriptWorkspace({
         setActive(id);
         setChatOpen(true);
       }}
-      onAddComment={async (quote, occurrence, body, kind) => {
-        const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind });
+      people={people}
+      roleColors={roleColors}
+      onAddComment={async (quote, occurrence, body, kind, sketch) => {
+        const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch });
         if (r.error !== undefined) return r.error;
         setChatOpen(true);
         setActive(r.id);
@@ -170,7 +189,7 @@ export function ScriptWorkspace({
               </span>
               <span className="ml-auto text-[11px] text-ink-faint">{relativeTime(c.createdAt)}</span>
             </div>
-            <p className="text-[13.5px] text-ink whitespace-pre-wrap">{c.body}</p>
+            <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
             <div className="flex items-center gap-1 mt-2 -mb-1">
               <button
                 type="button"
@@ -216,9 +235,42 @@ export function ScriptWorkspace({
           colorOf={colorOf}
           roleColors={roleColors}
           exportTitle={title}
+          people={people}
+          onSketch={setZoomed}
         />
       }
     />
+    {zoomed?.sketch && <Lightbox src={zoomed.sketch.url} alt={`Sketch: ${zoomed.body}`} download={`sketch-${zoomed.id.slice(0, 8)}.png`} onClose={() => setZoomed(null)} />}
+    </>
+  );
+}
+
+/** A comment's text (mentions highlighted) and its sketch, if it has one. */
+function CommentBody({ c, people, roleColors, onSketch }: { c: ScriptComment; people: MentionPerson[]; roleColors: Record<string, string>; onSketch: () => void }) {
+  const onlySketch = !!c.sketch && c.body.trim() === "Sketch";
+  return (
+    <>
+      {!onlySketch && (
+        <p className="text-[13.5px] text-ink whitespace-pre-wrap break-words">
+          <MentionText text={c.body} people={people} roleColors={roleColors} />
+        </p>
+      )}
+      {c.sketch && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSketch();
+          }}
+          className="group/sk relative mt-1.5 block w-full rounded-lg border border-line/15 bg-white overflow-hidden hover:border-line/35 transition-colors"
+          aria-label="Open the sketch"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={c.sketch.url} alt="Sketch" loading="lazy" className="w-full max-h-40 object-contain" />
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 text-white px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold opacity-0 group-hover/sk:opacity-100 transition-opacity">View</span>
+        </button>
+      )}
+    </>
   );
 }
 
@@ -663,6 +715,8 @@ function CommentsChat({
   colorOf,
   roleColors,
   exportTitle,
+  people,
+  onSketch,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
@@ -673,9 +727,12 @@ function CommentsChat({
   colorOf: (c: ScriptComment) => string;
   roleColors: Record<string, string>;
   exportTitle: string;
+  people: MentionPerson[];
+  onSketch: (c: ScriptComment) => void;
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<"all" | "comment" | "edit_idea">("all");
   // The big view, like the other chats.
   const [big, setBig] = useState(false);
@@ -786,7 +843,7 @@ function CommentsChat({
                   <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}>
                     “{c.quote}”{missing.has(c.id) && <span className="ml-1.5 rounded bg-surface-2 px-1.5 text-[10.5px] font-bold">text changed</span>}
                   </div>
-                  <p className="text-[13.5px] whitespace-pre-wrap">{c.body}</p>
+                  <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => onSketch(c)} />
                   <div className="flex items-center gap-1 mt-1.5 -mb-1">
                     <button
                       type="button"
@@ -800,9 +857,16 @@ function CommentsChat({
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        void act(() => deleteComment(c.id));
+                        const idea = c.kind === "edit_idea";
+                        const ok = await confirm({
+                          title: idea ? "Delete this editing idea?" : "Delete this comment?",
+                          description: c.sketch ? "Its drawing is deleted too. This can't be undone." : "This can't be undone.",
+                          confirmLabel: "Delete",
+                          danger: true,
+                        });
+                        if (ok) void act(() => deleteComment(c.id));
                       }}
                       className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
                     >
@@ -828,7 +892,7 @@ function CommentsChat({
                         .filter((c) => c.kind === "edit_idea" && !c.resolved)
                         .map((c) => ({ c, at: ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
                         .sort((a, b) => a.at - b.at)
-                        .map(({ c }) => ({ quote: c.quote, idea: c.body }));
+                        .map(({ c }) => ({ quote: c.quote, idea: c.sketch && c.body.trim() === "Sketch" ? "" : c.body, sketch: c.sketch?.url ?? null }));
                       if (!ideas.length) return toast.error("No open editing ideas to export.");
                       const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
                       if (f === "docx") await exportIdeasDocx(ideas, exportTitle, `${exportTitle} - editing ideas`.replace(/[\\/:*?"<>|]+/g, ""));

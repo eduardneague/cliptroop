@@ -307,7 +307,7 @@ export function Select({
               role="listbox"
               tabIndex={-1}
               aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
-              className="overflow-y-auto overscroll-contain styled-scroll p-1 outline-none"
+              className="overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll p-1 outline-none"
               style={{ maxHeight: pos.maxH - (useSearch ? 40 : 0) }}
             >
               {visible.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-soft">No matches</p>}

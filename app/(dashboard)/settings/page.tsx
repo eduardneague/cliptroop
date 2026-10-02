@@ -1,5 +1,6 @@
 import { TabNav } from "@/components/ui/tab-nav";
 import { AnimationsChoice } from "@/components/ui/motion";
+import { SoundsChoice } from "@/components/ui/sound-sync";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -13,6 +14,7 @@ import { TeamsVisibilityToggle } from "./teams-visibility-toggle";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { signOut } from "../actions";
 import type { Metadata } from "next";
+import { WhatsNewButton } from "@/components/ui/whats-new";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -27,7 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const [{ data: profile }, { data: memberships }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, full_name, email, bio, avatar_url, teams_visible, animations_enabled")
+      .select("username, full_name, email, bio, avatar_url, teams_visible, animations_enabled, sounds_enabled")
       .eq("id", user!.id)
       .single(),
     supabase
@@ -41,9 +43,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-semibold mb-1">Settings</h1>
-        <p className="text-sm text-ink-soft">Your account, across every team you&rsquo;re part of.</p>
+      <div className="flex items-start gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display text-3xl font-semibold mb-1">Settings</h1>
+          <p className="text-sm text-ink-soft">Your account, across every team you&rsquo;re part of.</p>
+        </div>
+        <WhatsNewButton className="text-[13px] mt-2.5" />
       </div>
 
       <TabNav
@@ -163,6 +168,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. &ldquo;Match device&rdquo; turns them off if your device asks for less motion.</div>
             </div>
             <AnimationsChoice pref={(profile?.animations_enabled as boolean | null) ?? null} />
+          </div>
+          <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
+            <div>
+              <div className="text-[13.5px] font-semibold">Sounds</div>
+              <div className="text-[11.5px] text-ink-faint">Quiet little sounds when you check things off, save, get a notification or drag something.</div>
+            </div>
+            <SoundsChoice on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
           </div>
         </section>
 

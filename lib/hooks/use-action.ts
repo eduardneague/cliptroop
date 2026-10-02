@@ -27,6 +27,8 @@ export function useAction<Args extends unknown[], R extends ActionResult>(
   opts: {
     optimistic?: (...args: Args) => void;
     success?: string | ((...args: Args) => string);
+    /** A different sound for the success toast (e.g. "advance" when a video moves on). */
+    sound?: import("@/lib/sounds").SoundName;
     onSuccess?: (result: R, ...args: Args) => void;
     onError?: (message: string, ...args: Args) => void;
   } = {}
@@ -49,7 +51,7 @@ export function useAction<Args extends unknown[], R extends ActionResult>(
             return;
           }
           if (opts.success) {
-            toast.success(typeof opts.success === "function" ? opts.success(...args) : opts.success);
+            toast.success(typeof opts.success === "function" ? opts.success(...args) : opts.success, opts.sound ? { sound: opts.sound } : undefined);
           }
           opts.onSuccess?.(result, ...args);
           resolve(true);

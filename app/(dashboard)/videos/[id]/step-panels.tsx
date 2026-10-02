@@ -80,8 +80,8 @@ function useStep() {
       const r = await fn();
       if (r.error) toast.error(r.error);
       else {
-        toast.success(ok);
         const target = goTo ?? (r.stage === "done" || r.stage === "publish" ? r.stage : undefined);
+        toast.success(ok, r.stage === "done" ? { sound: "celebrate" } : r.stage || goTo ? { sound: "advance" } : undefined);
         if (target) router.push(`?tab=${target}`, { scroll: false });
         else router.refresh();
       }

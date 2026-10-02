@@ -226,7 +226,8 @@ export async function exportScriptDocx(doc: Node, title: string, fileName: strin
 }
 
 /** One editing idea: the script text it's about, and the idea. */
-export type IdeaExport = { quote: string; idea: string };
+/** One editing idea: the quoted script text, the idea, and its drawing (if any). */
+export type IdeaExport = { quote: string; idea: string; sketch?: string | null };
 
 /**
  * Editing ideas as Word:
@@ -234,14 +235,23 @@ export type IdeaExport = { quote: string; idea: string };
  */
 export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileName: string) {
   const D = await loadDocx();
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = D;
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } = D;
+  // Drawings: fetched and turned into PNGs (all at once), placed right under their idea.
+  const pictures = await Promise.all(ideas.map((x) => (x.sketch ? imageData(x.sketch) : Promise.resolve(null))));
   const children = [
     new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(title)] }),
     new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Editing Ideas")] }),
-    ...ideas.flatMap((x, i) => [
-      new Paragraph({ spacing: { before: 280 }, children: [new TextRun({ text: `#${i + 1} "${x.quote}"`, bold: true })] }),
-      new Paragraph({ children: [new TextRun({ text: `(${x.idea})`, italics: true })] }),
-    ]),
+    ...ideas.flatMap((x, i) => {
+      const out = [new Paragraph({ spacing: { before: 280 }, children: [new TextRun({ text: `#${i + 1} "${x.quote}"`, bold: true })] })];
+      if (x.idea.trim()) out.push(new Paragraph({ children: [new TextRun({ text: `(${x.idea})`, italics: true })] }));
+      const img = pictures[i];
+      if (img) {
+        const w = Math.min(PAGE_WIDTH_PX * 0.8, img.w);
+        const h = Math.round((img.h / img.w) * w);
+        out.push(new Paragraph({ alignment: AlignmentType.LEFT, spacing: { before: 120 }, children: [new ImageRun({ type: "png", data: img.data, transformation: { width: Math.round(w), height: h } })] }));
+      }
+      return out;
+    }),
   ];
   const blob = await Packer.toBlob(new Document({ title: `${title} · Editing Ideas`, sections: [{ children }] }));
   const url = URL.createObjectURL(blob);
@@ -260,10 +270,10 @@ export function exportIdeasPdf(ideas: IdeaExport[], title: string) {
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} · Editing Ideas</title>
 <style>body{font-family:Georgia,'Times New Roman',serif;max-width:680px;margin:48px auto;padding:0 24px;color:#111;line-height:1.5}
 h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;font-weight:600;color:#555;margin:0 0 28px}
-.q{font-weight:700;margin:22px 0 2px}.i{font-style:italic;margin:0}@page{margin:18mm}</style></head><body>
+.q{font-weight:700;margin:22px 0 2px}.i{font-style:italic;margin:0}.s{display:block;max-width:80%;max-height:420px;margin:10px 0 4px;border:1px solid #ddd;border-radius:6px;break-inside:avoid}@page{margin:18mm}</style></head><body>
 <h1>${esc(title)}</h1><h2>Editing Ideas</h2>
-${ideas.map((x, i) => `<p class="q">#${i + 1} "${esc(x.quote)}"</p><p class="i">(${esc(x.idea)})</p>`).join("\n")}
-<script>window.onload=()=>{window.print()}</script></body></html>`;
+${ideas.map((x, i) => `<p class="q">#${i + 1} "${esc(x.quote)}"</p>${x.idea.trim() ? `<p class="i">(${esc(x.idea)})</p>` : ""}${x.sketch ? `<img class="s" src="${esc(x.sketch)}" alt="Sketch">` : ""}`).join("\n")}
+<script>window.onload=()=>{const imgs=[...document.images];Promise.all(imgs.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r}))).then(()=>window.print())}</script></body></html>`;
   const w = window.open("", "_blank");
   if (!w) return false;
   w.document.open();

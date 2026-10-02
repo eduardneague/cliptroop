@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEditor, EditorContent, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
@@ -10,8 +11,9 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import { createClient } from "@/lib/supabase/client";
-import { saveScript } from "@/app/(dashboard)/scripts/actions";
+import { prepareSketchUpload, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
 import { useMenuKeyboard } from "@/lib/hooks/use-menu-keyboard";
 import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
@@ -42,9 +44,23 @@ import {
   MoreIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark } from "../lib/anchors";
+import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark, type PendingMark } from "../lib/anchors";
+import { CommentComposer, KIND_COLOR } from "./comment-composer";
+import type { MentionPerson } from "../lib/mention-people";
+import type { Scene } from "../sketch/engine";
+
+// The Sketch Studio is only loaded when someone presses Draw.
+const SketchStudio = dynamic(() => import("../sketch/sketch-studio").then((m) => m.SketchStudio), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-paper/90 text-[13px] font-semibold text-ink-soft">Opening the Sketch Studio…</div>
+  ),
+});
+const DRAFT_KEY = (id: string) => `vp:comment-draft:${id}`;
+type SketchDraft = { scene: Scene; blob: Blob; w: number; h: number; url: string };
 import { ScriptImage } from "./script-image";
 import { countWords, EMPTY_DOC, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
+import { sounds } from "@/lib/sounds";
 
 /**
  * Where a block (like an image) can go near `pos`: right after the
@@ -124,6 +140,8 @@ export function ScriptEditor({
   onCommentClick,
   copySources = [],
   onCopyFrom,
+  people = [],
+  roleColors = {},
 }: {
   scriptId: string;
   teamId: string;
@@ -152,13 +170,17 @@ export function ScriptEditor({
   /** Inline comments (anyone on the team can add them). */
   comments?: CommentMark[];
   activeCommentId?: string | null;
-  onAddComment?: (quote: string, occurrence: number, body: string, kind: "comment" | "edit_idea") => Promise<string | null>;
+  onAddComment?: (quote: string, occurrence: number, body: string, kind: "comment" | "edit_idea", sketch?: { path: string; w: number; h: number } | null) => Promise<string | null>;
   onCommentClick?: (id: string) => void;
   /** "Copy from…" when this document is empty. */
   copySources?: { id: string; name: string }[];
   onCopyFrom?: (id: string) => Promise<Record<string, unknown> | null>;
+  /** Teammates for @mentions (with what they do on this video). */
+  people?: MentionPerson[];
+  roleColors?: Record<string, string>;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [status, setStatus] = useState<Status>("saved");
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
@@ -181,7 +203,7 @@ export function ScriptEditor({
   // from this, so clicks and no-op edits never trigger a save.
   const savedJsonRef = useRef<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null }>({ comments, active: activeCommentId });
+  const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null; pending: PendingMark }>({ comments, active: activeCommentId, pending: null });
 
   useEffect(() => {
     try {
@@ -344,11 +366,33 @@ export function ScriptEditor({
   });
   editorRef.current = editor;
 
-  // Comments changed (or another one is active): redraw the highlights.
+  // Selecting text shows a floating "Comment" button (even when view-only).
+  const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [draftKind, setDraftKind] = useState<"comment" | "edit_idea">("comment");
+  const [pop, setPop] = useState<{ id: string; top: number; left: number } | null>(null);
+  // A drawing for the editing idea being written, and the studio itself.
+  const [sketch, setSketch] = useState<SketchDraft | null>(null);
+  const [studio, setStudio] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [isPhone, setIsPhone] = useState(false);
+  const [backup, setBackup] = useState<{ quote: string; occurrence: number; kind: "comment" | "edit_idea"; text: string; scene: Scene | null } | null>(null);
+  const draftRef = useRef<{ text: string | null; sketch: boolean }>({ text: null, sketch: false });
+  draftRef.current = { text: draft, sketch: !!sketch };
   useEffect(() => {
-    commentStateRef.current = { comments, active: activeCommentId };
+    const mq = window.matchMedia("(max-width: 639px)");
+    const f = () => setIsPhone(mq.matches);
+    f();
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+
+  // Comments changed (or another one is active, or one is being written): redraw the highlights.
+  const drafting = draft !== null;
+  useEffect(() => {
+    commentStateRef.current = { comments, active: activeCommentId, pending: drafting && sel ? { quote: sel.quote, occurrence: sel.occurrence, kind: draftKind } : null };
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(commentKey, true));
-  }, [comments, activeCommentId, editor]);
+  }, [comments, activeCommentId, editor, drafting, sel, draftKind]);
   // Jump to the comment picked in the list.
   useEffect(() => {
     if (!editor || !activeCommentId) return;
@@ -359,14 +403,11 @@ export function ScriptEditor({
     (node.nodeType === 1 ? node : node.parentElement)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeCommentId, comments, editor]);
 
-  // Selecting text shows a floating "Comment" button (even when view-only).
-  const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
-  const [draft, setDraft] = useState<string | null>(null);
-  const [draftKind, setDraftKind] = useState<"comment" | "edit_idea">("comment");
-  const [pop, setPop] = useState<{ id: string; top: number; left: number } | null>(null);
   useEffect(() => {
     if (!editor || !onAddComment) return;
     const update = () => {
+      // Writing a comment: it stays on the text it was started on.
+      if (draftRef.current.text !== null) return;
       const { from, to, empty } = editor.state.selection;
       const $from = editor.state.doc.resolve(from);
       const $to = editor.state.doc.resolve(to);
@@ -388,6 +429,110 @@ export function ScriptEditor({
     };
   }, [editor, onAddComment, draft]);
 
+  // ---- writing a comment: never lost by accident ---------------------------------
+  const clearDraft = useCallback(() => {
+    setDraft(null);
+    setSel(null);
+    setSketch((sk) => {
+      if (sk) URL.revokeObjectURL(sk.url);
+      return null;
+    });
+    try {
+      localStorage.removeItem(DRAFT_KEY(scriptId));
+    } catch {}
+  }, [scriptId]);
+  async function requestDiscard() {
+    if ((draft ?? "").trim() || sketch) {
+      const ok = await confirm({
+        title: draftKind === "edit_idea" ? "Discard this editing idea?" : "Discard this comment?",
+        description: sketch ? "What you wrote and your drawing will be lost." : "What you wrote will be lost.",
+        confirmLabel: "Discard",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    clearDraft();
+  }
+  async function submitDraft() {
+    if (!sel || draft === null || !onAddComment || sending) return;
+    setSending(true);
+    let sk: { path: string; w: number; h: number } | null = null;
+    if (sketch) {
+      // The drawing goes up first (PNG + its editable version), then the idea.
+      // The server hands out signed upload links after checking you're on
+      // this document's team, so storage policies can't get in the way.
+      const target = await prepareSketchUpload(scriptId);
+      if (target.error !== undefined) {
+        setSending(false);
+        toast.error(target.error);
+        return;
+      }
+      const bucket = createClient().storage.from("script-sketches");
+      const [up] = await Promise.all([
+        bucket.uploadToSignedUrl(target.png.path, target.png.token, sketch.blob, { contentType: "image/png", cacheControl: UPLOAD_CACHE_CONTROL }),
+        target.json.token
+          ? bucket.uploadToSignedUrl(target.json.path, target.json.token, new Blob([JSON.stringify(sketch.scene)], { type: "application/json" }), { contentType: "application/json" })
+          : null,
+      ]);
+      if (up.error) {
+        setSending(false);
+        toast.error(`Couldn't upload the drawing (${up.error.message}). Try again.`);
+        return;
+      }
+      sk = { path: target.png.path, w: sketch.w, h: sketch.h };
+    }
+    const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind, sk);
+    setSending(false);
+    if (err) toast.error(err);
+    else {
+      sounds.send();
+      clearDraft();
+    }
+  }
+  // A copy of the unsent comment on this device (a reload or a closed tab can't lose it).
+  useEffect(() => {
+    if (draft === null || !sel) return;
+    const t = setTimeout(() => {
+      try {
+        const scene = sketch && JSON.stringify(sketch.scene).length < 1_500_000 ? sketch.scene : null;
+        if (!draft.trim() && !scene) return localStorage.removeItem(DRAFT_KEY(scriptId));
+        localStorage.setItem(DRAFT_KEY(scriptId), JSON.stringify({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, text: draft, scene, at: Date.now() }));
+      } catch {
+        /* full or private: the warnings still protect it */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draft, draftKind, sel, sketch, scriptId]);
+  // Found one from last time? Offer it back.
+  useEffect(() => {
+    if (!editor || !onAddComment) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY(scriptId));
+      if (!raw) return;
+      const b = JSON.parse(raw);
+      if (Date.now() - (b.at ?? 0) > 14 * 86_400_000 || !findQuote(editor.state.doc, b.quote, b.occurrence)) return localStorage.removeItem(DRAFT_KEY(scriptId));
+      setBackup({ quote: b.quote, occurrence: b.occurrence ?? 0, kind: b.kind === "edit_idea" ? "edit_idea" : "comment", text: String(b.text ?? ""), scene: b.scene ?? null });
+    } catch {}
+  }, [editor, onAddComment, scriptId]);
+  async function restoreBackup() {
+    const b = backup;
+    if (!b || !editor) return;
+    setBackup(null);
+    const r = findQuote(editor.state.doc, b.quote, b.occurrence);
+    if (!r) return toast.error("That text has changed since.");
+    editor.chain().setTextSelection(r).scrollIntoView().run();
+    // The selection listener places the composer; then fill it in.
+    requestAnimationFrame(async () => {
+      setDraftKind(b.kind);
+      setDraft(b.text);
+      if (b.scene?.els?.length) {
+        const { exportPng } = await import("../sketch/engine");
+        const png = await exportPng(b.scene.els, 1600, b.scene.paper === "dark" ? "dark" : "light");
+        if (png) setSketch({ scene: b.scene, ...png, url: URL.createObjectURL(png.blob) });
+      }
+    });
+  }
+
   // Save shortcut, unsaved-changes warning, and a final save when leaving.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -397,7 +542,7 @@ export function ScriptEditor({
       }
     };
     const onLeave = (e: BeforeUnloadEvent) => {
-      if (pendingRef.current || inflightRef.current) {
+      if (pendingRef.current || inflightRef.current || draftRef.current.text?.trim() || draftRef.current.sketch) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -687,92 +832,47 @@ export function ScriptEditor({
               {renderCommentPopover(pop.id, () => setPop(null))}
             </div>
           )}
-          {sel && onAddComment && (
+          {sel && onAddComment && draft === null && (
             <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
-              {draft === null ? (
-                <div className="flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1 animate-[modalin_.12s_var(--ease-out)]">
-                  {([
-                    ["comment", "Comment"],
-                    ["edit_idea", "Editing idea"],
-                  ] as const).map(([k, label]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        setDraftKind(k);
-                        setDraft("");
-                      }}
-                      className="rounded-lg px-3 h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
-                      style={{ background: k === "comment" ? "rgb(var(--amber))" : "rgb(59 130 246)" }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className="w-[280px] rounded-xl border bg-surface shadow-2xl p-2.5 space-y-2 animate-[modalin_.12s_var(--ease-out)]"
-                  style={{ borderColor: draftKind === "edit_idea" ? "rgb(59 130 246 / .55)" : "rgb(var(--amber) / .55)", background: `color-mix(in srgb, ${draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))"} 6%, rgb(var(--surface)))` }}
-                >
-                  <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))" }}>
-                    {draftKind === "edit_idea" ? "Editing idea" : "Comment"} · Enter to add
-                  </div>
-                  <div className="text-[11.5px] text-ink-soft truncate">“{sel.quote}”</div>
-                  <textarea
-                    autoFocus
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Escape") {
-                        setDraft(null);
-                        setSel(null);
-                      }
-                      if (e.key === "Enter" && !e.shiftKey && draft.trim()) {
-                        e.preventDefault();
-                        const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind);
-                        if (err) toast.error(err);
-                        else {
-                          setDraft(null);
-                          setSel(null);
-                        }
-                      }
+              <div className="flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1 animate-[modalin_.12s_var(--ease-out)]">
+                {([
+                  ["comment", "Comment"],
+                  ["edit_idea", "Editing idea"],
+                ] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setDraftKind(k);
+                      setDraft("");
                     }}
-                    rows={3}
-                    maxLength={2000}
-                    placeholder={draftKind === "edit_idea" ? "Your editing idea…" : "Your comment…"}
-                    className="w-full rounded-lg border border-line/15 bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:ring-2 focus:ring-amber"
-                  />
-                  <div className="flex justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft(null);
-                        setSel(null);
-                      }}
-                      className="rounded-lg px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!draft.trim()}
-                      onClick={async () => {
-                        const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind);
-                        if (err) toast.error(err);
-                        else {
-                          setDraft(null);
-                          setSel(null);
-                        }
-                      }}
-                      className="rounded-lg text-white font-bold px-3 h-8 text-[12.5px] disabled:opacity-50"
-                      style={{ background: draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))" }}
-                    >
-                      {draftKind === "edit_idea" ? "Add idea" : "Comment"}
-                    </button>
-                  </div>
-                </div>
-              )}
+                    className="rounded-lg px-3 h-9 sm:h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
+                    style={{ background: KIND_COLOR[k] }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {sel && onAddComment && draft !== null && !isPhone && (
+            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, (paperRef.current?.clientWidth ?? 600) - 308)) }}>
+              <CommentComposer
+                kind={draftKind}
+                quote={sel.quote}
+                people={people}
+                roleColors={roleColors}
+                text={draft}
+                setText={setDraft}
+                sketchUrl={sketch?.url ?? null}
+                onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
+                onRemoveSketch={() => setSketch(null)}
+                busy={sending}
+                onSubmit={() => void submitDraft()}
+                onCancel={() => void requestDiscard()}
+                sheet={false}
+              />
             </div>
           )}
         </div>
@@ -784,6 +884,65 @@ export function ScriptEditor({
       {sideBySide && <div className="hidden lg:block min-w-0">{sideBySide}</div>}
       </div>
       {rightPanel}
+      {/* Phones: the comment being written is a sheet at the bottom. */}
+      {sel && onAddComment && draft !== null && isPhone &&
+        createPortal(
+          <div className="no-print fixed inset-x-0 bottom-0 z-[95] rounded-t-2xl border-t border-line/15 bg-surface shadow-[0_-20px_50px_-20px_rgb(0_0_0/0.45)] animate-[sheetup_.22s_var(--ease-out)]">
+            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line/20" aria-hidden />
+            <CommentComposer
+              kind={draftKind}
+              quote={sel.quote}
+              people={people}
+              roleColors={roleColors}
+              text={draft}
+              setText={setDraft}
+              sketchUrl={sketch?.url ?? null}
+              onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
+              onRemoveSketch={() => setSketch(null)}
+              busy={sending}
+              onSubmit={() => void submitDraft()}
+              onCancel={() => void requestDiscard()}
+              sheet
+            />
+          </div>,
+          document.body
+        )}
+      {studio && (
+        <SketchStudio
+          initial={sketch?.scene ?? null}
+          onCancel={() => setStudio(false)}
+          onConfirm={(r) => {
+            setSketch((old) => {
+              if (old) URL.revokeObjectURL(old.url);
+              return { ...r, url: URL.createObjectURL(r.blob) };
+            });
+            setStudio(false);
+          }}
+        />
+      )}
+      {backup && draft === null && (
+        <div className="no-print fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] lg:bottom-6 w-[min(30rem,calc(100vw-1.5rem))] rounded-2xl border bg-surface shadow-2xl px-4 py-3 flex items-center gap-3 animate-[toastin_.25s_ease]" style={{ borderColor: `color-mix(in srgb, ${KIND_COLOR[backup.kind]} 45%, transparent)` }}>
+          <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: KIND_COLOR[backup.kind] }} />
+          <p className="flex-1 min-w-0 text-[13px]">
+            You have an unsent {backup.kind === "edit_idea" ? "editing idea" : "comment"} on <span className="font-semibold">“{backup.quote.slice(0, 40)}{backup.quote.length > 40 ? "…" : ""}”</span>.
+          </p>
+          <button type="button" onClick={() => void restoreBackup()} className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] flex-shrink-0">
+            Restore
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBackup(null);
+              try {
+                localStorage.removeItem(DRAFT_KEY(scriptId));
+              } catch {}
+            }}
+            className="rounded-lg px-2 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink flex-shrink-0"
+          >
+            Discard
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );

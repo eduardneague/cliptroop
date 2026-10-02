@@ -34,6 +34,11 @@ const config: Config = {
         red: "rgb(var(--red) / <alpha-value>)",
         coral: "rgb(var(--coral) / <alpha-value>)",
       },
+      // 12% tints (badges, chips, tiles) are used across the app; Tailwind's
+      // scale only has steps of 5, so without this they rendered with no tint.
+      opacity: {
+        12: "0.12",
+      },
       fontFamily: {
         display: ["var(--font-display)"],
         body: ["var(--font-body)"],

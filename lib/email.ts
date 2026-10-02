@@ -23,7 +23,7 @@ export function appUrl() {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** A short alert email with one button. Never throws. */
-export async function sendAlertEmail(input: { to: string[]; subject: string; message: string; linkText: string; href: string }) {
+export async function sendAlertEmail(input: { to: string[]; subject: string; message: string; linkText: string; href: string; footer?: string }) {
   if (!emailConfigured() || input.to.length === 0) return { sent: false as const };
   const html = `<!doctype html><html><body style="margin:0;background:#f6f4f0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1917">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
@@ -32,7 +32,7 @@ export async function sendAlertEmail(input: { to: string[]; subject: string; mes
 <tr><td style="padding-top:14px;font-size:18px;font-weight:700;line-height:1.35">${esc(input.subject)}</td></tr>
 <tr><td style="padding-top:10px;font-size:14.5px;line-height:1.55;color:#44403c">${esc(input.message)}</td></tr>
 <tr><td style="padding-top:22px"><a href="${esc(input.href)}" style="display:inline-block;background:#e8630d;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px">${esc(input.linkText)}</a></td></tr>
-<tr><td style="padding-top:22px;font-size:12px;color:#a8a29e">You get this because you're a master or scheduler of this team.</td></tr>
+<tr><td style="padding-top:22px;font-size:12px;color:#a8a29e">${esc(input.footer ?? "You get this because you're a master or scheduler of this team.")}</td></tr>
 </table></td></tr></table></body></html>`;
   try {
     const res = await fetch("https://api.resend.com/emails", {
