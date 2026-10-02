@@ -224,3 +224,50 @@ export async function exportScriptDocx(doc: Node, title: string, fileName: strin
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+/** One editing idea: the script text it's about, and the idea. */
+export type IdeaExport = { quote: string; idea: string };
+
+/**
+ * Editing ideas as Word:
+ *   TITLE / Editing Ideas / #1 "quote" (bold) / (idea) (italic) …
+ */
+export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileName: string) {
+  const D = await loadDocx();
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = D;
+  const children = [
+    new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(title)] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Editing Ideas")] }),
+    ...ideas.flatMap((x, i) => [
+      new Paragraph({ spacing: { before: 280 }, children: [new TextRun({ text: `#${i + 1} "${x.quote}"`, bold: true })] }),
+      new Paragraph({ children: [new TextRun({ text: `(${x.idea})`, italics: true })] }),
+    ]),
+  ];
+  const blob = await Packer.toBlob(new Document({ title: `${title} · Editing Ideas`, sections: [{ children }] }));
+  const url = URL.createObjectURL(blob);
+  const a = window.document.createElement("a");
+  a.href = url;
+  a.download = `${fileName}.docx`;
+  window.document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Editing ideas as PDF: a clean page in a new window, printed to PDF. */
+export function exportIdeasPdf(ideas: IdeaExport[], title: string) {
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} · Editing Ideas</title>
+<style>body{font-family:Georgia,'Times New Roman',serif;max-width:680px;margin:48px auto;padding:0 24px;color:#111;line-height:1.5}
+h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;font-weight:600;color:#555;margin:0 0 28px}
+.q{font-weight:700;margin:22px 0 2px}.i{font-style:italic;margin:0}@page{margin:18mm}</style></head><body>
+<h1>${esc(title)}</h1><h2>Editing Ideas</h2>
+${ideas.map((x, i) => `<p class="q">#${i + 1} "${esc(x.quote)}"</p><p class="i">(${esc(x.idea)})</p>`).join("\n")}
+<script>window.onload=()=>{window.print()}</script></body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) return false;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  return true;
+}

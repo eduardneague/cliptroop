@@ -703,15 +703,21 @@ export function ScriptEditor({
                         setDraftKind(k);
                         setDraft("");
                       }}
-                      className={`rounded-lg px-3 h-8 text-[12.5px] font-bold whitespace-nowrap ${k === "comment" ? "bg-amber text-white" : "text-ink hover:bg-surface-2"}`}
+                      className="rounded-lg px-3 h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
+                      style={{ background: k === "comment" ? "rgb(var(--amber))" : "rgb(59 130 246)" }}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="w-[280px] rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 space-y-2 animate-[modalin_.12s_var(--ease-out)]">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">{draftKind === "edit_idea" ? "Editing idea" : "Comment"}</div>
+                <div
+                  className="w-[280px] rounded-xl border bg-surface shadow-2xl p-2.5 space-y-2 animate-[modalin_.12s_var(--ease-out)]"
+                  style={{ borderColor: draftKind === "edit_idea" ? "rgb(59 130 246 / .55)" : "rgb(var(--amber) / .55)", background: `color-mix(in srgb, ${draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))"} 6%, rgb(var(--surface)))` }}
+                >
+                  <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))" }}>
+                    {draftKind === "edit_idea" ? "Editing idea" : "Comment"} · Enter to add
+                  </div>
                   <div className="text-[11.5px] text-ink-soft truncate">“{sel.quote}”</div>
                   <textarea
                     autoFocus
@@ -722,7 +728,8 @@ export function ScriptEditor({
                         setDraft(null);
                         setSel(null);
                       }
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && draft.trim()) {
+                      if (e.key === "Enter" && !e.shiftKey && draft.trim()) {
+                        e.preventDefault();
                         const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind);
                         if (err) toast.error(err);
                         else {
@@ -758,9 +765,10 @@ export function ScriptEditor({
                           setSel(null);
                         }
                       }}
-                      className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] disabled:opacity-50"
+                      className="rounded-lg text-white font-bold px-3 h-8 text-[12.5px] disabled:opacity-50"
+                      style={{ background: draftKind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))" }}
                     >
-                      Comment
+                      {draftKind === "edit_idea" ? "Add idea" : "Comment"}
                     </button>
                   </div>
                 </div>

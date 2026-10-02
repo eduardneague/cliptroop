@@ -34,7 +34,7 @@ export function InviteToTeam({ userId, name, teams }: { userId: string; name: st
                   onClick={() => setTeam(t.id)}
                   className={`w-full flex items-center gap-2 rounded-lg px-2.5 h-9 text-[13px] ${team === t.id ? "bg-amber/10 font-bold ring-1 ring-amber/40" : "hover:bg-surface-2"}`}
                 >
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: t.color }} />
+                  <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: t.color }} />
                   {t.name}
                 </button>
               ))}
@@ -49,7 +49,7 @@ export function InviteToTeam({ userId, name, teams }: { userId: string; name: st
                   type="button"
                   aria-pressed={roles.includes(r.id)}
                   onClick={() => setRoles((cur) => (cur.includes(r.id) ? cur.filter((x) => x !== r.id) : [...cur, r.id]))}
-                  className={`rounded-full px-2.5 h-7 text-[12px] font-semibold border ${roles.includes(r.id) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+                  className={`rounded-lg px-2.5 h-7 text-[12px] font-semibold border ${roles.includes(r.id) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
                 >
                   {r.name}
                 </button>

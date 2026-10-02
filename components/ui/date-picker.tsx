@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getPlannedDays, type PlannedDay } from "@/app/(dashboard)/calendar/planned-days";
+
+// What's planned per visible 6 weeks, remembered while the page is open.
+const PLANNED_CACHE = new Map<string, Record<string, PlannedDay>>();
 import { createPortal } from "react-dom";
 import { ChevronRightIcon, ArrowLeftIcon } from "./icons";
 
@@ -64,6 +68,11 @@ export function DatePicker({
   // The month on screen. Only the arrows or the keyboard change it —
   // never the mouse (hovering a greyed edge day used to flip months).
   const [viewMonth, setViewMonth] = useState<string>("");
+  // Shorts + long videos planned per day (every picker shows both).
+  const [planned, setPlanned] = useState<Record<string, PlannedDay>>({});
+  const [peek, setPeek] = useState<string | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
   const [pos, setPos] = useState({ left: 0, top: 0, up: false });
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -164,6 +173,24 @@ export function DatePicker({
   const days = viewMonth ? Array.from({ length: 42 }, (_, i) => addDays(first, i)) : [];
   const monthLabel = monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const inMonth = (d: string) => d.slice(0, 7) === viewMonth;
+  useEffect(() => {
+    if (!open || !days.length) return;
+    const key = `${days[0]}:${days[days.length - 1]}`;
+    // Show what we have instantly, then refresh (plans change).
+    const hit = PLANNED_CACHE.get(key);
+    if (hit) setPlanned(hit);
+    let alive = true;
+    getPlannedDays(days[0], days[days.length - 1])
+      .then((r) => {
+        PLANNED_CACHE.set(key, r);
+        if (alive) setPlanned(r);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, viewMonth]);
 
   return (
     <>
@@ -233,6 +260,27 @@ export function DatePicker({
               ))}
             </div>
 
+            {peek && planned[peek] && (
+              <div className="absolute left-2 right-2 top-2 z-10 rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 animate-[modalin_.12s_var(--ease-out)]" role="status">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
+                  {parse(peek).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                </div>
+                <ul className="space-y-1">
+                  {[...planned[peek].longs.map((x) => ({ ...x, k: "long" as const })), ...planned[peek].shorts.map((x) => ({ ...x, k: "short" as const }))]
+                    .slice(0, 7)
+                    .map((x, i) => (
+                      <li key={i} className={`flex items-center gap-2 text-[12.5px] ${x.done ? "text-ink-soft line-through" : "text-ink"}`}>
+                        <span className={`w-2 h-2 rounded-[2px] flex-shrink-0 ${x.k === "long" ? "bg-long" : "bg-short"}`} />
+                        <span className="font-mono text-ink-faint text-[11px]">#{x.n}</span>
+                        <span className="truncate">{x.t}</span>
+                      </li>
+                    ))}
+                </ul>
+                {planned[peek].shorts.length + planned[peek].longs.length > 7 && (
+                  <div className="text-[11.5px] text-ink-soft mt-1">and {planned[peek].shorts.length + planned[peek].longs.length - 7} more</div>
+                )}
+              </div>
+            )}
             <div ref={grid} role="grid" onKeyDown={onGridKey} className="grid grid-cols-7 gap-0.5">
               {days.map((d) => {
                 const info = dayInfo?.(d) ?? null;
@@ -240,6 +288,9 @@ export function DatePicker({
                 const isToday = d === today;
                 const isCursor = d === cursor;
                 const full = !!info && info.count >= info.limit;
+                const plan = planned[d];
+                const shortsN = info ? info.count : plan?.shorts.length ?? 0;
+                const longsN = plan?.longs.length ?? 0;
                 return (
                   <button
                     key={d}
@@ -251,7 +302,26 @@ export function DatePicker({
                     aria-label={`${parse(d).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}${
                       info && info.count ? `, ${info.count} of ${info.limit} planned` : ""
                     }`}
-                    onClick={() => pick(d)}
+                    onClick={() => {
+                      if (held.current) {
+                        held.current = false;
+                        return;
+                      }
+                      pick(d);
+                    }}
+                    onMouseEnter={() => (shortsN + longsN ? setPeek(d) : setPeek(null))}
+                    onMouseLeave={() => setPeek((p) => (p === d ? null : p))}
+                    // Phones: press and hold a day to see what's planned.
+                    onTouchStart={() => {
+                      held.current = false;
+                      if (!(shortsN + longsN)) return;
+                      holdTimer.current = setTimeout(() => {
+                        held.current = true;
+                        setPeek(d);
+                      }, 420);
+                    }}
+                    onTouchEnd={() => holdTimer.current && clearTimeout(holdTimer.current)}
+                    onTouchMove={() => holdTimer.current && clearTimeout(holdTimer.current)}
                     className={`relative h-10 rounded-lg flex flex-col items-center justify-center text-[13px] tabular-nums transition-colors focus:outline-none ${
                       selected
                         ? "bg-amber text-white font-bold"
@@ -261,17 +331,21 @@ export function DatePicker({
                     } ${d < today && !selected ? "opacity-55" : ""}`}
                   >
                     {Number(d.slice(8))}
-                    {info && info.count > 0 && (
-                      <span className="absolute bottom-1 flex gap-[2px]" aria-hidden>
-                        {Array.from({ length: Math.min(info.count, 4) }).map((_, i) => (
+                    {shortsN + longsN > 0 && (
+                      <span className="absolute bottom-1 flex items-center gap-[2px]" aria-hidden>
+                        {Array.from({ length: Math.min(shortsN, longsN ? 2 : 3) }).map((_, i) => (
                           <span
-                            key={i}
-                            className={`w-[5px] h-[5px] rounded-full ${
-                              // Shape, not shade: hollow = planned, solid = full (team shorts colour).
-                              selected ? (full ? "bg-white" : "border border-white") : full ? "bg-short" : "border-[1.5px] border-short"
+                            key={`s${i}`}
+                            className={`w-[5px] h-[5px] rounded-[1.5px] ${
+                              // Shorts: hollow = planned, solid = the day is full (team shorts colour).
+                              selected ? (full ? "bg-white" : "border border-white") : info ? (full ? "bg-short" : "border-[1.5px] border-short") : "bg-short"
                             }`}
                           />
                         ))}
+                        {Array.from({ length: Math.min(longsN, shortsN ? 1 : 2) }).map((_, i) => (
+                          <span key={`l${i}`} className={`w-[5px] h-[5px] rounded-[1.5px] ${selected ? "bg-white" : "bg-long"}`} />
+                        ))}
+                        {shortsN + longsN > 3 && <span className={`text-[8px] leading-none font-bold ${selected ? "text-white" : "text-ink-soft"}`}>+</span>}
                       </span>
                     )}
                   </button>
@@ -299,13 +373,24 @@ export function DatePicker({
                   {clearLabel}
                 </button>
               )}
-              {dayInfo && !onClear && (
+              {!onClear && (
                 <span className="flex items-center gap-2 text-[11px] text-ink-soft">
+                  {dayInfo ? (
+                    <>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-[7px] h-[7px] rounded-[2px] border-[1.5px] border-short" /> planned
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-[7px] h-[7px] rounded-[2px] bg-short" /> full
+                      </span>
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-[7px] h-[7px] rounded-[2px] bg-short" /> shorts
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1">
-                    <span className="w-[7px] h-[7px] rounded-full border-[1.5px] border-short" /> planned
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-[7px] h-[7px] rounded-full bg-short" /> full
+                    <span className="w-[7px] h-[7px] rounded-[2px] bg-long" /> long
                   </span>
                 </span>
               )}

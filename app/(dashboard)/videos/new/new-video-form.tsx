@@ -130,7 +130,7 @@ export function NewVideoForm({
             <span className={label}>Type</span>
             <div className="flex flex-wrap gap-2">
               {TYPES.map((t) => (
-                <label key={t} className={`cursor-pointer rounded-full border px-4 h-10 inline-flex items-center text-[13.5px] font-semibold transition-colors ${types.includes(t) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
+                <label key={t} className={`cursor-pointer rounded-lg border px-4 h-10 inline-flex items-center text-[13.5px] font-semibold transition-colors ${types.includes(t) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
                   <input type="checkbox" name="type" value={t} checked={types.includes(t)} onChange={() => setTypes((all) => (all.includes(t) ? all.filter((x) => x !== t) : [...all, t]))} className="sr-only" />
                   {t}
                 </label>
@@ -181,7 +181,7 @@ export function NewVideoForm({
               {PLATFORMS.map((p) => {
                 const on = platforms.includes(p.id);
                 return (
-                  <label key={p.id} className={`cursor-pointer inline-flex items-center gap-2 rounded-full border pl-1.5 pr-3.5 h-10 text-[13.5px] font-semibold transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
+                  <label key={p.id} className={`cursor-pointer inline-flex items-center gap-2 rounded-lg border pl-1.5 pr-3.5 h-10 text-[13.5px] font-semibold transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}>
                     <input
                       type="checkbox"
                       name="platforms"
@@ -190,7 +190,7 @@ export function NewVideoForm({
                       onChange={() => setPlatforms((all) => (all.includes(p.id) ? (all.length > 1 ? all.filter((x) => x !== p.id) : all) : [...all, p.id]))}
                       className="sr-only"
                     />
-                    <PlatformIcon platform={p.id as "youtube"} className={`w-7 h-7 rounded-full ${on ? "" : "opacity-50 grayscale"}`} />
+                    <PlatformIcon platform={p.id as "youtube"} className={`w-7 h-7 rounded-md ${on ? "" : "opacity-50 grayscale"}`} />
                     {p.name}
                   </label>
                 );

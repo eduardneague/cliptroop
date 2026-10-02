@@ -389,7 +389,7 @@ export function CalendarView({
         {day === today && <span className={`text-[10.5px] font-extrabold tracking-[0.12em] text-amber ${big ? "" : "hidden sm:inline"}`}>TODAY</span>}
         <span className={`flex-1 ${big ? "" : "hidden sm:block"}`} />
         {(byDay.get(day) ?? []).some((x) => x.kind === "long") && (
-          <span className={`w-2 h-2 rounded-full bg-long ${big ? "" : "hidden sm:inline-block"}`} title="A long video is planned" />
+          <span className={`w-2 h-2 rounded-[2px] bg-long ${big ? "" : "hidden sm:inline-block"}`} title="A long video is planned" />
         )}
         {day >= today && (
           <span className={big ? "" : "hidden sm:inline-flex"}>
@@ -514,7 +514,7 @@ export function CalendarView({
                   {/* Phones: just markers; the day's list shows below the grid. */}
                   <div className="sm:hidden flex items-center justify-center gap-0.5 min-h-[8px]">
                     {list.slice(0, 3).map((it) => (
-                      <span key={it.id} className={`w-1.5 h-1.5 rounded-full ${it.done ? "opacity-40" : ""} ${it.kind === "short" ? "bg-short" : "bg-long"}`} />
+                      <span key={it.id} className={`w-1.5 h-1.5 rounded-[1.5px] ${it.done ? "opacity-40" : ""} ${it.kind === "short" ? "bg-short" : "bg-long"}`} />
                     ))}
                     {list.length > 3 && <span className="text-[9px] font-bold text-ink-soft leading-none">+</span>}
                   </div>
@@ -799,10 +799,10 @@ function CapacityDots({ count, limit, label = false }: { count: number; limit: n
       title={`${count} of ${limit} short${limit === 1 ? "" : "s"}${over ? ` · ${over} over` : full ? " · full" : ""}`}
     >
       {Array.from({ length: limit }, (_, i) => (
-        <span key={i} className={`w-2 h-2 rounded-full ${i < count ? "bg-short" : "border border-short/60"}`} />
+        <span key={i} className={`w-2 h-2 rounded-[2px] ${i < count ? "bg-short" : "border border-short/60"}`} />
       ))}
       {Array.from({ length: Math.min(over, 3) }, (_, i) => (
-        <span key={`o${i}`} className="w-2 h-2 rounded-full bg-red" />
+        <span key={`o${i}`} className="w-2 h-2 rounded-[2px] bg-red" />
       ))}
       {label && (
         <span className="ml-1 text-[12.5px] font-semibold text-ink-soft">
@@ -1082,8 +1082,8 @@ function QuickView({
                   {item.platforms.map((p) => {
                     const posted = item.postedPlatforms.includes(p) || item.posts.some((x) => x.platform === p && x.status === "published");
                     return (
-                      <span key={p} title={`${PLATFORM_NAME[p] ?? p}${posted ? " · posted" : ""}`} className={`inline-flex rounded-full ${posted ? "ring-2 ring-green ring-offset-1 ring-offset-surface" : ""}`}>
-                        <PlatformIcon platform={p as "youtube"} className="w-7 h-7 rounded-full" />
+                      <span key={p} title={`${PLATFORM_NAME[p] ?? p}${posted ? " · posted" : ""}`} className={`inline-flex rounded-lg ${posted ? "ring-2 ring-green ring-offset-1 ring-offset-surface" : ""}`}>
+                        <PlatformIcon platform={p as "youtube"} className="w-7 h-7 rounded-md" />
                       </span>
                     );
                   })}

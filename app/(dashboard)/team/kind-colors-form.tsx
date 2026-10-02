@@ -23,11 +23,11 @@ function Picker({ label, value, onChange, kind }: { label: string; value: string
             onClick={() => onChange(c)}
             aria-label={`Use ${c}`}
             aria-pressed={value.toUpperCase() === c}
-            className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${value.toUpperCase() === c ? "ring-2 ring-offset-2 ring-offset-surface ring-ink" : ""}`}
+            className={`w-8 h-8 rounded-lg transition-transform hover:scale-110 ${value.toUpperCase() === c ? "ring-2 ring-offset-2 ring-offset-surface ring-ink" : ""}`}
             style={{ background: c }}
           />
         ))}
-        <label className="relative w-8 h-8 rounded-full border border-dashed border-line/40 flex items-center justify-center cursor-pointer text-[15px] text-ink-soft hover:text-ink" title="Custom colour">
+        <label className="relative w-8 h-8 rounded-lg border border-dashed border-line/40 flex items-center justify-center cursor-pointer text-[15px] text-ink-soft hover:text-ink" title="Custom colour">
           +
           <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" aria-label={`Custom colour for ${label}`} />
         </label>
@@ -40,7 +40,7 @@ function Picker({ label, value, onChange, kind }: { label: string; value: string
         <span className="font-mono text-ink-soft">#{kind === "short" ? 12 : 3}</span>
         <span className="font-semibold truncate">{kind === "short" ? "Why Restarting Fixes 99%" : "I Tested a $200 Fake iPhone"}</span>
         <span className="flex-1" />
-        <span className="w-2 h-2 rounded-full" style={{ background: value }} />
+        <span className="w-2 h-2 rounded-[3px]" style={{ background: value }} />
       </div>
     </div>
   );

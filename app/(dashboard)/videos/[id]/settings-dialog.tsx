@@ -101,7 +101,7 @@ export function LongVideoSettings({
                     type="button"
                     aria-pressed={types.includes(t)}
                     onClick={() => setTypes((all) => (all.includes(t) ? all.filter((x) => x !== t) : [...all, t]))}
-                    className={`rounded-full border px-4 h-9 text-[13px] font-semibold transition-colors ${types.includes(t) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+                    className={`rounded-lg border px-4 h-9 text-[13px] font-semibold transition-colors ${types.includes(t) ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
                   >
                     {t}
                   </button>
@@ -159,9 +159,9 @@ export function LongVideoSettings({
                         setPlatforms(next);
                         run(() => setLongPlatforms(projectId, next), "Platforms updated");
                       }}
-                      className={`rounded-full p-0.5 border transition-colors ${on ? "border-amber" : "border-transparent opacity-45 grayscale hover:opacity-80"}`}
+                      className={`rounded-lg p-0.5 border transition-colors ${on ? "border-amber" : "border-transparent opacity-45 grayscale hover:opacity-80"}`}
                     >
-                      <PlatformIcon platform={p.id as "youtube"} className="w-8 h-8 rounded-full" />
+                      <PlatformIcon platform={p.id as "youtube"} className="w-8 h-8 rounded-md" />
                     </button>
                   );
                 })}

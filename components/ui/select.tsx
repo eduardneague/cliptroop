@@ -226,7 +226,7 @@ export function Select({
 
   const triggerCls =
     variant === "pill"
-      ? `inline-flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-[12.5px] font-semibold text-ink-soft hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-60 ${
+      ? `inline-flex items-center gap-1 rounded-lg border border-dashed px-2.5 py-1 text-[12.5px] font-semibold text-ink-soft hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-60 ${
           open ? "border-amber text-ink" : "border-line/30 hover:border-line/50"
         } ${className}`
       : variant === "inline"

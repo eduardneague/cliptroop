@@ -50,7 +50,7 @@ export function ScripterPicker({
       {chosen.map((p) => (
         <span
           key={p.memberId}
-          className={`inline-flex items-center gap-1.5 rounded-full border border-line/15 bg-surface-2 pl-1 pr-1 ${size === "sm" ? "h-7" : "h-8"}`}
+          className={`inline-flex items-center gap-1.5 rounded-lg border border-line/15 bg-surface-2 pl-1 pr-1 ${size === "sm" ? "h-7" : "h-8"}`}
         >
           <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} />
           <span className={`${size === "sm" ? "text-[12px]" : "text-[13px]"} font-semibold`}>{p.name}</span>
@@ -59,7 +59,7 @@ export function ScripterPicker({
             disabled={disabled}
             onClick={() => onRemove(p.memberId)}
             aria-label={`Remove ${p.name} as ${word}`}
-            className="w-6 h-6 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-40"
+            className="w-6 h-6 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-40"
           >
             <CloseIcon className="w-3 h-3" />
           </button>}

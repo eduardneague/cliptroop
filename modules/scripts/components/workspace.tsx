@@ -11,7 +11,8 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { relativeTime } from "@/lib/relative-time";
-import { ChevronDownIcon, CloseIcon, PlusIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
+import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
@@ -121,8 +122,12 @@ export function ScriptWorkspace({
       }}
       topBarExtra={
         <>
-          {topBarExtra}
+          {/* Keys: the first child is created on the server (React warns otherwise). */}
+          <span key="extra" className="contents">
+            {topBarExtra}
+          </span>
           <SideBySideMenu
+            key="side"
             docs={docs.filter((d) => d.id !== doc.id)}
             active={sideOpen ? side?.id ?? null : null}
             onPick={(id) => {
@@ -156,10 +161,11 @@ export function ScriptWorkspace({
         if (!c) return null;
         const color = colorOf(c);
         return (
-          <div className="rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_var(--ease-out)]" style={{ boxShadow: `inset 3px 0 0 ${color}, 0 20px 50px -20px rgb(0 0 0 / .5)` }}>
+          <div className="rounded-xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_var(--ease-out)]" style={{ boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent), 0 20px 50px -20px rgb(0 0 0 / .5)` }}>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[12.5px] font-bold" style={{ color }}>{c.author?.name ?? "Someone"}</span>
-              <span className="rounded-full px-2 h-5 inline-flex items-center text-[10.5px] font-bold text-white" style={{ background: color }}>
+              <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-5 h-5 text-[9px]" />
+              <span className="text-[12.5px] font-semibold text-ink">{c.author?.name ?? "Someone"}</span>
+              <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
                 {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
               </span>
               <span className="ml-auto text-[11px] text-ink-faint">{relativeTime(c.createdAt)}</span>
@@ -209,6 +215,7 @@ export function ScriptWorkspace({
           docContent={doc.content}
           colorOf={colorOf}
           roleColors={roleColors}
+          exportTitle={title}
         />
       }
     />
@@ -639,12 +646,10 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
   );
 }
 
-const ROLE_ORDER = ["scripter", "researcher", "editor", "filmer", "packager", "publisher", "master"];
-/** Editing ideas: the editor colour. Comments: the author's main role colour. */
-function commentColor(c: ScriptComment, roleColors: Record<string, string>) {
-  if (c.kind === "edit_idea") return roleColors.editor;
-  const role = ROLE_ORDER.find((r) => c.authorRoles.includes(r) && r !== "master") ?? (c.authorRoles.includes("master") ? "master" : null);
-  return role ? roleColors[role] : roleColors.master;
+/** One colour per type, everywhere: comments orange, editing ideas blue. */
+export const TYPE_COLOR = { comment: "rgb(var(--amber))", edit_idea: "rgb(59 130 246)" } as const;
+function commentColor(c: ScriptComment, _roleColors?: Record<string, string>) {
+  return TYPE_COLOR[c.kind];
 }
 
 /** Comments as a small chat: a floating button, a panel on desktop, a sheet on phones. */
@@ -657,6 +662,7 @@ function CommentsChat({
   docContent,
   colorOf,
   roleColors,
+  exportTitle,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
@@ -666,10 +672,13 @@ function CommentsChat({
   docContent: Record<string, unknown>;
   colorOf: (c: ScriptComment) => string;
   roleColors: Record<string, string>;
+  exportTitle: string;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [filter, setFilter] = useState<"all" | "comment" | "edit_idea">("all");
+  // The big view, like the other chats.
+  const [big, setBig] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
   const openCount = comments.filter((c) => !c.resolved).length;
   const list = comments.filter((c) => (showResolved || !c.resolved) && (filter === "all" || c.kind === filter));
@@ -703,9 +712,17 @@ function CommentsChat({
           <span className={`rounded-full px-2 h-6 inline-flex items-center text-[12px] ${openCount ? "bg-amber text-white" : "bg-line/15 text-ink-soft"}`}>{openCount}</span>
         </button>
       )}
+      {open && big && (
+        <div className="no-print fixed inset-0 z-[39] bg-black/55 animate-[fadein_.15s_ease]" onClick={() => setBig(false)} aria-hidden />
+      )}
       {open && (
         <section
-          className="no-print fixed z-40 inset-x-0 bottom-0 h-[78dvh] rounded-t-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[400px] lg:h-[min(620px,calc(100dvh-9rem))] lg:rounded-2xl bg-surface border border-line/15 shadow-2xl flex flex-col animate-[modalin_.18s_var(--ease-out)]"
+          key={big ? "big" : "small"}
+          className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col ${big ? "animate-[modalin_.22s_var(--ease-out)]" : "animate-[modalin_.18s_var(--ease-out)]"} ${
+            big
+              ? "inset-2 sm:inset-6 lg:inset-x-[max(1.5rem,calc(50vw-28rem))] lg:inset-y-8 rounded-2xl"
+              : "inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[400px] lg:h-[min(620px,calc(100dvh-9rem))]"
+          }`}
           aria-label="Comments"
         >
           <header className="px-4 pt-3.5 pb-2.5 border-b border-line/10 space-y-2.5">
@@ -713,6 +730,9 @@ function CommentsChat({
               <h2 className="text-[15px] font-bold">Comments</h2>
               <span className="text-[12.5px] text-ink-soft">{openCount} open</span>
               <span className="flex-1" />
+              <button type="button" onClick={() => setBig((b) => !b)} aria-label={big ? "Smaller" : "Bigger"} title={big ? "Smaller" : "Big view"} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                <ExpandIcon className="w-4 h-4" />
+              </button>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close comments" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
                 <CloseIcon className="w-4 h-4" />
               </button>
@@ -720,8 +740,8 @@ function CommentsChat({
             <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Show">
               {([
                 ["all", "All", null],
-                ["comment", "Comments", roleColors.master],
-                ["edit_idea", "Editing ideas", roleColors.editor],
+                ["comment", "Comments", TYPE_COLOR.comment],
+                ["edit_idea", "Editing ideas", TYPE_COLOR.edit_idea],
               ] as const).map(([k, label, dot]) => (
                 <button
                   key={k}
@@ -731,7 +751,7 @@ function CommentsChat({
                   onClick={() => setFilter(k)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
                 >
-                  {dot && <span className="w-2 h-2 rounded-full" style={{ background: dot }} />}
+                  {dot && <span className="w-2 h-2 rounded-[3px]" style={{ background: dot }} />}
                   {label}
                 </button>
               ))}
@@ -749,22 +769,21 @@ function CommentsChat({
                 <article
                   key={c.id}
                   onClick={() => onPick(c.id)}
-                  className={`rounded-2xl p-3 cursor-pointer transition-shadow ${c.resolved ? "opacity-55" : ""} ${c.id === active ? "ring-2 ring-offset-2 ring-offset-surface" : ""}`}
-                  style={{ background: `color-mix(in srgb, ${color} 11%, transparent)`, boxShadow: `inset 3px 0 0 ${color}`, ...(c.id === active ? { ["--tw-ring-color" as string]: color } : {}) }}
+                  className={`rounded-xl border p-3 cursor-pointer transition-colors ${c.resolved ? "opacity-55" : ""} ${c.id === active ? "border-line/40" : "border-line/10 hover:border-line/25"}`}
+                  style={{ background: `color-mix(in srgb, ${color} 5%, transparent)`, boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent)` }}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" style={{ background: color }}>
-                      {(c.author?.name ?? "?").slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="text-[12.5px] font-bold truncate" style={{ color }}>
-                      {c.author?.name ?? "Someone"}
-                    </span>
-                    <span className="rounded-full px-2 h-5 inline-flex items-center text-[10.5px] font-bold text-white flex-shrink-0" style={{ background: color }}>
+                    <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-6 h-6 text-[10px]" />
+                    <span className="text-[12.5px] font-semibold text-ink truncate">{c.author?.name ?? "Someone"}</span>
+                    <span
+                      className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold flex-shrink-0"
+                      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}
+                    >
                       {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
                     </span>
                     <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap">{relativeTime(c.createdAt)}</span>
                   </div>
-                  <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: color }}>
+                  <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}>
                     “{c.quote}”{missing.has(c.id) && <span className="ml-1.5 rounded bg-surface-2 px-1.5 text-[10.5px] font-bold">text changed</span>}
                   </div>
                   <p className="text-[13.5px] whitespace-pre-wrap">{c.body}</p>
@@ -794,8 +813,34 @@ function CommentsChat({
               );
             })}
           </div>
-          <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
-            <span className="flex-1">Select text to add one.</span>
+          <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
+            <span className="flex-1 min-w-[8rem]">Select text, then Enter to add.</span>
+            {comments.some((c) => c.kind === "edit_idea") && (
+              <span className="inline-flex items-center gap-1">
+                <span className="font-semibold">Export ideas</span>
+                {(["docx", "pdf"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={async () => {
+                      // Editing ideas in the order they appear in the script.
+                      const ideas = comments
+                        .filter((c) => c.kind === "edit_idea" && !c.resolved)
+                        .map((c) => ({ c, at: ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
+                        .sort((a, b) => a.at - b.at)
+                        .map(({ c }) => ({ quote: c.quote, idea: c.body }));
+                      if (!ideas.length) return toast.error("No open editing ideas to export.");
+                      const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
+                      if (f === "docx") await exportIdeasDocx(ideas, exportTitle, `${exportTitle} - editing ideas`.replace(/[\\/:*?"<>|]+/g, ""));
+                      else if (!exportIdeasPdf(ideas, exportTitle)) toast.error("Allow pop-ups to print the PDF.");
+                    }}
+                    className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
+                  >
+                    {f === "docx" ? "Word" : "PDF"}
+                  </button>
+                ))}
+              </span>
+            )}
             {comments.some((c) => c.resolved) && (
               <button type="button" onClick={() => setShowResolved((v) => !v)} className="font-semibold hover:text-ink">
                 {showResolved ? "Hide resolved" : `Show resolved (${comments.filter((c) => c.resolved).length})`}

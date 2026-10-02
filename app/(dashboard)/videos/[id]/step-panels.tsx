@@ -355,11 +355,11 @@ export function PostPanel({
                   disabled={pending}
                   aria-pressed={on}
                   onClick={() => run(() => setLongPlatforms(projectId, on ? platforms.filter((x) => x !== p.id) : [...platforms, p.id]), "Platforms updated")}
-                  className={`inline-flex items-center gap-2 rounded-full border pl-1.5 pr-3.5 h-9 text-[13px] font-semibold transition-colors ${
+                  className={`inline-flex items-center gap-2 rounded-lg border pl-1.5 pr-3.5 h-9 text-[13px] font-semibold transition-colors ${
                     on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"
                   }`}
                 >
-                  <PlatformIcon platform={p.id} className={`w-6 h-6 rounded-full ${on ? "" : "opacity-50 grayscale"}`} />
+                  <PlatformIcon platform={p.id} className={`w-6 h-6 rounded-md ${on ? "" : "opacity-50 grayscale"}`} />
                   {p.name}
                 </button>
               );

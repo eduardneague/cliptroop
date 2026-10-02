@@ -109,10 +109,10 @@ export function MemberManager({
           member.roles.map((r) => (
             <span
               key={r}
-              className="inline-flex items-center gap-1.5 rounded-full pl-2 pr-2.5 h-7 text-[12px] font-semibold"
+              className="inline-flex items-center gap-1.5 rounded-lg pl-2 pr-2.5 h-7 text-[12px] font-semibold"
               style={{ background: `color-mix(in srgb, ${roleColors[r]} 14%, transparent)`, color: roleColors[r] }}
             >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleColors[r] }} />
+              <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: roleColors[r] }} />
               {ROLES.find((x) => x.id === r)?.name ?? r}
             </span>
           ))
@@ -162,12 +162,12 @@ export function MemberManager({
                   aria-pressed={active}
                   onClick={() => !locked && toggleRole(r.id)}
                   title={ownerLocked ? "The team owner is always Master" : locked ? "Only the team owner can grant or remove Master" : undefined}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-all ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12.5px] font-semibold border transition-all ${
                     active ? "text-white shadow-sm" : "border-line/20 text-ink-soft hover:text-ink hover:border-line/40"
                   } ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
                   style={active ? { background: roleColors[r.id], borderColor: roleColors[r.id] } : undefined}
                 >
-                  {!active && <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleColors[r.id] }} />}
+                  {!active && <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: roleColors[r.id] }} />}
                   {r.name}
                   {locked && <LockIcon className="w-3 h-3" />}
                 </button>

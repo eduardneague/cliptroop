@@ -78,6 +78,15 @@ function allowedTimes(date: string) {
   const earliest = Date.now() + MIN_LEAD_MS;
   return TIMES.filter((t) => new Date(`${date}T${t.value}:00`).getTime() >= earliest);
 }
+/** 30 minutes from now (this device), rounded up to the next quarter hour. */
+function soonSlot() {
+  const d = new Date(Date.now() + 30 * 60_000);
+  const m = Math.ceil(d.getMinutes() / 15) * 15;
+  d.setMinutes(m, 0, 0);
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { date, time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` };
+}
+
 /** Keep a chosen time if allowed, otherwise the next allowed slot. */
 function fitTime(date: string, time: string) {
   const list = allowedTimes(date);
@@ -235,13 +244,12 @@ export function SchedulePanel({
   const [editing, setEditing] = useState<Record<string, boolean>>({});
 
   // ---- form state ----------------------------------------------------------
-  const initialDate = plannedDate ?? tomorrow();
   const [include, setInclude] = useState<Record<Platform, boolean>>({ youtube: true, instagram: true, tiktok: true });
-  const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({
-    youtube: { date: initialDate, time: fitTime(initialDate, defaultTimes.youtube) },
-    instagram: { date: initialDate, time: fitTime(initialDate, defaultTimes.instagram) },
-    tiktok: { date: initialDate, time: fitTime(initialDate, defaultTimes.tiktok) },
-  });
+  // By default: 30 minutes from now on this device, on the next quarter hour.
+  const soon = soonSlot();
+  const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({ youtube: soon, instagram: soon, tiktok: soon });
+  // "Post all at the same time": one date and time for every platform.
+  const [sameTime, setSameTime] = useState(false);
   // The short's title goes in by default everywhere (plus its caption, if it has one).
   const defaultCaption = caption ? `${title}\n\n${caption}` : title;
   const [yt, setYt] = useState({
@@ -349,6 +357,27 @@ export function SchedulePanel({
   }
   const byHand = (p: string) => manualPosts.find((m) => m.platform === p) ?? null;
 
+  // "Manually post this video": you posted it yourself, everywhere.
+  const confirmManual = useConfirm();
+  const [manualOpen, setManualOpen] = useState(false);
+  const remaining = [...platforms, ...(hasFacebook ? (["facebook"] as const) : [])].filter(
+    (p) => !byHand(p) && !active.some((x) => x.platform === p && x.status === "published")
+  );
+  async function postAllManually() {
+    const ok = await confirmManual({
+      title: "Mark this short as posted?",
+      description: "Only if you posted it yourself. Every platform that isn't posted yet is marked posted, and the short moves to Posted. Scheduled posts aren't sent.",
+      confirmLabel: "Yes, I posted it",
+    });
+    if (!ok) return;
+    for (const p of remaining) {
+      const r = await setShortPlatformPosted(shortId, p as never, true);
+      if (r && "error" in r && r.error) return toast.error(r.error);
+    }
+    toast.success("Marked as posted");
+    router.refresh();
+  }
+
   const withFacebook = (p: Platform) => p === "instagram" && hasFacebook;
 
   return (
@@ -377,6 +406,29 @@ export function SchedulePanel({
         )}
       </div>
 
+      {formPlatforms.length > 1 && (
+        <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[13.5px] font-semibold flex-1">Post all at the same time</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sameTime}
+              aria-label="Post all at the same time"
+              onClick={() => {
+                const next = !sameTime;
+                setSameTime(next);
+                if (next) setWhen((w) => ({ youtube: w.youtube, instagram: w.youtube, tiktok: w.youtube }));
+              }}
+              className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+              style={{ background: sameTime ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}
+            >
+              <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${sameTime ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+          {sameTime && <When value={when.youtube} onChange={(v) => setWhen({ youtube: v, instagram: v, tiktok: v })} />}
+        </div>
+      )}
       {platforms.map((p) => {
         const post = postFor(p);
         const acc = account(p);
@@ -462,7 +514,7 @@ export function SchedulePanel({
                 />
               ) : showForm && include[p] ? (
                 <div className="space-y-3 pt-1">
-                  <When value={when[p]} onChange={(v) => setWhen((s) => ({ ...s, [p]: v }))} />
+                  {!sameTime && <When value={when[p]} onChange={(v) => setWhen((s) => ({ ...s, [p]: v }))} />}
                   {p === "youtube" && <YouTubeFields v={yt} set={setYt} />}
                   {p === "instagram" && (
                     <div>
@@ -569,6 +621,26 @@ export function SchedulePanel({
           </button>
         </div>
       )}
+      {canManage && remaining.length > 0 && (
+        <div className="px-1 pt-1">
+          {!manualOpen ? (
+            <button type="button" onClick={() => setManualOpen(true)} className="text-[12px] font-semibold text-ink-faint hover:text-ink-soft">
+              More options
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap rounded-xl border border-dashed border-line/20 px-3.5 py-3 animate-[modalin_.15s_var(--ease-out)]">
+              <span className="text-[12.5px] text-ink-soft flex-1 min-w-[12rem]">Posted it yourself, outside VPlanner?</span>
+              <button type="button" onClick={() => void postAllManually()} className="rounded-lg border border-line/20 px-3 h-9 text-[12.5px] font-semibold hover:border-line/40">
+                Manually post this video
+              </button>
+              <button type="button" onClick={() => setManualOpen(false)} className="text-[12px] font-semibold text-ink-faint hover:text-ink-soft">
+                Hide
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
     </section>
   );
 }
