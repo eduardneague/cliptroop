@@ -42,7 +42,9 @@ function friendlyDbError(error: { code?: string; message: string } | null, fallb
     }
   }
   if (error.code === "42501") return "You don't have permission to do that.";
-  return fallback;
+  // Unexpected: say what actually happened (an in-house tool; makes bugs quick to fix).
+  console.error("[shorts] database error", error.code, error.message);
+  return `${fallback} (${error.code ?? "error"}: ${error.message.slice(0, 140)})`;
 }
 
 async function requireUser() {

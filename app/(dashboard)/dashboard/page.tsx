@@ -2,12 +2,16 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
+import { getCachedUser } from "@/lib/supabase/get-user";
+import { listDone, listMyTasks, listPostsAroundToday, listTeamCards, listTodos, listUpcoming } from "@/modules/dashboard/lib/queries";
+import { readLayout } from "@/modules/dashboard/layout";
+import { DashboardStudio } from "@/modules/dashboard/components/studio";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { currentTeam } = await getTeamsAndCurrent(supabase);
+  const { teams, currentTeam } = await getTeamsAndCurrent(supabase);
 
   if (!currentTeam) {
     return (
@@ -31,33 +35,27 @@ export default async function DashboardPage() {
     );
   }
 
-  const { count: memberCount } = await supabase
-    .from("team_members")
-    .select("id", { count: "exact", head: true })
-    .eq("team_id", currentTeam.id)
-    .eq("status", "active");
+  // Everything the widgets need, in parallel.
+  const user = await getCachedUser();
+  const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
+  const t = new Date();
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts] = await Promise.all([
+    listMyTasks(currentTeam.id),
+    listDone(since),
+    listTodos(),
+    listTeamCards(teams.map((t) => t.id)),
+    supabase.from("profiles").select("username, full_name, dashboard_layout").eq("id", user?.id ?? "").maybeSingle(),
+    listUpcoming(currentTeam.id, today),
+    listPostsAroundToday(currentTeam.id),
+  ]);
+  const name = ((profile?.full_name as string | null) || (profile?.username as string | null) || "there").split(" ")[0];
 
   return (
-    <div className="p-4 sm:p-8 max-w-3xl">
-      <h1 className="font-display text-3xl font-semibold mb-1.5">
-        {currentTeam.name}
-      </h1>
-      <p className="text-sm text-ink-soft mb-10">
-        {memberCount ?? 1} member{(memberCount ?? 1) === 1 ? "" : "s"}
-      </p>
-
-      <div className="rounded-xl border border-line/10 bg-surface p-7">
-        <p className="font-display text-lg font-medium mb-2">
-          The long-form video pipeline is next
-        </p>
-        <p className="text-sm text-ink-soft leading-relaxed max-w-md">
-          This is where project creation, the ideate-through-publish
-          pipeline, roles, and the calendar all land. The foundation
-          underneath. Teams, roles, permissions, notifications. Is
-          already built and enforced at the database level; this screen
-          is next in line to build on top of it.
-        </p>
-      </div>
-    </div>
+    <DashboardStudio
+      name={name}
+      initial={readLayout(profile?.dashboard_layout)}
+      data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts }}
+    />
   );
 }
