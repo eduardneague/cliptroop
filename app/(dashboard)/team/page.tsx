@@ -28,7 +28,8 @@ import { LongSettingsForm } from "./long-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
-import { PROVIDERS, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
+import { PROVIDERS, YOUTUBE_EDIT_SCOPE, hasStatsScopes, statsEnabled, type SocialPlatform } from "@/lib/social/providers";
+import { getSocialSetup } from "@/lib/social/setup";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
@@ -100,6 +101,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     instagram: PROVIDERS.instagram.configured() && socialKeyConfigured(),
     tiktok: PROVIDERS.tiktok.configured() && socialKeyConfigured(),
   };
+  const socialSetup = canManageSocial && tab === "accounts" ? await getSocialSetup() : null;
   const [shortSettings, shortPeople] = userIsMaster
     ? await Promise.all([getShortSettings(currentTeam.id), listTeamPeople(currentTeam.id)])
     : [null, []];
@@ -248,7 +250,11 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 // YouTube connected before "change scheduled videos" existed.
                 missingPermission:
                   r.platform === "youtube" && !((r.scopes as string[] | null) ?? []).includes(YOUTUBE_EDIT_SCOPE),
+                // Analytics is switched on for this platform, but this sign-in predates it.
+                statsMissing:
+                  statsEnabled(r.platform as SocialPlatform) && !hasStatsScopes(r.platform as SocialPlatform, (r.scopes as string[] | null) ?? []),
               }))}
+              setup={socialSetup}
               history={
                 socialHistory
                   ? socialHistory.map((h) => {

@@ -339,8 +339,15 @@ const tiktok: Provider = {
 
 export const PROVIDERS: Record<SocialPlatform, Provider> = { youtube, instagram, tiktok };
 
-/** Where each platform sends people back to. Must match the developer app exactly. */
+/**
+ * Where each platform sends people back to. Must match the developer app
+ * exactly. Production (and your computer) may pin it with
+ * NEXT_PUBLIC_APP_URL. Previews (staging) ALWAYS use their own address:
+ * sending people back to production would land them on a different copy
+ * of the app (other database, other sign-in), so the connection is lost.
+ */
 export function redirectUriFor(platform: SocialPlatform, origin: string) {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || origin).replace(/\/+$/, "");
+  const pinned = process.env.VERCEL_ENV === "preview" ? "" : process.env.NEXT_PUBLIC_APP_URL;
+  const base = (pinned || origin).replace(/\/+$/, "");
   return `${base}/api/social/${platform}/callback`;
 }

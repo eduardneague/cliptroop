@@ -1,119 +1,64 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NUMERIC_TO_ALPHA2 } from "../lib/iso-countries";
+import type { WORLD as WorldShapes } from "../lib/world-shapes";
 
 /*
- * World map of a number per country (views, followers…), drawn in SVG with
- * the Equal Earth projection. The country shapes (Natural Earth, public
- * domain, via the world-atlas package) load once from the jsDelivr CDN in
- * the browser; if that fails the list beside the map still has every number.
- * Colour: one hue (amber), lighter → darker in 5 steps (more = darker).
+ * A heat map of a number per country (views, followers…). The country
+ * shapes ship with the app (lib/world-shapes.ts: Natural Earth, already
+ * projected), loaded as their own small chunk the first time a map shows,
+ * so nothing is fetched from another website.
+ * Colour: one hue (amber), lighter → darker in 5 steps (more = darker),
+ * steps by quantile so one huge country doesn't wash out the rest.
  */
 
-const MAP_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
-
-type Geometry = { type: "Polygon" | "MultiPolygon"; id?: string | number; arcs: number[][] | number[][][] };
-type Topology = {
-  transform?: { scale: [number, number]; translate: [number, number] };
-  arcs: [number, number][][];
-  objects: { countries: { geometries: Geometry[] } };
-};
-type Shape = { code: string | null; d: string };
-
-let shapesPromise: Promise<{ shapes: Shape[]; w: number; h: number }> | null = null;
-
-// Equal Earth (Šavrič, Patterson, Jenny 2018).
-const A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796, M = Math.sqrt(3) / 2;
-function project(lon: number, lat: number): [number, number] {
-  const l = (lon * Math.PI) / 180;
-  const p = Math.asin(M * Math.sin((lat * Math.PI) / 180));
-  const p2 = p * p;
-  const p6 = p2 * p2 * p2;
-  return [(l * Math.cos(p)) / (M * (A1 + 3 * A2 * p2 + p6 * (7 * A3 + 9 * A4 * p2))), -(p * (A1 + A2 * p2 + p6 * (A3 + A4 * p2)))];
-}
-
-function loadShapes() {
-  shapesPromise ??= fetch(MAP_URL)
-    .then((r) => {
-      if (!r.ok) throw new Error("map");
-      return r.json() as Promise<Topology>;
-    })
-    .then((t) => {
-      const [sx, sy] = t.transform?.scale ?? [1, 1];
-      const [tx, ty] = t.transform?.translate ?? [0, 0];
-      const arcs = t.arcs.map((arc) => {
-        let x = 0;
-        let y = 0;
-        return arc.map(([dx, dy]) => {
-          if (t.transform) {
-            x += dx;
-            y += dy;
-            return project(x * sx + tx, y * sy + ty);
-          }
-          return project(dx, dy);
-        });
-      });
-      const ring = (idx: number[]) => {
-        const pts: [number, number][] = [];
-        idx.forEach((i, k) => {
-          const a = i < 0 ? [...arcs[~i]].reverse() : arcs[i];
-          pts.push(...(k ? a.slice(1) : a));
-        });
-        return pts;
-      };
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      const raw = t.objects.countries.geometries
-        .filter((g) => (g.type === "Polygon" || g.type === "MultiPolygon") && Array.isArray(g.arcs))
-        .filter((g) => String(g.id) !== "010") // Antarctica: nobody watches from there
-        .map((g) => {
-          const polys = (g.type === "Polygon" ? [g.arcs] : g.arcs) as number[][][];
-          const rings = polys.flatMap((poly) => poly.map(ring));
-          for (const r of rings)
-            for (const [x, y] of r) {
-              minX = Math.min(minX, x);
-              maxX = Math.max(maxX, x);
-              minY = Math.min(minY, y);
-              maxY = Math.max(maxY, y);
-            }
-          const id = g.id === undefined ? null : String(g.id).padStart(3, "0");
-          return { code: id ? NUMERIC_TO_ALPHA2[id] ?? null : null, rings };
-        });
-      const W = 1000;
-      const k = W / (maxX - minX);
-      const H = Math.round((maxY - minY) * k);
-      const shapes = raw.map((s) => ({
-        code: s.code,
-        d: s.rings.map((r) => "M" + r.map(([x, y]) => `${((x - minX) * k).toFixed(1)},${((y - minY) * k).toFixed(1)}`).join("L") + "Z").join(""),
-      }));
-      return { shapes, w: W, h: H };
-    })
+type World = typeof WorldShapes;
+let worldPromise: Promise<World> | null = null;
+function loadWorld() {
+  worldPromise ??= import("../lib/world-shapes")
+    .then((m) => m.WORLD)
     .catch((e) => {
-      shapesPromise = null;
+      worldPromise = null;
       throw e;
     });
-  return shapesPromise;
+  return worldPromise;
 }
 
-const STEPS = [0.16, 0.32, 0.5, 0.72, 1];
+const STEPS = [0.18, 0.34, 0.52, 0.74, 1];
 
+let names: Intl.DisplayNames | null = null;
 export function countryName(code: string) {
   try {
-    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+    names ??= new Intl.DisplayNames(["en"], { type: "region" });
+    return names.of(code) ?? code;
   } catch {
     return code;
   }
 }
 
-export function WorldMap({ data, format, label }: { data: { code: string; value: number }[]; format: (n: number) => string; label: string }) {
-  const [map, setMap] = useState<{ shapes: Shape[]; w: number; h: number } | null>(null);
+export function WorldMap({
+  data,
+  format,
+  label,
+  empty,
+  compact = false,
+}: {
+  data: { code: string; value: number }[];
+  format: (n: number) => string;
+  label: string;
+  /** Shown over a grey map while there are no numbers yet. */
+  empty?: string;
+  /** Small version (dashboard widget): no legend. */
+  compact?: boolean;
+}) {
+  const [world, setWorld] = useState<World | null>(null);
   const [failed, setFailed] = useState(false);
   const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let alive = true;
-    loadShapes()
-      .then((m) => alive && setMap(m))
+    loadWorld()
+      .then((m) => alive && setWorld(m))
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
@@ -122,41 +67,55 @@ export function WorldMap({ data, format, label }: { data: { code: string; value:
 
   const values = useMemo(() => new Map(data.map((d) => [d.code, d.value])), [data]);
   const total = useMemo(() => data.reduce((a, d) => a + d.value, 0), [data]);
-  // 5 steps by quantile, so a few huge countries don't wash out the rest.
   const cuts = useMemo(() => {
-    const vs = data.map((d) => d.value).filter((v) => v > 0).sort((a, b) => a - b);
+    const vs = data
+      .map((d) => d.value)
+      .filter((v) => v > 0)
+      .sort((a, b) => a - b);
     if (!vs.length) return [];
     return [0.2, 0.4, 0.6, 0.8].map((q) => vs[Math.min(vs.length - 1, Math.floor(q * vs.length))]);
   }, [data]);
   const step = (v: number) => cuts.filter((c) => v > c).length;
+  const fill = (code: string | null) => {
+    const v = code ? values.get(code) ?? 0 : 0;
+    return v > 0 ? `rgb(var(--amber) / ${STEPS[step(v)]})` : "rgb(var(--line) / 0.09)";
+  };
 
   if (failed) return <p className="text-[12.5px] text-ink-faint py-6 text-center">The map couldn&rsquo;t load. Every country is in the list.</p>;
-  if (!map) return <div className="skeleton rounded-xl w-full aspect-[2.1/1]" aria-hidden />;
+  if (!world) return <div className="skeleton rounded-xl w-full aspect-[2.28/1]" aria-hidden />;
+  const hovered = hover ? world.shapes.find((s) => s.c === hover.code) : null;
+  const noData = !data.some((d) => d.value > 0);
   return (
-    <div ref={box} className="relative">
-      <svg viewBox={`0 0 ${map.w} ${map.h}`} className="w-full h-auto block" role="img" aria-label={label}>
-        {map.shapes.map((s, i) => {
-          const v = s.code ? values.get(s.code) ?? 0 : 0;
-          const on = hover?.code === s.code && !!s.code;
-          return (
-            <path
-              key={i}
-              d={s.d}
-              fill={v > 0 ? `rgb(var(--amber) / ${STEPS[step(v)]})` : "rgb(var(--line) / 0.08)"}
-              stroke={on ? "rgb(var(--ink))" : "rgb(var(--surface))"}
-              strokeWidth={on ? 1.6 : 0.6}
-              onPointerMove={(e) => {
-                if (!s.code) return;
-                const r = box.current!.getBoundingClientRect();
-                setHover({ code: s.code, x: e.clientX - r.left, y: e.clientY - r.top });
-              }}
-              onPointerLeave={() => setHover(null)}
-            />
-          );
-        })}
+    <div ref={box} className="relative" onPointerLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${world.w} ${world.h}`} className="w-full h-auto block" role="img" aria-label={label}>
+        {world.shapes.map((s, i) => (
+          <path
+            key={i}
+            d={s.d}
+            fill={fill(s.c)}
+            stroke="rgb(var(--surface))"
+            strokeWidth={0.6}
+            strokeLinejoin="round"
+            onPointerMove={(e) => {
+              if (!s.c || noData) return setHover(null);
+              const r = box.current!.getBoundingClientRect();
+              setHover({ code: s.c, x: e.clientX - r.left, y: e.clientY - r.top });
+            }}
+          />
+        ))}
+        {/* The hovered country on top, outlined, so its border isn't hidden by its neighbours. */}
+        {hovered && <path d={hovered.d} fill={fill(hovered.c)} stroke="rgb(var(--ink))" strokeWidth={1.4} strokeLinejoin="round" pointerEvents="none" />}
       </svg>
+      {noData && empty && (
+        <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+          <p className="rounded-xl border border-line/15 bg-surface px-4 py-2.5 text-[12.5px] text-ink-soft text-center max-w-xs shadow-sm">{empty}</p>
+        </div>
+      )}
       {hover && (
-        <div className="pointer-events-none absolute z-10 rounded-xl border border-line/15 bg-surface shadow-xl px-3 py-2 text-[12px]" style={{ left: Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - 170), top: hover.y + 12 }}>
+        <div
+          className="pointer-events-none absolute z-10 rounded-xl border border-line/15 bg-surface shadow-xl px-3 py-2 text-[12px] whitespace-nowrap"
+          style={{ left: Math.max(0, Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - 170)), top: hover.y + 14 }}
+        >
           <div className="font-semibold text-ink">{countryName(hover.code)}</div>
           <div className="text-ink-soft">
             <b className="text-ink tabular-nums">{format(values.get(hover.code) ?? 0)}</b>
@@ -164,7 +123,7 @@ export function WorldMap({ data, format, label }: { data: { code: string; value:
           </div>
         </div>
       )}
-      {cuts.length > 0 && (
+      {!compact && cuts.length > 0 && (
         <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-faint">
           <span>Fewer</span>
           <span className="flex gap-0.5" aria-hidden>

@@ -194,7 +194,7 @@ function NextUp({ m }: { m: Meeting }) {
             </span>
           )}
           {m.link && (
-            <a href={m.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-violet text-white font-bold px-4 h-10 text-[13.5px] hover:brightness-110">
+            <a href={m.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-violet text-white dark:text-paper font-bold px-4 h-10 text-[13.5px] hover:brightness-110">
               <ExternalIcon className="w-4 h-4" />
               Join
             </a>

@@ -957,7 +957,11 @@ export function SketchStudio({ initial, onCancel, onConfirm, title = "Sketch you
         <div className="flex items-center gap-1.5" aria-label="Fill">
           {FILLS.map((f) =>
             f === null ? (
-              <button key="none" type="button" onClick={() => applyStyle({ fill: null })} aria-label="No fill" aria-pressed={cur.fill === null} className={`w-6 h-6 rounded-md flex-shrink-0 border border-line/30 bg-[linear-gradient(135deg,transparent_45%,#E5484D_45%,#E5484D_55%,transparent_55%)] ${cur.fill === null ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`} />
+              <button key="none" type="button" onClick={() => applyStyle({ fill: null })} aria-label="No fill" aria-pressed={cur.fill === null} className={`w-6 h-6 rounded-md flex-shrink-0 border border-line/30 overflow-hidden ${cur.fill === null ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`}>
+                <svg viewBox="0 0 24 24" className="w-full h-full block" aria-hidden>
+                  <path d="M3 21 21 3" stroke="#E5484D" strokeWidth="2.4" strokeLinecap="round" />
+                </svg>
+              </button>
             ) : (
               <button key={f} type="button" onClick={() => applyStyle({ fill: f })} aria-label={`Fill ${f}`} aria-pressed={cur.fill === f} className={`w-6 h-6 rounded-md flex-shrink-0 ${cur.fill === f ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`} style={{ background: f, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.12)" }} />
             )

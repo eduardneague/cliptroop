@@ -16,6 +16,7 @@ import { TodoWidget } from "./todo-widget";
 import { ClockWidget, MiniCalendarWidget, TeamsWidget } from "./small-widgets";
 import { PipelineWidget, PostingTodayWidget, UpcomingLongsWidget, UpcomingShortsWidget, WeatherCitySearch, WeatherWidget } from "./team-widgets";
 import { MeetingsWidget } from "./meetings-widget";
+import { AudienceMapWidget, FollowersWidget, OutputWidget, TopVideosWidget, ViewsWidget } from "./analytics-widgets";
 import type { Meeting } from "@/modules/meetings/lib/types";
 
 export type StudioData = {
@@ -586,6 +587,16 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <MeetingsWidget meetings={data.meetings ?? []} />;
     case "weather":
       return <WeatherWidget settings={w.settings} />;
+    case "views":
+      return <ViewsWidget teamId={data.teamId} />;
+    case "followers":
+      return <FollowersWidget teamId={data.teamId} />;
+    case "topVideos":
+      return <TopVideosWidget teamId={data.teamId} />;
+    case "audienceMap":
+      return <AudienceMapWidget teamId={data.teamId} />;
+    case "output":
+      return <OutputWidget teamId={data.teamId} />;
   }
 }
 const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather"];

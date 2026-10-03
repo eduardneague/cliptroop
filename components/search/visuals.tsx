@@ -52,7 +52,7 @@ export function ProjectThumb({ url, color }: { url: string | null; color: string
       style={
         url
           ? undefined
-          : { background: `linear-gradient(135deg, color-mix(in srgb, ${color} 35%, transparent), color-mix(in srgb, ${color} 8%, transparent))` }
+          : { background: `color-mix(in srgb, ${color} 18%, transparent)` }
       }
     >
       {url ? (

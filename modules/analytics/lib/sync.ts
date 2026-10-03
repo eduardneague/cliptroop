@@ -14,7 +14,7 @@ import { hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/lib/social/
 
 type Admin = ReturnType<typeof createAdminClient>;
 type Account = { id: string; team_id: string; platform: SocialPlatform; external_id: string | null; scopes: string[] | null };
-export type SyncResult = { platform: SocialPlatform; ok: boolean; error?: string; rows: number };
+export type SyncResult = { platform: SocialPlatform; ok: boolean; error?: string; rows: number; note?: string | null };
 
 const DAY = 86_400_000;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -77,7 +77,7 @@ const isoDuration = (d: unknown) => {
   return m ? (+(m[1] ?? 0)) * 86400 + (+(m[2] ?? 0)) * 3600 + (+(m[3] ?? 0)) * 60 + +(m[4] ?? 0) : null;
 };
 
-async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links: Links): Promise<{ rows: number; revenueNote: string | null }> {
+async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links: Links): Promise<{ rows: number; revenueNote: string | null; note: string | null }> {
   const token = await getAccessToken(acc.id);
   const start = backfill ? daysAgo(90) : daysAgo(6);
   const end = daysAgo(0);
@@ -152,17 +152,39 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
 
   rows += await upsert(admin, "analytics_daily", [...daily.values()], "team_id,platform,day,content");
 
-  // Countries, one day at a time (the map). History: the last 28 days.
-  const countryDays = dayRange(backfill ? daysAgo(28) : daysAgo(4), daysAgo(1)).reverse();
+  // Countries, one day at a time (the map; YouTube can't split days and
+  // countries in one report). Every run refreshes the last 4 days and fills
+  // any day of the last 28 that has no countries yet, so one bad run never
+  // leaves the map empty for good. A failing day doesn't stop the others.
+  const have = new Set(
+    ((
+      await admin
+        .from("analytics_countries")
+        .select("day")
+        .eq("team_id", acc.team_id)
+        .eq("platform", "youtube")
+        .eq("metric", "views")
+        .gte("day", daysAgo(28))
+    ).data ?? []).map((r) => r.day as string)
+  );
+  const recent = new Set(dayRange(daysAgo(4), daysAgo(1)));
+  const countryDays = dayRange(daysAgo(28), daysAgo(1))
+    .filter((d) => recent.has(d) || !have.has(d))
+    .reverse();
+  let countryError: string | null = null;
+  let failures = 0;
   for (const day of countryDays) {
+    if (failures >= 3) break; // Something's wrong with the report itself: try again next run.
     try {
-      const list = rowsOf(await ytReport(token, { startDate: day, endDate: day, metrics: "views,estimatedMinutesWatched", dimensions: "country", sort: "-views", maxResults: "250" }));
+      const list = rowsOf(await ytReport(token, { startDate: day, endDate: day, metrics: "views,estimatedMinutesWatched", dimensions: "country", sort: "-views" }));
       const recs = list
         .filter((r) => /^[A-Z]{2}$/.test(String(r.country)) && r.country !== "ZZ")
         .map((r) => ({ team_id: acc.team_id, platform: "youtube", metric: "views", day, country: String(r.country), value: num(r.views) ?? 0, watch_minutes: num(r.estimatedMinutesWatched) }));
       if (recs.length) rows += await upsert(admin, "analytics_countries", recs, "team_id,platform,metric,day,country");
-    } catch {
-      break;
+      failures = 0;
+    } catch (e) {
+      failures++;
+      countryError ??= e instanceof Error ? e.message : "unknown error";
     }
   }
 
@@ -178,7 +200,7 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
       revenueNote = e instanceof Error ? `Revenue: ${e.message}` : "Revenue isn't available for this channel.";
     }
   } else revenueNote = "Reconnect YouTube to include revenue.";
-  return { rows, revenueNote };
+  return { rows, revenueNote, note: countryError ? `countries: ${countryError}` : null };
 }
 
 async function syncYouTubeVideos(admin: Admin, acc: Account, token: string, uploads: string, links: Links) {
@@ -449,12 +471,13 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
     try {
       let rows = 0;
       let revenueNote: string | null = null;
-      if (a.platform === "youtube") ({ rows, revenueNote } = await syncYouTube(admin, a, backfill, links));
+      let note: string | null = null;
+      if (a.platform === "youtube") ({ rows, revenueNote, note } = await syncYouTube(admin, a, backfill, links));
       else if (a.platform === "instagram") ({ rows } = await syncInstagram(admin, a, backfill, links));
       else ({ rows } = await syncTikTok(admin, a, links));
       const now = new Date().toISOString();
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: now, last_ok_at: now, last_error: null, backfilled: true, revenue_note: revenueNote }, { onConflict: "team_id,platform" });
-      out.push({ platform: a.platform, ok: true, rows });
+      out.push({ platform: a.platform, ok: true, rows, note });
     } catch (e) {
       const message = (e instanceof Error ? e.message : "Unknown error").slice(0, 300);
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: new Date().toISOString(), last_error: message }, { onConflict: "team_id,platform" });

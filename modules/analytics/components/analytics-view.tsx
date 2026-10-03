@@ -527,28 +527,70 @@ function AudienceTab({ a, compare }: { a: Audience; compare: boolean }) {
         </ChartCard>
       </div>
 
-      <ChartCard title="Where the views come from" sub={`YouTube views by country${a.countriesSince ? ` (since ${niceDay(a.countriesSince)}, when copying started)` : ""}`}>
-        {a.countries.length ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] items-start">
-            <WorldMap data={a.countries.map((c) => ({ code: c.code, value: c.views }))} format={fmtInt} label="World map of YouTube views by country" />
-            <div>
-              <BarList items={a.countries.slice(0, 10).map((c) => ({ key: c.code, label: countryName(c.code), value: c.views }))} format={fmtCompact} />
-              {a.countries.length > 10 && <p className="text-[12px] text-ink-faint mt-2">and {a.countries.length - 10} more countries (in the CSV).</p>}
-            </div>
-          </div>
-        ) : (
-          <p className="text-[13px] text-ink-faint">No country numbers yet (YouTube only shares them for days already copied).</p>
-        )}
-        {a.igFollowerCountries.length > 0 && (
-          <div className="mt-6 pt-5 border-t border-line/10">
-            <h3 className="text-[13px] font-semibold mb-3">Instagram followers by country</h3>
-            <div className="max-w-2xl">
-              <BarList items={a.igFollowerCountries.slice(0, 8).map((c) => ({ key: c.code, label: countryName(c.code), value: c.value, color: PLATFORM.instagram.color }))} format={fmtCompact} />
-            </div>
-          </div>
-        )}
-      </ChartCard>
+      <CountryMap a={a} />
     </div>
+  );
+}
+
+/** The heat map: YouTube views, YouTube watch time, or Instagram followers by country. */
+function CountryMap({ a }: { a: Audience }) {
+  const modes = [
+    { id: "views", label: "YouTube views", rows: a.countries.map((c) => ({ code: c.code, value: c.views })), format: fmtInt },
+    ...(a.countries.some((c) => c.watchMinutes)
+      ? [{ id: "watch", label: "Watch time", rows: a.countries.map((c) => ({ code: c.code, value: Math.round((c.watchMinutes ?? 0) / 60) })), format: (n: number) => `${fmtInt(n)} h` }]
+      : []),
+    ...(a.igFollowerCountries.length ? [{ id: "ig", label: "Instagram followers", rows: a.igFollowerCountries.map((c) => ({ code: c.code, value: c.value })), format: fmtInt }] : []),
+  ];
+  const [mode, setMode] = useState(modes[0].id);
+  const m = modes.find((x) => x.id === mode) ?? modes[0];
+  const rows = [...m.rows].filter((r) => r.value > 0).sort((x, y) => y.value - x.value);
+  const ytConnected = a.status.some((s) => s.platform === "youtube" && s.connected && s.statsReady);
+  return (
+    <ChartCard
+      title="Where your audience is"
+      sub={
+        m.id === "ig"
+          ? "Instagram followers by country (latest copy)"
+          : `${m.id === "watch" ? "Hours watched" : "YouTube views"} by country in this range${a.countriesSince ? ` (since ${niceDay(a.countriesSince)}, when copying started)` : ""}`
+      }
+      right={
+        modes.length > 1 ? (
+          <div role="radiogroup" aria-label="Map shows" className="inline-flex rounded-lg border border-line/15 p-0.5">
+            {modes.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="radio"
+                aria-checked={mode === x.id}
+                onClick={() => setMode(x.id)}
+                className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${mode === x.id ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+        ) : undefined
+      }
+    >
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] items-start">
+        <WorldMap
+          data={rows}
+          format={m.format}
+          label={`World map: ${m.label} by country`}
+          empty={ytConnected ? "Country numbers arrive with the next sync. YouTube shares them two or three days late." : "Connect YouTube (with stats allowed) to fill the map."}
+        />
+        <div>
+          {rows.length ? (
+            <>
+              <BarList items={rows.slice(0, 10).map((c) => ({ key: c.code, label: countryName(c.code), value: c.value, color: m.id === "ig" ? PLATFORM.instagram.color : undefined }))} format={(n) => (n === null ? "–" : m.id === "watch" ? `${fmtCompact(n)} h` : fmtCompact(n))} />
+              {rows.length > 10 && <p className="text-[12px] text-ink-faint mt-2">and {rows.length - 10} more countries{m.id === "views" ? " (in the CSV)" : ""}.</p>}
+            </>
+          ) : (
+            <p className="text-[13px] text-ink-faint">No countries yet.</p>
+          )}
+        </div>
+      </div>
+    </ChartCard>
   );
 }
 

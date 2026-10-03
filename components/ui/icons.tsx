@@ -682,6 +682,16 @@ export function MeetingIcon(p: IconProps) {
   );
 }
 
+/** Pin: a fixed date (doesn't move with the queue). */
+export function PinIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z" />
+      <path d="M12 14v6" />
+    </Svg>
+  );
+}
+
 /** Analytics: three rising bars on a baseline. */
 export function AnalyticsIcon(p: IconProps) {
   return (

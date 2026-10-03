@@ -40,8 +40,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!access.user || access.user.id !== saved.user_id) return back(`social_error=expired&platform=${platform}`);
   if (!access.ok) return back(`social_error=forbidden&platform=${platform}`);
 
-  // The person pressed "Cancel" on the platform's screen.
-  if (q.get("error") || !q.get("code")) return back(`social_error=cancelled&platform=${platform}`);
+  // The person pressed "Cancel" on the platform's screen, or the platform
+  // refused (wrong scopes, app not allowed for this account…): say why.
+  const refused = q.get("error");
+  if (refused || !q.get("code")) {
+    if (!refused || /^(access_denied|user_denied|user_cancel)/i.test(refused)) {
+      const why = q.get("error_description") ?? "";
+      // Some platforms say access_denied for "scope not allowed" too: keep their words when there are any.
+      return back(`social_error=cancelled&platform=${platform}${why && !/cancel|denied the request|user denied/i.test(why) ? `&message=${encodeURIComponent(why.slice(0, 200))}` : ""}`);
+    }
+    const why = q.get("error_description") || q.get("error_reason") || refused;
+    return back(`social_error=refused&platform=${platform}&message=${encodeURIComponent(why.slice(0, 200))}`);
+  }
 
   const provider = PROVIDERS[platform];
   try {

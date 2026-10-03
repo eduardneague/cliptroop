@@ -129,9 +129,9 @@ const dueLabel = (due: string, today: string) =>
       ? new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })
       : shortDate(due);
 
-/** Today is clear: Clip celebrates. */
+/** Today is clear: Clippy celebrates. */
 /**
- * How much room an element has (its own box, kept up to date). Clip is
+ * How much room an element has (its own box, kept up to date). Clippy is
  * sized from this so he fills the free space in the widget, big and cheerful.
  */
 function useRoom<T extends HTMLElement>() {
@@ -147,7 +147,7 @@ function useRoom<T extends HTMLElement>() {
   return [ref, room] as const;
 }
 
-/** Clip's size: as big as the free space allows (text underneath needs `reserve` px). */
+/** Clippy's size: as big as the free space allows (text underneath needs `reserve` px). */
 function clipSize(room: { w: number; h: number } | null, box: { w: number; h: number }, reserve: number, max = 230) {
   const h = room ? room.h - reserve : box.h * 0.5;
   const w = room ? room.w * 0.7 : box.w * 0.55;
@@ -179,7 +179,7 @@ function AllDone({ overdue, onOverdue }: { overdue: number; onOverdue: () => voi
   );
 }
 
-/** Nothing overdue: a calmer, still roomy Clip. */
+/** Nothing overdue: a calmer, still roomy Clippy. */
 function NothingOverdue() {
   const box = useBox();
   const [ref, room] = useRoom<HTMLDivElement>();
@@ -213,7 +213,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
     };
   }, [tasks, today]);
   const upCount = g.tomorrow.length + g.week.length + g.later.length + g.waiting.length;
-  // All done for today: Next up stays short so Clip gets the room.
+  // All done for today: Next up stays short so Clippy gets the room.
   const nextUp = useMemo(() => [...g.tomorrow, ...g.week, ...g.later].slice(0, g.today.length ? 3 : 2), [g]);
   const wanted = (settings?.tab as Tab | undefined) ?? "today";
   const [tab, setTab] = useState<Tab>(wanted);

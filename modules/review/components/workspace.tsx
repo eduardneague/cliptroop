@@ -878,7 +878,7 @@ function NoteThread({
           ? {
               // "You are here" (or just clicked): a soft tint, no border.
               background: active
-                ? "linear-gradient(90deg, rgb(var(--amber) / 0.15), rgb(var(--amber) / 0.03) 75%)"
+                ? "rgb(var(--amber) / 0.11)"
                 : "rgb(var(--amber) / 0.07)",
             }
           : undefined

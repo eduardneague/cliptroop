@@ -21,7 +21,7 @@ const field = "w-full rounded-xl border border-line/15 bg-surface px-3.5 py-2.5 
 /** The "your turn" box: orange, one clear action. */
 function TurnBox({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-amber bg-amber/10 p-5 space-y-3.5 animate-[modalin_.25s_var(--ease-out)]">
+    <section className="rounded-2xl border border-amber/40 bg-amber/[0.05] p-5 space-y-3.5 animate-[modalin_.25s_var(--ease-out)]">
       <h3 className="text-[11px] font-bold uppercase tracking-wide text-amber">{title}</h3>
       {children}
     </section>
@@ -172,7 +172,7 @@ export function EditPanel({
   return (
     <div className="space-y-4">
       {isCurrent && reviewNote && (
-        <section className="rounded-2xl border border-amber bg-amber/10 p-4" role="status">
+        <section className="rounded-2xl border border-amber/40 bg-amber/[0.05] p-4" role="status">
           <div className="text-[11px] font-bold uppercase tracking-wide text-amber mb-1">Changes requested</div>
           <p className="text-[14px] whitespace-pre-wrap">{reviewNote}</p>
         </section>
@@ -368,7 +368,7 @@ export function PostPanel({
         </div>
       )}
 
-      <section className={`rounded-2xl border p-5 space-y-3 ${isCurrent && !all ? "border-amber bg-amber/10" : "border-line/10 bg-surface-2/40"}`}>
+      <section className={`rounded-2xl border p-5 space-y-3 ${isCurrent && !all ? "border-amber/40 bg-amber/[0.05]" : "border-line/10 bg-surface-2/40"}`}>
         <div className="flex items-center gap-3">
           <h3 className={`text-[11px] font-bold uppercase tracking-wide ${isCurrent && !all ? "text-amber" : "text-ink-soft"}`}>Post</h3>
           <span className="flex-1" />

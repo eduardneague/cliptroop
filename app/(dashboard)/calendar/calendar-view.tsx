@@ -967,7 +967,7 @@ function Chip({
         transform: shift ? `translateY(calc(${shift} * (100% + ${gapPx}px)))` : undefined,
         ...(tinted
           ? {
-              background: `linear-gradient(90deg, color-mix(in srgb, ${accent} 26%, transparent), color-mix(in srgb, ${accent} 7%, transparent) 80%)`,
+              background: `color-mix(in srgb, ${accent} 15%, transparent)`,
               boxShadow: `inset 3px 0 0 ${accent}`,
             }
           : {}),

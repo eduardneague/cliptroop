@@ -23,6 +23,23 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.5.0",
+    date: "2026-10-03",
+    title: "Analytics widgets, the world map, and a calmer look",
+    changes: [
+      { kind: "new", text: "Analytics widgets for your dashboard: This week (shorts and long videos out, on time, overdue), Views (last 7 days with the trend), Followers, Top videos and an Audience map. Add them from Customize → Add widget." },
+      { kind: "new", text: "The audience heat map: a world map of where your views come from, switchable to watch time and Instagram followers. The map now ships with the app, so it always shows." },
+      { kind: "fixed", text: "Country numbers could stay empty for good if one copy went wrong. Every sync now fills in any missing days from the last 4 weeks." },
+      { kind: "fixed", text: "Reconnecting accounts on staging sent you back to production and failed. Each copy of VPlanner now uses its own return address, and when a platform refuses, you see its reason." },
+      { kind: "new", text: "Setup check in Team → Connected accounts (masters and schedulers): shows each platform's keys, analytics permission and the exact return address to register in its developer app." },
+      { kind: "better", text: "Long videos: calmer cards with a strip showing where each video is in the pipeline, and dates that turn orange when they're close and red when they're late." },
+      { kind: "better", text: "Short videos: rows are one clean line, with a pin for fixed dates and the reviewer's requested changes right under the title. Stage tabs have their colour dot, and Mark done is quieter in lists." },
+      { kind: "better", text: "No more gradients anywhere. Meetings violet is deeper in light mode and brighter in dark mode, so it reads clearly on both." },
+      { kind: "better", text: "Our mascot has a name: say hi to Clippy." },
+      { kind: "fixed", text: "The Create video buttons no longer float over the form while you scroll." },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-10-03",
     title: "Analytics: how the work flows and how the videos do",

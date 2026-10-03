@@ -46,6 +46,8 @@ export type ShortListItem = {
   postedPlatforms: Platform[];
   editor: ShortEditor | null;
   hasFileLink: boolean;
+  /** The reviewer's "changes requested" note (shown while it's back in editing). */
+  reviewNote?: string | null;
 };
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -69,7 +71,7 @@ const PEOPLE_SELECT =
   `reviewer:team_members!short_videos_reviewer_member_id_fkey${PERSON_EMBED}, ` +
   `scheduler:team_members!short_videos_scheduler_member_id_fkey${PERSON_EMBED}`;
 const LIST_SELECT =
-  "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, " +
+  "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, " +
   PEOPLE_SELECT +
   ", short_video_posts(platform), short_scripters(team_member_id), short_video_versions!short_video_versions_short_id_fkey(count)";
 
@@ -118,6 +120,7 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
     fileLink: (r.file_link as string | null) ?? null,
     scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
     hasFileLink: !!r.file_link,
+    reviewNote: (r.review_note as string | null) ?? null,
   }));
 }
 

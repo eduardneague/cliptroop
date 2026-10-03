@@ -140,7 +140,7 @@ export function Timeline({
     >
       <div className="absolute inset-x-0 h-1.5 group-hover/bar:h-2.5 rounded-full bg-white/12 transition-[height] duration-150 overflow-hidden" style={{ background: "rgb(255 255 255 / 0.12)" }}>
         <div className="absolute inset-y-0 left-0 bg-white/15" style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
-        <div className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber to-[#ff9b4a] ${move}`} style={{ width: `${pct}%` }} />
+        <div className={`absolute inset-y-0 left-0 rounded-full bg-amber ${move}`} style={{ width: `${pct}%` }} />
       </div>
 
       {hover !== null && duration > 0 && (
@@ -362,7 +362,7 @@ export const ReviewPlayer = forwardRef<
         )}
       </div>
 
-      <div className="bg-gradient-to-b from-[#141210] to-[#0b0a09] px-3 sm:px-4 pt-5 pb-2.5 border-t border-white/5">
+      <div className="bg-[#100e0c] px-3 sm:px-4 pt-5 pb-2.5 border-t border-white/5">
         <Timeline
           time={time}
           duration={duration}

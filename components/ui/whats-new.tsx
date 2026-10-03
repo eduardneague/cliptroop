@@ -13,7 +13,7 @@ import { sounds } from "@/lib/sounds";
  * What's new — the patch notes, without a page.
  *
  *  - <WhatsNewHost/> (once, in the dashboard layout) owns the window, and
- *    after a feature update shows a small card with Clip: "VPlanner 1.2 is
+ *    after a feature update shows a small card with Clippy: "VPlanner 1.2 is
  *    here" (once per device per update).
  *  - <WhatsNewButton/> opens it from anywhere (sidebar, Settings, Team),
  *    with an amber dot until this device has looked at the current version.

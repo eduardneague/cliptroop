@@ -708,7 +708,7 @@ export function ScriptEditor({
 
       {status === "conflict" && (
         <div className="no-print mx-auto mt-4 w-full max-w-3xl px-4">
-          <div className="rounded-xl border border-amber bg-amber/10 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="rounded-xl border border-amber/40 bg-amber/[0.06] px-4 py-3 flex items-center gap-3 flex-wrap">
             <p className="text-[13.5px] text-ink flex-1 min-w-[200px]">
               Someone else saved this script while you were editing. Reload to see their version. Your last
               changes weren&rsquo;t saved, so copy anything you need first.

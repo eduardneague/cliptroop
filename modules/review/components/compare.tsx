@@ -178,7 +178,7 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
         {side(b, right, rightId, setRightId, "b")}
       </div>
 
-      <div className="rounded-2xl bg-gradient-to-b from-[#141210] to-[#0b0a09] ring-1 ring-white/5 px-3 sm:px-4 pt-3 pb-2.5">
+      <div className="rounded-2xl bg-[#100e0c] ring-1 ring-white/5 px-3 sm:px-4 pt-3 pb-2.5">
         <Timeline time={time} duration={duration} glide={glide} onSeek={(t) => seek(t)} />
         <div className="flex items-center gap-1 sm:gap-1.5 mt-1.5">
           <CtrlButton label={playing ? "Pause both" : "Play both"} shortcut="Space" onClick={toggle} primary>

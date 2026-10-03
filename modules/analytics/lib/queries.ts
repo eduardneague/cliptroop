@@ -5,7 +5,7 @@ import { hasStatsScopes, PLATFORMS, type SocialPlatform } from "@/lib/social/pro
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
-import { bucketOf, bucketsFor, dayIn, daysBetween, dayList, type Bucket, type Window } from "./ranges";
+import { addDays, bucketOf, bucketsFor, dayIn, daysBetween, dayList, type Bucket, type Window } from "./ranges";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 type Row = Record<string, unknown>;
@@ -301,7 +301,8 @@ export async function getPlatformStatus(teamId: string): Promise<PlatformStatus[
 export async function getAudience(teamId: string, w: Window): Promise<Audience> {
   const supabase = await createClient();
   const [rows, countries, igCountries, status] = await Promise.all([
-    all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).gte("day", w.prevFrom).lte("day", w.to).order("day").range(a, b)),
+    // One day past the range: "followers now" snapshots are saved on the day of the sync (today).
+    all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).gte("day", w.prevFrom).lte("day", addDays(w.to, 1)).order("day").range(a, b)),
     all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes, day").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b)),
     supabase.from("analytics_countries").select("country, value, day").eq("team_id", teamId).eq("platform", "instagram").eq("metric", "followers").order("day", { ascending: false }).limit(300),
     getPlatformStatus(teamId),

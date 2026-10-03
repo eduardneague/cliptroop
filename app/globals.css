@@ -22,7 +22,7 @@
   --amber: 232 99 13;      /* the one accent — used sparingly, on purpose */
   --teal: 21 130 115;
   --blue: 47 86 194;
-  --violet: 103 76 209;
+  --violet: 88 58 200;     /* meetings: 7.4:1 on white */
   /* Content kinds: shorts (orange) and long videos (light blue), everywhere.
      Teams can pick their own (Team → Colors); these are the defaults. */
   --short: 234 88 12;
@@ -57,6 +57,7 @@
      identical to :root in both themes. Only structural tokens
      (background/text/surface) actually need to invert for dark mode. */
   /* Brighter kind colours on dark backgrounds. */
+  --violet: 152 130 245;   /* meetings: 5.8:1 on the dark surface */
   --short: 251 146 60;
   --long: 56 189 248;
   /* Chart series, re-stepped for the dark surface (not just flipped). */
@@ -499,7 +500,7 @@ html[data-motion="off"] button:active { scale: none; }
 @keyframes todo-in { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
 
 /* ---------------------------------------------------------------------------
-   Mascot (Clip the clapperboard, components/ui/mascot.tsx).
+   Mascot (Clippy the clapperboard, components/ui/mascot.tsx).
    Pivots are in the SVG's own coordinates (transform-box: view-box).
    With animations off everything ends in its resting pose.
    ------------------------------------------------------------------------- */

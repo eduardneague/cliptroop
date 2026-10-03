@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
-import { ArrowLeftIcon, AlertIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, AlertIcon, PinIcon } from "@/components/ui/icons";
+import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import {
   getShortDetail,
   getShortSettings,
@@ -179,9 +180,21 @@ export default async function ShortPage({
         ) : (
           <span className="text-ink-faint">No planned date</span>
         )}
-        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-          {short.scheduleMode === "auto" ? "Auto date" : short.pinKind === "oneoff" ? "Fixed · just this one" : "Fixed · queue starts here"}
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-surface-2 px-1.5 h-[22px] text-[11.5px] font-semibold text-ink-soft"
+          title={short.scheduleMode === "auto" ? "Moves with the queue when the plan changes" : short.pinKind === "oneoff" ? "Fixed, just this one: the queue carries on around it" : "Fixed: the queue continues from this date"}
+        >
+          {short.scheduleMode !== "auto" && <PinIcon className="w-3 h-3" />}
+          {short.scheduleMode === "auto" ? "Auto date" : short.pinKind === "oneoff" ? "Fixed, just this one" : "Fixed, queue starts here"}
         </span>
+        {short.editor && (
+          <span className="inline-flex items-center gap-1.5">
+            <PersonAvatar name={short.editor.name} avatarUrl={short.editor.avatarUrl} color={short.editor.color} className="w-5 h-5 text-[8.5px]" />
+            <span>
+              Editor <b className="font-semibold text-ink">{short.editor.name}</b>
+            </span>
+          </span>
+        )}
         {short.createdBy && <span className="hidden sm:inline text-ink-faint">Created by {short.createdBy.name}</span>}
       </div>
 

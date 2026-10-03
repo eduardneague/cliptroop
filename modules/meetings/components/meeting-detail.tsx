@@ -110,7 +110,7 @@ export function MeetingDetail({ meeting, people, canOrganize, me }: { meeting: M
               </div>
               <div className="mt-4 pt-4 border-t border-violet/15 flex items-center gap-2 flex-wrap">
                 {meeting.link && (
-                  <a href={meeting.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-violet text-white font-bold px-4 h-10 text-[13.5px] hover:brightness-110">
+                  <a href={meeting.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-violet text-white dark:text-paper font-bold px-4 h-10 text-[13.5px] hover:brightness-110">
                     <ExternalIcon className="w-4 h-4" />
                     Join on {meeting.location}
                   </a>
@@ -415,7 +415,7 @@ function InviteDialog({ open, onClose, meeting, people, me }: { open: boolean; o
                 }
                 className="w-full flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-2 disabled:opacity-70"
               >
-                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${on ? "bg-violet border-violet text-white" : "border-line/30"}`}>{on && <CheckIcon className="w-3.5 h-3.5" />}</span>
+                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${on ? "bg-violet border-violet text-white dark:text-paper" : "border-line/30"}`}>{on && <CheckIcon className="w-3.5 h-3.5" />}</span>
                 <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} className="w-7 h-7 text-[10px]" />
                 <span className="text-[13.5px] font-semibold">{p.name}</span>
                 {p.userId === me && <span className="text-[12px] text-ink-faint">(you)</span>}

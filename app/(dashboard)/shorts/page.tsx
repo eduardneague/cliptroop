@@ -6,7 +6,7 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { GridIcon, ListIcon, PlusIcon, CalendarIcon } from "@/components/ui/icons";
+import { GridIcon, ListIcon, PlusIcon, CalendarIcon, PinIcon } from "@/components/ui/icons";
 import { LinkPendingIndicator } from "@/components/ui/link-pending";
 import {
   getShortSettings,
@@ -26,6 +26,7 @@ import {
   isShortType,
   SHORT_STAGES,
   SHORT_STAGE_LABELS,
+  SHORT_STAGE_COLOR,
   isPlatform,
   isShortStage,
 } from "@/modules/short-videos/lib/constants";
@@ -241,10 +242,11 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       <div className="flex items-center gap-2 mb-6">
         <div className="-ml-4 pl-4 sm:ml-0 sm:pl-0 flex-1 min-w-0 overflow-x-auto no-scrollbar">
           <div className="flex gap-1 w-max items-center">
-            {[{ key: "", label: "All", count: all.length }, ...SHORT_STAGES.map((st) => ({
+            {[{ key: "", label: "All", count: all.length, color: null as string | null }, ...SHORT_STAGES.map((st) => ({
               key: st,
               label: SHORT_STAGE_LABELS[st],
               count: counts.get(st) ?? 0,
+              color: SHORT_STAGE_COLOR[st] as string | null,
             }))].map((f) => {
               const active = (stageFilter ?? "") === f.key;
               return (
@@ -261,6 +263,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                         : "text-ink-soft hover:bg-surface-2 hover:text-ink"
                   }`}
                 >
+                  {f.color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: f.color, opacity: f.count ? 1 : 0.45 }} aria-hidden />}
                   {f.label}
                   <span className={`text-[11px] tabular-nums font-medium ${active ? "text-paper/60" : "text-ink-faint"}`}>
                     {f.count}
@@ -470,7 +473,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                     ? {
                         // Sponsor / Big: a colored left edge and a soft tint, plus the S / B badge on the right.
                         boxShadow: `inset 4px 0 0 ${SHORT_TYPE_META[s.shortType].color}`,
-                        background: `linear-gradient(90deg, color-mix(in srgb, ${SHORT_TYPE_META[s.shortType].color} 14%, transparent), color-mix(in srgb, ${SHORT_TYPE_META[s.shortType].color} 4%, transparent) 60%)`,
+                        background: `color-mix(in srgb, ${SHORT_TYPE_META[s.shortType].color} 8%, transparent)`,
                       }
                     : undefined
                 }
@@ -487,20 +490,35 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                   >
                     {s.title}
                   </Link>
-                  {/* Second line: type first (so Sponsor / Big read instantly), then the rest. */}
-                  <div className="flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap text-[11.5px] text-ink-soft">
-                    <span className="md:hidden">
-                      <ShortStagePill stage={s.stage} />
-                    </span>
-                    {s.plannedDate && (
-                      <span className={`2xl:hidden ${overdue ? "text-red font-semibold" : ""}`}>
-                        <span className="md:hidden">{formatShortDate(s.plannedDate)} · </span>
-                        {s.scheduleMode === "auto" ? "Auto" : s.pinKind === "oneoff" ? "One-off" : "Fixed"}
-                        {overdue ? " · overdue" : ""}
-                      </span>
-                    )}
-                    {s.editor && <span className="lg:hidden truncate">· {s.editor.name}</span>}
-                  </div>
+                  {/* Second line, only when there's something worth saying: the date on
+                      phones, a fixed date, overdue, the reviewer's requested changes. */}
+                  {(() => {
+                    const pinned = s.scheduleMode === "pinned";
+                    const changes = s.stage === "editing" && s.reviewNote;
+                    const extra = pinned || overdue || changes;
+                    return (
+                      <div className={`flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap text-[11.5px] text-ink-soft ${extra ? "" : s.editor ? "lg:hidden" : "md:hidden"}`}>
+                        <span className="md:hidden">
+                          <ShortStagePill stage={s.stage} />
+                        </span>
+                        {s.plannedDate && <span className={`md:hidden ${overdue ? "text-red font-semibold" : ""}`}>{formatShortDate(s.plannedDate)}</span>}
+                        {pinned && (
+                          <span className="2xl:hidden inline-flex items-center gap-1 text-ink-soft" title={s.pinKind === "oneoff" ? "Fixed, just this one: the queue carries on around it" : "Fixed: the queue continues from this date"}>
+                            <PinIcon className="w-3 h-3" />
+                            {s.pinKind === "oneoff" ? "One-off date" : "Fixed date"}
+                          </span>
+                        )}
+                        {overdue && <span className="2xl:hidden text-red font-semibold">Overdue</span>}
+                        {changes && (
+                          <span className="inline-flex items-center gap-1 min-w-0 max-w-full text-amber font-medium" title={s.reviewNote ?? undefined}>
+                            <span className="font-bold flex-shrink-0">Changes:</span>
+                            <span className="truncate">{s.reviewNote}</span>
+                          </span>
+                        )}
+                        {s.editor && <span className="lg:hidden truncate">{s.editor.name}</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="hidden 2xl:block text-[12px]">
@@ -508,18 +526,15 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                     <>
                       <div className={`font-semibold ${overdue ? "text-red" : "text-ink"}`}>
                         {formatShortDate(s.plannedDate)}
-                        <span
-                          className="ml-1.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-faint"
-                          title={
-                            s.scheduleMode === "auto"
-                              ? "Auto: moves with the queue"
-                              : s.pinKind === "oneoff"
-                                ? "Fixed, just this one: the queue carries on around it"
-                                : "Fixed: the queue continues from this date"
-                          }
-                        >
-                          {s.scheduleMode === "auto" ? "Auto" : s.pinKind === "oneoff" ? "One-off" : "Fixed"}
-                        </span>
+                        {s.scheduleMode === "pinned" && (
+                          <span
+                            className="ml-1.5 inline-flex items-center gap-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-faint"
+                            title={s.pinKind === "oneoff" ? "Fixed, just this one: the queue carries on around it" : "Fixed: the queue continues from this date"}
+                          >
+                            <PinIcon className="w-2.5 h-2.5" />
+                            {s.pinKind === "oneoff" ? "One-off" : "Fixed"}
+                          </span>
+                        )}
                       </div>
                       {(overdue || rel) && (
                         <div className={`text-[11px] ${overdue ? "text-red/80" : "text-ink-faint"}`}>

@@ -11,8 +11,12 @@ export function emailConfigured() {
   return !!process.env.RESEND_API_KEY && !!process.env.EMAIL_FROM;
 }
 
-/** The app's public address, for links in emails. */
+/** The app's public address, for links in emails. Previews (staging) link to themselves. */
 export function appUrl() {
+  if (process.env.VERCEL_ENV === "preview") {
+    const own = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL;
+    if (own) return `https://${own}`.replace(/\/+$/, "");
+  }
   const raw =
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||

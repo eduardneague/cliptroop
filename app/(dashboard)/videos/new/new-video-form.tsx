@@ -218,18 +218,20 @@ export function NewVideoForm({
             {state.error}
           </p>
         )}
-        <div className="flex items-center gap-2 sticky bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] lg:bottom-4 z-10">
+        {/* Stays in reach while you scroll: a solid bar, so the form never shows through the buttons. */}
+        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] lg:bottom-4 z-10 flex items-center gap-2 rounded-2xl border border-line/15 bg-surface px-3 py-2.5 shadow-[0_12px_32px_-18px_rgb(0_0_0/0.45)]">
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-6 h-12 text-[15px] shadow-[0_10px_30px_-10px_rgb(var(--amber)/0.7)] hover:brightness-105 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-60"
           >
             {pending && <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
             Create video
           </button>
-          <Link href="/videos" className="rounded-xl border border-line/15 bg-surface px-5 h-12 inline-flex items-center text-[14px] font-semibold text-ink-soft hover:text-ink">
+          <Link href="/videos" className="rounded-xl px-4 h-11 inline-flex items-center text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
             Cancel
           </Link>
+          <span className="ml-auto pr-1 text-[12px] text-ink-faint hidden sm:block">Starts in Ideate. You can change everything later.</span>
         </div>
       </form>
     </div>

@@ -1,7 +1,24 @@
 /** Dashboard Studio: which widgets, where, how big, their settings. */
 import { COLS, compact, firstFit, type Box, type Limits } from "./grid";
 
-export type WidgetType = "tasks" | "contributions" | "todo" | "teams" | "clock" | "minicalendar" | "upcomingShorts" | "upcomingLongs" | "pipeline" | "posting" | "weather" | "meetings";
+export type WidgetType =
+  | "tasks"
+  | "contributions"
+  | "todo"
+  | "teams"
+  | "clock"
+  | "minicalendar"
+  | "upcomingShorts"
+  | "upcomingLongs"
+  | "pipeline"
+  | "posting"
+  | "weather"
+  | "meetings"
+  | "views"
+  | "followers"
+  | "topVideos"
+  | "audienceMap"
+  | "output";
 
 /**
  * One widget on the 12 column grid: x/y = column/row of its top-left
@@ -27,6 +44,12 @@ export const CATALOG: Record<WidgetType, Meta> = {
   pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } },
   meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } },
   weather: { name: "Weather", description: "Now and the next days, for your city.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 4 }, bare: true, settings: { units: "c" } },
+  // Analytics (1.5): each loads its own numbers when it appears.
+  output: { name: "This week", description: "Shorts and long videos out in the last 7 days, how many on time, and what's late.", w: 6, h: 2, limits: { minW: 2, minH: 2, maxW: 12, maxH: 4 } },
+  views: { name: "Views", description: "Views on YouTube, Instagram and TikTok in the last 7 days, and the trend.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } },
+  followers: { name: "Followers", description: "Subscribers and followers on each platform, and how they changed.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } },
+  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } },
+  audienceMap: { name: "Audience map", description: "Where your YouTube views come from: a world map of the last 28 days.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 } },
 };
 
 export const LIMITS_BY_TYPE = Object.fromEntries(Object.entries(CATALOG).map(([k, v]) => [k, v.limits])) as Record<WidgetType, Limits>;

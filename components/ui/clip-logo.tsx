@@ -1,5 +1,5 @@
 /**
- * The VPlanner logo: Clip's face (the mascot, cropped to the board) —
+ * The VPlanner logo: Clippy's face (the mascot, cropped to the board) —
  * static, so it reads at small sizes. Hovering the brand row claps the
  * clapper once (CSS: .brand-row:hover .clip-logo-arm).
  * Same drawing as app/icon.svg (the browser tab icon).
@@ -55,10 +55,10 @@ export function ClipLogo({ size = 28, className = "" }: { size?: number; classNa
   );
 }
 
-/** Clip + the wordmark. */
+/** Clippy + the wordmark. */
 export function Brand({ className = "" }: { className?: string }) {
   return (
-    <span className={`brand-row inline-flex items-center gap-2 ${className}`}>
+    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title="Hi, I'm Clippy!">
       <ClipLogo size={28} />
       <span className="font-display font-semibold text-[16px] tracking-tight">VPlanner</span>
     </span>
