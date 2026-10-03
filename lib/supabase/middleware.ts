@@ -58,12 +58,16 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth") ||
     // Scheduled jobs (Vercel Cron). Each route checks CRON_SECRET itself.
     request.nextUrl.pathname.startsWith("/api/cron/") ||
-    // Public pages the platform reviews require.
+    // Public pages the platform reviews require (the home page signs you in or sends you on).
+    request.nextUrl.pathname === "/" ||
     request.nextUrl.pathname === "/privacy" ||
     request.nextUrl.pathname === "/terms" ||
+    request.nextUrl.pathname === "/data-deletion" ||
     // Status page + health check: public (details only for the alert people).
     request.nextUrl.pathname === "/status" ||
-    request.nextUrl.pathname === "/api/health";
+    request.nextUrl.pathname === "/api/health" ||
+    // The installed app's "you're offline" page (cached by the service worker).
+    request.nextUrl.pathname === "/offline.html";
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

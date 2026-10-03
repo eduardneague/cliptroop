@@ -123,3 +123,18 @@ export async function setPalette(palette: string | null) {
   if (error) return { error: /palette/.test(error.message) ? "Saved on this device only (the database needs migration 0060)." : "Couldn't save that setting. Try again." };
   return { success: true };
 }
+
+/** Remove one of your devices from push notifications (Settings → Notifications). */
+export async function removePushDevice(id: string): Promise<{ error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Not found." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expired." };
+  // RLS: only your own devices can be deleted.
+  const { error } = await supabase.from("push_subscriptions").delete().eq("id", id).eq("user_id", user.id);
+  if (error) return { error: "Couldn't remove it. Try again." };
+  revalidatePath("/settings");
+  return {};
+}

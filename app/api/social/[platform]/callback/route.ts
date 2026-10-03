@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PROVIDERS, ProviderError, hasStatsScopes, isSocialPlatform, missingRequired, redirectUriFor, statsEnabled } from "@/lib/social/providers";
@@ -18,7 +19,7 @@ type Result = { ok: boolean; platform: string | null; error?: string; message?: 
  */
 function popupPage(result: Result, fallback: string) {
   const json = JSON.stringify({ type: "vp-social", ...result }).replace(/</g, "\\u003c");
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VPlanner</title>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${APP_NAME}</title>
 <style>body{margin:0;height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:#edeee7;color:#14110c}@media (prefers-color-scheme:dark){body{background:#120f0b;color:#f0ece3}}p{margin:0;padding:24px;text-align:center}</style></head>
 <body><p>${result.ok ? "Connected. You can close this window." : "That didn&rsquo;t work. You can close this window."}</p>
 <script>

@@ -23,6 +23,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.0",
+    date: "2026-10-04",
+    title: "On your phone, with notifications",
+    changes: [
+      { kind: "new", text: "Install VPlanner on your phone like an app, straight from the browser, no app store: iPhone and iPad with Share → Add to Home Screen, Android with Install app. It gets its own icon and opens full screen. Settings → Notifications & app shows the steps for your phone." },
+      { kind: "new", text: "Push notifications on phones and computers: everything that shows up in the bell also pops up on your device, even when VPlanner is closed. Turn them on per device in Settings → Notifications & app, send yourself a test, and see or remove your devices. (On iPhone, from the installed app.)" },
+      { kind: "new", text: "The little clapperboard has a name again: Clip." },
+      { kind: "new", text: "A public home page, plus an up-to-date privacy policy, terms and a page on deleting your data: what Google, Meta and TikTok check before approving VPlanner." },
+      { kind: "better", text: "No internet? The installed app shows a friendly \"You're offline\" page and tries again by itself when you're back online." },
+      { kind: "better", text: "Safer: other sites can't show VPlanner inside their pages, browsers get stricter security rules on every page, and notifications are only ever sent to the browsers' real notification services." },
+      { kind: "better", text: "The app's name lives in one place now, ready for the new name and domain." },
+      { kind: "fixed", text: "Automatic database updates explain a wrong database password in plain words, and the automatic checks use GitHub's current tools (no more warnings)." },
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-10-03",
     title: "Tasks for everything, a status page, error alerts and a faster app",

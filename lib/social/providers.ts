@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import "server-only";
 
 /**
@@ -413,7 +414,7 @@ export async function facebookPages(userToken: string): Promise<FbPage[]> {
     }
   }
   if (!pages.length && ids.length) {
-    throw new ProviderError("Facebook let VPlanner see your Page but not open it. In the Meta app's Facebook Login for Business configuration, also tick business_management, then connect again.");
+    throw new ProviderError(`Facebook let ${APP_NAME} see your Page but not open it. In the Meta app's Facebook Login for Business configuration, also tick business_management, then connect again.`);
   }
   return pages;
 }

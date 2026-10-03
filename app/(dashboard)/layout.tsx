@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -20,6 +21,9 @@ import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
 import { signOut } from "./actions";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { cookies } from "next/headers";
+import { PushKeeper } from "@/components/pwa";
+import { PUSH_COOKIE } from "@/lib/push/guard";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -74,6 +78,8 @@ export default async function DashboardLayout({
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+        {/* Keeps this device's push notifications working after logging in again. */}
+        <PushKeeper userId={user!.id} deviceHash={(await cookies()).get(PUSH_COOKIE)?.value ?? null} />
         {/* The team's colours for shorts and long videos, everywhere. */}
         <style>{kindColorCss(teamColors?.short_color as string | undefined, teamColors?.long_color as string | undefined)}</style>
         <div className="min-h-screen flex">
@@ -92,7 +98,7 @@ export default async function DashboardLayout({
                 brand on the left, search icon + actions on the right. */}
             <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
               <span className="flex items-center gap-2 min-w-0">
-                <Link href="/dashboard" aria-label="VPlanner home" className="md:hidden">
+                <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="md:hidden">
                   <Brand className="[&_.font-display]:text-[15px]" />
                 </Link>
                 {/* Staging only: so it's always obvious you're not on the real app. */}

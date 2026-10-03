@@ -216,6 +216,10 @@ module.exports = {
       { id: "ta000000-0000-4000-8000-000000000002", kind: "script", item_id: "dd000000-0000-4000-8000-000000000002", stage: "review", state: "active", due_date: null, team_id: TEAM, user_id: U[0], completed_at: null },
       { id: "ta000000-0000-4000-8000-000000000003", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000002", stage: "action", state: "done", due_date: day(-1), team_id: TEAM, user_id: U[0], completed_at: at(-1, 15) },
     ],
+    push_subscriptions: process.env.MOCK_PUSH ? [
+      { id: "fa000000-0000-4000-8000-000000000001", user_id: U[0], endpoint: "https://web.push.apple.com/mock-iphone", label: "iPhone · Safari", created_at: at(-2, 20), last_sent_at: at(0, 8) },
+      { id: "fa000000-0000-4000-8000-000000000002", user_id: U[0], endpoint: "https://fcm.googleapis.com/fcm/send/mock-mac", label: "Mac · Chrome", created_at: at(-9, 11), last_sent_at: null },
+    ] : [],
     app_errors: [
       { id: "ffffffff-0000-4000-8000-000000000001", source: "server", message: "Cannot read properties of undefined (reading 'title')", route: "GET /shorts/[id] (render)", count: 3, first_seen: at(-1, 14), last_seen: at(0, 8), resolved_at: null },
       { id: "ffffffff-0000-4000-8000-000000000002", source: "browser", message: "ResizeObserver loop completed with undelivered notifications", route: "/dashboard", count: 1, first_seen: at(-3, 10), last_seen: at(-3, 10), resolved_at: at(-2, 9) },

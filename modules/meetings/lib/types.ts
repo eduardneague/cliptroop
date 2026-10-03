@@ -1,5 +1,6 @@
 /** Meetings: shared types and small helpers (safe on client and server). */
 
+import { APP_NAME } from "@/lib/brand";
 export type Rsvp = "pending" | "yes" | "maybe" | "no";
 
 export type MeetingPerson = { userId: string; name: string; username: string | null; avatarUrl: string | null; color: string };
@@ -67,7 +68,7 @@ export function meetingIcs(m: Pick<Meeting, "id" | "title" | "startsAt" | "durat
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//VPlanner//Meetings//EN",
+    `PRODID:-//${APP_NAME}//Meetings//EN`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -77,7 +78,7 @@ export function meetingIcs(m: Pick<Meeting, "id" | "title" | "startsAt" | "durat
     `DTEND:${icsDate(endsAt(m))}`,
     `SUMMARY:${icsText(m.title)}`,
     `LOCATION:${icsText(m.link ? `${m.location} (${m.link})` : m.location)}`,
-    `DESCRIPTION:${icsText([m.agenda, `Open in VPlanner: ${url}`].filter(Boolean).join("\n\n"))}`,
+    `DESCRIPTION:${icsText([m.agenda, `Open in ${APP_NAME}: ${url}`].filter(Boolean).join("\n\n"))}`,
     `URL:${url}`,
     `STATUS:${m.status === "cancelled" ? "CANCELLED" : "CONFIRMED"}`,
     "BEGIN:VALARM",

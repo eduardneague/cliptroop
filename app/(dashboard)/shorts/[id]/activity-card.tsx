@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import { relativeTime } from "@/lib/relative-time";
 import { PLATFORM_META, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import type { ShortEvent } from "@/modules/short-videos/lib/queries";
@@ -56,7 +57,7 @@ export function ActivityCard({ events }: { events: ShortEvent[] }) {
                 </span>
               )}
               <div className="min-w-0 text-[12.5px] leading-snug pt-0.5">
-                <span className="font-semibold">{e.actor?.name ?? "VPlanner"}</span> {describe(e, !e.actor)}
+                <span className="font-semibold">{e.actor?.name ?? APP_NAME}</span> {describe(e, !e.actor)}
                 {e.note && (
                   <p className="mt-1 rounded-lg bg-amber/10 text-ink px-2.5 py-1.5 text-[12px] whitespace-pre-wrap">{e.note}</p>
                 )}

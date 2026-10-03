@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import "server-only";
 import { PublishError, readChunk, signedVideoUrl, videoFor, type PostRow, type StepResult } from "./common";
 
@@ -14,7 +15,7 @@ async function readError(res: Response) {
   try {
     const j = (await res.json()) as { error?: { message?: string; errors?: { reason?: string }[] } };
     const reason = j.error?.errors?.[0]?.reason ?? "";
-    if (reason === "quotaExceeded") return { msg: "YouTube's daily upload limit for VPlanner was reached. It'll retry later.", retry: true };
+    if (reason === "quotaExceeded") return { msg: `YouTube's daily upload limit for ${APP_NAME} was reached. It'll retry later.`, retry: true };
     if (reason === "uploadLimitExceeded") return { msg: "This channel reached YouTube's upload limit for today. It'll retry later.", retry: true };
     return { msg: j.error?.message ?? `HTTP ${res.status}`, retry: res.status >= 500 || res.status === 429 };
   } catch {
@@ -137,7 +138,7 @@ export async function youtubeStep(post: PostRow, token: string, deadline: number
     if (s.uploadStatus === "processed") {
       const privateNote =
         s.privacyStatus === "private"
-          ? "Uploaded, but YouTube kept it private. That's expected until Google verifies VPlanner."
+          ? `Uploaded, but YouTube kept it private. That's expected until Google verifies ${APP_NAME}.`
           : null;
       return {
         status: "published",

@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -629,7 +630,7 @@ export function SchedulePanel({
             </button>
           ) : (
             <div className="flex items-center gap-3 flex-wrap rounded-xl border border-dashed border-line/20 px-3.5 py-3 animate-[modalin_.15s_var(--ease-out)]">
-              <span className="text-[12.5px] text-ink-soft flex-1 min-w-[12rem]">Posted it yourself, outside VPlanner?</span>
+              <span className="text-[12.5px] text-ink-soft flex-1 min-w-[12rem]">Posted it yourself, outside {APP_NAME}?</span>
               <button type="button" onClick={() => void postAllManually()} className="rounded-lg border border-line/20 px-3 h-9 text-[12.5px] font-semibold hover:border-line/40">
                 Manually post this video
               </button>
@@ -909,7 +910,7 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
   if (post.platform === "youtube") {
     current = post.status === "published" ? 4 : post.status === "waiting" || post.step === "check" ? 3 : 1;
     return [
-      { label: "Scheduled in VPlanner", state: "done", at: at(["scheduled", "rescheduled"]) },
+      { label: `Scheduled in ${APP_NAME}`, state: "done", at: at(["scheduled", "rescheduled"]) },
       {
         label: "Upload to YouTube",
         state: bad(1, current),
@@ -930,7 +931,7 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
   const step = post.status === "published" ? "done" : post.step ?? (post.status === "uploading" ? "upload" : post.status === "scheduled" ? "start" : "status");
   current = step === "done" ? 4 : step === "status" || step === "publish" ? 2 : 1;
   return [
-    { label: "Scheduled in VPlanner", state: "done", detail: current === 1 && post.status === "scheduled" ? `${name} can't hold scheduled posts, so VPlanner keeps it and sends it at ${when}.` : null, at: at(["scheduled", "rescheduled"]) },
+    { label: `Scheduled in ${APP_NAME}`, state: "done", detail: current === 1 && post.status === "scheduled" ? `${name} can't hold scheduled posts, so ${APP_NAME} keeps it and sends it at ${when}.` : null, at: at(["scheduled", "rescheduled"]) },
     {
       label: post.platform === "instagram" ? `Sent to Instagram at ${when}` : `Uploaded to TikTok at ${when}`,
       state: bad(1, current),
@@ -1127,7 +1128,7 @@ function ReconnectNotice() {
       <div className="min-w-0 flex-1">
         <div className="text-[13.5px] font-semibold">Reconnect YouTube once</div>
         <p className="text-[12.5px] text-ink-soft mt-0.5">
-          YouTube was connected before VPlanner could change scheduled videos. Reconnect it to allow that. It only takes a moment.
+          YouTube was connected before {APP_NAME} could change scheduled videos. Reconnect it to allow that. It only takes a moment.
         </p>
         <Link href="/team?tab=accounts" className="mt-2.5 inline-flex items-center rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px]">
           Reconnect YouTube

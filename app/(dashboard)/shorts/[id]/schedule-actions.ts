@@ -1,5 +1,6 @@
 "use server";
 
+import { APP_NAME } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -348,12 +349,12 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
           const j = (await r.json().catch(() => ({}))) as { account_type?: string; username?: string };
           if (!r.ok) return { platform, ok: false, message: "Instagram refused the sign-in. Reconnect Instagram." };
           if (j.account_type && !/business|creator/i.test(j.account_type)) return { platform, ok: false, message: "The Instagram account must be Professional (Business or Creator)." };
-          return { platform, ok: true, message: `Signed in as @${j.username ?? "account"}. VPlanner sends it at your time.` };
+          return { platform, ok: true, message: `Signed in as @${j.username ?? "account"}. ${APP_NAME} sends it at your time.` };
         }
         const d = await tiktokCall("/post/publish/creator_info/query/", token, {});
         const max = Number(d.max_video_post_duration_sec ?? 0);
         if (max && duration && duration > max) return { platform, ok: false, message: `This account can post up to ${max}s; the video is ${Math.round(duration)}s.` };
-        return { platform, ok: true, message: `Signed in as ${String(d.creator_nickname ?? "account")}. VPlanner sends it at your time.` };
+        return { platform, ok: true, message: `Signed in as ${String(d.creator_nickname ?? "account")}. ${APP_NAME} sends it at your time.` };
       } catch (e) {
         return { platform, ok: false, message: e instanceof Error ? e.message : "Couldn't check this account." };
       }

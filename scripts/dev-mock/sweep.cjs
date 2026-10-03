@@ -3,7 +3,7 @@ const { chromium } = require(require("child_process").execSync("npm root -g").to
 const cookie = require("./cookie.cjs");
 const F = require("./fixtures.cjs");
 const short = F.tables.short_videos[0].id, long = F.tables.long_video_projects[0].id;
-const pages = ["/dashboard", "/shorts", `/shorts/${short}`, `/shorts/${short}/script`, "/shorts/new", "/videos", `/videos/${long}`, `/videos/${long}/script`, `/videos/${long}/studio`, "/calendar", "/posting", "/meetings", "/meetings/cccccccc-0000-4000-8000-000000000001", "/analytics", "/analytics?tab=audience", "/analytics?tab=content", "/analytics?tab=revenue", "/team", "/team?tab=defaults", "/team?tab=accounts", "/team?tab=appearance", "/team?tab=team", "/settings", "/u/edu", "/status", "/videos/new", "/does-not-exist"];
+const pages = ["/dashboard", "/shorts", `/shorts/${short}`, `/shorts/${short}/script`, "/shorts/new", "/videos", `/videos/${long}`, `/videos/${long}/script`, `/videos/${long}/studio`, "/calendar", "/posting", "/meetings", "/meetings/cccccccc-0000-4000-8000-000000000001", "/analytics", "/analytics?tab=audience", "/analytics?tab=content", "/analytics?tab=revenue", "/team", "/team?tab=defaults", "/team?tab=accounts", "/team?tab=appearance", "/team?tab=team", "/settings", "/settings?tab=notifications", "/u/edu", "/status", "/privacy", "/terms", "/data-deletion", "/offline.html", "/videos/new", "/does-not-exist"];
 (async () => {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US", timezoneId: "Europe/Bucharest" });

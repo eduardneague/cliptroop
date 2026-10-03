@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { useId } from "react";
 
 /**
@@ -32,7 +33,7 @@ export function Mascot({ mood = "idle", size = 96, className = "" }: { mood?: Ma
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const happy = mood === "celebrate";
   return (
-    <svg viewBox="0 0 120 120" width={size} height={size} className={`mascot mascot-${mood} ${className}`} role="img" aria-label={happy ? "The VPlanner clapperboard, celebrating" : "The VPlanner clapperboard"}>
+    <svg viewBox="0 0 120 120" width={size} height={size} className={`mascot mascot-${mood} ${className}`} role="img" aria-label={happy ? `${MASCOT_NAME}, the ${APP_NAME} clapperboard, celebrating` : `${MASCOT_NAME}, the ${APP_NAME} clapperboard`}>
       <defs>
         <clipPath id={`${id}-board`}>
           <rect x="30" y="50" width="60" height="50" rx="10" />

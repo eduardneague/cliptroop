@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useState } from "react";
 import { PlusIcon } from "@/components/ui/icons";
 
@@ -26,7 +27,7 @@ export function MembersHeader({ count, canInvite, children }: { count: number; c
       </div>
       {open && (
         <div className="mb-4 rounded-2xl border border-amber/40 bg-surface p-4 sm:p-5 space-y-4 animate-[modalin_.15s_var(--ease-out)]">
-          <p className="text-[13px] text-ink-soft">Find someone with a VPlanner account and invite them to this team.</p>
+          <p className="text-[13px] text-ink-soft">Find someone with a {APP_NAME} account and invite them to this team.</p>
           {children}
         </div>
       )}
