@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
+import { ErrorReporter } from "@/components/error-reporter";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -69,6 +70,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
+        <ErrorReporter />
         <AuthHashHandler />
         {children}
       </body>

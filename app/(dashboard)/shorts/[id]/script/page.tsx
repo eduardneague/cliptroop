@@ -9,6 +9,8 @@ import { ArrowLeftIcon } from "@/components/ui/icons";
 import { getShortDetail, listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
+import { getScriptFlow, isStepPerson } from "@/modules/scripts/lib/flow";
+import { setShortScripter } from "@/app/(dashboard)/shorts/actions";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { mentionPeople } from "@/modules/scripts/lib/mention-people";
@@ -35,15 +37,16 @@ export default async function ShortScriptPage({
   if (!short) notFound();
 
   const supabase = await createClient();
-  const membership = await getMembership(supabase, short.teamId);
+  const [membership, people, roleColors] = await Promise.all([getMembership(supabase, short.teamId), listTeamPeople(short.teamId), getRoleColors(supabase, short.teamId)]);
   const roles = membership?.roles ?? [];
   // Masters, plus this short's scripters (default scripter + anyone added).
   const canEdit = isMaster(roles) || (!!membership && short.scripterIds.includes(membership.teamMemberId));
   // Masters and schedulers decide who the scripters are.
   const canManageScripters = isMaster(roles) || roles.includes("publisher");
+  const me = membership?.teamMemberId ?? null;
 
   // Versions: Script · Review · Staging (+ any added), created on first open.
-  const [docs, people] = await Promise.all([ensureDefaultDocs({ short: id }, { script: canEdit, research: false }), listTeamPeople(short.teamId)]);
+  const docs = await ensureDefaultDocs({ short: id }, { script: canEdit, research: false });
   const current = docs.find((d) => d.id === docParam) ?? docs.find((d) => d.kind === "script");
   if (!current) {
     return (
@@ -57,7 +60,12 @@ export default async function ShortScriptPage({
     );
   }
   const sideItem = docs.find((d) => d.id === sideParam && d.id !== current.id);
-  const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, short.teamId), getRoleColors(supabase, short.teamId)]);
+  const [doc, side, comments, flow] = await Promise.all([
+    getDoc(current.id),
+    sideItem ? getDoc(sideItem.id) : Promise.resolve(null),
+    listComments(current.id, short.teamId),
+    getScriptFlow(docs, short.teamId, short.scripterIds),
+  ]);
   if (!doc) notFound();
 
   // Who does what on this short (for @mention suggestions).
@@ -75,7 +83,8 @@ export default async function ShortScriptPage({
       owner={{ short: id }}
       docs={docs}
       doc={doc}
-      canEdit={canEdit}
+      // Reviewers edit Review, staging people edit Staging (0062).
+      canEdit={canEdit || isStepPerson(flow, doc.id, me)}
       canCreate={{ script: canEdit, research: false }}
       side={side}
       comments={comments}
@@ -86,8 +95,19 @@ export default async function ShortScriptPage({
       backHref={`/shorts/${id}`}
       backLabel="Back to the short"
       topBarExtra={
-        <ScriptersButton shortId={id} number={short.number} people={people} scripterIds={short.scripterIds} canManage={canManageScripters} />
+        flow.ready ? undefined : <ScriptersButton shortId={id} number={short.number} people={people} scripterIds={short.scripterIds} canManage={canManageScripters} />
       }
+      flow={{
+        data: flow,
+        team: people,
+        videoId: id,
+        scripterAction: setShortScripter,
+        can: {
+          scripters: canManageScripters,
+          people: canManageScripters || canEdit,
+          handOff: { write: canEdit, review: isMaster(roles) || isStepPerson(flow, flow.steps.find((s) => s.step === "review")?.docId ?? "", me) },
+        },
+      }}
       lastEdited={doc.updatedBy && doc.version > 1 ? `Last edited by ${doc.updatedBy.name}, ${relativeTime(doc.updatedAt)}` : null}
     />
   );

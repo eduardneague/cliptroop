@@ -79,19 +79,21 @@ export async function listMeetings(teamId: string, opts: { from?: string; to?: s
 }
 
 /** One meeting with its people and action items (null if not yours to see). */
-export async function getMeeting(id: string): Promise<Meeting | null> {
+/* cache(): the page and its title both ask for it. */
+export const getMeeting = cache(async function getMeeting(id: string): Promise<Meeting | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const supabase = await createClient();
-  const { data: row } = await supabase.from("meetings").select(MEETING_COLS).eq("id", id).maybeSingle();
-  if (!row) return null;
-  const [user, people, { data: att }, { data: acts }] = await Promise.all([
+  // The meeting, its people and its action items at once (RLS hides them all if it isn't yours).
+  const [{ data: row }, user, { data: att }, { data: acts }] = await Promise.all([
+    supabase.from("meetings").select(MEETING_COLS).eq("id", id).maybeSingle(),
     getCachedUser(),
-    peopleOf(row.team_id as string),
     supabase.from("meeting_attendees").select("meeting_id, user_id, rsvp").eq("meeting_id", id),
     supabase.from("meeting_actions").select("id, meeting_id, text, owner_id, due_date, done_at, created_by").eq("meeting_id", id).order("created_at"),
   ]);
+  if (!row) return null;
+  const people = await peopleOf(row.team_id as string);
   return build(row, att ?? [], acts ?? [], people, user?.id ?? null);
-}
+});
 
 export type MyAction = MeetingAction & { meetingId: string; meetingTitle: string };
 

@@ -1,6 +1,6 @@
 {
   "name": "vplanner",
-  "version": "1.6.0",
+  "version": "1.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs",
+    "db:test": "bash scripts/db/test-from-scratch.sh",
+    "db:baseline": "bash scripts/db/baseline.sh",
     "dev:webpack": "next dev",
     "postinstall": "node scripts/copy-vendor.mjs"
   },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { syncAllTeams } from "@/modules/analytics/lib/sync";
+import { watchHealth } from "@/lib/health-watch";
 
 /**
  * Once a day (Vercel Cron, see vercel.json): copy every team's numbers from
@@ -22,7 +23,9 @@ export async function GET(request: Request) {
   if (!authorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const result = await syncAllTeams(50_000);
+  const result = await syncAllTeams(45_000);
+  // Once a day: is the every-minute timer still running? (alerts if not)
+  await watchHealth("daily");
   return NextResponse.json({
     ok: true,
     teams: result.teams,

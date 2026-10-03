@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { StarIcon } from "@/components/ui/icons";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
@@ -25,6 +26,7 @@ import { KindColorsForm } from "./kind-colors-form";
 import { TeamTabs } from "./team-tabs";
 import { MembersHeader } from "./invite-toggle";
 import { LongSettingsForm } from "./long-settings";
+import { ScriptSettingsForm } from "./script-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
@@ -48,12 +50,34 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
   }
 
-  const [membership, currentUser, roleColors, [{ data: team }, { data: members }, { data: pendingInvites }]] = await Promise.all([
+  // Everything this page needs, in one round trip. The parts only some people
+  // see are read anyway (the database hides what isn't theirs) and dropped below.
+  const nowIso = new Date().toISOString();
+  const [
+    membership,
+    currentUser,
+    roleColors,
+    { data: team },
+    { data: members },
+    { data: pendingInvites },
+    { data: socialRows },
+    { data: historyRows },
+    people,
+    shortSettingsAny,
+    scriptDefaultsAny,
+    { data: transferRow },
+    setupAny,
+  ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
     getRoleColors(supabase, currentTeam.id),
-    Promise.all([
-    supabase.from("teams").select("id, name, logo_url, color, owner_id").eq("id", currentTeam.id).single(),
+    supabase
+      .from("teams")
+      .select(
+        "id, name, logo_url, color, owner_id, short_color, long_color, default_long_description, default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id"
+      )
+      .eq("id", currentTeam.id)
+      .single(),
     supabase
       .from("team_members")
       .select("id, user_id, invited_email, status, profiles(username, full_name, email, avatar_url), member_roles(role)")
@@ -64,30 +88,11 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       .select("id, proposed_roles, expires_at, created_at, profiles!team_invites_invited_user_id_fkey(username, full_name, email)")
       .eq("team_id", currentTeam.id)
       .eq("status", "pending")
-      .gt("expires_at", new Date().toISOString())
+      .gt("expires_at", nowIso)
       .order("created_at", { ascending: false }),
-    ]),
-  ]);
-  const userIsMaster = isMaster(membership?.roles ?? []);
-  const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
-  const [{ data: teamColors }, { data: longDefaults }, longPeople] = await Promise.all([
-    supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle(),
-    supabase
-      .from("teams")
-      .select("default_long_description, default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id")
-      .eq("id", currentTeam.id)
-      .maybeSingle(),
-    userIsMaster ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
-  ]);
-
-  // Connected accounts: safe columns only (tokens can't be read by
-  // clients at all); the history is visible to masters and schedulers.
-  const [{ data: socialRows }, { data: socialHistory }] = await Promise.all([
-    supabase
-      .from("social_accounts")
-      .select("platform, display_name, username, avatar_url, status, last_error, connected_at, scopes")
-      .eq("team_id", currentTeam.id),
-    canManageSocial
+    // Connected accounts: safe columns only (tokens can't be read by clients at all).
+    supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status, last_error, connected_at, scopes").eq("team_id", currentTeam.id),
+    tab === "accounts"
       ? supabase
           .from("social_audit_log")
           .select("id, platform, action, detail, created_at, actor:profiles!social_audit_log_actor_id_fkey(username, full_name, email)")
@@ -95,31 +100,33 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           .order("created_at", { ascending: false })
           .limit(8)
       : Promise.resolve({ data: null }),
+    listTeamPeople(currentTeam.id),
+    tab === "defaults" ? getShortSettings(currentTeam.id) : Promise.resolve(null),
+    // Script flow defaults (0062): who reviews and who stages.
+    tab === "defaults" ? supabase.from("team_script_people").select("step, team_member_id").eq("team_id", currentTeam.id) : Promise.resolve({ data: [], error: null }),
+    // The owner's live (pending, unexpired) ownership request, if any — so it can be shown and cancelled.
+    supabase.from("ownership_transfer_requests").select("id, to_user_id, expires_at").eq("team_id", currentTeam.id).eq("status", "pending").gt("expires_at", nowIso).maybeSingle(),
+    // Setup check: staging and your computer only (production keeps it out of sight).
+    tab === "accounts" && process.env.VERCEL_ENV !== "production" ? getSocialSetup() : Promise.resolve(null),
   ]);
+  const userIsMaster = isMaster(membership?.roles ?? []);
+  const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
+  const teamColors = team ? { short_color: team.short_color, long_color: team.long_color } : null;
+  const longDefaults = team;
+  const longPeople = userIsMaster ? people : [];
+  const socialHistory = canManageSocial ? historyRows : null;
   const socialConfigured = {
     youtube: PROVIDERS.youtube.configured() && socialKeyConfigured(),
     instagram: PROVIDERS.instagram.configured() && socialKeyConfigured(),
     tiktok: PROVIDERS.tiktok.configured() && socialKeyConfigured(),
     facebook: PROVIDERS.facebook.configured() && socialKeyConfigured(),
   };
-  // Setup check: staging and your computer only (production keeps it out of sight).
-  const socialSetup = canManageSocial && tab === "accounts" && process.env.VERCEL_ENV !== "production" ? await getSocialSetup() : null;
-  const [shortSettings, shortPeople] = userIsMaster
-    ? await Promise.all([getShortSettings(currentTeam.id), listTeamPeople(currentTeam.id)])
-    : [null, []];
+  const socialSetup = canManageSocial ? setupAny : null;
+  const shortSettings = userIsMaster ? shortSettingsAny : null;
+  const shortPeople = userIsMaster ? people : [];
+  const scriptDefaults = userIsMaster && tab === "defaults" ? scriptDefaultsAny : { data: [], error: null };
   const viewerIsOwner = !!currentUser && currentUser.id === team?.owner_id;
-
-  // The owner's live (pending, unexpired) ownership request, if any —
-  // so it can be shown and canceled.
-  const { data: pendingTransferRow } = viewerIsOwner
-    ? await supabase
-        .from("ownership_transfer_requests")
-        .select("id, to_user_id, expires_at")
-        .eq("team_id", currentTeam.id)
-        .eq("status", "pending")
-        .gt("expires_at", new Date().toISOString())
-        .maybeSingle()
-    : { data: null };
+  const pendingTransferRow = viewerIsOwner ? transferRow : null;
 
   const memberRows: MemberRow[] = (members ?? []).map((m) => {
     const profile = m.profiles as unknown as { username: string | null; full_name: string | null; email: string | null; avatar_url: string | null } | null;
@@ -221,6 +228,21 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               publisher: (longDefaults?.default_long_publisher_id as string | null) ?? null,
             }}
               people={longPeople}
+            />
+          </section>
+        )}
+        {userIsMaster && (
+          <section className="rounded-xl border border-line/10 bg-surface p-6">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Scripts</h2>
+            <p className="text-[12px] text-ink-soft mb-5">Script → Review → Staging: who&rsquo;s next when a script is handed on.</p>
+            <ScriptSettingsForm
+              teamId={currentTeam.id}
+              ready={!scriptDefaults.error}
+              defaults={{
+                review: (scriptDefaults.data ?? []).filter((r) => r.step === "review").map((r) => r.team_member_id as string),
+                staging: (scriptDefaults.data ?? []).filter((r) => r.step === "staging").map((r) => r.team_member_id as string),
+              }}
+              people={shortPeople}
             />
           </section>
         )}
@@ -378,7 +400,10 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       )}
 
       <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">
-        VPlanner {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" />
+        VPlanner {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" /> ·{" "}
+        <Link href="/status" className="hover:text-ink underline-offset-2 hover:underline">
+          Status
+        </Link>
       </p>
     </div>
   );

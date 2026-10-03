@@ -9,6 +9,7 @@ import { ArrowLeftIcon } from "@/components/ui/icons";
 import { getProject } from "@/modules/long-videos/lib/queries";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
+import { getScriptFlow, isStepPerson } from "@/modules/scripts/lib/flow";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
 import { mentionPeople } from "@/modules/scripts/lib/mention-people";
@@ -42,11 +43,12 @@ export default async function LongScriptPage({
   if (!project) notFound();
 
   const supabase = await createClient();
-  const [membership, { data: scripterRows }, people, { data: assigneeRows }] = await Promise.all([
+  const [membership, { data: scripterRows }, people, { data: assigneeRows }, roleColors] = await Promise.all([
     getMembership(supabase, project.team_id),
     supabase.from("long_video_scripters").select("team_member_id").eq("project_id", id),
     listTeamPeople(project.team_id),
     supabase.from("project_assignees").select("stage, team_member_id").eq("project_id", id),
+    getRoleColors(supabase, project.team_id),
   ]);
   const roles = membership?.roles ?? [];
   const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
@@ -70,7 +72,13 @@ export default async function LongScriptPage({
     );
   }
   const sideItem = docs.find((d) => d.id === sideParam && d.id !== current.id);
-  const [doc, side, comments, roleColors] = await Promise.all([getDoc(current.id), sideItem ? getDoc(sideItem.id) : Promise.resolve(null), listComments(current.id, project.team_id), getRoleColors(supabase, project.team_id)]);
+  const [doc, side, comments, flow] = await Promise.all([
+    getDoc(current.id),
+    sideItem ? getDoc(sideItem.id) : Promise.resolve(null),
+    listComments(current.id, project.team_id),
+    getScriptFlow(docs, project.team_id, scripterIds),
+  ]);
+  const me = membership?.teamMemberId ?? null;
   if (!doc) notFound();
 
   // Who does what on this video (for @mention suggestions).
@@ -87,7 +95,8 @@ export default async function LongScriptPage({
       owner={{ long: id }}
       docs={docs}
       doc={doc}
-      canEdit={doc.kind === "research" ? canEditResearch : canEditScript}
+      // Reviewers edit Review, staging people edit Staging (0062).
+      canEdit={doc.kind === "research" ? canEditResearch : canEditScript || isStepPerson(flow, doc.id, me)}
       canCreate={{ script: canEditScript, research: canEditResearch }}
       side={side}
       comments={comments}
@@ -98,8 +107,19 @@ export default async function LongScriptPage({
       backHref={`/videos/${id}?tab=${doc.kind === "research" ? "research" : "script"}`}
       backLabel="Back to the video"
       topBarExtra={
-        <ScriptersButton shortId={id} number={project.entry_number} people={people} scripterIds={scripterIds} canManage={isMaster(roles)} action={setLongScripter} />
+        flow.ready ? undefined : <ScriptersButton shortId={id} number={project.entry_number} people={people} scripterIds={scripterIds} canManage={isMaster(roles)} action={setLongScripter} />
       }
+      flow={{
+        data: flow,
+        team: people,
+        videoId: id,
+        scripterAction: setLongScripter,
+        can: {
+          scripters: isMaster(roles),
+          people: isMaster(roles) || roles.includes("publisher") || canEditScript,
+          handOff: { write: canEditScript, review: isMaster(roles) || isStepPerson(flow, flow.steps.find((s) => s.step === "review")?.docId ?? "", me) },
+        },
+      }}
       lastEdited={doc.updatedBy && doc.version > 1 ? `Last edited by ${doc.updatedBy.name}, ${relativeTime(doc.updatedAt)}` : null}
     />
   );

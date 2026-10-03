@@ -52,7 +52,7 @@ export function TaskRow({ t, today }: { t: Task; today: string }) {
   return (
     <Link
       href={t.href}
-      title={`${t.action}: #${t.number} ${t.title} (${t.stageLabel}, step ${t.step} of ${t.steps})`}
+      title={t.kind === "meeting" ? `${t.action} (from ${t.title})` : `${t.action}: #${t.number} ${t.title} (${t.stageLabel}, step ${t.step} of ${t.steps})`}
       className={`group relative flex items-center gap-2.5 rounded-lg pl-2 pr-1.5 py-1.5 transition-colors hover:bg-surface-2/70 ${waiting ? "opacity-70 hover:opacity-100" : ""}`}
     >
       {late && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-red" aria-hidden />}
@@ -60,14 +60,14 @@ export function TaskRow({ t, today }: { t: Task; today: string }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={t.thumb} alt="" className="w-[46px] h-[26px] rounded-[5px] object-cover flex-shrink-0 bg-surface-2" />
       ) : (
-        <span className={`w-[26px] h-[26px] rounded-[6px] flex items-center justify-center flex-shrink-0 ${t.kind === "short" ? "bg-short/12" : "bg-long/12"}`}>
+        <span className={`w-[26px] h-[26px] rounded-[6px] flex items-center justify-center flex-shrink-0 ${t.kind === "short" ? "bg-short/12" : t.kind === "meeting" ? "bg-violet/12" : "bg-long/12"}`}>
           <KindIcon kind={t.kind} className="w-3.5 h-3.5" />
         </span>
       )}
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block text-[13px] font-semibold truncate">{t.action}</span>
         <span className="block text-[11.5px] text-ink-soft truncate">
-          <span className="font-mono text-ink-faint">#{t.number}</span> {t.title}
+          {t.kind === "meeting" ? <span className="text-ink-faint">From </span> : <span className="font-mono text-ink-faint">#{t.number}</span>} {t.title}
           {waiting && t.currentStageLabel && <span className="text-ink-faint"> · after {t.currentStageLabel}</span>}
         </span>
       </span>
@@ -108,10 +108,10 @@ function NextUp({ tasks, today, onMore }: { tasks: Task[]; today: string; onMore
       <ul>
         {tasks.map((t) => (
           <li key={t.id}>
-            <Link href={t.href} title={`${t.action}: #${t.number} ${t.title}`} className="flex items-center gap-2 rounded-md px-2 py-[3px] text-[11.5px] text-ink-soft hover:bg-surface-2/60 hover:text-ink transition-colors">
-              <span className={`w-1.5 h-1.5 rounded-[2px] flex-shrink-0 ${t.kind === "short" ? "bg-short/70" : "bg-long/70"}`} aria-hidden />
+            <Link href={t.href} title={t.kind === "meeting" ? `${t.action} (from ${t.title})` : `${t.action}: #${t.number} ${t.title}`} className="flex items-center gap-2 rounded-md px-2 py-[3px] text-[11.5px] text-ink-soft hover:bg-surface-2/60 hover:text-ink transition-colors">
+              <span className={`w-1.5 h-1.5 rounded-[2px] flex-shrink-0 ${t.kind === "short" ? "bg-short/70" : t.kind === "meeting" ? "bg-violet/70" : "bg-long/70"}`} aria-hidden />
               <span className="min-w-0 flex-1 truncate">
-                {t.action} <span className="text-ink-faint">· #{t.number} {t.title}</span>
+                {t.action} <span className="text-ink-faint">· {t.kind === "meeting" ? t.title : `#${t.number} ${t.title}`}</span>
               </span>
               <span className="text-[10.5px] text-ink-faint tabular-nums flex-shrink-0">{t.dueDate ? dueLabel(t.dueDate, today) : ""}</span>
             </Link>
@@ -300,7 +300,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
                     <span className="min-w-0 flex-1 leading-tight">
                       <span className="block text-[13px] font-semibold truncate">{d.action}</span>
                       <span className="block text-[11.5px] text-ink-soft truncate">
-                        <span className="font-mono text-ink-faint">#{d.number}</span> {d.title}
+                        {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
                       </span>
                     </span>
                     <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>

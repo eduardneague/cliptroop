@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
@@ -37,19 +38,23 @@ export type StudioData = {
 const HOUR = 3600;
 
 /** Everything the studio needs, in parallel, with signed image links in batches. */
-export async function getStudioData(projectId: string): Promise<StudioData | null> {
+/* cache(): the page and its title both ask for it. */
+export const getStudioData = cache(async function getStudioData(projectId: string): Promise<StudioData | null> {
   const supabase = await createClient();
-  const { data: project } = await supabase.from("long_video_projects").select("id, entry_number, title, team_id").eq("id", projectId).maybeSingle();
+  // What only needs the video's id starts with the video itself.
+  const [{ data: project }, { data: entries }, { data: picked }] = await Promise.all([
+    supabase.from("long_video_projects").select("id, entry_number, title, team_id").eq("id", projectId).maybeSingle(),
+    supabase.from("package_entries").select("id, title, thumbnail_storage_path, width, height, size_bytes, is_winner, position").eq("project_id", projectId).order("position"),
+    supabase.from("project_titles").select("title").eq("project_id", projectId).eq("is_picked", true).maybeSingle(),
+  ]);
   if (!project) return null;
   const teamId = project.team_id as string;
 
-  const [membership, { data: entries }, { data: lib }, { data: yt }, { data: team }, { data: picked }] = await Promise.all([
+  const [membership, { data: lib }, { data: yt }, { data: team }] = await Promise.all([
     getMembership(supabase, teamId),
-    supabase.from("package_entries").select("id, title, thumbnail_storage_path, width, height, size_bytes, is_winner, position").eq("project_id", projectId).order("position"),
     supabase.from("mockup_videos").select("id, title, channel, thumb_path, channel_avatar_path, views, published_at, duration_sec, category").eq("team_id", teamId).limit(400),
     supabase.from("social_accounts").select("display_name, avatar_url").eq("team_id", teamId).eq("platform", "youtube").maybeSingle(),
     supabase.from("teams").select("name").eq("id", teamId).maybeSingle(),
-    supabase.from("project_titles").select("title").eq("project_id", projectId).eq("is_picked", true).maybeSingle(),
   ]);
 
   const sign = async (bucket: string, paths: string[]) => {
@@ -93,4 +98,4 @@ export async function getStudioData(projectId: string): Promise<StudioData | nul
     canEdit,
     canImport: canEdit,
   };
-}
+});

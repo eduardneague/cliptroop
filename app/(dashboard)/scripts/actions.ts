@@ -296,3 +296,129 @@ export async function deleteComment(id: string): Promise<DocResult> {
   if (path) await createAdminClient().storage.from("script-sketches").remove([path, path.replace(/\.png$/, ".json")]);
   return {};
 }
+
+// ---------------------------------------------------------------------------
+// Script flow: who reviews / stages, and handing a document on (0062)
+// ---------------------------------------------------------------------------
+
+const STEP_WORD = { review: "review", staging: "staging" } as const;
+const flowError = (message: string | undefined) =>
+  /set_script_people|script_hand_off|does not exist|schema cache/i.test(message ?? "") ? "Run migration 0062 first." : (message ?? "Couldn't save that.");
+
+/**
+ * Who reviews / stages. With `scriptId`: this video's Review or Staging
+ * document (an empty list = the team's defaults again). Without: the team's
+ * defaults for `step` (masters, Team → Defaults → Scripts).
+ */
+export async function setScriptPeople(input: { scriptId?: string; teamId?: string; step?: "review" | "staging"; memberIds: string[] }): Promise<DocResult> {
+  const ids = [...new Set((input.memberIds ?? []).filter((x) => UUID_RX.test(x)))].slice(0, 30);
+  if (input.scriptId && !UUID_RX.test(input.scriptId)) return { error: "Document not found." };
+  if (!input.scriptId && (!input.teamId || !UUID_RX.test(input.teamId) || !input.step)) return { error: "Pick Review or Staging." };
+  const supabase = await createClient();
+  // Who was already on it (to tell only the people just added).
+  const before = input.scriptId ? (await supabase.from("script_doc_people").select("team_member_id").eq("script_id", input.scriptId)).data ?? [] : [];
+  const { error } = await supabase.rpc("set_script_people", {
+    p_script: input.scriptId ?? null,
+    p_team: input.scriptId ? null : input.teamId,
+    p_step: input.scriptId ? null : input.step,
+    p_members: ids,
+  });
+  if (error) return { error: flowError(error.message) };
+  if (input.scriptId) {
+    const { data } = await supabase.from("scripts").select("name, step, short_video_id, long_video_id").eq("id", input.scriptId).maybeSingle();
+    refreshDocs({ short: data?.short_video_id as string | null, long: data?.long_video_id as string | null });
+    // The people just added are told they're on this video's Review / Staging.
+    const had = new Set(before.map((r) => r.team_member_id as string));
+    const added = ids.filter((m) => !had.has(m));
+    if (data && added.length) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const [{ data: members }, video, actor] = await Promise.all([
+        supabase.from("team_members").select("id, user_id").in("id", added),
+        data.short_video_id
+          ? supabase.from("short_videos").select("entry_number, title").eq("id", data.short_video_id as string).maybeSingle()
+          : supabase.from("long_video_projects").select("entry_number, title").eq("id", (data.long_video_id as string) ?? "").maybeSingle(),
+        user ? actorMeta(supabase, user.id) : Promise.resolve({ name: "Someone", avatarUrl: null }),
+      ]);
+      const number = (video.data?.entry_number as number | undefined) ?? 0;
+      const title = (video.data?.title as string | undefined) ?? "a video";
+      const word = data.step === "staging" ? "staging" : "review";
+      const href = `${data.short_video_id ? `/shorts/${data.short_video_id}` : `/videos/${data.long_video_id}`}/script?doc=${input.scriptId}`;
+      await sendNotifications(
+        (members ?? [])
+          .filter((m) => m.user_id && m.user_id !== user?.id)
+          .map((m) => ({
+            recipient_id: m.user_id as string,
+            kind: "script_people",
+            short_id: (data.short_video_id as string | null) ?? null,
+            project_id: (data.long_video_id as string | null) ?? null,
+            body: `${actor.name} added you to the ${word} of #${number} "${title}". You'll be told when the script is ready for ${word}.`,
+            metadata: { actor, toStep: word, docName: data.name, shortNumber: number, shortTitle: title, href },
+          }))
+      );
+    }
+  } else revalidatePath("/team");
+  return {};
+}
+
+/**
+ * "Ready for review" / "Ready for staging": the database checks who's asking,
+ * copies the text into the next document when it's still empty and logs it;
+ * then the next step's people get a notification and an email.
+ */
+export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; notified: number }>> {
+  if (!UUID_RX.test(scriptId)) return { error: "Document not found." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { data, error } = await supabase.rpc("script_hand_off", { p_script: scriptId, p_copy: !!copy });
+  if (error || !data) return { error: flowError(error?.message) };
+  const r = data as { next_id: string; next_name: string; next_step: "review" | "staging"; name: string; copied: boolean; team: string; short: string | null; long: string | null; recipients: string[] };
+  refreshDocs({ short: r.short, long: r.long });
+
+  const recipients = (r.recipients ?? []).filter((id) => UUID_RX.test(id));
+  if (recipients.length) {
+    const [video, actor] = await Promise.all([
+      r.short
+        ? supabase.from("short_videos").select("entry_number, title").eq("id", r.short).maybeSingle()
+        : supabase.from("long_video_projects").select("entry_number, title").eq("id", r.long ?? "").maybeSingle(),
+      actorMeta(supabase, user.id),
+    ]);
+    const number = (video.data?.entry_number as number | undefined) ?? 0;
+    const title = (video.data?.title as string | undefined) ?? "a video";
+    const href = `${r.short ? `/shorts/${r.short}/script` : `/videos/${r.long}/script`}?doc=${r.next_id}`;
+    const word = STEP_WORD[r.next_step];
+    await sendNotifications(
+      recipients.map((recipient_id) => ({
+        recipient_id,
+        kind: "script_handoff",
+        short_id: r.short,
+        project_id: r.long,
+        body: `${actor.name} sent #${number} "${title}" to ${word}. It's your turn (${r.next_name}).`,
+        metadata: { actor, toStep: r.next_step, docName: r.next_name, fromName: r.name, copied: r.copied, shortNumber: number, shortTitle: title, href },
+      }))
+    );
+    // An email each too (nobody sees the others' addresses).
+    const { appUrl, emailConfigured, sendAlertEmail } = await import("@/lib/email");
+    if (emailConfigured()) {
+      const { data: rows } = await createAdminClient().from("profiles").select("email").in("id", recipients);
+      const to = (rows ?? []).map((p) => p.email as string | null).filter((e): e is string => !!e);
+      await Promise.all(
+        to.map((email) =>
+          sendAlertEmail({
+            to: [email],
+            subject: `#${number} "${title}" is ready for ${word}`,
+            message: `${actor.name} sent the script to ${word}. Your part is in the ${r.next_name} document${r.copied ? " (the script was copied into it)" : ""}.`,
+            linkText: `Open ${r.next_name}`,
+            href: `${appUrl()}${href}`,
+            footer: `You get this because you do the ${word} for this video.`,
+          })
+        )
+      );
+    }
+  }
+  return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, notified: recipients.length };
+}

@@ -268,9 +268,33 @@ export async function updateAction(id: string, patch: { text?: string; ownerId?:
   if (patch.done !== undefined) next.done_at = patch.done ? new Date().toISOString() : null;
   const { supabase, user } = await session();
   if (!user) return { error: "Your session expired. Sign in again." };
-  const { data, error } = await supabase.from("meeting_actions").update(next).eq("id", id).select("meeting_id");
+  const { data: before } = await supabase.from("meeting_actions").select("owner_id, done_at, created_by").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("meeting_actions").update(next).eq("id", id).select("meeting_id, text, owner_id, due_date, done_at, created_by, meetings(title)");
   if (error || !data?.length) return { error: "Couldn't save it." };
-  refresh(data[0].meeting_id as string);
+  const row = data[0];
+  const mt = (Array.isArray(row.meetings) ? row.meetings[0] : row.meetings) as { title: string } | null;
+  const href = `/meetings/${row.meeting_id}`;
+  // Given to someone new: they're told (and it's on their task list).
+  if (patch.ownerId !== undefined && row.owner_id && row.owner_id !== before?.owner_id && row.owner_id !== user.id) {
+    const actor = await actorMeta(supabase, user.id);
+    await sendNotifications({
+      recipient_id: row.owner_id as string,
+      kind: "meeting_action",
+      body: `${actor.name} gave you an action item: ${row.text}`,
+      metadata: { actor, meetingTitle: mt?.title ?? "a meeting", snippet: String(row.text).slice(0, 140), dueDate: row.due_date, href },
+    });
+  }
+  // Done: whoever added it hears about it.
+  if (patch.done === true && !before?.done_at && row.created_by && row.created_by !== user.id) {
+    const actor = await actorMeta(supabase, user.id);
+    await sendNotifications({
+      recipient_id: row.created_by as string,
+      kind: "meeting_action_done",
+      body: `${actor.name} finished an action item: ${row.text}`,
+      metadata: { actor, meetingTitle: mt?.title ?? "a meeting", snippet: String(row.text).slice(0, 140), href },
+    });
+  }
+  refresh(row.meeting_id as string);
   return {};
 }
 

@@ -179,7 +179,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-semibold truncate">{d.action}</span>
                     <span className="block text-[12.5px] text-ink-soft truncate">
-                      <span className="font-mono text-ink-faint">#{d.number}</span> {d.title}
+                      {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
                     </span>
                   </span>
                   <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>

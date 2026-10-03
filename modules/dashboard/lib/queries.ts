@@ -3,9 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
 
 export type TaskKind = "short" | "long";
+/** What a task row looks like: a short, a long video, or a meeting action item. */
+export type TaskLook = TaskKind | "meeting";
 export type Task = {
   id: string;
-  kind: TaskKind;
+  kind: TaskLook;
   itemId: string;
   stage: string;
   state: "active" | "waiting" | "done";
@@ -26,7 +28,7 @@ export type Task = {
   step: number;
   steps: number;
 };
-export type Done = { id: string; at: string; kind: TaskKind; action: string; number: number; title: string; href: string; teamId: string };
+export type Done = { id: string; at: string; kind: TaskLook; action: string; number: number; title: string; href: string; teamId: string };
 export type Todo = { id: string; title: string; notes: string | null; dueDate: string | null; priority: number; position: number; doneAt: string | null };
 export type TeamCard = {
   id: string;
@@ -77,11 +79,11 @@ function hrefFor(kind: TaskKind, id: string, stage: string) {
 }
 
 type ItemInfo = { number: number; title: string; stage: string };
-async function itemsFor(supabase: Awaited<ReturnType<typeof createClient>>, shortIds: string[], longIds: string[]) {
+async function itemsFor(supabase: Awaited<ReturnType<typeof createClient>>, shortIds: string[], longIds: string[], withThumbs = true) {
   const [{ data: shorts }, { data: longs }, { data: winners }] = await Promise.all([
     shortIds.length ? supabase.from("short_videos").select("id, entry_number, title, stage").in("id", shortIds) : Promise.resolve({ data: [] }),
     longIds.length ? supabase.from("long_video_projects").select("id, entry_number, title, stage").in("id", longIds) : Promise.resolve({ data: [] }),
-    longIds.length
+    withThumbs && longIds.length
       ? supabase.from("package_entries").select("project_id, thumbnail_storage_path, position").in("project_id", longIds).eq("is_winner", true).order("position")
       : Promise.resolve({ data: [] }),
   ]);
@@ -96,7 +98,91 @@ async function itemsFor(supabase: Awaited<ReturnType<typeof createClient>>, shor
   return { info, thumb };
 }
 
-/** Your open tasks in this team (your turn now, and the ones coming up). */
+type TaskRow = { id: string; kind: string; item_id: string; stage: string; state?: string; due_date?: string | null; team_id: string; completed_at?: string | null };
+type Extra = {
+  /** Script Review / Staging tasks: the document and its video. */
+  scripts: Map<string, { step: string; name: string; short: string | null; long: string | null }>;
+  /** Meeting action items: what to do, and the meeting. */
+  actions: Map<string, { text: string; meetingId: string; meetingTitle: string }>;
+};
+
+/** The documents and action items behind script / meeting tasks (one query each). */
+async function extrasFor(supabase: Awaited<ReturnType<typeof createClient>>, rows: TaskRow[]): Promise<Extra> {
+  const scriptIds = [...new Set(rows.filter((r) => r.kind === "script").map((r) => r.item_id))];
+  const actionIds = [...new Set(rows.filter((r) => r.kind === "meeting").map((r) => r.item_id))];
+  const [{ data: docs }, { data: acts }] = await Promise.all([
+    scriptIds.length ? supabase.from("scripts").select("id, step, name, short_video_id, long_video_id").in("id", scriptIds) : Promise.resolve({ data: [] }),
+    actionIds.length ? supabase.from("meeting_actions").select("id, text, meeting_id, meetings(title)").in("id", actionIds) : Promise.resolve({ data: [] }),
+  ]);
+  return {
+    scripts: new Map((docs ?? []).map((d) => [d.id as string, { step: d.step as string, name: d.name as string, short: (d.short_video_id as string | null) ?? null, long: (d.long_video_id as string | null) ?? null }])),
+    actions: new Map(
+      (acts ?? []).map((a) => {
+        const m = (Array.isArray(a.meetings) ? a.meetings[0] : a.meetings) as { title: string } | null;
+        return [a.id as string, { text: a.text as string, meetingId: a.meeting_id as string, meetingTitle: m?.title ?? "A meeting" }];
+      })
+    ),
+  };
+}
+
+/** One task row → what the widgets show (null when its video / item is gone). */
+function describe(r: TaskRow, ex: Extra, info: Map<string, ItemInfo>, thumb: ((id: string) => string | null) | null) {
+  if (r.kind === "meeting") {
+    const a = ex.actions.get(r.item_id);
+    if (!a) return null;
+    return { kind: "meeting" as const, action: a.text, number: 0, title: a.meetingTitle, href: `/meetings/${a.meetingId}`, thumb: null, stageLabel: "Action item", step: 1, steps: 1, currentStage: null };
+  }
+  if (r.kind === "script") {
+    const d = ex.scripts.get(r.item_id);
+    const videoId = d?.short ?? d?.long;
+    const it = videoId ? info.get(videoId) : undefined;
+    if (!d || !videoId || !it) return null;
+    const kind: TaskKind = d.short ? "short" : "long";
+    return {
+      kind,
+      action: d.step === "staging" ? "Stage the script" : "Review the script",
+      number: it.number,
+      title: it.title,
+      href: `${kind === "short" ? `/shorts/${videoId}` : `/videos/${videoId}`}/script?doc=${r.item_id}`,
+      thumb: kind === "long" && thumb ? thumb(videoId) : null,
+      stageLabel: d.name,
+      step: d.step === "staging" ? 3 : 2,
+      steps: 3,
+      currentStage: null,
+    };
+  }
+  const it = info.get(r.item_id);
+  if (!it) return null;
+  const kind = r.kind as TaskKind;
+  return {
+    kind,
+    action: actionFor(kind, r.stage),
+    number: it.number,
+    title: it.title,
+    href: hrefFor(kind, r.item_id, r.stage),
+    thumb: kind === "long" && thumb ? thumb(r.item_id) : null,
+    stageLabel: STAGE_LABEL[r.stage] ?? r.stage,
+    step: (STEPS[kind].indexOf(r.stage) + 1) || 1,
+    steps: STEPS[kind].length,
+    currentStage: STAGE_LABEL[it.stage] ?? it.stage,
+  };
+}
+
+/** Video ids behind a set of task rows (their own, and the scripts' videos). */
+function videoIds(rows: TaskRow[], ex: Extra) {
+  const shorts = new Set(rows.filter((r) => r.kind === "short").map((r) => r.item_id));
+  const longs = new Set(rows.filter((r) => r.kind === "long").map((r) => r.item_id));
+  for (const d of ex.scripts.values()) {
+    if (d.short) shorts.add(d.short);
+    if (d.long) longs.add(d.long);
+  }
+  return { shorts: [...shorts], longs: [...longs] };
+}
+
+/**
+ * Your open tasks in this team (your turn now, and the ones coming up):
+ * video steps, script Review / Staging, and meeting action items.
+ */
 export async function listMyTasks(teamId: string): Promise<Task[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -105,37 +191,35 @@ export async function listMyTasks(teamId: string): Promise<Task[]> {
     .eq("team_id", teamId)
     .neq("state", "done")
     .order("due_date", { ascending: true, nullsFirst: false });
-  const rows = data ?? [];
-  const { info, thumb } = await itemsFor(
-    supabase,
-    rows.filter((r) => r.kind === "short").map((r) => r.item_id as string),
-    rows.filter((r) => r.kind === "long").map((r) => r.item_id as string)
-  );
-  return rows
-    .filter((r) => info.has(r.item_id as string))
-    .map((r) => {
-      const it = info.get(r.item_id as string)!;
-      const kind = r.kind as TaskKind;
-      return {
-        id: r.id as string,
-        kind,
-        itemId: r.item_id as string,
-        stage: r.stage as string,
+  const rows = (data ?? []) as TaskRow[];
+  const ex = await extrasFor(supabase, rows);
+  const ids = videoIds(rows, ex);
+  const { info, thumb } = await itemsFor(supabase, ids.shorts, ids.longs);
+  return rows.flatMap((r) => {
+    const t = describe(r, ex, info, thumb);
+    if (!t) return [];
+    return [
+      {
+        id: r.id,
+        kind: t.kind,
+        itemId: r.item_id,
+        stage: r.stage,
         state: r.state as Task["state"],
-        action: actionFor(kind, r.stage as string),
-        number: it.number,
-        title: it.title,
-        dueDate: (r.due_date as string | null) ?? null,
-        href: hrefFor(kind, r.item_id as string, r.stage as string),
-        thumb: kind === "long" ? thumb(r.item_id as string) : null,
-        currentStageLabel: r.state === "waiting" ? STAGE_LABEL[it.stage] ?? it.stage : null,
-        teamId: r.team_id as string,
+        action: t.action,
+        number: t.number,
+        title: t.title,
+        dueDate: r.due_date ?? null,
+        href: t.href,
+        thumb: t.thumb,
+        currentStageLabel: r.state === "waiting" ? t.currentStage : null,
+        teamId: r.team_id,
         completedAt: null,
-        stageLabel: STAGE_LABEL[r.stage as string] ?? (r.stage as string),
-        step: (STEPS[kind].indexOf(r.stage as string) + 1) || 1,
-        steps: STEPS[kind].length,
-      };
-    });
+        stageLabel: t.stageLabel,
+        step: t.step,
+        steps: t.steps,
+      },
+    ];
+  });
 }
 
 /** Your completed tasks for the past year (every team): the contribution grid. */
@@ -148,24 +232,22 @@ export async function listDone(sinceIso: string): Promise<Done[]> {
     .gte("completed_at", sinceIso)
     .order("completed_at", { ascending: false })
     .limit(5000);
-  const rows = data ?? [];
-  const { info } = await itemsFor(
-    supabase,
-    [...new Set(rows.filter((r) => r.kind === "short").map((r) => r.item_id as string))],
-    [...new Set(rows.filter((r) => r.kind === "long").map((r) => r.item_id as string))]
-  );
+  const rows = (data ?? []) as TaskRow[];
+  const ex = await extrasFor(supabase, rows);
+  const ids = videoIds(rows, ex);
+  // Titles only: no thumbnails needed for the grid (skips the signing round trip).
+  const { info } = await itemsFor(supabase, ids.shorts, ids.longs, false);
   return rows.map((r) => {
-    const it = info.get(r.item_id as string);
-    const kind = r.kind as TaskKind;
+    const t = describe(r, ex, info, null);
     return {
-      id: r.id as string,
+      id: r.id,
       at: r.completed_at as string,
-      kind,
-      action: actionFor(kind, r.stage as string),
-      number: it?.number ?? 0,
-      title: it?.title ?? "Deleted video",
-      href: it ? hrefFor(kind, r.item_id as string, r.stage as string) : "#",
-      teamId: r.team_id as string,
+      kind: t?.kind ?? (r.kind === "meeting" ? "meeting" : r.kind === "long" ? "long" : "short"),
+      action: t?.action ?? (r.kind === "meeting" ? "Action item" : actionFor(r.kind === "long" ? "long" : "short", r.stage)),
+      number: t?.number ?? 0,
+      title: t?.title ?? (r.kind === "meeting" ? "Removed action item" : "Deleted video"),
+      href: t?.href ?? "#",
+      teamId: r.team_id,
     };
   });
 }

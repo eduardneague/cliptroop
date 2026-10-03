@@ -42,6 +42,7 @@ export function WorldMap({
   label,
   empty,
   compact = false,
+  tooltip,
 }: {
   data: { code: string; value: number }[];
   format: (n: number) => string;
@@ -50,6 +51,8 @@ export function WorldMap({
   empty?: string;
   /** Small version (dashboard widget): no legend. */
   compact?: boolean;
+  /** Richer hover card (e.g. every platform for that country). */
+  tooltip?: (code: string) => React.ReactNode;
 }) {
   const [world, setWorld] = useState<World | null>(null);
   const [failed, setFailed] = useState(false);
@@ -114,13 +117,17 @@ export function WorldMap({
       {hover && (
         <div
           className="pointer-events-none absolute z-10 rounded-xl border border-line/15 bg-surface shadow-xl px-3 py-2 text-[12px] whitespace-nowrap"
-          style={{ left: Math.max(0, Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - 170)), top: hover.y + 14 }}
+          style={{ left: Math.max(0, Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - (tooltip ? 262 : 170))), top: hover.y + 14 }}
         >
           <div className="font-semibold text-ink">{countryName(hover.code)}</div>
-          <div className="text-ink-soft">
-            <b className="text-ink tabular-nums">{format(values.get(hover.code) ?? 0)}</b>
-            {total > 0 && ` · ${(((values.get(hover.code) ?? 0) / total) * 100).toFixed(1)}%`}
-          </div>
+          {tooltip ? (
+            tooltip(hover.code)
+          ) : (
+            <div className="text-ink-soft">
+              <b className="text-ink tabular-nums">{format(values.get(hover.code) ?? 0)}</b>
+              {total > 0 && ` · ${(((values.get(hover.code) ?? 0) / total) * 100).toFixed(1)}%`}
+            </div>
+          )}
         </div>
       )}
       {!compact && cuts.length > 0 && (

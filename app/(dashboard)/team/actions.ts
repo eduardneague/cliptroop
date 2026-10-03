@@ -647,11 +647,14 @@ export async function chooseFacebookPage(teamId: string, pageId: string) {
     return { error: "Facebook didn't answer. Reconnect Facebook and try again." };
   }
   if (!page) return { error: "That Page isn't available to this Facebook account any more." };
+  // One Page, one team.
+  const { data: elsewhere } = await admin.from("social_accounts").select("id").eq("platform", "facebook").eq("external_id", page.id).neq("team_id", teamId).limit(1);
+  if (elsewhere?.length) return { error: "That Page is already connected to another VPlanner team. Disconnect it there first." };
   const { error } = await admin
     .from("social_accounts")
     .update({ access_token_enc: encryptToken(page.token), external_id: page.id, display_name: page.name, username: null, avatar_url: page.picture, status: "active", last_error: null })
     .eq("id", row.id);
-  if (error) return { error: "Couldn't switch the Page. Try again." };
+  if (error) return { error: error.code === "23505" ? "That Page is already connected to another VPlanner team. Disconnect it there first." : "Couldn't switch the Page. Try again." };
   // The old Page's numbers no longer belong here: the next sync starts fresh (90 days).
   await Promise.all([
     admin.from("analytics_daily").delete().eq("team_id", teamId).eq("platform", "facebook"),

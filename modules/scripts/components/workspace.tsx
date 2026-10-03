@@ -23,6 +23,9 @@ import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
 import { MentionText } from "./comment-composer";
 import type { MentionPerson } from "../lib/mention-people";
+import type { ScriptFlow } from "../lib/flow";
+import type { TeamPerson } from "@/modules/short-videos/lib/queries";
+import { FlowStrip, type FlowPermissions } from "./script-flow";
 
 type Owner = { short: string } | { long: string };
 
@@ -47,6 +50,7 @@ export function ScriptWorkspace({
   lastEdited,
   roleColors,
   people = [],
+  flow,
 }: {
   owner: Owner;
   docs: DocListItem[];
@@ -65,10 +69,19 @@ export function ScriptWorkspace({
   roleColors: Record<string, string>;
   /** Teammates for @mentions, with what they do on this video. */
   people?: MentionPerson[];
+  /** Script → Review → Staging (migration 0062): shown as a strip under the top bar. */
+  flow?: {
+    data: ScriptFlow;
+    team: TeamPerson[];
+    can: FlowPermissions;
+    scripterAction: (id: string, memberId: string, add: boolean) => Promise<{ error?: string } | object>;
+    videoId: string;
+  };
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
+  const confirm = useConfirm();
   const [sideOpen, setSideOpen] = useState(!!side);
   // ?comment=<id> (from a notification): open the comments on that one.
   const linked = params.get("comment");
@@ -139,6 +152,21 @@ export function ScriptWorkspace({
         }
         return r.content;
       }}
+      subBar={
+        flow?.data.ready && doc.kind === "script" ? (
+          <FlowStrip
+            flow={flow.data}
+            currentDocId={doc.id}
+            people={flow.team}
+            number={number}
+            can={flow.can}
+            scripterAction={flow.scripterAction}
+            videoId={flow.videoId}
+            href={(id) => href({ doc: id })}
+            roleColors={roleColors}
+          />
+        ) : undefined
+      }
       topBarExtra={
         <>
           {/* Keys: the first child is created on the server (React warns otherwise). */}
@@ -194,6 +222,7 @@ export function ScriptWorkspace({
               <button
                 type="button"
                 onClick={async () => {
+                  if (!c.resolved && !(await confirmResolve(confirm, c))) return;
                   const r = await resolveComment(c.id, !c.resolved);
                   if (r.error) toast.error(r.error);
                   else {
@@ -243,6 +272,16 @@ export function ScriptWorkspace({
     {zoomed?.sketch && <Lightbox src={zoomed.sketch.url} alt={`Sketch: ${zoomed.body}`} download={`sketch-${zoomed.id.slice(0, 8)}.png`} onClose={() => setZoomed(null)} />}
     </>
   );
+}
+
+/** Resolving hides a comment / editing idea from the list: ask first. */
+function confirmResolve(confirm: ReturnType<typeof useConfirm>, c: ScriptComment) {
+  const idea = c.kind === "edit_idea";
+  return confirm({
+    title: idea ? "Resolve this editing idea?" : "Resolve this comment?",
+    description: `It's marked as done and hidden from the list (Show resolved brings it back). You can reopen it any time.`,
+    confirmLabel: "Resolve",
+  });
 }
 
 /** A comment's text (mentions highlighted) and its sketch, if it has one. */
@@ -847,8 +886,9 @@ function CommentsChat({
                   <div className="flex items-center gap-1 mt-1.5 -mb-1">
                     <button
                       type="button"
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
+                        if (!c.resolved && !(await confirmResolve(confirm, c))) return;
                         void act(() => resolveComment(c.id, !c.resolved));
                       }}
                       className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"

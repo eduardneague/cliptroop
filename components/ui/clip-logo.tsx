@@ -58,7 +58,7 @@ export function ClipLogo({ size = 28, className = "" }: { size?: number; classNa
 /** Clippy + the wordmark. */
 export function Brand({ className = "" }: { className?: string }) {
   return (
-    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title="Hi, I'm Clippy!">
+    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title="Hi there!">
       <ClipLogo size={28} />
       <span className="font-display font-semibold text-[16px] tracking-tight">VPlanner</span>
     </span>

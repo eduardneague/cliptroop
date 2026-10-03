@@ -43,6 +43,7 @@ const ERRORS: Record<string, string> = {
   missing_permissions: "wasn't connected: leave every box ticked on the permissions screen. Missing",
   failed: "couldn't be connected.",
   bad_request: "link was invalid.",
+  taken: "is already connected to another VPlanner team. An account can only be in one team: disconnect it there first (Team → Connected accounts), then connect it here.",
 };
 
 const ACTION: Record<string, string> = {
@@ -51,6 +52,7 @@ const ACTION: Record<string, string> = {
   disconnected: "disconnected",
   refreshed: "sign-in renewed automatically",
   refresh_failed: "sign-in expired, needs reconnecting",
+  refused_taken: "refused: already connected to another team",
 };
 
 export function ConnectedAccounts({
@@ -362,7 +364,10 @@ function SetupCheck({ setup }: { setup: SocialSetup }) {
                 <span>App keys: {ok(p.keys, "set", "missing")}</span>
                 <span className="text-ink-faint">·</span>
                 <span>
-                  Analytics permission: <b className={p.stats ? "text-ink" : "text-ink-faint"}>{p.stats ? "asked for" : "not asked (not in SOCIAL_STATS_PLATFORMS)"}</b>
+                  Analytics permission:{" "}
+                  <b className={p.stats || p.platform === "facebook" ? "text-ink" : "text-ink-faint"}>
+                    {p.platform === "facebook" ? "always (Facebook is for Analytics only)" : p.stats ? "asked for" : "not asked (not in SOCIAL_STATS_PLATFORMS)"}
+                  </b>
                 </span>
               </div>
               <div className="flex items-center gap-2 min-w-0">

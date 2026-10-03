@@ -53,17 +53,16 @@ export default async function ShortPage({
   if (!short) notFound();
 
   const supabase = await createClient();
-  const membership = await getMembership(supabase, short.teamId);
-  const roles = membership?.roles ?? [];
-  const isAssignedEditor = !!membership && short.editor?.memberId === membership.teamMemberId;
-  const isAssignedReviewer = !!membership && short.reviewer?.memberId === membership.teamMemberId;
-  const perms = shortPermissions({
-    roles,
-    isAssignedEditor,
-    isAssignedReviewer,
-    stage: short.stage,
-    scheduleMode: short.scheduleMode,
-  });
+  // Started now, while your roles load: none of these depend on them.
+  const common = Promise.all([
+    // Everyone sees the scripters' names; masters/schedulers also pick people.
+    listTeamPeople(short.teamId),
+    getShortSettings(short.teamId),
+    getShortScript(short.id),
+    listVersions(short.id),
+    listNotes(short.id),
+  ]);
+  common.catch(() => {}); // awaited below; this only stops an early failure being reported twice
 
   // Looking back at an earlier step (?view=script …): shows that step's
   // cards without changing where the short actually is.
@@ -74,7 +73,7 @@ export default async function ShortPage({
       : null;
   const shown = viewStage ?? short.stage;
 
-  // Automatic posting data, fetched in parallel with everything else.
+  // Automatic posting data, also started before the roles are known.
   const posting = shown === "ready" || shown === "posted";
   const postingPromise = posting
     ? Promise.all([
@@ -92,22 +91,34 @@ export default async function ShortPage({
           .order("created_at", { ascending: true }),
       ])
     : null;
+  postingPromise?.catch(() => {});
 
-  const [people, planned, settings, limits, queueStart, script, versions, notes] = await Promise.all([
-    // Everyone sees the scripters' names; masters/schedulers also pick people.
-    listTeamPeople(short.teamId),
+  const membership = await getMembership(supabase, short.teamId);
+  const roles = membership?.roles ?? [];
+  const isAssignedEditor = !!membership && short.editor?.memberId === membership.teamMemberId;
+  const isAssignedReviewer = !!membership && short.reviewer?.memberId === membership.teamMemberId;
+  const perms = shortPermissions({
+    roles,
+    isAssignedEditor,
+    isAssignedReviewer,
+    stage: short.stage,
+    scheduleMode: short.scheduleMode,
+  });
+
+  const [[people, settings, script, versions, notes], planned, limits, queueStart, postingRows] = await Promise.all([
+    common,
     perms.canEditBasics ? listPlannedDates(short.teamId) : Promise.resolve([]),
-    getShortSettings(short.teamId),
     perms.canEditBasics ? listDayLimits(short.teamId) : Promise.resolve({}),
     perms.canEditBasics ? getQueueStart(short.teamId) : Promise.resolve(null),
-    getShortScript(short.id),
-    listVersions(short.id),
-    listNotes(short.id),
+    postingPromise,
   ]);
   const latestVersion = versions.find((v) => !v.deleted) ?? null;
-  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }] = postingPromise
-    ? await postingPromise
-    : [{ data: null }, { data: null }, { data: null }, { data: null }];
+  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }] = postingRows ?? [
+    { data: null },
+    { data: null },
+    { data: null },
+    { data: null },
+  ];
 
 
   const openNotes = latestVersion

@@ -14,12 +14,12 @@ const LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-output", type: "output", x: 0, y: 0, w: 6, h: 2 },
   { id: "w-views", type: "views", x: 6, y: 0, w: 3, h: 3 },
   { id: "w-followers", type: "followers", x: 9, y: 0, w: 3, h: 3 },
-  { id: "w-map", type: "audienceMap", x: 0, y: 2, w: 6, h: 4 },
+  { id: "w-map", type: "audienceMap", x: 0, y: 2, w: 6, h: 4, settings: { view: process.env.MOCK_GLOBE ? "globe" : "map", mode: process.env.MOCK_GLOBE ? "all" : "views" } },
   { id: "w-top", type: "topVideos", x: 6, y: 3, w: 6, h: 4 },
   { id: "w-clock", type: "clock", x: 0, y: 6, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-views2", type: "meetings", x: 2, y: 6, w: 4, h: 2 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -86,6 +86,27 @@ const longs = LONG.map(([title, stage, d, theme], i) => ({
 const titles = longs.flatMap((l, i) => [{ id: `t${i}a`, project_id: l.id, title: l.title, is_picked: true, position: 0 }, { id: `t${i}b`, project_id: l.id, title: l.title + " (alt)", is_picked: false, position: 1 }]);
 const assignees = longs.flatMap((l) => [{ id: l.id + "a1", project_id: l.id, stage: "edit", team_member_id: members[2].id }, { id: l.id + "a2", project_id: l.id, stage: "script", team_member_id: members[1].id }, { id: l.id + "a3", project_id: l.id, stage: "publish", team_member_id: members[3].id }]);
 
+// ---- Thumbnail Studio: variations for long #42 (MOCK_WINNERS=0..3 picks how many winners) and a placeholder library.
+const W = Math.max(0, Math.min(3, Number(process.env.MOCK_WINNERS ?? 2)));
+const packageEntries = ["Every bakery in Cluj, ranked", "I ate at 23 bakeries in one day", "Cluj's best pastry is NOT where you think", "The bakery tour that broke me", "23 bakeries, 1 winner"].map((title, i) => ({
+  id: `pppppppp-0000-4000-8000-00000000000${i + 1}`, project_id: longs[1].id, title, thumbnail_storage_path: `${TEAM}/${longs[1].id}/v${i + 1}.jpg`, width: i === 3 ? 1080 : 1280, height: i === 3 ? 720 : 720, size_bytes: i === 4 ? 2_600_000 : 640_000, is_winner: i < W, position: i,
+}));
+const LIB = ["Building a house in 24 hours", "I tested every phone camera", "The world's longest train ride", "Why this city has no cars", "$1 vs $1,000 burger", "I survived 7 days in the desert", "Making the perfect croissant", "The truth about electric cars", "Inside the biggest ship ever", "I bought a mountain", "Speedrunning a marathon", "The strangest museum on Earth", "Cooking with a volcano", "What $10 buys in Tokyo", "We rebuilt a 1960s car", "The quietest room in the world"];
+const mockupVideos = LIB.map((title, i) => ({ id: `mmmmmmmm-0000-4000-8000-0000000000${String(i + 10)}`, team_id: TEAM, title, channel: ["Atlas", "Northwind", "Pixel Lab", "Roam", "Brick & Co", "Marlo"][i % 6], thumb_path: `${TEAM}/v/lib${i}.jpg`, channel_avatar_path: `${TEAM}/c/ch${i % 6}.jpg`, views: Math.round(2e5 + ((i * 7919) % 97) * 1.3e5), published_at: at(-(i * 3 + 1)), duration_sec: 420 + i * 61, category: "Popular" }));
+
+// ---- Scripts (0050 + 0062): Script → Review → Staging for the first short. MOCK_SENT=1: already sent to review.
+const doc = (id, name, position, step, text) => ({
+  id, team_id: TEAM, short_video_id: shorts[0].id, long_video_id: null, kind: "script", name, position, step, version: 3, updated_at: at(-1), updated_by: U[0], word_count: text ? text.split(" ").length : 0, content_text: text,
+  content: { type: "doc", content: text ? [{ type: "paragraph", content: [{ type: "text", text }] }] : [] },
+  editor: { username: "edu", full_name: null, email: "edu@example.com", avatar_url: null },
+});
+const scriptDocs = [
+  doc("dd000000-0000-4000-8000-000000000001", "Script", 1, "write", "Hook: you won't believe what this street food costs. Body: three stalls, three prices. Call to action: follow for part two."),
+  doc("dd000000-0000-4000-8000-000000000002", "Review", 2, "review", process.env.MOCK_SENT ? "Hook: you won't believe what this street food costs." : ""),
+  doc("dd000000-0000-4000-8000-000000000003", "Staging", 3, "staging", ""),
+  doc("dd000000-0000-4000-8000-000000000004", "Version 4", 4, null, ""),
+];
+
 // ---- Analytics (0058)
 let seed = 11;
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -110,14 +131,43 @@ const IGC = [["RO", 38100], ["MD", 7200], ["IT", 4900], ["US", 3100], ["ES", 240
 const contentRows = shorts.filter((x) => x.stage === "posted").flatMap((x, i) => ["youtube", "instagram", "tiktok"].map((pl, k) => ({ team_id: TEAM, platform: pl, external_id: `${pl}-${i}`, kind: "short", title: x.title, url: "https://example.com", thumbnail_url: null, published_at: at(-3 + i), duration_seconds: 45, views: Math.round(20000 + 90000 * rnd()), likes: Math.round(4000 * rnd()), comments: Math.round(300 * rnd()), shares: Math.round(400 * rnd()), saves: null, reach: null, short_id: x.id, project_id: null, short_videos: { entry_number: x.entry_number }, long_video_projects: null })));
 contentRows.push({ team_id: TEAM, platform: "youtube", external_id: "yt-long-1", kind: "long", title: "Inside a 400-year-old salt mine", url: "https://example.com", thumbnail_url: null, published_at: at(-9), duration_seconds: 1240, views: 214000, likes: 9800, comments: 640, shares: 410, short_id: null, project_id: longs[5].id, short_videos: null, long_video_projects: { entry_number: 46 } });
 contentRows.sort((a, b) => b.views - a.views);
-const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
+const revenue = [];
+for (let d = -400; d <= -1; d++) {
+  const total = Math.round((30 + 12 * Math.sin(d / 9) + 10 * rnd()) * 100) / 100;
+  const ads = Math.round(total * 0.78 * 100) / 100;
+  const premium = Math.round(total * 0.12 * 100) / 100;
+  revenue.push({ team_id: TEAM, platform: "youtube", day: day(d), content: "all", revenue: total, ad_revenue: ads, premium_revenue: premium, gross_revenue: total * 1.4, currency: "USD" });
+  revenue.push({ team_id: TEAM, platform: "youtube", day: day(d), content: "shorts", revenue: Math.round(total * 0.35 * 100) / 100, currency: "USD" });
+  revenue.push({ team_id: TEAM, platform: "youtube", day: day(d), content: "long", revenue: Math.round(total * 0.65 * 100) / 100, currency: "USD" });
+}
+const incomes = [
+  { id: "eeeeeeee-0000-4000-8000-000000000001", team_id: TEAM, day: day(-5), source: "sponsorship", amount: 750, currency: "USD", note: "Brand X: street food short", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
+  { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
+  { id: "eeeeeeee-0000-4000-8000-000000000003", team_id: TEAM, day: day(-20), source: "affiliate", amount: 86.4, currency: "USD", note: null, short_id: null, project_id: null, short_videos: null, long_video_projects: null },
+];
+const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
 const STATS = { youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"], instagram: ["instagram_business_manage_insights"], tiktok: ["user.info.stats", "video.list"], facebook: ["pages_show_list", "pages_read_engagement", "read_insights"] };
 
 module.exports = {
   TEAM,
   U,
   user: { id: U[0], aud: "authenticated", role: "authenticated", email: "edu@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
-  rpc: { can_view_revenue: true, is_master_of: true },
+  rpc: {
+    can_view_revenue: true,
+    is_master_of: true,
+    record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
+    status_checks: {
+      timer_scheduled: true,
+      timer_last: { at: new Date(Date.now() - 60_000).toISOString(), status: "succeeded" },
+      analytics_last: new Date(Date.now() - 5 * 3600e3).toISOString(),
+      analytics_failing: 0,
+      posts_failed_24h: process.env.MOCK_STATUS_BAD ? 2 : 0,
+      posts_published_24h: 3,
+      errors_24h: process.env.MOCK_STATUS_BAD ? 4 : 0,
+      error_kinds_24h: process.env.MOCK_STATUS_BAD ? 2 : 0,
+      accounts_needing_reconnect: process.env.MOCK_STATUS_BAD ? 1 : 0,
+    },
+  },
   tables: {
     teams: [team],
     profiles: people.map((_, i) => prof(i)),
@@ -138,19 +188,38 @@ module.exports = {
     comment_attachments: [],
     long_video_posts: [],
     long_video_scripters: longs.map((l) => ({ project_id: l.id, team_member_id: members[1].id })),
-    package_entries: [],
+    package_entries: packageEntries,
+    scripts: scriptDocs,
+    script_comments: [],
+    script_doc_people: [{ script_id: "dd000000-0000-4000-8000-000000000002", team_member_id: members[2].id, team_id: TEAM }],
+    team_script_people: [{ team_id: TEAM, step: "review", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[3].id }],
+    script_handoffs: process.env.MOCK_SENT ? [{ script_id: "dd000000-0000-4000-8000-000000000001", created_at: at(0, -2), by: { username: "edu", full_name: null, email: "edu@example.com" } }] : [],
+    mockup_videos: mockupVideos,
     social_accounts: ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: pl === "facebook" ? "Viverro (Page)" : "Viverro", username: pl === "facebook" ? null : "viverro", avatar_url: null, status: "active", scopes: STATS[pl], connected_at: at(-30), last_error: null, external_id: pl === "facebook" ? "123456789" : "ext-" + pl })),
     analytics_daily: daily,
-    analytics_countries: [...countriesRows, ...IGC],
+    analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
     analytics_syncs: syncs,
-    analytics_revenue_daily: [],
+    analytics_revenue_daily: revenue,
+    revenue_entries: incomes,
     revenue_access: [],
     social_posts: [],
     team_day_limits: [],
-    meetings: [],
+    meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
+    meeting_actions: [
+      { id: "ca000000-0000-4000-8000-000000000001", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Send the sponsor the draft cut", owner_id: U[0], done_at: null, created_by: U[0], team_id: TEAM, created_at: at(-1, 10), due_date: day(2), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
+      { id: "ca000000-0000-4000-8000-000000000002", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Book the bakery for filming", owner_id: U[0], done_at: at(-1, 15), created_by: U[1], team_id: TEAM, created_at: at(-2, 10), due_date: day(-1), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
+    ],
     todos: [],
-    tasks: [],
+    tasks: [
+      { id: "ta000000-0000-4000-8000-000000000001", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000001", stage: "action", state: "active", due_date: day(2), team_id: TEAM, user_id: U[0], completed_at: null },
+      { id: "ta000000-0000-4000-8000-000000000002", kind: "script", item_id: "dd000000-0000-4000-8000-000000000002", stage: "review", state: "active", due_date: null, team_id: TEAM, user_id: U[0], completed_at: null },
+      { id: "ta000000-0000-4000-8000-000000000003", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000002", stage: "action", state: "done", due_date: day(-1), team_id: TEAM, user_id: U[0], completed_at: at(-1, 15) },
+    ],
+    app_errors: [
+      { id: "ffffffff-0000-4000-8000-000000000001", source: "server", message: "Cannot read properties of undefined (reading 'title')", route: "GET /shorts/[id] (render)", count: 3, first_seen: at(-1, 14), last_seen: at(0, 8), resolved_at: null },
+      { id: "ffffffff-0000-4000-8000-000000000002", source: "browser", message: "ResizeObserver loop completed with undelivered notifications", route: "/dashboard", count: 1, first_seen: at(-3, 10), last_seen: at(-3, 10), resolved_at: at(-2, 9) },
+    ],
   },
   helpers: { day, at, people, members },
 };

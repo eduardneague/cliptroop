@@ -5,9 +5,14 @@ import { getMembership } from "@/lib/permissions/membership";
 import { readRange, readTab, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
 import { canViewRevenue, getAudience, getContent, getProduction, getRevenue } from "@/modules/analytics/lib/queries";
 import { AnalyticsView } from "@/modules/analytics/components/analytics-view";
+import { cookies } from "next/headers";
+import { getCachedUser } from "@/lib/supabase/get-user";
+import { isCurrencyCode } from "@/lib/fx";
+import { after } from "next/server";
+import { claimAnalyticsCatchUp, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 
 export const metadata: Metadata = { title: "Analytics" };
-// "Sync now" copies from three platforms: give it time.
+// "Sync now" and the catch-up copy from several platforms: give them time.
 export const maxDuration = 60;
 
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string }> }) {
@@ -18,11 +23,24 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const tab = readTab(sp.tab);
   const range = readRange(sp.range);
   const compare = sp.compare !== "0";
-  const [membership, { data: team }, revenueAllowed] = await Promise.all([
+  const [membership, { data: team }, revenueAllowed, wantedCurrency, catchingUp] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     supabase.from("teams").select("timezone").eq("id", currentTeam.id).maybeSingle(),
     canViewRevenue(supabase, currentTeam.id),
+    tab === "revenue" ? revenueCurrency(supabase) : Promise.resolve(null),
+    // Copied every morning on its own; if that was missed, start it now.
+    claimAnalyticsCatchUp(currentTeam.id),
   ]);
+  if (catchingUp && membership) {
+    const teamId = currentTeam.id;
+    after(async () => {
+      try {
+        await syncTeamAnalytics(teamId);
+      } catch (e) {
+        console.error("[analytics catch-up]", e instanceof Error ? e.message : e);
+      }
+    });
+  }
   const tz = (team?.timezone as string | null) || "Europe/Bucharest";
   const roles = membership?.roles ?? [];
   const isMaster = roles.includes("master");
@@ -38,7 +56,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         ? { tab, audience: await getAudience(currentTeam.id, w) }
         : tab === "content"
           ? { tab, content: await getContent(currentTeam.id, w) }
-          : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster) };
+          : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster, wantedCurrency, revenueAllowed) };
 
   return (
     <AnalyticsView
@@ -48,8 +66,20 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       range={range}
       compare={compare}
       canSync={canSync}
+      catchingUp={catchingUp && !!membership}
       revenueAllowed={revenueAllowed}
       data={data as Parameters<typeof AnalyticsView>[0]["data"]}
     />
   );
+}
+
+/** The currency this person picked for revenue: their account first (migration 0062), then this device. */
+async function revenueCurrency(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const user = await getCachedUser();
+  if (user) {
+    const { data, error } = await supabase.from("profiles").select("currency").eq("id", user.id).maybeSingle();
+    if (!error && isCurrencyCode(data?.currency)) return data.currency as string;
+  }
+  const c = (await cookies()).get("vp_currency")?.value;
+  return isCurrencyCode(c) ? c : null;
 }

@@ -70,21 +70,20 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   const cookieStore = await cookies();
   const isTable = params.view ? params.view !== "grid" : cookieStore.get(SHORTS_VIEW_COOKIE)?.value !== "grid";
 
-  const membership = await getMembership(supabase, currentTeam.id);
-  const roles = membership?.roles ?? [];
-  const master = isMaster(roles);
-
-  // First visit of a new day: roll unposted Auto shorts forward first.
-  await refreshShortQueue(currentTeam.id);
-  const [all, user, settings, people, dayLimits, queueStart] = await Promise.all([
-    listShorts(currentTeam.id),
+  // First visit of a new day rolls unposted Auto shorts forward, so the list
+  // and the queue are read after that; everything else loads alongside it.
+  const [membership, user, settings, everyone, dayLimits, [all, queueStart]] = await Promise.all([
+    getMembership(supabase, currentTeam.id),
     getCachedUser(),
     getShortSettings(currentTeam.id),
-    // Masters and schedulers can open a short's Edit window (people included).
-    master || roles.includes("publisher") ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
+    listTeamPeople(currentTeam.id),
     listDayLimits(currentTeam.id),
-    getQueueStart(currentTeam.id),
+    refreshShortQueue(currentTeam.id).then(() => Promise.all([listShorts(currentTeam.id), getQueueStart(currentTeam.id)])),
   ]);
+  const roles = membership?.roles ?? [];
+  const master = isMaster(roles);
+  // Masters and schedulers can open a short's Edit window (people included).
+  const people = master || roles.includes("publisher") ? everyone : [];
   // For the "Edit settings" window (masters and schedulers).
   const settingsCtx = {
     planned: all

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runDuePosts } from "@/lib/social/worker";
 import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
+import { watchHealth } from "@/lib/health-watch";
 
 /**
  * Called every minute by the Supabase timer (pg_cron → pg_net) when a
@@ -25,7 +26,9 @@ async function handle(request: Request) {
   // Meeting reminders first (quick), then the posts.
   const meetings = await runMeetingReminders();
   const result = await runDuePosts(40_000);
-  return NextResponse.json({ ok: true, ...result, meetingReminders: meetings.sent });
+  // Every 15 minutes: is everything else still working? (alerts if not)
+  const problems = new Date().getUTCMinutes() % 15 === 0 ? await watchHealth("timer") : 0;
+  return NextResponse.json({ ok: true, ...result, meetingReminders: meetings.sent, problems });
 }
 
 export const POST = handle;

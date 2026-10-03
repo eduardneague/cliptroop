@@ -100,6 +100,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: existing } = await admin.from("social_accounts").select("id, external_id").eq("team_id", saved.team_id).eq("platform", platform).maybeSingle();
 
+    // One account, one team: if this channel / account / Page is connected to
+    // another team (anyone's), it must be disconnected there first. The
+    // database enforces it too (0063); this gives the clear message.
+    const { data: elsewhere } = await admin
+      .from("social_accounts")
+      .select("id")
+      .eq("platform", platform)
+      .eq("external_id", profile.externalId)
+      .neq("team_id", saved.team_id)
+      .limit(1);
+    if (elsewhere?.length) {
+      await logSocial(saved.team_id as string, platform, "refused_taken", access.user.id, { account: profile.username ?? profile.displayName });
+      return finish({ ok: false, platform, error: "taken" });
+    }
+
     const { error } = await admin.from("social_accounts").upsert(
       {
         team_id: saved.team_id,
@@ -121,7 +136,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
       { onConflict: "team_id,platform" }
     );
-    if (error) throw new ProviderError("Couldn't save the connection.");
+    if (error) {
+      // Lost a race with another team connecting the same account (unique index, 0063).
+      if (error.code === "23505") return finish({ ok: false, platform, error: "taken" });
+      throw new ProviderError("Couldn't save the connection.");
+    }
 
     // A different channel / account / Page than before: its old numbers don't belong to this one.
     if (existing?.external_id && existing.external_id !== profile.externalId) {

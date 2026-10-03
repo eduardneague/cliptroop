@@ -84,7 +84,21 @@ export function Select({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!useSearch || !q) return allOptions;
-    return allOptions.filter((o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q));
+    // Best matches first: the start of the name (or its code / hint), then a word in it, then anywhere.
+    const score = (o: SelectOption) => {
+      const label = o.label.toLowerCase();
+      const hint = o.hint?.toLowerCase() ?? "";
+      if (label.startsWith(q) || hint.startsWith(q) || o.value.toLowerCase() === q) return 0;
+      if (label.split(/[\s(·,-]+/).some((w) => w.startsWith(q)) || hint.split(/[\s(·,-]+/).some((w) => w.startsWith(q))) return 1;
+      if (label.includes(q) || hint.includes(q)) return 2;
+      return -1;
+    };
+    return allOptions
+      .map((o, i) => ({ o, i, s: score(o) }))
+      .filter((x) => x.s >= 0)
+      .sort((a, b) => a.s - b.s || a.i - b.i)
+      // Groups only make sense in the full list.
+      .map((x) => (x.o.group ? { ...x.o, group: undefined } : x.o));
   }, [allOptions, query, useSearch]);
 
   const selectedKey = value ?? (emptyOption ? "__none__" : null);
@@ -266,7 +280,7 @@ export function Select({
           )}
         </span>
         <ChevronDownIcon
-          className={`${variant === "pill" ? "w-3.5 h-3.5" : "w-4 h-4"} flex-shrink-0 text-ink-soft transition-transform ${open ? "rotate-180" : ""} ${
+          className={`${variant === "pill" ? "w-3.5 h-3.5 text-current" : "w-4 h-4 text-ink-soft"} flex-shrink-0 transition-transform ${open ? "rotate-180" : ""} ${
             variant === "inline" ? "opacity-70 group-hover:opacity-100" : ""
           }`}
         />
@@ -276,6 +290,7 @@ export function Select({
         createPortal(
           <div
             ref={menuRef}
+            data-floating-menu=""
             onKeyDown={onMenuKey}
             style={{
               left: pos.left,

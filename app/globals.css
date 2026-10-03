@@ -73,7 +73,7 @@
 /*
   Colour themes (Settings → Preferences → Colours). Each person picks one;
   <html data-palette="…"> switches the paper, the cards and the accent (the
-  "amber" token every button and link uses). No attribute = Clippy, the
+  "amber" token every button and link uses). No attribute = Default, the
   original. Kind, chart, status and meeting colours stay the same in every
   theme so their meaning never changes. Accents keep white text ≥ 3.4:1.
 */
@@ -87,8 +87,18 @@ html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224
 html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 139 102 240; }
 html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; }
 html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 225 62 120; }
-html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 180 83 9; }
-html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 214 110 30; }
+html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 161 98 7; }
+html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 178 120 8; }
+html[data-palette="cherry"]:not(.dark) { --paper: 242 233 233; --paper-2: 235 224 224; --surface: 255 255 255; --surface-2: 250 245 245; --amber: 200 30 48; }
+html.dark[data-palette="cherry"] { --paper: 20 11 12; --paper-2: 26 16 17; --surface: 33 21 23; --surface-2: 41 27 29; --amber: 229 62 74; }
+html[data-palette="orchid"]:not(.dark) { --paper: 241 232 242; --paper-2: 234 223 236; --surface: 255 255 255; --surface-2: 250 244 251; --amber: 162 28 175; }
+html.dark[data-palette="orchid"] { --paper: 18 11 19; --paper-2: 24 16 26; --surface: 31 21 33; --surface-2: 39 27 42; --amber: 192 72 206; }
+html[data-palette="lime"]:not(.dark) { --paper: 236 239 226; --paper-2: 228 232 216; --surface: 255 255 255; --surface-2: 247 249 241; --amber: 77 124 15; }
+html.dark[data-palette="lime"] { --paper: 14 17 10; --paper-2: 19 23 14; --surface: 25 30 19; --surface-2: 32 38 25; --amber: 88 142 14; }
+html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223 216; --surface: 255 254 252; --surface-2: 248 244 240; --amber: 120 82 52; }
+html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 166 118 78; }
+html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; }
+html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; }
 
 body {
   background: rgb(var(--paper));

@@ -28,29 +28,42 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
-  const roles = (await getMembership(supabase, currentTeam.id))?.roles ?? [];
-  const master = isMaster(roles);
-  const canManage = master || roles.includes("publisher");
   const today = iso(new Date());
+
+  // The team-wide parts don't depend on which month is open: start them now,
+  // while the month is being worked out.
+  const teamWide = Promise.all([
+    getMembership(supabase, currentTeam.id),
+    // The same short list as the Shorts table, so both always agree.
+    listShorts(currentTeam.id),
+    getShortSettings(currentTeam.id),
+    listDayLimits(currentTeam.id),
+    supabase
+      .from("social_posts")
+      .select("short_id, platform, status, scheduled_at, permalink, external_id")
+      .eq("team_id", currentTeam.id)
+      .neq("status", "cancelled"),
+    listTeamPeople(currentTeam.id),
+  ]);
+  teamWide.catch(() => {}); // awaited below
 
   // Which month to open: the one asked for; else this month if it has
   // anything; else the next scheduled item's month; else the latest one.
+  // (All six questions in one go.)
   let focus = d && DATE.test(d) ? d : null;
   if (!focus) {
     const monthStart = `${today.slice(0, 7)}-01`;
     const monthEnd = `${today.slice(0, 7)}-31`;
-    const [s1, l1] = await Promise.all([
+    const [s1, l1, ns, nl, ps, pl] = await Promise.all([
       supabase.from("short_videos").select("id", { count: "exact", head: true }).eq("team_id", currentTeam.id).gte("planned_date", monthStart).lte("planned_date", monthEnd),
       supabase.from("long_video_projects").select("id", { count: "exact", head: true }).eq("team_id", currentTeam.id).gte("expected_date", monthStart).lte("expected_date", monthEnd),
+      supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).gte("planned_date", today).order("planned_date").limit(1).maybeSingle(),
+      supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).gte("expected_date", today).order("expected_date").limit(1).maybeSingle(),
+      supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).lt("planned_date", today).order("planned_date", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).lt("expected_date", today).order("expected_date", { ascending: false }).limit(1).maybeSingle(),
     ]);
     if ((s1.count ?? 0) + (l1.count ?? 0) > 0) focus = today;
     else {
-      const [ns, nl, ps, pl] = await Promise.all([
-        supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).gte("planned_date", today).order("planned_date").limit(1).maybeSingle(),
-        supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).gte("expected_date", today).order("expected_date").limit(1).maybeSingle(),
-        supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).lt("planned_date", today).order("planned_date", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).lt("expected_date", today).order("expected_date", { ascending: false }).limit(1).maybeSingle(),
-      ]);
       const next = [ns.data?.planned_date, nl.data?.expected_date].filter(Boolean).sort()[0] as string | undefined;
       const last = [ps.data?.planned_date, pl.data?.expected_date].filter(Boolean).sort().reverse()[0] as string | undefined;
       focus = next ?? last ?? today;
@@ -63,17 +76,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const start = grid.start;
   const end = focus.slice(0, 7) === today.slice(0, 7) && rollingEnd > grid.end ? rollingEnd : grid.end;
 
-  // The same short list as the Shorts table, so both always agree.
   const edge = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString();
-  const [allShorts, settings, dayLimits, { data: posts }, { data: longs }, { data: meetingRows }] = await Promise.all([
-    listShorts(currentTeam.id),
-    getShortSettings(currentTeam.id),
-    listDayLimits(currentTeam.id),
-    supabase
-      .from("social_posts")
-      .select("short_id, platform, status, scheduled_at, permalink, external_id")
-      .eq("team_id", currentTeam.id)
-      .neq("status", "cancelled"),
+  const [[membership, allShorts, settings, dayLimits, { data: posts }, people], { data: longs }, { data: meetingRows }] = await Promise.all([
+    teamWide,
     supabase
       .from("long_video_projects")
       .select("id, entry_number, title, stage, expected_date, platforms")
@@ -83,17 +88,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     // Meetings (a day's margin each side: the browser puts them on its local day).
     supabase.from("meetings").select("id, title, starts_at, duration_min, location, status").eq("team_id", currentTeam.id).gte("starts_at", edge(start, -1)).lt("starts_at", edge(end, 2)).order("starts_at"),
   ]);
+  const roles = membership?.roles ?? [];
+  const master = isMaster(roles);
+  const canManage = master || roles.includes("publisher");
 
   // Long videos: winning thumbnail, posted platforms and assigned people (one batch).
   const longIds = (longs ?? []).map((l) => l.id as string);
-  const [{ data: winners }, { data: longPosts }, { data: assigned }, people] = longIds.length
+  const [{ data: winners }, { data: longPosts }, { data: assigned }] = longIds.length
     ? await Promise.all([
         supabase.from("package_entries").select("project_id, thumbnail_storage_path, position").in("project_id", longIds).eq("is_winner", true).order("position"),
         supabase.from("long_video_posts").select("project_id, platform").in("project_id", longIds),
         supabase.from("project_assignees").select("project_id, stage, team_member_id").in("project_id", longIds),
-        listTeamPeople(currentTeam.id),
       ])
-    : [{ data: [] }, { data: [] }, { data: [] }, []];
+    : [{ data: [] }, { data: [] }, { data: [] }];
   const thumbPath = new Map<string, string>();
   for (const w of winners ?? []) if (w.thumbnail_storage_path && !thumbPath.has(w.project_id as string)) thumbPath.set(w.project_id as string, w.thumbnail_storage_path as string);
   const { data: signed } = thumbPath.size ? await supabase.storage.from("package-thumbs").createSignedUrls([...thumbPath.values()], 3600) : { data: [] };

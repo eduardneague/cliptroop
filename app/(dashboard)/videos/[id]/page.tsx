@@ -82,6 +82,7 @@ export default async function ProjectDetailPage({
     { data: teamDefaults },
     script,
     people,
+    { data: packageRows },
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -121,13 +122,9 @@ export default async function ProjectDetailPage({
     supabase.from("teams").select("default_long_description").eq("id", teamId).maybeSingle(),
     getLongScript(id),
     listTeamPeople(teamId),
+    // Package: the Studio's winner (or first variation) for the summary card.
+    supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
   ]);
-  // Package: the Studio's winner (or first variation) for the summary card.
-  const { data: packageRows } = await supabase
-    .from("package_entries")
-    .select("title, thumbnail_storage_path, is_winner")
-    .eq("project_id", id)
-    .order("position");
   const packageCount = packageRows?.length ?? 0;
   const winners = (packageRows ?? []).filter((r) => r.is_winner);
   const winner = winners[0] ?? null;
@@ -479,11 +476,14 @@ export default async function ProjectDetailPage({
                   href={`/videos/${id}/studio`}
                   className="group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
                 >
-                  <span className="flex gap-1.5 flex-shrink-0 [&>img]:flex-1 sm:[&>img]:flex-none">
+                  <span className="flex gap-1.5 flex-shrink-0 [&>span]:flex-1 sm:[&>span]:flex-none">
                     {cardUrls.length ? (
-                      cardUrls.map((u) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img key={u} src={u} alt="" className={`${cardUrls.length > 1 ? "w-24" : "w-40"} aspect-video rounded-lg object-cover bg-surface-2`} />
+                      cardUrls.map((u, i) => (
+                        <span key={u} className={`relative ${cardUrls.length > 1 ? "sm:w-24" : "sm:w-40"} aspect-video rounded-lg overflow-hidden bg-surface-2`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={u} alt="" className="w-full h-full object-cover" />
+                          {winners.length > 1 && <span className="absolute right-1 top-1 rounded bg-amber text-white text-[10.5px] font-bold leading-none px-1.5 py-1">{"ABC"[i]}</span>}
+                        </span>
                       ))
                     ) : (
                       <span className="w-full sm:w-40 aspect-video rounded-lg bg-surface-2 flex items-center justify-center text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
@@ -493,11 +493,16 @@ export default async function ProjectDetailPage({
                     <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Thumbnail Studio</span>
                     <span className="block text-[15px] font-semibold mt-0.5 truncate">{winner?.title ?? "Add your thumbnails and titles"}</span>
                     <span className="block text-[12.5px] text-ink-soft mt-0.5">
-                      {packageCount
-                        ? `${packageCount} variation${packageCount === 1 ? "" : "s"} · ${
-                            winners.length > 1 ? `A/B test · ${winners.length} winners` : winners.length ? "winner picked" : "no winner yet"
-                          }`
-                        : "Preview them on YouTube: home, search, mobile, TV…"}
+                      {!packageCount ? (
+                        "Preview them on YouTube: home, search, mobile, TV…"
+                      ) : winners.length > 1 ? (
+                        <>
+                          <span className="inline-block whitespace-nowrap rounded bg-amber text-white text-[10.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 mr-1.5">A/B test on</span>
+                          <span className="font-semibold text-ink">{"ABC".slice(0, winners.length).split("").join(" vs ")}</span> · {packageCount} variations
+                        </>
+                      ) : (
+                        `${packageCount} variation${packageCount === 1 ? "" : "s"} · ${winners.length ? "winner picked" : "no winner yet"}`
+                      )}
                     </span>
                   </span>
                   <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center justify-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open Thumbnail Studio</span>

@@ -70,7 +70,11 @@ function markSeen() {
   window.dispatchEvent(new Event(SEEN_EVENT));
 }
 
-const short = (v: string) => v.split(".").slice(0, 2).join(".");
+/** "1.6.0" → "1.6", "1.7.5" → "1.7.5" (a patch number only when it isn't 0). */
+const short = (v: string) => {
+  const [a, b, c] = v.split(".");
+  return c && c !== "0" ? `${a}.${b}.${c}` : `${a}.${b ?? 0}`;
+};
 const niceDate = (d?: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : null);
 
 const KIND_STYLE: Record<ChangeKind, string> = {

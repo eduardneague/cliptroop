@@ -128,6 +128,7 @@ export function ScriptEditor({
   backLabel,
   lastEdited,
   topBarExtra,
+  subBar,
   docName,
   leftRail,
   rightPanel,
@@ -155,6 +156,8 @@ export function ScriptEditor({
   lastEdited: string | null;
   /** Extra controls for the top bar (e.g. the short's scripters). */
   topBarExtra?: React.ReactNode;
+  /** A strip under the top bar (the Script → Review → Staging flow). */
+  subBar?: React.ReactNode;
   /** The document's name (e.g. "Review"), shown in the top bar. */
   docName?: string;
   /** Left: the documents list (a strip on phones). */
@@ -705,6 +708,7 @@ export function ScriptEditor({
         />
         </span>
       </div>
+      {subBar}
 
       {status === "conflict" && (
         <div className="no-print mx-auto mt-4 w-full max-w-3xl px-4">
@@ -801,25 +805,20 @@ export function ScriptEditor({
                 Use template
               </button>
               {onCopyFrom && copySources.length > 0 && (
-                <select
-                  defaultValue=""
-                  onChange={async (e) => {
-                    const id = e.target.value;
-                    e.target.value = "";
+                <Select
+                  value={null}
+                  variant="pill"
+                  className="!h-8 !border-solid !border-[rgb(var(--sp-line)/0.25)] !text-[rgb(var(--sp-soft))] hover:!text-[rgb(var(--sp-ink))]"
+                  renderValue={() => <span className="truncate">Copy from…</span>}
+                  placeholder="Copy from…"
+                  ariaLabel="Copy from another document"
+                  options={copySources.map((d) => ({ value: d.id, label: d.name }))}
+                  onChange={async (id) => {
                     if (!id) return;
                     const content = await onCopyFrom(id);
                     if (content && editor) editor.commands.setContent(content, { emitUpdate: true });
                   }}
-                  className="rounded-lg border px-2 h-8 text-[12.5px] font-semibold bg-transparent script-soft-border"
-                  aria-label="Copy from another document"
-                >
-                  <option value="">Copy from…</option>
-                  {copySources.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                />
               )}
               </div>
             </div>

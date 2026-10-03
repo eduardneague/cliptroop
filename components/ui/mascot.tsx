@@ -32,7 +32,7 @@ export function Mascot({ mood = "idle", size = 96, className = "" }: { mood?: Ma
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const happy = mood === "celebrate";
   return (
-    <svg viewBox="0 0 120 120" width={size} height={size} className={`mascot mascot-${mood} ${className}`} role="img" aria-label={happy ? "Clippy the clapperboard, celebrating" : "Clippy the clapperboard"}>
+    <svg viewBox="0 0 120 120" width={size} height={size} className={`mascot mascot-${mood} ${className}`} role="img" aria-label={happy ? "The VPlanner clapperboard, celebrating" : "The VPlanner clapperboard"}>
       <defs>
         <clipPath id={`${id}-board`}>
           <rect x="30" y="50" width="60" height="50" rx="10" />

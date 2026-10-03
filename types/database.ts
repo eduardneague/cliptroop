@@ -11,5 +11,4 @@
  *
  * Until then, this keeps the app compiling without lying about shape.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Database = any;

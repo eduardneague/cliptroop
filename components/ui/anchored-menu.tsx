@@ -55,11 +55,14 @@ export function AnchoredMenu({
     const onDown = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node;
       if (panel.current?.contains(t) || anchor.current?.contains(t)) return;
+      // A dropdown opened from inside the panel lives in its own portal.
+      if (t instanceof Element && t.closest("[data-floating-menu]")) return;
       onClose();
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     const onScroll = (e: Event) => {
       if (panel.current && e.target instanceof Node && panel.current.contains(e.target)) return;
+      if (e.target instanceof Element && e.target.closest("[data-floating-menu]")) return;
       onClose();
     };
     document.addEventListener("mousedown", onDown);

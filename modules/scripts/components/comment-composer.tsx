@@ -219,11 +219,12 @@ export function CommentComposer({
         <div className="relative rounded-lg border border-line/15 bg-white overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={sketchUrl} alt="Your sketch" className="w-full max-h-32 object-contain" />
-          <div className="absolute top-1.5 right-1.5 flex gap-1">
-            <button type="button" onClick={onDraw} className="rounded-md bg-surface/95 border border-line/15 px-2 h-7 text-[11.5px] font-semibold hover:bg-surface">
+          {/* Fixed colours: they sit on the drawing (white or black paper), whatever the app theme. */}
+          <div className="absolute top-1.5 right-1.5 flex gap-1.5">
+            <button type="button" onClick={onDraw} className="rounded-md bg-[#14110c] text-white ring-1 ring-white/25 shadow-md px-2.5 h-7 text-[11.5px] font-bold hover:bg-black">
               Edit drawing
             </button>
-            <button type="button" onClick={onRemoveSketch} className="rounded-md bg-surface/95 border border-line/15 px-2 h-7 text-[11.5px] font-semibold hover:text-red">
+            <button type="button" onClick={onRemoveSketch} className="rounded-md bg-[#c42b2b] text-white ring-1 ring-white/25 shadow-md px-2.5 h-7 text-[11.5px] font-bold hover:bg-[#a82222]">
               Remove
             </button>
           </div>

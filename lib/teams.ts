@@ -11,6 +11,9 @@ export type TeamSummary = {
   slug: string;
   color: string;
   logoUrl: string | null;
+  /** The team's colours for shorts and long videos (Team → Appearance). */
+  shortColor?: string | null;
+  longColor?: string | null;
 };
 
 /**
@@ -33,7 +36,7 @@ export const getTeamsAndCurrent = cache(async (supabase: SupabaseClient) => {
     // Explicit relationship: teams also point at team_members (default
     // short editor/reviewer/scheduler, migration 0027), so without the hint
     // Supabase can't tell which link to follow and the query fails.
-    .select("id, name, slug, color, logo_url, team_members!team_members_team_id_fkey!inner(user_id, status)")
+    .select("id, name, slug, color, logo_url, short_color, long_color, team_members!team_members_team_id_fkey!inner(user_id, status)")
     .eq("team_members.user_id", user.id)
     .eq("team_members.status", "active")
     .order("created_at", { ascending: true });
@@ -44,6 +47,8 @@ export const getTeamsAndCurrent = cache(async (supabase: SupabaseClient) => {
     slug: t.slug,
     color: t.color,
     logoUrl: t.logo_url,
+    shortColor: (t as { short_color?: string | null }).short_color ?? null,
+    longColor: (t as { long_color?: string | null }).long_color ?? null,
   }));
 
   if (list.length === 0) return { teams: list, currentTeam: null };

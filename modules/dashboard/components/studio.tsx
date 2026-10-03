@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { Dialog } from "@/components/ui/dialog";
+import { Select } from "@/components/ui/select";
+import { MAP_MODES } from "@/modules/analytics/components/audience-map";
 import { CloseIcon, FillIcon, GripIcon, PlusIcon, ResizeCornerIcon, SettingsIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
@@ -594,12 +596,12 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "topVideos":
       return <TopVideosWidget teamId={data.teamId} />;
     case "audienceMap":
-      return <AudienceMapWidget teamId={data.teamId} />;
+      return <AudienceMapWidget teamId={data.teamId} settings={w.settings} />;
     case "output":
       return <OutputWidget teamId={data.teamId} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap"];
 
 /** Measures its content box so widgets can adapt to the space they get. */
 function Measured({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -873,6 +875,28 @@ function WidgetSettings({ w, onChange }: { w: WidgetInstance; onChange: (s: Reco
                 °{v.toUpperCase()}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (w.type === "audienceMap") {
+    return (
+      <div>
+        <div className={row}>
+          <span className="text-[13.5px] font-semibold">Show as</span>
+          <div className="flex rounded-lg border border-line/15 p-0.5">
+            {(["map", "globe"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => onChange({ view: v })} className={`px-3 h-8 rounded-md text-[12.5px] font-semibold ${(s.view ?? "map") === v ? "bg-surface-2 text-ink" : "text-ink-soft"}`}>
+                {v === "map" ? "Flat map" : "3D globe"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={row}>
+          <span className="text-[13.5px] font-semibold">Numbers</span>
+          <div className="w-56">
+            <Select value={(s.mode as string) ?? "views"} onChange={(v) => v && onChange({ mode: v })} options={MAP_MODES.map((m) => ({ value: m.id, label: m.label }))} ariaLabel="Numbers" className="!h-9 !text-[13px]" />
           </div>
         </div>
       </div>

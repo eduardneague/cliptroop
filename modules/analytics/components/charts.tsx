@@ -316,18 +316,28 @@ export function BarList({
   format = fmtInt,
   color = "rgb(var(--amber))",
   empty = "No data yet.",
+  onHover,
+  active,
 }: {
   items: { key: string; label: React.ReactNode; value: number | null; sub?: string; color?: string }[];
   format?: (n: number | null) => string;
   color?: string;
   empty?: string;
+  /** Pointing at a row (e.g. turns the globe to that country). */
+  onHover?: (key: string | null) => void;
+  /** A row to show as highlighted (e.g. the country hovered on the map). */
+  active?: string | null;
 }) {
   const max = Math.max(0, ...items.map((i) => i.value ?? 0));
   if (!items.length) return <p className="text-[13px] text-ink-faint">{empty}</p>;
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2" onMouseLeave={onHover ? () => onHover(null) : undefined}>
       {items.map((it) => (
-        <li key={it.key} className="grid grid-cols-[minmax(6rem,9rem)_1fr] sm:grid-cols-[minmax(7rem,11rem)_1fr] items-center gap-3">
+        <li
+          key={it.key}
+          onMouseEnter={onHover ? () => onHover(it.key) : undefined}
+          className={`grid grid-cols-[minmax(6rem,9rem)_1fr] sm:grid-cols-[minmax(7rem,11rem)_1fr] items-center gap-3 rounded-md transition-colors ${onHover ? "-mx-1.5 px-1.5 py-0.5 hover:bg-surface-2" : ""} ${active === it.key ? "bg-surface-2" : ""}`}
+        >
           <span className="text-[13px] text-ink-soft truncate">{it.label}</span>
           <span className="flex items-center gap-2 min-w-0">
             <span className="flex-1 min-w-0 h-2.5 rounded-full bg-line/[0.06] overflow-hidden">
@@ -412,12 +422,13 @@ export function StatTile({
 export function ChartCard({ title, sub, right, children, className = "" }: { title: string; sub?: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <section className={`rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0 ${className}`}>
-      <div className="flex items-start gap-3 mb-3 flex-wrap">
-        <div className="flex-1 min-w-0">
+      {/* The title keeps at least ~13rem; when the controls don't fit beside it, they drop below (phones). */}
+      <div className="flex items-start gap-x-3 gap-y-2.5 mb-3 flex-wrap">
+        <div className="flex-1 basis-52 min-w-0">
           <h2 className="text-[14.5px] font-semibold">{title}</h2>
           {sub && <p className="text-[12px] text-ink-faint mt-0.5">{sub}</p>}
         </div>
-        {right}
+        {right && <div className="max-w-full min-w-0">{right}</div>}
       </div>
       {children}
     </section>

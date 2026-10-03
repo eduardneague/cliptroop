@@ -38,12 +38,12 @@ export default async function DashboardLayout({
   // into the catch-all 404 route. Never assume; send them to login.
   if (!user) redirect("/login");
 
-  // Three independent reads — run them at the same time instead of one
-  // after another (one round trip of waiting instead of three).
+  // Everything the shell needs in ONE round trip: profile (with the colour
+  // theme), teams (with their colours) and the latest notifications.
   const [{ data: profile }, { teams, currentTeam }, { data: notifications }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled")
+      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
       .eq("id", user!.id)
       .single(),
     getTeamsAndCurrent(supabase),
@@ -54,11 +54,8 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
-  const [{ data: teamColors }, { data: paletteRow }] = await Promise.all([
-    currentTeam ? supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle() : Promise.resolve({ data: null }),
-    // Its own query: before migration 0060 the column doesn't exist, and that mustn't cost the profile.
-    supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
-  ]);
+  const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
+  const paletteRow = profile ? { palette: (profile as { palette?: string | null }).palette ?? null } : null;
 
   const resolvedName = displayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
   const resolvedEmail = profile?.email ?? user?.email ?? "";

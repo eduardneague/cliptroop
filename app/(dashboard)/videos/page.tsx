@@ -36,9 +36,6 @@ export default async function VideosPage({
   const isTable = view ? view === "table" : savedView === "table";
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
-  const createRoles = currentTeam ? (await getMembership(supabase, currentTeam.id))?.roles ?? [] : [];
-  const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
-
   if (!currentTeam) {
     return (
       <div className="p-8 text-sm text-ink-soft">
@@ -67,10 +64,13 @@ export default async function VideosPage({
 
   // Stage counts for the filter chips — one tiny query (just the stage
   // column), run in parallel with the main list.
-  const [{ data: projects }, { data: stageRows }] = await Promise.all([
+  const [{ data: projects }, { data: stageRows }, membership] = await Promise.all([
     query,
     supabase.from("long_video_projects").select("stage").eq("team_id", currentTeam.id),
+    getMembership(supabase, currentTeam.id),
   ]);
+  const createRoles = membership?.roles ?? [];
+  const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
   const stageCounts = new Map<string, number>();
   (stageRows ?? []).forEach((r) => stageCounts.set(r.stage, (stageCounts.get(r.stage) ?? 0) + 1));
   const totalCount = stageRows?.length ?? 0;

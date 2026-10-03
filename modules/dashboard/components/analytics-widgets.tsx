@@ -6,7 +6,8 @@ import { loadDashAudience, loadDashProduction, type DashAudience, type DashProdu
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Mascot } from "@/components/ui/mascot";
 import { fmtCompact, fmtInt } from "@/modules/analytics/components/charts";
-import { countryName, WorldMap } from "@/modules/analytics/components/world-map";
+import { countryName } from "@/modules/analytics/components/world-map";
+import { AudienceMapView, layerFor, MAP_MODES, type MapMode, type MapView } from "@/modules/analytics/components/audience-map";
 import { useBox } from "./widget-box";
 
 /*
@@ -280,22 +281,27 @@ export function TopVideosWidget({ teamId }: { teamId: string }) {
 // Audience map: YouTube views by country, last 28 days.
 // ---------------------------------------------------------------------------
 
-export function AudienceMapWidget({ teamId }: { teamId: string }) {
+/** Settings: shows a flat map or a 3D globe, of one platform's countries or all together. */
+export function AudienceMapWidget({ teamId, settings }: { teamId: string; settings?: Record<string, unknown> }) {
   const r = useLoaded(caches.audience, teamId, loadDashAudience);
   const box = useBox();
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
-  const rows = r.data.audience.countries.map((c) => ({ code: c.code, value: c.views })).filter((c) => c.value > 0);
+  const view: MapView = settings?.view === "globe" ? "globe" : "map";
+  const mode: MapMode = MAP_MODES.some((m) => m.id === settings?.mode) ? (settings!.mode as MapMode) : "views";
+  const layer = layerFor(r.data.audience, mode);
+  const rows = layer.rows;
   const total = rows.reduce((s, c) => s + c.value, 0);
   const side = box.w >= 520 && box.h >= 150;
   const top = rows.slice(0, side ? Math.max(3, Math.min(8, Math.floor((box.h - 10) / 24))) : 3);
   const mapW = side ? box.w - 190 : box.w;
-  const fits = Math.min(mapW, (box.h - (side ? 0 : 26)) * 2.28);
+  const fits = view === "globe" ? Math.min(mapW, box.h - (side ? 0 : 26)) : Math.min(mapW, (box.h - (side ? 0 : 26)) * 2.28);
+  const ytReady = r.data.audience.status.some((s) => s.platform === "youtube" && s.connected && s.statsReady);
   return (
     <div className={`h-full min-h-0 ${side ? "flex items-center gap-4" : "flex flex-col"}`}>
       <div className={side ? "flex-1 min-w-0 flex justify-center" : "flex-1 min-h-0 flex items-center justify-center"}>
         <div style={{ width: Math.max(120, fits) }}>
-          <WorldMap compact data={rows} format={fmtInt} label="World map of YouTube views by country, last 28 days" empty="Countries arrive with the next sync." />
+          <AudienceMapView a={r.data.audience} mode={mode} view={view} youtubeReady={ytReady} compact globeSize={Math.max(120, fits)} />
         </div>
       </div>
       {total > 0 &&

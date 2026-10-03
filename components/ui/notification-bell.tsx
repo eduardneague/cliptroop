@@ -67,6 +67,10 @@ export type NotificationItem = {
     dueDate?: string | null;
     docName?: string;
     commentKind?: "comment" | "edit_idea";
+    /** script_handoff: the step it was sent to. */
+    toStep?: "review" | "staging";
+    /** app_alert: where it happened. */
+    where?: string;
   } | null;
 };
 
@@ -345,6 +349,38 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> mentioned you in {m.commentKind === "edit_idea" ? "an editing idea" : "a comment"} on <ShortRef m={m} />
           {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
+    case "script_people":
+      return (
+        <>
+          <b>{m.actor?.name}</b> added you to the <b>{m.toStep === "staging" ? "staging" : "review"}</b> of <ShortRef m={m} />. You&rsquo;ll be told when it&rsquo;s your turn.
+        </>
+      );
+    case "meeting_action_done":
+      return (
+        <>
+          <b>{m.actor?.name}</b> finished an action item from <b>{m.meetingTitle}</b>: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
+    case "revenue_access":
+      return (
+        <>
+          <b>{m.actor?.name}</b> let you see <b>{m.team?.name}</b>&rsquo;s revenue in Analytics.
+        </>
+      );
+    case "app_alert":
+      return (
+        <>
+          <b>Something broke</b>{m.snippet ? <>: &ldquo;{m.snippet}&rdquo;</> : null}
+          {m.where ? <span className="text-ink-faint"> · {m.where}</span> : null}
+        </>
+      );
+    case "script_handoff":
+      return (
+        <>
+          <b>{m.actor?.name}</b> sent <ShortRef m={m} /> to <b>{m.toStep === "staging" ? "staging" : "review"}</b>. It&rsquo;s your turn
+          {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}
         </>
       );
     case "meeting_scheduled":

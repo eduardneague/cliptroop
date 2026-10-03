@@ -377,17 +377,45 @@ const tiktok: Provider = {
 const FB_SCOPES = ["pages_show_list", "pages_read_engagement", "read_insights"];
 export const FB_GRAPH = () => `https://graph.facebook.com/${env("FACEBOOK_GRAPH_VERSION") || "v23.0"}`;
 
-/** The Pages this person manages (each with its own Page token). */
-export async function facebookPages(userToken: string) {
+type FbPage = { id: string; name: string; token: string; picture: string | null; canAnalyze: boolean };
+
+/**
+ * The Pages this person let VPlanner use (each with its own Page token).
+ * /me/accounts lists Pages they manage directly; Pages owned by a Business
+ * portfolio often don't show there with Facebook Login for Business, so
+ * then we ask the sign-in itself which Pages were picked (debug_token →
+ * granular_scopes → target_ids) and read each one by id.
+ */
+export async function facebookPages(userToken: string): Promise<FbPage[]> {
   const r = await call(`${FB_GRAPH()}/me/accounts?` + new URLSearchParams({ fields: "id,name,access_token,picture{url},tasks", limit: "100", access_token: userToken }));
-  return ((r.data as { id: string; name: string; access_token: string; picture?: { data?: { url?: string } }; tasks?: string[] }[] | undefined) ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    token: p.access_token,
-    picture: p.picture?.data?.url ?? null,
-    // Insights need the ANALYZE task on the Page.
-    canAnalyze: !p.tasks || p.tasks.includes("ANALYZE"),
-  }));
+  const listed: FbPage[] = ((r.data as { id: string; name: string; access_token?: string; picture?: { data?: { url?: string } }; tasks?: string[] }[] | undefined) ?? [])
+    .filter((p) => !!p.access_token)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      token: p.access_token!,
+      picture: p.picture?.data?.url ?? null,
+      // Insights need the ANALYZE task on the Page.
+      canAnalyze: !p.tasks || p.tasks.includes("ANALYZE"),
+    }));
+  if (listed.length) return listed;
+
+  const dbg = await call(`${FB_GRAPH()}/debug_token?` + new URLSearchParams({ input_token: userToken, access_token: `${env("FACEBOOK_APP_ID")}|${env("FACEBOOK_APP_SECRET")}` }));
+  const scopes = ((dbg.data as { granular_scopes?: { scope: string; target_ids?: string[] }[] } | undefined)?.granular_scopes ?? []) as { scope: string; target_ids?: string[] }[];
+  const ids = [...new Set(scopes.filter((s) => /^pages_|^read_insights$/.test(s.scope)).flatMap((s) => s.target_ids ?? []))].slice(0, 25);
+  const pages: FbPage[] = [];
+  for (const id of ids) {
+    try {
+      const p = await call(`${FB_GRAPH()}/${id}?` + new URLSearchParams({ fields: "id,name,access_token,picture{url}", access_token: userToken }));
+      if (p.access_token) pages.push({ id: String(p.id), name: String(p.name ?? "Facebook Page"), token: String(p.access_token), picture: (p.picture as { data?: { url?: string } } | undefined)?.data?.url ?? null, canAnalyze: true });
+    } catch {
+      /* a Page we can't open: skip it */
+    }
+  }
+  if (!pages.length && ids.length) {
+    throw new ProviderError("Facebook let VPlanner see your Page but not open it. In the Meta app's Facebook Login for Business configuration, also tick business_management, then connect again.");
+  }
+  return pages;
 }
 
 const facebook: Provider = {
@@ -420,7 +448,7 @@ const facebook: Provider = {
     const granted = ((perms.data as { permission: string; status: string }[] | undefined) ?? []).filter((p) => p.status === "granted").map((p) => p.permission);
     const pages = granted.includes("pages_show_list") ? await facebookPages(userToken) : [];
     const page = pages.find((p) => p.canAnalyze) ?? pages[0];
-    if (granted.includes("pages_show_list") && !page) throw new ProviderError("No Facebook Page came through. Connect again and pick your Page on Facebook's screen.");
+    if (granted.includes("pages_show_list") && !page) throw new ProviderError("No Facebook Page came through. Connect again and tick your Page on Facebook's screen (\"current Pages only\" is fine).");
     return {
       // The Page's token does the work; the person's token is kept to switch Pages later.
       accessToken: page ? page.token : userToken,

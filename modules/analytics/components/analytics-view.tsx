@@ -3,16 +3,20 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DownloadIcon, ExternalIcon, LockIcon } from "@/components/ui/icons";
+import { CloseIcon, DownloadIcon, ExternalIcon, LockIcon, PlusIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Mascot } from "@/components/ui/mascot";
-import { setRevenueAccess, syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
+import { addRevenueEntry, deleteRevenueEntry, setRevenueAccess, setRevenueCurrency, syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
+import { Select, type SelectOption } from "@/components/ui/select";
+import { useConfirm } from "@/components/ui/confirm-provider";
+import { DateChip } from "@/components/ui/date-picker";
 import { RANGES, type RangeId, type TabId, type Window } from "../lib/ranges";
 import type { Audience, ContentItem, PlatformStatus, Production, Revenue } from "../lib/queries";
 import { BarList, ChartCard, fmtCompact, fmtInt, Legend, LineChart, StackedColumns, StatTile } from "./charts";
-import { countryName, WorldMap } from "./world-map";
+import { countryName } from "./world-map";
+import { AudienceMapView, MAP_MODES, sourcesOf, type MapMode, type MapView } from "./audience-map";
 
 type Data =
   | { tab: "production"; production: Production }
@@ -72,6 +76,7 @@ export function AnalyticsView({
   range,
   compare,
   canSync,
+  catchingUp = false,
   revenueAllowed,
   data,
 }: {
@@ -81,11 +86,29 @@ export function AnalyticsView({
   range: RangeId;
   compare: boolean;
   canSync: boolean;
+  /** The morning copy was missed and a catch-up just started (this page refreshes itself when it's likely done). */
+  catchingUp?: boolean;
   revenueAllowed: boolean;
   data: Data;
 }) {
   const router = useRouter();
   const toast = useToast();
+  const [updating, setUpdating] = useState(catchingUp);
+  useEffect(() => {
+    if (catchingUp) setUpdating(true);
+  }, [catchingUp]);
+  useEffect(() => {
+    if (!updating) return;
+    const soon = window.setTimeout(() => router.refresh(), 35_000);
+    const done = window.setTimeout(() => {
+      router.refresh();
+      setUpdating(false);
+    }, 70_000);
+    return () => {
+      window.clearTimeout(soon);
+      window.clearTimeout(done);
+    };
+  }, [updating, router]);
   // Audience: which platforms to show (null = all that have numbers). Remembered on
   // this device; read after the first paint so the server and browser render the same.
   const [picked, setPickedState] = useState<P[] | null>(null);
@@ -147,7 +170,17 @@ export function AnalyticsView({
       ]);
     } else if (data.revenue.allowed) {
       const r = data.revenue;
-      csvDownload(`revenue_${stamp}.csv`, [["Month", `Revenue (${r.currency})`, "YouTube views"], ...r.months.map((m) => [m.month, m.revenue.toFixed(2), m.views])]);
+      csvDownload(`revenue_${stamp}.csv`, [
+        ["Stream", `Amount (${r.currency})`],
+        ...r.streams.map((x) => [x.label, x.amount.toFixed(2)]),
+        ["All streams", (r.all.value ?? 0).toFixed(2)],
+        [],
+        ["Month", `YouTube (${r.currency})`, `Other income (${r.currency})`, `Total (${r.currency})`, "YouTube views"],
+        ...r.months.map((m) => [m.month, m.revenue.toFixed(2), m.other.toFixed(2), (m.revenue + m.other).toFixed(2), m.views]),
+        [],
+        ["Date", "Other income", `Amount (${r.currency})`, "Note"],
+        ...r.entries.map((e) => [e.day, e.source, e.amount.toFixed(2), e.note]),
+      ]);
     }
   }
 
@@ -160,7 +193,9 @@ export function AnalyticsView({
             {teamName}: how the work flows, and how the videos do. {niceDay(w.from, true)} – {niceDay(w.to, true)}.
           </p>
         </div>
-        {canSync && data.tab !== "production" && (
+        {data.tab !== "production" && (updating || canSync) && (
+        <div className="flex flex-col items-start sm:items-end gap-1.5">
+        {canSync && (
           <button
             type="button"
             disabled={syncing}
@@ -170,6 +205,7 @@ export function AnalyticsView({
                 if (r.error !== undefined) toast.error(r.error);
                 else {
                   toast.success(r.summary);
+                  setUpdating(false);
                   router.refresh();
                 }
               })
@@ -181,6 +217,18 @@ export function AnalyticsView({
             </svg>
             {syncing ? "Syncing…" : "Sync now"}
           </button>
+        )}
+          <p className="text-[11.5px] text-ink-faint sm:text-right max-w-[260px]" role="status">
+            {updating ? (
+              <span className="flex items-start sm:justify-end gap-1.5 text-ink-soft">
+                <span aria-hidden className="mt-[5px] w-1.5 h-1.5 shrink-0 rounded-full bg-amber animate-pulse" />
+                <span>Getting the latest numbers… this page updates by itself.</span>
+              </span>
+            ) : (
+              "Updates by itself every morning."
+            )}
+          </p>
+        </div>
         )}
       </div>
 
@@ -682,63 +730,106 @@ function AudienceTab({ a, compare, picked, setPicked }: { a: Audience; compare: 
   );
 }
 
-/** The heat map: YouTube views, YouTube watch time, or Instagram followers by country. */
+/**
+ * Where the audience is: one platform's countries or all together, on the
+ * flat map or the 3D globe (both choices remembered on this device).
+ */
 function CountryMap({ a }: { a: Audience }) {
-  const modes = [
-    { id: "views", label: "YouTube views", rows: a.countries.map((c) => ({ code: c.code, value: c.views })), format: fmtInt },
-    ...(a.countries.some((c) => c.watchMinutes)
-      ? [{ id: "watch", label: "Watch time", rows: a.countries.map((c) => ({ code: c.code, value: Math.round((c.watchMinutes ?? 0) / 60) })), format: (n: number) => `${fmtInt(n)} h` }]
-      : []),
-    ...(a.igFollowerCountries.length ? [{ id: "ig", label: "Instagram followers", rows: a.igFollowerCountries.map((c) => ({ code: c.code, value: c.value })), format: fmtInt }] : []),
-  ];
-  const [mode, setMode] = useState(modes[0].id);
-  const m = modes.find((x) => x.id === mode) ?? modes[0];
-  const rows = [...m.rows].filter((r) => r.value > 0).sort((x, y) => y.value - x.value);
-  const ytConnected = a.status.some((s) => s.platform === "youtube" && s.connected && s.statsReady);
+  const [mode, setMode] = useState<MapMode>("views");
+  const [view, setView] = useState<MapView>("map");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("vp-map-view");
+      if (v === "map" || v === "globe") setView(v);
+      const m = localStorage.getItem("vp-map-mode");
+      if (MAP_MODES.some((x) => x.id === m)) setMode(m as MapMode);
+    } catch {}
+  }, []);
+  const remember = (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch {}
+  };
+  const sources = sourcesOf(a);
+  const hasData = (id: MapMode) => (id === "all" ? sources.filter((s) => s.id !== "watch" && s.rows.length).length > 0 : (sources.find((s) => s.id === id)?.rows.length ?? 0) > 0);
+  const ytReady = a.status.some((s) => s.platform === "youtube" && s.connected && s.statsReady);
+  const sub =
+    mode === "all"
+      ? "Each country's share of your audience, averaged over every platform that shares countries"
+      : mode === "views" || mode === "watch"
+        ? `${mode === "watch" ? "Hours watched" : "YouTube views"} by country in this range${a.countriesSince ? ` (since ${niceDay(a.countriesSince)}, when copying started)` : ""}`
+        : `${MAP_MODES.find((m) => m.id === mode)!.label} by country (latest copy)`;
   return (
     <ChartCard
       title="Where your audience is"
-      sub={
-        m.id === "ig"
-          ? "Instagram followers by country (latest copy)"
-          : `${m.id === "watch" ? "Hours watched" : "YouTube views"} by country in this range${a.countriesSince ? ` (since ${niceDay(a.countriesSince)}, when copying started)` : ""}`
-      }
+      sub={sub}
       right={
-        modes.length > 1 ? (
-          <div role="radiogroup" aria-label="Map shows" className="inline-flex rounded-lg border border-line/15 p-0.5">
-            {modes.map((x) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="w-[13.5rem] max-w-full">
+            <Select
+              value={mode}
+              onChange={(v) => {
+                if (!v) return;
+                setMode(v as MapMode);
+                remember("vp-map-mode", v);
+              }}
+              ariaLabel="Map shows"
+              className="!h-8 !text-[12.5px]"
+              menuMinWidth={240}
+              options={MAP_MODES.map((m) => ({
+                value: m.id,
+                label: m.label,
+                hint: hasData(m.id) ? undefined : m.id === "tiktok" ? "Not shared by TikTok" : "No countries yet",
+                icon: <span className="w-2 h-2 rounded-[2px] flex-shrink-0" style={{ background: m.id === "all" ? "rgb(var(--amber))" : sources.find((x) => x.id === m.id)?.color }} aria-hidden />,
+              }))}
+            />
+          </div>
+          <div role="radiogroup" aria-label="Show as" className="inline-flex rounded-lg border border-line/15 p-0.5">
+            {(["map", "globe"] as const).map((v) => (
               <button
-                key={x.id}
+                key={v}
                 type="button"
                 role="radio"
-                aria-checked={mode === x.id}
-                onClick={() => setMode(x.id)}
-                className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${mode === x.id ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+                aria-checked={view === v}
+                onClick={() => {
+                  setView(v);
+                  remember("vp-map-view", v);
+                }}
+                className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${view === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
               >
-                {x.label}
+                {v === "map" ? "Map" : "Globe"}
               </button>
             ))}
           </div>
-        ) : undefined
+        </div>
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] items-start">
-        <WorldMap
-          data={rows}
-          format={m.format}
-          label={`World map: ${m.label} by country`}
-          empty={ytConnected ? "Country numbers arrive with the next sync. YouTube shares them two or three days late." : "Connect YouTube (with stats allowed) to fill the map."}
-        />
-        <div>
-          {rows.length ? (
-            <>
-              <BarList items={rows.slice(0, 10).map((c) => ({ key: c.code, label: countryName(c.code), value: c.value, color: m.id === "ig" ? PLATFORM.instagram.color : undefined }))} format={(n) => (n === null ? "–" : m.id === "watch" ? `${fmtCompact(n)} h` : fmtCompact(n))} />
-              {rows.length > 10 && <p className="text-[12px] text-ink-faint mt-2">and {rows.length - 10} more countries{m.id === "views" ? " (in the CSV)" : ""}.</p>}
-            </>
-          ) : (
-            <p className="text-[13px] text-ink-faint">No countries yet.</p>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] items-center">
+        <AudienceMapView
+          a={a}
+          mode={mode}
+          view={view}
+          youtubeReady={ytReady}
+          globeSize={440}
+          list={(rows, _format, hover) => (
+            <div>
+              {rows.length ? (
+                <>
+                  <BarList
+                    items={rows.slice(0, 10).map((c) => ({ key: c.code, label: countryName(c.code), value: c.value, color: mode === "all" ? undefined : sources.find((x) => x.id === mode)?.color }))}
+                    format={(n) => (n === null ? "–" : mode === "all" ? `${(n * 100).toFixed(n >= 0.1 ? 0 : 1)}%` : mode === "watch" ? `${fmtCompact(n)} h` : fmtCompact(n))}
+                    onHover={view === "globe" ? hover.set : undefined}
+                    active={hover.code}
+                  />
+                  {rows.length > 10 && <p className="text-[12px] text-ink-faint mt-2">and {rows.length - 10} more countries{mode === "views" ? " (in the CSV)" : ""}.</p>}
+                  {view === "globe" && <p className="text-[11.5px] text-ink-faint mt-2">Point at a country to turn the globe to it.</p>}
+                </>
+              ) : (
+                <p className="text-[13px] text-ink-faint">No countries yet.</p>
+              )}
+            </div>
           )}
-        </div>
+        />
       </div>
     </ChartCard>
   );
@@ -845,7 +936,11 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
 // Revenue
 // ---------------------------------------------------------------------------
 
+const YT_COLOR = "rgb(var(--chart-yt))";
+const OTHER_COLOR = "rgb(var(--chart-tt))";
+
 function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; teamId: string }) {
+  const [adding, setAdding] = useState(false);
   if (!r.allowed)
     return (
       <div className="rounded-2xl border border-line/10 bg-surface p-8 text-center flex flex-col items-center">
@@ -856,51 +951,146 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
         <p className="text-[13px] text-ink-soft mt-1 max-w-sm">Only masters, and the people a master chooses, can see the channel&rsquo;s revenue.</p>
       </div>
     );
-  // Big numbers and round axis ticks without cents; everything else with them.
+  // Big numbers and round axis ticks without cents; everything else with them (as many as the currency uses).
   const money = (n: number | null) => {
     if (n === null) return "–";
-    const d = Math.abs(n) >= 1000 || Number.isInteger(n) ? 0 : 2;
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
+    if (Math.abs(n) >= 1000 || Number.isInteger(n)) return new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, maximumFractionDigits: 0 }).format(n);
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency }).format(n);
   };
-  const cents = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const cents = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: r.currency }).format(n);
+  const streamTotal = r.streams.reduce((t, x) => t + x.amount, 0);
+  const splitTotal = r.split ? r.split.shorts + r.split.long : 0;
+  const hasOther = r.perBucket.some((b) => b.other > 0);
   return (
     <div className="space-y-5">
+      <CurrencyBar r={r} />
       {r.note && <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-[13px] text-ink">{r.note}</p>}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-        <StatTile label="Estimated revenue" value={r.total.value} prev={r.total.prev} compare={compare} format={money} />
-        <StatTile label="Per 1,000 views (RPM)" value={r.rpm.value} prev={r.rpm.prev} compare={compare} format={(n) => (n === null ? "–" : cents(n))} />
-        <StatTile className="col-span-2 lg:col-span-1" label="Best day" value={r.bestDay?.revenue ?? null} compare={false} format={(n) => (n === null ? "–" : cents(n))} hint={r.bestDay ? niceDay(r.bestDay.day) : undefined} />
+      {r.fxNote && <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-[13px] text-ink">{r.fxNote}</p>}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <StatTile className="ring-1 ring-amber/30" label="All streams together" value={r.all.value} prev={r.all.prev} compare={compare} format={money} />
+        <StatTile label="YouTube (estimated)" value={r.total.value} prev={r.total.prev} compare={compare} format={money} hint={r.bestDay ? `best day ${niceDay(r.bestDay.day)}: ${cents(r.bestDay.revenue)}` : undefined} />
+        <StatTile label="Other income" value={r.other.value} prev={r.other.prev} compare={compare} format={money} hint={r.other.value === null ? "sponsorships, deals, other platforms" : undefined} />
+        <StatTile label="Per 1,000 views" value={r.rpm.value} prev={r.rpm.prev} compare={compare} format={(n) => (n === null ? "–" : cents(n))} hint="YouTube revenue ÷ views" />
       </div>
+
       {r.hasData ? (
-        <ChartCard title="Revenue" sub={`YouTube estimated revenue (${r.currency})`}>
-          <StackedColumns ariaLabel="Revenue per period" labels={r.buckets.map((b) => b.label)} series={[{ key: "rev", label: "Revenue", color: "rgb(var(--chart-yt))", values: r.perBucket.map((b) => b.revenue) }]} format={money} />
+        <ChartCard
+          title="Revenue"
+          sub={`${!r.buckets.length || r.buckets[0].from === r.buckets[0].to ? "Per day" : r.buckets[0].key.length === 7 ? "Per month" : "Per week"} · ${r.currency}`}
+          right={hasOther ? <Legend shape="rect" items={[{ key: "yt", label: "YouTube", color: YT_COLOR }, { key: "other", label: "Other income", color: OTHER_COLOR }]} /> : undefined}
+        >
+          <StackedColumns
+            ariaLabel="Revenue per period"
+            labels={r.buckets.map((b) => b.label)}
+            series={[
+              { key: "rev", label: "YouTube", color: YT_COLOR, values: r.perBucket.map((b) => b.revenue) },
+              ...(hasOther ? [{ key: "other", label: "Other income", color: OTHER_COLOR, values: r.perBucket.map((b) => b.other) }] : []),
+            ]}
+            format={money}
+          />
         </ChartCard>
       ) : (
         <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">
-          No revenue copied yet. It needs YouTube connected with stats allowed, a monetized channel, and a sync.
+          No revenue yet. YouTube&rsquo;s comes with a sync (YouTube connected with stats allowed, a monetized channel); other income you add below.
         </p>
       )}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ChartCard title="Where it comes from" sub="Every stream in this range, biggest first">
+          {r.streams.length ? (
+            <ul className="space-y-2.5">
+              {r.streams.map((x) => (
+                <li key={x.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 items-center">
+                  <span className="flex items-center gap-2 min-w-0 text-[13px]">
+                    <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: x.youtube ? YT_COLOR : OTHER_COLOR }} aria-hidden />
+                    <span className="truncate">{x.label}</span>
+                  </span>
+                  <span className="text-[13px] tabular-nums">
+                    <b>{cents(x.amount)}</b>
+                    <span className="text-ink-faint ml-2 inline-block w-10 text-right">{streamTotal ? `${Math.round((x.amount / streamTotal) * 100)}%` : ""}</span>
+                  </span>
+                  <span className="col-span-2 mt-1 h-1.5 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
+                    <span className="block h-full rounded-full" style={{ width: `${streamTotal ? Math.max(2, (x.amount / streamTotal) * 100) : 0}%`, background: x.youtube ? YT_COLOR : OTHER_COLOR }} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13px] text-ink-faint">Nothing in this range.</p>
+          )}
+          {r.split && splitTotal > 0 && (
+            <div className="mt-5 pt-4 border-t border-line/10">
+              <div className="text-[12px] font-semibold text-ink-soft mb-2">YouTube revenue: Shorts vs long videos</div>
+              <div className="flex h-3 rounded-full overflow-hidden gap-[2px]" role="img" aria-label={`Shorts ${cents(r.split.shorts)}, long videos ${cents(r.split.long)}`}>
+                <span style={{ width: `${(r.split.shorts / splitTotal) * 100}%`, background: SHORT_COLOR }} />
+                <span style={{ width: `${(r.split.long / splitTotal) * 100}%`, background: LONG_COLOR }} />
+              </div>
+              <div className="mt-2 flex justify-between text-[12px] text-ink-soft">
+                <span>
+                  <span className="inline-block w-2 h-2 rounded-[2px] mr-1.5" style={{ background: SHORT_COLOR }} />
+                  Shorts <b className="text-ink">{cents(r.split.shorts)}</b> · {Math.round((r.split.shorts / splitTotal) * 100)}%
+                </span>
+                <span>
+                  <span className="inline-block w-2 h-2 rounded-[2px] mr-1.5" style={{ background: LONG_COLOR }} />
+                  Long <b className="text-ink">{cents(r.split.long)}</b> · {Math.round((r.split.long / splitTotal) * 100)}%
+                </span>
+              </div>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="Other income"
+          sub="Sponsorships, brand deals, affiliate links, other platforms: anything YouTube's numbers don't show"
+          right={
+            r.isMaster && !adding ? (
+              <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] hover:brightness-110">
+                <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.4} />
+                Add income
+              </button>
+            ) : undefined
+          }
+        >
+          {adding && <IncomeForm teamId={teamId} currency={r.currency} onDone={() => setAdding(false)} />}
+          {r.entries.length ? (
+            <ul className="divide-y divide-line/10 -my-1">
+              {r.entries.map((e) => (
+                <IncomeRow key={e.id} e={e} teamId={teamId} canEdit={r.isMaster} money={cents} />
+              ))}
+            </ul>
+          ) : (
+            !adding && <p className="text-[13px] text-ink-faint">{r.isMaster ? "Nothing added in this range." : "Nothing in this range."}</p>
+          )}
+        </ChartCard>
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="By month" sub="The last 12 months">
           {r.months.length ? (
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-faint text-left">
-                  <th className="font-bold pb-2">Month</th>
-                  <th className="font-bold pb-2 text-right">Revenue</th>
-                  <th className="font-bold pb-2 text-right">RPM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {r.months.map((m) => (
-                  <tr key={m.month} className="border-t border-line/10">
-                    <td className="py-2">{new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</td>
-                    <td className="py-2 text-right tabular-nums font-semibold">{cents(m.revenue)}</td>
-                    <td className="py-2 text-right tabular-nums text-ink-soft">{m.views ? cents((m.revenue / m.views) * 1000) : "–"}</td>
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-faint text-left">
+                    <th className="font-bold pb-2 px-1">Month</th>
+                    <th className="font-bold pb-2 px-1 text-right">YouTube</th>
+                    <th className="font-bold pb-2 px-1 text-right">Other</th>
+                    <th className="font-bold pb-2 px-1 text-right">Total</th>
+                    <th className="font-bold pb-2 px-1 text-right">RPM</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {r.months.map((m) => (
+                    <tr key={m.month} className="border-t border-line/10">
+                      <td className="py-2 px-1 whitespace-nowrap">{new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}</td>
+                      <td className="py-2 px-1 text-right tabular-nums">{cents(m.revenue)}</td>
+                      <td className="py-2 px-1 text-right tabular-nums text-ink-soft">{m.other ? cents(m.other) : "–"}</td>
+                      <td className="py-2 px-1 text-right tabular-nums font-semibold">{cents(m.revenue + m.other)}</td>
+                      <td className="py-2 px-1 text-right tabular-nums text-ink-soft">{m.views ? cents((m.revenue / m.views) * 1000) : "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className="text-[13px] text-ink-faint">Nothing yet.</p>
           )}
@@ -908,6 +1098,208 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
         {r.isMaster && <AccessCard r={r} teamId={teamId} />}
       </div>
     </div>
+  );
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  sponsorship: "Sponsorship",
+  brand_deal: "Brand deal",
+  affiliate: "Affiliate links",
+  youtube_other: "YouTube (outside the estimate)",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  merch: "Merch",
+  other: "Other",
+};
+
+/** Brand-ish dots for the income sources in the dropdown (meaning stays in the words). */
+const SOURCE_TONE: Record<string, string> = {
+  youtube_other: "rgb(var(--chart-yt))",
+  facebook: "rgb(var(--chart-fb))",
+  instagram: "rgb(var(--chart-ig))",
+  tiktok: "rgb(var(--chart-tt))",
+};
+
+const POPULAR_CURRENCIES = ["USD", "EUR", "GBP", "RON", "CAD", "AUD", "CHF", "JPY", "INR", "BRL", "MXN", "PLN", "SEK", "NOK", "DKK", "HUF", "CZK", "TRY", "AED", "ZAR"];
+let currencyNames: Intl.DisplayNames | null = null;
+function currencyName(code: string) {
+  try {
+    currencyNames ??= new Intl.DisplayNames(["en"], { type: "currency" });
+    return currencyNames.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+function currencySymbol(code: string) {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" }).formatToParts(0).find((x) => x.type === "currency")?.value ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/** "Amounts in [EUR · Euro ▾]": any currency with an exchange rate, saved for this person. */
+function CurrencyBar({ r }: { r: Revenue }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, start] = useTransition();
+  const [value, setValue] = useState(r.currency);
+  useEffect(() => setValue(r.currency), [r.currency]);
+  const options = useMemo<SelectOption[]>(() => {
+    const opt = (code: string, group: string): SelectOption => ({
+      value: code,
+      label: currencyName(code),
+      hint: `${code} · ${currencySymbol(code)}`,
+      group,
+      icon: <span className="w-9 flex-shrink-0 text-[11px] font-bold font-mono text-ink-soft">{code}</span>,
+    });
+    const popular = POPULAR_CURRENCIES.filter((c) => r.currencies.includes(c));
+    return [...popular.map((c) => opt(c, "Common")), ...r.currencies.filter((c) => !popular.includes(c)).map((c) => opt(c, "All currencies"))];
+  }, [r.currencies]);
+  const updated = r.fx?.updatedAt ? new Date(r.fx.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+  return (
+    <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+      <span className="text-[12.5px] font-semibold text-ink-soft">Amounts in</span>
+      <div className="w-[15.5rem] max-w-full">
+        <Select
+          value={value}
+          onChange={(code) => {
+            if (!code || code === value) return;
+            const prev = value;
+            setValue(code);
+            start(async () => {
+              const res = await setRevenueCurrency(code);
+              if (res.error !== undefined) {
+                setValue(prev);
+                toast.error(res.error);
+              } else router.refresh();
+            });
+          }}
+          options={options}
+          searchable
+          ariaLabel="Currency"
+          menuMinWidth={280}
+          className={`!h-9 !text-[13px] ${pending ? "opacity-60" : ""}`}
+          renderValue={(o) => (
+            <span className="truncate">
+              <b className="font-mono text-[12px] mr-1.5">{value}</b>
+              {o?.label ?? currencyName(value)}
+            </span>
+          )}
+        />
+      </div>
+      {r.fx && (
+        <span className="text-[11.5px] text-ink-faint">
+          {r.fx.converted ? "Converted at today\u2019s rate" : "Exchange rates"}
+          {updated ? ` (${updated})` : ""} ·{" "}
+          <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer" className="underline decoration-line/30 underline-offset-2 hover:text-ink">
+            Rates By Exchange Rate API
+          </a>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function IncomeForm({ teamId, currency, onDone }: { teamId: string; currency: string; onDone: () => void }) {
+  const toast = useToast();
+  const router = useRouter();
+  const today = new Date();
+  const [day, setDay] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`);
+  const [source, setSource] = useState("sponsorship");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <form
+      className="mb-4 rounded-xl border border-line/15 bg-surface-2/50 p-3 grid gap-2.5 sm:grid-cols-[auto_minmax(0,1fr)_8rem]"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        const res = await addRevenueEntry(teamId, { day, source, amount: Number(amount.replace(",", ".")), note, currency });
+        setSaving(false);
+        if (res.error !== undefined) return toast.error(res.error);
+        toast.success("Income added");
+        onDone();
+        router.refresh();
+      }}
+    >
+      <DateChip value={day} onChange={setDay} ariaLabel="Date of the income" />
+      <Select
+        value={source}
+        onChange={(v) => v && setSource(v)}
+        ariaLabel="Where it came from"
+        className="!h-9 !text-[13px]"
+        menuMinWidth={240}
+        options={Object.entries(SOURCE_LABEL).map(([k, v]) => ({ value: k, label: v, icon: <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SOURCE_TONE[k] ?? OTHER_COLOR }} aria-hidden /> }))}
+      />
+      <label className="flex items-center h-9 rounded-lg border border-line/15 bg-surface px-2.5 text-[13px] focus-within:ring-2 focus-within:ring-amber/40">
+        <span className="text-ink-faint mr-1.5 text-[12px] font-semibold">{currency}</span>
+        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" aria-label="Amount" className="w-full bg-transparent outline-none tabular-nums" autoFocus />
+      </label>
+      <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Note (optional): brand, campaign, which video…" aria-label="Note" className="sm:col-span-3 h-9 rounded-lg border border-line/15 bg-surface px-2.5 text-[13px]" />
+      <div className="sm:col-span-3 flex items-center gap-2">
+        <button type="submit" disabled={saving || !amount} className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] disabled:opacity-50">
+          {saving ? "Adding…" : "Add"}
+        </button>
+        <button type="button" onClick={onDone} className="rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function IncomeRow({ e, teamId, canEdit, money }: { e: Revenue["entries"][number]; teamId: string; canEdit: boolean; money: (n: number) => string }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <li className="flex items-center gap-3 py-2">
+      <span className="w-14 text-[12px] text-ink-faint tabular-nums flex-shrink-0">{niceDay(e.day)}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[13px] font-semibold truncate">{SOURCE_LABEL[e.source] ?? "Other"}</span>
+        {(e.note || e.video) && (
+          <span className="block text-[11.5px] text-ink-soft truncate">
+            {e.video && (
+              <Link href={e.video.kind === "short" ? `/shorts/${e.video.id}` : `/videos/${e.video.id}`} className="font-mono text-amber hover:underline mr-1.5">
+                #{e.video.number ?? "?"}
+              </Link>
+            )}
+            {e.note}
+          </span>
+        )}
+      </span>
+      <span className="text-right">
+        <b className="block text-[13px] tabular-nums">{money(e.amount)}</b>
+        {e.original && (
+          <span className="block text-[11px] text-ink-faint tabular-nums">
+            {new Intl.NumberFormat("en-US", { style: "currency", currency: e.original.currency }).format(e.original.amount)}
+          </span>
+        )}
+      </span>
+      {canEdit && (
+        <button
+          type="button"
+          disabled={busy}
+          aria-label="Remove this income"
+          onClick={async () => {
+            const ok = await confirm({ title: "Remove this income?", description: `${SOURCE_LABEL[e.source] ?? "Other"}, ${money(e.amount)} on ${niceDay(e.day)}.`, confirmLabel: "Remove", danger: true });
+            if (!ok) return;
+            setBusy(true);
+            const res = await deleteRevenueEntry(teamId, e.id);
+            setBusy(false);
+            if (res.error !== undefined) toast.error(res.error);
+            else router.refresh();
+          }}
+          className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-red hover:bg-red/10 disabled:opacity-50"
+        >
+          <CloseIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </li>
   );
 }
 

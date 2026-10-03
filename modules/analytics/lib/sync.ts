@@ -193,9 +193,52 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
   if ((acc.scopes ?? []).includes(STATS_SCOPES.youtube[1])) {
     try {
       const currency = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
-      const rev = rowsOf(await ytReport(token, { startDate: start, endDate: end, metrics: "estimatedRevenue", dimensions: "day", sort: "day", currency }));
-      const recs = rev.map((r) => ({ team_id: acc.team_id, platform: "youtube", day: String(r.day), content: "all", revenue: num(r.estimatedRevenue) ?? 0, currency, updated_at: new Date().toISOString() }));
-      if (recs.length) rows += await upsert(admin, "analytics_revenue_daily", recs, "team_id,platform,day,content");
+      const base = { startDate: start, endDate: end, dimensions: "day", sort: "day", currency };
+      // Revenue by stream (ads, YouTube Premium; the rest is memberships, Supers, Shopping…).
+      let rev: Record<string, unknown>[];
+      let detailed = true;
+      try {
+        rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue,estimatedAdRevenue,estimatedRedPartnerRevenue,grossRevenue" }));
+      } catch {
+        detailed = false;
+        rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue" }));
+      }
+      const now = new Date().toISOString();
+      const recs = rev.map((r) => ({
+        team_id: acc.team_id,
+        platform: "youtube",
+        day: String(r.day),
+        content: "all",
+        revenue: num(r.estimatedRevenue) ?? 0,
+        currency,
+        updated_at: now,
+        ...(detailed ? { ad_revenue: num(r.estimatedAdRevenue), premium_revenue: num(r.estimatedRedPartnerRevenue), gross_revenue: num(r.grossRevenue) } : {}),
+      }));
+      // Shorts vs long videos.
+      try {
+        const split = rowsOf(await ytReport(token, { ...base, dimensions: "day,creatorContentType", metrics: "estimatedRevenue" }));
+        const byKey = new Map<string, number>();
+        for (const r of split) {
+          const type = String(r.creatorContentType ?? "");
+          const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" || type === "LIVE_STREAM" ? "long" : null;
+          if (!content) continue;
+          const k = `${r.day}|${content}`;
+          byKey.set(k, (byKey.get(k) ?? 0) + (num(r.estimatedRevenue) ?? 0));
+        }
+        for (const [k, v] of byKey) {
+          const [day, content] = k.split("|");
+          recs.push({ team_id: acc.team_id, platform: "youtube", day, content, revenue: v, currency, updated_at: now });
+        }
+      } catch {}
+      if (recs.length) {
+        try {
+          rows += await upsert(admin, "analytics_revenue_daily", recs, "team_id,platform,day,content");
+        } catch (e) {
+          // Before migration 0061 the stream columns don't exist: save the totals alone.
+          if (!/ad_revenue|premium_revenue|gross_revenue|column/i.test(e instanceof Error ? e.message : "")) throw e;
+          rows += await upsert(admin, "analytics_revenue_daily", recs.map(({ team_id, platform, day, content, revenue, currency, updated_at }) => ({ team_id, platform, day, content, revenue, currency, updated_at })), "team_id,platform,day,content");
+        }
+      }
     } catch (e) {
       revenueNote = e instanceof Error ? `Revenue: ${e.message}` : "Revenue isn't available for this channel.";
     }
@@ -465,6 +508,29 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
   } catch {}
   rows += await upsert(admin, "analytics_daily", [...daily.values()], "team_id,platform,day,content");
 
+  // Followers by country (the latest snapshot), for the audience map. Meta
+  // renamed page_fans_country to page_follows_country; try the new one first.
+  let countries = 0;
+  for (const metric of ["page_follows_country", "page_fans_country"]) {
+    try {
+      const r = (await q(`${pageId}/insights`, { metric })) as { data?: { values?: { value: unknown; end_time: string }[] }[] };
+      const values = (r.data ?? []).flatMap((d) => d.values ?? []).filter((v) => v.value && typeof v.value === "object");
+      const last = values[values.length - 1];
+      if (!last) continue;
+      const today = daysAgo(0);
+      const recs = Object.entries(last.value as Record<string, unknown>)
+        .filter(([code]) => /^[A-Z]{2}$/.test(code))
+        .map(([code, v]) => ({ team_id: acc.team_id, platform: "facebook", metric: "followers", day: today, country: code, value: num(v) ?? 0 }))
+        .filter((x) => x.value > 0);
+      if (!recs.length) continue;
+      rows += await upsert(admin, "analytics_countries", recs, "team_id,platform,metric,day,country");
+      countries = recs.length;
+      break;
+    } catch {
+      /* not shared for this Page: the map just has no Facebook layer */
+    }
+  }
+
   // Posts with their numbers (views per post when Meta allows it; else without).
   const fields = "id,message,created_time,permalink_url,full_picture,shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)";
   let posts: Record<string, unknown>[] = [];
@@ -500,7 +566,7 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
   });
   rows += await upsert(admin, "analytics_content", recs, "team_id,platform,external_id");
   if (!ok) throw new ApiError(`Facebook refused every Page metric${failed.length ? ` (${failed[0]})` : ""}. Check the Page permissions (read_insights).`);
-  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length} posts` };
+  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length} posts${countries ? `, ${countries} countries` : ""}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +647,50 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
     }
   }
   return out;
+}
+
+/*
+ * Catch-up. The numbers are copied automatically every morning (the daily
+ * job below). If that didn't happen — the timer isn't set up, a platform was
+ * down, the app was asleep — the first person to open Analytics after 30
+ * hours starts a copy in the background, and their page refreshes when it's
+ * done. Nobody has to press Sync now.
+ */
+const CATCH_UP_AFTER_HOURS = 30;
+const recentCatchUps = new Map<string, number>();
+
+/** Is this team's copy overdue? If so, claims it (so only one visitor starts one) and says yes. */
+export async function claimAnalyticsCatchUp(teamId: string): Promise<boolean> {
+  try {
+    const now = Date.now();
+    if ((recentCatchUps.get(teamId) ?? 0) > now - 10 * 60_000) return false;
+    const admin = createAdminClient();
+    const [{ data: accounts }, { data: syncs }] = await Promise.all([
+      admin.from("social_accounts").select("platform, scopes").eq("team_id", teamId).eq("status", "active"),
+      admin.from("analytics_syncs").select("platform, last_run_at").eq("team_id", teamId),
+    ]);
+    const counted = ((accounts ?? []) as { platform: Account["platform"]; scopes: string[] | null }[]).filter((a) => hasStatsScopes(a.platform, a.scopes ?? []));
+    if (!counted.length) return false;
+    const cutoff = now - CATCH_UP_AFTER_HOURS * 3_600_000;
+    const lastRun = new Map((syncs ?? []).map((s) => [s.platform as string, Date.parse((s.last_run_at as string | null) ?? "") || 0]));
+    const neverRun = counted.some((a) => !lastRun.has(a.platform));
+    const overdue = counted.some((a) => (lastRun.get(a.platform) ?? 0) < cutoff);
+    if (!overdue) return false;
+    if (!neverRun) {
+      // Mark it started; whoever's update finds the old date first gets to run it.
+      const { data: claimed, error } = await admin
+        .from("analytics_syncs")
+        .update({ last_run_at: new Date(now).toISOString() })
+        .eq("team_id", teamId)
+        .lt("last_run_at", new Date(cutoff).toISOString())
+        .select("platform");
+      if (error || !claimed?.length) return false;
+    }
+    recentCatchUps.set(teamId, now);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The daily job: every team with a connected account (within a time budget). */

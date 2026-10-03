@@ -224,7 +224,8 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
 export type TeamPerson = Person & { memberId: string; roles: RoleId[] };
 
 /** Active teammates with roles — for the editor picker. Editors first. */
-export async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
+/* cache(): one read per request, however many places on the page need the team. */
+export const listTeamPeople = cache(async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
@@ -249,7 +250,7 @@ export async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
     const be = b.roles.includes("editor") ? 0 : 1;
     return ae - be || a.name.localeCompare(b.name);
   });
-}
+});
 
 export type DatedShort = { id: string; number: number; title: string; date: string };
 

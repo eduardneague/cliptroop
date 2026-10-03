@@ -1,42 +1,48 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** Thumbnail Studio: header, tool buttons, variations on the left, the big preview. */
+/** Thumbnail Studio: header, the thumbnails (a list on xl, a strip below), the preview card with its toolbar. */
 export default function Loading() {
   return (
-    <div role="status" aria-label="Loading" aria-busy="true" className="px-2.5 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+    <div role="status" aria-label="Loading" aria-busy="true" className="px-3 sm:px-6 py-3 sm:py-4 space-y-3">
       <span className="sr-only">Loading…</span>
-      <div className="flex items-center gap-2 flex-wrap" aria-hidden>
-        <Skeleton className="h-4 w-12 mr-1" />
-        <h1 className="text-[20px] sm:text-[24px] font-display font-semibold mr-2 text-ink-faint">Thumbnail Studio</h1>
-        <span className="flex-1" />
-        <Skeleton className="h-9 w-full sm:w-72 rounded-lg" />
-        <Skeleton className="h-9 w-full sm:w-44 rounded-lg" />
+      <div className="flex items-center gap-2.5" aria-hidden>
+        <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <h1 className="text-[19px] sm:text-[22px] font-display font-semibold leading-tight text-ink-faint">Thumbnail Studio</h1>
+          <Skeleton className="h-3 w-48" />
+        </div>
+        <Skeleton className="h-9 w-9 sm:w-24 rounded-lg" />
+        <Skeleton className="h-9 w-12 sm:w-28 rounded-lg" />
       </div>
-      <div className="flex items-center gap-2 flex-wrap" aria-hidden>
-        {[96, 112, 112, 96, 104].map((w, i) => (
-          <div key={i} className="skeleton h-9 rounded-lg" style={{ width: w }} />
-        ))}
-      </div>
-      <div className="grid gap-3 sm:gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)] items-start" aria-hidden>
-        <div className="min-w-0 rounded-2xl border border-line/10 bg-surface p-2.5">
-          <Skeleton className="h-3 w-40 mx-1.5 mb-3" />
-          <div className="flex lg:flex-col gap-2 overflow-hidden">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="flex-shrink-0 w-[168px] sm:w-[220px] lg:w-auto rounded-xl border border-line/10 p-2 space-y-2">
-                <Skeleton className="aspect-video w-full rounded-lg" />
-                <Skeleton className="h-3 w-3/4" />
+      <div className="grid gap-3 xl:gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)] items-start" aria-hidden>
+        <div className="min-w-0 rounded-2xl border border-line/10 bg-surface">
+          <div className="flex items-center justify-between px-3 pt-2.5 pb-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-8 w-16 rounded-lg" />
+          </div>
+          <div className="flex xl:flex-col gap-2 xl:gap-1 overflow-hidden px-3 xl:px-2 pb-3 xl:pb-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex-shrink-0 w-[128px] xl:w-auto xl:flex xl:gap-2.5 xl:p-1.5">
+                <Skeleton className="aspect-video w-full xl:w-[124px] rounded-lg flex-shrink-0" />
+                <div className="hidden xl:block flex-1 space-y-1.5 pt-1">
+                  <Skeleton className="h-3.5 w-full" />
+                  <Skeleton className="h-3.5 w-2/3" />
+                </div>
               </div>
             ))}
           </div>
         </div>
-        <div className="space-y-3">
-          <Skeleton className="w-full aspect-video max-h-[70vh] rounded-2xl" />
-          <div className="flex items-center gap-3">
-            <Skeleton className="w-10 h-10 rounded-full" />
-            <div className="flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
-            </div>
+        <div className="min-w-0 rounded-2xl border border-line/10 bg-surface overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 px-2.5 py-2 border-b border-line/10">
+            <Skeleton className="h-9 w-full sm:w-80 rounded-lg" />
+            <Skeleton className="h-9 w-40 rounded-lg" />
+            <span className="flex-1" />
+            <Skeleton className="h-9 w-9 rounded-lg" />
+            <Skeleton className="h-9 w-9 rounded-lg" />
+          </div>
+          <div className="p-2 sm:p-3 space-y-2">
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="w-full aspect-video max-h-[70vh] rounded-xl" />
           </div>
         </div>
       </div>

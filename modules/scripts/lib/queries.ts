@@ -16,7 +16,9 @@ export type ScriptRow = {
   updatedAt: string;
   updatedBy: { name: string; avatarUrl: string | null; color: string } | null;
 };
-export type DocListItem = { id: string; kind: DocKind; name: string; position: number; wordCount: number; updatedAt: string };
+/** The three default documents are steps of one flow: Script (write) → Review → Staging. */
+export type FlowStep = "write" | "review" | "staging";
+export type DocListItem = { id: string; kind: DocKind; name: string; position: number; wordCount: number; updatedAt: string; step: FlowStep | null };
 export type ScriptComment = {
   id: string;
   /** "comment" or "edit_idea" (Editing idea). */
@@ -60,11 +62,12 @@ const SELECT =
   "id, team_id, kind, name, position, content, content_text, word_count, version, updated_at, updated_by, editor:profiles!scripts_updated_by_fkey(username, full_name, email, avatar_url)";
 const col = (o: DocOwner) => ("short" in o ? (["short_video_id", o.short] as const) : (["long_video_id", o.long] as const));
 
-/** A video's documents, in order (script versions first, then research). */
-export const listDocs = cache(async (owner: DocOwner): Promise<DocListItem[]> => {
-  const supabase = await createClient();
+/** The documents of a video, in order. Before migration 0062 there's no step column: read without it. */
+async function readDocList(supabase: Awaited<ReturnType<typeof createClient>>, owner: DocOwner): Promise<DocListItem[]> {
   const [c, v] = col(owner);
-  const { data } = await supabase.from("scripts").select("id, kind, name, position, word_count, updated_at").eq(c, v).order("kind", { ascending: false }).order("position");
+  const read = (cols: string) => supabase.from("scripts").select(cols).eq(c, v).order("kind", { ascending: false }).order("position");
+  const first = await read("id, kind, name, position, word_count, updated_at, step");
+  const data = (first.error ? (await read("id, kind, name, position, word_count, updated_at")).data : first.data) as unknown as Record<string, unknown>[] | null;
   return (data ?? []).map((d) => ({
     id: d.id as string,
     kind: d.kind as DocKind,
@@ -72,8 +75,12 @@ export const listDocs = cache(async (owner: DocOwner): Promise<DocListItem[]> =>
     position: Number(d.position),
     wordCount: (d.word_count as number) ?? 0,
     updatedAt: d.updated_at as string,
+    step: (["write", "review", "staging"].includes(d.step as string) ? d.step : null) as FlowStep | null,
   }));
-});
+}
+
+/** A video's documents, in order (script versions first, then research). */
+export const listDocs = cache(async (owner: DocOwner): Promise<DocListItem[]> => readDocList(await createClient(), owner));
 
 export const getDoc = cache(async (id: string): Promise<ScriptRow | null> => {
   const supabase = await createClient();
@@ -102,16 +109,7 @@ export async function ensureDefaultDocs(owner: DocOwner, can: { script: boolean;
   if (can.script || can.research) {
     await supabase.rpc("ensure_script_docs", { p_short: "short" in owner ? owner.short : null, p_long: "long" in owner ? owner.long : null });
   }
-  const [c, v] = col(owner);
-  const { data } = await supabase.from("scripts").select("id, kind, name, position, word_count, updated_at").eq(c, v).order("kind", { ascending: false }).order("position");
-  return (data ?? []).map((d) => ({
-    id: d.id as string,
-    kind: d.kind as DocKind,
-    name: d.name as string,
-    position: Number(d.position),
-    wordCount: (d.word_count as number) ?? 0,
-    updatedAt: d.updated_at as string,
-  }));
+  return readDocList(supabase, owner);
 }
 
 /** Kept for the Script cards: the main script, created if missing. */

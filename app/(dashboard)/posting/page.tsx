@@ -34,10 +34,9 @@ export default async function PostingPage() {
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
-  const roles = (await getMembership(supabase, currentTeam.id))?.roles ?? [];
-  const manager = isMaster(roles) || roles.includes("publisher");
-
-  const [{ data: rows }, { data: accounts }, health] = await Promise.all([
+  const isManager = (roles: string[]) => isMaster(roles as Parameters<typeof isMaster>[0]) || roles.includes("publisher");
+  const [membership, { data: rows }, { data: accounts }, health] = await Promise.all([
+    getMembership(supabase, currentTeam.id),
     supabase
       .from("social_posts")
       .select(
@@ -48,8 +47,13 @@ export default async function PostingPage() {
       .order("scheduled_at", { ascending: true })
       .limit(200),
     supabase.from("social_accounts").select("platform, display_name, username, status, last_error").eq("team_id", currentTeam.id).in("platform", ["youtube", "instagram", "tiktok"]),
-    manager ? supabase.rpc("posting_health", { p_team: currentTeam.id }) : Promise.resolve({ data: null }),
+    // Managers only: asked as soon as the roles are known, alongside the rest.
+    getMembership(supabase, currentTeam.id).then((m) =>
+      isManager(m?.roles ?? []) ? supabase.rpc("posting_health", { p_team: currentTeam.id }).then((r) => ({ data: r.data as unknown })) : { data: null as unknown }
+    ),
   ]);
+  const roles = membership?.roles ?? [];
+  const manager = isManager(roles);
 
   const now = Date.now();
   const posts = ((rows ?? []) as unknown as Row[]).map((r) => ({ ...r, short: Array.isArray(r.short) ? r.short[0] : r.short }));
