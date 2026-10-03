@@ -6,6 +6,7 @@ import { colorForId } from "@/lib/avatar";
 import type { RoleId } from "@/lib/permissions/roles";
 import { useToast } from "./toast-provider";
 import { ArrowRightIcon, CloseIcon, ChevronRightIcon, SmileIcon, PaperclipIcon, GifIcon } from "./icons";
+import { sounds } from "@/lib/sounds";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -305,6 +306,7 @@ export function MentionInput({
   function submitMessage() {
     if (!value.trim() && files.length === 0) return;
     onSubmit(value.trim(), files);
+    sounds.send();
     setValue("");
     setFiles([]);
     setQuery(null);
@@ -337,7 +339,7 @@ export function MentionInput({
 
       <div className="relative flex items-center gap-1.5">
         {query !== null && items.length > 0 && (
-          <div className="absolute bottom-[calc(100%+6px)] left-0 w-64 max-h-64 overflow-y-auto styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg z-30 p-1">
+          <div className="absolute bottom-[calc(100%+6px)] left-0 w-64 max-h-64 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg z-30 p-1">
             {items.map((item, i) => {
               const active = i === highlighted;
               if (item.type === "rolesGroup") {
@@ -456,7 +458,7 @@ export function MentionInput({
                 placeholder="Search GIFs…"
                 className="w-full rounded-md border border-line/15 bg-surface-2 px-2.5 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-amber mb-2"
               />
-              <div className="max-h-64 overflow-y-auto styled-scroll grid grid-cols-3 gap-1.5">
+              <div className="max-h-64 overflow-y-auto overflow-x-hidden styled-scroll grid grid-cols-3 gap-1.5">
                 {gifLoading && (
                   <div className="col-span-3 text-center text-[11px] text-ink-faint py-6">Loading…</div>
                 )}
@@ -480,7 +482,7 @@ export function MentionInput({
           )}
 
           {menuView === "emoji" && (
-            <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5 animate-[modalin_.12s_ease]">
+            <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5 animate-[modalin_.12s_ease]">
               {EMOJI.map((e, i) => (
                 <button
                   key={i}

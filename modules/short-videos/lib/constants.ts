@@ -71,7 +71,3 @@ export function isShortType(v: unknown): v is ShortType {
   return typeof v === "string" && (SHORT_TYPES as readonly string[]).includes(v);
 }
 
-/** Same rule as the database's is_frameio_link(). */
-export function isFrameioLink(link: string | null | undefined) {
-  return !!link && /^https:\/\/([a-z0-9-]+\.)*(frame\.io|f\.io)\/\S+$/i.test(link.trim());
-}

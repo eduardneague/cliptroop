@@ -19,7 +19,7 @@ type Row = {
 export async function logSocial(
   teamId: string,
   platform: string,
-  action: "connected" | "reconnected" | "disconnected" | "refresh_failed" | "refreshed",
+  action: "connected" | "reconnected" | "disconnected" | "refresh_failed" | "refreshed" | "refused_taken",
   actorId: string | null,
   detail: Record<string, unknown> = {}
 ) {

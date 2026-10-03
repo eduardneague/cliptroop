@@ -76,7 +76,7 @@ export function Dialog({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center sm:p-4">
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:p-4">
       <div className="absolute inset-0 bg-black/50 animate-[fadein_.12s_ease]" onClick={onClose} aria-hidden />
       <div
         ref={boxRef}
@@ -84,7 +84,8 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-t-2xl sm:rounded-2xl border border-line/15 shadow-2xl outline-none animate-[modalin_.14s_ease]`}
+        // Phones: a floating card with breathing room on every side (never flush to the edges).
+        className={`relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-2xl border border-line/15 shadow-2xl outline-none animate-[modalin_.14s_ease]`}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3 border-b border-line/10">
           <div className="flex-1 min-w-0">
@@ -101,7 +102,7 @@ export function Dialog({
             <CloseIcon className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain styled-scroll px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4">{children}</div>
         {footer && (
           <div
             className="px-5 py-3 border-t border-line/10 flex justify-end gap-2"

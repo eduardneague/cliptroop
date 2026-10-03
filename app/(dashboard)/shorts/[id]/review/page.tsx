@@ -40,8 +40,10 @@ export default async function ShortReviewPage({ params }: { params: Promise<{ id
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
   // Masters, schedulers and this short's editor can upload versions.
+  // Uploading new versions is part of editing (not review or later).
   const canUpload =
-    master || roles.includes("publisher") || (!!membership && short.editor?.memberId === membership.teamMemberId);
+    short.stage === "editing" &&
+    (master || roles.includes("publisher") || (!!membership && short.editor?.memberId === membership.teamMemberId));
 
   return (
     <div className="px-4 sm:px-8 py-6 max-w-[1500px] mx-auto">

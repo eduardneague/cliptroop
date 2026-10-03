@@ -520,6 +520,7 @@ export async function updateShortSettings(
     defaultReviewer: string | null;
     defaultScheduler: string | null;
     defaultScripter: string | null;
+    youtubeDescription: string;
   }
 ) {
   const check = await requireMaster(teamId);
@@ -549,6 +550,7 @@ export async function updateShortSettings(
       default_short_reviewer_member_id: input.defaultReviewer || null,
       default_short_scheduler_member_id: input.defaultScheduler || null,
       default_short_scripter_member_id: input.defaultScripter || null,
+      default_youtube_description: String(input.youtubeDescription ?? "").slice(0, 5000),
     })
     .eq("id", teamId);
 
@@ -600,6 +602,117 @@ export async function disconnectSocialAccount(teamId: string, platform: string) 
   if (error) return { error: "Couldn't disconnect. Try again." };
   await logSocial(teamId, platform, "disconnected", access.user.id, { account: row.username ?? row.display_name });
 
+  revalidatePath("/team");
+  return { success: true };
+}
+
+/** The Facebook Pages the person who connected Facebook manages (to pick which one feeds Analytics). */
+export async function listFacebookPages(teamId: string): Promise<{ error: string } | { pages: { id: string; name: string; picture: string | null; current: boolean }[] }> {
+  const { facebookPages } = await import("@/lib/social/providers");
+  const { requireSocialManager } = await import("@/lib/social/access");
+  const { decryptToken } = await import("@/lib/social/crypto");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const access = await requireSocialManager(teamId);
+  if (!access.user) return { error: "Your session expired. Sign in again." };
+  if (!access.ok) return { error: "Only the master or a scheduler can change this." };
+  const admin = createAdminClient();
+  const { data: row } = await admin.from("social_accounts").select("external_id, refresh_token_enc").eq("team_id", teamId).eq("platform", "facebook").maybeSingle();
+  if (!row?.refresh_token_enc) return { error: "Connect Facebook again to pick a Page." };
+  try {
+    const pages = await facebookPages(decryptToken(row.refresh_token_enc as string));
+    return { pages: pages.map((p) => ({ id: p.id, name: p.name, picture: p.picture, current: p.id === row.external_id })) };
+  } catch {
+    return { error: "Facebook didn't answer. Reconnect Facebook and try again." };
+  }
+}
+
+/** Use another of your Pages for Analytics (its numbers are copied from the next sync). */
+export async function chooseFacebookPage(teamId: string, pageId: string) {
+  const { facebookPages } = await import("@/lib/social/providers");
+  const { requireSocialManager } = await import("@/lib/social/access");
+  const { decryptToken, encryptToken } = await import("@/lib/social/crypto");
+  const { logSocial } = await import("@/lib/social/tokens");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  if (!/^\d{3,30}$/.test(pageId)) return { error: "Unknown Page." };
+  const access = await requireSocialManager(teamId);
+  if (!access.user) return { error: "Your session expired. Sign in again." };
+  if (!access.ok) return { error: "Only the master or a scheduler can change this." };
+  const admin = createAdminClient();
+  const { data: row } = await admin.from("social_accounts").select("id, refresh_token_enc").eq("team_id", teamId).eq("platform", "facebook").maybeSingle();
+  if (!row?.refresh_token_enc) return { error: "Connect Facebook again to pick a Page." };
+  let page;
+  try {
+    page = (await facebookPages(decryptToken(row.refresh_token_enc as string))).find((p) => p.id === pageId);
+  } catch {
+    return { error: "Facebook didn't answer. Reconnect Facebook and try again." };
+  }
+  if (!page) return { error: "That Page isn't available to this Facebook account any more." };
+  // One Page, one team.
+  const { data: elsewhere } = await admin.from("social_accounts").select("id").eq("platform", "facebook").eq("external_id", page.id).neq("team_id", teamId).limit(1);
+  if (elsewhere?.length) return { error: "That Page is already connected to another VPlanner team. Disconnect it there first." };
+  const { error } = await admin
+    .from("social_accounts")
+    .update({ access_token_enc: encryptToken(page.token), external_id: page.id, display_name: page.name, username: null, avatar_url: page.picture, status: "active", last_error: null })
+    .eq("id", row.id);
+  if (error) return { error: error.code === "23505" ? "That Page is already connected to another VPlanner team. Disconnect it there first." : "Couldn't switch the Page. Try again." };
+  // The old Page's numbers no longer belong here: the next sync starts fresh (90 days).
+  await Promise.all([
+    admin.from("analytics_daily").delete().eq("team_id", teamId).eq("platform", "facebook"),
+    admin.from("analytics_content").delete().eq("team_id", teamId).eq("platform", "facebook"),
+    admin.from("analytics_syncs").delete().eq("team_id", teamId).eq("platform", "facebook"),
+  ]);
+  await logSocial(teamId, "facebook", "reconnected", access.user.id, { account: page.name });
+  revalidatePath("/team");
+  revalidatePath("/analytics");
+  return { success: true };
+}
+
+/** The team's colours for shorts and long videos (masters). */
+export async function updateTeamColors(teamId: string, shortColor: string, longColor: string) {
+  const hex = /^#[0-9a-fA-F]{6}$/;
+  if (!hex.test(shortColor) || !hex.test(longColor)) return { error: "Pick valid colours." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .update({ short_color: shortColor.toUpperCase(), long_color: longColor.toUpperCase() })
+    .eq("id", teamId)
+    .select("id");
+  if (error || !data?.length) return { error: "Only the master can change the team's colours." };
+  // Colours are used on every page.
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+/** Team → Long videos: default description and default scripter (masters). */
+export async function updateLongSettings(
+  teamId: string,
+  input: { description: string; scripter: string | null; people?: Partial<Record<"researcher" | "filmer" | "editor" | "packager" | "publisher", string | null>> }
+) {
+  const description = String(input.description ?? "");
+  if (description.length > 5000) return { error: "Descriptions can be up to 5,000 characters." };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("teams")
+    .update({
+      default_long_description: description,
+      default_long_scripter_member_id: input.scripter || null,
+      ...(input.people
+        ? {
+            default_long_researcher_id: input.people.researcher || null,
+            default_long_filmer_id: input.people.filmer || null,
+            default_long_editor_id: input.people.editor || null,
+            default_long_packager_id: input.people.packager || null,
+            default_long_publisher_id: input.people.publisher || null,
+          }
+        : {}),
+    })
+    .eq("id", teamId)
+    .select("id");
+  if (error?.code === "42703" || error?.code === "PGRST204") {
+    return { error: "The database is missing the newest update: run migration 0052 in Supabase, then save again." };
+  }
+  if (error) return { error: `Couldn't save: ${error.message}` };
+  if (!data?.length) return { error: "Only the master can change these settings." };
   revalidatePath("/team");
   return { success: true };
 }

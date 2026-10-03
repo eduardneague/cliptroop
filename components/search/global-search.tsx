@@ -164,8 +164,8 @@ export function GlobalSearch({
     return [
       { key: "new-project", label: "New long-form project", keywords: "create add idea video", href: "/videos/new", icon: <PlusIcon className="w-4 h-4" /> },
       { key: "new-short", label: "New short", keywords: "create add short reel tiktok script", href: "/shorts/new", icon: <PlusIcon className="w-4 h-4" /> },
-      { key: "shorts", label: "Short videos", keywords: "shorts reels tiktok posted schedule", href: "/shorts", icon: <ShortsIcon className="w-4 h-4" /> },
-      { key: "videos", label: "Long videos", keywords: "projects pipeline list", href: "/videos", icon: <VideoIcon className="w-4 h-4" /> },
+      { key: "shorts", label: "Short videos", keywords: "shorts reels tiktok posted schedule", href: "/shorts", icon: <ShortsIcon className="w-4 h-4 text-short" /> },
+      { key: "videos", label: "Long videos", keywords: "projects pipeline list", href: "/videos", icon: <VideoIcon className="w-4 h-4 text-long" /> },
       { key: "dashboard", label: "Dashboard", keywords: "home", href: "/dashboard", icon: <HomeIcon className="w-4 h-4" /> },
       { key: "team", label: "Team settings", keywords: "members roles invite", href: "/team", icon: <UsersIcon className="w-4 h-4" /> },
       { key: "settings", label: "Account settings", keywords: "profile avatar password privacy logout", href: "/settings", icon: <SettingsIcon className="w-4 h-4" /> },

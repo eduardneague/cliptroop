@@ -18,9 +18,13 @@ export function ScriptersButton({
   people,
   scripterIds,
   canManage,
+  action = setShortScripter,
 }: {
+  /** The short's (or long video's) id. */
   shortId: string;
   number: number;
+  /** How to save a change: shorts by default; long videos pass their own. */
+  action?: (id: string, memberId: string, add: boolean) => Promise<{ error?: string } | object>;
   people: TeamPerson[];
   scripterIds: string[];
   canManage: boolean;
@@ -29,7 +33,7 @@ export function ScriptersButton({
   const [ids, setIds] = useState(scripterIds);
   useEffect(() => setIds(scripterIds), [scripterIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = useAction(setShortScripter, {
+  const save = useAction(action as typeof setShortScripter, {
     success: (_id, _m, add) => (add ? "Scripter added. They've been notified." : "Scripter removed."),
     onError: () => setIds(scripterIds),
   });
@@ -46,7 +50,7 @@ export function ScriptersButton({
         type="button"
         onClick={() => setOpen(true)}
         title={shown.length ? `Scripters: ${shown.map((p) => p.name).join(", ")}` : "No scripters yet"}
-        className="inline-flex items-center gap-2 rounded-lg border border-line/15 pl-1.5 pr-2.5 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 flex-shrink-0"
+        className="inline-flex items-center gap-2 rounded-lg border border-line/15 pl-2 pr-2.5 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 flex-shrink-0"
       >
         <span className="flex -space-x-1.5">
           {shown.slice(0, 3).map((p) => (
@@ -55,8 +59,9 @@ export function ScriptersButton({
             </span>
           ))}
         </span>
-        <span className="hidden sm:inline">
-          {shown.length === 0 ? "Scripters" : shown.length > 3 ? `+${shown.length - 3}` : "Scripters"}
+        {/* Always a label (an empty button is just a sliver on phones). */}
+        <span className={shown.length ? "hidden sm:inline" : ""}>
+          {shown.length === 0 ? (canManage ? "+ Add scripters" : "No scripters") : shown.length > 3 ? `+${shown.length - 3}` : "Scripters"}
         </span>
       </button>
 

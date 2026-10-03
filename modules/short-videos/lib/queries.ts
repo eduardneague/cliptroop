@@ -3,7 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
 import type { RoleId } from "@/lib/permissions/roles";
-import { isFrameioLink, type Platform, type ShortStage, type ShortType } from "./constants";
+import { type Platform, type ShortStage, type ShortType } from "./constants";
 
 type ProfileRow = {
   username: string | null;
@@ -40,12 +40,14 @@ export type ShortListItem = {
   fileLink: string | null;
   /** team_member ids of the people who may write this short's script. */
   scripterIds: string[];
-  /** Final file is a Frame.io link (required before "Mark editing done"). */
-  hasFrameio: boolean;
+  /** A video version has been uploaded (required before "Mark editing done"). */
+  hasVideo: boolean;
   platforms: Platform[];
   postedPlatforms: Platform[];
   editor: ShortEditor | null;
   hasFileLink: boolean;
+  /** The reviewer's "changes requested" note (shown while it's back in editing). */
+  reviewNote?: string | null;
 };
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -69,7 +71,7 @@ const PEOPLE_SELECT =
   `reviewer:team_members!short_videos_reviewer_member_id_fkey${PERSON_EMBED}, ` +
   `scheduler:team_members!short_videos_scheduler_member_id_fkey${PERSON_EMBED}`;
 const LIST_SELECT =
-  "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, " +
+  "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, " +
   PEOPLE_SELECT +
   ", short_video_posts(platform), short_scripters(team_member_id), short_video_versions!short_video_versions_short_id_fkey(count)";
 
@@ -112,13 +114,13 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
     caption: (r.caption as string | null) ?? null,
-    // "Has a video": any uploaded version, or (legacy) a Frame.io link.
-    hasFrameio:
-      isFrameioLink(r.file_link as string | null) ||
+    // "Has a video": any uploaded version.
+    hasVideo:
       (((r.short_video_versions as { count: number }[] | undefined)?.[0]?.count ?? 0) > 0),
     fileLink: (r.file_link as string | null) ?? null,
     scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
     hasFileLink: !!r.file_link,
+    reviewNote: (r.review_note as string | null) ?? null,
   }));
 }
 
@@ -197,7 +199,7 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
     scheduler: toEditor(r.scheduler as RawEditor),
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
-    hasFrameio: isFrameioLink(r.file_link as string | null),
+    hasVideo: false,
     hasFileLink: !!r.file_link,
     fileLink: (r.file_link as string | null) ?? null,
     scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
@@ -222,7 +224,8 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
 export type TeamPerson = Person & { memberId: string; roles: RoleId[] };
 
 /** Active teammates with roles — for the editor picker. Editors first. */
-export async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
+/* cache(): one read per request, however many places on the page need the team. */
+export const listTeamPeople = cache(async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
@@ -247,7 +250,7 @@ export async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
     const be = b.roles.includes("editor") ? 0 : 1;
     return ae - be || a.name.localeCompare(b.name);
   });
-}
+});
 
 export type DatedShort = { id: string; number: number; title: string; date: string };
 
@@ -283,6 +286,8 @@ export type ShortTeamSettings = {
   defaultReviewer: string | null;
   defaultScheduler: string | null;
   defaultScripter: string | null;
+  /** Filled into every YouTube description when scheduling. */
+  youtubeDescription: string;
 };
 
 export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
@@ -290,7 +295,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
   const { data } = await supabase
     .from("teams")
     .select(
-      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id"
+      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description"
     )
     .eq("id", teamId)
     .maybeSingle();
@@ -304,6 +309,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
     defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
+    youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
   };
 }
 

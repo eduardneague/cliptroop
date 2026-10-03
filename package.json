@@ -1,6 +1,6 @@
 {
   "name": "vplanner",
-  "version": "0.1.0",
+  "version": "1.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -9,10 +9,16 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "node scripts/run-tests.mjs",
+    "db:test": "bash scripts/db/test-from-scratch.sh",
+    "db:baseline": "bash scripts/db/baseline.sh",
     "dev:webpack": "next dev",
     "postinstall": "node scripts/copy-vendor.mjs"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@tiptap/extension-highlight": "^3.31.3",

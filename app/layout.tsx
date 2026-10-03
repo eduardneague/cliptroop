@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
+import { ErrorReporter } from "@/components/error-reporter";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -63,12 +64,13 @@ export default function RootLayout({
         <script
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
-            // Also applies the user's "Animations off" choice before first paint.
-            __html: `try{if(localStorage.getItem('vp-theme')==='dark')document.documentElement.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')document.documentElement.dataset.motion=m}catch(e){}`,
+            // Also applies the user's "Animations off" choice and colour theme before first paint.
+            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p))d.dataset.palette=p}catch(e){}`,
           }}
         />
       </head>
       <body className="font-body antialiased">
+        <ErrorReporter />
         <AuthHashHandler />
         {children}
       </body>

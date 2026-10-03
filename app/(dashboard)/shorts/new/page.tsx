@@ -23,21 +23,22 @@ export default async function NewShortPage() {
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first from the sidebar.</div>;
 
-  const membership = await getMembership(supabase, currentTeam.id);
+  // The queue is rolled forward first (new day), then the dates are read;
+  // the rest loads alongside.
+  const [membership, everyone, settings, limits, [planned, nextSlot, queueStart]] = await Promise.all([
+    getMembership(supabase, currentTeam.id),
+    listTeamPeople(currentTeam.id),
+    getShortSettings(currentTeam.id),
+    listDayLimits(currentTeam.id),
+    refreshShortQueue(currentTeam.id).then(() =>
+      Promise.all([listPlannedDates(currentTeam.id), getNextShortSlot(currentTeam.id), getQueueStart(currentTeam.id)])
+    ),
+  ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
   const canCreate = master || roles.includes("publisher");
-
-  await refreshShortQueue(currentTeam.id);
-  const [people, planned, settings, nextSlot, limits, queueStart] = await Promise.all([
-    // Masters and schedulers pick the people (scripters, editor, reviewer, scheduler).
-    master || roles.includes("publisher") ? listTeamPeople(currentTeam.id) : Promise.resolve([]),
-    listPlannedDates(currentTeam.id),
-    getShortSettings(currentTeam.id),
-    getNextShortSlot(currentTeam.id),
-    listDayLimits(currentTeam.id),
-    getQueueStart(currentTeam.id),
-  ]);
+  // Masters and schedulers pick the people (scripters, editor, reviewer, scheduler).
+  const people = canCreate ? everyone : [];
 
   return (
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-2xl mx-auto">

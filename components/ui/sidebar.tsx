@@ -4,6 +4,8 @@ import type { TeamSummary } from "@/lib/teams";
 import { initialsFor } from "@/lib/avatar";
 import { SidebarNav } from "./sidebar-nav";
 import { SettingsIcon } from "./icons";
+import { WhatsNewButton } from "./whats-new";
+import { Brand } from "./clip-logo";
 
 export function Sidebar({
   teams,
@@ -23,18 +25,20 @@ export function Sidebar({
   username: string | null;
 }) {
   return (
-    <aside className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto styled-scroll">
-      <div className="mb-4">
+    <aside className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden styled-scroll">
+      <Link href="/dashboard" aria-label="VPlanner home" className="flex items-center px-1.5 pt-0.5 pb-3 rounded-lg">
+        <Brand />
+      </Link>
+      <div className="mb-5">
         <WorkspaceSwitcher teams={teams} currentTeam={currentTeam} />
-      </div>
-
-      <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
-        Workspace
       </div>
 
       <SidebarNav />
 
-      <div className="mt-auto pt-3 border-t border-line/10">
+      <div className="mt-auto">
+        <WhatsNewButton variant="sidebar" className="mb-2" />
+      </div>
+      <div className="pt-3 border-t border-line/10">
         <div className="flex items-center gap-1">
           <Link
             href={username ? `/u/${username}` : "/settings"}

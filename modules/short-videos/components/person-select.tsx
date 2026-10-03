@@ -1,17 +1,21 @@
 "use client";
 
+import { ScripterPicker } from "./scripter-picker";
 import { Select, type SelectOption } from "@/components/ui/select";
 import type { RoleId } from "@/lib/permissions/roles";
 import type { TeamPerson } from "../lib/queries";
 import { PersonAvatar } from "./person-chip";
 
-export type PersonKind = "editor" | "reviewer" | "scheduler" | "scripter";
+export type PersonKind = "editor" | "reviewer" | "scheduler" | "scripter" | "researcher" | "filmer" | "packager";
 
 const ROLE_FOR: Record<PersonKind, RoleId[]> = {
   editor: ["editor", "master"], // masters can take on any job
   reviewer: ["master"],
   scheduler: ["publisher", "master"],
   scripter: ["scripter", "master"],
+  researcher: ["researcher", "master"],
+  filmer: ["filmer", "master"],
+  packager: ["packager", "master"],
 };
 
 const EMPTY: Record<PersonKind, string> = {
@@ -19,7 +23,11 @@ const EMPTY: Record<PersonKind, string> = {
   reviewer: "Any master",
   scheduler: "Any scheduler",
   scripter: "No default scripter",
+  researcher: "No researcher yet",
+  filmer: "No filmer yet",
+  packager: "No packager yet",
 };
+const GROUP: Partial<Record<PersonKind, string>> = { researcher: "Researchers", filmer: "Filmers", packager: "Packagers" };
 
 /** Build the option list for a role picker (shared with the table's editor cell). */
 export function personOptions(kind: PersonKind, people: TeamPerson[], currentId: string | null): SelectOption[] {
@@ -56,7 +64,9 @@ export function personOptions(kind: PersonKind, people: TeamPerson[], currentId:
             ? p.roles.includes("editor") ? "Editors" : "Masters"
             : kind === "scripter"
               ? p.roles.includes("scripter") ? "Scripters" : "Masters"
-              : p.roles.includes("publisher") ? "Schedulers" : "Masters"
+              : GROUP[kind]
+                ? p.roles.includes(ROLE_FOR[kind][0]) ? GROUP[kind]! : "Masters"
+                : p.roles.includes("publisher") ? "Schedulers" : "Masters"
       )
     ),
     ...others.map((p) => toOption(p, "Teammates")),
@@ -68,6 +78,10 @@ export function personOptions(kind: PersonKind, people: TeamPerson[], currentId:
  *   scheduler → Schedulers (and Masters)
  *   reviewer  → Masters first, then anyone on the team
  * Whoever is currently set is always listed, even if their roles changed.
+ */
+/**
+ * Pick ONE person for a role: the same chip component as every other
+ * assignment in the app (avatar chip with ×, or "+ Add …" when empty).
  */
 export function PersonSelect({
   kind,
@@ -83,13 +97,15 @@ export function PersonSelect({
   disabled?: boolean;
 }) {
   return (
-    <Select
-      value={value}
-      onChange={onChange}
-      options={personOptions(kind, people, value)}
-      emptyOption={EMPTY[kind]}
+    <ScripterPicker
+      people={people}
+      value={value ? [value] : []}
+      kind={kind}
+      max={1}
       disabled={disabled}
-      ariaLabel={kind[0].toUpperCase() + kind.slice(1)}
+      emptyHint={kind === "reviewer" ? "Any master" : kind === "scheduler" ? "Any scheduler" : undefined}
+      onAdd={(id) => onChange(id)}
+      onRemove={() => onChange(null)}
     />
   );
 }

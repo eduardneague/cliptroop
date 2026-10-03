@@ -122,16 +122,26 @@ Files in `supabase/migrations/` are run in order on BOTH Supabase projects
 (staging first, then production). Personal one-off SQL goes in
 `supabase/scratch/` (gitignored) — never in `migrations/`.
 
+Since 1.8 the **Database** GitHub Action runs them (push to `staging` →
+staging, push to `main` → production, or by hand from the Actions tab);
+setup and how to write one: `scripts/db/README.md`. Every push also runs
+**CI**: type check, lint, `npm test`, a production build, and every
+migration on an empty database.
+
 ## Performance conventions (follow these for every new feature)
 
 **Database**
 - Every new column you filter, join or sort by gets an index in the same
   migration. Postgres does NOT index foreign keys automatically.
+  (0064 indexed every foreign key that was missing one; CI's
+  "migrations apply from scratch" check runs every migration.)
 - Read (SELECT) policies check membership with the set helpers, never a
   per-row function: `team_id in (select my_team_ids())`,
   `project_id in (select my_project_ids())`,
-  `recipient_id = (select auth.uid())`. The `(select …)` wrapper is what
-  makes Postgres evaluate it once per query instead of once per row.
+  `recipient_id = (select auth.uid())`, masters with
+  `team_id in (select my_master_team_ids())`. The `(select …)` wrapper is
+  what makes Postgres evaluate it once per query instead of once per row
+  (0064 rewrote every older rule that still asked per row).
 - Never write a single `FOR ALL` policy — split into insert / update /
   delete so reads don't pay for write checks.
 - Select only the columns a screen needs; filter child rows in the query
@@ -140,6 +150,14 @@ Files in `supabase/migrations/` are run in order on BOTH Supabase projects
 **Server (pages & actions)**
 - Independent queries go in ONE `Promise.all` — never `await` them one by
   one. Each sequential await is a full round trip to the database.
+- Don't wait for your roles before loading what doesn't depend on them:
+  read it in the same batch as `getMembership()` (the database already
+  hides what isn't yours) and drop it afterwards for people who can't see
+  it — see `app/(dashboard)/team/page.tsx`. When something MUST wait (the
+  shorts queue refresh), chain only the dependent reads onto it with
+  `.then()` inside the batch, as `shorts/page.tsx` does.
+- A promise started early and awaited later gets `.catch(() => {})` right
+  away, so an early failure isn't reported twice (`shorts/[id]/page.tsx`).
 - Anything two places in the same request need (a project, the user, a
   membership) is wrapped in React `cache()` — see
   `modules/long-videos/lib/queries.ts` and `lib/supabase/get-user.ts`.

@@ -1,3 +1,4 @@
+import { ShortsIcon, VideoIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/avatar";
 
 type TeamLike = { name: string; color: string; logo_url: string | null };
@@ -51,33 +52,27 @@ export function ProjectThumb({ url, color }: { url: string | null; color: string
       style={
         url
           ? undefined
-          : { background: `linear-gradient(135deg, color-mix(in srgb, ${color} 35%, transparent), color-mix(in srgb, ${color} 8%, transparent))` }
+          : { background: `color-mix(in srgb, ${color} 18%, transparent)` }
       }
     >
-      {url && (
+      {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img loading="lazy" decoding="async" src={url} alt="" className="w-full h-full object-cover" />
+      ) : (
+        // No thumbnail yet: the long-video icon, so it's clearly a long video.
+        <span className="w-full h-full flex items-center justify-center text-long">
+          <VideoIcon className="w-5 h-5" />
+        </span>
       )}
     </span>
   );
 }
 
-/** Vertical 9:16 tile for shorts, tinted by stage. */
-export function ShortThumb({ color }: { color: string }) {
+/** Short: the solid portrait icon in the shorts color, on a matching tile. */
+export function ShortThumb(_: { color?: string }) {
   return (
-    <span
-      className="w-14 h-8 rounded-md flex-shrink-0 flex items-center justify-center border border-line/10"
-      style={{ background: `color-mix(in srgb, ${color} 12%, transparent)` }}
-    >
-      <span
-        className="w-[14px] h-[24px] rounded-[3px] border-[1.5px] flex items-center justify-center"
-        style={{ borderColor: color }}
-      >
-        <span
-          className="w-0 h-0 border-y-[3.5px] border-y-transparent border-l-[5px]"
-          style={{ borderLeftColor: color }}
-        />
-      </span>
+    <span className="w-14 h-8 rounded-md flex-shrink-0 flex items-center justify-center bg-short/12 border border-short/20 text-short">
+      <ShortsIcon className="w-5 h-5" />
     </span>
   );
 }

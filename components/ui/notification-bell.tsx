@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -9,12 +10,13 @@ import {
   respondToTeamInvite,
   respondToOwnershipTransfer,
 } from "@/app/(dashboard)/notification-actions";
-import { relativeTime } from "@/lib/relative-time";
 import { BellIcon } from "./icons";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
+import { ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { sounds } from "@/lib/sounds";
 
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
@@ -55,6 +57,20 @@ export type NotificationItem = {
     ok?: boolean;
     message?: string;
     version?: number | null;
+    /** Where the notification leads (e.g. a script comment). */
+    href?: string;
+    /** Meetings */
+    meetingTitle?: string;
+    startsAt?: string;
+    location?: string;
+    when?: string;
+    dueDate?: string | null;
+    docName?: string;
+    commentKind?: "comment" | "edit_idea";
+    /** script_handoff: the step it was sent to. */
+    toStep?: "review" | "staging";
+    /** app_alert: where it happened. */
+    where?: string;
   } | null;
 };
 
@@ -87,23 +103,51 @@ function actionableStatus(n: NotificationItem): string | null {
 // notifications with no metadata, which keeps the old simple dot.
 function LeadingVisual({ n }: { n: NotificationItem }) {
   const m = n.metadata;
-  if (!m) return null;
+  // What it's about: a short (vertical icon) or a long video (horizontal),
+  // the same icons as in search.
+  const TypeIcon = n.short_id ? ShortsIcon : n.project_id ? VideoIcon : null;
+  const failed = m?.ok === false;
 
-  if (m.actor) {
+  if (n.kind?.startsWith("meeting") && !m?.actor) {
     return (
-      <span
-        className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
-        style={{ background: "#888" }}
-      >
-        {m.actor.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={m.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initialsFor(m.actor.name)
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-violet/15 text-violet" aria-label="Meeting">
+        <UsersIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  if (m?.actor) {
+    return (
+      <span className="relative flex-shrink-0">
+        <span
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden"
+          style={{ background: "#888" }}
+        >
+          {m.actor.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img loading="lazy" decoding="async" src={m.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            initialsFor(m.actor.name)
+          )}
+        </span>
+        {TypeIcon && (
+          <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-[5px] bg-surface ring-1 ring-line/20 flex items-center justify-center ${n.short_id ? "text-short" : "text-long"}`}>
+            <TypeIcon className="w-2.5 h-2.5" />
+          </span>
         )}
       </span>
     );
   }
+  if (TypeIcon && (!m || !m.team)) {
+    return (
+      <span
+        className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${failed ? "bg-red/15 text-red" : n.short_id ? "bg-short/15 text-short" : "bg-long/15 text-long"}`}
+        aria-label={n.short_id ? "Short video" : "Long video"}
+      >
+        <TypeIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  if (!m) return null;
   if (m.team) {
     return (
       <span
@@ -130,6 +174,12 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
     );
   }
   return null;
+}
+
+/** "Sat, Oct 10, 18:00" in your own time zone (the list only renders in the browser). */
+function meetingWhen(iso: string) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}, ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 // Rich, structured body — bold names/teams, colored role pills — for
@@ -294,6 +344,67 @@ function RichBody({ n }: { n: NotificationItem }) {
           . You have work to do.
         </>
       );
+    case "script_mention":
+      return (
+        <>
+          <b>{m.actor?.name}</b> mentioned you in {m.commentKind === "edit_idea" ? "an editing idea" : "a comment"} on <ShortRef m={m} />
+          {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
+    case "script_people":
+      return (
+        <>
+          <b>{m.actor?.name}</b> added you to the <b>{m.toStep === "staging" ? "staging" : "review"}</b> of <ShortRef m={m} />. You&rsquo;ll be told when it&rsquo;s your turn.
+        </>
+      );
+    case "meeting_action_done":
+      return (
+        <>
+          <b>{m.actor?.name}</b> finished an action item from <b>{m.meetingTitle}</b>: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
+    case "revenue_access":
+      return (
+        <>
+          <b>{m.actor?.name}</b> let you see <b>{m.team?.name}</b>&rsquo;s revenue in Analytics.
+        </>
+      );
+    case "app_alert":
+      return (
+        <>
+          <b>Something broke</b>{m.snippet ? <>: &ldquo;{m.snippet}&rdquo;</> : null}
+          {m.where ? <span className="text-ink-faint"> · {m.where}</span> : null}
+        </>
+      );
+    case "script_handoff":
+      return (
+        <>
+          <b>{m.actor?.name}</b> sent <ShortRef m={m} /> to <b>{m.toStep === "staging" ? "staging" : "review"}</b>. It&rsquo;s your turn
+          {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}
+        </>
+      );
+    case "meeting_scheduled":
+    case "meeting_changed":
+    case "meeting_cancelled":
+      return (
+        <>
+          <b>{m.actor?.name}</b> {n.kind === "meeting_scheduled" ? "invited you to" : n.kind === "meeting_changed" ? "moved" : "cancelled"} <b>{m.meetingTitle}</b>
+          {m.startsAt && n.kind !== "meeting_cancelled" ? <span className="text-ink-soft"> · {meetingWhen(m.startsAt)}{m.location ? `, ${m.location}` : ""}</span> : null}
+        </>
+      );
+    case "meeting_reminder":
+      return (
+        <>
+          <b>{m.meetingTitle}</b> starts {m.when}
+          {m.startsAt ? <span className="text-ink-soft"> · {meetingWhen(m.startsAt)}{m.location ? `, ${m.location}` : ""}</span> : null}
+        </>
+      );
+    case "meeting_action":
+      return (
+        <>
+          <b>{m.actor?.name}</b> gave you an action item from <b>{m.meetingTitle}</b>: &ldquo;{m.snippet}&rdquo;
+        </>
+      );
     case "mention":
       return (
         <>
@@ -376,6 +487,7 @@ export function NotificationBell({
           ) {
             router.refresh();
           }
+          if (payload.eventType === "INSERT") sounds.notify();
           setItems((cur) => {
             if (payload.eventType === "INSERT") {
               return [row, ...cur.filter((n) => n.id !== id)].slice(0, 50);
@@ -431,7 +543,10 @@ export function NotificationBell({
     if (isActionable(n)) return; // handled by its own Accept/Decline buttons
     setOpen(false);
     if (!n.is_read) markReadLocally(n.id);
-    if (n.short_id) {
+    // Some notifications lead somewhere specific (a comment in a script).
+    if (n.metadata?.href?.startsWith("/")) {
+      router.push(n.metadata.href);
+    } else if (n.short_id) {
       router.push(`/shorts/${n.short_id}`);
     } else if (n.project_id) {
       router.push(n.stage ? `/videos/${n.project_id}?tab=${n.stage}` : `/videos/${n.project_id}`);
@@ -516,7 +631,7 @@ export function NotificationBell({
               </button>
             )}
           </div>
-          <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overscroll-contain styled-scroll">
+          <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {items.length === 0 ? (
               <div className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
                 Nothing yet.
@@ -549,7 +664,7 @@ export function NotificationBell({
                         )}
                       </span>
                       <span className="block text-[10.5px] text-ink-soft mt-1">
-                        {relativeTime(n.created_at)}
+                        <Ago iso={n.created_at} />
                       </span>
                       {isPendingAction && (
                         <div className="flex gap-2 mt-2">

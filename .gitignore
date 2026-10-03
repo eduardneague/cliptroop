@@ -35,3 +35,6 @@ supabase/scratch/
 /public/vendor/
 
 certificates
+# Supabase CLI working files
+supabase/.temp/
+supabase/.branches/

@@ -43,9 +43,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verifies the session (and refreshes it when it's about to expire).
+  // getClaims() checks the token's signature locally with the project's
+  // public key when the project uses asymmetric JWT signing keys (Supabase →
+  // Project Settings → JWT Keys): no round trip to Supabase Auth on every
+  // request. With the older shared secret it asks Supabase Auth, exactly
+  // like getUser() did. Either way the identity is verified.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  const user = claims?.sub ? { id: claims.sub as string, email: (claims.email as string | undefined) ?? null } : null;
 
   const isPublicRoute =
     request.nextUrl.pathname.startsWith("/login") ||
@@ -54,7 +60,10 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/cron/") ||
     // Public pages the platform reviews require.
     request.nextUrl.pathname === "/privacy" ||
-    request.nextUrl.pathname === "/terms";
+    request.nextUrl.pathname === "/terms" ||
+    // Status page + health check: public (details only for the alert people).
+    request.nextUrl.pathname === "/status" ||
+    request.nextUrl.pathname === "/api/health";
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

@@ -1,125 +1,95 @@
 "use client";
 
-import { useOptimistic } from "react";
+import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useAction } from "@/lib/hooks/use-action";
-import { Select } from "@/components/ui/select";
-import { CloseIcon } from "@/components/ui/icons";
-import { assignMember, removeAssignee } from "./actions";
 import { useConfirm } from "@/components/ui/confirm-provider";
+import { useToast } from "@/components/ui/toast-provider";
+import { ScripterPicker } from "@/modules/short-videos/components/scripter-picker";
+import type { PersonKind } from "@/modules/short-videos/components/person-select";
+import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import type { PipelineStage } from "@/lib/permissions/roles";
+import { assignMember, removeAssignee, setLongScripter } from "./actions";
 
-type EligibleMember = { teamMemberId: string; name: string; roles: string; color?: string };
 type Assignee = { rowId: string; teamMemberId: string; name: string; color: string };
 
+/** Which role picks people for each step. */
+export const STEP_KIND: Record<PipelineStage, PersonKind> = {
+  ideate: "reviewer",
+  research: "researcher",
+  script: "scripter",
+  film: "filmer",
+  edit: "editor",
+  review: "reviewer",
+  package: "packager",
+  publish: "scheduler",
+  done: "scheduler",
+};
+
+/**
+ * The step's people: the same picker as everywhere (chips with × and
+ * "+ Add …"). Assigning notifies the person. Masters edit; others see.
+ */
 export function AssigneeRow({
   projectId,
   stage,
   isMaster,
   assignees,
-  eligible,
+  people,
 }: {
   projectId: string;
   stage: PipelineStage;
   isMaster: boolean;
   assignees: Assignee[];
-  eligible: EligibleMember[];
+  people: TeamPerson[];
 }) {
   const confirm = useConfirm();
-
-  // Instant UI: the chip appears / disappears the moment you act; if the
-  // server rejects it, React reverts it and useAction shows the error.
-  const [shown, applyOptimistic] = useOptimistic(
-    assignees,
-    (state: Assignee[], change: { type: "add"; member: EligibleMember } | { type: "remove"; rowId: string }) =>
-      change.type === "add"
-        ? [
-            ...state,
-            {
-              rowId: `tmp-${change.member.teamMemberId}`,
-              teamMemberId: change.member.teamMemberId,
-              name: change.member.name,
-              color: change.member.color ?? "#999",
-            },
-          ]
-        : state.filter((a) => a.rowId !== change.rowId)
+  const [shown, apply] = useOptimistic(assignees, (state: Assignee[], c: { type: "add"; id: string } | { type: "remove"; id: string }) =>
+    c.type === "add" ? [...state, { rowId: `tmp-${c.id}`, teamMemberId: c.id, name: "", color: "" }] : state.filter((a) => a.teamMemberId !== c.id)
   );
-
-  const assign = useAction(assignMember, {
-    optimistic: (_projectId, _stage, memberId) => {
-      const member = eligible.find((e) => e.teamMemberId === memberId);
-      if (member) applyOptimistic({ type: "add", member });
-    },
-    success: "Assigned. They've been notified",
-  });
-
-  const unassign = useAction(removeAssignee, {
-    optimistic: (_projectId, rowId) => applyOptimistic({ type: "remove", rowId }),
-  });
-
-  const pending = assign.pending || unassign.pending;
-  const assignedIds = new Set(shown.map((a) => a.teamMemberId));
-  const available = eligible.filter((e) => !assignedIds.has(e.teamMemberId));
-
-  async function handleRemove(a: Assignee) {
-    if (a.rowId.startsWith("tmp-")) return; // still being saved
-    const ok = await confirm({
-      title: `Unassign ${a.name}?`,
-      description: `They'll no longer be tagged on this stage.`,
-      confirmLabel: "Unassign",
-      danger: true,
-    });
-    if (!ok) return;
-    unassign.run(projectId, a.rowId);
-  }
-
-  function handleAssign(id: string) {
-    assign.run(projectId, stage, id);
-  }
+  const [, start] = useTransition();
+  const assign = useAction(assignMember, { success: () => "Assigned" });
+  const unassign = useAction(removeAssignee, { success: () => "Removed" });
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {shown.length === 0 && (
-        <span className="text-sm text-ink-soft">Nobody assigned yet.</span>
-      )}
-      {shown.map((a) => (
-        <span
-          key={a.rowId}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line/15 bg-surface-2 pl-1 pr-2.5 py-1 text-[12.5px] font-medium"
-        >
-          <span
-            className="w-4 h-4 rounded-full flex-shrink-0"
-            style={{ background: a.color }}
-          />
-          {a.name}
-          {isMaster && (
-            <button
-              onClick={() => handleRemove(a)}
-              disabled={pending}
-              className="text-ink-faint hover:text-red ml-0.5"
-              aria-label={`Remove ${a.name}`}
-            >
-              <CloseIcon className="w-3 h-3" />
-            </button>
-          )}
-        </span>
-      ))}
-      {isMaster && available.length > 0 && (
-        <Select
-          variant="pill"
-          value={null}
-          disabled={pending}
-          onChange={(memberId) => memberId && handleAssign(memberId)}
-          options={available.map((m) => ({ value: m.teamMemberId, label: m.name, hint: m.roles }))}
-          renderValue={() => <span>+ Assign…</span>}
-          ariaLabel="Assign someone to this stage"
-        />
-      )}
-      {isMaster && available.length === 0 && shown.length === 0 && (
-        <span className="text-[11.5px] text-ink-soft">
-          Nobody holds a role for this stage yet. Assign one from the Team
-          page.
-        </span>
-      )}
-    </div>
+    <ScripterPicker
+      people={people}
+      value={shown.map((a) => a.teamMemberId)}
+      kind={STEP_KIND[stage]}
+      readOnly={!isMaster}
+      disabled={assign.pending || unassign.pending}
+      onAdd={(id) =>
+        start(() => {
+          apply({ type: "add", id });
+          assign.run(projectId, stage, id);
+        })
+      }
+      onRemove={async (id) => {
+        const row = assignees.find((a) => a.teamMemberId === id);
+        const person = people.find((p) => p.memberId === id);
+        if (!row) return;
+        if (!(await confirm({ title: `Remove ${person?.name ?? "them"}?`, description: "They'll no longer be tagged on this step.", confirmLabel: "Remove", danger: true }))) return;
+        start(() => {
+          apply({ type: "remove", id });
+          unassign.run(projectId, row.rowId);
+        });
+      }}
+    />
   );
+}
+
+/** Script step: the scripters ARE the step's people (one control, no duplicates). */
+export function ScriptersRow({ projectId, people, scripterIds, isMaster }: { projectId: string; people: TeamPerson[]; scripterIds: string[]; isMaster: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [shown, apply] = useOptimistic(scripterIds, (state: string[], c: { add: boolean; id: string }) => (c.add ? [...state, c.id] : state.filter((x) => x !== c.id)));
+  const [, start] = useTransition();
+  const change = (id: string, add: boolean) =>
+    start(async () => {
+      apply({ add, id });
+      const r = await setLongScripter(projectId, id, add);
+      if (r.error) toast.error(r.error);
+      router.refresh();
+    });
+  return <ScripterPicker people={people} value={shown} kind="scripter" readOnly={!isMaster} onAdd={(id) => change(id, true)} onRemove={(id) => change(id, false)} />;
 }

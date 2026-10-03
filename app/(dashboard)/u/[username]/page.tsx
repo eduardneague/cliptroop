@@ -3,6 +3,7 @@ import { getProfileByHandle } from "@/lib/profiles";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
+import { InviteToTeam } from "./invite-to-team";
 import { colorForId, initialsFor } from "@/lib/avatar";
 import Link from "next/link";
 
@@ -56,6 +57,27 @@ export default async function PublicProfilePage({
     commonTeams = (visibleTeams ?? []).filter((t: { id: string }) => myTeamIds.has(t.id));
   }
 
+  // Teams where the viewer is master and this person isn't a member yet.
+  let invitable: { id: string; name: string; color: string }[] = [];
+  if (currentUser && !isSelf) {
+    const [{ data: mine }, { data: theirs }] = await Promise.all([
+      supabase
+        .from("team_members")
+        .select("team_id, teams(name, color), member_roles!inner(role)")
+        .eq("user_id", currentUser.id)
+        .eq("status", "active")
+        .eq("member_roles.role", "master"),
+      supabase.from("team_members").select("team_id").eq("user_id", profile.id),
+    ]);
+    const inTeam = new Set((theirs ?? []).map((t) => t.team_id as string));
+    invitable = (mine ?? [])
+      .filter((m) => !inTeam.has(m.team_id as string))
+      .map((m) => {
+        const t = (Array.isArray(m.teams) ? m.teams[0] : m.teams) as { name: string; color: string } | null;
+        return { id: m.team_id as string, name: t?.name ?? "Team", color: t?.color ?? "#999" };
+      });
+  }
+
   const name = profile.full_name || profile.username || "Unnamed member";
   const color = colorForId(profile.id);
   const joined = new Date(profile.created_at).toLocaleDateString("en-US", {
@@ -69,7 +91,12 @@ export default async function PublicProfilePage({
 
   return (
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-2xl mx-auto space-y-6">
-      <div className="rounded-2xl border border-line/10 bg-surface p-6 sm:p-8">
+      <div className="relative rounded-2xl border border-line/10 bg-surface p-6 sm:p-8">
+        {invitable.length > 0 && (
+          <div className="sm:absolute sm:right-6 sm:top-6 mb-4 sm:mb-0">
+            <InviteToTeam userId={profile.id} name={name} teams={invitable} />
+          </div>
+        )}
         <div className="flex items-start gap-5 flex-wrap">
           <span
             className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 overflow-hidden"

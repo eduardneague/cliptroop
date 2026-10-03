@@ -1,10 +1,10 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CommentDeleteButton } from "./comment-delete-button";
-import { relativeTime } from "@/lib/relative-time";
 import { initialsFor } from "@/lib/avatar";
 import { ExpandIcon, CloseIcon, FileIcon } from "@/components/ui/icons";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
@@ -275,7 +275,7 @@ export function NotesPanel({
                 </div>
               )}
               <div className="text-[10.5px] text-ink-soft mt-1">
-                {c.pending ? "Sending…" : relativeTime(c.createdAt)}
+                {c.pending ? "Sending…" : <Ago iso={c.createdAt} />}
               </div>
             </div>
             {c.canDelete && !c.pending && (

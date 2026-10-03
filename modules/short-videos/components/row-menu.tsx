@@ -195,7 +195,7 @@ export function ShortRowMenu({
                   <button
                     key={k}
                     type="button"
-                    role="menuitem"
+                    role="menuitemradio"
                     aria-checked={pinKind === k}
                     className={item}
                     disabled={busy || pinKind === k || (k === "anchor" && startTaken)}

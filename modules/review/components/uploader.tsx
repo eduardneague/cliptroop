@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload as TusUpload } from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
@@ -54,6 +54,16 @@ export function VersionUploader({
   const uploadRef = useRef<TusUpload | null>(null);
   const [progress, setProgress] = useState<{ sent: number; total: number; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // After saving, stay in "Updating…" until the page has really refreshed,
+  // so the old "no video" state never flashes back.
+  const [refreshing, startRefresh] = useTransition();
+  const [finished, setFinished] = useState(false);
+  useEffect(() => {
+    if (finished && !refreshing) {
+      setFinished(false);
+      setProgress(null);
+    }
+  }, [finished, refreshing]);
 
   async function start(file: File) {
     if (!VIDEO_TYPES.includes(file.type)) {
@@ -119,14 +129,15 @@ export function VersionUploader({
           height: meta.height,
         });
         setSaving(false);
-        setProgress(null);
         if (res.error !== undefined) {
+          setProgress(null);
           toast.error(res.error);
           return;
         }
         toast.success(`v${res.number} uploaded`);
         onUploaded?.(res.id);
-        router.refresh();
+        setFinished(true);
+        startRefresh(() => router.refresh());
       },
     });
     uploadRef.current = upload;
@@ -145,7 +156,7 @@ export function VersionUploader({
     return (
       <div className="w-full sm:w-80 rounded-xl border border-line/15 bg-surface px-3.5 py-2.5" aria-live="polite">
         <div className="flex items-center justify-between gap-3 text-[12.5px]">
-          <span className="font-semibold truncate">{saving ? "Saving…" : `Uploading v${nextNumber}`}</span>
+          <span className="font-semibold truncate">{finished ? "Updating…" : saving ? "Saving…" : `Uploading v${nextNumber}`}</span>
           <span className="tabular-nums text-ink-soft">
             {formatBytes(progress.sent)} / {formatBytes(progress.total)}
           </span>
@@ -153,7 +164,7 @@ export function VersionUploader({
         <div className="mt-2 h-1.5 rounded-full bg-surface-2 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
           <div className="h-full bg-amber transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
-        {!saving && (
+        {!saving && !finished && (
           <div className="mt-1.5 flex items-center justify-between text-[11.5px] text-ink-soft">
             <span>{pct}% · keep this tab open</span>
             <button type="button" onClick={cancel} className="font-semibold hover:text-red">

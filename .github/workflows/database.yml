@@ -1,0 +1,82 @@
+# Runs database changes (supabase/migrations) on staging and production.
+# How it works and the one-time setup: scripts/db/README.md
+name: Database
+
+on:
+  # Every push to staging / main (not only ones that add a migration): when
+  # nothing is new it just says the database is up to date.
+  push:
+    branches: [staging, main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which database
+        type: choice
+        options: [staging, production]
+        default: staging
+      action:
+        description: "push = run new migrations · status = just list them · baseline = mark the ones already run by hand (once)"
+        type: choice
+        options: [push, status, baseline]
+        default: push
+      baseline_through:
+        description: "baseline only: the last migration this database already has"
+        default: "0062"
+
+# One run per database at a time, never cancelled halfway.
+concurrency:
+  group: database-${{ github.event_name == 'push' && (github.ref_name == 'main' && 'production' || 'staging') || inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: ${{ github.event_name == 'push' && (github.ref_name == 'main' && 'production' || 'staging') || inputs.target }} · ${{ inputs.action || 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET: ${{ github.event_name == 'push' && (github.ref_name == 'main' && 'production' || 'staging') || inputs.target }}
+      ACTION: ${{ inputs.action || 'push' }}
+      DB_URL: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.PRODUCTION_DB_URL || (github.event_name == 'push' && secrets.STAGING_DB_URL) || (inputs.target == 'production' && secrets.PRODUCTION_DB_URL || secrets.STAGING_DB_URL) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Check the connection string is set
+        run: |
+          if [ -z "$DB_URL" ]; then
+            name=$([ "$TARGET" = production ] && echo PRODUCTION_DB_URL || echo STAGING_DB_URL)
+            echo "::error::The secret $name isn't set. Repo → Settings → Secrets and variables → Actions. Use the Session pooler connection string (scripts/db/README.md)."
+            exit 1
+          fi
+
+      - name: Baseline (mark migrations already run by hand)
+        if: env.ACTION == 'baseline'
+        run: SUPABASE_BIN=supabase bash scripts/db/baseline.sh "$DB_URL" "${{ inputs.baseline_through }}"
+
+      - name: Migrations on ${{ env.TARGET }}
+        run: supabase migration list --db-url "$DB_URL"
+
+      - name: Refuse to run everything from 0001 on a database that has data
+        if: env.ACTION == 'push'
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          # Baselined = 0001 is marked as run (scripts/db/baseline.sql, or action = baseline).
+          first=$(psql "$DB_URL" -qAtX -c "select count(*) from supabase_migrations.schema_migrations where version = '0001'" 2>/dev/null || echo 0)
+          if [ "${first:-0}" != "1" ]; then
+            echo "::error::$TARGET isn't baselined yet (0001 isn't marked as run), so the CLI would try to run every migration from 0001. Paste scripts/db/baseline.sql into that project's SQL editor once (or run this workflow with action = baseline). See scripts/db/README.md."
+            exit 1
+          fi
+
+      - name: Dry run (what would run)
+        if: env.ACTION == 'push'
+        run: supabase db push --db-url "$DB_URL" --dry-run
+
+      - name: Run new migrations
+        if: env.ACTION == 'push'
+        run: supabase db push --db-url "$DB_URL"
+
+      - name: Result
+        if: env.ACTION == 'push'
+        run: supabase migration list --db-url "$DB_URL"

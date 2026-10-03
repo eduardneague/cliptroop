@@ -11,7 +11,8 @@ import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { buildMentionCatalog } from "@/lib/mentions";
 import { CheckIcon, ArrowLeftIcon } from "@/components/ui/icons";
 import { AdvanceStageButton, RegressStageButton } from "./advance-button";
-import { AssigneeRow } from "./assignee-row";
+import { AssigneeRow, ScriptersRow } from "./assignee-row";
+import { LongVideoSettings } from "./settings-dialog";
 import { TitleList } from "./title-list";
 import { ThumbnailUploader } from "./thumbnail-uploader";
 import { InlineEditable } from "./inline-editable";
@@ -23,17 +24,16 @@ import { postComment } from "./actions";
 import type { Metadata } from "next";
 import { getProject } from "@/modules/long-videos/lib/queries";
 import { LinkPendingIndicator } from "@/components/ui/link-pending";
-import { ScrollToCurrent } from "@/components/ui/scroll-to-current";
+import { LongStepBar } from "./step-bar";
+import { DescriptionEditor, EditPanel, FilmPanel, PostPanel, ReviewPanel } from "./step-panels";
+import { ScriptCard } from "@/modules/scripts/components/script-card";
+import { getLongScript } from "@/modules/scripts/lib/queries";
+import { listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
+import { setLongScripter } from "./actions";
 
-const TABS: PipelineStage[] = [
-  "ideate",
-  "research",
-  "script",
-  "film",
-  "edit",
-  "package",
-  "publish",
-];
+// The steps ARE the tabs.
+const TABS: PipelineStage[] = STAGE_ORDER;
 
 export async function generateMetadata({
   params,
@@ -54,9 +54,6 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
   const { tab: tabParam } = await searchParams;
-  const tab: PipelineStage = TABS.includes(tabParam as PipelineStage)
-    ? (tabParam as PipelineStage)
-    : "ideate";
 
   const supabase = await createClient();
 
@@ -66,6 +63,8 @@ export default async function ProjectDetailPage({
   const [project, currentUser] = await Promise.all([getProject(id), getCachedUser()]);
   if (!project) notFound();
   const teamId: string = project.team_id;
+  // Opens on the video's current step (any step can be opened any time).
+  const tab: PipelineStage = TABS.includes(tabParam as PipelineStage) ? (tabParam as PipelineStage) : (project.stage as PipelineStage);
 
   // Everything below depends only on the project id / team id, so it all
   // runs in parallel — one round of waiting instead of a chain.
@@ -78,7 +77,12 @@ export default async function ProjectDetailPage({
     { data: comments },
     { data: thumbnailRows },
     { data: attachmentRows },
-    { data: otherDated },
+    { data: postRows },
+    { data: scripterRows },
+    { data: teamDefaults },
+    script,
+    people,
+    { data: packageRows },
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -113,16 +117,26 @@ export default async function ProjectDetailPage({
       .select("id, comment_id, file_name, file_path, file_size, mime_type, project_comments!inner(project_id, stage)")
       .eq("project_comments.project_id", id)
       .eq("project_comments.stage", tab),
-    // Other long videos' dates — dots in the date picker.
-    supabase
-      .from("long_video_projects")
-      .select("expected_date")
-      .eq("team_id", teamId)
-      .neq("id", id)
-      .not("expected_date", "is", null),
+    supabase.from("long_video_posts").select("platform, url, posted_at, posted_by").eq("project_id", id),
+    supabase.from("long_video_scripters").select("team_member_id").eq("project_id", id),
+    supabase.from("teams").select("default_long_description").eq("id", teamId).maybeSingle(),
+    getLongScript(id),
+    listTeamPeople(teamId),
+    // Package: the Studio's winner (or first variation) for the summary card.
+    supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
   ]);
+  const packageCount = packageRows?.length ?? 0;
+  const winners = (packageRows ?? []).filter((r) => r.is_winner);
+  const winner = winners[0] ?? null;
+  // Up to 3 winners (A/B test); otherwise the first variation.
+  const cardRows = winners.length ? winners : (packageRows ?? []).slice(0, 1);
+  const cardPaths = cardRows.map((r) => r.thumbnail_storage_path as string | null).filter((x): x is string => !!x);
+  const { data: cardSigned } = cardPaths.length ? await supabase.storage.from("package-thumbs").createSignedUrls(cardPaths, 3600) : { data: [] };
+  const cardUrls = (cardSigned ?? []).map((d) => d.signedUrl).filter(Boolean) as string[];
 
   const userIsMaster = isMaster(membership?.roles ?? []);
+  const myRoles = membership?.roles ?? [];
+  const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
 
   const memberColors = ["#E8630D", "#178C7C", "#3159C9", "#6B4FD6", "#B84070", "#B4890E", "#2B9757"];
   const membersById = new Map(
@@ -174,6 +188,7 @@ export default async function ProjectDetailPage({
     url: thumbnailBase + t.storage_path,
   }));
 
+  const nameOf = (userId: string | null | undefined) => (userId ? peopleByUserId.get(userId)?.name ?? null : null);
   const updatedByName = project.updated_by
     ? peopleByUserId.get(project.updated_by)?.name ?? null
     : null;
@@ -186,6 +201,7 @@ export default async function ProjectDetailPage({
   const currentIndex = STAGE_ORDER.indexOf(project.stage as PipelineStage);
   const nextStage = STAGE_ORDER[currentIndex + 1];
 
+  const filmAssignees = (assigneeRows ?? []).filter((a) => a.stage === "film").map((a) => a.team_member_id as string);
   const assigneesForTab = (assigneeRows ?? [])
     .filter((a) => a.stage === tab)
     .map((a) => {
@@ -234,7 +250,26 @@ export default async function ProjectDetailPage({
           {project.title}
         </h1>
         {userIsMaster && (
-          <div className="flex-shrink-0 pt-0.5">
+          <div className="flex-shrink-0 pt-0.5 flex items-center gap-1">
+            <LongVideoSettings
+              projectId={id}
+              teamId={teamId}
+              videoType={project.video_type ?? []}
+              theme={project.theme ?? ""}
+              subtheme={project.subtheme}
+              expectedDate={project.expected_date}
+              platforms={(project.platforms as string[] | null) ?? ["youtube"]}
+              people={people}
+              scripterIds={scripterIds}
+              assignees={Object.fromEntries(
+                ["research", "film", "edit", "package", "publish"].map((st) => [
+                  st,
+                  (assigneeRows ?? [])
+                    .filter((a) => a.stage === st)
+                    .map((a) => ({ rowId: a.id, teamMemberId: a.team_member_id, name: membersById.get(a.team_member_id)?.name ?? "Unknown", color: membersById.get(a.team_member_id)?.color ?? "#999" })),
+                ])
+              )}
+            />
             <DeleteProjectButton projectId={id} teamId={teamId} projectTitle={project.title} />
           </div>
         )}
@@ -257,118 +292,78 @@ export default async function ProjectDetailPage({
           teamId={teamId}
           date={project.expected_date}
           canEdit={canActOnStage(membership, "ideate")}
-          otherDates={(otherDated ?? []).map((r) => r.expected_date as string)}
         />
       </div>
 
-      {/* Stage actions */}
-      <div className="flex items-center gap-2 flex-wrap mb-6">
-        {project.stage === "done" ? (
-          <span className="text-[12px] font-bold px-2.5 py-1 rounded-full bg-teal/15 text-teal">
-            Finished
+      {/* The steps are the tabs: every step can be opened at any time. */}
+      <LongStepBar projectId={id} stage={project.stage as PipelineStage} tab={tab} />
+
+      {/* Looking at another step: one click back to where the video is. */}
+      {tab !== project.stage && (
+        <div className="mb-5 flex items-center gap-3 flex-wrap rounded-xl border border-amber/40 bg-amber/10 px-4 py-2.5 animate-[modalin_.2s_var(--ease-out)]">
+          <span className="text-[13.5px]">
+            Viewing the <b>{STAGE_LABELS[tab]}</b> step. This video is in <b>{STAGE_LABELS[project.stage as PipelineStage]}</b>.
           </span>
-        ) : userIsMaster ? (
-          <>
-            {currentIndex > 0 && (
-              <RegressStageButton
-                projectId={project.id}
-                prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]}
-              />
-            )}
-            {nextStage && (
-              <AdvanceStageButton
-                projectId={project.id}
-                nextLabel={STAGE_LABELS[nextStage as PipelineStage]}
-              />
-            )}
-          </>
-        ) : (
-          <span className="text-[12px] text-ink-faint">Only the master can move this project</span>
-        )}
-      </div>
-
-      {/* Stage tracker */}
-      <ScrollToCurrent className="flex items-center mb-8 overflow-x-auto no-scrollbar pb-1 scroll-smooth">
-        {STAGE_ORDER.map((s, i) => {
-          const state = stageState(s, project.stage as PipelineStage);
-          const isDone = state === "done";
-          const isCurrent = state === "current";
-          const stepColor = STAGE_STATE_COLOR[state];
-          return (
-            <div key={s} className="flex items-center flex-shrink-0" data-current={isCurrent ? "true" : undefined}>
-              <div className="flex flex-col items-center gap-1.5 min-w-[74px]">
-                <div
-                  className={`rounded-full flex items-center justify-center font-bold border-2 transition-all ${
-                    isCurrent ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"
-                  }`}
-                  style={{
-                    borderColor: isDone || isCurrent ? stepColor : "rgb(var(--line) / 0.2)",
-                    background: isDone || isCurrent ? stepColor : "transparent",
-                    color: isDone || isCurrent ? "#fff" : "rgb(var(--ink-faint))",
-                  }}
-                >
-                  {isDone ? <CheckIcon className="w-4 h-4" /> : i + 1}
-                </div>
-                <span className={`text-[10px] font-bold ${isDone || isCurrent ? "text-ink" : "text-ink-faint"}`}>
-                  {STAGE_LABELS[s]}
-                </span>
-              </div>
-              {i < STAGE_ORDER.length - 1 && (
-                <div
-                  className="w-8 h-[2px] mb-4 flex-shrink-0"
-                  style={{
-                    background:
-                      stageState(STAGE_ORDER[i + 1], project.stage as PipelineStage) !== "upcoming"
-                        ? STAGE_STATE_COLOR.done
-                        : "rgb(var(--line) / 0.15)",
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </ScrollToCurrent>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-line/10 mb-6 overflow-x-auto no-scrollbar">
-        {TABS.map((t) => (
+          <span className="flex-1" />
           <Link
-            key={t}
-            href={`/videos/${id}?tab=${t}`}
+            href={`/videos/${id}?tab=${project.stage}`}
             scroll={false}
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
-              tab === t
-                ? "border-amber text-amber"
-                : "border-transparent text-ink-faint hover:text-ink"
-            }`}
+            className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 inline-flex items-center text-[13px] hover:brightness-110"
           >
-            {STAGE_LABELS[t]}
-            <LinkPendingIndicator />
+            Go to {STAGE_LABELS[project.stage as PipelineStage]}
           </Link>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Master: move the video by hand (the step buttons move it too). */}
+      {project.stage !== "done" && userIsMaster && (
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          {currentIndex > 0 && <RegressStageButton projectId={project.id} prevLabel={STAGE_LABELS[STAGE_ORDER[currentIndex - 1]]} prevStage={STAGE_ORDER[currentIndex - 1]} />}
+          {nextStage && <AdvanceStageButton projectId={project.id} nextLabel={STAGE_LABELS[nextStage as PipelineStage]} nextStage={nextStage as string} />}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
         {/* Main tab content */}
         <div className="rounded-xl border border-line/10 bg-surface p-6">
           {tab === "ideate" ? (
-            <div className="space-y-5">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Titles
+            <div className="space-y-4">
+              {/* The idea template, at a glance */}
+              {(() => {
+                const checks = [
+                  { label: "2+ titles", ok: (titles ?? []).length >= 2 },
+                  { label: "Hook", ok: !!project.hook?.trim() },
+                  { label: "2–5 thumbnail sketches", ok: thumbnails.length >= 2 },
+                  { label: "Budget", ok: !!project.budget_notes?.trim() },
+                ];
+                const done = checks.filter((c) => c.ok).length;
+                return (
+                  <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 flex items-center gap-3 flex-wrap">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Idea checklist</span>
+                    {checks.map((c) => (
+                      <span
+                        key={c.label}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[12px] font-semibold ${c.ok ? "bg-green/12 text-green" : "bg-surface-2 text-ink-soft"}`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${c.ok ? "bg-green text-white" : "border border-line/30"}`}>{c.ok ? "✓" : ""}</span>
+                        {c.label}
+                      </span>
+                    ))}
+                    <span className="ml-auto text-[12px] font-bold tabular-nums text-ink-soft">{done}/{checks.length}</span>
+                  </div>
+                );
+              })()}
+
+              <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Titles</h3>
+                  <span className="text-[12px] text-ink-faint">{(titles ?? []).length} option{(titles ?? []).length === 1 ? "" : "s"} · ★ marks the main one</span>
                 </div>
-                <TitleList
-                  projectId={id}
-                  teamId={teamId}
-                  titles={titles ?? []}
-                  canPick={userIsMaster}
-                  canEditText={canActOnStage(membership, "ideate")}
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Hook
-                </div>
+                <TitleList projectId={id} teamId={teamId} titles={titles ?? []} canPick={userIsMaster} canEditText={canActOnStage(membership, "ideate")} />
+              </section>
+
+              <section className="rounded-2xl border border-amber/25 bg-amber/[0.05] p-4 sm:p-5">
+                <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-amber mb-2.5">Hook</h3>
                 <InlineEditable
                   projectId={id}
                   teamId={teamId}
@@ -380,56 +375,162 @@ export default async function ProjectDetailPage({
                   lastEditedBy={updatedByName}
                   emphasize
                 />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Notes
+              </section>
+
+              <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Thumbnail sketches</h3>
+                  <span className={`text-[12px] font-semibold ${thumbnails.length >= 2 && thumbnails.length <= 5 ? "text-green" : "text-ink-faint"}`}>{thumbnails.length} of 2–5</span>
                 </div>
-                <InlineEditable
-                  projectId={id}
-                  teamId={teamId}
-                  field="notes"
-                  value={project.notes}
-                  canEdit={canActOnStage(membership, "ideate")}
-                  placeholder="Add a note (optional)"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Budget needed
-                </div>
-                <InlineEditable
-                  projectId={id}
-                  teamId={teamId}
-                  field="budget_notes"
-                  value={project.budget_notes}
-                  canEdit={canActOnStage(membership, "ideate")}
-                  placeholder="Add a rough budget estimate"
-                />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">
-                  Thumbnail sketches
-                </div>
-                <ThumbnailUploader
-                  projectId={id}
-                  thumbnails={thumbnails}
-                  canEdit={canActOnStage(membership, "ideate")}
-                />
+                <ThumbnailUploader projectId={id} thumbnails={thumbnails} canEdit={canActOnStage(membership, "ideate")} />
+              </section>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-2.5">Budget</h3>
+                  <InlineEditable projectId={id} teamId={teamId} field="budget_notes" value={project.budget_notes} canEdit={canActOnStage(membership, "ideate")} placeholder="A rough estimate, links to what to buy…" />
+                </section>
+                <section className="rounded-2xl border border-line/10 bg-surface-2/20 p-4 sm:p-5">
+                  <h3 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-2.5">Notes</h3>
+                  <InlineEditable projectId={id} teamId={teamId} field="notes" value={project.notes} canEdit={canActOnStage(membership, "ideate")} placeholder="Anything else (optional)" />
+                </section>
               </div>
             </div>
           ) : (
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">
-                Assigned · {STAGE_LABELS[tab]}
-              </div>
-              <AssigneeRow
-                projectId={id}
-                stage={tab}
-                isMaster={userIsMaster}
-                assignees={assigneesForTab}
-                eligible={eligibleForTab}
-              />
+            <div className="space-y-6">
+              {tab !== "done" && (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">{tab === "script" ? "Scripters" : `People · ${STAGE_LABELS[tab]}`}</div>
+                  {tab === "script" ? (
+                    <ScriptersRow projectId={id} people={people} scripterIds={scripterIds} isMaster={userIsMaster} />
+                  ) : (
+                    <AssigneeRow projectId={id} stage={tab} isMaster={userIsMaster} assignees={assigneesForTab} people={people} />
+                  )}
+                </div>
+              )}
+              {tab === "research" && (
+                <Link
+                  href={`/videos/${id}/script?kind=research`}
+                  className="group flex items-center gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-4 hover:border-amber transition-colors"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Research</span>
+                    <span className="block text-[15px] font-semibold mt-0.5">Research documents</span>
+                    <span className="block text-[12.5px] text-ink-soft mt-0.5">Same editor as the script. Open it next to the script with Side by side.</span>
+                  </span>
+                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open</span>
+                </Link>
+              )}
+              {tab === "script" && (
+                <div className="space-y-3">
+                  <ScriptCard
+                    href={`/videos/${id}/script`}
+                    script={script}
+                    canEdit={userIsMaster || (!!membership && scripterIds.includes(membership.teamMemberId))}
+                    prominent={project.stage === "script"}
+                    showScripters={false}
+                  />
+                </div>
+              )}
+              {tab === "film" && (
+                <FilmPanel
+                  projectId={id}
+                  isCurrent={project.stage === "film"}
+                  canAct={
+                    userIsMaster ||
+                    // The assigned filmer (or any filmer if nobody is assigned), like the database rule.
+                    (filmAssignees.length ? !!membership && filmAssignees.includes(membership.teamMemberId) : myRoles.includes("filmer"))
+                  }
+                  filmedAt={project.filmed_at}
+                  filmedBy={nameOf(project.filmed_by)}
+                  nasPath={project.nas_path}
+                />
+              )}
+              {tab === "edit" && (
+                <EditPanel
+                  projectId={id}
+                  isCurrent={project.stage === "edit"}
+                  canAct={userIsMaster || myRoles.includes("editor")}
+                  editedAt={project.edited_at}
+                  editedBy={nameOf(project.edited_by)}
+                  editNote={project.edit_note}
+                  reviewNote={project.review_note}
+                  nasPath={project.nas_path}
+                />
+              )}
+              {tab === "review" && (
+                <ReviewPanel
+                  projectId={id}
+                  isCurrent={project.stage === "review"}
+                  canReview={userIsMaster}
+                  editedAt={project.edited_at}
+                  editedBy={nameOf(project.edited_by)}
+                  editNote={project.edit_note}
+                  reviewedAt={project.reviewed_at}
+                  reviewedBy={nameOf(project.reviewed_by)}
+                  approved={STAGE_ORDER.indexOf(project.stage as PipelineStage) > STAGE_ORDER.indexOf("review")}
+                />
+              )}
+              {tab === "package" && (
+                <Link
+                  href={`/videos/${id}/studio`}
+                  className="group flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-2xl border border-line/15 bg-surface-2/40 p-3.5 hover:border-amber transition-colors"
+                >
+                  <span className="flex gap-1.5 flex-shrink-0 [&>span]:flex-1 sm:[&>span]:flex-none">
+                    {cardUrls.length ? (
+                      cardUrls.map((u, i) => (
+                        <span key={u} className={`relative ${cardUrls.length > 1 ? "sm:w-24" : "sm:w-40"} aspect-video rounded-lg overflow-hidden bg-surface-2`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={u} alt="" className="w-full h-full object-cover" />
+                          {winners.length > 1 && <span className="absolute right-1 top-1 rounded bg-amber text-white text-[10.5px] font-bold leading-none px-1.5 py-1">{"ABC"[i]}</span>}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="w-full sm:w-40 aspect-video rounded-lg bg-surface-2 flex items-center justify-center text-[11.5px] text-ink-soft px-2 text-center">No thumbnails yet</span>
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">Thumbnail Studio</span>
+                    <span className="block text-[15px] font-semibold mt-0.5 truncate">{winner?.title ?? "Add your thumbnails and titles"}</span>
+                    <span className="block text-[12.5px] text-ink-soft mt-0.5">
+                      {!packageCount ? (
+                        "Preview them on YouTube: home, search, mobile, TV…"
+                      ) : winners.length > 1 ? (
+                        <>
+                          <span className="inline-block whitespace-nowrap rounded bg-amber text-white text-[10.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 mr-1.5">A/B test on</span>
+                          <span className="font-semibold text-ink">{"ABC".slice(0, winners.length).split("").join(" vs ")}</span> · {packageCount} variations
+                        </>
+                      ) : (
+                        `${packageCount} variation${packageCount === 1 ? "" : "s"} · ${winners.length ? "winner picked" : "no winner yet"}`
+                      )}
+                    </span>
+                  </span>
+                  <span className="rounded-lg bg-amber text-white font-bold px-4 h-10 inline-flex items-center justify-center text-[13.5px] flex-shrink-0 group-hover:brightness-110">Open Thumbnail Studio</span>
+                </Link>
+              )}
+              {tab === "package" && (
+                <DescriptionEditor
+                  projectId={id}
+                  value={project.description ?? null}
+                  teamDefault={(teamDefaults?.default_long_description as string | undefined) ?? ""}
+                  canEdit={canActOnStage(membership, "package")}
+                />
+              )}
+              {(tab === "publish" || tab === "done") && (
+                <PostPanel
+                  projectId={id}
+                  isCurrent={project.stage === "publish" || project.stage === "done"}
+                  canAct={userIsMaster || myRoles.includes("publisher")}
+                  isMaster={userIsMaster}
+                  platforms={(project.platforms as string[] | null) ?? ["youtube"]}
+                  posts={(postRows ?? []).map((r) => ({
+                    platform: r.platform as string,
+                    url: (r.url as string | null) ?? null,
+                    postedAt: r.posted_at as string,
+                    postedBy: nameOf(r.posted_by as string | null),
+                  }))}
+                />
+              )}
             </div>
           )}
         </div>

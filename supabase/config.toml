@@ -1,0 +1,7 @@
+# Supabase CLI settings. VPlanner only uses the CLI to run database changes
+# (supabase/migrations) on staging and production — see scripts/db/README.md.
+# Nothing here changes the hosted projects' settings.
+project_id = "vplanner"
+
+[db]
+major_version = 15

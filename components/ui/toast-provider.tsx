@@ -1,11 +1,13 @@
 "use client";
 
 import { AlertIcon, CheckIcon } from "./icons";
+import { sounds, type SoundName } from "@/lib/sounds";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 
 export type ToastAction = { label: string; onClick: () => void };
-type ToastOptions = { action?: ToastAction; duration?: number };
+/** sound: a different sound than the default (success/error), or false for none. */
+type ToastOptions = { action?: ToastAction; duration?: number; sound?: SoundName | false };
 type Toast = { id: number; kind: "success" | "error"; message: string; action?: ToastAction };
 type ToastAPI = {
   success: (message: string, opts?: ToastOptions) => void;
@@ -24,6 +26,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (kind: Toast["kind"], message: string, opts?: ToastOptions) => {
       const id = ++idRef.current;
       setToasts((t) => [...t, { id, kind, message, action: opts?.action }]);
+      const sound = opts?.sound ?? (kind === "error" ? "error" : "success");
+      if (sound) sounds[sound]();
       // Toasts with an action stay long enough to actually use it.
       setTimeout(() => dismiss(id), opts?.duration ?? (opts?.action ? 9000 : 4200));
     },
@@ -39,7 +43,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <div
-        className="fixed bottom-5 right-5 left-5 sm:left-auto z-[200] flex flex-col gap-2 items-end pointer-events-none"
+        // Phones: top of the screen, so a toast never covers a popup's buttons
+        // (bottom sheets live at the bottom). Larger screens: bottom-right.
+        className="fixed left-3 right-3 sm:left-auto sm:right-5 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] sm:top-auto sm:bottom-5 z-[200] flex flex-col gap-2 items-stretch sm:items-end pointer-events-none"
         style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))" }}
         aria-live="polite"
       >

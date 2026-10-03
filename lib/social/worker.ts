@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotifications } from "@/lib/notify";
+import { appUrl, emailConfigured, sendAlertEmail } from "@/lib/email";
 import { getAccessToken } from "./tokens";
 import { ProviderError } from "./providers";
 import { PublishError, type PostRow, type StepResult } from "./publishers/common";
@@ -24,15 +25,30 @@ async function notify(post: Claimed, ok: boolean, message: string) {
   const recipients = new Set<string>();
   if (post.created_by) recipients.add(post.created_by);
   if (!ok) {
-    const { data: masters } = await admin
+    // Failures reach every master and scheduler (not just who scheduled it).
+    const { data: people } = await admin
       .from("team_members")
       .select("user_id, member_roles!inner(role)")
       .eq("team_id", post.team_id)
       .eq("status", "active")
-      .eq("member_roles.role", "master");
-    (masters ?? []).forEach((m) => m.user_id && recipients.add(m.user_id as string));
+      .in("member_roles.role", ["master", "publisher"]);
+    (people ?? []).forEach((m) => m.user_id && recipients.add(m.user_id as string));
   }
   const ref = short ? `#${short.entry_number} "${short.title}"` : "A short";
+
+  // Failures also go out by email, with a link straight to the short.
+  if (!ok && emailConfigured() && recipients.size) {
+    const { data: profiles } = await admin.from("profiles").select("email").in("id", [...recipients]);
+    const to = (profiles ?? []).map((p) => p.email as string | null).filter((e): e is string => !!e);
+    const r = await sendAlertEmail({
+      to,
+      subject: `${short ? `#${short.entry_number} ` : ""}couldn't post to ${NAME[post.platform]}`,
+      message: `${ref} didn't post to ${NAME[post.platform]}: ${message} Open it to see the details and retry.`,
+      linkText: "Open the short",
+      href: `${appUrl()}/shorts/${post.short_id}`,
+    });
+    await event(post.id, post.team_id, "note", r.sent ? `Alert emailed to ${to.length} ${to.length === 1 ? "person" : "people"}` : "Alert email couldn't be sent");
+  }
   await Promise.all(
     [...recipients].map((recipient_id) =>
       sendNotifications({
@@ -52,6 +68,19 @@ async function markPosted(post: Claimed, permalink: string | null) {
     .from("short_video_posts")
     .upsert({ short_id: post.short_id, platform: post.platform, post_url: permalink }, { onConflict: "short_id,platform", ignoreDuplicates: true });
   if (error) await event(post.id, post.team_id, "note", `Posted, but couldn't mark it on the short: ${error.message}`);
+
+  // Instagram shares Reels to Facebook automatically (account setting), so
+  // Facebook counts as posted too, if the short lists it. Can be undone by hand.
+  if (post.platform === "instagram") {
+    const admin = createAdminClient();
+    const { data: short } = await admin.from("short_videos").select("platforms").eq("id", post.short_id).maybeSingle();
+    if ((short?.platforms as string[] | undefined)?.includes("facebook")) {
+      const { error: fb } = await admin
+        .from("short_video_posts")
+        .upsert({ short_id: post.short_id, platform: "facebook", post_url: null }, { onConflict: "short_id,platform", ignoreDuplicates: true });
+      if (!fb) await event(post.id, post.team_id, "note", "Facebook marked as posted (shared from Instagram)");
+    }
+  }
 }
 
 async function save(post: Claimed, r: StepResult, keepLock: boolean) {
@@ -151,11 +180,18 @@ async function runOne(row: Claimed, deadline: number) {
  * Move every due post forward, within a time budget. Called every minute
  * by the Supabase timer (and by "Run due posts now" when testing).
  */
-export async function runDuePosts(budgetMs = 45_000) {
-  const deadline = Date.now() + budgetMs;
+export async function runDuePosts(budgetMs = 45_000, source: "timer" | "manual" = "timer") {
+  const started = Date.now();
+  const deadline = started + budgetMs;
   const admin = createAdminClient();
+  // Every run is recorded, so the Posting page can show the app is alive.
+  const record = (claimed: number, error: string | null) =>
+    admin.from("posting_runs").insert({ source, claimed, duration_ms: Date.now() - started, error });
   const { data, error } = await admin.rpc("claim_social_posts", { p_limit: 5 });
-  if (error) return { claimed: 0, error: error.message };
+  if (error) {
+    await record(0, error.message);
+    return { claimed: 0, error: error.message };
+  }
   const posts = (data ?? []) as Claimed[];
   for (const post of posts) {
     if (Date.now() > deadline - 10_000) {
@@ -165,5 +201,6 @@ export async function runDuePosts(budgetMs = 45_000) {
     }
     await runOne(post, deadline);
   }
+  await record(posts.length, null);
   return { claimed: posts.length };
 }

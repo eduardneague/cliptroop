@@ -26,11 +26,18 @@ const config: Config = {
         teal: "rgb(var(--teal) / <alpha-value>)",
         blue: "rgb(var(--blue) / <alpha-value>)",
         violet: "rgb(var(--violet) / <alpha-value>)",
+        short: "rgb(var(--short) / <alpha-value>)",
+        long: "rgb(var(--long) / <alpha-value>)",
         pink: "rgb(var(--pink) / <alpha-value>)",
         gold: "rgb(var(--gold) / <alpha-value>)",
         green: "rgb(var(--green) / <alpha-value>)",
         red: "rgb(var(--red) / <alpha-value>)",
         coral: "rgb(var(--coral) / <alpha-value>)",
+      },
+      // 12% tints (badges, chips, tiles) are used across the app; Tailwind's
+      // scale only has steps of 5, so without this they rendered with no tint.
+      opacity: {
+        12: "0.12",
       },
       fontFamily: {
         display: ["var(--font-display)"],

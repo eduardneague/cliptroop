@@ -23,7 +23,7 @@ export function WorkflowActions({
   hasEditor,
   editorName,
   reviewerName,
-  hasFrameio,
+  hasVideo,
 }: {
   id: string;
   number: number;
@@ -32,12 +32,13 @@ export function WorkflowActions({
   hasEditor: boolean;
   editorName: string | null;
   reviewerName: string | null;
-  hasFrameio: boolean;
+  hasVideo: boolean;
 }) {
   const confirm = useConfirm();
 
   const toEditing = useAction(sendShortToEditing, {
     success: `Sent to editing. ${editorName ?? "the editor"} has been notified`,
+    sound: "advance",
   });
   async function handleSendToEditing() {
     const ok = await confirm({
@@ -69,13 +70,13 @@ export function WorkflowActions({
     } else hint = "Waiting for the master to send it to editing.";
   } else if (stage === "editing") {
     if (perms.canSubmitForReview) {
-      primary = <MarkDoneButton shortId={id} number={number} disabled={!hasFrameio} />;
-      if (!hasFrameio) hint = "Upload the video first.";
+      primary = <MarkDoneButton shortId={id} number={number} disabled={!hasVideo} />;
+      if (!hasVideo) hint = "Upload the video first.";
     }
     else hint = `${editorName ?? "The editor"} is editing this.`;
   } else if (stage === "review") {
     hint = perms.canReview
-      ? "Open the Frame.io link and approve it, or ask for changes."
+      ? "Watch the video and approve it, or ask for changes."
       : reviewerName
         ? `Waiting for ${reviewerName} to review.`
         : "Waiting for the master to review.";
@@ -109,6 +110,7 @@ function MoveToMenu({ id, stage }: { id: string; stage: ShortStage }) {
   useMenuKeyboard(open, menuRef, triggerRef, closeMenu);
   const move = useAction(moveShortStage, {
     success: (_id, to) => `Moved to ${SHORT_STAGE_LABELS[to]}`,
+    sound: "advance",
   });
 
   useEffect(() => {

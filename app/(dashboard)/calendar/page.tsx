@@ -1,0 +1,191 @@
+import type { Metadata } from "next";
+import { createClient } from "@/lib/supabase/server";
+import { getTeamsAndCurrent } from "@/lib/teams";
+import { getMembership } from "@/lib/permissions/membership";
+import { isMaster } from "@/lib/permissions/roles";
+import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
+import { SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
+import { CalendarView, type CalItem } from "./calendar-view";
+import { getShortSettings, listDayLimits, listShorts, listTeamPeople } from "@/modules/short-videos/lib/queries";
+
+export const metadata: Metadata = { title: "Calendar" };
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const pad = (n: number) => String(n).padStart(2, "0");
+const iso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+
+/** The 6-week grid (Monday first) around a month. */
+function gridFor(focus: string) {
+  const first = new Date(`${focus.slice(0, 7)}-01T00:00:00Z`);
+  const offset = (first.getUTCDay() + 6) % 7; // Monday = 0
+  const start = new Date(first.getTime() - offset * 86_400_000);
+  const end = new Date(start.getTime() + 41 * 86_400_000);
+  return { start: iso(start), end: iso(end) };
+}
+
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ d?: string; view?: string }> }) {
+  const { d, view } = await searchParams;
+  const supabase = await createClient();
+  const { currentTeam } = await getTeamsAndCurrent(supabase);
+  if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
+  const today = iso(new Date());
+
+  // The team-wide parts don't depend on which month is open: start them now,
+  // while the month is being worked out.
+  const teamWide = Promise.all([
+    getMembership(supabase, currentTeam.id),
+    // The same short list as the Shorts table, so both always agree.
+    listShorts(currentTeam.id),
+    getShortSettings(currentTeam.id),
+    listDayLimits(currentTeam.id),
+    supabase
+      .from("social_posts")
+      .select("short_id, platform, status, scheduled_at, permalink, external_id")
+      .eq("team_id", currentTeam.id)
+      .neq("status", "cancelled"),
+    listTeamPeople(currentTeam.id),
+  ]);
+  teamWide.catch(() => {}); // awaited below
+
+  // Which month to open: the one asked for; else this month if it has
+  // anything; else the next scheduled item's month; else the latest one.
+  // (All six questions in one go.)
+  let focus = d && DATE.test(d) ? d : null;
+  if (!focus) {
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const monthEnd = `${today.slice(0, 7)}-31`;
+    const [s1, l1, ns, nl, ps, pl] = await Promise.all([
+      supabase.from("short_videos").select("id", { count: "exact", head: true }).eq("team_id", currentTeam.id).gte("planned_date", monthStart).lte("planned_date", monthEnd),
+      supabase.from("long_video_projects").select("id", { count: "exact", head: true }).eq("team_id", currentTeam.id).gte("expected_date", monthStart).lte("expected_date", monthEnd),
+      supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).gte("planned_date", today).order("planned_date").limit(1).maybeSingle(),
+      supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).gte("expected_date", today).order("expected_date").limit(1).maybeSingle(),
+      supabase.from("short_videos").select("planned_date").eq("team_id", currentTeam.id).lt("planned_date", today).order("planned_date", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("long_video_projects").select("expected_date").eq("team_id", currentTeam.id).lt("expected_date", today).order("expected_date", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if ((s1.count ?? 0) + (l1.count ?? 0) > 0) focus = today;
+    else {
+      const next = [ns.data?.planned_date, nl.data?.expected_date].filter(Boolean).sort()[0] as string | undefined;
+      const last = [ps.data?.planned_date, pl.data?.expected_date].filter(Boolean).sort().reverse()[0] as string | undefined;
+      focus = next ?? last ?? today;
+    }
+  }
+
+  const grid = gridFor(focus);
+  // The agenda's rolling 5 weeks can run past the month grid: load those too.
+  const rollingEnd = iso(new Date(Date.parse(`${today}T00:00:00Z`) + 36 * 86_400_000));
+  const start = grid.start;
+  const end = focus.slice(0, 7) === today.slice(0, 7) && rollingEnd > grid.end ? rollingEnd : grid.end;
+
+  const edge = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString();
+  const [[membership, allShorts, settings, dayLimits, { data: posts }, people], { data: longs }, { data: meetingRows }] = await Promise.all([
+    teamWide,
+    supabase
+      .from("long_video_projects")
+      .select("id, entry_number, title, stage, expected_date, platforms")
+      .eq("team_id", currentTeam.id)
+      .gte("expected_date", start)
+      .lte("expected_date", end),
+    // Meetings (a day's margin each side: the browser puts them on its local day).
+    supabase.from("meetings").select("id, title, starts_at, duration_min, location, status").eq("team_id", currentTeam.id).gte("starts_at", edge(start, -1)).lt("starts_at", edge(end, 2)).order("starts_at"),
+  ]);
+  const roles = membership?.roles ?? [];
+  const master = isMaster(roles);
+  const canManage = master || roles.includes("publisher");
+
+  // Long videos: winning thumbnail, posted platforms and assigned people (one batch).
+  const longIds = (longs ?? []).map((l) => l.id as string);
+  const [{ data: winners }, { data: longPosts }, { data: assigned }] = longIds.length
+    ? await Promise.all([
+        supabase.from("package_entries").select("project_id, thumbnail_storage_path, position").in("project_id", longIds).eq("is_winner", true).order("position"),
+        supabase.from("long_video_posts").select("project_id, platform").in("project_id", longIds),
+        supabase.from("project_assignees").select("project_id, stage, team_member_id").in("project_id", longIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+  const thumbPath = new Map<string, string>();
+  for (const w of winners ?? []) if (w.thumbnail_storage_path && !thumbPath.has(w.project_id as string)) thumbPath.set(w.project_id as string, w.thumbnail_storage_path as string);
+  const { data: signed } = thumbPath.size ? await supabase.storage.from("package-thumbs").createSignedUrls([...thumbPath.values()], 3600) : { data: [] };
+  const urlOf = new Map((signed ?? []).filter((x) => x.path && x.signedUrl).map((x) => [x.path as string, x.signedUrl as string]));
+  const personOf = new Map(people.map((p) => [p.memberId, p]));
+  const postsByShort = new Map<string, CalItem["posts"]>();
+  for (const p of posts ?? []) {
+    const list = postsByShort.get(p.short_id as string) ?? [];
+    list.push({
+      platform: p.platform as string,
+      status: p.status as string,
+      at: p.scheduled_at as string,
+      link:
+        (p.permalink as string | null) ??
+        (p.platform === "youtube" && p.external_id ? `https://studio.youtube.com/video/${p.external_id}/edit` : null),
+    });
+    postsByShort.set(p.short_id as string, list);
+  }
+
+  const items: CalItem[] = [
+    ...allShorts
+      .filter((s) => s.plannedDate && s.plannedDate >= start && s.plannedDate <= end)
+      .map((s) => ({
+        kind: "short" as const,
+        id: s.id,
+        number: s.number,
+        title: s.title,
+        date: s.plannedDate as string,
+        stageLabel: SHORT_STAGE_LABELS[s.stage] ?? String(s.stage),
+        done: s.stage === "posted",
+        shortType: s.shortType,
+        pinKind: s.scheduleMode === "pinned" ? s.pinKind : null,
+        auto: s.scheduleMode === "auto",
+        queuePosition: s.queuePosition,
+        platforms: s.platforms as string[],
+        postedPlatforms: s.postedPlatforms as string[],
+        editor: s.editor ? { name: s.editor.name, avatarUrl: s.editor.avatarUrl, color: s.editor.color } : null,
+        posts: postsByShort.get(s.id) ?? [],
+      })),
+    ...(longs ?? []).map((l) => ({
+      kind: "long" as const,
+      id: l.id as string,
+      number: l.entry_number as number,
+      title: l.title as string,
+      date: l.expected_date as string,
+      stageLabel: STAGE_LABELS[l.stage as keyof typeof STAGE_LABELS] ?? String(l.stage),
+      done: l.stage === "done",
+      shortType: null,
+      pinKind: null,
+      auto: false,
+      queuePosition: 0,
+      platforms: ((l.platforms as string[] | null) ?? ["youtube"]),
+      postedPlatforms: (longPosts ?? []).filter((x) => x.project_id === l.id).map((x) => x.platform as string),
+      editor: null,
+      posts: [],
+      thumb: thumbPath.has(l.id as string) ? urlOf.get(thumbPath.get(l.id as string)!) ?? null : null,
+      assignees: (assigned ?? [])
+        .filter((a) => a.project_id === l.id)
+        .map((a) => {
+          const p = personOf.get(a.team_member_id as string);
+          return p ? { name: p.name, avatarUrl: p.avatarUrl, color: p.color, stage: STAGE_LABELS[a.stage as keyof typeof STAGE_LABELS] ?? String(a.stage) } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x),
+    })),
+  ];
+
+  return (
+    <div className="px-3 sm:px-6 lg:px-8 py-6">
+      <CalendarView
+        items={items}
+        focus={focus}
+        view={view === "week" || view === "agenda" || view === "month" ? view : null}
+        teamId={currentTeam.id}
+        canManage={canManage}
+        isMaster={master}
+        capacity={{ perDay: settings.perDay, weekends: settings.weekends, limits: dayLimits }}
+        meetings={(meetingRows ?? []).map((m) => ({
+          id: m.id as string,
+          title: m.title as string,
+          at: m.starts_at as string,
+          durationMin: m.duration_min as number,
+          location: (m.location as string) || "Discord",
+          cancelled: m.status === "cancelled",
+        }))}
+      />
+    </div>
+  );
+}

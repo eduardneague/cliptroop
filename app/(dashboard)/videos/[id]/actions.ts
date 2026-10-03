@@ -106,6 +106,10 @@ export async function updateTypeTheme(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -136,6 +140,10 @@ export async function updateExpectedDate(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -177,6 +185,10 @@ export async function updateIdeateField(
   if (error) return { error: "Couldn't save. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true, updatedAt: new Date().toISOString() };
 }
 
@@ -228,6 +240,10 @@ export async function regressStage(projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -288,6 +304,10 @@ export async function advanceStage(projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   revalidatePath("/videos");
   return { success: true };
 }
@@ -343,6 +363,10 @@ export async function assignMember(
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
 }
 
@@ -358,6 +382,10 @@ export async function removeAssignee(projectId: string, assigneeRowId: string) {
   if (error) return { error: "Couldn't unassign. Try again." };
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
 }
 
@@ -488,6 +516,10 @@ export async function postComment(
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return {};
 }
 
@@ -503,5 +535,137 @@ export async function deleteComment(commentId: string, projectId: string) {
   }
 
   revalidatePath(`/videos/${projectId}`);
+
+  revalidatePath("/videos");
+
+  revalidatePath("/calendar");
   return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Long-video steps (Film, Edit, Review, Post). The database functions check
+// the person's role and the current step; these add notifications.
+// ---------------------------------------------------------------------------
+
+type StepResult = { error?: string };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function stepError(error: { code?: string; message?: string } | null, fallback: string) {
+  if (!error) return null;
+  return ["42501", "23514", "P0002"].includes(error.code ?? "") ? error.message ?? fallback : fallback;
+}
+
+/** Tell whoever is assigned to `stage` that it's their turn. */
+async function notifyStage(projectId: string, stage: PipelineStage, extra = "") {
+  const supabase = await createClient();
+  const [{ data: project }, { data: assignees }] = await Promise.all([
+    supabase.from("long_video_projects").select("title").eq("id", projectId).maybeSingle(),
+    supabase.from("project_assignees").select("team_members(user_id)").eq("project_id", projectId).eq("stage", stage),
+  ]);
+  const recipients = (assignees ?? [])
+    .map((a) => (a.team_members as unknown as { user_id: string })?.user_id)
+    .filter(Boolean);
+  if (!recipients.length || !project) return;
+  await sendNotifications(
+    recipients.map((recipient_id) => ({
+      recipient_id,
+      project_id: projectId,
+      stage,
+      kind: "stage_ready",
+      metadata: { projectTitle: project.title, stageLabel: STAGE_LABELS[stage], stageColor: stageColor(stage) },
+      body: `"${project.title}" moved into ${STAGE_LABELS[stage]}.${extra ? ` ${extra}` : " You have work to do."}`,
+    }))
+  );
+}
+
+function refreshLong(projectId: string) {
+  revalidatePath(`/videos/${projectId}`);
+  revalidatePath("/videos");
+  revalidatePath("/calendar");
+}
+
+/** Film: "Filmed and uploaded to the NAS" (+ optional folder path). → Edit */
+export async function markFilmed(projectId: string, nasPath: string): Promise<StepResult> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("long_mark_filmed", { p_project: projectId, p_nas_path: String(nasPath ?? "").slice(0, 500) });
+  const msg = stepError(error, "Couldn't mark it filmed. Try again.");
+  if (msg) return { error: msg };
+  await notifyStage(projectId, "edit", nasPath?.trim() ? `The footage is on the NAS: ${nasPath.trim()}` : "");
+  refreshLong(projectId);
+  return {};
+}
+
+/** Edit: the editor's note + "Editing complete". → Review */
+export async function markEdited(projectId: string, note: string): Promise<StepResult> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("long_mark_edited", { p_project: projectId, p_note: String(note ?? "").slice(0, 4000) });
+  const msg = stepError(error, "Couldn't mark editing complete. Try again.");
+  if (msg) return { error: msg };
+  await notifyStage(projectId, "review", "The edit is ready for review.");
+  refreshLong(projectId);
+  return {};
+}
+
+/** Review: approve (→ Package) or request changes with a note (→ Edit). */
+export async function reviewLong(projectId: string, approve: boolean, note: string): Promise<StepResult> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("long_review", { p_project: projectId, p_approve: !!approve, p_note: String(note ?? "").slice(0, 4000) });
+  const msg = stepError(error, "Couldn't save the review. Try again.");
+  if (msg) return { error: msg };
+  await notifyStage(projectId, approve ? "package" : "edit", approve ? "" : `Changes requested: ${String(note).trim().slice(0, 200)}`);
+  refreshLong(projectId);
+  return {};
+}
+
+/** Post: tick / untick a platform (optional link). All ticked → Posted. */
+export async function setLongPosted(projectId: string, platform: string, posted: boolean, url = ""): Promise<StepResult & { stage?: string }> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("long_set_posted", { p_project: projectId, p_platform: platform, p_posted: !!posted, p_url: url });
+  const msg = stepError(error, "Couldn't update it. Try again.");
+  if (msg) return { error: msg };
+  refreshLong(projectId);
+  return { stage: data as string };
+}
+
+/** Which platforms this video goes to (masters). */
+export async function setLongPlatforms(projectId: string, platforms: string[]): Promise<StepResult> {
+  const allowed = ["youtube", "facebook", "instagram", "tiktok"];
+  const list = Array.from(new Set(platforms)).filter((p) => allowed.includes(p));
+  if (!list.length) return { error: "Keep at least one platform." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("long_video_projects").update({ platforms: list }).eq("id", projectId).select("id");
+  if (error || !data?.length) return { error: "Only the master can change the platforms." };
+  refreshLong(projectId);
+  return {};
+}
+
+/** Package: the final YouTube description. */
+export async function saveLongDescription(projectId: string, description: string): Promise<StepResult> {
+  const text = String(description ?? "");
+  if (text.length > 5000) return { error: "YouTube descriptions can be up to 5,000 characters." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("long_video_projects").update({ description: text }).eq("id", projectId).select("id");
+  if (error || !data?.length) return { error: "You can't edit the description of this video." };
+  revalidatePath(`/videos/${projectId}`);
+  return {};
+}
+
+/** Script: add or remove one of this video's scripters (masters). */
+export async function setLongScripter(projectId: string, memberId: string, add: boolean): Promise<StepResult> {
+  if (!UUID_RE.test(projectId) || !UUID_RE.test(memberId)) return { error: "Not found." };
+  const supabase = await createClient();
+  const { error } = add
+    ? await supabase.from("long_video_scripters").insert({ project_id: projectId, team_member_id: memberId })
+    : await supabase.from("long_video_scripters").delete().eq("project_id", projectId).eq("team_member_id", memberId);
+  if (error && error.code !== "23505") return { error: "Only the master can change the scripters." };
+  // The scripters are also the Script step's people (tagging notifies them).
+  if (add) await assignMember(projectId, "script", memberId);
+  else await supabase.from("project_assignees").delete().eq("project_id", projectId).eq("stage", "script").eq("team_member_id", memberId);
+  revalidatePath(`/videos/${projectId}`);
+  revalidatePath(`/videos/${projectId}/script`);
+  return {};
 }

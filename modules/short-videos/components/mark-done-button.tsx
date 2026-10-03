@@ -15,7 +15,7 @@ export function MarkDoneButton({
   shortId: string;
   number: number;
   compact?: boolean;
-  /** Locked until a video is uploaded (or a Frame.io link is set). */
+  /** Locked until a video is uploaded. */
   disabled?: boolean;
 }) {
   const confirm = useConfirm();
@@ -40,8 +40,11 @@ export function MarkDoneButton({
       onClick={handleClick}
       disabled={submit.pending || disabled}
       title={disabled ? "Upload the video first" : undefined}
-      className={`relative z-10 inline-flex items-center gap-1 rounded-lg bg-amber text-white font-bold disabled:opacity-45 disabled:cursor-not-allowed hover:brightness-110 transition-[filter] ${
-        compact ? "text-[11px] px-2 py-1" : "text-[13px] px-3.5 h-9"
+      className={`relative z-10 inline-flex items-center gap-1 rounded-lg font-bold disabled:opacity-45 disabled:cursor-not-allowed transition-colors ${
+        compact
+          ? // In lists: a quiet outline that fills in on hover, so a page of shorts doesn't shout.
+            "text-[11px] px-2 h-6 border border-amber/45 bg-amber/[0.08] text-amber hover:bg-amber hover:text-white disabled:hover:bg-amber/[0.08] disabled:hover:text-amber"
+          : "text-[13px] px-3.5 h-9 bg-amber text-white hover:brightness-110"
       }`}
     >
       <CheckIcon className={compact ? "w-3 h-3" : "w-4 h-4"} />

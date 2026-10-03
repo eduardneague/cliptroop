@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { getTeamsAndCurrent } from "@/lib/teams";
+import { kindColorCss } from "@/lib/kind-colors";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileTopBar, MobileBottomNav } from "@/components/ui/mobile-nav";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -9,7 +10,13 @@ import { ToastProvider } from "@/components/ui/toast-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { GlobalSearch } from "@/components/search/global-search";
+import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
+import { PaletteSync } from "@/components/ui/palette";
+import { SoundSync } from "@/components/ui/sound-sync";
+import { WhatsNewHost } from "@/components/ui/whats-new";
+import { Brand } from "@/components/ui/clip-logo";
+import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
 import { signOut } from "./actions";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
@@ -31,12 +38,12 @@ export default async function DashboardLayout({
   // into the catch-all 404 route. Never assume; send them to login.
   if (!user) redirect("/login");
 
-  // Three independent reads — run them at the same time instead of one
-  // after another (one round trip of waiting instead of three).
+  // Everything the shell needs in ONE round trip: profile (with the colour
+  // theme), teams (with their colours) and the latest notifications.
   const [{ data: profile }, { teams, currentTeam }, { data: notifications }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, full_name, email, avatar_url, animations_enabled")
+      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
       .eq("id", user!.id)
       .single(),
     getTeamsAndCurrent(supabase),
@@ -47,6 +54,8 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
+  const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
+  const paletteRow = profile ? { palette: (profile as { palette?: string | null }).palette ?? null } : null;
 
   const resolvedName = displayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
   const resolvedEmail = profile?.email ?? user?.email ?? "";
@@ -63,6 +72,10 @@ export default async function DashboardLayout({
     <ToastProvider>
       <ConfirmProvider>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
+        {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
+        <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+        {/* The team's colours for shorts and long videos, everywhere. */}
+        <style>{kindColorCss(teamColors?.short_color as string | undefined, teamColors?.long_color as string | undefined)}</style>
         <div className="min-h-screen flex">
           <Sidebar
             teams={teams}
@@ -78,8 +91,19 @@ export default async function DashboardLayout({
                 middle of the top bar: [brand] [search] [actions]. On phones:
                 brand on the left, search icon + actions on the right. */}
             <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
-              <span className="font-display font-semibold text-[14px] tracking-tight md:invisible">
-                VPlanner
+              <span className="flex items-center gap-2 min-w-0">
+                <Link href="/dashboard" aria-label="VPlanner home" className="md:hidden">
+                  <Brand className="[&_.font-display]:text-[15px]" />
+                </Link>
+                {/* Staging only: so it's always obvious you're not on the real app. */}
+                {APP_CHANNEL === "E" && (
+                  <span
+                    className="rounded-md border border-amber/50 bg-amber/15 text-amber px-1.5 py-0.5 text-[10px] font-bold tracking-[0.12em]"
+                    title={`Experimental build ${APP_VERSION_LABEL}`}
+                  >
+                    EXPERIMENTAL
+                  </span>
+                )}
               </span>
               <div className="min-w-0 flex items-center justify-end md:justify-center">
                 <GlobalSearch
@@ -114,6 +138,7 @@ export default async function DashboardLayout({
             <MobileBottomNav />
           </div>
         </div>
+        <WhatsNewHost />
       </ConfirmProvider>
     </ToastProvider>
   );

@@ -42,7 +42,9 @@ function friendlyDbError(error: { code?: string; message: string } | null, fallb
     }
   }
   if (error.code === "42501") return "You don't have permission to do that.";
-  return fallback;
+  // Unexpected: say what actually happened (an in-house tool; makes bugs quick to fix).
+  console.error("[shorts] database error", error.code, error.message);
+  return `${fallback} (${error.code ?? "error"}: ${error.message.slice(0, 140)})`;
 }
 
 async function requireUser() {
@@ -111,8 +113,11 @@ function notifyMany(
   return sendNotifications(unique.map(build));
 }
 
+/** Every page that shows shorts: the list, the calendar, posting. */
 function revalidateShort(id?: string) {
   revalidatePath("/shorts");
+  revalidatePath("/calendar");
+  revalidatePath("/posting");
   if (id) revalidatePath(`/shorts/${id}`);
 }
 
@@ -653,7 +658,7 @@ export async function deleteShort(
     vacated = { teamId: before.team_id as string, day: before.planned_date as string, keep: Math.max(0, dayCount - 1) };
   }
 
-  revalidatePath("/shorts");
+  revalidateShort();
   return { vacated };
 }
 
@@ -697,7 +702,7 @@ export async function setShortDayLimit(
     }
   }
 
-  revalidatePath("/shorts");
+  revalidateShort();
   return {};
 }
 
@@ -736,3 +741,26 @@ export async function setShortScripter(id: string, memberId: string, add: boolea
   return {};
 }
 
+
+/**
+ * Calendar: move an automatic short to a day while keeping it automatic.
+ * It lands on that day if there's room, otherwise on the next free day.
+ */
+export async function moveShortAuto(id: string, day: string): Promise<{ error?: string; landed?: string }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { error: "Pick a valid day." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("move_short_auto", { p_short: id, p_day: day });
+  if (error) return { error: error.code === "42501" || error.code === "23514" || error.code === "P0002" ? error.message : "Couldn't move it. Try again." };
+  revalidateShort(id);
+  return { landed: data as string };
+}
+
+/** Calendar: two shorts trade places (drop one onto another on a different day). */
+export async function swapShorts(a: string, b: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("swap_shorts", { p_a: a, p_b: b });
+  if (error) return { error: ["42501", "23514", "P0002"].includes(error.code ?? "") ? error.message : "Couldn't swap them. Try again." };
+  revalidateShort(a);
+  revalidateShort(b);
+  return {};
+}

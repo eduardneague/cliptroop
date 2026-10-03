@@ -86,6 +86,18 @@ export async function updateTeamsVisibility(visible: boolean) {
   return { success: true };
 }
 
+/** Small UI sounds for this account (Settings → Preferences). */
+export async function setSounds(on: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { error } = await supabase.from("profiles").update({ sounds_enabled: !!on }).eq("id", user.id);
+  if (error) return { error: "Couldn't save that setting. Try again." };
+  return { success: true };
+}
+
 /** Animations for this account: null = match the device, true = on, false = off. */
 export async function setAnimations(enabled: boolean | null) {
   const supabase = await createClient();
@@ -95,5 +107,19 @@ export async function setAnimations(enabled: boolean | null) {
   if (!user) return { error: "Your session expired. Sign in again." };
   const { error } = await supabase.from("profiles").update({ animations_enabled: enabled === null ? null : !!enabled }).eq("id", user.id);
   if (error) return { error: "Couldn't save that setting. Try again." };
+  return { success: true };
+}
+
+/** Colour theme for this account (null = the original). Settings → Preferences → Colours. */
+export async function setPalette(palette: string | null) {
+  if (palette !== null && !/^[a-z]{2,20}$/.test(palette)) return { error: "Unknown theme." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { error } = await supabase.from("profiles").update({ palette }).eq("id", user.id);
+  // Before migration 0060 the column doesn't exist: keep it on this device and say so.
+  if (error) return { error: /palette/.test(error.message) ? "Saved on this device only (the database needs migration 0060)." : "Couldn't save that setting. Try again." };
   return { success: true };
 }

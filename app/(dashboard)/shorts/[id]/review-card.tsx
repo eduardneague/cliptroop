@@ -56,7 +56,7 @@ export function ReviewCard({
   }
 
   return (
-    <section className="rounded-2xl border border-amber bg-amber/10 p-5">
+    <section className="rounded-2xl border border-amber/40 bg-amber/[0.06] p-5">
       <h2 className="text-[12px] font-bold uppercase tracking-wide text-amber mb-3">In review</h2>
 
       {latestVersion ? (
@@ -74,21 +74,6 @@ export function ReviewCard({
             </span>
           </span>
         </Link>
-      ) : link ? (
-        <a
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group flex items-center gap-3 rounded-xl bg-surface border border-line/15 px-3.5 py-3 mb-4 hover:border-green transition-colors"
-        >
-          <span className="w-9 h-9 rounded-lg bg-green text-white flex items-center justify-center flex-shrink-0">
-            <ExternalIcon className="w-4 h-4" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[13.5px] font-bold text-ink">Open in Frame.io</span>
-            <span className="block text-[11.5px] text-ink-soft truncate">{link.replace(/^https:\/\//, "")}</span>
-          </span>
-        </a>
       ) : (
         <p className="text-[13px] text-ink mb-4">No video uploaded yet.</p>
       )}

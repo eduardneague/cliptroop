@@ -272,11 +272,12 @@ export function HomeIcon(p: IconProps) {
   );
 }
 
+/** A long video: a solid landscape (16:9) card with a centered play triangle. */
+/** Long videos: a solid landscape (16:9) card, play triangle cut out and centred. */
 export function VideoIcon(p: IconProps) {
   return (
-    <Svg {...p}>
-      <rect x="2.75" y="5" width="18.5" height="14" rx="3" />
-      <path d="m10 9.25 4.75 2.75L10 14.75Z" fill="currentColor" />
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d="M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z" />
     </Svg>
   );
 }
@@ -413,11 +414,19 @@ export function UserIcon(p: IconProps) {
 }
 
 /** Vertical frame with a play mark — short-form video. */
+/**
+ * A short: a solid portrait (9:16) card with the play triangle cut out,
+ * centered on its centroid so it looks centered.
+ */
+/**
+ * Shorts: a solid portrait (9:16) card with the play triangle cut out.
+ * The triangle's centre of balance sits exactly on the card's centre,
+ * which is what makes it look centred.
+ */
 export function ShortsIcon(p: IconProps) {
   return (
-    <Svg {...p}>
-      <rect x="6.5" y="2.75" width="11" height="18.5" rx="2.75" />
-      <path d="m10.5 9.5 4 2.5-4 2.5Z" fill="currentColor" />
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d="M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z" />
     </Svg>
   );
 }
@@ -587,6 +596,132 @@ export function DocumentIcon(p: IconProps) {
     <Svg {...p}>
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
       <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </Svg>
+  );
+}
+
+/** Paper plane: the Posting page. */
+export function PostingIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M21 3 3.8 10.2c-.8.3-.8 1.4 0 1.7L10 14l2.1 6.2c.3.8 1.4.8 1.7 0L21 3Z" />
+      <path d="M21 3 10 14" />
+    </Svg>
+  );
+}
+
+/** Six dots: drag to move. */
+export function GripIcon(p: IconProps) {
+  return (
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <circle cx="9" cy="6" r="1.6" />
+      <circle cx="15" cy="6" r="1.6" />
+      <circle cx="9" cy="12" r="1.6" />
+      <circle cx="15" cy="12" r="1.6" />
+      <circle cx="9" cy="18" r="1.6" />
+      <circle cx="15" cy="18" r="1.6" />
+    </Svg>
+  );
+}
+
+/** A flag: priority. */
+export function FlagIcon({ filled, ...p }: IconProps & { filled?: boolean }) {
+  return (
+    <Svg {...p} fill={filled ? "currentColor" : "none"}>
+      <path d="M5 21V4.5M5 4.5h11.5l-2 4 2 4H5" />
+    </Svg>
+  );
+}
+
+export function ChevronLeftIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m15 6-6 6 6 6" />
+    </Svg>
+  );
+}
+
+/** Speaker: sounds on (waves) or off (a cross). */
+export function SoundIcon({ off, ...p }: IconProps & { off?: boolean }) {
+  return (
+    <Svg {...p}>
+      <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z" />
+      {off ? <path d="m16 9.5 5 5M21 9.5l-5 5" /> : <path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />}
+    </Svg>
+  );
+}
+
+/** Four tiles filling a square: "fill empty space". */
+export function FillIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="3.5" width="9" height="7" rx="1.5" />
+      <rect x="14.5" y="3.5" width="6" height="7" rx="1.5" />
+      <rect x="3.5" y="12.5" width="5" height="8" rx="1.5" />
+      <rect x="10.5" y="12.5" width="10" height="8" rx="1.5" />
+    </Svg>
+  );
+}
+
+/** Two short diagonal strokes in a corner: drag to resize. */
+export function ResizeCornerIcon(p: IconProps) {
+  return (
+    <Svg {...p} strokeWidth={p.strokeWidth ?? 2}>
+      <path d="M19 11 11 19M19 16l-3 3" />
+    </Svg>
+  );
+}
+
+/** Meetings: two speech bubbles (a call / a chat). */
+export function MeetingIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 5.5h10a1.5 1.5 0 0 1 1.5 1.5v5.5A1.5 1.5 0 0 1 14 14H9l-3.5 3v-3H4a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 4 5.5Z" />
+      <path d="M18 9h2a1.5 1.5 0 0 1 1.5 1.5V16a1.5 1.5 0 0 1-1.5 1.5h-1.5V20L15 17.5h-3.5" />
+    </Svg>
+  );
+}
+
+/** Pin: a fixed date (doesn't move with the queue). */
+export function PinIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z" />
+      <path d="M12 14v6" />
+    </Svg>
+  );
+}
+
+/** Analytics: three rising bars on a baseline. */
+export function AnalyticsIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 20h16" />
+      <rect x="5.5" y="12" width="3.5" height="5.5" rx="1" />
+      <rect x="10.25" y="8" width="3.5" height="9.5" rx="1" />
+      <rect x="15" y="4.5" width="3.5" height="13" rx="1" />
+    </Svg>
+  );
+}
+
+/** "More" in the phone bar: a 2×2 grid of rounded squares. */
+export function AppsIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" />
+    </Svg>
+  );
+}
+
+/** Log out: a door with an arrow leaving. */
+export function LogoutIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14" />
+      <path d="M10.5 12h10M17 8.5l3.5 3.5-3.5 3.5" />
     </Svg>
   );
 }

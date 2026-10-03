@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -17,6 +18,7 @@ import type { Person, ReviewNote, VideoVersion } from "../lib/queries";
 import { ReviewPlayer, type PlayerHandle } from "./player";
 import { VersionUploader } from "./uploader";
 import { CompareView } from "./compare";
+import { sounds } from "@/lib/sounds";
 
 type Filter = "open" | "all";
 type Pending = { tempId: string; versionId: string; parentId: string | null; body: string; time: number | null };
@@ -101,6 +103,23 @@ export function ReviewWorkspace({
   useEffect(() => {
     if (!versionId && latest) setVersionId(latest.id);
   }, [latest, versionId]);
+
+  // Just uploaded a version that isn't in the page data yet: keep
+  // refreshing (up to 5 times) until it arrives, never leave a stale page.
+  const waitingFor = versionId && !versions.some((v) => v.id === versionId) ? versionId : null;
+  const waitTries = useRef(0);
+  useEffect(() => {
+    if (!waitingFor) {
+      waitTries.current = 0;
+      return;
+    }
+    if (waitTries.current >= 5) return;
+    const t = setTimeout(() => {
+      waitTries.current += 1;
+      router.refresh();
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [waitingFor, versions, router]);
 
   // Notes shown while saving disappear once the fresh list has arrived.
   useEffect(() => {
@@ -385,7 +404,7 @@ export function ReviewWorkspace({
             <p className="text-[12px] text-ink-soft">
               v{version.number} · {formatBytes(version.size)}
               {version.width && version.height ? ` · ${version.width}×${version.height}` : ""}
-              {version.uploadedBy ? ` · uploaded by ${version.uploadedBy.name}` : ""}, {relativeTime(version.createdAt)}
+              {version.uploadedBy ? ` · uploaded by ${version.uploadedBy.name}` : ""}, <Ago iso={version.createdAt} />
               <span className="hidden md:inline"> · Space play · J/L 5s · , . frame · C note · N notes</span>
             </p>
           </>
@@ -555,7 +574,10 @@ function Composer({
     setBusy(true);
     const ok = await onPost(draft, atTime ? moment : null);
     setBusy(false);
-    if (ok) setDraft("");
+    if (ok) {
+      setDraft("");
+      sounds.send();
+    }
   }
 
   return (
@@ -779,6 +801,7 @@ function NoteThread({
     const ok = await onReply(note.id, reply);
     setSending(false);
     if (ok) {
+      sounds.send();
       setReply("");
       setReplying(false);
     }
@@ -798,7 +821,7 @@ function NoteThread({
         <div className="flex items-center gap-2 text-[12px]">
           <span className="font-semibold text-ink-soft truncate">{n.author?.name ?? "Someone"}</span>
           <span className="text-ink-faint whitespace-nowrap">
-            {n.pending ? "posting…" : relativeTime(n.createdAt)}
+            {n.pending ? "posting…" : <Ago iso={n.createdAt} />}
             {n.editedAt ? " · edited" : ""}
           </span>
           {n.pending && <Spinner className="w-3 h-3 text-ink-soft" />}
@@ -856,7 +879,7 @@ function NoteThread({
           ? {
               // "You are here" (or just clicked): a soft tint, no border.
               background: active
-                ? "linear-gradient(90deg, rgb(var(--amber) / 0.15), rgb(var(--amber) / 0.03) 75%)"
+                ? "rgb(var(--amber) / 0.11)"
                 : "rgb(var(--amber) / 0.07)",
             }
           : undefined
