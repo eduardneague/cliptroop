@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import Link from "next/link";
 import { StarIcon } from "@/components/ui/icons";
 import { createClient } from "@/lib/supabase/server";
@@ -400,7 +401,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       )}
 
       <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">
-        VPlanner {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" /> ·{" "}
+        {APP_NAME} {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" /> ·{" "}
         <Link href="/status" className="hover:text-ink underline-offset-2 hover:underline">
           Status
         </Link>

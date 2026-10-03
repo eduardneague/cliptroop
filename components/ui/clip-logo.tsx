@@ -4,6 +4,7 @@
  * clapper once (CSS: .brand-row:hover .clip-logo-arm).
  * Same drawing as app/icon.svg (the browser tab icon).
  */
+import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 const INK = "#2B2118";
 const CREAM = "#FFF4E6";
 const AMBER = "#E8630D";
@@ -21,7 +22,7 @@ function Stripes({ y, h }: { y: number; h: number }) {
 
 export function ClipLogo({ size = 28, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg viewBox="18 20 84 84" width={size} height={size} className={`clip-logo flex-shrink-0 ${className}`} role="img" aria-label="VPlanner">
+    <svg viewBox="18 20 84 84" width={size} height={size} className={`clip-logo flex-shrink-0 ${className}`} role="img" aria-label={APP_NAME}>
       <defs>
         <clipPath id="clip-logo-board">
           <rect x="30" y="50" width="60" height="50" rx="10" />
@@ -58,9 +59,9 @@ export function ClipLogo({ size = 28, className = "" }: { size?: number; classNa
 /** Clippy + the wordmark. */
 export function Brand({ className = "" }: { className?: string }) {
   return (
-    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title="Hi there!">
+    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title={`Hi, I'm ${MASCOT_NAME}!`}>
       <ClipLogo size={28} />
-      <span className="font-display font-semibold text-[16px] tracking-tight">VPlanner</span>
+      <span className="font-display font-semibold text-[16px] tracking-tight">{APP_NAME}</span>
     </span>
   );
 }

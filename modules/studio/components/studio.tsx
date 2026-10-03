@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -540,7 +541,7 @@ export function Studio({ data }: { data: StudioData }) {
           <AnchoredMenu open={panel === "library"} onClose={() => setPanel(null)} anchor={libraryBtn} width={300} label="library">
             <div className="p-3.5 space-y-2.5">
               <p className="text-[12.5px] text-ink-soft">
-                {data.library.length ? `${data.library.length} popular videos, stored in VPlanner so previews load instantly.` : "No placeholder videos yet."} Import YouTube&rsquo;s current most popular videos, including Science &amp; Tech.
+                {data.library.length ? `${data.library.length} popular videos, stored in ${APP_NAME} so previews load instantly.` : "No placeholder videos yet."} Import YouTube&rsquo;s current most popular videos, including Science &amp; Tech.
               </p>
               <Select value={region} onChange={(v) => v && setRegion(v)} options={REGIONS.map(([code, name]) => ({ value: code, label: name }))} ariaLabel="Region" menuMinWidth={200} />
               {data.canImport ? (

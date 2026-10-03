@@ -12,5 +12,6 @@ export const config = {
      * session gets refreshed on every navigation.
      */
     // vendor/ = public library files (e.g. the Word export), cacheable.
-"/((?!_next/static|_next/image|favicon.ico|vendor/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)",  ],
+// sw.js / manifest.webmanifest / app-icons = the installable app: public, no session needed.
+"/((?!_next/static|_next/image|favicon.ico|vendor/|app-icons/|sw\\.js$|manifest\\.webmanifest$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)",  ],
 };

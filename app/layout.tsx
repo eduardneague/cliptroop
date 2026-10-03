@@ -1,3 +1,5 @@
+import { APP_NAME, APP_DESCRIPTION, APP_SHORT_NAME } from "@/lib/brand";
+import { PwaRegister } from "@/components/pwa";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
@@ -36,10 +38,15 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "VPlanner",
-    template: "%s · VPlanner",
+    default: APP_NAME,
+    template: `%s · ${APP_NAME}`,
   },
-  description: "Internal content production dashboard.",
+  description: APP_DESCRIPTION,
+  applicationName: APP_NAME,
+  // The installable app (app/manifest.ts): iPhone home-screen icon and full-screen mode.
+  appleWebApp: { capable: true, title: APP_SHORT_NAME, statusBarStyle: "default" },
+  icons: { apple: [{ url: "/app-icons/apple-touch-icon.png", sizes: "180x180" }] },
+  formatDetection: { telephone: false },
   // This app is invite-only and has no public content — nothing here
   // should ever show up in search results, regardless of auth state.
   // Individual pages can override this, but none currently need to.
@@ -71,6 +78,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ErrorReporter />
+        <PwaRegister />
         <AuthHashHandler />
         {children}
       </body>

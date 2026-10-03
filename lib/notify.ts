@@ -1,6 +1,9 @@
 import "server-only";
 import { displayName } from "./avatar";
 import { createAdminClient } from "./supabase/admin";
+import { APP_NAME } from "./brand";
+import { notificationUrl } from "./notification-url";
+import { queuePush } from "./push/send";
 
 type SupabaseLike = {
   from: (table: string) => any;
@@ -60,5 +63,17 @@ export async function sendNotifications(
     console.error("[sendNotifications]", error.message);
     return { error: error.message };
   }
+  // The same thing on their phones / computers (only devices they turned on).
+  queuePush(
+    list.map((n) => {
+      const team = (n.metadata?.team as { name?: unknown } | undefined)?.name;
+      return {
+        userId: n.recipient_id,
+        title: typeof team === "string" && team ? team : APP_NAME,
+        body: n.body,
+        url: notificationUrl(n) ?? "/dashboard?notifications=1",
+      };
+    })
+  );
   return { error: null };
 }

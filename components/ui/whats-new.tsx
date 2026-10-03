@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Dialog } from "./dialog";
@@ -117,7 +118,7 @@ export function WhatsNewHost() {
   return (
     <>
       {card && current && <UpdateCard release={current} onOpen={openWhatsNew} onClose={dismissCard} />}
-      <Dialog open={open} onClose={() => setOpen(false)} title="What's new" description={`You're on VPlanner ${APP_VERSION}.`} width="sm:max-w-2xl">
+      <Dialog open={open} onClose={() => setOpen(false)} title="What's new" description={`You're on ${APP_NAME} ${APP_VERSION}.`} width="sm:max-w-2xl">
         {open && <Notes />}
       </Dialog>
     </>
@@ -132,7 +133,7 @@ function UpdateCard({ release, onOpen, onClose }: { release: Release; onOpen: ()
     >
       <Mascot mood="celebrate" size={58} className="flex-shrink-0 -my-1" />
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-semibold leading-snug">VPlanner {short(release.version)} is here</p>
+        <p className="text-[13.5px] font-semibold leading-snug">{APP_NAME} {short(release.version)} is here</p>
         <p className="text-[12px] text-ink-soft leading-snug mt-0.5 line-clamp-2">{release.title}</p>
         <button type="button" data-sound="none" onClick={onOpen} className="mt-2 rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] hover:brightness-110">
           See what&rsquo;s new

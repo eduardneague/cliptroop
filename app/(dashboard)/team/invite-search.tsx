@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useEffect, useRef, useState } from "react";
 import { searchInvitableUsers, type InviteCandidate } from "./search-users-action";
 import { inviteExistingUser } from "./actions";
@@ -178,7 +179,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
         </div>
       )}
       <p className="text-[11px] text-ink-faint mt-1.5">
-        Only finds people who already have a VPlanner account. New accounts are created
+        Only finds people who already have a {APP_NAME} account. New accounts are created
         separately, by invite.
       </p>
     </div>

@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import Link from "next/link";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import type { TeamSummary } from "@/lib/teams";
@@ -26,7 +27,7 @@ export function Sidebar({
 }) {
   return (
     <aside className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden styled-scroll">
-      <Link href="/dashboard" aria-label="VPlanner home" className="flex items-center px-1.5 pt-0.5 pb-3 rounded-lg">
+      <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="flex items-center px-1.5 pt-0.5 pb-3 rounded-lg">
         <Brand />
       </Link>
       <div className="mb-5">

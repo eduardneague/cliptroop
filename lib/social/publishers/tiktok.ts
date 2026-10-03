@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import "server-only";
 import { PublishError, readChunk, signedVideoUrl, videoFor, type PostRow, type StepResult } from "./common";
 
@@ -24,12 +25,12 @@ export type TikTokOptions = {
 
 const FRIENDLY: Record<string, string> = {
   unaudited_client_can_only_post_to_private_accounts:
-    "Until TikTok approves VPlanner, the TikTok account must be set to private (TikTok app → Settings → Privacy → Private account).",
+    `Until TikTok approves ${APP_NAME}, the TikTok account must be set to private (TikTok app → Settings → Privacy → Private account).`,
   privacy_level_option_mismatch: "That privacy option isn't allowed for this account right now. Pick another one.",
   spam_risk_too_many_posts: "TikTok's daily posting limit for this account was reached. It'll retry later.",
   spam_risk_user_banned_from_posting: "This TikTok account is currently blocked from posting.",
   access_token_invalid: "The TikTok sign-in expired. Reconnect TikTok in Team → Connected accounts.",
-  scope_not_authorized: "VPlanner doesn't have posting permission. Reconnect TikTok and allow posting.",
+  scope_not_authorized: `${APP_NAME} doesn't have posting permission. Reconnect TikTok and allow posting.`,
   rate_limit_exceeded: "TikTok is rate limiting requests. It'll retry shortly.",
 };
 const RETRY = new Set(["spam_risk_too_many_posts", "rate_limit_exceeded", "internal_error"]);
@@ -164,7 +165,7 @@ export async function tiktokStep(post: PostRow, token: string, deadline: number)
         externalId: ids[0] ? String(ids[0]) : st.publishId,
         permalink: null,
         note: isPrivate
-          ? "Posted as private (only you can see it). That's expected until TikTok approves VPlanner."
+          ? `Posted as private (only you can see it). That's expected until TikTok approves ${APP_NAME}.`
           : "Posted. Open TikTok to see it.",
         event: { kind: "published", message: isPrivate ? "Posted to TikTok (private)" : "Live on TikTok" },
       };

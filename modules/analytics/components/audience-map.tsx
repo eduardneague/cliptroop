@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useState } from "react";
 import type { Audience } from "../lib/queries";
 import { WorldMap } from "./world-map";
@@ -105,7 +106,7 @@ export function emptyText(mode: MapMode, youtubeReady: boolean) {
     case "facebook":
       return "Facebook shares followers by country for Pages with 100+ followers (when it does for your Page). They arrive with the next sync.";
     case "tiktok":
-      return "TikTok doesn't share followers by country with apps like VPlanner yet (only its own business tools show them).";
+      return `TikTok doesn't share followers by country with apps like ${APP_NAME} yet (only its own business tools show them).`;
   }
 }
 

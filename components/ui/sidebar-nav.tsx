@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -109,7 +110,7 @@ function MoreSheet({ onClose, pathname }: { onClose: () => void; pathname: strin
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line/25" aria-hidden />
         <div className="flex items-center gap-2 px-1 mb-3">
           <ClipLogo size={26} />
-          <span className="font-display font-semibold text-[15px]">VPlanner</span>
+          <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {MORE_ITEMS.map(({ href, label, Icon }) => {

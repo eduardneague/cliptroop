@@ -1,5 +1,7 @@
 "use client";
 
+import { notificationUrl } from "@/lib/notification-url";
+import Link from "next/link";
 import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -442,6 +444,29 @@ export function NotificationBell({
   // what pushed the panel off-screen on phones.
   const [anchor, setAnchor] = useState<{ top: number; right: number }>({ top: 64, right: 16 });
   const router = useRouter();
+  // Whether this device already gets push notifications (else the panel offers it).
+  const [pushOn, setPushOn] = useState(true);
+  useEffect(() => {
+    if (!open) return;
+    try {
+      setPushOn("Notification" in window && Notification.permission === "granted" && localStorage.getItem("vp-push-user") === userId);
+    } catch {
+      setPushOn(true);
+    }
+  }, [open, userId]);
+  // A push notification that has no page of its own opens the bell
+  // (it links to …?notifications=1); the address is tidied afterwards.
+  useEffect(() => {
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get("notifications") !== "1") return;
+      u.searchParams.delete("notifications");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+      const rect = bellRef.current?.getBoundingClientRect();
+      if (rect) setAnchor({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) });
+      setOpen(true);
+    } catch {}
+  }, []);
   const toast = useToast();
 
   // The bell owns its own list on the client. The server layout provides
@@ -544,13 +569,8 @@ export function NotificationBell({
     setOpen(false);
     if (!n.is_read) markReadLocally(n.id);
     // Some notifications lead somewhere specific (a comment in a script).
-    if (n.metadata?.href?.startsWith("/")) {
-      router.push(n.metadata.href);
-    } else if (n.short_id) {
-      router.push(`/shorts/${n.short_id}`);
-    } else if (n.project_id) {
-      router.push(n.stage ? `/videos/${n.project_id}?tab=${n.stage}` : `/videos/${n.project_id}`);
-    }
+    const to = notificationUrl(n);
+    if (to) router.push(to);
   }
 
   async function respond(n: NotificationItem, accept: boolean) {
@@ -701,6 +721,16 @@ export function NotificationBell({
               })
             )}
           </div>
+          {!pushOn && (
+            <Link
+              href="/settings?tab=notifications"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-line/10 text-[12px] font-semibold text-amber hover:bg-surface-2"
+            >
+              Get these on your phone too
+              <span aria-hidden>→</span>
+            </Link>
+          )}
         </div>
       </>,
           document.body

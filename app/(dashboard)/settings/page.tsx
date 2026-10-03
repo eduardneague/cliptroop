@@ -16,10 +16,18 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { signOut } from "../actions";
 import type { Metadata } from "next";
 import { WhatsNewButton } from "@/components/ui/whats-new";
+import { cookies } from "next/headers";
+import { createHash } from "node:crypto";
+import { InstallApp, PushKeysHelper, PushSettings } from "@/components/pwa";
+import { PushDevices, type PushDevice } from "./push-devices";
+import { pushConfigured } from "@/lib/push/send";
+import { PUSH_COOKIE } from "@/lib/push/guard";
+import { isAlertPerson } from "@/lib/errors";
+import { APP_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const TABS = ["profile", "teams", "preferences", "account"] as const;
+const TABS = ["profile", "teams", "notifications", "preferences", "account"] as const;
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab: tabParam } = await searchParams;
@@ -43,6 +51,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
 
+  // Notifications tab: your devices (this one marked), and the one-time key setup for the owner.
+  let devices: PushDevice[] = [];
+  let showKeysHelper = false;
+  if (tab === "notifications") {
+    const [{ data: rows }, alertPerson, cookieStore] = await Promise.all([
+      supabase.from("push_subscriptions").select("id, endpoint, label, created_at, last_sent_at").eq("user_id", user!.id).order("created_at", { ascending: false }),
+      pushConfigured() ? Promise.resolve(false) : isAlertPerson(user!.id),
+      cookies(),
+    ]);
+    const mine = cookieStore.get(PUSH_COOKIE)?.value ?? null;
+    devices = (rows ?? []).map((r) => ({
+      id: r.id as string,
+      label: (r.label as string | null) ?? "Device",
+      createdAt: r.created_at as string,
+      lastSentAt: (r.last_sent_at as string | null) ?? null,
+      thisDevice: !!mine && createHash("sha256").update(r.endpoint as string).digest("base64url") === mine,
+    }));
+    showKeysHelper = alertPerson;
+  }
+
   const name = buildDisplayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
 
   return (
@@ -62,6 +90,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         tabs={[
           { id: "profile", label: "Profile" },
           { id: "teams", label: "Teams" },
+          { id: "notifications", label: "Notifications & app" },
           { id: "preferences", label: "Preferences" },
           { id: "account", label: "Account" },
         ]}
@@ -151,6 +180,34 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         </section>
 
+        </div>
+      )}
+      {tab === "notifications" && (
+        <div className="grid gap-6 lg:grid-cols-2 items-start">
+          <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
+            <div>
+              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">{APP_NAME} on your phone</h2>
+              <p className="text-[12.5px] text-ink-soft">
+                Install it like an app, straight from the browser: its own icon, full screen, and notifications. No app store, works on iPhone and Android.
+              </p>
+            </div>
+            <InstallApp />
+          </section>
+          <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
+            <div>
+              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Notifications on this device</h2>
+              <p className="text-[12.5px] text-ink-soft">
+                Everything that shows up in the bell (your turn on a video, a script to review, an action item, a meeting about to start…) also pops up here, even when {APP_NAME} is closed.
+                Turn it on separately on each phone or computer.
+              </p>
+            </div>
+            {showKeysHelper && <PushKeysHelper />}
+            <PushSettings userId={user!.id} />
+            <div className="pt-4 border-t border-line/10">
+              <div className="text-[13px] font-semibold mb-2">Your devices</div>
+              <PushDevices devices={devices} />
+            </div>
+          </section>
         </div>
       )}
       {tab === "preferences" && (

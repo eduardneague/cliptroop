@@ -1,5 +1,6 @@
 "use client";
 
+import { APP_NAME } from "@/lib/brand";
 import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -37,13 +38,13 @@ const ORDER: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 const ERRORS: Record<string, string> = {
   not_configured: "isn't set up on the server yet (missing app keys).",
   forbidden: "can only be connected by the master or a scheduler.",
-  expired: "sign-in expired or came back to a different copy of VPlanner. Try again; if it keeps happening, open Setup check below.",
+  expired: `sign-in expired or came back to a different copy of ${APP_NAME}. Try again; if it keeps happening, open Setup check below.`,
   cancelled: "connection was cancelled.",
   refused: "refused the connection",
   missing_permissions: "wasn't connected: leave every box ticked on the permissions screen. Missing",
   failed: "couldn't be connected.",
   bad_request: "link was invalid.",
-  taken: "is already connected to another VPlanner team. An account can only be in one team: disconnect it there first (Team → Connected accounts), then connect it here.",
+  taken: `is already connected to another ${APP_NAME} team. An account can only be in one team: disconnect it there first (Team → Connected accounts), then connect it here.`,
 };
 
 const ACTION: Record<string, string> = {
@@ -286,7 +287,7 @@ export function ConnectedAccounts({
                 <PlatformIcon platform={h.platform as Platform} className="w-4 h-4 rounded" />
                 <span>
                   <b className="text-ink font-semibold">
-                    {h.actor ?? (META[h.platform as Platform]?.name ?? "VPlanner")}
+                    {h.actor ?? (META[h.platform as Platform]?.name ?? APP_NAME)}
                   </b>{" "}
                   {ACTION[h.action] ?? h.action}
                   {h.account ? ` ${h.account}` : ""}
@@ -340,7 +341,7 @@ function SetupCheck({ setup }: { setup: SocialSetup }) {
       </summary>
       <div className="px-3.5 pb-4 space-y-4 text-[12.5px]">
         <p className="text-ink-soft">
-          What this copy of VPlanner uses. Each <b className="text-ink">return address</b> must be listed exactly (same https, same spelling, no slash at the end) in that platform&rsquo;s developer app,
+          What this copy of {APP_NAME} uses. Each <b className="text-ink">return address</b> must be listed exactly (same https, same spelling, no slash at the end) in that platform&rsquo;s developer app,
           and each copy (production, staging, your computer) needs its own.
         </p>
         <div className="flex flex-wrap gap-x-5 gap-y-1">

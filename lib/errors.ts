@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import "server-only";
 import { fingerprint } from "./error-kinds";
 import { createAdminClient } from "./supabase/admin";
@@ -85,11 +86,11 @@ export async function reportError(input: { source: ErrorSource; message: string;
         who.emails.map((email) =>
           sendAlertEmail({
             to: [email],
-            subject: r.count > 1 ? `VPlanner: still happening (${r.count}×): ${message.slice(0, 80)}` : `VPlanner error: ${message.slice(0, 90)}`,
+            subject: r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
             message: `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
             linkText: "Open the status page",
             href: `${appUrl()}/status`,
-            footer: "You get this because you receive VPlanner's alerts (ALERT_EMAILS, or a team owner).",
+            footer: `You get this because you receive ${APP_NAME}'s alerts (ALERT_EMAILS, or a team owner).`,
           })
         )
       );

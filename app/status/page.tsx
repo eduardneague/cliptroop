@@ -1,3 +1,4 @@
+import { APP_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -60,7 +61,7 @@ export default async function StatusPage() {
       <AutoRefresh />
       <div className="mx-auto max-w-2xl space-y-6">
         <header className="flex items-center justify-between gap-3">
-          <Link href="/dashboard" aria-label="VPlanner">
+          <Link href="/dashboard" aria-label={APP_NAME}>
             <Brand />
           </Link>
           <span className="text-[12px] text-ink-faint">Status · v{process.env.NEXT_PUBLIC_APP_VERSION}</span>
@@ -72,7 +73,7 @@ export default async function StatusPage() {
         </section>
 
         <section className="rounded-2xl border border-line/10 bg-surface px-5 py-2">
-          <h2 className="pt-3 text-[12px] font-bold uppercase tracking-wide text-ink-faint">VPlanner</h2>
+          <h2 className="pt-3 text-[12px] font-bold uppercase tracking-wide text-ink-faint">{APP_NAME}</h2>
           <ul className="divide-y divide-line/10">
             {[...core, ...jobs].map((c) => (
               <Row key={c.key} name={c.name} level={c.level} detail={c.detail} />
@@ -81,7 +82,7 @@ export default async function StatusPage() {
         </section>
 
         <section className="rounded-2xl border border-line/10 bg-surface px-5 py-2">
-          <h2 className="pt-3 text-[12px] font-bold uppercase tracking-wide text-ink-faint">Services VPlanner runs on</h2>
+          <h2 className="pt-3 text-[12px] font-bold uppercase tracking-wide text-ink-faint">Services {APP_NAME} runs on</h2>
           <ul className="divide-y divide-line/10">
             {vendors.map((v) => (
               <Row key={v.key} name={v.name} level={v.level} detail={v.detail} href={v.url} />

@@ -14,6 +14,29 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_CHANNEL: channel,
     NEXT_PUBLIC_APP_COMMIT: commit,
   },
+  // Security headers on every page, and the service worker always fresh.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Nobody can show the app inside their own page (clickjacking).
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=(), usb=()" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
