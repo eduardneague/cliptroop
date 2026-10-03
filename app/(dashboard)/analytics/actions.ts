@@ -24,7 +24,7 @@ export async function syncAnalyticsNow(teamId: string): Promise<Result<{ summary
   const results = await syncTeamAnalytics(teamId);
   revalidatePath("/analytics");
   if (!results.length) return { error: "No connected accounts. Connect them in Team → Connected accounts." };
-  const name = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" } as const;
+  const name = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
   const bad = results.filter((r) => !r.ok);
   if (bad.length === results.length) return { error: bad.map((r) => `${name[r.platform]}: ${r.error}`).join(" · ") };
   return { summary: results.map((r) => `${name[r.platform]} ${r.ok ? `updated${r.note ? ` (${r.note})` : ""}` : `failed (${r.error})`}`).join(" · ") };

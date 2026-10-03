@@ -23,6 +23,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.6.0",
+    date: "2026-10-03",
+    title: "Colour themes, Facebook in Analytics, and smoother connecting",
+    changes: [
+      { kind: "new", text: "Colour themes: Clippy (the original), Ocean, Forest, Lagoon, Grape, Berry and Sand, each in light and dark. Pick yours in Settings → Preferences → Colours. Only you see it, and it follows you to every device." },
+      { kind: "new", text: "Facebook in Analytics: connect your Facebook Page in Team → Connected accounts to see its views, likes, comments and shares, new followers and posts next to YouTube, Instagram and TikTok. (Posting to Facebook stays by hand.)" },
+      { kind: "new", text: "Audience: pick which platforms to count. Click one to see only it, add others to combine them, or All together. Every number, chart and the CSV follow your choice." },
+      { kind: "better", text: "Connect and Reconnect open in their own window, so the page you're on stays put. When you're done, the window closes and the account updates." },
+      { kind: "fixed", text: "Unticking permissions on YouTube's (or TikTok's) screen no longer leaves a half-working connection: VPlanner says which boxes are needed and keeps your previous connection." },
+      { kind: "fixed", text: "TikTok numbers: daily views now count correctly (TikTok only shares totals, so they start the day after the first copy), and its totals, likes and followers show from the first sync." },
+      { kind: "fixed", text: "Coming back from connecting an account no longer jumps to the Members tab, and the \"16s ago\" times no longer cause an error when a page loads." },
+      { kind: "better", text: "The Setup check is only on staging and your computer, not in production." },
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-10-03",
     title: "Analytics widgets, the world map, and a calmer look",

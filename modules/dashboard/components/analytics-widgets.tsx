@@ -15,10 +15,10 @@ import { useBox } from "./widget-box";
  * same kind share one request, kept for 5 minutes.
  */
 
-const PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
+const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
 type P = (typeof PLATFORMS)[number];
-const NAME: Record<P, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
-const COLOR: Record<P, string> = { youtube: "rgb(var(--chart-yt))", instagram: "rgb(var(--chart-ig))", tiktok: "rgb(var(--chart-tt))" };
+const NAME: Record<P, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
+const COLOR: Record<P, string> = { youtube: "rgb(var(--chart-yt))", instagram: "rgb(var(--chart-ig))", tiktok: "rgb(var(--chart-tt))", facebook: "rgb(var(--chart-fb))" };
 
 type Loaded<T> = { state: "loading" } | { state: "error"; error: string } | { state: "ok"; data: T };
 const caches = { audience: new Map<string, { at: number; p: Promise<Loaded<DashAudience>> }>(), production: new Map<string, { at: number; p: Promise<Loaded<DashProduction>> }>() };

@@ -34,9 +34,10 @@
   --coral: 224 90 64;
   /* Chart series (validated for colour-blind separation and contrast on
      the surface; see modules/analytics). Platforms, then content kinds. */
-  --chart-yt: 208 56 70;
-  --chart-ig: 103 76 209;
+  --chart-yt: 200 48 46;
+  --chart-ig: 163 62 168;
   --chart-tt: 15 156 136;
+  --chart-fb: 31 111 224;
   --chart-short: 234 88 12;
   --chart-long: 11 143 203;
   /* --font-display / --font-body / --font-mono are provided by next/font
@@ -61,12 +62,33 @@
   --short: 251 146 60;
   --long: 56 189 248;
   /* Chart series, re-stepped for the dark surface (not just flipped). */
-  --chart-yt: 229 84 95;
-  --chart-ig: 139 114 238;
+  --chart-yt: 224 86 79;
+  --chart-ig: 185 91 192;
   --chart-tt: 31 168 147;
+  --chart-fb: 61 133 238;
   --chart-short: 224 106 30;
   --chart-long: 30 152 210;
 }
+
+/*
+  Colour themes (Settings → Preferences → Colours). Each person picks one;
+  <html data-palette="…"> switches the paper, the cards and the accent (the
+  "amber" token every button and link uses). No attribute = Clippy, the
+  original. Kind, chart, status and meeting colours stay the same in every
+  theme so their meaning never changes. Accents keep white text ≥ 3.4:1.
+*/
+html[data-palette="ocean"]:not(.dark) { --paper: 233 237 242; --paper-2: 224 229 236; --surface: 255 255 255; --surface-2: 244 246 250; --amber: 37 99 235; }
+html.dark[data-palette="ocean"] { --paper: 12 15 21; --paper-2: 17 21 29; --surface: 21 26 35; --surface-2: 27 33 44; --amber: 59 130 246; }
+html[data-palette="forest"]:not(.dark) { --paper: 231 236 229; --paper-2: 222 229 219; --surface: 255 255 255; --surface-2: 244 247 241; --amber: 22 128 74; }
+html.dark[data-palette="forest"] { --paper: 12 16 13; --paper-2: 17 22 18; --surface: 21 28 23; --surface-2: 27 35 29; --amber: 31 150 88; }
+html[data-palette="lagoon"]:not(.dark) { --paper: 229 237 236; --paper-2: 220 230 229; --surface: 255 255 255; --surface-2: 243 248 247; --amber: 13 124 128; }
+html.dark[data-palette="lagoon"] { --paper: 10 16 17; --paper-2: 15 22 23; --surface: 19 28 29; --surface-2: 25 35 36; --amber: 20 150 150; }
+html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224 237; --surface: 255 255 255; --surface-2: 247 245 251; --amber: 109 64 214; }
+html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 139 102 240; }
+html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; }
+html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 225 62 120; }
+html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 180 83 9; }
+html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 214 110 30; }
 
 body {
   background: rgb(var(--paper));

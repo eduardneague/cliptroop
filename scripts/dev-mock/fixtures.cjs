@@ -19,7 +19,7 @@ const LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: 6, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-views2", type: "meetings", x: 2, y: 6, w: 4, h: 2 },
 ] };
-const prof = (i) => ({ ...people[i], animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -100,15 +100,18 @@ for (let d = -60; d <= 0; d++) {
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "shorts", views: Math.round(yt * 0.72) });
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "long", views: Math.round(yt * 0.28) });
   daily.push({ team_id: TEAM, platform: "instagram", day: dd, content: "all", views: ig, likes: Math.round(ig * 0.05), comments: Math.round(ig * 0.004), shares: Math.round(ig * 0.003), saves: Math.round(ig * 0.006), reach: Math.round(ig * 0.7), followers: 64000 + (d + 60) * 12, followers_gained: null, followers_lost: null, watch_minutes: null, total_views: null, total_likes: null });
-  daily.push({ team_id: TEAM, platform: "tiktok", day: dd, content: "all", followers: 120000 + (d + 60) * 40, total_views: 9000000 + (d + 60) * 9500 + Math.round(4000 * rnd()), total_likes: 700000 + (d + 60) * 600, views: null });
+  // MOCK_TT_FIRST=1: TikTok was just connected (one copy, today).
+  if (!process.env.MOCK_TT_FIRST || d === 0) daily.push({ team_id: TEAM, platform: "tiktok", day: dd, content: "all", followers: 120000 + (d + 60) * 40, total_views: 9000000 + (d + 60) * 9500 + Math.round(4000 * rnd()), total_likes: 700000 + (d + 60) * 600, views: null });
+  const fb = Math.round(3100 + 900 * Math.sin(d / 5) + 1200 * rnd());
+  daily.push({ team_id: TEAM, platform: "facebook", day: dd, content: "all", views: d === 0 ? null : fb, engagements: d === 0 ? null : Math.round(fb * 0.06), followers_gained: d === 0 ? null : Math.round(20 + 15 * rnd()), followers_lost: d === 0 ? null : Math.round(4 + 4 * rnd()), followers: d === 0 ? 23800 : null, likes: null, comments: null, shares: null });
   if (d >= -28 && d <= -1) for (const [c, share] of CC) countriesRows.push({ team_id: TEAM, platform: "youtube", metric: "views", day: dd, country: c, value: Math.round(yt * share * (0.85 + rnd() * 0.3)), watch_minutes: Math.round(yt * share * 0.5) });
 }
 const IGC = [["RO", 38100], ["MD", 7200], ["IT", 4900], ["US", 3100], ["ES", 2400], ["DE", 1900]].map(([c, v]) => ({ team_id: TEAM, platform: "instagram", metric: "followers", day: day(-1), country: c, value: v }));
 const contentRows = shorts.filter((x) => x.stage === "posted").flatMap((x, i) => ["youtube", "instagram", "tiktok"].map((pl, k) => ({ team_id: TEAM, platform: pl, external_id: `${pl}-${i}`, kind: "short", title: x.title, url: "https://example.com", thumbnail_url: null, published_at: at(-3 + i), duration_seconds: 45, views: Math.round(20000 + 90000 * rnd()), likes: Math.round(4000 * rnd()), comments: Math.round(300 * rnd()), shares: Math.round(400 * rnd()), saves: null, reach: null, short_id: x.id, project_id: null, short_videos: { entry_number: x.entry_number }, long_video_projects: null })));
 contentRows.push({ team_id: TEAM, platform: "youtube", external_id: "yt-long-1", kind: "long", title: "Inside a 400-year-old salt mine", url: "https://example.com", thumbnail_url: null, published_at: at(-9), duration_seconds: 1240, views: 214000, likes: 9800, comments: 640, shares: 410, short_id: null, project_id: longs[5].id, short_videos: null, long_video_projects: { entry_number: 46 } });
 contentRows.sort((a, b) => b.views - a.views);
-const syncs = ["youtube", "instagram", "tiktok"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
-const STATS = { youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"], instagram: ["instagram_business_manage_insights"], tiktok: ["user.info.stats", "video.list"] };
+const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
+const STATS = { youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"], instagram: ["instagram_business_manage_insights"], tiktok: ["user.info.stats", "video.list"], facebook: ["pages_show_list", "pages_read_engagement", "read_insights"] };
 
 module.exports = {
   TEAM,
@@ -136,7 +139,7 @@ module.exports = {
     long_video_posts: [],
     long_video_scripters: longs.map((l) => ({ project_id: l.id, team_member_id: members[1].id })),
     package_entries: [],
-    social_accounts: ["youtube", "instagram", "tiktok"].map((pl) => ({ id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: "Viverro", username: "viverro", avatar_url: null, status: "active", scopes: STATS[pl], connected_at: at(-30), last_error: null })),
+    social_accounts: ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: pl === "facebook" ? "Viverro (Page)" : "Viverro", username: pl === "facebook" ? null : "viverro", avatar_url: null, status: "active", scopes: STATS[pl], connected_at: at(-30), last_error: null, external_id: pl === "facebook" ? "123456789" : "ext-" + pl })),
     analytics_daily: daily,
     analytics_countries: [...countriesRows, ...IGC],
     analytics_content: contentRows,

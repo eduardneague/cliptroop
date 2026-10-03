@@ -1,6 +1,7 @@
 import { TabNav } from "@/components/ui/tab-nav";
 import { AnimationsChoice } from "@/components/ui/motion";
 import { SoundsChoice } from "@/components/ui/sound-sync";
+import { PaletteChoice } from "@/components/ui/palette";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -26,7 +27,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const user = await getCachedUser();
 
-  const [{ data: profile }, { data: memberships }] = await Promise.all([
+  const [{ data: profile }, { data: memberships }, { data: paletteRow }] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, bio, avatar_url, teams_visible, animations_enabled, sounds_enabled")
@@ -37,7 +38,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       .select("team_id, status, member_roles(role), teams!team_members_team_id_fkey(id, name, color, logo_url)")
       .eq("user_id", user!.id)
       .eq("status", "active"),
+    // Own query: before migration 0060 the column doesn't exist.
+    supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
   ]);
+  const palette = (paletteRow?.palette as string | null | undefined) ?? null;
 
   const name = buildDisplayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
 
@@ -175,6 +179,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <div className="text-[11.5px] text-ink-faint">Quiet little sounds when you check things off, save, get a notification or drag something.</div>
             </div>
             <SoundsChoice on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+          </div>
+          <div className="mt-5 pt-5 border-t border-line/10">
+            <div className="text-[13.5px] font-semibold">Colours</div>
+            <div className="text-[11.5px] text-ink-faint mb-3">The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.</div>
+            <PaletteChoice value={palette} />
           </div>
         </section>
 

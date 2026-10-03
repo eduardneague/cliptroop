@@ -9,9 +9,14 @@ import "server-only";
  *   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET          (YouTube)
  *   INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET          (Instagram API with Instagram Login)
  *   TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET         (TikTok Login Kit + Content Posting)
+ *   FACEBOOK_APP_ID / FACEBOOK_APP_SECRET            (Facebook Login: Page analytics only)
+ *     optional FACEBOOK_LOGIN_CONFIG_ID (Facebook Login for Business) and
+ *     FACEBOOK_GRAPH_VERSION (default v23.0)
  */
 
-export const PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
+export const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
+/** Platforms VPlanner posts to (Facebook is connected for analytics only). */
+export const POSTING_PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
 export type SocialPlatform = (typeof PLATFORMS)[number];
 export const isSocialPlatform = (p: unknown): p is SocialPlatform =>
   typeof p === "string" && (PLATFORMS as readonly string[]).includes(p);
@@ -44,6 +49,8 @@ export const STATS_SCOPES: Record<SocialPlatform, string[]> = {
   youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
   instagram: ["instagram_business_manage_insights"],
   tiktok: ["user.info.stats", "video.list"],
+  // Facebook is only connected for analytics: its permissions are the required ones.
+  facebook: [],
 };
 export function statsEnabled(p: SocialPlatform) {
   const raw = process.env.SOCIAL_STATS_PLATFORMS ?? "youtube";
@@ -58,6 +65,32 @@ export function hasStatsScopes(p: SocialPlatform, scopes: string[]) {
   return need.every((s) => scopes.includes(s));
 }
 const withStats = (p: SocialPlatform, base: string[]) => (statsEnabled(p) ? [...base, ...STATS_SCOPES[p]] : base);
+
+/**
+ * Boxes people must leave ticked on the platform's consent screen (Google
+ * and TikTok let you untick some). Without them a connection is useless,
+ * so the callback refuses it, says which ones, and keeps the old one.
+ */
+export const REQUIRED_SCOPES: Record<SocialPlatform, { scope: string; label: string }[]> = {
+  youtube: [
+    { scope: "https://www.googleapis.com/auth/youtube.upload", label: "Manage your YouTube videos (upload)" },
+    { scope: "https://www.googleapis.com/auth/youtube.force-ssl", label: "See, edit and delete your YouTube videos (change or cancel scheduled ones)" },
+  ],
+  instagram: [
+    { scope: "instagram_business_basic", label: "Access your profile" },
+    { scope: "instagram_business_content_publish", label: "Publish content" },
+  ],
+  tiktok: [
+    { scope: "user.info.basic", label: "Read your profile info" },
+    { scope: "video.publish", label: "Post content to TikTok" },
+  ],
+  facebook: [
+    { scope: "pages_show_list", label: "Show a list of the Pages you manage" },
+    { scope: "pages_read_engagement", label: "Read content posted on the Page" },
+    { scope: "read_insights", label: "Read Page insights" },
+  ],
+};
+export const missingRequired = (p: SocialPlatform, granted: string[]) => REQUIRED_SCOPES[p].filter((r) => !granted.includes(r.scope));
 
 type Provider = {
   name: string;
@@ -337,7 +370,83 @@ const tiktok: Provider = {
   },
 };
 
-export const PROVIDERS: Record<SocialPlatform, Provider> = { youtube, instagram, tiktok };
+// ---------------------------------------------------------------------------
+// Facebook (Facebook Login → one Page; analytics only)
+// ---------------------------------------------------------------------------
+
+const FB_SCOPES = ["pages_show_list", "pages_read_engagement", "read_insights"];
+export const FB_GRAPH = () => `https://graph.facebook.com/${env("FACEBOOK_GRAPH_VERSION") || "v23.0"}`;
+
+/** The Pages this person manages (each with its own Page token). */
+export async function facebookPages(userToken: string) {
+  const r = await call(`${FB_GRAPH()}/me/accounts?` + new URLSearchParams({ fields: "id,name,access_token,picture{url},tasks", limit: "100", access_token: userToken }));
+  return ((r.data as { id: string; name: string; access_token: string; picture?: { data?: { url?: string } }; tasks?: string[] }[] | undefined) ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    token: p.access_token,
+    picture: p.picture?.data?.url ?? null,
+    // Insights need the ANALYZE task on the Page.
+    canAnalyze: !p.tasks || p.tasks.includes("ANALYZE"),
+  }));
+}
+
+const facebook: Provider = {
+  name: "Facebook",
+  configured: () => !!env("FACEBOOK_APP_ID") && !!env("FACEBOOK_APP_SECRET"),
+  usesPkce: false,
+  authorizeUrl: ({ state, redirectUri }) =>
+    `https://www.facebook.com/${env("FACEBOOK_GRAPH_VERSION") || "v23.0"}/dialog/oauth?` +
+    new URLSearchParams({
+      client_id: env("FACEBOOK_APP_ID"),
+      redirect_uri: redirectUri,
+      response_type: "code",
+      state,
+      // Ask again for anything declined last time.
+      auth_type: "rerequest",
+      // Facebook Login for Business uses a configuration instead of scopes.
+      ...(env("FACEBOOK_LOGIN_CONFIG_ID") ? { config_id: env("FACEBOOK_LOGIN_CONFIG_ID") } : { scope: FB_SCOPES.join(",") }),
+    }),
+  exchange: async ({ code, redirectUri }) => {
+    const short = await call(
+      `${FB_GRAPH()}/oauth/access_token?` + new URLSearchParams({ client_id: env("FACEBOOK_APP_ID"), client_secret: env("FACEBOOK_APP_SECRET"), redirect_uri: redirectUri, code })
+    );
+    // Long-lived user token (about 60 days): Page tokens made from it don't expire.
+    const long = await call(
+      `${FB_GRAPH()}/oauth/access_token?` +
+        new URLSearchParams({ grant_type: "fb_exchange_token", client_id: env("FACEBOOK_APP_ID"), client_secret: env("FACEBOOK_APP_SECRET"), fb_exchange_token: String(short.access_token) })
+    );
+    const userToken = String(long.access_token ?? short.access_token);
+    const perms = await call(`${FB_GRAPH()}/me/permissions?` + new URLSearchParams({ access_token: userToken }));
+    const granted = ((perms.data as { permission: string; status: string }[] | undefined) ?? []).filter((p) => p.status === "granted").map((p) => p.permission);
+    const pages = granted.includes("pages_show_list") ? await facebookPages(userToken) : [];
+    const page = pages.find((p) => p.canAnalyze) ?? pages[0];
+    if (granted.includes("pages_show_list") && !page) throw new ProviderError("No Facebook Page came through. Connect again and pick your Page on Facebook's screen.");
+    return {
+      // The Page's token does the work; the person's token is kept to switch Pages later.
+      accessToken: page ? page.token : userToken,
+      refreshToken: userToken,
+      expiresAt: null,
+      refreshExpiresAt: inSeconds(long.expires_in),
+      scopes: granted,
+    };
+  },
+  profile: async (accessToken) => {
+    const r = await call(`${FB_GRAPH()}/me?` + new URLSearchParams({ fields: "id,name,username,picture{url}", access_token: accessToken }));
+    return {
+      externalId: String(r.id),
+      displayName: (r.name as string) || null,
+      username: (r.username as string) || null,
+      avatarUrl: ((r.picture as { data?: { url?: string } } | undefined)?.data?.url as string) || null,
+    };
+  },
+  // Page tokens made from a long-lived user token don't expire.
+  refresh: async ({ accessToken, refreshToken }) => ({ accessToken, refreshToken, expiresAt: null, refreshExpiresAt: null, scopes: FB_SCOPES }),
+  revoke: async ({ refreshToken }) => {
+    if (refreshToken) await call(`${FB_GRAPH()}/me/permissions?` + new URLSearchParams({ access_token: refreshToken }), { method: "DELETE" });
+  },
+};
+
+export const PROVIDERS: Record<SocialPlatform, Provider> = { youtube, instagram, tiktok, facebook };
 
 /**
  * Where each platform sends people back to. Must match the developer app

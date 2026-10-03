@@ -1,9 +1,9 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateIdeateField } from "./actions";
 import { renderLiteMarkdown } from "@/lib/markdown-lite";
-import { relativeTime } from "@/lib/relative-time";
 import { useToast } from "@/components/ui/toast-provider";
 import { EditIcon } from "@/components/ui/icons";
 
@@ -110,7 +110,7 @@ export function InlineEditable({
         </div>
         {savedAt && (
           <p className="text-[11px] text-ink-soft mt-1.5">
-            Last edited {relativeTime(savedAt)}
+            Last edited <Ago iso={savedAt} />
             {lastEditedBy ? ` by ${lastEditedBy}` : ""}
           </p>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DownloadIcon, ExternalIcon, LockIcon } from "@/components/ui/icons";
@@ -24,7 +24,26 @@ const PLATFORM = {
   youtube: { name: "YouTube", color: "rgb(var(--chart-yt))" },
   instagram: { name: "Instagram", color: "rgb(var(--chart-ig))" },
   tiktok: { name: "TikTok", color: "rgb(var(--chart-tt))" },
+  facebook: { name: "Facebook", color: "rgb(var(--chart-fb))" },
 } as const;
+type P = keyof typeof PLATFORM;
+const ALL_P = Object.keys(PLATFORM) as P[];
+
+/** Platforms that are connected and have anything to show. */
+const usableIn = (a: Audience) =>
+  ALL_P.filter((p) => {
+    const s = a.perPlatform[p];
+    return a.status.some((x) => x.platform === p && x.connected) && (s.views.some((v) => v !== null) || s.engagement.some((v) => v !== null) || a.followersNow[p] !== undefined);
+  });
+const sumArr = (xs: (number | null)[]) => {
+  const v = xs.filter((x): x is number => x !== null);
+  return v.length ? v.reduce((a, b) => a + b, 0) : null;
+};
+/** Day-by-day sum of the picked platforms (null where none has a number). */
+const addUp = (a: Audience, picked: P[], pick: (p: P) => (number | null)[]) => {
+  const len = picked.length ? pick(picked[0]).length : 0;
+  return Array.from({ length: len }, (_, i) => sumArr(picked.map((p) => pick(p)[i])));
+};
 const SHORT_COLOR = "rgb(var(--chart-short))";
 const LONG_COLOR = "rgb(var(--chart-long))";
 const TOTAL_COLOR = "rgb(var(--amber))";
@@ -67,6 +86,23 @@ export function AnalyticsView({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // Audience: which platforms to show (null = all that have numbers). Remembered on
+  // this device; read after the first paint so the server and browser render the same.
+  const [picked, setPickedState] = useState<P[] | null>(null);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("vp-audience-platforms");
+      const v = raw ? (JSON.parse(raw) as string[]).filter((x): x is P => x in PLATFORM) : null;
+      if (v && v.length) setPickedState(v);
+    } catch {}
+  }, []);
+  const setPicked = (v: P[] | null) => {
+    setPickedState(v);
+    try {
+      if (v) window.localStorage.setItem("vp-audience-platforms", JSON.stringify(v));
+      else window.localStorage.removeItem("vp-audience-platforms");
+    } catch {}
+  };
   const [navigating, startNav] = useTransition();
   const [syncing, startSync] = useTransition();
   const href = (p: { tab?: TabId; range?: RangeId; compare?: boolean }) => {
@@ -92,9 +128,14 @@ export function AnalyticsView({
       ]);
     } else if (data.tab === "audience") {
       const a = data.audience;
+      const ps = pickedIn(a, picked);
       csvDownload(`audience_${stamp}.csv`, [
-        ["Date", "YouTube views", "Instagram views", "TikTok views"],
-        ...a.days.map((d, i) => [d, a.views.youtube[i], a.views.instagram[i], a.views.tiktok[i]]),
+        ["Date", ...ps.flatMap((p) => [`${PLATFORM[p].name} views`, `${PLATFORM[p].name} engagement`]), ...(ps.includes("youtube") ? ["YouTube watch hours"] : [])],
+        ...a.days.map((d, i) => [
+          d,
+          ...ps.flatMap((p) => [a.perPlatform[p].views[i], a.perPlatform[p].engagement[i]]),
+          ...(ps.includes("youtube") ? [a.perPlatform.youtube.watchHours[i] === null ? null : Math.round(a.perPlatform.youtube.watchHours[i]! * 10) / 10] : []),
+        ]),
         [],
         ["Country", "YouTube views"],
         ...a.countries.map((c) => [countryName(c.code), c.views]),
@@ -201,7 +242,7 @@ export function AnalyticsView({
 
       <div className={`transition-opacity duration-200 ${navigating ? "opacity-50" : ""}`}>
         {data.tab === "production" && <ProductionTab p={data.production} compare={compare} w={w} />}
-        {data.tab === "audience" && <AudienceTab a={data.audience} compare={compare} />}
+        {data.tab === "audience" && <AudienceTab a={data.audience} compare={compare} picked={pickedIn(data.audience, picked)} setPicked={setPicked} />}
         {data.tab === "content" && <ContentTab items={data.content.items} status={data.content.status} />}
         {data.tab === "revenue" && <RevenueTab r={data.revenue} compare={compare} teamId={teamId} />}
       </div>
@@ -332,7 +373,7 @@ function ProductionTab({ p, compare, w }: { p: Production; compare: boolean; w: 
                     const total = x.published + x.failed;
                     return (
                       <li key={x.platform} className="flex items-center gap-3">
-                        <PlatformIcon platform={x.platform as "youtube"} className="w-7 h-7 rounded-lg" />
+                        <PlatformIcon platform={x.platform as P} className="w-7 h-7 rounded-lg" />
                         <span className="flex-1 min-w-0">
                           <span className="block text-[13.5px] font-semibold">{PLATFORM[x.platform as keyof typeof PLATFORM]?.name ?? x.platform}</span>
                           <span className="block text-[12px] text-ink-soft">
@@ -360,6 +401,18 @@ function ProductionTab({ p, compare, w }: { p: Production; compare: boolean; w: 
 // Audience
 // ---------------------------------------------------------------------------
 
+function statusText(s: PlatformStatus) {
+  return !s.connected
+    ? "not connected"
+    : !s.statsReady
+      ? "reconnect to allow stats"
+      : s.lastError
+        ? "last sync failed"
+        : s.lastOkAt
+          ? `synced ${new Date(s.lastOkAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+          : "waiting for the first sync";
+}
+
 function StatusRow({ status }: { status: PlatformStatus[] }) {
   return (
     <div className="flex items-center gap-2 flex-wrap mb-5">
@@ -369,21 +422,66 @@ function StatusRow({ status }: { status: PlatformStatus[] }) {
           title={s.lastError ?? undefined}
           className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold ${s.lastError && s.connected ? "border-red/30 bg-red/5" : "border-line/15 bg-surface"}`}
         >
-          <PlatformIcon platform={s.platform as "youtube"} className={`w-6 h-6 rounded-full ${s.connected ? "" : "opacity-40 grayscale"}`} />
+          <PlatformIcon platform={s.platform} className={`w-6 h-6 rounded-full ${s.connected ? "" : "opacity-40 grayscale"}`} />
           <span className="text-ink">{PLATFORM[s.platform].name}</span>
-          <span className="text-ink-faint font-medium">
-            {!s.connected
-              ? "not connected"
-              : !s.statsReady
-                ? "reconnect to allow stats"
-                : s.lastError
-                  ? "last sync failed"
-                  : s.lastOkAt
-                    ? `synced ${new Date(s.lastOkAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-                    : "waiting for the first sync"}
-          </span>
+          <span className="text-ink-faint font-medium">{statusText(s)}</span>
         </span>
       ))}
+    </div>
+  );
+}
+
+/** The platforms the Audience tab adds up (all with numbers, unless you pick some). */
+function pickedIn(a: Audience, picked: P[] | null): P[] {
+  const usable = usableIn(a);
+  const chosen = picked ? usable.filter((p) => picked.includes(p)) : usable;
+  return chosen.length ? chosen : usable;
+}
+
+/** One chip per platform: its sync status, and a switch to include it in the numbers. */
+function PlatformFilter({ a, picked, setPicked }: { a: Audience; picked: P[]; setPicked: (v: P[] | null) => void }) {
+  const usable = usableIn(a);
+  const all = picked.length === usable.length;
+  return (
+    <div className="flex items-center gap-2 flex-wrap mb-5" role="group" aria-label="Platforms to include">
+      {usable.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setPicked(null)}
+          aria-pressed={all}
+          className={`inline-flex items-center rounded-full px-3 h-8 text-[12px] font-semibold border transition-colors ${all ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+        >
+          All together
+        </button>
+      )}
+      {a.status.map((s) => {
+        const p = s.platform as P;
+        const can = usable.includes(p);
+        const on = can && picked.includes(p);
+        return (
+          <button
+            key={p}
+            type="button"
+            disabled={!can}
+            aria-pressed={on}
+            title={s.lastError ?? (can ? (on ? `Leave ${PLATFORM[p].name} out` : `Add ${PLATFORM[p].name}`) : undefined)}
+            onClick={() => {
+              // Click one while all are on: just that one. Otherwise add / remove it (never none).
+              if (all && usable.length > 1) return setPicked([p]);
+              const next = on ? picked.filter((x) => x !== p) : [...picked, p];
+              setPicked(next.length === 0 || next.length === usable.length ? null : next);
+            }}
+            className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors disabled:cursor-default ${
+              on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)]" : can ? "border-line/15 bg-surface/50 opacity-70 hover:opacity-100" : "border-line/10 bg-transparent"
+            } ${s.lastError && s.connected ? "!border-red/40" : ""}`}
+          >
+            <PlatformIcon platform={p} className={`w-6 h-6 rounded-full ${can ? "" : "opacity-40 grayscale"}`} />
+            <span className={can ? "text-ink" : "text-ink-faint"}>{PLATFORM[p].name}</span>
+            {on && usable.length > 1 && <span className="w-1.5 h-1.5 rounded-full" style={{ background: PLATFORM[p].color }} aria-hidden />}
+            <span className="text-ink-faint font-medium">{statusText(s)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -397,7 +495,7 @@ function SetupCard({ status }: { status: PlatformStatus[] }) {
         <h2 className="font-display text-[22px] font-semibold">No platform numbers yet</h2>
         <ol className="mt-3 space-y-2 text-[14px] text-ink-soft list-decimal pl-5">
           <li className={connected ? "line-through text-ink-faint" : ""}>
-            Connect YouTube, Instagram or TikTok in{" "}
+            Connect YouTube, Instagram, TikTok or a Facebook Page in{" "}
             <Link href="/team?tab=accounts" className="font-semibold text-amber hover:underline">
               Team → Connected accounts
             </Link>
@@ -412,15 +510,10 @@ function SetupCard({ status }: { status: PlatformStatus[] }) {
   );
 }
 
-function AudienceTab({ a, compare }: { a: Audience; compare: boolean }) {
+function AudienceTab({ a, compare, picked, setPicked }: { a: Audience; compare: boolean; picked: P[]; setPicked: (v: P[] | null) => void }) {
   const ready = a.status.some((s) => s.connected && s.statsReady);
-  const active = (["youtube", "instagram", "tiktok"] as const).filter((p) => a.views[p].some((v) => v !== null));
   const dayLabels = a.days.map((d) => niceDay(d));
   const [mode, setMode] = useState<"platform" | "total">("platform");
-  // One platform: its line IS the total, so compare right away.
-  const together = mode === "total" || active.length <= 1;
-  const totalViews = a.days.map((_, i) => (active.some((p) => a.views[p][i] !== null) ? active.reduce((s, p) => s + (a.views[p][i] ?? 0), 0) : null));
-  const t = a.totals;
   if (!ready || !a.hasData)
     return (
       <>
@@ -428,37 +521,67 @@ function AudienceTab({ a, compare }: { a: Audience; compare: boolean }) {
         <SetupCard status={a.status} />
       </>
     );
+  const pp = a.perPlatform;
+  const withViews = picked.filter((p) => pp[p].views.some((v) => v !== null));
+  // One platform: its line IS the total, so compare right away.
+  const together = mode === "total" || withViews.length <= 1;
+  const views = addUp(a, picked, (p) => pp[p].views);
+  const prevViews = addUp(a, picked, (p) => pp[p].prevViews);
+  const kpi = (now: (number | null)[], prev: (number | null)[]) => ({ value: sumArr(now), prev: sumArr(prev) });
+  const kViews = kpi(views, prevViews);
+  const kEngage = kpi(addUp(a, picked, (p) => pp[p].engagement), addUp(a, picked, (p) => pp[p].prevEngagement));
+  const hasYT = picked.includes("youtube");
+  const kWatch = hasYT ? kpi(pp.youtube.watchHours, pp.youtube.prevWatchHours) : { value: null, prev: null };
+  const kFollow = { value: sumArr(picked.map((p) => pp[p].followersNet)), prev: sumArr(picked.map((p) => pp[p].prevFollowersNet)) };
+  const names = picked.length === usableIn(a).length ? "All platforms" : picked.map((p) => PLATFORM[p].name).join(" + ");
+  const single = picked.length === 1 ? PLATFORM[picked[0]] : null;
   const split = a.youtubeSplit;
   const splitTotal = split ? split.shorts + split.long : 0;
+  const ttWaiting = picked.includes("tiktok") && a.tiktok && !pp.tiktok.views.some((v) => v !== null);
   return (
     <div className="space-y-5">
-      <StatusRow status={a.status} />
+      <PlatformFilter a={a} picked={picked} setPicked={setPicked} />
+      {ttWaiting && (
+        <p className="rounded-xl border border-line/15 bg-surface px-4 py-3 text-[13px] text-ink-soft flex items-start gap-3">
+          <PlatformIcon platform="tiktok" className="w-5 h-5 rounded mt-0.5 flex-shrink-0" />
+          <span>
+            TikTok only shares running totals, so its views per day start the day after the first copy. So far:{" "}
+            <b className="text-ink">{fmtCompact(a.tiktok!.totalViews)}</b> views and <b className="text-ink">{fmtCompact(a.tiktok!.totalLikes)}</b> likes in total
+            {a.followersNow.tiktok !== undefined ? (
+              <>
+                , <b className="text-ink">{fmtCompact(a.followersNow.tiktok)}</b> followers
+              </>
+            ) : null}
+            .
+          </span>
+        </p>
+      )}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Views" value={t.views.value} prev={t.views.prev} compare={compare} />
-        <StatTile label="Watch time (YouTube)" value={t.watchHours.value} prev={t.watchHours.prev} compare={compare} unit=" h" />
-        <StatTile label="Likes, comments & shares" value={t.engagement.value} prev={t.engagement.prev} compare={compare} />
-        <StatTile label="New followers (net)" value={t.followersNet.value} prev={t.followersNet.prev} compare={compare} good="up" />
+        <StatTile label={picked.length === 1 ? `Views on ${single!.name}` : "Views"} value={kViews.value} prev={kViews.prev} compare={compare} />
+        <StatTile label="Watch time (YouTube)" value={kWatch.value} prev={kWatch.prev} compare={compare && hasYT} unit=" h" hint={hasYT ? undefined : "YouTube isn't picked"} />
+        <StatTile label="Likes, comments & shares" value={kEngage.value} prev={kEngage.prev} compare={compare} />
+        <StatTile label="New followers (net)" value={kFollow.value} prev={kFollow.prev} compare={compare} good="up" />
       </div>
 
       <ChartCard
         title="Views per day"
         sub={
           together
-            ? `All platforms together${compare ? ` · dashed: the ${a.days.length} days before` : ""}`
+            ? `${names}${compare ? ` · dashed: the ${a.days.length} days before` : ""}`
             : `By platform${compare ? " · switch to Together to compare with before" : ""}`
         }
         right={
           <div className="flex items-center gap-4 flex-wrap justify-end">
-            {!together && <Legend items={active.map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color }))} />}
+            {!together && <Legend items={withViews.map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color }))} />}
             {together && compare && (
               <Legend
                 items={[
-                  { key: "now", label: "This range", color: TOTAL_COLOR },
+                  { key: "now", label: "This range", color: single ? single.color : TOTAL_COLOR },
                   { key: "prev", label: "Before", color: "rgb(var(--ink-faint))", dashed: true },
                 ]}
               />
             )}
-            {active.length > 1 && (
+            {withViews.length > 1 && (
               <div role="radiogroup" aria-label="Lines" className="inline-flex rounded-lg border border-line/15 p-0.5">
                 {(["platform", "total"] as const).map((m) => (
                   <button
@@ -477,19 +600,44 @@ function AudienceTab({ a, compare }: { a: Audience; compare: boolean }) {
           </div>
         }
       >
+        {!views.some((v) => v !== null) ? (
+          <p className="py-16 text-center text-[13px] text-ink-faint">No views per day yet for {names === "All platforms" ? "these platforms" : names}.</p>
+        ) : (
         <LineChart
-          ariaLabel={together ? "Views per day, all platforms" : "Views per day by platform"}
+          ariaLabel={together ? `Views per day, ${names}` : "Views per day by platform"}
           labels={dayLabels}
-          series={together ? [{ key: "total", label: "Views", color: active.length === 1 ? PLATFORM[active[0]].color : TOTAL_COLOR, values: totalViews }] : active.map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color, values: a.views[p] }))}
-          previous={together && compare ? { label: "Before", values: a.prevViews } : null}
+          series={
+            together
+              ? [{ key: "total", label: "Views", color: withViews.length === 1 ? PLATFORM[withViews[0]].color : TOTAL_COLOR, values: views }]
+              : withViews.map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color, values: pp[p].views }))
+          }
+          previous={together && compare ? { label: "Before", values: prevViews } : null}
         />
+        )}
       </ChartCard>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="Views by platform" sub="This range">
-          <BarList items={a.byPlatform.filter((p) => p.views || p.prev).map((p) => ({ key: p.platform, label: <span className="inline-flex items-center gap-2"><PlatformIcon platform={p.platform as "youtube"} className="w-5 h-5 rounded" />{PLATFORM[p.platform].name}</span>, value: p.views, color: PLATFORM[p.platform].color, sub: compare && p.prev ? `before: ${fmtCompact(p.prev)}` : undefined }))} format={fmtCompact} />
+          <BarList
+            items={a.byPlatform
+              .filter((x) => picked.includes(x.platform as P) && (x.views || x.prev))
+              .map((x) => ({
+                key: x.platform,
+                label: (
+                  <span className="inline-flex items-center gap-2">
+                    <PlatformIcon platform={x.platform} className="w-5 h-5 rounded" />
+                    {PLATFORM[x.platform as P].name}
+                  </span>
+                ),
+                value: x.views,
+                color: PLATFORM[x.platform as P].color,
+                sub: compare && x.prev ? `before: ${fmtCompact(x.prev)}` : undefined,
+              }))}
+            format={fmtCompact}
+            empty="No views per day yet for these platforms."
+          />
           <div className="mt-4 pt-4 border-t border-line/10 flex flex-wrap gap-x-6 gap-y-2">
-            {(["youtube", "instagram", "tiktok"] as const)
+            {picked
               .filter((p) => a.followersNow[p] !== undefined)
               .map((p) => (
                 <span key={p} className="text-[12.5px] text-ink-soft">
@@ -499,7 +647,9 @@ function AudienceTab({ a, compare }: { a: Audience; compare: boolean }) {
           </div>
         </ChartCard>
         <ChartCard title="Shorts vs long videos" sub="YouTube views in this range">
-          {split && splitTotal > 0 ? (
+          {!hasYT ? (
+            <p className="text-[13px] text-ink-faint">Pick YouTube above to see how its views split between shorts and long videos.</p>
+          ) : split && splitTotal > 0 ? (
             <div>
               <div className="flex h-6 rounded-lg overflow-hidden gap-[2px]" role="img" aria-label={`Shorts ${fmtCompact(split.shorts)}, long videos ${fmtCompact(split.long)}`}>
                 <span style={{ width: `${(split.shorts / splitTotal) * 100}%`, background: SHORT_COLOR }} />
@@ -599,7 +749,7 @@ function CountryMap({ a }: { a: Audience }) {
 // ---------------------------------------------------------------------------
 
 function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformStatus[] }) {
-  const [platform, setPlatform] = useState<"all" | "youtube" | "instagram" | "tiktok">("all");
+  const [platform, setPlatform] = useState<"all" | P>("all");
   const list = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
   if (!status.some((s) => s.connected && s.statsReady) && !items.length)
     return (
@@ -612,7 +762,7 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
     <div className="space-y-4">
       <StatusRow status={status} />
       <div className="flex items-center gap-1.5 flex-wrap">
-        {(["all", "youtube", "instagram", "tiktok"] as const).map((p) => (
+        {(["all", ...ALL_P.filter((x) => items.some((i) => i.platform === x))] as ("all" | P)[]).map((p) => (
           <button
             key={p}
             type="button"
@@ -649,7 +799,7 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={c.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
-                        <PlatformIcon platform={c.platform as "youtube"} className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded" />
+                        <PlatformIcon platform={c.platform} className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded" />
                       </span>
                       <span className="min-w-0">
                         {c.url ? (
@@ -686,7 +836,7 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
       ) : (
         <p className="rounded-2xl border border-dashed border-line/20 py-10 text-center text-[13.5px] text-ink-soft">Nothing published in this range.</p>
       )}
-      <p className="text-[12px] text-ink-faint">Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos.</p>
+      <p className="text-[12px] text-ink-faint">Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts.</p>
     </div>
   );
 }

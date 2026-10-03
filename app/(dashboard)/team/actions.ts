@@ -606,6 +606,64 @@ export async function disconnectSocialAccount(teamId: string, platform: string) 
   return { success: true };
 }
 
+/** The Facebook Pages the person who connected Facebook manages (to pick which one feeds Analytics). */
+export async function listFacebookPages(teamId: string): Promise<{ error: string } | { pages: { id: string; name: string; picture: string | null; current: boolean }[] }> {
+  const { facebookPages } = await import("@/lib/social/providers");
+  const { requireSocialManager } = await import("@/lib/social/access");
+  const { decryptToken } = await import("@/lib/social/crypto");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const access = await requireSocialManager(teamId);
+  if (!access.user) return { error: "Your session expired. Sign in again." };
+  if (!access.ok) return { error: "Only the master or a scheduler can change this." };
+  const admin = createAdminClient();
+  const { data: row } = await admin.from("social_accounts").select("external_id, refresh_token_enc").eq("team_id", teamId).eq("platform", "facebook").maybeSingle();
+  if (!row?.refresh_token_enc) return { error: "Connect Facebook again to pick a Page." };
+  try {
+    const pages = await facebookPages(decryptToken(row.refresh_token_enc as string));
+    return { pages: pages.map((p) => ({ id: p.id, name: p.name, picture: p.picture, current: p.id === row.external_id })) };
+  } catch {
+    return { error: "Facebook didn't answer. Reconnect Facebook and try again." };
+  }
+}
+
+/** Use another of your Pages for Analytics (its numbers are copied from the next sync). */
+export async function chooseFacebookPage(teamId: string, pageId: string) {
+  const { facebookPages } = await import("@/lib/social/providers");
+  const { requireSocialManager } = await import("@/lib/social/access");
+  const { decryptToken, encryptToken } = await import("@/lib/social/crypto");
+  const { logSocial } = await import("@/lib/social/tokens");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  if (!/^\d{3,30}$/.test(pageId)) return { error: "Unknown Page." };
+  const access = await requireSocialManager(teamId);
+  if (!access.user) return { error: "Your session expired. Sign in again." };
+  if (!access.ok) return { error: "Only the master or a scheduler can change this." };
+  const admin = createAdminClient();
+  const { data: row } = await admin.from("social_accounts").select("id, refresh_token_enc").eq("team_id", teamId).eq("platform", "facebook").maybeSingle();
+  if (!row?.refresh_token_enc) return { error: "Connect Facebook again to pick a Page." };
+  let page;
+  try {
+    page = (await facebookPages(decryptToken(row.refresh_token_enc as string))).find((p) => p.id === pageId);
+  } catch {
+    return { error: "Facebook didn't answer. Reconnect Facebook and try again." };
+  }
+  if (!page) return { error: "That Page isn't available to this Facebook account any more." };
+  const { error } = await admin
+    .from("social_accounts")
+    .update({ access_token_enc: encryptToken(page.token), external_id: page.id, display_name: page.name, username: null, avatar_url: page.picture, status: "active", last_error: null })
+    .eq("id", row.id);
+  if (error) return { error: "Couldn't switch the Page. Try again." };
+  // The old Page's numbers no longer belong here: the next sync starts fresh (90 days).
+  await Promise.all([
+    admin.from("analytics_daily").delete().eq("team_id", teamId).eq("platform", "facebook"),
+    admin.from("analytics_content").delete().eq("team_id", teamId).eq("platform", "facebook"),
+    admin.from("analytics_syncs").delete().eq("team_id", teamId).eq("platform", "facebook"),
+  ]);
+  await logSocial(teamId, "facebook", "reconnected", access.user.id, { account: page.name });
+  revalidatePath("/team");
+  revalidatePath("/analytics");
+  return { success: true };
+}
+
 /** The team's colours for shorts and long videos (masters). */
 export async function updateTeamColors(teamId: string, shortColor: string, longColor: string) {
   const hex = /^#[0-9a-fA-F]{6}$/;

@@ -78,7 +78,7 @@ export default async function ShortPage({
   const posting = shown === "ready" || shown === "posted";
   const postingPromise = posting
     ? Promise.all([
-        supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status").eq("team_id", short.teamId),
+        supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status").eq("team_id", short.teamId).in("platform", ["youtube", "instagram", "tiktok"]),
         supabase
           .from("social_posts")
           .select("id, platform, status, step, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")

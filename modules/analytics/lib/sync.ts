@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAccessToken } from "@/lib/social/tokens";
-import { hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
+import { FB_GRAPH, hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
 
 /*
  * Copies the platforms' numbers into our analytics tables (migration 0058).
@@ -405,7 +405,102 @@ async function syncTikTok(admin: Admin, acc: Account, links: Links) {
     [{ team_id: acc.team_id, platform: "tiktok", day: today, content: "all", followers: num(u.follower_count), total_views: totalViews, total_likes: num(u.likes_count) ?? totalLikes, updated_at: new Date().toISOString() }],
     "team_id,platform,day,content"
   );
-  return { rows };
+  // TikTok only gives running totals: daily numbers start once there are two copies.
+  const videos = recs.length;
+  return { rows, note: `${videos} video${videos === 1 ? "" : "s"}${num(u.follower_count) !== null ? `, ${num(u.follower_count)} followers` : ""}${videos ? "" : " (TikTok returned no public videos)"}` };
+}
+
+// ---------------------------------------------------------------------------
+// Facebook (a Page: analytics only)
+// ---------------------------------------------------------------------------
+
+/** Facebook's daily values end at midnight Pacific: the value belongs to the day before end_time. */
+const fbDay = (endTime: string) => new Date(Date.parse(endTime) - 12 * 3_600_000).toISOString().slice(0, 10);
+
+async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links: Links) {
+  const token = await getAccessToken(acc.id);
+  const pageId = acc.external_id ?? "me";
+  const q = (path: string, p: Record<string, string>) => get(`${FB_GRAPH()}/${path}?${new URLSearchParams({ ...p, access_token: token })}`, "");
+  let rows = 0;
+  const daily = new Map<string, Record<string, unknown>>();
+  const put = (day: string, v: Record<string, unknown>) =>
+    daily.set(day, { ...(daily.get(day) ?? { team_id: acc.team_id, platform: "facebook", day, content: "all" }), ...v, updated_at: new Date().toISOString() });
+
+  // One metric per call, so a metric Meta retires never blanks the others.
+  // page_media_view replaced impressions (Nov 2025); page fans are gone (followers_count instead).
+  const since = String(Math.floor(Date.parse(`${daysAgo(backfill ? 89 : 7)}T00:00:00Z`) / 1000));
+  const until = String(Math.floor(Date.now() / 1000));
+  const METRICS: [string, string][] = [
+    ["page_media_view", "views"],
+    ["page_post_engagements", "engagements"],
+    ["page_daily_follows_unique", "followers_gained"],
+    ["page_daily_unfollows_unique", "followers_lost"],
+    ["page_video_views", "video_views"],
+  ];
+  let ok = 0;
+  const failed: string[] = [];
+  const videoViews = new Map<string, number>();
+  for (const [metric, field] of METRICS) {
+    try {
+      const r = (await q(`${pageId}/insights`, { metric, period: "day", since, until })) as { data?: { values?: { value: unknown; end_time: string }[] }[] };
+      for (const v of r.data?.[0]?.values ?? []) {
+        const value = typeof v.value === "number" ? v.value : num(v.value);
+        if (value === null) continue;
+        if (field === "video_views") videoViews.set(fbDay(v.end_time), value);
+        else put(fbDay(v.end_time), { [field]: value });
+      }
+      ok++;
+    } catch {
+      failed.push(metric);
+    }
+  }
+  // Pages with mostly video: if media views were refused, video views stand in.
+  for (const [day, v] of videoViews) if (daily.get(day)?.views === undefined) put(day, { views: v });
+
+  // Followers right now (on today's row, like the other snapshots).
+  try {
+    const page = (await q(pageId, { fields: "followers_count,fan_count" })) as { followers_count?: number; fan_count?: number };
+    const f = num(page.followers_count) ?? num(page.fan_count);
+    if (f !== null) put(daysAgo(0), { followers: f });
+  } catch {}
+  rows += await upsert(admin, "analytics_daily", [...daily.values()], "team_id,platform,day,content");
+
+  // Posts with their numbers (views per post when Meta allows it; else without).
+  const fields = "id,message,created_time,permalink_url,full_picture,shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)";
+  let posts: Record<string, unknown>[] = [];
+  try {
+    posts = (((await q(`${pageId}/published_posts`, { fields: `${fields},insights.metric(post_media_view)`, limit: "25" })) as { data?: Record<string, unknown>[] }).data ?? []);
+  } catch {
+    try {
+      posts = (((await q(`${pageId}/published_posts`, { fields, limit: "25" })) as { data?: Record<string, unknown>[] }).data ?? []);
+    } catch {}
+  }
+  const recs = posts.map((m) => {
+    const id = String(m.id);
+    const permalink = (m.permalink_url as string | undefined) ?? null;
+    const link = links.byExternal.get(`facebook:${id}`) ?? (permalink ? links.byUrl(permalink) : null);
+    const insight = ((m.insights as { data?: { name: string; values?: { value: unknown }[] }[] } | undefined)?.data ?? []).find((x) => x.name === "post_media_view");
+    return {
+      team_id: acc.team_id,
+      platform: "facebook",
+      external_id: id,
+      kind: link?.project ? "long" : link?.short ? "short" : "post",
+      title: String(m.message ?? "").split("\n")[0].slice(0, 200) || null,
+      url: permalink,
+      thumbnail_url: (m.full_picture as string | undefined) ?? null,
+      published_at: (m.created_time as string | undefined) ? new Date(m.created_time as string).toISOString() : null,
+      views: insight ? num(insight.values?.[0]?.value) : null,
+      likes: num((m.reactions as { summary?: { total_count?: number } } | undefined)?.summary?.total_count),
+      comments: num((m.comments as { summary?: { total_count?: number } } | undefined)?.summary?.total_count),
+      shares: num((m.shares as { count?: number } | undefined)?.count) ?? 0,
+      short_id: link?.short ?? null,
+      project_id: link?.project ?? null,
+      updated_at: new Date().toISOString(),
+    };
+  });
+  rows += await upsert(admin, "analytics_content", recs, "team_id,platform,external_id");
+  if (!ok) throw new ApiError(`Facebook refused every Page metric${failed.length ? ` (${failed[0]})` : ""}. Check the Page permissions (read_insights).`);
+  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length} posts` };
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +569,8 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
       let note: string | null = null;
       if (a.platform === "youtube") ({ rows, revenueNote, note } = await syncYouTube(admin, a, backfill, links));
       else if (a.platform === "instagram") ({ rows } = await syncInstagram(admin, a, backfill, links));
-      else ({ rows } = await syncTikTok(admin, a, links));
+      else if (a.platform === "facebook") ({ rows, note } = await syncFacebook(admin, a, backfill, links));
+      else ({ rows, note } = await syncTikTok(admin, a, links));
       const now = new Date().toISOString();
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: now, last_ok_at: now, last_error: null, backfilled: true, revenue_note: revenueNote }, { onConflict: "team_id,platform" });
       out.push({ platform: a.platform, ok: true, rows, note });

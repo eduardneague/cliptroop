@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -403,7 +404,7 @@ export function ReviewWorkspace({
             <p className="text-[12px] text-ink-soft">
               v{version.number} · {formatBytes(version.size)}
               {version.width && version.height ? ` · ${version.width}×${version.height}` : ""}
-              {version.uploadedBy ? ` · uploaded by ${version.uploadedBy.name}` : ""}, {relativeTime(version.createdAt)}
+              {version.uploadedBy ? ` · uploaded by ${version.uploadedBy.name}` : ""}, <Ago iso={version.createdAt} />
               <span className="hidden md:inline"> · Space play · J/L 5s · , . frame · C note · N notes</span>
             </p>
           </>
@@ -820,7 +821,7 @@ function NoteThread({
         <div className="flex items-center gap-2 text-[12px]">
           <span className="font-semibold text-ink-soft truncate">{n.author?.name ?? "Someone"}</span>
           <span className="text-ink-faint whitespace-nowrap">
-            {n.pending ? "posting…" : relativeTime(n.createdAt)}
+            {n.pending ? "posting…" : <Ago iso={n.createdAt} />}
             {n.editedAt ? " · edited" : ""}
           </span>
           {n.pending && <Spinner className="w-3 h-3 text-ink-soft" />}

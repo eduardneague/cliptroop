@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,7 +8,6 @@ import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
 import { DateChip } from "@/components/ui/date-picker";
-import { relativeTime } from "@/lib/relative-time";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
 import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon } from "@/components/ui/icons";
@@ -483,7 +483,7 @@ export function SchedulePanel({
                 byHand(p) ? (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[12.5px] font-semibold text-green">✓ Marked as posted</span>
-                    <span className="text-[12px] text-ink-soft">{relativeTime(byHand(p)!.postedAt)}</span>
+                    <span className="text-[12px] text-ink-soft"><Ago iso={byHand(p)!.postedAt} /></span>
                     {canManage && (
                       <Action onClick={() => void markByHand(p, false)} icon={<CloseIcon className="w-3.5 h-3.5" />}>
                         Undo
@@ -1016,7 +1016,7 @@ function StatusView({
             <div className="min-w-0 flex-1">
               <div className={`text-[13px] font-semibold leading-snug ${st.state === "todo" ? "text-ink-faint" : "text-ink"}`}>
                 {st.label}
-                {st.at && st.state === "done" && <span className="ml-1.5 font-normal text-[11.5px] text-ink-soft">{relativeTime(st.at)}</span>}
+                {st.at && st.state === "done" && <span className="ml-1.5 font-normal text-[11.5px] text-ink-soft"><Ago iso={st.at} /></span>}
               </div>
               {st.detail && (
                 <div className={`text-[12px] mt-0.5 ${st.state === "failed" ? "text-red" : st.state === "late" ? "text-amber" : "text-ink-soft"}`}>

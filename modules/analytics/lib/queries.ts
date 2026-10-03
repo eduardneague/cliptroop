@@ -255,19 +255,36 @@ export type PlatformStatus = {
   lastError: string | null;
   revenueNote: string | null;
 };
+/** One platform's numbers for the range (and the same stretch before it). */
+export type PlatformSeries = {
+  views: (number | null)[];
+  prevViews: (number | null)[];
+  engagement: (number | null)[];
+  prevEngagement: (number | null)[];
+  /** YouTube only (null arrays elsewhere). */
+  watchHours: (number | null)[];
+  prevWatchHours: (number | null)[];
+  followersNet: number | null;
+  prevFollowersNet: number | null;
+};
 export type Audience = {
   days: string[];
   buckets: Bucket[];
   /** Views per day per platform (null = no data that day). */
   views: Record<SocialPlatform, (number | null)[]>;
   prevViews: (number | null)[];
+  /** All platforms together (the dashboard widgets use these). */
   totals: {
     views: Kpi;
     watchHours: Kpi;
     engagement: Kpi;
     followersNet: Kpi;
   };
+  /** Everything per platform, so the page can filter and combine them. */
+  perPlatform: Record<SocialPlatform, PlatformSeries>;
   followersNow: Partial<Record<SocialPlatform, number>>;
+  /** TikTok only shares running totals: lifetime numbers from the latest copy, and how many copies exist. */
+  tiktok: { totalViews: number | null; totalLikes: number | null; snapshots: number } | null;
   byPlatform: { platform: SocialPlatform; views: number; prev: number }[];
   youtubeSplit: { shorts: number; long: number } | null;
   countries: { code: string; views: number; watchMinutes: number | null }[];
@@ -301,8 +318,8 @@ export async function getPlatformStatus(teamId: string): Promise<PlatformStatus[
 export async function getAudience(teamId: string, w: Window): Promise<Audience> {
   const supabase = await createClient();
   const [rows, countries, igCountries, status] = await Promise.all([
-    // One day past the range: "followers now" snapshots are saved on the day of the sync (today).
-    all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).gte("day", w.prevFrom).lte("day", addDays(w.to, 1)).order("day").range(a, b)),
+    // One day past the range: snapshots (followers, TikTok totals) are saved on the day of the sync.
+    all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).gte("day", addDays(w.prevFrom, -1)).lte("day", addDays(w.to, 1)).order("day").range(a, b)),
     all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes, day").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b)),
     supabase.from("analytics_countries").select("country, value, day").eq("team_id", teamId).eq("platform", "instagram").eq("metric", "followers").order("day", { ascending: false }).limit(300),
     getPlatformStatus(teamId),
@@ -310,19 +327,30 @@ export async function getAudience(teamId: string, w: Window): Promise<Audience> 
   const days = dayList(w.from, w.to);
   const prevDays = dayList(w.prevFrom, w.prevTo);
   const at = (p: string, content = "all") => new Map(rows.filter((r) => r.platform === p && r.content === content).map((r) => [r.day as string, r]));
-  const yt = at("youtube");
-  const ig = at("instagram");
-  const tt = at("tiktok");
+  const maps = { youtube: at("youtube"), instagram: at("instagram"), tiktok: at("tiktok"), facebook: at("facebook") } as Record<SocialPlatform, Map<string, Row>>;
   const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
-  // TikTok only has running totals: a day's views = today's total − yesterday's.
-  const ttDelta = (day: string, field: "total_views" | "total_likes") => {
-    const t = n(tt.get(day)?.[field]);
-    const y = n(tt.get(new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10))?.[field]);
+  // TikTok (and the Facebook follower count) only come as running totals,
+  // copied each morning: what happened ON a day = the next morning's total − that morning's.
+  const delta = (map: Map<string, Row>, day: string, field: string) => {
+    const t = n(map.get(day)?.[field]);
+    const next = n(map.get(addDays(day, 1))?.[field]);
     // (A deleted video can make the total drop: never count less than nothing.)
-    return t !== null && y !== null ? Math.max(0, t - y) : null;
+    return t !== null && next !== null ? Math.max(0, next - t) : null;
   };
-  const viewsOn = (p: SocialPlatform, day: string) => (p === "tiktok" ? ttDelta(day, "total_views") : n((p === "youtube" ? yt : ig).get(day)?.views));
-  const views = Object.fromEntries(PLATFORMS.map((p) => [p, days.map((d) => viewsOn(p, d))])) as Record<SocialPlatform, (number | null)[]>;
+  const viewsOn = (p: SocialPlatform, day: string) => (p === "tiktok" ? delta(maps.tiktok, day, "total_views") : n(maps[p].get(day)?.views));
+  const engagementOn = (p: SocialPlatform, day: string) => {
+    if (p === "tiktok") return delta(maps.tiktok, day, "total_likes");
+    const r = maps[p].get(day);
+    if (!r) return null;
+    if (p === "facebook") return n(r.engagements);
+    const parts = [n(r.likes), n(r.comments), n(r.shares)].filter((x): x is number => x !== null);
+    return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  };
+  const watchOn = (p: SocialPlatform, day: string) => {
+    if (p !== "youtube") return null;
+    const m = n(maps.youtube.get(day)?.watch_minutes);
+    return m === null ? null : m / 60;
+  };
   const sumDays = (list: string[], f: (d: string) => number | null) => {
     let s = 0;
     let any = false;
@@ -335,48 +363,59 @@ export async function getAudience(teamId: string, w: Window): Promise<Audience> 
     }
     return any ? s : null;
   };
-  const totalViews = (d: string) => {
-    const xs = PLATFORMS.map((p) => viewsOn(p, d)).filter((x): x is number => x !== null);
-    return xs.length ? xs.reduce((a, b) => a + b, 0) : null;
-  };
-  const engagement = (d: string) => {
-    const parts = [yt.get(d), ig.get(d)].flatMap((r) => (r ? [n(r.likes), n(r.comments), n(r.shares)] : [])).filter((x): x is number => x !== null);
-    const t = ttDelta(d, "total_likes");
-    if (t !== null) parts.push(t);
-    return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
-  };
-  const watchHours = (d: string) => {
-    const m = n(yt.get(d)?.watch_minutes);
-    return m === null ? null : m / 60;
-  };
-  // Followers: YouTube counts gained − lost per day; Instagram and TikTok compare snapshots.
-  const snapshotChange = (map: Map<string, Row>, list: string[]) => {
-    const vals = list.map((d) => n(map.get(d)?.followers)).filter((x): x is number => x !== null);
+  // Followers: gained − lost per day where the platform says so (YouTube, Facebook);
+  // otherwise compare the snapshots at both ends of the range.
+  const followersNet = (p: SocialPlatform, list: string[]) => {
+    const map = maps[p];
+    const daily = sumDays(list, (d) => {
+      const r = map.get(d);
+      return r && (r.followers_gained !== null || r.followers_lost !== null) && (r.followers_gained !== undefined || r.followers_lost !== undefined)
+        ? (n(r.followers_gained) ?? 0) - (n(r.followers_lost) ?? 0)
+        : null;
+    });
+    if (daily !== null) return daily;
+    const vals = [...list, addDays(list[list.length - 1], 1)].map((d) => n(map.get(d)?.followers)).filter((x): x is number => x !== null);
     return vals.length >= 2 ? vals[vals.length - 1] - vals[0] : null;
   };
-  const followersNet = (list: string[]) => {
-    const ytNet = sumDays(list, (d) => {
-      const r = yt.get(d);
-      return r ? (n(r.followers_gained) ?? 0) - (n(r.followers_lost) ?? 0) : null;
-    });
-    const parts = [ytNet, snapshotChange(ig, list), snapshotChange(tt, list)].filter((x): x is number => x !== null);
-    return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+  const perPlatform = Object.fromEntries(
+    PLATFORMS.map((p) => [
+      p,
+      {
+        views: days.map((d) => viewsOn(p, d)),
+        prevViews: prevDays.map((d) => viewsOn(p, d)),
+        engagement: days.map((d) => engagementOn(p, d)),
+        prevEngagement: prevDays.map((d) => engagementOn(p, d)),
+        watchHours: days.map((d) => watchOn(p, d)),
+        prevWatchHours: prevDays.map((d) => watchOn(p, d)),
+        followersNet: followersNet(p, days),
+        prevFollowersNet: followersNet(p, prevDays),
+      } satisfies PlatformSeries,
+    ])
+  ) as Record<SocialPlatform, PlatformSeries>;
+  const total = (pick: (s: PlatformSeries) => (number | null)[]) => (i: number) => {
+    const xs = PLATFORMS.map((p) => pick(perPlatform[p])[i]).filter((x): x is number => x !== null);
+    return xs.length ? xs.reduce((a, b) => a + b, 0) : null;
   };
-  const latest = (map: Map<string, Row>) => {
-    const vals = [...map.values()].filter((r) => r.followers !== null && r.followers !== undefined).sort((a, b) => String(b.day).localeCompare(String(a.day)));
-    return vals.length ? Number(vals[0].followers) : undefined;
+  const sumIdx = (len: number, f: (i: number) => number | null) => sumDays(Array.from({ length: len }, (_, i) => String(i)), (k) => f(Number(k)));
+  const sumNullable = (xs: (number | null)[]) => {
+    const v = xs.filter((x): x is number => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  };
+  const latest = (map: Map<string, Row>, field = "followers") => {
+    const vals = [...map.values()].filter((r) => r[field] !== null && r[field] !== undefined).sort((a, b) => String(b.day).localeCompare(String(a.day)));
+    return vals.length ? Number(vals[0][field]) : undefined;
   };
   const followersNow: Partial<Record<SocialPlatform, number>> = {};
-  for (const [p, m] of [["youtube", yt], ["instagram", ig], ["tiktok", tt]] as const) {
-    const v = latest(m);
+  for (const p of PLATFORMS) {
+    const v = latest(maps[p]);
     if (v !== undefined) followersNow[p] = v;
   }
 
   const split = (() => {
-    const s = at("youtube", "shorts");
-    const l = at("youtube", "long");
-    const sv = sumDays(days, (d) => n(s.get(d)?.views));
-    const lv = sumDays(days, (d) => n(l.get(d)?.views));
+    const sh = at("youtube", "shorts");
+    const lo = at("youtube", "long");
+    const sv = sumDays(days, (d) => n(sh.get(d)?.views));
+    const lv = sumDays(days, (d) => n(lo.get(d)?.views));
     return sv === null && lv === null ? null : { shorts: sv ?? 0, long: lv ?? 0 };
   })();
 
@@ -390,20 +429,26 @@ export async function getAudience(teamId: string, w: Window): Promise<Audience> 
     if (!since || (c.day as string) < since) since = c.day as string;
   }
   const igLatestDay = (igCountries.data ?? [])[0]?.day as string | undefined;
+  const ttSnapshots = [...maps.tiktok.values()].filter((r) => r.total_views !== null && r.total_views !== undefined).length;
 
   return {
     days,
     buckets: bucketsFor(w),
-    views,
-    prevViews: prevDays.map(totalViews),
+    views: Object.fromEntries(PLATFORMS.map((p) => [p, perPlatform[p].views])) as Record<SocialPlatform, (number | null)[]>,
+    prevViews: prevDays.map((_, i) => total((s) => s.prevViews)(i)),
     totals: {
-      views: { value: sumDays(days, totalViews), prev: sumDays(prevDays, totalViews) },
-      watchHours: { value: sumDays(days, watchHours), prev: sumDays(prevDays, watchHours) },
-      engagement: { value: sumDays(days, engagement), prev: sumDays(prevDays, engagement) },
-      followersNet: { value: followersNet(days), prev: followersNet(prevDays) },
+      views: { value: sumIdx(days.length, total((s) => s.views)), prev: sumIdx(prevDays.length, total((s) => s.prevViews)) },
+      watchHours: { value: sumNullable(perPlatform.youtube.watchHours), prev: sumNullable(perPlatform.youtube.prevWatchHours) },
+      engagement: { value: sumIdx(days.length, total((s) => s.engagement)), prev: sumIdx(prevDays.length, total((s) => s.prevEngagement)) },
+      followersNet: {
+        value: sumNullable(PLATFORMS.map((p) => perPlatform[p].followersNet)),
+        prev: sumNullable(PLATFORMS.map((p) => perPlatform[p].prevFollowersNet)),
+      },
     },
+    perPlatform,
     followersNow,
-    byPlatform: PLATFORMS.map((p) => ({ platform: p, views: sumDays(days, (d) => viewsOn(p, d)) ?? 0, prev: sumDays(prevDays, (d) => viewsOn(p, d)) ?? 0 })),
+    tiktok: ttSnapshots ? { totalViews: latest(maps.tiktok, "total_views") ?? null, totalLikes: latest(maps.tiktok, "total_likes") ?? null, snapshots: ttSnapshots } : null,
+    byPlatform: PLATFORMS.map((p) => ({ platform: p, views: sumNullable(perPlatform[p].views) ?? 0, prev: sumNullable(perPlatform[p].prevViews) ?? 0 })),
     youtubeSplit: split,
     countries: [...byCountry.entries()].map(([code, v]) => ({ code, views: v.views, watchMinutes: v.watch })).sort((a, b) => b.views - a.views),
     countriesSince: since && since > w.from ? since : null,
@@ -412,7 +457,8 @@ export async function getAudience(teamId: string, w: Window): Promise<Audience> 
       .map((r) => ({ code: r.country as string, value: Number(r.value) || 0 }))
       .sort((a, b) => b.value - a.value),
     status,
-    hasData: rows.some((r) => inRange(r.day as string, w.from, w.to)),
+    // A copy exists for the range (or the day after it: a first TikTok/Facebook snapshot).
+    hasData: rows.some((r) => inRange(r.day as string, w.from, addDays(w.to, 1))),
   };
 }
 

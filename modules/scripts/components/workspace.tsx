@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,7 +11,6 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { relativeTime } from "@/lib/relative-time";
 import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
@@ -187,7 +187,7 @@ export function ScriptWorkspace({
               <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
                 {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
               </span>
-              <span className="ml-auto text-[11px] text-ink-faint">{relativeTime(c.createdAt)}</span>
+              <span className="ml-auto text-[11px] text-ink-faint"><Ago iso={c.createdAt} /></span>
             </div>
             <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
             <div className="flex items-center gap-1 mt-2 -mb-1">
@@ -838,7 +838,7 @@ function CommentsChat({
                     >
                       {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
                     </span>
-                    <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap">{relativeTime(c.createdAt)}</span>
+                    <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap"><Ago iso={c.createdAt} /></span>
                   </div>
                   <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}>
                     “{c.quote}”{missing.has(c.id) && <span className="ml-1.5 rounded bg-surface-2 px-1.5 text-[10.5px] font-bold">text changed</span>}

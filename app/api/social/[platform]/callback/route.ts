@@ -1,11 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PROVIDERS, ProviderError, isSocialPlatform, redirectUriFor } from "@/lib/social/providers";
+import { PROVIDERS, ProviderError, hasStatsScopes, isSocialPlatform, missingRequired, redirectUriFor, statsEnabled } from "@/lib/social/providers";
 import { requireSocialManager } from "@/lib/social/access";
 import { encryptToken } from "@/lib/social/crypto";
 import { logSocial } from "@/lib/social/tokens";
+import { POPUP_COOKIE } from "@/lib/social/popup";
 
 export const dynamic = "force-dynamic";
+
+type Result = { ok: boolean; platform: string | null; error?: string; message?: string; note?: string };
+
+/**
+ * When connecting happened in its own window (the usual way): a tiny page
+ * that tells the Team page how it went (BroadcastChannel + storage event,
+ * which work even when the platform's sign-in cut the link to the opener)
+ * and closes itself. If it can't close, it goes to the accounts tab.
+ */
+function popupPage(result: Result, fallback: string) {
+  const json = JSON.stringify({ type: "vp-social", ...result }).replace(/</g, "\\u003c");
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VPlanner</title>
+<style>body{margin:0;height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:#edeee7;color:#14110c}@media (prefers-color-scheme:dark){body{background:#120f0b;color:#f0ece3}}p{margin:0;padding:24px;text-align:center}</style></head>
+<body><p>${result.ok ? "Connected. You can close this window." : "That didn&rsquo;t work. You can close this window."}</p>
+<script>
+(function(){var r=${json};
+try{var bc=new BroadcastChannel("vp-social");bc.postMessage(r);bc.close();}catch(e){}
+try{localStorage.setItem("vp-social",JSON.stringify(Object.assign({t:Date.now()},r)));}catch(e){}
+try{if(window.opener)window.opener.postMessage(r,location.origin);}catch(e){}
+setTimeout(function(){window.close();setTimeout(function(){location.replace(${JSON.stringify(fallback)});},500);},250);})();
+</script></body></html>`;
+  const res = new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" } });
+  res.cookies.set(POPUP_COOKIE, "", { path: "/api/social", maxAge: 0 });
+  return res;
+}
 
 /**
  * The platform sends the person back here. We only accept it if the
@@ -15,59 +41,64 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ platform: string }> }) {
   const { platform } = await params;
   const q = request.nextUrl.searchParams;
-  const back = (query: string) => {
-    const res = NextResponse.redirect(new URL(`/team?tab=accounts&${query}#connected-accounts`, request.url));
+  const popup = request.cookies.get(POPUP_COOKIE)?.value === "1";
+  const finish = (r: Result) => {
+    const query = new URLSearchParams({ tab: "accounts" });
+    if (r.ok) query.set("social", "connected");
+    else query.set("social_error", r.error ?? "failed");
+    if (r.platform) query.set("platform", r.platform);
+    if (r.message) query.set("message", r.message);
+    if (r.note) query.set("note", r.note);
+    const target = `/team?${query}#connected-accounts`;
+    if (popup) return popupPage(r, target);
+    const res = NextResponse.redirect(new URL(target, request.url));
     res.headers.set("Cache-Control", "private, no-store");
     return res;
   };
-  if (!isSocialPlatform(platform)) return back("social_error=bad_request");
+  if (!isSocialPlatform(platform)) return finish({ ok: false, platform: null, error: "bad_request" });
 
-  const state = q.get("state") ?? "";
-  const admin = createAdminClient();
-  // Single use: take it out as we read it.
-  const { data: saved } = await admin
-    .from("oauth_states")
-    .delete()
-    .eq("state", state)
-    .eq("platform", platform)
-    .select("team_id, user_id, code_verifier, created_at")
-    .maybeSingle();
-  if (!saved || Date.now() - Date.parse(saved.created_at as string) > 15 * 60_000) {
-    return back(`social_error=expired&platform=${platform}`);
-  }
-
-  const access = await requireSocialManager(saved.team_id as string);
-  if (!access.user || access.user.id !== saved.user_id) return back(`social_error=expired&platform=${platform}`);
-  if (!access.ok) return back(`social_error=forbidden&platform=${platform}`);
-
-  // The person pressed "Cancel" on the platform's screen, or the platform
-  // refused (wrong scopes, app not allowed for this account…): say why.
-  const refused = q.get("error");
-  if (refused || !q.get("code")) {
-    if (!refused || /^(access_denied|user_denied|user_cancel)/i.test(refused)) {
-      const why = q.get("error_description") ?? "";
-      // Some platforms say access_denied for "scope not allowed" too: keep their words when there are any.
-      return back(`social_error=cancelled&platform=${platform}${why && !/cancel|denied the request|user denied/i.test(why) ? `&message=${encodeURIComponent(why.slice(0, 200))}` : ""}`);
-    }
-    const why = q.get("error_description") || q.get("error_reason") || refused;
-    return back(`social_error=refused&platform=${platform}&message=${encodeURIComponent(why.slice(0, 200))}`);
-  }
-
-  const provider = PROVIDERS[platform];
   try {
+    const state = q.get("state") ?? "";
+    const admin = createAdminClient();
+    // Single use: take it out as we read it.
+    const { data: saved } = await admin
+      .from("oauth_states")
+      .delete()
+      .eq("state", state)
+      .eq("platform", platform)
+      .select("team_id, user_id, code_verifier, created_at")
+      .maybeSingle();
+    if (!saved || Date.now() - Date.parse(saved.created_at as string) > 15 * 60_000) return finish({ ok: false, platform, error: "expired" });
+
+    const access = await requireSocialManager(saved.team_id as string);
+    if (!access.user || access.user.id !== saved.user_id) return finish({ ok: false, platform, error: "expired" });
+    if (!access.ok) return finish({ ok: false, platform, error: "forbidden" });
+
+    // The person pressed "Cancel" on the platform's screen, or the platform
+    // refused (wrong scopes, app not allowed for this account…): say why.
+    const refused = q.get("error");
+    if (refused || !q.get("code")) {
+      const why = q.get("error_description") || q.get("error_reason") || "";
+      if (!refused || /^(access_denied|user_denied|user_cancel)/i.test(refused)) {
+        return finish({ ok: false, platform, error: "cancelled", message: why && !/cancel|denied the request|user denied|permissions error/i.test(why) ? why.slice(0, 200) : undefined });
+      }
+      return finish({ ok: false, platform, error: "refused", message: (why || refused).slice(0, 200) });
+    }
+
+    const provider = PROVIDERS[platform];
     const tokens = await provider.exchange({
       code: q.get("code")!,
       verifier: (saved.code_verifier as string | null) ?? null,
       redirectUri: redirectUriFor(platform, request.nextUrl.origin),
     });
+    // Some boxes were unticked on the consent screen: refuse it (and keep
+    // the connection we already had) instead of saving a half-working one.
+    const missing = missingRequired(platform, tokens.scopes);
+    if (missing.length) return finish({ ok: false, platform, error: "missing_permissions", message: missing.map((m) => m.label).join(" · ") });
+
     const profile = await provider.profile(tokens.accessToken);
 
-    const { data: existing } = await admin
-      .from("social_accounts")
-      .select("id")
-      .eq("team_id", saved.team_id)
-      .eq("platform", platform)
-      .maybeSingle();
+    const { data: existing } = await admin.from("social_accounts").select("id, external_id").eq("team_id", saved.team_id).eq("platform", platform).maybeSingle();
 
     const { error } = await admin.from("social_accounts").upsert(
       {
@@ -92,12 +123,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
     if (error) throw new ProviderError("Couldn't save the connection.");
 
+    // A different channel / account / Page than before: its old numbers don't belong to this one.
+    if (existing?.external_id && existing.external_id !== profile.externalId) {
+      await Promise.all(
+        ["analytics_daily", "analytics_countries", "analytics_content", "analytics_syncs", ...(platform === "youtube" ? ["analytics_revenue_daily"] : [])].map((t) =>
+          admin.from(t).delete().eq("team_id", saved.team_id).eq("platform", platform)
+        )
+      );
+    }
+
     await logSocial(saved.team_id as string, platform, existing ? "reconnected" : "connected", access.user.id, {
       account: profile.username ?? profile.displayName,
     });
-    return back(`social=connected&platform=${platform}`);
+    // Connected, but the Analytics box was left unticked: say so.
+    const statsMissing = statsEnabled(platform) && !hasStatsScopes(platform, tokens.scopes);
+    return finish({ ok: true, platform, note: statsMissing ? "stats_missing" : undefined });
   } catch (e) {
     const msg = e instanceof ProviderError ? e.message : "Something went wrong talking to the platform.";
-    return back(`social_error=failed&platform=${platform}&message=${encodeURIComponent(msg.slice(0, 200))}`);
+    return finish({ ok: false, platform, error: "failed", message: msg.slice(0, 200) });
   }
 }

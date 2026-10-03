@@ -1,10 +1,10 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { relativeTime } from "@/lib/relative-time";
 import { CheckIcon, CopyIcon, ExternalIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { markEdited, markFilmed, reviewLong, saveLongDescription, setLongPlatforms, setLongPosted } from "./actions";
@@ -41,7 +41,7 @@ function DoneBox({ title, by, at, children }: { title: string; by: string | null
           <div className="text-[12.5px] text-ink-soft">
             {by ? `by ${by}` : ""}
             {by && at ? ", " : ""}
-            {at ? relativeTime(at) : ""}
+            {at ? <Ago iso={at} /> : ""}
           </div>
         )}
         {children}
@@ -244,7 +244,7 @@ export function ReviewPanel({
         <div className="rounded-2xl border border-line/10 bg-surface-2/40 p-4">
           <div className="text-[12px] text-ink-soft">
             Editing completed {editedBy ? `by ${editedBy}, ` : ""}
-            {relativeTime(editedAt)}
+            <Ago iso={editedAt} />
           </div>
           {editNote ? <p className="mt-1.5 text-[14px] whitespace-pre-wrap">{editNote}</p> : <p className="mt-1.5 text-[13.5px] text-ink-soft">No note.</p>}
         </div>
@@ -388,7 +388,7 @@ export function PostPanel({
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-semibold">{meta?.name ?? pid}</div>
                     <div className="text-[12px] text-ink-soft">
-                      {post ? `Posted ${post.postedBy ? `by ${post.postedBy}, ` : ""}${relativeTime(post.postedAt)}` : "Not posted yet"}
+                      {post ? <>{`Posted ${post.postedBy ? `by ${post.postedBy}, ` : ""}`}<Ago iso={post.postedAt} /></> : "Not posted yet"}
                     </div>
                   </div>
                   {post?.url && (

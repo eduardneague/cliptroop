@@ -1,9 +1,9 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { relativeTime } from "@/lib/relative-time";
 import { ExternalIcon } from "@/components/ui/icons";
 import { formatBytes, formatTime } from "../lib/limits";
 import type { VideoVersion } from "../lib/queries";
@@ -73,7 +73,7 @@ export function VideoCard({
           {latest.duration ? ` · ${formatTime(latest.duration)}` : ""} · {formatBytes(latest.size)}
           <span className="block text-[12px] text-ink-soft mt-0.5">
             {latest.uploadedBy ? `Uploaded by ${latest.uploadedBy.name}, ` : "Uploaded "}
-            {relativeTime(latest.createdAt)}
+            <Ago iso={latest.createdAt} />
             {versions.length > 1 ? ` · ${versions.length} versions` : ""}
           </span>
         </p>

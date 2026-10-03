@@ -1,5 +1,6 @@
 "use client";
 
+import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -9,7 +10,6 @@ import {
   respondToTeamInvite,
   respondToOwnershipTransfer,
 } from "@/app/(dashboard)/notification-actions";
-import { relativeTime } from "@/lib/relative-time";
 import { BellIcon } from "./icons";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -628,7 +628,7 @@ export function NotificationBell({
                         )}
                       </span>
                       <span className="block text-[10.5px] text-ink-soft mt-1">
-                        {relativeTime(n.created_at)}
+                        <Ago iso={n.created_at} />
                       </span>
                       {isPendingAction && (
                         <div className="flex gap-2 mt-2">

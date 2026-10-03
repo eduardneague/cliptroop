@@ -12,6 +12,7 @@ import { NotificationBell } from "@/components/ui/notification-bell";
 import { GlobalSearch } from "@/components/search/global-search";
 import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
+import { PaletteSync } from "@/components/ui/palette";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
 import { Brand } from "@/components/ui/clip-logo";
@@ -53,9 +54,11 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .limit(25),
   ]);
-  const { data: teamColors } = currentTeam
-    ? await supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle()
-    : { data: null };
+  const [{ data: teamColors }, { data: paletteRow }] = await Promise.all([
+    currentTeam ? supabase.from("teams").select("short_color, long_color").eq("id", currentTeam.id).maybeSingle() : Promise.resolve({ data: null }),
+    // Its own query: before migration 0060 the column doesn't exist, and that mustn't cost the profile.
+    supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
+  ]);
 
   const resolvedName = displayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
   const resolvedEmail = profile?.email ?? user?.email ?? "";
@@ -72,6 +75,7 @@ export default async function DashboardLayout({
     <ToastProvider>
       <ConfirmProvider>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
+        {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
         {/* The team's colours for shorts and long videos, everywhere. */}
         <style>{kindColorCss(teamColors?.short_color as string | undefined, teamColors?.long_color as string | undefined)}</style>

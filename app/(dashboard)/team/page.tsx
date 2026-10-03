@@ -100,8 +100,10 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     youtube: PROVIDERS.youtube.configured() && socialKeyConfigured(),
     instagram: PROVIDERS.instagram.configured() && socialKeyConfigured(),
     tiktok: PROVIDERS.tiktok.configured() && socialKeyConfigured(),
+    facebook: PROVIDERS.facebook.configured() && socialKeyConfigured(),
   };
-  const socialSetup = canManageSocial && tab === "accounts" ? await getSocialSetup() : null;
+  // Setup check: staging and your computer only (production keeps it out of sight).
+  const socialSetup = canManageSocial && tab === "accounts" && process.env.VERCEL_ENV !== "production" ? await getSocialSetup() : null;
   const [shortSettings, shortPeople] = userIsMaster
     ? await Promise.all([getShortSettings(currentTeam.id), listTeamPeople(currentTeam.id)])
     : [null, []];
@@ -232,7 +234,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             Connected accounts
           </h2>
           <p className="text-[12px] text-ink-soft mb-5">
-            Where approved shorts get posted. Sign-ins are stored encrypted and never leave the server.
+            Where approved shorts get posted, and where Analytics reads its numbers. Sign-ins are stored encrypted and never leave the server.
           </p>
           <Suspense>
             <ConnectedAccounts
@@ -240,7 +242,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               canManage={canManageSocial}
               configured={socialConfigured}
               accounts={(socialRows ?? []).map((r) => ({
-                platform: r.platform as "youtube" | "instagram" | "tiktok",
+                platform: r.platform as "youtube" | "instagram" | "tiktok" | "facebook",
                 displayName: (r.display_name as string | null) ?? null,
                 username: (r.username as string | null) ?? null,
                 avatarUrl: (r.avatar_url as string | null) ?? null,

@@ -47,7 +47,7 @@ export default async function PostingPage() {
       .neq("status", "cancelled")
       .order("scheduled_at", { ascending: true })
       .limit(200),
-    supabase.from("social_accounts").select("platform, display_name, username, status, last_error").eq("team_id", currentTeam.id),
+    supabase.from("social_accounts").select("platform, display_name, username, status, last_error").eq("team_id", currentTeam.id).in("platform", ["youtube", "instagram", "tiktok"]),
     manager ? supabase.rpc("posting_health", { p_team: currentTeam.id }) : Promise.resolve({ data: null }),
   ]);
 

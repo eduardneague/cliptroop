@@ -374,7 +374,9 @@ export function StatTile({
     if (!compare || value === null || prev === null || prev === undefined) return null;
     if (deltaMode === "points" || deltaMode === "absolute") return value - prev;
     if (prev === 0) return value === 0 ? 0 : null;
-    return ((value - prev) / Math.abs(prev)) * 100;
+    const pct = ((value - prev) / Math.abs(prev)) * 100;
+    // Rounds to 0.0%: no change worth an arrow or a colour.
+    return Math.abs(pct) < 0.05 ? 0 : pct;
   }, [compare, value, prev, deltaMode]);
   const tone = delta === null || delta === 0 || good === "none" ? "text-ink-soft bg-surface-2" : (delta > 0) === (good === "up") ? "text-green bg-green/10" : "text-red bg-red/10";
   const deltaText =
