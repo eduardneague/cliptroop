@@ -3,9 +3,10 @@
 name: Database
 
 on:
+  # Every push to staging / main (not only ones that add a migration): when
+  # nothing is new it just says the database is up to date.
   push:
     branches: [staging, main]
-    paths: ["supabase/migrations/**"]
   workflow_dispatch:
     inputs:
       target:

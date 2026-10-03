@@ -8,8 +8,8 @@ so nothing has to be pasted into the SQL editor any more.
 
 | When | What happens |
 | --- | --- |
-| A push to `staging` that adds a migration | Staging gets it (dry run first, then for real). |
-| A push to `main` that adds a migration | Production gets it — after staging, because that's the order the branches move in. |
+| Every push to `staging` | Staging gets any new migration (dry run first, then for real); if there's none it says "up to date". |
+| Every push to `main` | Production gets any new migration — after staging, because that's the order the branches move in. |
 | Actions → Database → Run workflow | Run it by hand: pick staging or production, *push* or *baseline*, or *status* to just look. |
 | Every push / pull request (CI) | Every migration is run on an empty database to prove it works from scratch, plus the type check, lint, tests and a full build. |
 
