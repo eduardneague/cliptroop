@@ -23,6 +23,14 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.3",
+    date: "2026-10-05",
+    title: "One more step for the move",
+    changes: [
+      { kind: "better", text: "App setup (owner) has a last card for the move: telling Supabase's timer the new address, so automatic posting, meeting reminders and the morning analytics keep running on cliptroop.com." },
+    ],
+  },
+  {
     version: "1.9.2",
     date: "2026-10-05",
     title: "VPlanner is now ClipTroop",
