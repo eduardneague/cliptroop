@@ -7,11 +7,20 @@
  * or server): nothing secret lives here.
  */
 
-/** The product's name, as people see it. */
-export const APP_NAME = "VPlanner";
+/** The product's name, as people see it. (Called VPlanner until 1.9.2.) */
+export const APP_NAME = "ClipTroop";
 
 /** Short name under the icon on a phone's home screen (≤ 12 characters). */
-export const APP_SHORT_NAME = "VPlanner";
+export const APP_SHORT_NAME = "ClipTroop";
+
+/**
+ * The domain we own (bought Oct 5 2026; DNS in cPanel at Hostico). The app
+ * lives on app.<domain>, staging on staging.<domain>, the root is for a
+ * website later. App setup (/setup) shows these addresses before they're
+ * switched on; the app itself only moves when NEXT_PUBLIC_APP_URL /
+ * STAGING_URL are set in Vercel.
+ */
+export const APP_DOMAIN = "cliptroop.com";
 
 /** The little clapperboard. */
 export const MASCOT_NAME = "Clip";

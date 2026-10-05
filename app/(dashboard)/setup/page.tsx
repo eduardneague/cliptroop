@@ -4,7 +4,7 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { isAlertPerson } from "@/lib/errors";
 import { getSocialSetup, type SocialSetup } from "@/lib/social/setup";
 import { authEmails } from "@/lib/auth-emails";
-import { APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
+import { APP_DOMAIN, APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { CopyField, EmailPreview } from "./setup-client";
 
@@ -12,10 +12,12 @@ export const metadata: Metadata = { title: "App setup" };
 export const dynamic = "force-dynamic";
 
 /*
- * App setup (owner only): everything to paste in Supabase, Google, Meta,
- * TikTok and Vercel for THIS copy of the app, read from where it's running.
- * Open it on staging and on production: each shows its own addresses.
- * Secrets are never shown, only whether they're set.
+ * App setup (owner only): everything to paste in cPanel, Resend, Supabase,
+ * Google, Meta, TikTok and Vercel for THIS copy of the app (production or
+ * staging). The addresses are the ones it SHOULD use: NEXT_PUBLIC_APP_URL /
+ * STAGING_URL when set, else app.<APP_DOMAIN> / staging.<APP_DOMAIN>, so the
+ * page is right even before the domain is switched on. Secrets are never
+ * shown, only whether they're set.
  */
 
 const ENV_LABEL: Record<SocialSetup["env"], string> = {
@@ -77,23 +79,32 @@ export default async function SetupPage() {
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
   const staging = setup.env === "preview";
-  const pinned = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "") || null;
-  const mismatch = prod && !!pinned && pinned !== origin;
+  const stagingBranch = staging && process.env.VERCEL_GIT_COMMIT_REF === "staging";
+  const clean = (v: string | undefined) => v?.trim().replace(/\/+$/, "") || null;
+  // The address this copy should be used on.
+  const target = prod
+    ? clean(process.env.NEXT_PUBLIC_APP_URL) || (APP_DOMAIN ? `https://app.${APP_DOMAIN}` : origin)
+    : stagingBranch
+      ? clean(process.env.STAGING_URL) || (APP_DOMAIN ? `https://staging.${APP_DOMAIN}` : origin)
+      : origin;
+  const targetHost = target.replace(/^https?:\/\//, "");
+  const elsewhere = target !== origin;
   const emails = authEmails();
-  const domain = rootDomain(setup.host);
+  const domain = APP_DOMAIN || rootDomain(setup.host);
   // A domain you own (for email addresses): not vercel.app, not your computer.
   const mailDomain = /\.[a-z]{2,}$/i.test(domain) && !domain.endsWith("vercel.app") ? domain : "yourdomain.com";
-  const contact = CONTACT_EMAIL || "you@yourdomain.com";
+  const contact = CONTACT_EMAIL || `hello@${mailDomain}`;
   const env = (k: string) => !!process.env[k]?.trim();
+  const sub = targetHost.endsWith(`.${domain}`) ? targetHost.slice(0, -(domain.length + 1)) : null;
 
   const vars: { name: string; what: string; value?: string; set: boolean; need: "yes" | "optional" | "prod" | "staging" }[] = [
-    { name: "NEXT_PUBLIC_APP_URL", what: prod ? "This copy's address (no slash at the end)." : "Production only. Leave it OUT of Preview: staging uses its own address.", value: prod ? origin : undefined, set: env("NEXT_PUBLIC_APP_URL"), need: "prod" },
-    { name: "STAGING_URL", what: staging ? "Staging's own address (Preview only, no slash at the end). Links in staging's emails use it, and the old staging address moves to it." : "Staging only (Preview), e.g. https://staging.yourdomain.com.", value: staging ? origin : undefined, set: env("STAGING_URL"), need: "staging" },
-    { name: "NEXT_PUBLIC_SITE_URL", what: "Same as NEXT_PUBLIC_APP_URL (Production only).", value: prod ? origin : undefined, set: env("NEXT_PUBLIC_SITE_URL"), need: "prod" },
-    { name: "NEXT_PUBLIC_CONTACT_EMAIL", what: "Shown on the privacy, terms and data deletion pages (the platforms check it).", value: CONTACT_EMAIL || undefined, set: env("NEXT_PUBLIC_CONTACT_EMAIL"), need: "yes" },
+    { name: "NEXT_PUBLIC_APP_URL", what: prod ? "Production's address (no slash at the end). Set it only once the address opens the app (card 1): from then on the old vercel.app address moves to it." : "Production only. Leave it OUT of Preview: staging uses STAGING_URL.", value: prod ? target : undefined, set: env("NEXT_PUBLIC_APP_URL"), need: "prod" },
+    { name: "NEXT_PUBLIC_SITE_URL", what: "Same as NEXT_PUBLIC_APP_URL (Production only).", value: prod ? target : undefined, set: env("NEXT_PUBLIC_SITE_URL"), need: "prod" },
+    { name: "STAGING_URL", what: staging ? "Staging's address (Preview only, no slash at the end). Set it only once the address opens staging (card 1)." : "Staging only (Preview), e.g. https://staging." + mailDomain + ".", value: staging ? target : undefined, set: env("STAGING_URL"), need: "staging" },
+    { name: "RESEND_API_KEY", what: "Resend → API Keys → the key made for " + mailDomain + " (card 2).", set: env("RESEND_API_KEY"), need: "yes" },
+    { name: "EMAIL_FROM", what: "Who the app's own emails (alerts, hand-offs, meetings) come from. The domain must be verified in Resend.", value: `${APP_NAME} <alerts@${mailDomain}>`, set: env("EMAIL_FROM"), need: "yes" },
+    { name: "NEXT_PUBLIC_CONTACT_EMAIL", what: "Shown on the privacy, terms and data deletion pages (the platforms check it). Make the inbox in cPanel → Email Accounts.", value: contact, set: env("NEXT_PUBLIC_CONTACT_EMAIL"), need: "yes" },
     { name: "VAPID_SUBJECT", what: "Push notifications: your contact, as mailto:.", value: `mailto:${contact}`, set: env("VAPID_SUBJECT"), need: "optional" },
-    { name: "EMAIL_FROM", what: "Who the app's own emails (alerts, hand-offs, meetings) come from. The domain must be verified in Resend.", value: `${APP_NAME} <notifications@${mailDomain}>`, set: env("EMAIL_FROM"), need: "yes" },
-    { name: "RESEND_API_KEY", what: "Resend → API Keys.", set: env("RESEND_API_KEY"), need: "yes" },
     { name: "NEXT_PUBLIC_SUPABASE_URL", what: "Supabase → Project Settings → Data API (this project's).", set: env("NEXT_PUBLIC_SUPABASE_URL"), need: "yes" },
     { name: "NEXT_PUBLIC_SUPABASE_ANON_KEY", what: "Supabase → Project Settings → API Keys (publishable / anon).", set: env("NEXT_PUBLIC_SUPABASE_ANON_KEY"), need: "yes" },
     { name: "SUPABASE_SERVICE_ROLE_KEY", what: "Supabase → Project Settings → API Keys (secret / service role).", set: env("SUPABASE_SERVICE_ROLE_KEY"), need: "yes" },
@@ -123,13 +134,13 @@ export default async function SetupPage() {
           <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${prod ? "bg-green/15 text-green" : "bg-gold/15 text-gold"}`}>{ENV_LABEL[setup.env]}</span>
         </div>
         <p className="text-[14px] text-ink-soft">
-          What to paste where, for the copy of {APP_NAME} at <b className="text-ink break-all">{origin}</b>. Open this page on staging and on production: each one shows its own
-          addresses. Do one numbered card at a time, top to bottom. Only you can see this page.
+          What to paste where, so {APP_NAME}&rsquo;s {prod ? "production" : staging ? "staging" : "copy"} runs on <b className="text-ink break-all">{target}</b>. Open this page on
+          staging and on production: each shows its own values. Do one numbered card at a time, top to bottom. Only you can see this page.
         </p>
-        {mismatch && (
+        {elsewhere && (
           <p className="mt-3 rounded-xl border border-gold/30 bg-gold/10 px-4 py-3 text-[13px]">
-            You&rsquo;re on <b>{origin}</b>, but NEXT_PUBLIC_APP_URL in Vercel says <b>{pinned}</b>. Open this page on <b>{pinned}</b> instead (or fix the variable), so the
-            addresses below are the ones people really use.
+            You&rsquo;re looking at this on <b className="break-all">{origin}</b>. That&rsquo;s fine: everything below is already for <b className="break-all">{target}</b>, the
+            address to move to.
           </p>
         )}
         {staging && (
@@ -141,6 +152,53 @@ export default async function SetupPage() {
 
       <Section
         n={1}
+        title={`Connect ${targetHost} to Vercel`}
+        intro={<p>Makes the address open the app. Once Vercel says Valid Configuration, the rest of this page can be done.</p>}
+      >
+        <CopyField label="Vercel → your project → Settings → Domains → Add Domain" value={targetHost} />
+        <Where>
+          {prod ? (
+            <>Connect it to <b>Production</b>.</>
+          ) : (
+            <>
+              After adding it: <b>Edit</b> → Connect to an environment: <b>Preview</b> → Git Branch: <b>staging</b> → Save.
+            </>
+          )}{" "}
+          Vercel then shows a <b>CNAME</b> value (something like abc123.vercel-dns-017.com): copy it.
+        </Where>
+        <Where>
+          cPanel → <b>Zone Editor</b> → {domain} → <b>Manage</b> → <b>+ Add Record</b> → type <b>CNAME</b>, Name <b>{sub ?? "app"}</b>, Record: the value from Vercel → Save.
+          It can take from a few minutes to an hour before Vercel shows Valid Configuration.
+        </Where>
+      </Section>
+
+      <Section
+        n={2}
+        title={`Email: send from ${mailDomain} (Resend)`}
+        intro={<p>Once per account, not per copy: do it on production and skip it on staging (only the Supabase SMTP part is per project).</p>}
+      >
+        <Where>
+          Resend → <b>Domains</b> → <b>Add Domain</b> → {mailDomain} → Region <b>Ireland (eu-west-1)</b>. Resend lists 3 to 4 records (MX and TXT on <b>send</b>, TXT on{" "}
+          <b>resend._domainkey</b>). Add each in cPanel → Zone Editor → {domain} → Manage → + Add Record, with the same type, name and value (MX priority 10). Also add TXT{" "}
+          <b>_dmarc</b> with the value below. Back in Resend: <b>Verify DNS Records</b>.
+        </Where>
+        <CopyField label="DMARC record (TXT, name _dmarc)" value="v=DMARC1; p=none;" />
+        <Where>
+          Resend → <b>API Keys</b> → <b>Create API Key</b> (Sending access, domain {mailDomain}). Copy it once: it goes into Vercel (RESEND_API_KEY, card 7) and into
+          Supabase below. Never paste it anywhere else.
+        </Where>
+        <Where>
+          Supabase → the <b>{prod ? "production" : staging ? "staging" : "matching"}</b> project → Authentication → Emails → <b>SMTP Settings</b> (do it in both projects):
+        </Where>
+        <CopyField label="Sender email" value={`hello@${mailDomain}`} />
+        <CopyField label="Sender name" value={APP_NAME} />
+        <CopyField label="Host" value="smtp.resend.com" />
+        <CopyField label="Port number" value="465" />
+        <CopyField label="Username" value="resend" hint="Password: the new Resend API key" />
+      </Section>
+
+      <Section
+        n={3}
         title="Supabase: where sign-in links lead"
         intro={
           <p>
@@ -148,13 +206,13 @@ export default async function SetupPage() {
           </p>
         }
       >
-        <CopyField label="Site URL" value={origin} hint="replace what's there, then Save" />
-        <CopyField label="Redirect URLs → Add URL" value={`${origin}/**`} hint="then Save URLs" />
+        <CopyField label="Site URL" value={target} hint="replace what's there, then Save" />
+        <CopyField label="Redirect URLs → Add URL" value={`${target}/**`} hint="then Save URLs" />
         <Where>No slash at the end of the Site URL. Old addresses in Redirect URLs can stay until everyone uses the new one.</Where>
       </Section>
 
       <Section
-        n={2}
+        n={4}
         title="Supabase: the sign-in emails"
         intro={
           <>
@@ -162,7 +220,7 @@ export default async function SetupPage() {
               Same project → Authentication → <b>Emails</b> → Templates. For each email below: click it in Supabase, paste the <b>Subject</b>, then in the message box
               select everything, delete it, and paste the <b>Body</b>. Save. The first two are the ones that matter.
             </p>
-            <p>Their links lead to {origin}/welcome, where people press a button to continue (so the link can&rsquo;t be used up by an email scanner).</p>
+            <p>Their links lead to {target}/welcome, where people press a button to continue (so the link can&rsquo;t be used up by an email scanner).</p>
           </>
         }
       >
@@ -176,25 +234,21 @@ export default async function SetupPage() {
             </div>
             <CopyField label="Subject" value={e.subject} />
             <CopyField label="Body (message)" value={e.html} big />
-            <EmailPreview html={e.html} origin={origin} />
+            <EmailPreview html={e.html} origin={target} />
           </div>
         ))}
-        <Where>
-          Sender: Authentication → Emails → <b>SMTP Settings</b>. Sender name: <b>{APP_NAME}</b>. Sender email: an address on a domain verified in Resend (for example
-          hello@{mailDomain}).
-        </Where>
       </Section>
 
       <Section
-        n={3}
+        n={5}
         title="Platform sign-ins: return addresses"
-        intro={<p>Each platform sends people back here after they connect an account. The address must match exactly, letter for letter.</p>}
+        intro={<p>Each platform sends people back here after they connect an account. The address must match exactly, letter for letter. Keep the old ones until the move is done.</p>}
       >
         {setup.platforms.map((p) => (
           <div key={p.platform} className="space-y-2">
             <CopyField
               label={PLATFORM[p.platform].name}
-              value={p.redirectUri}
+              value={`${target}/api/social/${p.platform}/callback`}
               hint={p.keys ? "keys set in Vercel" : "keys missing in Vercel"}
             />
             <Where>{PLATFORM[p.platform].where}</Where>
@@ -202,23 +256,24 @@ export default async function SetupPage() {
         ))}
       </Section>
 
-      <Section n={4} title="Platform apps: website, privacy, terms" intro={<p>The approvals check these pages. They&rsquo;re public (no sign-in needed).</p>}>
-        <CopyField label="Home page / website" value={`${origin}/`} />
-        <CopyField label="Privacy policy" value={`${origin}/privacy`} />
-        <CopyField label="Terms of service" value={`${origin}/terms`} />
-        <CopyField label="Data deletion instructions" value={`${origin}/data-deletion`} />
+      <Section n={6} title="Platform apps: website, privacy, terms" intro={<p>The approvals check these pages. They&rsquo;re public (no sign-in needed).</p>}>
+        <CopyField label="Home page / website" value={`${target}/`} />
+        <CopyField label="Privacy policy" value={`${target}/privacy`} />
+        <CopyField label="Terms of service" value={`${target}/terms`} />
+        <CopyField label="Data deletion instructions" value={`${target}/data-deletion`} />
         <CopyField label="Domain" value={domain} hint="Google: Authorized domains · Meta: App domains" />
-        <CopyField label="Authorized JavaScript origin (Google)" value={origin} />
+        <CopyField label="Authorized JavaScript origin (Google)" value={target} />
         <Where>
-          Google: Google Auth Platform → <b>Branding</b> (home page, privacy, terms, authorized domain) and Clients → your Web client (JavaScript origin). Meta: App settings →{" "}
-          <b>Basic</b> (App domains, Privacy Policy URL, Terms of Service URL, User data deletion → Data deletion instructions URL). TikTok: app → <b>Basic information</b>{" "}
-          (Terms of Service URL, Privacy Policy URL, Web/Desktop URL) and <b>URL properties</b> → Verify → Domain {domain} (TikTok shows a TXT record: add it in your
-          domain&rsquo;s DNS, cPanel → Zone Editor).
+          Google: Google Auth Platform → <b>Branding</b> (home page, privacy, terms, authorized domain) and Clients → your Web client (JavaScript origin). Google also wants
+          the domain verified: Google Search Console → Add property → <b>Domain</b> {domain} → it shows a TXT record → add it in cPanel → Zone Editor (name: {domain}). Meta: App
+          settings → <b>Basic</b> (App domains, Privacy Policy URL, Terms of Service URL, User data deletion → Data deletion instructions URL). TikTok: app →{" "}
+          <b>Basic information</b> (Terms of Service URL, Privacy Policy URL, Web/Desktop URL) and <b>URL properties</b> → Verify → Domain {domain} (TikTok shows a TXT
+          record: add it the same way).
         </Where>
       </Section>
 
       <Section
-        n={5}
+        n={7}
         title="Vercel: environment variables"
         intro={
           <p>

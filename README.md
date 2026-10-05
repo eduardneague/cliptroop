@@ -1,4 +1,4 @@
-# VPlanner
+# ClipTroop (formerly VPlanner)
 
 Internal content-production dashboard. First module: long-form YouTube video
 pipeline management.
