@@ -68,6 +68,21 @@ function Section({ n, title, intro, children }: { n: number; title: string; intr
   );
 }
 
+/** A button straight to the right page of this copy's Supabase project. */
+function Open({ href, label }: { href: string | null; label: string }) {
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold hover:border-line/40 hover:bg-surface-2"
+    >
+      {label} <span aria-hidden>↗</span>
+    </a>
+  );
+}
+
 function Where({ children }: { children: React.ReactNode }) {
   return <p className="text-[12.5px] text-ink-soft rounded-lg bg-paper/60 border border-line/10 px-3 py-2">{children}</p>;
 }
@@ -96,6 +111,10 @@ export default async function SetupPage() {
   const contact = CONTACT_EMAIL || `hello@${mailDomain}`;
   const env = (k: string) => !!process.env[k]?.trim();
   const sub = targetHost.endsWith(`.${domain}`) ? targetHost.slice(0, -(domain.length + 1)) : null;
+  // This copy's Supabase project (from its address), for direct links.
+  const ref = /^https:\/\/([a-z0-9]{10,40})\.supabase\.co/i.exec(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")?.[1] ?? null;
+  const sb = (path: string) => (ref ? `https://supabase.com/dashboard/project/${ref}/${path}` : null);
+  const projectWord = prod ? "production" : staging ? "staging" : "matching";
 
   const vars: { name: string; what: string; value?: string; set: boolean; need: "yes" | "optional" | "prod" | "staging" }[] = [
     { name: "NEXT_PUBLIC_APP_URL", what: prod ? "Production's address (no slash at the end). Set it only once the address opens the app (card 1): from then on the old vercel.app address moves to it." : "Production only. Leave it OUT of Preview: staging uses STAGING_URL.", value: prod ? target : undefined, set: env("NEXT_PUBLIC_APP_URL"), need: "prod" },
@@ -188,8 +207,9 @@ export default async function SetupPage() {
           Supabase below. Never paste it anywhere else.
         </Where>
         <Where>
-          Supabase → the <b>{prod ? "production" : staging ? "staging" : "matching"}</b> project → Authentication → Emails → <b>SMTP Settings</b> (do it in both projects):
+          Supabase → the <b>{projectWord}</b> project → Authentication → Emails → <b>SMTP Settings</b> (do it in both projects; the password is that project&rsquo;s Resend key):
         </Where>
+        <Open href={sb("auth/smtp")} label={`Open SMTP Settings (${projectWord})`} />
         <CopyField label="Sender email" value={`hello@${mailDomain}`} />
         <CopyField label="Sender name" value={APP_NAME} />
         <CopyField label="Host" value="smtp.resend.com" />
@@ -206,6 +226,7 @@ export default async function SetupPage() {
           </p>
         }
       >
+        <Open href={sb("auth/url-configuration")} label={`Open URL Configuration (${projectWord})`} />
         <CopyField label="Site URL" value={target} hint="replace what's there, then Save" />
         <CopyField label="Redirect URLs → Add URL" value={`${target}/**`} hint="then Save URLs" />
         <Where>No slash at the end of the Site URL. Old addresses in Redirect URLs can stay until everyone uses the new one.</Where>
@@ -217,13 +238,26 @@ export default async function SetupPage() {
         intro={
           <>
             <p>
-              Same project → Authentication → <b>Emails</b> → Templates. For each email below: click it in Supabase, paste the <b>Subject</b>, then in the message box
-              select everything, delete it, and paste the <b>Body</b>. Save. The first two are the ones that matter.
+              Same project → Authentication → <b>Emails</b> → <b>Templates</b> (button below). For <b>Invite user</b>, then <b>Reset Password</b>:
             </p>
+            <ol className="list-decimal pl-5 space-y-0.5">
+              <li>Click the template&rsquo;s name in Supabase.</li>
+              <li>
+                <b>Subject</b>: select what&rsquo;s there and paste the Subject from here.
+              </li>
+              <li>
+                <b>Message body</b>: if there are <b>Source</b> / Preview tabs, pick Source. Click inside, select all (Ctrl+A), delete, paste the Body from here.
+              </li>
+              <li>
+                <b>Save changes</b>.
+              </li>
+            </ol>
+            <p>The other three are optional (accounts are only made by invite).</p>
             <p>Their links lead to {target}/welcome, where people press a button to continue (so the link can&rsquo;t be used up by an email scanner).</p>
           </>
         }
       >
+        <Open href={sb("auth/templates")} label={`Open Email Templates (${projectWord})`} />
         {emails.map((e) => (
           <div key={e.id} className="rounded-xl border border-line/10 p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -311,8 +345,9 @@ export default async function SetupPage() {
           </p>
         }
       >
+        <Open href={sb("sql/new")} label={`Open the SQL Editor (${projectWord})`} />
         <CopyField
-          label={`Supabase → the ${prod ? "production" : staging ? "staging" : "matching"} project → SQL Editor → New query → paste → Run`}
+          label={`Supabase → the ${projectWord} project → SQL Editor → New query → paste → Run`}
           value={`select vault.update_secret(id, '${target}/api/cron/posting') from vault.secrets where name = 'posting_url';\nselect decrypted_secret as timer_address from vault.decrypted_secrets where name = 'posting_url';`}
         />
         <Where>

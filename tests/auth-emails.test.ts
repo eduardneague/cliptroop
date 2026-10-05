@@ -26,6 +26,8 @@ for (const e of emails) {
   ok(!/<script/i.test(e.html), `${e.id}: no scripts`);
   ok(!/ConfirmationURL/.test(e.html), `${e.id}: doesn't use the old link`);
   ok(e.html.startsWith("<!doctype html>"), `${e.id}: full document`);
+  ok(/prefers-color-scheme: dark/.test(e.html) && /class="card"/.test(e.html) && /class="ink"/.test(e.html), `${e.id}: has a readable dark mode`);
+  ok(!/\{\{[^}]*\{/.test(e.html), `${e.id}: no braces inside a Supabase placeholder`);
 }
 if (fails) process.exit(1);
 console.log("auth emails ok");
