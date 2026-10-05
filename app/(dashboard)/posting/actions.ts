@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+// tester
+
 /**
  * "Test the timer": Supabase calls this site right now, exactly like the
  * every-minute timer does. The answer shows up in Health a few seconds later.

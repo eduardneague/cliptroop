@@ -37,7 +37,7 @@ export function CopyField({ label, value, big = false, hint }: { label: string; 
             {value.length.toLocaleString()} characters of HTML. Press Copy, then paste it in Supabase.
           </span>
         ) : (
-          <code className="flex-1 min-w-0 rounded-lg border border-line/15 bg-paper/60 px-3 py-2 font-mono text-[12.5px] break-all select-all">{value}</code>
+          <code className="flex-1 min-w-0 rounded-lg border border-line/15 bg-paper/60 px-3 py-2 font-mono text-[12.5px] break-all whitespace-pre-wrap select-all">{value}</code>
         )}
         <button
           type="button"

@@ -300,6 +300,26 @@ export default async function SetupPage() {
           })}
         </ul>
       </Section>
+
+      <Section
+        n={8}
+        title="The timer: where Supabase calls the app"
+        intro={
+          <p>
+            Every few minutes Supabase wakes the app to post videos, send meeting reminders and copy analytics. It keeps the app&rsquo;s address in its Vault
+            (posting_url). Do this once {targetHost} opens the app (card 1).
+          </p>
+        }
+      >
+        <CopyField
+          label={`Supabase → the ${prod ? "production" : staging ? "staging" : "matching"} project → SQL Editor → New query → paste → Run`}
+          value={`select vault.update_secret(id, '${target}/api/cron/posting') from vault.secrets where name = 'posting_url';\nselect decrypted_secret as timer_address from vault.decrypted_secrets where name = 'posting_url';`}
+        />
+        <Where>
+          The answer is one row, <b>timer_address</b>, showing {target}/api/cron/posting. Then in the app: <b>Posting</b> → <b>Test the timer</b>: it should say the
+          timer reached the app. &ldquo;No rows returned&rdquo; means the timer was never set up on this project: tell Claude.
+        </Where>
+      </Section>
     </div>
   );
 }
