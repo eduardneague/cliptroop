@@ -12,6 +12,8 @@ import { socialKeyConfigured } from "./crypto";
 export type SocialSetup = {
   env: "production" | "preview" | "development" | "local";
   host: string;
+  /** https://host (http on your computer). */
+  origin: string;
   tokenKey: boolean;
   pinnedUrl: string | null;
   pinnedIgnored: boolean;
@@ -29,6 +31,7 @@ export async function getSocialSetup(): Promise<SocialSetup> {
   return {
     env,
     host,
+    origin,
     tokenKey: socialKeyConfigured(),
     pinnedUrl: pinned,
     pinnedIgnored: !!pinned && env === "preview",

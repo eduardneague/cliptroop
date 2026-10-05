@@ -12,9 +12,12 @@ export function emailConfigured() {
   return !!process.env.RESEND_API_KEY && !!process.env.EMAIL_FROM;
 }
 
-/** The app's public address, for links in emails. Previews (staging) link to themselves. */
+/** The app's public address, for links in emails. Previews (staging) link to themselves (or STAGING_URL). */
 export function appUrl() {
   if (process.env.VERCEL_ENV === "preview") {
+    // Staging on its own domain (STAGING_URL, e.g. https://staging.example.com).
+    const staging = process.env.VERCEL_GIT_COMMIT_REF === "staging" ? process.env.STAGING_URL?.trim() : "";
+    if (staging && /^https:\/\/[^/]+/.test(staging)) return staging.replace(/\/+$/, "");
     const own = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL;
     if (own) return `https://${own}`.replace(/\/+$/, "");
   }

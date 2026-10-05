@@ -385,6 +385,13 @@ function RichBody({ n }: { n: NotificationItem }) {
           {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}
         </>
       );
+    case "script_done":
+      return (
+        <>
+          <b>{m.actor?.name}</b> marked <ShortRef m={m} /> as done{" "}
+          <span className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
+        </>
+      );
     case "meeting_scheduled":
     case "meeting_changed":
     case "meeting_cancelled":

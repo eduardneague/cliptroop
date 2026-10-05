@@ -13,7 +13,7 @@ import { AvatarUploader } from "./avatar-uploader";
 import { ProfileForm } from "./profile-form";
 import { TeamsVisibilityToggle } from "./teams-visibility-toggle";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { signOut } from "../actions";
+import { LogoutButton } from "@/components/ui/logout-button";
 import type { Metadata } from "next";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { cookies } from "next/headers";
@@ -50,6 +50,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
   ]);
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
+  // Account tab: the app owner also gets the App setup page.
+  const showAppSetup = tab === "account" && (await isAlertPerson(user!.id));
 
   // Notifications tab: your devices (this one marked), and the one-time key setup for the owner.
   let devices: PushDevice[] = [];
@@ -252,15 +254,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Account</h2>
             <p className="text-[12.5px] text-ink-soft mt-1">Signed in as {profile?.email ?? "you"}.</p>
           </div>
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors"
+          {showAppSetup && (
+            <Link
+              href="/setup"
+              className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
             >
-              Log out
-            </button>
-          </form>
-
+              <span className="flex-1 min-w-0">
+                <span className="block text-[14px] font-semibold">App setup</span>
+                <span className="block text-[12.5px] text-ink-soft">
+                  What to paste in Supabase, Google, Meta, TikTok and Vercel for this copy of {APP_NAME}, including the sign-in emails. Only you see this.
+                </span>
+              </span>
+              <span className="text-ink-faint" aria-hidden>
+                →
+              </span>
+            </Link>
+          )}
+          <LogoutButton className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors">
+            Log out
+          </LogoutButton>
         </section>
       )}
     </div>

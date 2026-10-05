@@ -317,7 +317,7 @@ export function PushSettings({ userId }: { userId: string }) {
   const btn = "inline-flex items-center justify-center rounded-xl font-semibold text-[13.5px] px-4 h-10 disabled:opacity-60";
   const status = (dot: string, text: string) => (
     <p className="text-[13.5px] flex items-center gap-2">
-      <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden />
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} aria-hidden />
       {text}
     </p>
   );

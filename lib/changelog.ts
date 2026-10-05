@@ -23,6 +23,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.1",
+    date: "2026-10-04",
+    title: "Staging done, a friendlier welcome, ready for our own domain",
+    changes: [
+      { kind: "new", text: "Scripts: \"Staging done\" on the Staging document. Optional, just to keep things tidy: every step gets a tick, a big check pops up, and everyone on the script gets a notification. Any Review or Staging tasks close by themselves. Changed your mind? Undo." },
+      { kind: "new", text: "A friendlier welcome for new people: the invite email looks like VPlanner, and its link opens a welcome page with Clip. Setting up is four short steps: password, name and photo, getting it on your phone, done." },
+      { kind: "new", text: "Expired or already-used links now say so plainly, with the way forward (sign in, or ask for a new link)." },
+      { kind: "new", text: "App setup (for the owner, in Settings → Account): exactly what to paste in Supabase, Google, Meta, TikTok and Vercel for each copy of VPlanner, with Copy buttons and the sign-in emails ready to use." },
+      { kind: "better", text: "Log out asks first, so a stray tap doesn't sign you out." },
+      { kind: "better", text: "Ready for our own domain: once it's set up, the old vercel.app addresses move to the new one by themselves (staging too), so everyone uses one address." },
+      { kind: "better", text: "Analytics: the audience map shows all platforms together by default." },
+      { kind: "fixed", text: "Customizing the dashboard on a phone: the greeting no longer gets squeezed next to the buttons." },
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-10-04",
     title: "On your phone, with notifications",

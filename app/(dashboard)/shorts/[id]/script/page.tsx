@@ -106,6 +106,7 @@ export default async function ShortScriptPage({
           scripters: canManageScripters,
           people: canManageScripters || canEdit,
           handOff: { write: canEdit, review: isMaster(roles) || isStepPerson(flow, flow.steps.find((s) => s.step === "review")?.docId ?? "", me) },
+          finish: canEdit || flow.steps.some((s) => isStepPerson(flow, s.docId, me)),
         },
       }}
       lastEdited={doc.updatedBy && doc.version > 1 ? `Last edited by ${doc.updatedBy.name}, ${relativeTime(doc.updatedAt)}` : null}

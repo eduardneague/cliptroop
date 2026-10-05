@@ -15,11 +15,46 @@ export const VERIFIED_USER_ID_HEADER = "x-vp-verified-user-id";
 export const VERIFIED_USER_EMAIL_HEADER = "x-vp-verified-user-email";
 
 /**
+ * On its own domain: pages opened on the old *.vercel.app address move to
+ * the real one (same path), so everyone signs in, connects accounts and
+ * installs the phone app on ONE address.
+ *   production: NEXT_PUBLIC_APP_URL      (e.g. https://app.example.com)
+ *   staging:    STAGING_URL              (e.g. https://staging.example.com),
+ *               only the "staging" branch, never other previews
+ * Only when that's a real domain (not *.vercel.app), only page loads
+ * (GET/HEAD), never /api (platform callbacks, timers keep working on both).
+ */
+export function canonicalRedirect(request: NextRequest): NextResponse | null {
+  const env = process.env.VERCEL_ENV;
+  const raw = (
+    env === "production"
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : env === "preview" && process.env.VERCEL_GIT_COMMIT_REF === "staging"
+        ? process.env.STAGING_URL
+        : ""
+  )?.trim();
+  if (!raw) return null;
+  let target: URL;
+  try {
+    target = new URL(raw);
+  } catch {
+    return null;
+  }
+  const host = (request.headers.get("host") ?? request.nextUrl.host).toLowerCase();
+  if (target.protocol !== "https:" || target.host.endsWith(".vercel.app") || !host.endsWith(".vercel.app") || host === target.host) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (request.nextUrl.pathname.startsWith("/api/")) return null;
+  return NextResponse.redirect(new URL(request.nextUrl.pathname + request.nextUrl.search, target.origin), 308);
+}
+
+/**
  * Refreshes the user's auth session on every request and enforces
  * that dashboard routes require a logged-in session. Public routes
  * (login) are left alone. This runs in middleware.ts.
  */
 export async function updateSession(request: NextRequest) {
+  const moved = canonicalRedirect(request);
+  if (moved) return moved;
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -56,6 +91,8 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/api/auth") ||
+    // Where the sign-in emails lead (invites, password resets): signs you in.
+    request.nextUrl.pathname === "/welcome" ||
     // Scheduled jobs (Vercel Cron). Each route checks CRON_SECRET itself.
     request.nextUrl.pathname.startsWith("/api/cron/") ||
     // Public pages the platform reviews require (the home page signs you in or sends you on).

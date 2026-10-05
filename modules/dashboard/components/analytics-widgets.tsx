@@ -288,7 +288,7 @@ export function AudienceMapWidget({ teamId, settings }: { teamId: string; settin
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
   const view: MapView = settings?.view === "globe" ? "globe" : "map";
-  const mode: MapMode = MAP_MODES.some((m) => m.id === settings?.mode) ? (settings!.mode as MapMode) : "views";
+  const mode: MapMode = MAP_MODES.some((m) => m.id === settings?.mode) ? (settings!.mode as MapMode) : "all";
   const layer = layerFor(r.data.audience, mode);
   const rows = layer.rows;
   const total = rows.reduce((s, c) => s + c.value, 0);

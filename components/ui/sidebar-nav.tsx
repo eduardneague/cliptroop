@@ -9,7 +9,7 @@ import { BOTTOM_ITEMS, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
 import { AppsIcon, LogoutIcon, SettingsIcon } from "./icons";
 import { ClipLogo } from "./clip-logo";
 import { openWhatsNew, SparkIcon } from "./whats-new";
-import { signOut } from "@/app/(dashboard)/actions";
+import { LogoutButton } from "@/components/ui/logout-button";
 
 /**
  * Icons are quiet grey at rest (one consistent menu), and light up in their
@@ -146,12 +146,10 @@ function MoreSheet({ onClose, pathname }: { onClose: () => void; pathname: strin
             <SparkIcon className="w-5 h-5 text-amber" />
             What&rsquo;s new
           </button>
-          <form action={signOut}>
-            <button type="submit" className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-red text-left">
-              <LogoutIcon className="w-5 h-5" />
-              Log out
-            </button>
-          </form>
+          <LogoutButton className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-red text-left">
+            <LogoutIcon className="w-5 h-5" />
+            Log out
+          </LogoutButton>
         </div>
       </div>
     </div>,
