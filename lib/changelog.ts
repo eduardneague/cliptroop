@@ -23,6 +23,15 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.2",
+    date: "2026-10-05",
+    title: "VPlanner is now ClipTroop",
+    changes: [
+      { kind: "new", text: "New name: ClipTroop. Same app, same team, same Clip. Soon at its own address, app.cliptroop.com (we'll tell you when to switch)." },
+      { kind: "better", text: "App setup (owner) walks through moving to the new address step by step: connecting it, email from cliptroop.com, sign-in links, the platforms' return addresses and Vercel, with every value ready to copy." },
+    ],
+  },
+  {
     version: "1.9.1",
     date: "2026-10-04",
     title: "Staging done, a friendlier welcome, ready for our own domain",
