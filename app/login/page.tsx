@@ -37,10 +37,16 @@ export default function LoginPage() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetPending(false);
-    // Deliberately vague either way — never confirm/deny whether an
-    // email has an account, same reasoning as the sign-in error.
-    if (error) setResetError("Couldn't send the reset email. Try again.");
-    else setResetSent(true);
+    // Never confirm/deny whether an email has an account (same reasoning as
+    // the sign-in error); only say what the person can do about it.
+    if (error) {
+      const tooSoon = error.status === 429 || /rate limit|security purposes|seconds/i.test(error.message ?? "");
+      setResetError(
+        tooSoon
+          ? "One reset email a minute: wait a moment, then try again."
+          : "Couldn't send the reset email. Try again in a minute; if it keeps happening, tell your team's owner (the email settings need a look)."
+      );
+    } else setResetSent(true);
   }
 
   if (checkingForInvite) {

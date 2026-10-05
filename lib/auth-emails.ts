@@ -31,6 +31,13 @@ const FAINT = "#8A7F73";
 const PAPER = "#F6F1EA";
 const LINE = "#EDE4D8";
 const TINT = "#FDEBDD";
+// Dark mode (email apps that support it).
+const D_PAGE = "#17110D";
+const D_CARD = "#241B15";
+const D_LINE = "#3A2E25";
+const D_INK = "#F6F1EA";
+const D_SOFT = "#D6CBBF";
+const D_FAINT = "#A99D91";
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 const SERIF = "Georgia,'Times New Roman',serif";
 
@@ -53,38 +60,56 @@ function layout(o: {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 22px;">${o.steps
         .map(
           (s, i) =>
-            `<tr><td valign="top" style="padding:5px 12px 5px 0;"><div style="width:24px;height:24px;border-radius:12px;background:${TINT};color:${BRAND_COLOR};font:700 12px/24px ${SANS};text-align:center;">${i + 1}</div></td><td style="padding:7px 0 5px;font:15px/1.45 ${SANS};color:${INK};">${esc(s)}</td></tr>`
+            `<tr><td valign="top" style="padding:5px 12px 5px 0;"><div style="width:24px;height:24px;border-radius:12px;background:${TINT};color:${BRAND_COLOR};font:700 12px/24px ${SANS};text-align:center;">${i + 1}</div></td><td class="ink" style="padding:7px 0 5px;font:15px/1.45 ${SANS};color:${INK};">${esc(s)}</td></tr>`
         )
         .join("")}</table>`
     : "";
+  // Light by default. Email apps in dark mode get a deliberate dark version
+  // (Apple Mail, iOS, Outlook) instead of half-inverted colours; the others
+  // (Gmail) invert background and text together.
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light only">
-<meta name="supported-color-schemes" content="light only">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <title>${esc(o.subject)}</title>
+<style>
+:root { color-scheme: light dark; supported-color-schemes: light dark; }
+@media (prefers-color-scheme: dark) {
+  .page { background: ${D_PAGE} !important; }
+  .card { background: ${D_CARD} !important; border-color: ${D_LINE} !important; }
+  .ink { color: ${D_INK} !important; }
+  .soft { color: ${D_SOFT} !important; }
+  .faint { color: ${D_FAINT} !important; }
+}
+[data-ogsb] .page { background: ${D_PAGE} !important; }
+[data-ogsb] .card { background: ${D_CARD} !important; }
+[data-ogsc] .ink { color: ${D_INK} !important; }
+[data-ogsc] .soft { color: ${D_SOFT} !important; }
+[data-ogsc] .faint { color: ${D_FAINT} !important; }
+</style>
 </head>
-<body style="margin:0;padding:0;background:${PAPER};">
+<body class="page" style="margin:0;padding:0;background:${PAPER};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(o.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
+<table class="page" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};">
 <tr><td align="center" style="padding:32px 16px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 <tr><td style="padding:0 6px 18px;">
 <img src="{{ .SiteURL }}/app-icons/icon-192.png" width="36" height="36" alt="" style="display:inline-block;vertical-align:middle;border:0;border-radius:9px;">
-<span style="display:inline-block;vertical-align:middle;padding-left:9px;font:700 18px ${SERIF};color:${INK};">${esc(APP_NAME)}</span>
+<span class="ink" style="display:inline-block;vertical-align:middle;padding-left:9px;font:700 18px ${SERIF};color:${INK};">${esc(APP_NAME)}</span>
 </td></tr>
-<tr><td style="background:#FFFFFF;border:1px solid ${LINE};border-radius:20px;padding:32px 28px;">
+<tr><td class="card" style="background:#FFFFFF;border:1px solid ${LINE};border-radius:20px;padding:32px 28px;">
 <span style="display:inline-block;padding:5px 11px;border-radius:999px;background:${TINT};color:${BRAND_COLOR};font:700 12px ${SANS};letter-spacing:.02em;">${esc(o.eyebrow)}</span>
-<h1 style="margin:16px 0 10px;font:700 26px/1.25 ${SERIF};color:${INK};">${esc(o.title)}</h1>
-<p style="margin:0 0 20px;font:15px/1.6 ${SANS};color:${SOFT};">${esc(o.intro)}</p>
+<h1 class="ink" style="margin:16px 0 10px;font:700 26px/1.25 ${SERIF};color:${INK};">${esc(o.title)}</h1>
+<p class="soft" style="margin:0 0 20px;font:15px/1.6 ${SANS};color:${SOFT};">${esc(o.intro)}</p>
 ${steps}<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:12px;background:${BRAND_COLOR};">
 <a href="${o.href}" style="display:inline-block;padding:14px 26px;font:700 15px ${SANS};color:#FFFFFF;text-decoration:none;border-radius:12px;">${esc(o.cta)}</a>
 </td></tr></table>
-<p style="margin:24px 0 0;font:12.5px/1.55 ${SANS};color:${FAINT};">Button not working? Copy this link into your browser:<br><a href="${o.href}" style="color:${BRAND_COLOR};word-break:break-all;">${o.href}</a></p>
+<p class="faint" style="margin:24px 0 0;font:12.5px/1.55 ${SANS};color:${FAINT};">Button not working? Copy this link into your browser:<br><a href="${o.href}" style="color:${BRAND_COLOR};word-break:break-all;">${o.href}</a></p>
 </td></tr>
-<tr><td style="padding:18px 10px 0;font:12px/1.55 ${SANS};color:${FAINT};text-align:center;">${esc(o.footer)}</td></tr>
+<tr><td class="faint" style="padding:18px 10px 0;font:12px/1.55 ${SANS};color:${FAINT};text-align:center;">${esc(o.footer)}</td></tr>
 </table>
 </td></tr>
 </table>

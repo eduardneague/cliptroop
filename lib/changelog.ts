@@ -23,6 +23,16 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.4",
+    date: "2026-10-05",
+    title: "Emails that read well in dark mode",
+    changes: [
+      { kind: "better", text: "The invite and password emails have a proper dark version, so they stay readable in email apps set to dark mode." },
+      { kind: "better", text: "App setup (owner): buttons that open the exact Supabase page for each step, clearer steps for pasting the emails, and a light / dark preview." },
+      { kind: "fixed", text: "\"Forgot password\" says when to wait a minute (one reset email a minute) instead of a vague error." },
+    ],
+  },
+  {
     version: "1.9.3",
     date: "2026-10-05",
     title: "One more step for the move",
