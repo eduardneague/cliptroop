@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Ago } from "@/components/ui/ago";
 import { Dialog } from "@/components/ui/dialog";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { ArrowRightIcon, CheckIcon, UsersIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScripterPicker } from "@/modules/short-videos/components/scripter-picker";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
-import { handOffScript, setScriptPeople } from "@/app/(dashboard)/scripts/actions";
+import { finishScript, handOffScript, setScriptPeople } from "@/app/(dashboard)/scripts/actions";
+import { sounds } from "@/lib/sounds";
 import type { FlowStepInfo, ScriptFlow } from "../lib/flow";
 import type { FlowStep } from "../lib/queries";
 
@@ -18,7 +20,9 @@ import type { FlowStep } from "../lib/queries";
  * The strip under the script's top bar: Script → Review → Staging, who's on
  * each, what's been sent, and the one button that matters right now
  * ("Ready for review" on Script, "Ready for staging" on Review), which
- * notifies the next step's people.
+ * notifies the next step's people. On Staging, "Staging done" is the optional
+ * last tick: every step gets a check, everyone on the script is notified.
+ * Nothing needs it; it can be undone.
  */
 
 const LABEL: Record<FlowStep, string> = { write: "Script", review: "Review", staging: "Staging" };
@@ -36,6 +40,8 @@ export type FlowPermissions = {
   people: boolean;
   /** Hand on Script (the scripters, masters) and Review (the reviewers, masters). */
   handOff: { write: boolean; review: boolean };
+  /** "Staging done" (and undo): masters, scripters, reviewers, staging people. */
+  finish: boolean;
 };
 
 export function FlowStrip({
@@ -62,11 +68,18 @@ export function FlowStrip({
 }) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [sending, setSending] = useState<FlowStepInfo | null>(null);
+  // Shown at once (before the page refreshes); `celebrate` plays the big tick.
+  const [doneNow, setDoneNow] = useState<ScriptFlow["done"] | undefined>(undefined);
+  const [celebrate, setCelebrate] = useState(0);
+  useEffect(() => setDoneNow(undefined), [flow.done?.at]);
+  const done = doneNow === undefined ? flow.done : doneNow;
   const current = flow.steps.find((s) => s.docId === currentDocId) ?? null;
   const nextOf = (s: FlowStepInfo) => flow.steps.find((x) => x.step === NEXT[s.step]) ?? null;
   const dot: Record<FlowStep, string | undefined> = { write: roleColors.scripter, review: roleColors.master, staging: roleColors.editor };
   const personOf = (id: string) => people.find((p) => p.memberId === id) ?? null;
   const showHandOff = current && NEXT[current.step] && can.handOff[current.step as "write" | "review"];
+  const hasStaging = flow.steps.some((s) => s.step === "staging");
+  const showFinish = !!current && current.step === "staging" && can.finish && !done;
 
   return (
     <div className="no-print border-b border-line/10 bg-paper/60">
@@ -75,6 +88,7 @@ export function FlowStrip({
           {flow.steps.map((s, i) => {
             const on = s.docId === currentDocId;
             const crew = s.people.map(personOf).filter(Boolean) as TeamPerson[];
+            const ticked = !!done || !!s.sent;
             return (
               <li key={s.step} className="flex items-center gap-1 flex-shrink-0">
                 {i > 0 && <ArrowRightIcon className="w-3.5 h-3.5 text-ink-faint flex-shrink-0" aria-hidden />}
@@ -83,14 +97,18 @@ export function FlowStrip({
                   scroll={false}
                   prefetch={false}
                   aria-current={on ? "step" : undefined}
-                  title={`${LABEL[s.step]}: ${crew.length ? crew.map((p) => p.name).join(", ") : "nobody yet"}${s.sent ? ` · sent on by ${s.sent.by ?? "someone"}` : ""}`}
+                  title={`${LABEL[s.step]}: ${crew.length ? crew.map((p) => p.name).join(", ") : "nobody yet"}${done ? " · done" : s.sent ? ` · sent on by ${s.sent.by ?? "someone"}` : ""}`}
                   className={`inline-flex items-center gap-2 rounded-lg pl-2 pr-2.5 h-8 text-[12.5px] font-semibold transition-colors ${
                     on ? "bg-amber/12 text-ink ring-1 ring-amber/40" : "text-ink-soft hover:text-ink hover:bg-surface-2"
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dot[s.step] ?? "rgb(var(--line) / .4)" }} aria-hidden />
                   {s.name}
-                  {s.sent && <CheckIcon className="w-3.5 h-3.5 text-green" aria-label="sent on" />}
+                  {ticked && (
+                    <span key={celebrate ? `t${celebrate}` : "t"} className={celebrate ? "done-step-tick inline-flex" : "inline-flex"} style={{ "--d": `${i * 120}ms` } as React.CSSProperties}>
+                      <CheckIcon className="w-3.5 h-3.5 text-green" aria-label={done ? "done" : "sent on"} />
+                    </span>
+                  )}
                   {crew.length > 0 ? (
                     <span className="flex -space-x-1.5">
                       {crew.slice(0, 3).map((p) => (
@@ -106,6 +124,21 @@ export function FlowStrip({
               </li>
             );
           })}
+          {hasStaging && done && (
+            <li className="flex items-center gap-1 flex-shrink-0">
+              <ArrowRightIcon className="w-3.5 h-3.5 text-ink-faint flex-shrink-0" aria-hidden />
+              <span
+                key={celebrate}
+                title={`Marked done${done.by ? ` by ${done.by}` : ""}`}
+                className={`inline-flex items-center gap-1.5 rounded-full bg-green/15 text-green pl-1 pr-2.5 h-7 text-[12px] font-bold ${celebrate ? "done-chip" : ""}`}
+              >
+                <span className="grid place-items-center w-5 h-5 rounded-full bg-green text-white">
+                  <CheckIcon className="w-3 h-3" />
+                </span>
+                Done
+              </span>
+            </li>
+          )}
         </ol>
         <button
           type="button"
@@ -119,7 +152,19 @@ export function FlowStrip({
         {showHandOff && current && (
           <HandOffButton step={current} next={nextOf(current)} onOpen={() => setSending(current)} />
         )}
+        {current?.step === "staging" && (showFinish || done) && (
+          <FinishButton
+            docId={current.docId}
+            done={done ?? null}
+            canUndo={can.finish}
+            onChange={(d) => {
+              setDoneNow(d);
+              if (d) setCelebrate((n) => n + 1);
+            }}
+          />
+        )}
       </div>
+      {celebrate > 0 && <DoneBurst key={celebrate} />}
 
       <PeopleDialog
         open={peopleOpen}
@@ -176,6 +221,115 @@ function HandOffButton({ step, next, onOpen }: { step: FlowStepInfo; next: FlowS
       Ready for {word}
       <ArrowRightIcon className="w-3.5 h-3.5" />
     </button>
+  );
+}
+
+/** "Staging done" on the Staging document; once done, when and by whom (and undo). */
+function FinishButton({
+  docId,
+  done,
+  canUndo,
+  onChange,
+}: {
+  docId: string;
+  done: ScriptFlow["done"];
+  canUndo: boolean;
+  onChange: (d: ScriptFlow["done"]) => void;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [pending, start] = useTransition();
+
+  function mark(on: boolean) {
+    start(async () => {
+      const r = await finishScript(docId, on);
+      if (r.error !== undefined) {
+        toast.error(r.error);
+        return;
+      }
+      if (on) {
+        onChange({ at: new Date().toISOString(), by: null });
+        toast.success(r.notified ? `All done! ${r.notified === 1 ? "1 person was" : `${r.notified} people were`} notified.` : "All done!", { sound: "celebrate" });
+      } else {
+        sounds.uncheck();
+        onChange(null);
+      }
+      router.refresh();
+    });
+  }
+
+  if (done) {
+    return (
+      <span className="inline-flex items-center gap-1 flex-shrink-0">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-green/40 bg-green/10 text-ink px-3 h-8 text-[12.5px] font-semibold">
+          <CheckIcon className="w-3.5 h-3.5 text-green" />
+          Staging done
+          <span className="font-normal text-ink-soft">
+            · <Ago iso={done.at} />
+          </span>
+        </span>
+        {canUndo && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Take back “done”?",
+                description: "The ticks go away. Nobody is notified, and any Review or Staging work still in progress shows up in their tasks again.",
+                confirmLabel: "Take it back",
+                cancelLabel: "Keep it done",
+              });
+              if (ok) mark(false);
+            }}
+            className="rounded-lg px-2 h-8 text-[12px] font-semibold text-ink-faint hover:text-ink hover:bg-surface-2 disabled:opacity-50"
+          >
+            {pending ? "…" : "Undo"}
+          </button>
+        )}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => mark(true)}
+      title="Optional: puts a tick on every step and lets everyone on this script know"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-green text-white px-3.5 h-8 text-[12.5px] font-bold hover:brightness-110 disabled:opacity-60 flex-shrink-0"
+    >
+      {pending ? <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <CheckIcon className="w-3.5 h-3.5" />}
+      Staging done
+    </button>
+  );
+}
+
+/** The big tick in the middle of the screen, for a second and a half. */
+function DoneBurst() {
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGone(true), 2100);
+    return () => clearTimeout(t);
+  }, []);
+  if (gone) return null;
+  const sparks = [0, 45, 90, 135, 180, 225, 270, 315];
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center pointer-events-none" aria-hidden>
+      <div className="done-burst flex flex-col items-center gap-3 rounded-3xl bg-surface shadow-2xl ring-1 ring-line/10 px-10 py-8">
+        <svg viewBox="0 0 60 60" className="done-check w-24 h-24 overflow-visible">
+          <circle className="disc" cx="30" cy="30" r="24" fill="rgb(var(--green) / 0.14)" />
+          <circle className="ring" cx="30" cy="30" r="24" fill="none" stroke="rgb(var(--green))" strokeWidth="3.5" strokeLinecap="round" transform="rotate(-90 30 30)" />
+          <path className="tick" d="M19 31 l7.5 7.5 L41.5 22.5" fill="none" stroke="rgb(var(--green))" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" style={{ "--len": 48 } as React.CSSProperties} />
+          {sparks.map((a, k) => (
+            <circle key={a} className="spark" cx="30" cy="30" r="2" fill={k % 2 ? "rgb(var(--amber))" : "rgb(var(--green))"} style={{ "--a": `${a}deg`, "--d": `${(k % 3) * 40}ms` } as React.CSSProperties} />
+          ))}
+        </svg>
+        <div className="text-center">
+          <div className="font-display text-[19px] font-bold">All done</div>
+          <div className="text-[12.5px] text-ink-soft">Script ✓ Review ✓ Staging ✓</div>
+        </div>
+      </div>
+    </div>
   );
 }
 

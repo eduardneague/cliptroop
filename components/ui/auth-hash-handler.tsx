@@ -22,6 +22,15 @@ export function AuthHashHandler() {
 
   useEffect(() => {
     const hash = window.location.hash;
+    // An expired or already-used link (Supabase sends you back with
+    // #error=...&error_code=otp_expired): say so plainly.
+    if (/[#&]error_code=/.test(hash) || (/[#&]error=/.test(hash) && hash.includes("error_description="))) {
+      const p = new URLSearchParams(hash.slice(1));
+      const type = p.get("type");
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      router.replace(`/welcome?error=expired${type && /^[a-z_]{3,20}$/.test(type) ? `&type=${type}` : ""}`);
+      return;
+    }
     if (!hash.includes("access_token")) return;
 
     const params = new URLSearchParams(hash.slice(1));

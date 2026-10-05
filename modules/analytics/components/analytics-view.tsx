@@ -735,7 +735,7 @@ function AudienceTab({ a, compare, picked, setPicked }: { a: Audience; compare: 
  * flat map or the 3D globe (both choices remembered on this device).
  */
 function CountryMap({ a }: { a: Audience }) {
-  const [mode, setMode] = useState<MapMode>("views");
+  const [mode, setMode] = useState<MapMode>("all");
   const [view, setView] = useState<MapView>("map");
   useEffect(() => {
     try {

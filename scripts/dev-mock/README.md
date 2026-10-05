@@ -9,7 +9,7 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_LAYOUT=1 gives the sample user a dashboard with the analytics widgets,
 #    MOCK_PALETTE=ocean picks a colour theme, MOCK_TT_FIRST=1 a just-connected TikTok,
 #    MOCK_WINNERS=0..3 how many thumbnails of long #42 are starred (2 = an A/B test),
-#    MOCK_SENT=1 short #231's script already sent to review, MOCK_GLOBE=1 the map
+#    MOCK_SENT=1 short #231's script already sent to review, MOCK_DONE=1 its script marked done, MOCK_GLOBE=1 the map
 #    widget as a globe of all platforms, MOCK_CURRENCY=EUR the revenue currency,
 #    MOCK_STALE=1 analytics last copied 50 h ago (the catch-up starts),
 #    MOCK_STATUS_BAD=1 the status page with failed posts, errors and a reconnect

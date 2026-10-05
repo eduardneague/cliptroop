@@ -22,7 +22,10 @@ export default function LoginPage() {
   const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
-    setCheckingForInvite(window.location.hash.includes("access_token"));
+    const hash = window.location.hash;
+    setCheckingForInvite(hash.includes("access_token") || hash.includes("error_code="));
+    // "Get a new reset link" (from an expired reset email) opens the reset form.
+    if (new URLSearchParams(window.location.search).get("reset") === "1") setMode("forgot");
   }, []);
 
   async function handleReset(e: React.FormEvent) {

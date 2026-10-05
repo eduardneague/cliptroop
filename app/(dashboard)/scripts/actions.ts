@@ -422,3 +422,48 @@ export async function handOffScript(scriptId: string, copy: boolean): Promise<Do
   }
   return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, notified: recipients.length };
 }
+
+/**
+ * "Staging done" (optional): a tick on every step and a notification for
+ * everyone on the script. `done = false` takes it back (no notification).
+ * Migration 0066.
+ */
+export async function finishScript(scriptId: string, done: boolean): Promise<DocResult<{ done: boolean; notified: number }>> {
+  if (!UUID_RX.test(scriptId)) return { error: "Document not found." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { data, error } = await supabase.rpc("script_finish", { p_script: scriptId, p_done: !!done });
+  if (error || !data) {
+    const msg = error?.message ?? "";
+    return { error: /script_finish|does not exist|schema cache|check constraint/i.test(msg) ? "Run migration 0066 first." : msg || "Couldn't save that." };
+  }
+  const r = data as { done: boolean; changed: boolean; staging_id: string; team: string; short: string | null; long: string | null; recipients: string[] };
+  refreshDocs({ short: r.short, long: r.long });
+
+  const recipients = r.done && r.changed ? (r.recipients ?? []).filter((id) => UUID_RX.test(id)) : [];
+  if (recipients.length) {
+    const [video, actor] = await Promise.all([
+      r.short
+        ? supabase.from("short_videos").select("entry_number, title").eq("id", r.short).maybeSingle()
+        : supabase.from("long_video_projects").select("entry_number, title").eq("id", r.long ?? "").maybeSingle(),
+      actorMeta(supabase, user.id),
+    ]);
+    const number = (video.data?.entry_number as number | undefined) ?? 0;
+    const title = (video.data?.title as string | undefined) ?? "a video";
+    const href = `${r.short ? `/shorts/${r.short}/script` : `/videos/${r.long}/script`}?doc=${r.staging_id}`;
+    await sendNotifications(
+      recipients.map((recipient_id) => ({
+        recipient_id,
+        kind: "script_done",
+        short_id: r.short,
+        project_id: r.long,
+        body: `${actor.name} marked #${number} "${title}" as done: Script ✓ Review ✓ Staging ✓`,
+        metadata: { actor, shortNumber: number, shortTitle: title, href },
+      }))
+    );
+  }
+  return { done: r.done, notified: recipients.length };
+}

@@ -94,7 +94,7 @@ const packageEntries = ["Every bakery in Cluj, ranked", "I ate at 23 bakeries in
 const LIB = ["Building a house in 24 hours", "I tested every phone camera", "The world's longest train ride", "Why this city has no cars", "$1 vs $1,000 burger", "I survived 7 days in the desert", "Making the perfect croissant", "The truth about electric cars", "Inside the biggest ship ever", "I bought a mountain", "Speedrunning a marathon", "The strangest museum on Earth", "Cooking with a volcano", "What $10 buys in Tokyo", "We rebuilt a 1960s car", "The quietest room in the world"];
 const mockupVideos = LIB.map((title, i) => ({ id: `mmmmmmmm-0000-4000-8000-0000000000${String(i + 10)}`, team_id: TEAM, title, channel: ["Atlas", "Northwind", "Pixel Lab", "Roam", "Brick & Co", "Marlo"][i % 6], thumb_path: `${TEAM}/v/lib${i}.jpg`, channel_avatar_path: `${TEAM}/c/ch${i % 6}.jpg`, views: Math.round(2e5 + ((i * 7919) % 97) * 1.3e5), published_at: at(-(i * 3 + 1)), duration_sec: 420 + i * 61, category: "Popular" }));
 
-// ---- Scripts (0050 + 0062): Script → Review → Staging for the first short. MOCK_SENT=1: already sent to review.
+// ---- Scripts (0050 + 0062): Script → Review → Staging for the first short. MOCK_SENT=1: already sent to review. MOCK_DONE=1: marked done (0066).
 const doc = (id, name, position, step, text) => ({
   id, team_id: TEAM, short_video_id: shorts[0].id, long_video_id: null, kind: "script", name, position, step, version: 3, updated_at: at(-1), updated_by: U[0], word_count: text ? text.split(" ").length : 0, content_text: text,
   content: { type: "doc", content: text ? [{ type: "paragraph", content: [{ type: "text", text }] }] : [] },
@@ -156,6 +156,8 @@ module.exports = {
     can_view_revenue: true,
     is_master_of: true,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
+    // "Staging done" (0066): marks it and says who to tell.
+    script_finish: (b) => ({ done: b.p_done !== false, changed: true, staging_id: "dd000000-0000-4000-8000-000000000003", team: TEAM, short: shorts[0].id, long: null, recipients: b.p_done === false ? [] : [U[1], U[2]] }),
     status_checks: {
       timer_scheduled: true,
       timer_last: { at: new Date(Date.now() - 60_000).toISOString(), status: "succeeded" },
@@ -193,7 +195,11 @@ module.exports = {
     script_comments: [],
     script_doc_people: [{ script_id: "dd000000-0000-4000-8000-000000000002", team_member_id: members[2].id, team_id: TEAM }],
     team_script_people: [{ team_id: TEAM, step: "review", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[3].id }],
-    script_handoffs: process.env.MOCK_SENT ? [{ script_id: "dd000000-0000-4000-8000-000000000001", created_at: at(0, -2), by: { username: "edu", full_name: null, email: "edu@example.com" } }] : [],
+    script_handoffs: [
+      ...(process.env.MOCK_SENT || process.env.MOCK_DONE ? [{ script_id: "dd000000-0000-4000-8000-000000000001", to_step: "review", created_at: at(0, -2), by: { username: "edu", full_name: null, email: "edu@example.com" } }] : []),
+      ...(process.env.MOCK_DONE ? [{ script_id: "dd000000-0000-4000-8000-000000000003", to_step: "done", created_at: at(0, -1), by: { username: "edu", full_name: null, email: "edu@example.com" } }] : []),
+    ],
+    team_invites: [],
     mockup_videos: mockupVideos,
     social_accounts: ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: pl === "facebook" ? "Viverro (Page)" : "Viverro", username: pl === "facebook" ? null : "viverro", avatar_url: null, status: "active", scopes: STATS[pl], connected_at: at(-30), last_error: null, external_id: pl === "facebook" ? "123456789" : "ext-" + pl })),
     analytics_daily: daily,

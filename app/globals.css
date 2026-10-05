@@ -531,6 +531,29 @@ html[data-motion="off"] button:active { scale: none; }
 @keyframes todo-flash { 0% { background: rgb(var(--green) / 0.16); } 100% { background: transparent; } }
 @keyframes todo-in { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
 
+/* Account setup (app/set-password): each step rises in. */
+.motion-step { animation: page-in 0.4s var(--ease-out) backwards; }
+
+/* ---- Script flow: "Staging done" (modules/scripts/components/script-flow.tsx) ----
+   The ring draws, then the tick, then a few sparks. With animations off it's
+   simply there. */
+.done-check .ring { stroke-dasharray: 152; stroke-dashoffset: 0; animation: done-draw 0.55s var(--ease-out) both; }
+.done-check .tick { stroke-dasharray: 48; stroke-dashoffset: 0; animation: done-draw 0.35s var(--ease-out) 0.42s both; }
+.done-check .disc { transform-box: fill-box; transform-origin: center; animation: done-pop 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) 0.3s both; }
+.done-check .spark { transform-box: view-box; transform-origin: 30px 30px; opacity: 0; animation: done-spark 0.8s var(--ease-out) calc(0.6s + var(--d, 0ms)) both; }
+.done-burst { animation: done-burst-in 0.25s ease-out both, done-burst-out 0.35s ease-in 1.6s forwards; }
+.done-chip { animation: done-chip-in 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.done-step-tick { animation: todo-pop 0.45s var(--ease-out) var(--d, 0ms) both; }
+@keyframes done-draw { from { stroke-dashoffset: var(--len, 152); } }
+@keyframes done-pop { from { transform: scale(0.4); opacity: 0; } }
+@keyframes done-spark {
+  0% { opacity: 1; transform: rotate(var(--a)) translateY(-27px) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-40px) scale(0.3); }
+}
+@keyframes done-burst-in { from { opacity: 0; transform: scale(0.85); } }
+@keyframes done-burst-out { to { opacity: 0; transform: scale(1.06); visibility: hidden; } }
+@keyframes done-chip-in { from { opacity: 0; transform: scale(0.6); } }
+
 /* ---------------------------------------------------------------------------
    Mascot (Clippy the clapperboard, components/ui/mascot.tsx).
    Pivots are in the SVG's own coordinates (transform-box: view-box).

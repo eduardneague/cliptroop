@@ -19,7 +19,7 @@ import { WhatsNewHost } from "@/components/ui/whats-new";
 import { Brand } from "@/components/ui/clip-logo";
 import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
-import { signOut } from "./actions";
+import { LogoutButton } from "@/components/ui/logout-button";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { cookies } from "next/headers";
 import { PushKeeper } from "@/components/pwa";
@@ -123,14 +123,11 @@ export default async function DashboardLayout({
                 <NotificationBell notifications={notifications ?? []} userId={user!.id} />
                 <ThemeToggle />
                 {/* On phones, Log out lives in Settings — keeps the header uncluttered. */}
-                <form action={signOut} className="hidden md:block">
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-line/15 px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-ink hover:border-line/30 transition-colors"
-                  >
+                <div className="hidden md:block">
+                  <LogoutButton className="rounded-lg border border-line/15 px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-ink hover:border-line/30 transition-colors">
                     Log out
-                  </button>
-                </form>
+                  </LogoutButton>
+                </div>
               </div>
             </header>
             <MobileTopBar

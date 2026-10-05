@@ -4,7 +4,7 @@ import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { useId } from "react";
 
 /**
- * Clippy, VPlanner's mascot: a little clapperboard (called Clip until 1.5).
+ * Clip, VPlanner's mascot: a little clapperboard (MASCOT_NAME in lib/brand.ts).
  *   celebrate: hops, claps, waves, throws confetti, then idles happily
  *   idle: breathes, blinks, claps now and then
  * Drawn in SVG, animated in CSS (globals.css, "Mascot"), so it follows the

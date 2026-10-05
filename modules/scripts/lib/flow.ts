@@ -9,7 +9,8 @@ import type { DocListItem, FlowStep } from "./queries";
  *   Review / Staging: the people set on that document, or else the team's
  *   defaults (Team → Defaults → Scripts). Migration 0062.
  * "Ready for review" / "Ready for staging" hand a document on: the next
- * step's people are notified (see handOffScript).
+ * step's people are notified (see handOffScript). "Staging done" is the
+ * optional last tick (finishScript, migration 0066).
  */
 
 export type FlowStepInfo = {
@@ -28,13 +29,15 @@ export type ScriptFlow = {
   /** False before migration 0062 (then the page works as before). */
   ready: boolean;
   steps: FlowStepInfo[];
+  /** "Staging done": the optional last tick (migration 0066). */
+  done: { at: string; by: string | null } | null;
   /** The team's defaults (for "Use the team's" in the dialog). */
   defaults: { review: string[]; staging: string[] };
 };
 
 export async function getScriptFlow(docs: DocListItem[], teamId: string, scripterIds: string[]): Promise<ScriptFlow> {
   const byStep = new Map(docs.filter((d) => d.step).map((d) => [d.step as FlowStep, d]));
-  const none: ScriptFlow = { ready: false, steps: [], defaults: { review: [], staging: [] } };
+  const none: ScriptFlow = { ready: false, steps: [], done: null, defaults: { review: [], staging: [] } };
   if (!byStep.size) return none;
   const supabase = await createClient();
   const stepDocs = [...byStep.values()];
@@ -44,7 +47,7 @@ export async function getScriptFlow(docs: DocListItem[], teamId: string, scripte
     supabase.from("team_script_people").select("step, team_member_id").eq("team_id", teamId),
     supabase
       .from("script_handoffs")
-      .select("script_id, created_at, by:profiles!script_handoffs_handed_by_fkey(username, full_name, email)")
+      .select("script_id, to_step, created_at, by:profiles!script_handoffs_handed_by_fkey(username, full_name, email)")
       .in("script_id", ids)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -55,10 +58,16 @@ export async function getScriptFlow(docs: DocListItem[], teamId: string, scripte
     staging: (team.data ?? []).filter((r) => r.step === "staging").map((r) => r.team_member_id as string),
   };
   const lastSent = new Map<string, { at: string; by: string | null }>();
+  let done: ScriptFlow["done"] = null;
   for (const r of (sent.data ?? []) as Record<string, unknown>[]) {
-    if (lastSent.has(r.script_id as string)) continue;
     const p = (Array.isArray(r.by) ? r.by[0] : r.by) as { username: string | null; full_name: string | null; email: string | null } | null;
-    lastSent.set(r.script_id as string, { at: r.created_at as string, by: p ? displayName(p.username, p.full_name, p.email) : null });
+    const entry = { at: r.created_at as string, by: p ? displayName(p.username, p.full_name, p.email) : null };
+    if (r.to_step === "done") {
+      if (!done) done = entry;
+      continue;
+    }
+    if (lastSent.has(r.script_id as string)) continue;
+    lastSent.set(r.script_id as string, entry);
   }
   const order: FlowStep[] = ["write", "review", "staging"];
   const steps = order
@@ -77,7 +86,7 @@ export async function getScriptFlow(docs: DocListItem[], teamId: string, scripte
         sent: s === "staging" ? null : lastSent.get(d.id) ?? null,
       };
     });
-  return { ready: true, steps, defaults };
+  return { ready: true, steps, done: byStep.has("staging") ? done : null, defaults };
 }
 
 /** Can this member edit this document as one of its step's people? */

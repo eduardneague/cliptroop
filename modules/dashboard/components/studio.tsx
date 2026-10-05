@@ -95,7 +95,8 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
   return (
     <div className="px-3 sm:px-5 xl:px-6 py-4 sm:py-5 w-full">
       <header className="flex items-center gap-3 flex-wrap mb-4">
-        <div className="flex-1 min-w-0">
+        {/* Never narrower than ~15rem: on phones the Customize toolbar wraps below instead of squeezing the greeting. */}
+        <div className="flex-1 min-w-[min(100%,15rem)]">
           <h1 className="font-display text-[22px] sm:text-[24px] font-semibold leading-tight">
             {hello}, {name}
           </h1>
@@ -107,7 +108,7 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
             Customize
           </button>
         ) : (
-          <div className="flex items-center gap-1.5 flex-wrap animate-[modalin_.2s_var(--ease-out)]">
+          <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto animate-[modalin_.2s_var(--ease-out)]">
             <button type="button" onClick={() => setLibrary(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold hover:border-line/40 hover:bg-surface-2">
               <PlusIcon className="w-3.5 h-3.5" />
               Add widget
@@ -120,7 +121,7 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
             <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
               Cancel
             </button>
-            <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-amber text-white font-bold px-4 h-8 text-[12.5px] disabled:opacity-60">
+            <button type="button" onClick={save} disabled={saving} className="ml-auto sm:ml-0 rounded-lg bg-amber text-white font-bold px-4 h-8 text-[12.5px] disabled:opacity-60">
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
@@ -896,7 +897,7 @@ function WidgetSettings({ w, onChange }: { w: WidgetInstance; onChange: (s: Reco
         <div className={row}>
           <span className="text-[13.5px] font-semibold">Numbers</span>
           <div className="w-56">
-            <Select value={(s.mode as string) ?? "views"} onChange={(v) => v && onChange({ mode: v })} options={MAP_MODES.map((m) => ({ value: m.id, label: m.label }))} ariaLabel="Numbers" className="!h-9 !text-[13px]" />
+            <Select value={(s.mode as string) ?? "all"} onChange={(v) => v && onChange({ mode: v })} options={MAP_MODES.map((m) => ({ value: m.id, label: m.label }))} ariaLabel="Numbers" className="!h-9 !text-[13px]" />
           </div>
         </div>
       </div>

@@ -118,6 +118,7 @@ export default async function LongScriptPage({
           scripters: isMaster(roles),
           people: isMaster(roles) || roles.includes("publisher") || canEditScript,
           handOff: { write: canEditScript, review: isMaster(roles) || isStepPerson(flow, flow.steps.find((s) => s.step === "review")?.docId ?? "", me) },
+          finish: canEditScript || flow.steps.some((s) => isStepPerson(flow, s.docId, me)),
         },
       }}
       lastEdited={doc.updatedBy && doc.version > 1 ? `Last edited by ${doc.updatedBy.name}, ${relativeTime(doc.updatedAt)}` : null}
