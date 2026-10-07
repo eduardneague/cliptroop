@@ -5,10 +5,12 @@
  *  - Offline: when a page can't load at all, shows /offline.html instead of the
  *    browser's error. Nothing else is cached: team data is always fresh and
  *    never stored on the device.
+ *  - Faster opening: "navigation preload" asks for the page while this worker
+ *    is still waking up (opening the installed app), instead of after.
  *
  * Bump VERSION when this file changes so phones pick up the new one.
  */
-const VERSION = "2026-10-04.2";
+const VERSION = "2026-10-07.1";
 const OFFLINE_CACHE = `offline-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
 
@@ -27,16 +29,27 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith("offline-") && k !== OFFLINE_CACHE).map((k) => caches.delete(k))))
+      .then(() => (self.registration.navigationPreload ? self.registration.navigationPreload.enable().catch(() => {}) : undefined))
       .then(() => self.clients.claim())
   );
 });
 
-// Only full page loads, only when the network fails completely.
+// Only full page loads: the page as it comes (already on its way thanks to
+// navigation preload), and the offline page only when the network fails completely.
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.mode !== "navigate") return;
   event.respondWith(
-    fetch(req).catch(() => caches.open(OFFLINE_CACHE).then((cache) => cache.match(OFFLINE_URL)).then((res) => res || Response.error()))
+    (async () => {
+      try {
+        const early = await event.preloadResponse;
+        if (early) return early;
+        return await fetch(req);
+      } catch {
+        const cache = await caches.open(OFFLINE_CACHE);
+        return (await cache.match(OFFLINE_URL)) || Response.error();
+      }
+    })()
   );
 });
 

@@ -66,13 +66,17 @@ export function SkeletonBack({ label, className = "mb-4" }: { label?: string; cl
   );
 }
 
-/** Underlined tab row (Settings, Team). Names are real text; none is picked yet. */
-export function SkeletonTabs({ tabs }: { tabs: string[] }) {
+/** Underlined tab row (Settings, Team). Names are real text; `active` is underlined when known. */
+export function SkeletonTabs({ tabs, active }: { tabs: string[]; active?: string }) {
   return (
     <div className="flex items-center gap-1 border-b border-line/15 overflow-x-hidden -mx-1 px-1" aria-hidden>
       {tabs.map((t) => (
-        <span key={t} className="px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap text-ink-faint">
+        <span
+          key={t}
+          className={`relative px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap ${t === active ? "text-ink" : "text-ink-faint"}`}
+        >
           {t}
+          {t === active && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-amber" />}
         </span>
       ))}
     </div>

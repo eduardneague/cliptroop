@@ -3,7 +3,7 @@ import Link from "next/link";
 import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
 import { LEGAL_CONTACT, LEGAL_CONTACT_HREF, LEGAL_UPDATED } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Privacy policy" };
+export const metadata: Metadata = { title: "Privacy policy", robots: { index: true, follow: true } };
 
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a className="underline" href={href} target="_blank" rel="noopener noreferrer">

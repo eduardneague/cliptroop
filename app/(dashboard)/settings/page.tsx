@@ -24,14 +24,14 @@ import { pushConfigured } from "@/lib/push/send";
 import { PUSH_COOKIE } from "@/lib/push/guard";
 import { isAlertPerson } from "@/lib/errors";
 import { APP_NAME } from "@/lib/brand";
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const TABS = ["profile", "teams", "notifications", "preferences", "account"] as const;
-
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab: tabParam } = await searchParams;
-  const tab = (TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as (typeof TABS)[number]) : "profile";
+  const tab = settingsTab(tabParam);
   const supabase = await createClient();
   const user = await getCachedUser();
 
@@ -85,18 +85,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <WhatsNewButton className="text-[13px] mt-2.5" />
       </div>
 
-      <TabNav
-        base="/settings"
-        active={tab}
-        label="Account settings"
-        tabs={[
-          { id: "profile", label: "Profile" },
-          { id: "teams", label: "Teams" },
-          { id: "notifications", label: "Notifications & app" },
-          { id: "preferences", label: "Preferences" },
-          { id: "account", label: "Account" },
-        ]}
-      />
+      {/* Switching tabs answers at once: the tab is underlined and its skeleton shows until it's here. */}
+      <PendingNav>
+      <TabNav base="/settings" active={tab} label="Account settings" tabs={SETTINGS_TABS.map((t) => ({ id: t.id, label: t.label }))} />
+
+      <PendingSwap fallbacks={Object.fromEntries(SETTINGS_TABS.map((t) => [t.id, <SettingsTabSkeleton key={t.id} tab={t.id} />]))}>
+      <div className="space-y-6">
 
       {tab === "profile" && (
         <div className="grid gap-6 md:grid-cols-[minmax(0,18rem)_1fr] items-start">
@@ -275,6 +269,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </LogoutButton>
         </section>
       )}
+      </div>
+      </PendingSwap>
+      </PendingNav>
     </div>
   );
 }

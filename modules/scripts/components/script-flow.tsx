@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Ago } from "@/components/ui/ago";
 import { Dialog } from "@/components/ui/dialog";
@@ -15,6 +14,7 @@ import { finishScript, handOffScript, setScriptPeople } from "@/app/(dashboard)/
 import { sounds } from "@/lib/sounds";
 import type { FlowStepInfo, ScriptFlow } from "../lib/flow";
 import type { FlowStep } from "../lib/queries";
+import { PendingLink, usePendingNav } from "@/components/ui/pending-nav";
 
 /*
  * The strip under the script's top bar: Script → Review → Staging, who's on
@@ -80,21 +80,23 @@ export function FlowStrip({
   const showHandOff = current && NEXT[current.step] && can.handOff[current.step as "write" | "review"];
   const hasStaging = flow.steps.some((s) => s.step === "staging");
   const showFinish = !!current && current.step === "staging" && can.finish && !done;
+  // A step's document on its way (clicked here or in the list) lights up at once.
+  const openingDoc = usePendingNav().pending;
 
   return (
     <div className="no-print border-b border-line/10 bg-paper/60">
       <div className="flex items-center gap-2 px-3 sm:px-6 py-2 flex-wrap">
         <ol className="flex items-center gap-1 min-w-0 overflow-x-auto no-scrollbar -my-1 py-1" aria-label="Script steps">
           {flow.steps.map((s, i) => {
-            const on = s.docId === currentDocId;
+            const on = s.docId === (openingDoc ?? currentDocId);
             const crew = s.people.map(personOf).filter(Boolean) as TeamPerson[];
             const ticked = !!done || !!s.sent;
             return (
               <li key={s.step} className="flex items-center gap-1 flex-shrink-0">
                 {i > 0 && <ArrowRightIcon className="w-3.5 h-3.5 text-ink-faint flex-shrink-0" aria-hidden />}
-                <Link
+                <PendingLink
                   href={href(s.docId)}
-                  scroll={false}
+                  navKey={s.docId}
                   prefetch={false}
                   aria-current={on ? "step" : undefined}
                   title={`${LABEL[s.step]}: ${crew.length ? crew.map((p) => p.name).join(", ") : "nobody yet"}${done ? " · done" : s.sent ? ` · sent on by ${s.sent.by ?? "someone"}` : ""}`}
@@ -120,7 +122,7 @@ export function FlowStrip({
                   ) : (
                     <span className="text-[11px] font-normal text-ink-faint">nobody</span>
                   )}
-                </Link>
+                </PendingLink>
               </li>
             );
           })}

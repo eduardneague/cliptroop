@@ -24,17 +24,31 @@ import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { cookies } from "next/headers";
 import { PushKeeper } from "@/components/pwa";
 import { PUSH_COOKIE } from "@/lib/push/guard";
+import { Suspense } from "react";
+import { AppSplash } from "@/components/ui/app-splash";
+import { NavProgress } from "@/components/ui/nav-progress";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
 // level, on top of the Cache-Control header middleware already sets.
 export const dynamic = "force-dynamic";
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+/**
+ * The shell (sidebar, top bar, bell) needs your profile, teams and
+ * notifications before it can draw. Instead of a blank screen meanwhile,
+ * Clip's loading screen goes out at once and the shell streams in after
+ * (first load, the installed app starting, coming from sign-in). Moving
+ * around inside the app keeps the shell, so this only shows on those.
+ */
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<AppSplash />}>
+      <DashboardShell>{children}</DashboardShell>
+    </Suspense>
+  );
+}
+
+async function DashboardShell({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const user = await getCachedUser();
   // Middleware normally guarantees a session here, but it deliberately
@@ -75,6 +89,8 @@ export default async function DashboardLayout({
   return (
     <ToastProvider>
       <ConfirmProvider>
+        {/* A thin bar the moment you click a link, until the page is there. */}
+        <NavProgress />
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />

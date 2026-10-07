@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { APP_NAME } from "@/lib/brand";
 import { LEGAL_CONTACT, LEGAL_CONTACT_HREF, LEGAL_UPDATED } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Data deletion" };
+export const metadata: Metadata = { title: "Data deletion", robots: { index: true, follow: true } };
 
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a className="underline" href={href} target="_blank" rel="noopener noreferrer">

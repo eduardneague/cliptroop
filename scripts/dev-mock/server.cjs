@@ -61,7 +61,11 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   let body = "";
   req.on("data", (c) => (body += c));
-  req.on("end", () => {
+  // MOCK_DELAY=1500: every database answer takes that long (to see the loading screens).
+  req.on("end", () => setTimeout(() => answer(req, res, url, body), Number(process.env.MOCK_DELAY) || 0));
+});
+function answer(req, res, url, body) {
+  {
     const F = fixtures();
     log.push(`${req.method} ${url.pathname}${url.search}`);
     if (process.env.MOCK_LOG) console.log(req.method, decodeURIComponent(url.pathname + url.search).slice(0, 300));
@@ -117,6 +121,6 @@ const server = http.createServer((req, res) => {
       return send(res, 200, rows, headers);
     }
     return send(res, 404, { message: "mock: unknown " + url.pathname });
-  });
-});
+  }
+}
 server.listen(54321, "127.0.0.1", () => console.log("mock supabase on :54321"));

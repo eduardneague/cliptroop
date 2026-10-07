@@ -17,6 +17,7 @@ import type { Audience, ContentItem, PlatformStatus, Production, Revenue } from 
 import { BarList, ChartCard, fmtCompact, fmtInt, Legend, LineChart, StackedColumns, StatTile } from "./charts";
 import { countryName } from "./world-map";
 import { AudienceMapView, MAP_MODES, sourcesOf, type MapMode, type MapView } from "./audience-map";
+import { startNavProgress } from "@/components/ui/nav-progress";
 
 type Data =
   | { tab: "production"; production: Production }
@@ -133,7 +134,10 @@ export function AnalyticsView({
     if (!(p.compare ?? compare)) q.set("compare", "0");
     return `/analytics?${q}`;
   };
-  const go = (p: Parameters<typeof href>[0]) => startNav(() => router.push(href(p), { scroll: false }));
+  const go = (p: Parameters<typeof href>[0]) => {
+    startNavProgress(href(p));
+    startNav(() => router.push(href(p), { scroll: false }));
+  };
   const tabs: { id: TabId; label: string; locked?: boolean }[] = [
     { id: "production", label: "Production" },
     { id: "audience", label: "Audience" },

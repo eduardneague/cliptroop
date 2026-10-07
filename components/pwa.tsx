@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { APP_NAME } from "@/lib/brand";
 import { useToast } from "@/components/ui/toast-provider";
+import { Skeleton, SkeletonLines } from "@/components/ui/skeleton";
 
 /*
  * The installable app + push notifications, browser side.
@@ -163,7 +164,8 @@ export function InstallApp() {
     };
   }, []);
 
-  if (!p) return <div className="h-16" aria-hidden />;
+  // Checking which device this is (a moment after the page appears): the steps' shape meanwhile.
+  if (!p) return <InstallAppSkeleton />;
 
   if (p.standalone || installed) {
     return (
@@ -322,7 +324,7 @@ export function PushSettings({ userId }: { userId: string }) {
     </p>
   );
 
-  if (state === "loading") return <div className="h-16" aria-hidden />;
+  if (state === "loading") return <PushSettingsSkeleton />;
   if (state === "needs-install")
     return (
       <div className="space-y-2">
@@ -427,6 +429,34 @@ export function PushKeysHelper() {
           <p className="text-[12px] text-ink-faint">The second one is secret: don&rsquo;t share it. Leaving this page forgets both (make new ones if you lose them).</p>
         </>
       )}
+    </div>
+  );
+}
+
+/** Where the install steps go, while this device is being checked. */
+export function InstallAppSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden>
+      <SkeletonLines lines={1} />
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-3">
+          <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
+          <Skeleton className={`h-3.5 ${["w-3/4", "w-2/3", "w-4/5"][i]}`} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Where the notification switch goes, while this device is being checked. */
+export function PushSettingsSkeleton() {
+  return (
+    <div className="space-y-3" aria-hidden>
+      <div className="flex items-center gap-2">
+        <Skeleton className="w-2 h-2 rounded-full" />
+        <Skeleton className="h-3.5 w-48" />
+      </div>
+      <Skeleton className="h-10 w-44 rounded-xl" />
     </div>
   );
 }

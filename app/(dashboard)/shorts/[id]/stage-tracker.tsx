@@ -1,20 +1,24 @@
-import Link from "next/link";
+"use client";
+
 import { CheckIcon } from "@/components/ui/icons";
 import { ScrollToCurrent } from "@/components/ui/scroll-to-current";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { STAGE_STATE_COLOR } from "@/modules/long-videos/lib/stages";
 import type { ShortStage } from "@/modules/short-videos/lib/constants";
+import { PendingLink, usePendingNav } from "@/components/ui/pending-nav";
 
 /**
  * The short's steps. Done and current steps can be clicked to look back
  * at them (without changing the stage). The step you're on gets a small
  * dot under its name; a step you're looking back at also gets a soft halo.
+ * Inside <PendingNav>: a clicked step lights up at once (its cards turn into
+ * a skeleton until they're there).
  */
 export function StageTracker({
   shortId,
   stage,
-  shown,
-  viewing,
+  shown: shownProp,
+  viewing: viewingProp,
 }: {
   shortId: string;
   stage: ShortStage;
@@ -22,6 +26,10 @@ export function StageTracker({
   viewing: boolean;
 }) {
   const currentIndex = SHORT_STAGES.indexOf(stage);
+  // The step on its way counts as shown already.
+  const pending = usePendingNav().pending as ShortStage | null;
+  const shown = pending ?? shownProp;
+  const viewing = pending ? pending !== stage : viewingProp;
   return (
   <ScrollToCurrent className="flex items-center mb-6 overflow-x-auto no-scrollbar pb-1">
     {SHORT_STAGES.map((s, i) => {
@@ -32,6 +40,7 @@ export function StageTracker({
       return (
         <div key={s} className="flex items-center flex-shrink-0" data-current={state === "current" ? "true" : undefined}>
           <StepLink
+            stage={s}
             href={state === "upcoming" ? null : s === stage ? `/shorts/${shortId}` : `/shorts/${shortId}?view=${s}`}
             selected={s === shown}
             label={SHORT_STAGE_LABELS[s]}
@@ -72,7 +81,7 @@ export function StageTracker({
   );
 }
 
-function StepLink({ href, selected, label, children }: { href: string | null; selected: boolean; label: string; children: React.ReactNode }) {
+function StepLink({ stage, href, selected, label, children }: { stage: ShortStage; href: string | null; selected: boolean; label: string; children: React.ReactNode }) {
   const inner = (
     <>
       {children}
@@ -85,8 +94,8 @@ function StepLink({ href, selected, label, children }: { href: string | null; se
   const cls = "group flex flex-col items-center gap-1.5 min-w-[78px] pt-1 pb-0.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber";
   if (!href) return <div className={cls}>{inner}</div>;
   return (
-    <Link href={href} scroll={false} className={cls} aria-label={`View the ${label} step`} aria-current={selected ? "step" : undefined}>
+    <PendingLink href={href} navKey={stage} className={cls} aria-label={`View the ${label} step`} aria-current={selected ? "step" : undefined}>
       {inner}
-    </Link>
+    </PendingLink>
   );
 }

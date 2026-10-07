@@ -23,6 +23,19 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.5",
+    date: "2026-10-07",
+    title: "Every tap answers at once",
+    changes: [
+      { kind: "new", text: "Clip greets you while the app opens (on your phone, the installed app and the computer), instead of a blank screen." },
+      { kind: "better", text: "Every click answers right away: a thin orange line runs across the top until the next page is there." },
+      { kind: "better", text: "Steps on short and long videos, tabs in Settings and Team, and documents in the script editor light up the moment you tap them, with their shape shimmering in while they load." },
+      { kind: "better", text: "Settings → Notifications & app and the Team tabs have proper loading shapes, so nothing jumps in at the last second." },
+      { kind: "better", text: "The installed app asks for the page while it's still waking up, so it opens a little faster." },
+      { kind: "fixed", text: "Meta, Google and TikTok can now read the privacy policy, terms, data deletion page and home page (they were closed to their robots, so Meta said the data deletion address wasn't valid). The rest of the app stays private." },
+    ],
+  },
+  {
     version: "1.9.4",
     date: "2026-10-05",
     title: "Emails that read well in dark mode",

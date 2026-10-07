@@ -176,8 +176,14 @@ migration on an empty database.
 - Realtime handlers patch the exact rows that changed (see
   `notification-bell.tsx`) or debounce `router.refresh()` — never refresh
   the whole page per event, and skip events caused by your own action.
-- Every route has a `loading.tsx` built from `components/ui/skeleton.tsx`.
-  Same-page navigations (tabs) get `<LinkPendingIndicator />`.
+- Every route has a `loading.tsx` built from `components/ui/skeleton.tsx`
+  (a page with `?tab=` tabs: a client loading.tsx that shows that tab).
+  Same-page navigations (tabs, steps, documents) use `PendingNav` /
+  `PendingLink` / `PendingSwap` (`components/ui/pending-nav.tsx`): the tab
+  lights up and its skeleton shows the moment it's clicked. The top bar
+  (`NavProgress`, started for every move by `instrumentation-client.ts`)
+  also nudges React while a page loads, so no move gets stuck.
+  `<LinkPendingIndicator />` is still there for small inline links.
 - Images: upload through `compressImage()` with an `IMAGE_PRESETS` entry
   and `UPLOAD_CACHE_CONTROL`; render with `loading="lazy"
   decoding="async"`.
