@@ -10,6 +10,7 @@ import { getShortDetail, listTeamPeople } from "@/modules/short-videos/lib/queri
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { getScriptFlow, isStepPerson } from "@/modules/scripts/lib/flow";
+import { flowStartDocId } from "@/modules/scripts/lib/flow-start";
 import { setShortScripter } from "@/app/(dashboard)/shorts/actions";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
@@ -47,7 +48,12 @@ export default async function ShortScriptPage({
 
   // Versions: Script · Review · Staging (+ any added), created on first open.
   const docs = await ensureDefaultDocs({ short: id }, { script: canEdit, research: false });
-  const current = docs.find((d) => d.id === docParam) ?? docs.find((d) => d.kind === "script");
+  const flowPromise = getScriptFlow(docs, short.teamId, short.scripterIds);
+  flowPromise.catch(() => {}); // awaited below; this only stops an early failure being reported twice
+  // No document asked for: open where the script is now (after "Ready for review", the Review doc).
+  const asked = docs.find((d) => d.id === docParam);
+  const startId = asked ? null : flowStartDocId(await flowPromise);
+  const current = asked ?? docs.find((d) => d.id === startId) ?? docs.find((d) => d.kind === "script");
   if (!current) {
     return (
       <div className="px-4 sm:px-10 py-8 max-w-2xl mx-auto">
@@ -64,7 +70,7 @@ export default async function ShortScriptPage({
     getDoc(current.id),
     sideItem ? getDoc(sideItem.id) : Promise.resolve(null),
     listComments(current.id, short.teamId),
-    getScriptFlow(docs, short.teamId, short.scripterIds),
+    flowPromise,
   ]);
   if (!doc) notFound();
 

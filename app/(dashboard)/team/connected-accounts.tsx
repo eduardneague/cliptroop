@@ -77,6 +77,13 @@ export function ConnectedAccounts({
   const pathname = usePathname();
   const params = useSearchParams();
   const [busy, setBusy] = useState<string | null>(null);
+  // Disconnected here: gone from the cards at once, before the page has refreshed.
+  const [gone, setGone] = useState<Platform[]>([]);
+  const shown = accounts.filter((a) => !gone.includes(a.platform));
+  // Once the page's own list no longer has it, forget it (so connecting again shows it).
+  useEffect(() => {
+    setGone((g) => (g.some((p) => !accounts.some((a) => a.platform === p)) ? g.filter((p) => accounts.some((a) => a.platform === p)) : g));
+  }, [accounts]);
 
   // How connecting went: from the connect window (message / storage event),
   // or from the URL when it happened in this tab.
@@ -90,6 +97,7 @@ export function ConnectedAccounts({
         if (handled.current === key) handled.current = null;
       }, 3000);
       setBusy(null);
+      if (r.ok) setGone([]);
       const name = r.platform && r.platform in META ? META[r.platform as Platform].name : "The account";
       if (r.ok) {
         if (r.note === "stats_missing") toast.error(`${name} connected, but without the Analytics permission. Reconnect and leave every box ticked to see its numbers.`);
@@ -137,6 +145,7 @@ export function ConnectedAccounts({
   function connect(p: Platform, e: React.MouseEvent) {
     e.preventDefault();
     if (!configured[p]) return toast.error(`${META[p].name} ${ERRORS.not_configured}`);
+    setGone((g) => g.filter((x) => x !== p));
     const url = `/api/social/${p}/connect?team=${teamId}`;
     const w = 520;
     const h = 720;
@@ -176,6 +185,7 @@ export function ConnectedAccounts({
     setBusy(null);
     if ("error" in res && res.error) toast.error(res.error);
     else {
+      setGone((g) => (g.includes(platform) ? g : [...g, platform]));
       toast.success(`${META[platform].name} disconnected`);
       router.refresh();
     }
@@ -185,7 +195,7 @@ export function ConnectedAccounts({
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {ORDER.map((p) => {
-          const a = accounts.find((x) => x.platform === p);
+          const a = shown.find((x) => x.platform === p);
           const needs = a?.status === "needs_reconnect";
           return (
             <div

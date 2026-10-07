@@ -6,13 +6,16 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { diagnose, type Health } from "@/lib/social/health";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { ChevronDownIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
 import { AutoRefresh, RunNowButton, TestEmailButton, TestTimerButton, When } from "./client-bits";
 import { APP_CHANNEL } from "@/lib/version";
+import { APP_NAME } from "@/lib/brand";
+import { currentProblems } from "@/lib/status";
 
 export const metadata: Metadata = { title: "Posting" };
 
 const NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+const PLURAL = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const ACTIVE = ["scheduled", "uploading", "processing", "waiting"];
 
 type Row = {
@@ -35,7 +38,7 @@ export default async function PostingPage() {
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
   const isManager = (roles: string[]) => isMaster(roles as Parameters<typeof isMaster>[0]) || roles.includes("publisher");
-  const [membership, { data: rows }, { data: accounts }, health] = await Promise.all([
+  const [membership, { data: rows }, { data: accounts }, health, appWide] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     supabase
       .from("social_posts")
@@ -51,6 +54,8 @@ export default async function PostingPage() {
     getMembership(supabase, currentTeam.id).then((m) =>
       isManager(m?.roles ?? []) ? supabase.rpc("posting_health", { p_team: currentTeam.id }).then((r) => ({ data: r.data as unknown })) : { data: null as unknown }
     ),
+    // App-wide problems from the last status check (levels only; /status has the rest).
+    currentProblems(),
   ]);
   const roles = membership?.roles ?? [];
   const manager = isManager(roles);
@@ -67,6 +72,73 @@ export default async function PostingPage() {
     .slice(0, 20);
   const findings = health.data ? diagnose(health.data as Health) : [];
   const anyActive = attention.length + moving.length + upcoming.length > 0;
+  const master = isMaster(roles as Parameters<typeof isMaster>[0]);
+
+  // Your team's problems, for everyone on the team (the app's own are on /status).
+  const failedPosts = posts.filter((r) => r.status === "failed");
+  const latePosts = posts.filter(late);
+  const toReconnect = (accounts ?? []).filter((a) => a.status !== "active");
+  const timerTrouble = appWide.some((p) => p.key === "timer" || p.key === "app" || p.key === "db");
+  const problems: { key: string; tone: "red" | "gold"; title: React.ReactNode; detail: React.ReactNode }[] = [
+    ...appWide.map((p) => ({
+      key: `app-${p.key}`,
+      tone: (p.level === "down" ? "red" : "gold") as "red" | "gold",
+      title: (
+        <>
+          {p.name} {p.level === "down" ? "isn\u2019t working right now" : "is slow right now"}
+        </>
+      ),
+      detail: (
+        <>
+          A problem with {APP_NAME} itself, not your team: nothing to fix on your side.{p.key === "timer" ? " Scheduled posts wait and go out once it\u2019s back." : ""}{" "}
+          <Link href="/status" className="text-amber font-semibold hover:underline">
+            Status page
+          </Link>
+        </>
+      ),
+    })),
+    ...toReconnect.map((a) => ({
+      key: `acc-${a.platform}`,
+      tone: "gold" as const,
+      title: (
+        <>
+          {NAME[a.platform as string] ?? a.platform} · {(a.display_name as string | null) ?? (a.username as string | null) ?? "account"} needs reconnecting
+        </>
+      ),
+      detail: (
+        <>
+          {a.last_error ? `${String(a.last_error).replace(/\.?\s*$/, ".")} ` : ""}Posts to it can&rsquo;t go out until it&rsquo;s reconnected.{" "}
+          {master ? (
+            <Link href="/team?tab=accounts" className="text-amber font-semibold hover:underline">
+              Reconnect it
+            </Link>
+          ) : (
+            <>Ask a master to reconnect it in Team → Connected accounts.</>
+          )}
+        </>
+      ),
+    })),
+    ...(failedPosts.length
+      ? [
+          {
+            key: "failed",
+            tone: "red" as const,
+            title: <>{PLURAL(failedPosts.length, "post failed", "posts failed")}</>,
+            detail: <>The reason is next to each one under Needs attention. Fix it, then press Retry on the short&rsquo;s page.</>,
+          },
+        ]
+      : []),
+    ...(latePosts.length
+      ? [
+          {
+            key: "late",
+            tone: "gold" as const,
+            title: <>{PLURAL(latePosts.length, "post is late", "posts are late")}: not started yet</>,
+            detail: timerTrouble ? <>Because of the problem above: they start by themselves once it&rsquo;s fixed.</> : <>They usually start within a few minutes.{manager ? " The Health box below says if the timer is stuck." : ""}</>,
+          },
+        ]
+      : []),
+  ];
 
   const row = (r: Row) => {
     const link =
@@ -105,8 +177,9 @@ export default async function PostingPage() {
           </div>
         </div>
         {link && (
-          <a href={link} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-amber hover:underline flex-shrink-0">
-            Open ↗
+          <a href={link} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-amber hover:underline flex-shrink-0 inline-flex items-center gap-1">
+            Open
+            <ExternalIcon className="w-3.5 h-3.5" />
           </a>
         )}
       </li>
@@ -149,7 +222,7 @@ export default async function PostingPage() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-[28px] font-display font-semibold">Posting</h1>
-          <p className="text-[13px] text-ink-soft">Everything scheduled, in progress and posted, and whether the system behind it is healthy.</p>
+          <p className="text-[13px] text-ink-soft">Everything scheduled, in progress and posted, and anything that stops your team&rsquo;s posts.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Staging only. */}
@@ -157,6 +230,38 @@ export default async function PostingPage() {
           {manager && process.env.VERCEL_ENV !== "production" && <RunNowButton />}
         </div>
       </div>
+
+      {problems.length === 0 ? (
+        <div className="flex items-center gap-2.5 rounded-2xl border border-green/25 bg-green/[0.07] px-4 py-3">
+          <span className="w-5 h-5 rounded-full bg-green text-white flex items-center justify-center flex-shrink-0" aria-hidden>
+            <CheckIcon className="w-3 h-3" />
+          </span>
+          <span className="text-[13.5px] font-semibold">No problems with your team&rsquo;s posting.</span>
+          <span className="flex-1" />
+          <Link href="/status" className="text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:underline whitespace-nowrap">
+            {APP_NAME} status
+          </Link>
+        </div>
+      ) : (
+        <section className="rounded-2xl border border-red/35 bg-red/[0.06] p-4 sm:p-5" aria-labelledby="problems-title">
+          <h2 id="problems-title" className="text-[11.5px] font-bold uppercase tracking-wide text-red mb-3">
+            Problems ({problems.length})
+          </h2>
+          <ul className="space-y-3">
+            {problems.map((p) => (
+              <li key={p.key} className="flex gap-2.5">
+                <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 ${p.tone === "red" ? "bg-red" : "bg-gold"}`} aria-hidden>
+                  <AlertIcon className="w-3 h-3" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[13.5px] font-semibold">{p.title}</div>
+                  <div className="text-[12.5px] text-ink-soft">{p.detail}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {manager && (
         <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
@@ -169,11 +274,12 @@ export default async function PostingPage() {
             {findings.map((f, i) => (
               <li key={i} className="flex gap-2.5">
                 <span
-                  className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${
+                  className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 ${
                     f.level === "ok" ? "bg-green" : f.level === "warn" ? "bg-amber" : "bg-red"
                   }`}
+                  aria-hidden
                 >
-                  {f.level === "ok" ? "✓" : "!"}
+                  {f.level === "ok" ? <CheckIcon className="w-3 h-3" /> : <AlertIcon className="w-3 h-3" />}
                 </span>
                 <div>
                   <div className="text-[13.5px] font-semibold">{f.title}</div>

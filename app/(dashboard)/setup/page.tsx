@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { isAlertPerson } from "@/lib/errors";
+import { isDeveloper } from "@/lib/errors";
 import { getSocialSetup, type SocialSetup } from "@/lib/social/setup";
 import { authEmails } from "@/lib/auth-emails";
 import { APP_DOMAIN, APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
@@ -89,7 +89,7 @@ function Where({ children }: { children: React.ReactNode }) {
 
 export default async function SetupPage() {
   const user = await getCachedUser();
-  if (!(await isAlertPerson(user?.id))) notFound();
+  if (!(await isDeveloper(user?.id))) notFound();
   const setup = await getSocialSetup();
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
@@ -141,7 +141,7 @@ export default async function SetupPage() {
     { name: "FACEBOOK_APP_SECRET", what: "Meta app secret.", set: env("FACEBOOK_APP_SECRET"), need: "optional" },
     { name: "SOCIAL_STATS_PLATFORMS", what: "Which platforms also ask for stats (youtube,instagram,tiktok).", set: env("SOCIAL_STATS_PLATFORMS"), need: "optional" },
     { name: "NEXT_PUBLIC_MAX_VIDEO_MB", what: "Largest upload in MB (50 on the free Supabase plan, 2048 on Pro).", set: env("NEXT_PUBLIC_MAX_VIDEO_MB"), need: "optional" },
-    { name: "ALERT_EMAILS", what: "Who gets error alerts (comma list). Empty = team owners.", set: env("ALERT_EMAILS"), need: "optional" },
+    { name: "DEVELOPER_EMAILS", what: "Developer accounts (comma list): open /developer and /setup, and are the only ones who get app-wide alerts. Empty = ALERT_EMAILS (old name), else the owner of the first team.", set: env("DEVELOPER_EMAILS") || env("ALERT_EMAILS"), need: "optional" },
     { name: "GIPHY_API_KEY", what: "GIFs in comments.", set: env("GIPHY_API_KEY"), need: "optional" },
   ];
 

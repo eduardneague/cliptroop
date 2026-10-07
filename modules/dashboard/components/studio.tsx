@@ -36,8 +36,13 @@ export type StudioData = {
 };
 
 const GAP = 12;
-/** Below this board width widgets stack (tablets, phones): no dragging there. */
-const NARROW = 960;
+/**
+ * Below this board width widgets stack, 2 per row (small laptops, tablets) or
+ * 1 (phones): no dragging there. Same widths as the @container rules for
+ * .dash-board in globals.css. 1.9.6: 1100 (was 960), since 12 columns got
+ * too small to read on ~1280px screens.
+ */
+const NARROW = 1100;
 
 // False on the server and while hydrating, true after: widget contents
 // depend on this device's clock, time zone and language, so they only
@@ -662,8 +667,10 @@ function WidgetCard({
   const meta = CATALOG[w.type];
   const hasSettings = HAS_SETTINGS.includes(w.type);
   const bare = meta.bare && !editing;
-  // Phones / tablets: span 2 columns when it's a wide widget, keep its height (capped).
-  const style = vars(box, { ["--o"]: order, ["--mw"]: w.w >= 6 ? 2 : 1, ["--mh"]: Math.max(2, Math.min(7, w.h)) });
+  // Stacked (small laptops, tablets, phones): each widget's own span and height (layout.ts, Stack).
+  const st = meta.stack;
+  const rows = Math.max(st.min, Math.min(st.max, w.h));
+  const style = vars(box, { ["--o"]: order, ["--mw"]: st.span ?? (w.w >= 6 ? 2 : 1), ["--mh"]: rows, ["--mhp"]: (typeof st.phone === "function" ? st.phone(w.settings) : st.phone) ?? rows });
   const stop = (e: React.PointerEvent) => e.stopPropagation();
   return (
     <section
@@ -683,7 +690,7 @@ function WidgetCard({
     >
       {bare ? (
         hasSettings && (
-          <button type="button" onClick={onSettings} aria-label={`${meta.name} settings`} className="absolute top-2 right-2 z-10 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:text-ink hover:bg-surface-2 transition-opacity">
+          <button type="button" onClick={onSettings} aria-label={`${meta.name} settings`} className="absolute top-2 right-2 z-10 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-60 hover:text-ink hover:bg-surface-2 transition-opacity">
             <SettingsIcon className="w-3.5 h-3.5" />
           </button>
         )
@@ -697,7 +704,7 @@ function WidgetCard({
               onPointerDown={stop}
               onClick={onSettings}
               aria-label={`${meta.name} settings`}
-              className={`w-6 h-6 -my-0.5 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 transition-opacity ${editing ? "" : "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100"}`}
+              className={`w-6 h-6 -my-0.5 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 transition-opacity ${editing ? "" : "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-70"}`}
             >
               <SettingsIcon className="w-3.5 h-3.5" />
             </button>

@@ -19,7 +19,27 @@ const LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: 6, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-views2", type: "meetings", x: 2, y: 6, w: 4, h: 2 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
+// MOCK_LAYOUT=all: every widget once (for checking them all on phones, tablets and laptops).
+const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
+  { id: "w-tasks", type: "tasks", x: 0, y: 0, w: 4, h: 6 },
+  { id: "w-teams", type: "teams", x: 4, y: 0, w: 2, h: 2 },
+  { id: "w-clock", type: "clock", x: 6, y: 0, w: 2, h: 2, settings: { h24: true, secondHand: true } },
+  { id: "w-weather", type: "weather", x: 8, y: 0, w: 2, h: 2, settings: { units: "c" } },
+  { id: "w-todo", type: "todo", x: 10, y: 0, w: 2, h: 4 },
+  { id: "w-cal", type: "minicalendar", x: 4, y: 2, w: 2, h: 4 },
+  { id: "w-shorts", type: "upcomingShorts", x: 6, y: 2, w: 2, h: 4 },
+  { id: "w-longs", type: "upcomingLongs", x: 8, y: 2, w: 2, h: 4 },
+  { id: "w-views", type: "views", x: 10, y: 4, w: 2, h: 3 },
+  { id: "w-contrib", type: "contributions", x: 0, y: 6, w: 6, h: 3, settings: { color: "#22c55e", scope: "all" } },
+  { id: "w-meetings", type: "meetings", x: 6, y: 6, w: 2, h: 3 },
+  { id: "w-posting", type: "posting", x: 8, y: 6, w: 2, h: 3 },
+  { id: "w-followers", type: "followers", x: 10, y: 7, w: 2, h: 3 },
+  { id: "w-pipeline", type: "pipeline", x: 0, y: 9, w: 6, h: 4 },
+  { id: "w-map", type: "audienceMap", x: 6, y: 9, w: 4, h: 4, settings: { view: process.env.MOCK_GLOBE ? "globe" : "map", mode: "all" } },
+  { id: "w-output", type: "output", x: 10, y: 10, w: 2, h: 2 },
+  { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
+] };
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -148,6 +168,43 @@ const incomes = [
 const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
 const STATS = { youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"], instagram: ["instagram_business_manage_insights"], tiktok: ["user.info.stats", "video.list"], facebook: ["pages_show_list", "pages_read_engagement", "read_insights"] };
 
+// Status history (0067): 3 days of hourly checks with a few problems in them.
+const HOUR = 3600e3;
+const hourAt = (k) => new Date(Math.floor(Date.now() / HOUR) * HOUR - k * HOUR).toISOString();
+const PARTS = ["app", "db", "auth", "files", "timer", "analytics", "email", "vercel", "supabase", "resend"];
+const BAD = {
+  // part: { hoursAgo: [level, warnChecks, downChecks, detail] }
+  timer: { 20: ["down", 0, 3, "Last ran 14 min ago."], 19: ["warn", 1, 0, "Last ran 4 min ago and failed."] },
+  db: { 50: ["warn", 2, 0, "Answering (3120 ms)"] },
+  files: { 50: ["warn", 1, 0, "Answering (2840 ms)"] },
+  app: { 33: ["down", 0, 2, "Timed out."] },
+  resend: { 8: ["warn", 6, 0, "Partially Degraded Service"], 7: ["warn", 3, 0, "Partially Degraded Service"] },
+  ...(process.env.MOCK_STATUS_BAD ? { timer: { 0: ["down", 0, 2, "Last ran 16 min ago."], 20: ["down", 0, 3, "Last ran 14 min ago."] } } : {}),
+};
+const statusHistory = (b) => {
+  const hours = Math.min(720, Math.max(1, Number(b.p_hours) || 72));
+  const rows = [];
+  for (const c of PARTS)
+    for (let k = hours - 1; k >= 0; k--) {
+      if (k > 60) continue; // recording started 61 hours ago
+      const bad = BAD[c]?.[k];
+      const samples = k === 0 ? 3 : 6;
+      rows.push({ component: c, hour: hourAt(k), level: bad ? bad[0] : "ok", samples, warn: bad ? bad[1] : 0, down: bad ? bad[2] : 0, detail: bad ? bad[3] : "Answering (120 ms)" });
+    }
+  return rows;
+};
+const statusIncidents = () => {
+  const out = [];
+  for (const [c, hours] of Object.entries(BAD))
+    for (const [k, v] of Object.entries(hours)) {
+      const start = Date.parse(hourAt(Number(k))) + 10 * 60e3;
+      const n = v[1] + v[2];
+      const ongoing = Number(k) === 0;
+      out.push({ component: c, level: v[0], started_at: new Date(start).toISOString(), last_bad_at: new Date(start + (n - 1) * 600e3).toISOString(), ended_at: ongoing ? null : new Date(start + n * 600e3).toISOString(), samples: n, detail: v[3] });
+    }
+  return out.sort((a, b) => b.started_at.localeCompare(a.started_at));
+};
+
 module.exports = {
   TEAM,
   U,
@@ -156,11 +213,22 @@ module.exports = {
     can_view_revenue: true,
     is_master_of: true,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
+    // "Ready for review / staging" (0062): Script → Review → Staging of short #231.
+    script_hand_off: (b) => {
+      const next = { "dd000000-0000-4000-8000-000000000001": ["dd000000-0000-4000-8000-000000000002", "Review", "review", "Script"], "dd000000-0000-4000-8000-000000000002": ["dd000000-0000-4000-8000-000000000003", "Staging", "staging", "Review"] }[b.p_script];
+      return next ? { next_id: next[0], next_name: next[1], next_step: next[2], name: next[3], copied: !!b.p_copy, team: TEAM, short: shorts[0].id, long: null, recipients: [U[1]] } : null;
+    },
     // "Staging done" (0066): marks it and says who to tell.
     script_finish: (b) => ({ done: b.p_done !== false, changed: true, staging_id: "dd000000-0000-4000-8000-000000000003", team: TEAM, short: shorts[0].id, long: null, recipients: b.p_done === false ? [] : [U[1], U[2]] }),
+    status_history: statusHistory,
+    status_incidents: statusIncidents,
+    status_current: () => [
+      ...PARTS.filter((c) => !(process.env.MOCK_STATUS_BAD && c === "timer")).map((c) => ({ component: c, level: "ok", at: new Date(Date.now() - 4 * 60e3).toISOString() })),
+      ...(process.env.MOCK_STATUS_BAD ? [{ component: "timer", level: "down", at: new Date(Date.now() - 4 * 60e3).toISOString() }] : []),
+    ],
     status_checks: {
       timer_scheduled: true,
-      timer_last: { at: new Date(Date.now() - 60_000).toISOString(), status: "succeeded" },
+      timer_last: { at: new Date(Date.now() - (process.env.MOCK_STATUS_BAD ? 16 * 60_000 : 60_000)).toISOString(), status: "succeeded" },
       analytics_last: new Date(Date.now() - 5 * 3600e3).toISOString(),
       analytics_failing: 0,
       posts_failed_24h: process.env.MOCK_STATUS_BAD ? 2 : 0,
@@ -201,7 +269,10 @@ module.exports = {
     ],
     team_invites: [],
     mockup_videos: mockupVideos,
-    social_accounts: ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: pl === "facebook" ? "Viverro (Page)" : "Viverro", username: pl === "facebook" ? null : "viverro", avatar_url: null, status: "active", scopes: STATS[pl], connected_at: at(-30), last_error: null, external_id: pl === "facebook" ? "123456789" : "ext-" + pl })),
+    social_accounts: ["youtube", "instagram", "tiktok", "facebook"].map((pl) => {
+      const bad = !!process.env.MOCK_STATUS_BAD && pl === "instagram";
+      return { id: "acc-" + pl, team_id: TEAM, platform: pl, display_name: pl === "facebook" ? "Viverro (Page)" : "Viverro", username: pl === "facebook" ? null : "viverro", avatar_url: null, status: bad ? "needs_reconnect" : "active", scopes: STATS[pl], connected_at: at(-30), last_error: bad ? "Instagram signed us out (the password was changed)." : null, external_id: pl === "facebook" ? "123456789" : "ext-" + pl };
+    }),
     analytics_daily: daily,
     analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
@@ -209,7 +280,12 @@ module.exports = {
     analytics_revenue_daily: revenue,
     revenue_entries: incomes,
     revenue_access: [],
-    social_posts: [],
+    social_posts: process.env.MOCK_STATUS_BAD
+      ? [
+          { id: "sp000000-0000-4000-8000-000000000001", team_id: TEAM, short_id: shorts[0].id, platform: "instagram", status: "failed", progress: 0, scheduled_at: at(0, -3), next_attempt_at: at(0, -3), last_error: "Instagram needs reconnecting.", attempts: 3, permalink: null, external_id: null, published_at: null, updated_at: new Date(Date.now() - 2 * 3600e3).toISOString(), short: { id: shorts[0].id, entry_number: shorts[0].entry_number, title: shorts[0].title } },
+          { id: "sp000000-0000-4000-8000-000000000002", team_id: TEAM, short_id: shorts[1].id, platform: "youtube", status: "scheduled", progress: 0, scheduled_at: at(0, -1), next_attempt_at: new Date(Date.now() - 20 * 60e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: null, published_at: null, updated_at: at(-1), short: { id: shorts[1].id, entry_number: shorts[1].entry_number, title: shorts[1].title } },
+        ]
+      : [],
     team_day_limits: [],
     meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
     meeting_actions: [
@@ -227,8 +303,9 @@ module.exports = {
       { id: "fa000000-0000-4000-8000-000000000002", user_id: U[0], endpoint: "https://fcm.googleapis.com/fcm/send/mock-mac", label: "Mac · Chrome", created_at: at(-9, 11), last_sent_at: null },
     ] : [],
     app_errors: [
-      { id: "ffffffff-0000-4000-8000-000000000001", source: "server", message: "Cannot read properties of undefined (reading 'title')", route: "GET /shorts/[id] (render)", count: 3, first_seen: at(-1, 14), last_seen: at(0, 8), resolved_at: null },
-      { id: "ffffffff-0000-4000-8000-000000000002", source: "browser", message: "ResizeObserver loop completed with undelivered notifications", route: "/dashboard", count: 1, first_seen: at(-3, 10), last_seen: at(-3, 10), resolved_at: at(-2, 9) },
+      { id: "ffffffff-0000-4000-8000-000000000001", source: "server", message: "Cannot read properties of undefined (reading 'title')", route: "GET /shorts/[id] (render)", count: 3, first_seen: at(-1, 14), last_seen: at(0, 8), resolved_at: null, digest: "2894517711", stack: "TypeError: Cannot read properties of undefined (reading 'title')\n    at ShortPage (app/(dashboard)/shorts/[id]/page.tsx:212:31)\n    at renderWithHooks (react-dom.development.js:15486:18)", last_user_id: U[1] },
+      { id: "ffffffff-0000-4000-8000-000000000003", source: "browser", message: "Error in input stream", route: "/videos", count: 1, first_seen: at(0, 14), last_seen: at(0, 14), resolved_at: null, digest: null, stack: null, last_user_id: U[0] },
+      { id: "ffffffff-0000-4000-8000-000000000002", source: "browser", message: "ResizeObserver loop completed with undelivered notifications", route: "/dashboard", count: 1, first_seen: at(-3, 10), last_seen: at(-3, 10), resolved_at: at(-2, 9), digest: null, stack: null, last_user_id: null },
     ],
   },
   helpers: { day, at, people, members },

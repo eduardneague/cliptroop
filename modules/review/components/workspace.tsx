@@ -19,13 +19,14 @@ import { ReviewPlayer, type PlayerHandle } from "./player";
 import { VersionUploader } from "./uploader";
 import { CompareView } from "./compare";
 import { sounds } from "@/lib/sounds";
+import { minWidth } from "@/lib/breakpoints";
 
 type Filter = "open" | "all";
 type Pending = { tempId: string; versionId: string; parentId: string | null; body: string; time: number | null };
 type Note = ReviewNote & { pending?: boolean };
 type Thread = { note: Note; replies: Note[] };
 
-const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+const isDesktop = () => typeof window !== "undefined" && window.matchMedia(minWidth("lg")).matches;
 const typing = (el: EventTarget | null) => {
   const t = el as HTMLElement | null;
   return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);

@@ -59,7 +59,7 @@ export function TeamsWidget({ teams, currentTeamId }: { teams: TeamCard[]; curre
     router.refresh();
   });
   return (
-    <div className={`h-full overflow-y-auto -mx-1 motion-stagger ${pending ? "opacity-60" : ""}`}>
+    <div className={`h-full widget-scroll -mx-1 motion-stagger ${pending ? "opacity-60" : ""}`}>
       {teams.map((t) => {
         const current = t.id === currentTeamId;
         return (

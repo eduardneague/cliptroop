@@ -28,28 +28,36 @@ export type WidgetType =
 export type WidgetInstance = { id: string; type: WidgetType; x: number; y: number; w: number; h: number; fixed?: boolean; settings?: Record<string, unknown> };
 export type Layout = { v: 2; widgets: WidgetInstance[]; fill: boolean; sounds: boolean };
 
-type Meta = { name: string; description: string; w: number; h: number; limits: Limits; bare?: boolean; settings?: Record<string, unknown> };
+/**
+ * Stacked (boards under 1100px: 2 per row, under 600px: 1 per row), where
+ * there's no dragging: rows of 60px (+12px gap). `span` 2 = the full width
+ * in 2-per-row (default: wide widgets, w ≥ 6). Height = the widget's own
+ * height kept between `min` and `max`; `phone` = rows when 1 per row (else
+ * the same). Sized so each one reads and taps well on a phone.
+ */
+export type Stack = { span?: 1 | 2; min: number; max: number; phone?: number | ((settings?: Record<string, unknown>) => number) };
+type Meta = { name: string; description: string; w: number; h: number; limits: Limits; bare?: boolean; settings?: Record<string, unknown>; stack: Stack };
 
 /** Every widget once per dashboard. w/h = size when added. */
 export const CATALOG: Record<WidgetType, Meta> = {
-  tasks: { name: "My tasks", description: "What you need to do: overdue, today, coming up.", w: 4, h: 6, limits: { minW: 3, minH: 3, maxW: 12, maxH: 12 } },
-  teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 6 } },
-  clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } },
-  posting: { name: "Posting today", description: "Today's scheduled posts and anything that failed.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } },
-  todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } },
-  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } },
-  minicalendar: { name: "Calendar", description: "This month with shorts and long videos marked.", w: 2, h: 4, limits: { minW: 2, minH: 4, maxW: 4, maxH: 8 } },
-  upcomingLongs: { name: "Long videos", description: "Long videos in progress, with thumbnails and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } },
-  contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", w: 6, h: 3, limits: { minW: 4, minH: 3, maxW: 12, maxH: 5 }, settings: { color: "#22c55e", scope: "all" } },
-  pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } },
-  meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } },
-  weather: { name: "Weather", description: "Now and the next days, for your city.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 4 }, bare: true, settings: { units: "c" } },
+  tasks: { name: "My tasks", description: "What you need to do: overdue, today, coming up.", w: 4, h: 6, limits: { minW: 3, minH: 3, maxW: 12, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
+  teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 6 } , stack: { min: 2, max: 4 } },
+  clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } , stack: { min: 2, max: 3, phone: 2 } },
+  posting: { name: "Posting today", description: "Today's scheduled posts and anything that failed.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } , stack: { min: 2, max: 4, phone: 3 } },
+  todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
+  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 6 } },
+  minicalendar: { name: "Calendar", description: "This month with shorts and long videos marked.", w: 2, h: 4, limits: { minW: 2, minH: 4, maxW: 4, maxH: 8 } , stack: { min: 6, max: 7, phone: 6 } },
+  upcomingLongs: { name: "Long videos", description: "Long videos in progress, with thumbnails and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } , stack: { min: 4, max: 7, phone: 5 } },
+  contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", w: 6, h: 3, limits: { minW: 4, minH: 3, maxW: 12, maxH: 5 }, settings: { color: "#22c55e", scope: "all" } , stack: { span: 2, min: 3, max: 4, phone: 3 } },
+  pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
+  meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 2, max: 4, phone: 3 } },
+  weather: { name: "Weather", description: "Now and the next days, for your city.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 4 }, bare: true, settings: { units: "c" } , stack: { min: 2, max: 3, phone: 2 } },
   // Analytics (1.5): each loads its own numbers when it appears.
-  output: { name: "This week", description: "Shorts and long videos out in the last 7 days, how many on time, and what's late.", w: 6, h: 2, limits: { minW: 2, minH: 2, maxW: 12, maxH: 4 } },
-  views: { name: "Views", description: "Views on YouTube, Instagram and TikTok in the last 7 days, and the trend.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } },
-  followers: { name: "Followers", description: "Subscribers and followers on each platform, and how they changed.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } },
-  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } },
-  audienceMap: { name: "Audience map", description: "Where your audience is, last 28 days: a world map or a 3D globe of YouTube views, followers, or all platforms together.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 }, settings: { view: "map", mode: "all" } },
+  output: { name: "This week", description: "Shorts and long videos out in the last 7 days, how many on time, and what's late.", w: 6, h: 2, limits: { minW: 2, minH: 2, maxW: 12, maxH: 4 } , stack: { min: 3, max: 3, phone: 3 } },
+  views: { name: "Views", description: "Views on YouTube, Instagram and TikTok in the last 7 days, and the trend.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 3, max: 4, phone: 3 } },
+  followers: { name: "Followers", description: "Subscribers and followers on each platform, and how they changed.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } , stack: { min: 4, max: 5, phone: 4 } },
+  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
+  audienceMap: { name: "Audience map", description: "Where your audience is, last 28 days: a world map or a 3D globe of YouTube views, followers, or all platforms together.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 }, settings: { view: "map", mode: "all" } , stack: { span: 2, min: 5, max: 7, phone: (st) => (st?.view === "globe" ? 7 : 5) } },
 };
 
 export const LIMITS_BY_TYPE = Object.fromEntries(Object.entries(CATALOG).map(([k, v]) => [k, v.limits])) as Record<WidgetType, Limits>;

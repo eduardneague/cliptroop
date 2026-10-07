@@ -1,7 +1,7 @@
 // Error alerts: the same error counts once however its ids and numbers differ;
 // different errors (or the same one somewhere else) count separately; Next.js
 // redirects / not-found are never reported.
-import { fingerprint, isControlFlow } from "../lib/error-kinds";
+import { fingerprint, isControlFlow, isNetworkNoise } from "../lib/error-kinds";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -24,6 +24,22 @@ ok(isControlFlow(Object.assign(new Error("x"), { digest: "NEXT_HTTP_ERROR_FALLBA
 ok(isControlFlow(new Error("Dynamic server usage: cookies")), "dynamic rendering bail-out is not an error");
 ok(!isControlFlow(new Error("relation \"tasks\" does not exist")), "a real error is reported");
 ok(!isControlFlow(null) && !isControlFlow(undefined) && !isControlFlow("boom"), "odd values don't crash");
+
+// A dropped connection isn't a bug (1.9.8): never recorded, never alerted.
+for (const m of [
+  "Error in input stream",
+  "TypeError: Error in input stream",
+  "NetworkError when attempting to fetch resource.",
+  "TypeError: Failed to fetch",
+  "Load failed",
+  "The network connection was lost.",
+  "Loading chunk 4512 failed.",
+  "ChunkLoadError: Loading chunk app/page failed.",
+  "cancelled",
+])
+  ok(isNetworkNoise(m), `noise: ${m}`);
+for (const m of ["Cannot read properties of undefined (reading 'title')", "Post was cancelled by the master", "Minified React error #418", "relation \"tasks\" does not exist"])
+  ok(!isNetworkNoise(m), `a real error: ${m}`);
 
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);

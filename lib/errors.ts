@@ -1,5 +1,6 @@
 import { APP_NAME } from "@/lib/brand";
 import "server-only";
+import { cache } from "react";
 import { fingerprint } from "./error-kinds";
 import { createAdminClient } from "./supabase/admin";
 import { appUrl, emailConfigured, sendAlertEmail } from "./email";
@@ -8,48 +9,66 @@ import { sendNotifications } from "./notify";
 /*
  * Error alerts (no outside service needed). Every error the app hits — on
  * the server (instrumentation.ts), in someone's browser (/api/errors) or in a
- * timed job — is counted in app_errors (migration 0063), one row per kind of
- * error. The first time, when it comes back after being marked fixed, and at
- * most once an hour while it keeps happening, the alert people get an email
- * and a notification. Details: /status (signed in as one of them).
+ * timed job (the status check, lib/health-watch.ts) — is counted in
+ * app_errors (migration 0063), one row per kind of error. The first time,
+ * when it comes back after being marked fixed, and at most once an hour
+ * while it keeps happening, the DEVELOPERS get an email and a notification.
+ * Details: /developer (developer accounts only).
  *
- * Alert people: ALERT_EMAILS (comma-separated) or, if that's not set, the
- * owners of the teams. Alerts are sent from production (and from staging
- * too with ALERT_ON_PREVIEW=1); everything is still recorded everywhere.
+ * Developers: DEVELOPER_EMAILS (comma-separated; ALERT_EMAILS, its old
+ * name, still works) or, if neither is set, the owner of the first team ever
+ * made. Team owners don't get these: one team's problems (a failed post, an
+ * account to reconnect) show on that team's Posting page instead.
+ * Alerts are sent from production (and from staging too with
+ * ALERT_ON_PREVIEW=1); everything is still recorded everywhere.
  */
 
 export type ErrorSource = "server" | "browser" | "job";
 
 export { isControlFlow } from "./error-kinds";
 
-export async function alertRecipients(): Promise<{ emails: string[]; userIds: string[] }> {
-  const admin = createAdminClient();
-  const fromEnv = (process.env.ALERT_EMAILS ?? "")
+const emailList = (v: string | undefined) =>
+  (v ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e));
+
+export type Developers = { emails: string[]; userIds: string[]; source: "DEVELOPER_EMAILS" | "ALERT_EMAILS" | "first team owner" | "none" };
+
+/** The developer accounts (once per request). */
+export const developers = cache(async (): Promise<Developers> => {
+  const admin = createAdminClient();
+  const named = emailList(process.env.DEVELOPER_EMAILS);
+  const legacy = named.length ? [] : emailList(process.env.ALERT_EMAILS);
+  const fromEnv = [...new Set([...named, ...legacy])].slice(0, 10);
   if (fromEnv.length) {
     const { data } = await admin.from("profiles").select("id, email").in("email", fromEnv);
-    return { emails: fromEnv.slice(0, 10), userIds: (data ?? []).map((p) => p.id as string) };
+    return { emails: fromEnv, userIds: (data ?? []).map((p) => p.id as string), source: named.length ? "DEVELOPER_EMAILS" : "ALERT_EMAILS" };
   }
-  const { data: teams } = await admin.from("teams").select("owner_id").limit(50);
-  const ids = [...new Set((teams ?? []).map((t) => t.owner_id as string).filter(Boolean))].slice(0, 5);
-  if (!ids.length) return { emails: [], userIds: [] };
-  const { data: owners } = await admin.from("profiles").select("id, email").in("id", ids);
-  return { emails: (owners ?? []).map((p) => p.email as string | null).filter((e): e is string => !!e), userIds: ids };
-}
+  const { data: team } = await admin.from("teams").select("owner_id").order("created_at", { ascending: true }).limit(1).maybeSingle();
+  const id = (team?.owner_id as string | undefined) ?? null;
+  if (!id) return { emails: [], userIds: [], source: "none" };
+  const { data: owner } = await admin.from("profiles").select("id, email").eq("id", id).maybeSingle();
+  return { emails: owner?.email ? [owner.email as string] : [], userIds: [id], source: "first team owner" };
+});
 
-/** Is this signed-in person one of the alert people (sees error details on /status)? */
-export async function isAlertPerson(userId: string | null | undefined) {
+/** Who gets the app-wide alerts: the developers, nobody else. */
+export const alertRecipients = developers;
+
+/** Is this signed-in person a developer (opens /developer and /setup, gets the alerts)? */
+export async function isDeveloper(userId: string | null | undefined) {
   if (!userId) return false;
   try {
-    return (await alertRecipients()).userIds.includes(userId);
+    return (await developers()).userIds.includes(userId);
   } catch {
     return false;
   }
 }
 
-const shouldAlert = () => process.env.VERCEL_ENV === "production" || (process.env.VERCEL_ENV === "preview" && process.env.ALERT_ON_PREVIEW === "1");
+/** @deprecated The old name (before 1.9.8): use isDeveloper. Kept so an older copy of a file still builds. */
+export const isAlertPerson = isDeveloper;
+
+export const shouldAlert = () => process.env.VERCEL_ENV === "production" || (process.env.VERCEL_ENV === "preview" && process.env.ALERT_ON_PREVIEW === "1");
 
 /** Count an error and alert when it's time. Never throws (it's called while something else is already failing). */
 export async function reportError(input: { source: ErrorSource; message: string; stack?: string | null; route?: string | null; digest?: string | null; userId?: string | null }) {
@@ -77,7 +96,7 @@ export async function reportError(input: { source: ErrorSource; message: string;
           recipient_id,
           kind: "app_alert",
           body: `Something broke: ${message.slice(0, 140)} (${where})`,
-          metadata: { snippet: message.slice(0, 140), where, href: "/status" },
+          metadata: { snippet: message.slice(0, 140), where, href: "/developer" },
         }))
       );
     }
@@ -88,9 +107,9 @@ export async function reportError(input: { source: ErrorSource; message: string;
             to: [email],
             subject: r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
             message: `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
-            linkText: "Open the status page",
-            href: `${appUrl()}/status`,
-            footer: `You get this because you receive ${APP_NAME}'s alerts (ALERT_EMAILS, or a team owner).`,
+            linkText: "Open the developer page",
+            href: `${appUrl()}/developer`,
+            footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
           })
         )
       );

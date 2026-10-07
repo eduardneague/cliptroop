@@ -24,7 +24,7 @@ export function UpcomingShortsWidget({ items }: { items: UpcomingShort[] }) {
   const today = localDay();
   if (!items.length) return <EmptyLine text="No shorts planned ahead." />;
   return (
-    <ul className="h-full overflow-y-auto -mx-1 motion-stagger">
+    <ul className="h-full widget-scroll -mx-1 motion-stagger">
       {items.map((s, i) => {
         const newDay = i === 0 || items[i - 1].date !== s.date;
         return (
@@ -63,7 +63,7 @@ export function UpcomingLongsWidget({ items }: { items: UpcomingLong[] }) {
   const today = localDay();
   if (!items.length) return <EmptyLine text="No long videos in progress." />;
   return (
-    <ul className="h-full overflow-y-auto -mx-1 motion-stagger">
+    <ul className="h-full widget-scroll -mx-1 motion-stagger">
       {items.map((l) => (
         <li key={l.id}>
           <Link href={`/videos/${l.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
@@ -114,7 +114,7 @@ export function PipelineWidget({ pipeline }: { pipeline: Pipeline }) {
     { kind: "long" as const, label: "Long videos", steps: LONG_STEPS, counts: pipeline.longs, color: "rgb(var(--long))", href: "/videos", done: pipeline.longs.done ?? 0 },
   ];
   return (
-    <div className={`grid gap-x-5 gap-y-3 h-full overflow-y-auto content-start ${box.w >= 380 ? "grid-cols-2" : "grid-cols-1"}`}>
+    <div className={`grid gap-x-5 gap-y-3 h-full widget-scroll content-start ${box.w >= 380 ? "grid-cols-2" : "grid-cols-1"}`}>
       {groups.map((g) => {
         const max = Math.max(1, ...g.steps.map(([k]) => g.counts[k] ?? 0));
         // Rows grow with the card (same height in both columns so they line up).
@@ -170,7 +170,7 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
   todays.sort((a, b) => (a.status === "failed" ? -1 : 0) - (b.status === "failed" ? -1 : 0) || a.at.localeCompare(b.at));
   if (!todays.length) return <EmptyLine text="Nothing posting today." />;
   return (
-    <ul className="h-full overflow-y-auto -mx-1 motion-stagger">
+    <ul className="h-full widget-scroll -mx-1 motion-stagger">
       {todays.map((p) => {
         const st = STATUS[p.status] ?? { label: p.status, cls: "text-ink-soft" };
         return (

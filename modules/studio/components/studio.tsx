@@ -21,6 +21,7 @@ import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Select } from "@/components/ui/select";
 import { deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
 import { HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
+import { belowWidth, minWidth } from "@/lib/breakpoints";
 
 const VIEWS: { id: MockView; label: string }[] = [
   { id: "home", label: "Home" },
@@ -155,13 +156,13 @@ export function Studio({ data }: { data: StudioData }) {
   const [canFullscreen, setCanFullscreen] = useState(false);
   useEffect(() => {
     setSeed(Math.floor(Math.random() * 1e9));
-    if (window.matchMedia("(max-width: 639px)").matches) setView("mobile");
+    if (window.matchMedia(belowWidth("sm")).matches) setView("mobile");
     setCanFullscreen(!!document.fullscreenEnabled);
   }, []);
-  // The list (xl) and the strip + editor (smaller) swap at 1280px: re-render then so the titles re-measure.
+  // The list (xl) and the strip + editor (smaller) swap at xl: re-render then so the titles re-measure.
   const [, setWide] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1280px)");
+    const mq = window.matchMedia(minWidth("xl"));
     const on = () => setWide(mq.matches);
     on();
     mq.addEventListener("change", on);

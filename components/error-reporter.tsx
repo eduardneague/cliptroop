@@ -2,11 +2,13 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { isNetworkNoise } from "@/lib/network-noise";
 
 /*
  * Sends browser errors to /api/errors (counted + alerted there). Skips the
  * noise every site gets (browser extensions, ResizeObserver, cross-origin
- * "Script error."), sends each message once per page view and at most 5.
+ * "Script error.", a connection that dropped mid-way), sends each message
+ * once per page view and at most 5.
  */
 
 const sent = new Set<string>();
@@ -15,7 +17,8 @@ let count = 0;
 function ignorable(message: string, stack: string) {
   return (
     !message ||
-    /ResizeObserver loop|^Script error\.?$|Non-Error promise rejection|AbortError|The user aborted|Load failed|NetworkError when attempting|Failed to fetch/i.test(message) ||
+    /ResizeObserver loop|^Script error\.?$|Non-Error promise rejection/i.test(message) ||
+    isNetworkNoise(message) ||
     /chrome-extension:|moz-extension:|safari-extension:/.test(stack)
   );
 }

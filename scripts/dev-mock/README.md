@@ -6,13 +6,15 @@ screenshots. It never touches a real Supabase project.
 
 ```bash
 # 1. the stand-in database (port 54321); MOCK_LOG=1 prints every query,
-#    MOCK_LAYOUT=1 gives the sample user a dashboard with the analytics widgets,
+#    MOCK_LAYOUT=1 gives the sample user a dashboard with the analytics widgets
+#    (MOCK_LAYOUT=all: every widget once),
 #    MOCK_PALETTE=ocean picks a colour theme, MOCK_TT_FIRST=1 a just-connected TikTok,
 #    MOCK_WINNERS=0..3 how many thumbnails of long #42 are starred (2 = an A/B test),
 #    MOCK_SENT=1 short #231's script already sent to review, MOCK_DONE=1 its script marked done, MOCK_GLOBE=1 the map
 #    widget as a globe of all platforms, MOCK_CURRENCY=EUR the revenue currency,
 #    MOCK_STALE=1 analytics last copied 50 h ago (the catch-up starts),
-#    MOCK_STATUS_BAD=1 the status page with failed posts, errors and a reconnect,
+#    MOCK_STATUS_BAD=1 the timer down now (status, developer, Posting), a failed + a late post
+#    and an Instagram account to reconnect (the status bars always have 3 days of sample history),
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens)
 node scripts/dev-mock/server.cjs
 

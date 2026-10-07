@@ -23,6 +23,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.8",
+    date: "2026-10-08",
+    title: "A clearer status page",
+    changes: [
+      { kind: "new", text: "The status page now shows the last 3 days hour by hour, like the big status pages: one bar per hour for every part of ClipTroop and the services it runs on, with the uptime. Hover or tap a bar to see that hour." },
+      { kind: "better", text: "The status page is only about ClipTroop as a whole and anyone can open it. Errors and the technical details moved to a separate developer page." },
+      { kind: "new", text: "Posting now starts with a Problems box for your whole team: posts that failed, posts that are late, accounts that need reconnecting (with what to do), and a note when ClipTroop itself has a problem. No problems? It says so." },
+      { kind: "fixed", text: "A dropped connection (switching from Wi-Fi to mobile data, a page loading while an update went live) is no longer counted as an error." },
+    ],
+  },
+  {
+    version: "1.9.7",
+    date: "2026-10-07",
+    title: "A dashboard made for your phone",
+    changes: [
+      { kind: "better", text: "On phones, tablets and smaller laptops every widget gets its own sensible size: the calendar shows a full month with room to tap (like the Calendar page), the pipeline shows every step, upcoming shorts and tasks show more at once." },
+      { kind: "better", text: "Audience map: taller on phones, with the leading countries and their share listed under the map or globe. The map works with taps (tap a country to see its numbers), and the globe's zoom buttons are bigger on touch screens." },
+      { kind: "better", text: "Lists that scroll inside a widget get a thin scrollbar in its own lane, so it never covers a date, a badge or an avatar." },
+      { kind: "better", text: "Calendar widget on phones: press and hold a day and its card opens above that row (or below it near the top), so the days around it stay visible." },
+      { kind: "better", text: "Followers shows each platform with a bar on phones, This week shows all four numbers, and widget settings are reachable on touch screens." },
+    ],
+  },
+  {
+    version: "1.9.6",
+    date: "2026-10-07",
+    title: "Roomier on smaller screens",
+    changes: [
+      { kind: "better", text: "On laptops and smaller windows the app switches to its roomier layouts sooner: the sidebar, two-column pages and the dashboard, whose widgets now sit two per row on screens narrower than about 1380px instead of getting squeezed." },
+      { kind: "better", text: "Scripts open where the work is now: after \"Ready for review\" the Review document opens (Staging after \"Ready for staging\"), and sending a script on takes you straight to the next document." },
+      { kind: "fixed", text: "Disconnecting an account removes it from Connected accounts right away." },
+      { kind: "fixed", text: "\"No meetings planned\" no longer spills out of a small Next meeting widget." },
+      { kind: "fixed", text: "Saves and refreshes that sometimes only showed after you clicked something else now show on their own." },
+    ],
+  },
+  {
     version: "1.9.5",
     date: "2026-10-07",
     title: "Every tap answers at once",

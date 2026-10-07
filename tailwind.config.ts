@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { BREAKPOINTS } from "./lib/breakpoints";
 
 // NOTE: These are placeholder tokens matching the prototype's palette,
 // so the app renders coherently from day one. The full visual design
@@ -12,6 +13,8 @@ const config: Config = {
   ],
   darkMode: ["class"],
   theme: {
+    // Earlier than Tailwind's defaults (lib/breakpoints.ts says why).
+    screens: Object.fromEntries(Object.entries(BREAKPOINTS).map(([k, v]) => [k, `${v}px`])),
     extend: {
       colors: {
         paper: "rgb(var(--paper) / <alpha-value>)",

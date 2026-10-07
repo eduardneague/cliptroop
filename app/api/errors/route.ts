@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { reportError } from "@/lib/errors";
+import { isNetworkNoise } from "@/lib/network-noise";
 
 /**
  * Errors from people's browsers (components/error-reporter.tsx and the error
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
   }
   const message = typeof body.message === "string" ? body.message : "";
   if (!message) return NextResponse.json({ ok: false }, { status: 400 });
+  // Tabs still running older code send dropped connections too: not a bug, not recorded.
+  if (isNetworkNoise(message)) return NextResponse.json({ ok: true, ignored: true });
   await reportError({
     source: "browser",
     message,

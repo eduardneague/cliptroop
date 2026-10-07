@@ -377,8 +377,9 @@ html[data-motion="off"] button:active { scale: none; }
    Dashboard board. Every widget has a place on a 12 column grid (--x --y
    --w --h, in cells). Sizes come from the board's own width (container
    units), so it renders right before any script runs and the layout looks
-   the same on every desktop screen. Narrower boards stack the widgets in
-   reading order (--o), 2 columns on tablets, 1 on phones.
+   the same on every desktop screen. Narrower boards (under 1100px, NARROW
+   in studio.tsx) stack the widgets in reading order (--o), 2 columns on
+   small laptops and tablets, 1 under 600px.
    ------------------------------------------------------------------------- */
 .dash-cq { container-type: inline-size; }
 .dash-board {
@@ -465,7 +466,7 @@ html[data-motion="off"] button:active { scale: none; }
 }
 .dash-cells.is-on { opacity: 1; }
 .dash-cells > span { border-radius: 10px; background: rgb(var(--line) / 0.05); box-shadow: inset 0 0 0 1px rgb(var(--line) / 0.05); }
-@container (max-width: 959px) {
+@container (max-width: 1099px) {
   .dash-board {
     display: grid;
     height: auto !important;
@@ -487,10 +488,25 @@ html[data-motion="off"] button:active { scale: none; }
   .dash-board .dash-item.is-removing { transform: scale(0.92); }
   .dash-ghost, .dash-cells, .dash-resize { display: none !important; }
 }
-@container (max-width: 559px) {
+@container (max-width: 599px) {
   .dash-board { grid-template-columns: minmax(0, 1fr); }
-  .dash-item { grid-column: span 1; }
+  .dash-item { grid-column: span 1; grid-row: span var(--mhp, var(--mh, 3)); }
 }
+
+/* Lists that scroll inside a widget: a thin scrollbar in its own lane (it
+   never covers a date, a badge or an avatar), faint until you point at it. */
+.widget-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--line) / 0.2) transparent;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+.widget-scroll:hover { scrollbar-color: rgb(var(--amber) / 0.55) transparent; }
+.widget-scroll::-webkit-scrollbar { width: 6px; }
+.widget-scroll::-webkit-scrollbar-track { background: transparent; }
+.widget-scroll::-webkit-scrollbar-thumb { background: rgb(var(--line) / 0.2); border-radius: 6px; }
+.widget-scroll:hover::-webkit-scrollbar-thumb { background: rgb(var(--amber) / 0.55); }
 
 /* ---------------------------------------------------------------------------
    To-do list: checking things off should feel good.
