@@ -20,3 +20,14 @@ export function startNavProgress(href?: string) {
   }
   window.dispatchEvent(new Event(NAV_START_EVENT));
 }
+
+export const NUDGE_EVENT = "cliptroop:nudge";
+
+/**
+ * Keeps React looking for finished work for `ms` (see NavProgress): used
+ * after a refresh or a save, whose results can otherwise sit unshown until
+ * something else on screen changes.
+ */
+export function nudgeReact(ms = 8000) {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(NUDGE_EVENT, { detail: ms }));
+}

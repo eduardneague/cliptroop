@@ -1,6 +1,6 @@
 // The dashboard grid: moving, resizing, filling and reading saved layouts never overlaps or loses widgets.
 import { compact, preview, fill, collides, bottom, COLS, type Box } from "../modules/dashboard/grid";
-import { DEFAULT_LAYOUT, toBox, limitsFor, readLayout, addWidget } from "../modules/dashboard/layout";
+import { DEFAULT_LAYOUT, toBox, limitsFor, readLayout, addWidget, CATALOG } from "../modules/dashboard/layout";
 let fails = 0;
 const ok = (c: boolean, m: string) => { if (!c) { fails++; console.log("FAIL", m); } };
 const noOverlap = (bs: Box[]) => bs.every((a) => bs.every((b) => !collides(a, b))) && bs.every((b) => b.x >= 0 && b.x + b.w <= COLS && b.y >= 0);
@@ -58,5 +58,15 @@ ok(noOverlap(v1.widgets.map(toBox)), "v1 migration: no overlap");
 const junk = readLayout({ v: 2, widgets: [{ id: "x", type: "tasks", x: 0, y: 0, w: 99, h: -3 }, { id: "y", type: "clock", x: 0, y: 0, w: 2, h: 2 }, { id: "z", type: "nope" }] });
 ok(junk.widgets.length === 2 && noOverlap(junk.widgets.map(toBox)), "junk v2 cleaned (limits + overlaps)");
 ok(readLayout(null).widgets.length === DEFAULT_LAYOUT.widgets.length && noOverlap(readLayout(null).widgets.map(toBox)) && readLayout({ v: 7 }).v === 2, "missing/unknown layouts fall back to default");
+// Stacked sizes (1.9.7): every widget has one, tall enough to use on a phone and never absurd.
+for (const [type, meta] of Object.entries(CATALOG)) {
+  const st = meta.stack;
+  const phones = typeof st.phone === "function" ? [st.phone({}), st.phone({ view: "globe" })] : [st.phone ?? st.min];
+  ok(st.min >= 2 && st.min <= st.max && st.max <= 8, `${type}: stacked rows ${st.min}..${st.max}`);
+  ok(phones.every((n) => n >= 2 && n <= 8), `${type}: phone rows ${phones.join("/")}`);
+  ok(st.span === undefined || st.span === 1 || st.span === 2, `${type}: span 1 or 2`);
+}
+ok(CATALOG.minicalendar.stack.min >= 6 && (CATALOG.minicalendar.stack.phone as number) >= 6, "calendar: a full month with room to tap on phones (6+ rows)");
+ok((CATALOG.audienceMap.stack.phone as (s?: Record<string, unknown>) => number)({ view: "globe" }) > (CATALOG.audienceMap.stack.phone as (s?: Record<string, unknown>) => number)({ view: "map" }), "globe gets more height than the flat map on phones");
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 process.exit(fails ? 1 : 0);

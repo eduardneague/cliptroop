@@ -15,6 +15,8 @@ export function isControlFlow(e: unknown) {
   );
 }
 
+export { isNetworkNoise } from "./network-noise";
+
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 /** The same error, wherever it happens: numbers, ids and quoted values don't make it a new one. */

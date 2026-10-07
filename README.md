@@ -190,6 +190,10 @@ migration on an empty database.
 
 ## UI conventions
 
+- **Breakpoints:** `lib/breakpoints.ts` (sm 640, md 900 = the sidebar
+  appears, lg 1180, xl 1400, 2xl 1600) is Tailwind's `screens` and what
+  code passes to `matchMedia` (`minWidth("lg")`). Never hard-code a width.
+
 - **Icons:** SVG components from `components/ui/icons.tsx` only. Never use
   Unicode symbols (▶ ✓ ★ 📅 …) for UI — iOS renders many as emoji.
 - **Stage colors mean state, not identity:** `stageState()` +
@@ -200,6 +204,26 @@ migration on an empty database.
 - **People link to profiles** via `profileHref()` / `MemberAvatarLink` /
   `MemberNameLink`; `/u/<username>` or `/u/<user-id>` both work.
 - **Roles next to a name:** `<RolePills roles={…} />` (max 2 + "+N").
+
+## Status, errors and alerts (who sees what)
+
+- **`/status`** (public, anyone): is the app as a whole working. Levels
+  only, never details: one bar per hour for the last 3 days per part
+  (`PARTS` / `VENDORS` in `lib/status.ts`), uptime, the last 7 days of
+  incidents. History: `status_samples` (0067), written every 10 minutes by
+  `status_tick()` (pg_cron) → `/api/cron/posting` with `{"status": true}`
+  → `recordStatus()`. Never pass `detail` to the page's client parts.
+- **`/developer`** (developer accounts only, else 404): errors with Mark
+  fixed, every check in full, the bars with the reason per hour, incidents,
+  teams that need a hand, who gets alerts, Send a test alert.
+- **Developers** = `DEVELOPER_EMAILS` (old name `ALERT_EMAILS`), else the
+  owner of the first team (`developers()` / `isDeveloper()` in
+  `lib/errors.ts`). They are the ONLY ones who get app-wide alerts.
+- **One team's problems** (a failed post, an account to reconnect) are never
+  app-wide: they go on that team's Posting page (the Problems box), which
+  also says when the app itself has a problem (`currentProblems()`).
+- A dropped connection isn't an error (`lib/network-noise.ts`): filtered in
+  the browser and again in `/api/errors`.
 
 ## Search
 

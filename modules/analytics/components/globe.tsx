@@ -546,7 +546,7 @@ export function Globe({
                 aria-label={b.label}
                 title={`${b.label} (or scroll)`}
                 onClick={b.run}
-                className={`${compact ? "w-6 h-6 text-[14px]" : "w-8 h-8 text-[17px]"} rounded-lg border border-line/20 bg-surface/95 text-ink font-semibold leading-none shadow-sm hover:bg-surface-2 flex items-center justify-center`}
+                className={`${compact ? "w-6 h-6 text-[14px] [@media(pointer:coarse)]:w-8 [@media(pointer:coarse)]:h-8 [@media(pointer:coarse)]:text-[17px]" : "w-8 h-8 text-[17px]"} rounded-lg border border-line/20 bg-surface/95 text-ink font-semibold leading-none shadow-sm hover:bg-surface-2 flex items-center justify-center`}
               >
                 {b.text}
               </button>
@@ -557,7 +557,7 @@ export function Globe({
                 aria-label="Whole globe"
                 title="Whole globe"
                 onClick={() => zoomBy(1 / ZOOM_MAX)}
-                className={`${compact ? "w-6 h-6 text-[9px]" : "w-8 h-8 text-[10px]"} rounded-lg border border-line/20 bg-surface/95 text-ink-soft font-bold shadow-sm hover:bg-surface-2 hover:text-ink flex items-center justify-center`}
+                className={`${compact ? "w-6 h-6 text-[9px] [@media(pointer:coarse)]:w-8 [@media(pointer:coarse)]:h-8" : "w-8 h-8 text-[10px]"} rounded-lg border border-line/20 bg-surface/95 text-ink-soft font-bold shadow-sm hover:bg-surface-2 hover:text-ink flex items-center justify-center`}
               >
                 1×
               </button>

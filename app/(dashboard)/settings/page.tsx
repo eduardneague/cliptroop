@@ -22,7 +22,8 @@ import { InstallApp, PushKeysHelper, PushSettings } from "@/components/pwa";
 import { PushDevices, type PushDevice } from "./push-devices";
 import { pushConfigured } from "@/lib/push/send";
 import { PUSH_COOKIE } from "@/lib/push/guard";
-import { isAlertPerson } from "@/lib/errors";
+import { isDeveloper } from "@/lib/errors";
+import { ChevronRightIcon } from "@/components/ui/icons";
 import { APP_NAME } from "@/lib/brand";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
@@ -50,8 +51,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
   ]);
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
-  // Account tab: the app owner also gets the App setup page.
-  const showAppSetup = tab === "account" && (await isAlertPerson(user!.id));
+  // Account tab: the developer also gets the Developer and App setup pages.
+  const showAppSetup = tab === "account" && (await isDeveloper(user!.id));
 
   // Notifications tab: your devices (this one marked), and the one-time key setup for the owner.
   let devices: PushDevice[] = [];
@@ -59,7 +60,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (tab === "notifications") {
     const [{ data: rows }, alertPerson, cookieStore] = await Promise.all([
       supabase.from("push_subscriptions").select("id, endpoint, label, created_at, last_sent_at").eq("user_id", user!.id).order("created_at", { ascending: false }),
-      pushConfigured() ? Promise.resolve(false) : isAlertPerson(user!.id),
+      pushConfigured() ? Promise.resolve(false) : isDeveloper(user!.id),
       cookies(),
     ]);
     const mine = cookieStore.get(PUSH_COOKIE)?.value ?? null;
@@ -249,20 +250,32 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p className="text-[12.5px] text-ink-soft mt-1">Signed in as {profile?.email ?? "you"}.</p>
           </div>
           {showAppSetup && (
-            <Link
-              href="/setup"
-              className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
-            >
-              <span className="flex-1 min-w-0">
-                <span className="block text-[14px] font-semibold">App setup</span>
-                <span className="block text-[12.5px] text-ink-soft">
-                  What to paste in Supabase, Google, Meta, TikTok and Vercel for this copy of {APP_NAME}, including the sign-in emails. Only you see this.
+            <>
+              <Link
+                href="/developer"
+                className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-semibold">Developer</span>
+                  <span className="block text-[12.5px] text-ink-soft">
+                    App-wide problems: errors, every check in full, the last 3 days. Only developer accounts see this.
+                  </span>
                 </span>
-              </span>
-              <span className="text-ink-faint" aria-hidden>
-                →
-              </span>
-            </Link>
+                <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
+              </Link>
+              <Link
+                href="/setup"
+                className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-semibold">App setup</span>
+                  <span className="block text-[12.5px] text-ink-soft">
+                    What to paste in Supabase, Google, Meta, TikTok and Vercel for this copy of {APP_NAME}, including the sign-in emails. Only developer accounts see this.
+                  </span>
+                </span>
+                <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
+              </Link>
+            </>
           )}
           <LogoutButton className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors">
             Log out

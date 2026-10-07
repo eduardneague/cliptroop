@@ -112,7 +112,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             {/* Three columns on desktop so the search bar sits in the true
                 middle of the top bar: [brand] [search] [actions]. On phones:
                 brand on the left, search icon + actions on the right. */}
-            <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
+            <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,22rem)_1fr] lg:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
               <span className="flex items-center gap-2 min-w-0">
                 <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="md:hidden">
                   <Brand className="[&_.font-display]:text-[15px]" />
@@ -140,7 +140,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 <ThemeToggle />
                 {/* On phones, Log out lives in Settings — keeps the header uncluttered. */}
                 <div className="hidden md:block">
-                  <LogoutButton className="rounded-lg border border-line/15 px-3 py-1.5 text-xs font-semibold text-ink-soft hover:text-ink hover:border-line/30 transition-colors">
+                  <LogoutButton className="rounded-lg border border-line/15 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft hover:text-ink hover:border-line/30 transition-colors">
                     Log out
                   </LogoutButton>
                 </div>

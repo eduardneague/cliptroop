@@ -352,6 +352,7 @@ function HandOffDialog({
   href: (docId: string) => string;
 }) {
   const router = useRouter();
+  const nav = usePendingNav();
   const toast = useToast();
   const [pending, start] = useTransition();
   const word = NEXT[step.step] === "review" ? "review" : "staging";
@@ -378,7 +379,10 @@ function HandOffDialog({
                 if (r.error !== undefined) return toast.error(r.error);
                 toast.success(`Sent to ${word}. ${r.notified ? `${r.notified === 1 ? "1 person was" : `${r.notified} people were`} notified.` : ""}`.trim());
                 onClose();
-                router.refresh();
+                // The script moves on, and so does the page: open the next step's document.
+                const to = r.nextId || next?.docId;
+                if (to) nav.go(href(to), to);
+                else router.refresh();
               })
             }
             className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] disabled:opacity-50"

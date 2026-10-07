@@ -89,8 +89,15 @@ export function WorldMap({
   const hovered = hover ? world.shapes.find((s) => s.c === hover.code) : null;
   const noData = !data.some((d) => d.value > 0);
   return (
-    <div ref={box} className="relative" onPointerLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${world.w} ${world.h}`} className="w-full h-auto block" role="img" aria-label={label}>
+    <div ref={box} className="relative" onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}>
+      <svg
+        viewBox={`0 0 ${world.w} ${world.h}`}
+        className="w-full h-auto block"
+        role="img"
+        aria-label={label}
+        // Phones: tapping the sea closes the country card.
+        onPointerDown={(e) => e.target === e.currentTarget && setHover(null)}
+      >
         {world.shapes.map((s, i) => (
           <path
             key={i}
@@ -100,9 +107,18 @@ export function WorldMap({
             strokeWidth={0.6}
             strokeLinejoin="round"
             onPointerMove={(e) => {
+              if (e.pointerType !== "mouse") return;
               if (!s.c || noData) return setHover(null);
               const r = box.current!.getBoundingClientRect();
               setHover({ code: s.c, x: e.clientX - r.left, y: e.clientY - r.top });
+            }}
+            // Phones and tablets have no hover: a tap shows the country (tap it again to close).
+            onPointerDown={(e) => {
+              if (e.pointerType === "mouse") return;
+              if (!s.c || noData) return setHover(null);
+              const r = box.current!.getBoundingClientRect();
+              const code = s.c;
+              setHover((h) => (h?.code === code ? null : { code, x: e.clientX - r.left, y: e.clientY - r.top }));
             }}
           />
         ))}
@@ -117,7 +133,12 @@ export function WorldMap({
       {hover && (
         <div
           className="pointer-events-none absolute z-10 rounded-xl border border-line/15 bg-surface shadow-xl px-3 py-2 text-[12px] whitespace-nowrap"
-          style={{ left: Math.max(0, Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - (tooltip ? 262 : 170))), top: hover.y + 14 }}
+          // Lower half: the card opens above the finger / pointer, so it stays inside small widgets.
+          style={{
+            left: Math.max(0, Math.min(hover.x + 12, (box.current?.clientWidth ?? 300) - (tooltip ? 262 : 170))),
+            top: hover.y > (box.current?.clientHeight ?? 0) / 2 ? hover.y - 10 : hover.y + 14,
+            transform: hover.y > (box.current?.clientHeight ?? 0) / 2 ? "translateY(-100%)" : undefined,
+          }}
         >
           <div className="font-semibold text-ink">{countryName(hover.code)}</div>
           {tooltip ? (

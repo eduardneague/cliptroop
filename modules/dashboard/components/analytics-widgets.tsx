@@ -293,13 +293,25 @@ export function AudienceMapWidget({ teamId, settings }: { teamId: string; settin
   const rows = layer.rows;
   const total = rows.reduce((s, c) => s + c.value, 0);
   const side = box.w >= 520 && box.h >= 150;
-  const top = rows.slice(0, side ? Math.max(3, Math.min(8, Math.floor((box.h - 10) / 24))) : 3);
+  // Tall and narrow (phones, stacked): the map on top, the leading countries
+  // underneath with bars, two per row. Otherwise a short line of the top 3.
+  const ROW = 30;
+  const pairs = box.w >= 280;
+  const wantH = view === "globe" ? Math.min(box.w, box.h - 3 * ROW - 10) : box.w / 2.28;
+  const mapH = side ? box.h : Math.max(100, Math.min(wantH, box.h - 26));
+  const listRows = side ? 0 : Math.floor((box.h - mapH - 10) / ROW);
+  const below = !side && total > 0 && listRows >= 2;
+  // The list underneath: up to 8, and only countries that round to at least 1%.
+  const shown = below ? rows.filter((c) => c.value / total >= 0.005) : rows;
+  const top = shown.slice(0, side ? Math.max(3, Math.min(8, Math.floor((box.h - 10) / 24))) : below ? Math.min(8, listRows * (pairs ? 2 : 1)) : 3);
   const mapW = side ? box.w - 190 : box.w;
-  const fits = view === "globe" ? Math.min(mapW, box.h - (side ? 0 : 26)) : Math.min(mapW, (box.h - (side ? 0 : 26)) * 2.28);
+  const fits = view === "globe" ? Math.min(mapW, side ? box.h : mapH) : Math.min(mapW, (side ? box.h : mapH) * 2.28);
   const ytReady = r.data.audience.status.some((s) => s.platform === "youtube" && s.connected && s.statsReady);
+  const pct = (v: number) => Math.round((v / total) * 100);
+  const most = top.length ? top[0].value : 1;
   return (
     <div className={`h-full min-h-0 ${side ? "flex items-center gap-4" : "flex flex-col"}`}>
-      <div className={side ? "flex-1 min-w-0 flex justify-center" : "flex-1 min-h-0 flex items-center justify-center"}>
+      <div className={side ? "flex-1 min-w-0 flex justify-center" : `${below ? "flex-shrink-0" : "flex-1 min-h-0"} flex items-center justify-center`}>
         <div style={{ width: Math.max(120, fits) }}>
           <AudienceMapView a={r.data.audience} mode={mode} view={view} youtubeReady={ytReady} compact globeSize={Math.max(120, fits)} />
         </div>
@@ -310,7 +322,21 @@ export function AudienceMapWidget({ teamId, settings }: { teamId: string; settin
             {top.map((c) => (
               <li key={c.code} className="flex items-center gap-2 text-[12px]">
                 <span className="flex-1 truncate text-ink-soft">{countryName(c.code)}</span>
-                <b className="tabular-nums">{Math.round((c.value / total) * 100)}%</b>
+                <b className="tabular-nums">{pct(c.value)}%</b>
+              </li>
+            ))}
+          </ol>
+        ) : below ? (
+          <ol className={`pt-3 grid gap-x-4 gap-y-2 ${pairs ? "grid-cols-2" : "grid-cols-1"}`}>
+            {top.map((c) => (
+              <li key={c.code} className="min-w-0">
+                <div className="flex items-center gap-2 text-[12px] leading-tight">
+                  <span className="flex-1 truncate text-ink-soft">{countryName(c.code)}</span>
+                  <b className="tabular-nums">{pct(c.value)}%</b>
+                </div>
+                <div className="mt-1 h-1 rounded-full bg-line/10 overflow-hidden" aria-hidden>
+                  <div className="h-full rounded-full bg-amber" style={{ width: `${Math.max(3, (c.value / most) * 100)}%` }} />
+                </div>
               </li>
             ))}
           </ol>
@@ -319,7 +345,7 @@ export function AudienceMapWidget({ teamId, settings }: { teamId: string; settin
             {top.map((c, i) => (
               <span key={c.code}>
                 {i > 0 && " · "}
-                {countryName(c.code)} <b className="text-ink tabular-nums">{Math.round((c.value / total) * 100)}%</b>
+                {countryName(c.code)} <b className="text-ink tabular-nums">{pct(c.value)}%</b>
               </span>
             ))}
           </p>

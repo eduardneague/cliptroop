@@ -260,7 +260,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
         })}
       </div>
 
-      <div key={tab} className="flex-1 min-h-0 overflow-y-auto -mx-1 px-0 animate-[fadein_.15s_ease-out]">
+      <div key={tab} className={`flex-1 min-h-0 -mx-1 animate-[fadein_.15s_ease-out] ${tab === "today" ? "overflow-hidden" : "widget-scroll"}`}>
         {tab === "overdue" &&
           (g.overdue.length ? (
             <Section tasks={g.overdue} today={today} />
@@ -269,7 +269,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
           ))}
         {tab === "today" && (
           <div className="h-full flex flex-col">
-            <div className="flex-1 min-h-0 overflow-y-auto">{g.today.length ? <Section tasks={g.today} today={today} /> : <AllDone overdue={g.overdue.length} onOverdue={() => setTab("overdue")} />}</div>
+            <div className="flex-1 min-h-0 widget-scroll">{g.today.length ? <Section tasks={g.today} today={today} /> : <AllDone overdue={g.overdue.length} onOverdue={() => setTab("overdue")} />}</div>
             <NextUp tasks={nextUp} today={today} onMore={() => setTab("upcoming")} />
           </div>
         )}

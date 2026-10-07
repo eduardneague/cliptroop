@@ -15,10 +15,12 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
   const now = Date.now();
   const list = meetings.filter((m) => m.status === "scheduled" && Date.parse(m.startsAt) + m.durationMin * 60_000 > now);
   const next = list[0];
-  if (!next)
+  if (!next) {
+    // Narrow box: Clip above the words instead of beside them (they ran past the edge).
+    const stacked = box.w > 0 && box.w < 230;
     return (
-      <div className="h-full flex items-center gap-3 animate-[fadein_.3s_ease]">
-        <Mascot mood="idle" size={Math.max(48, Math.min(80, box.h - 16))} />
+      <div className={`h-full flex items-center animate-[fadein_.3s_ease] ${stacked ? "flex-col justify-center gap-1.5 text-center" : "gap-3"}`}>
+        <Mascot mood="idle" size={stacked ? Math.max(40, Math.min(64, box.h - 70)) : Math.max(48, Math.min(80, box.h - 16))} />
         <div className="min-w-0">
           <p className="text-[13.5px] font-semibold">No meetings planned</p>
           <Link href="/meetings" className="text-[12.5px] font-semibold text-amber hover:brightness-110">
@@ -27,6 +29,7 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
         </div>
       </div>
     );
+  }
   const going = next.attendees.filter((a) => a.rsvp === "yes").map((a) => a.person);
   const tall = box.h >= 150;
   const roomy = box.h >= 230;

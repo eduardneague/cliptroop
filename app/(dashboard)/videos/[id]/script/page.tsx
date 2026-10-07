@@ -10,6 +10,7 @@ import { getProject } from "@/modules/long-videos/lib/queries";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { getScriptFlow, isStepPerson } from "@/modules/scripts/lib/flow";
+import { flowStartDocId } from "@/modules/scripts/lib/flow-start";
 import { ensureDefaultDocs, getDoc, listComments } from "@/modules/scripts/lib/queries";
 import { ScriptWorkspace } from "@/modules/scripts/components/workspace";
 import { mentionPeople } from "@/modules/scripts/lib/mention-people";
@@ -56,8 +57,14 @@ export default async function LongScriptPage({
   const canEditResearch = canEditScript || roles.includes("researcher");
 
   const docs = await ensureDefaultDocs({ long: id }, { script: canEditScript, research: canEditResearch });
+  const flowPromise = getScriptFlow(docs, project.team_id, scripterIds);
+  flowPromise.catch(() => {}); // awaited below; this only stops an early failure being reported twice
+  // No document asked for: research when coming from Research, else where the
+  // script is now (after "Ready for review", the Review doc).
+  const asked = docs.find((d) => d.id === docParam);
+  const startId = asked || kind === "research" ? null : flowStartDocId(await flowPromise);
   const current =
-    docs.find((d) => d.id === docParam) ?? docs.find((d) => d.kind === (kind === "research" ? "research" : "script")) ?? docs[0];
+    asked ?? docs.find((d) => d.id === startId) ?? docs.find((d) => d.kind === (kind === "research" ? "research" : "script")) ?? docs[0];
   const back = (
     <Link href={`/videos/${id}?tab=${kind === "research" ? "research" : "script"}`} className="inline-flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink mb-5">
       <ArrowLeftIcon className="w-3.5 h-3.5" />#{project.entry_number} {project.title}
@@ -76,7 +83,7 @@ export default async function LongScriptPage({
     getDoc(current.id),
     sideItem ? getDoc(sideItem.id) : Promise.resolve(null),
     listComments(current.id, project.team_id),
-    getScriptFlow(docs, project.team_id, scripterIds),
+    flowPromise,
   ]);
   const me = membership?.teamMemberId ?? null;
   if (!doc) notFound();

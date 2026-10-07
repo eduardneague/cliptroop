@@ -80,6 +80,9 @@ export function MonthCalendar({
   const [viewMonth, setViewMonth] = useState("");
   const [range, setRange] = useState<PlannedRange | null>(null);
   const [peek, setPeek] = useState<string | null>(null);
+  // Phones (press and hold): where the held day is, so the card opens above
+  // its row (or below it, for the top rows) instead of over the days around it.
+  const [peekAt, setPeekAt] = useState<{ top: number; bottom: number; height: number; below: boolean } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const grid = useRef<HTMLDivElement>(null);
@@ -211,7 +214,18 @@ export function MonthCalendar({
       </div>
 
       {peek && peekPlan && peekPlan.shorts.length + peekPlan.longs.length + peekMeetings.length > 0 && (
-        <div className="absolute left-0 right-0 top-0 z-10 rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 animate-[modalin_.12s_var(--ease-out)] pointer-events-none" role="status">
+        <div
+          className={`absolute left-0 right-0 ${peekAt ? "" : "top-0"} z-10 overflow-hidden rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 animate-[modalin_.12s_var(--ease-out)] pointer-events-none`}
+          style={
+            peekAt
+              ? peekAt.below
+                ? { top: peekAt.bottom + 10, maxHeight: Math.max(64, peekAt.height - peekAt.bottom - 10) }
+                : // A little higher above the row: clear of the fingertip.
+                  { bottom: peekAt.height - peekAt.top + 14, maxHeight: Math.max(64, peekAt.top - 14) }
+              : undefined
+          }
+          role="status"
+        >
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
             {parse(peek).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
           </div>
@@ -245,7 +259,7 @@ export function MonthCalendar({
         onKeyDown={onGridKey}
         className={`grid grid-cols-7 gap-0.5 animate-[fadein_.25s_ease] ${fit ? "grid-rows-6 flex-1 min-h-0" : ""}`}
       >
-        {days.map((d) => {
+        {days.map((d, index) => {
           const info = dayInfo?.(d) ?? null;
           const p = plan(d);
           const shortsN = info ? info.count : p?.shorts.length ?? 0;
@@ -277,14 +291,21 @@ export function MonthCalendar({
                 setCursor(d);
                 pick(d);
               }}
-              onMouseEnter={() => setPeek(shortsN + longsN + meetingsN ? d : null)}
+              onMouseEnter={() => {
+                setPeekAt(null);
+                setPeek(shortsN + longsN + meetingsN ? d : null);
+              }}
               onMouseLeave={() => setPeek((x) => (x === d ? null : x))}
-              // Phones: press and hold a day to see what's planned.
-              onTouchStart={() => {
+              // Phones: press and hold a day to see what's planned (the card
+              // opens above that row, or below it for the top three rows).
+              onTouchStart={(e) => {
                 held.current = false;
                 if (!(shortsN + longsN + meetingsN)) return;
+                const cell = e.currentTarget.getBoundingClientRect();
+                const box = root.current?.getBoundingClientRect();
                 holdTimer.current = setTimeout(() => {
                   held.current = true;
+                  if (box) setPeekAt({ top: cell.top - box.top, bottom: cell.bottom - box.top, height: box.height, below: Math.floor(index / 7) < 3 });
                   setPeek(d);
                 }, 420);
               }}
@@ -293,7 +314,8 @@ export function MonthCalendar({
                 if (held.current) setTimeout(() => setPeek((x) => (x === d ? null : x)), 1600);
               }}
               onTouchMove={() => holdTimer.current && clearTimeout(holdTimer.current)}
-              className={`relative ${fit ? "min-h-0 h-full text-[12.5px]" : "h-10 text-[13px]"} rounded-lg flex flex-col items-center justify-center tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+              style={{ WebkitTouchCallout: "none" }}
+              className={`relative ${fit ? "min-h-0 h-full text-[12.5px]" : "h-10 text-[13px]"} select-none rounded-lg flex flex-col items-center justify-center tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
                 selected
                   ? "bg-amber text-white font-bold"
                   : `${isCursor ? "bg-surface-2 ring-1 ring-line/25" : "hover:bg-surface-2"} ${isToday ? "text-amber font-bold" : inMonth ? "text-ink" : "text-ink-faint"}`
