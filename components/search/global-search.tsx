@@ -28,6 +28,7 @@ import { Highlight } from "./highlight";
 import { InvitePanel } from "./invite-panel";
 import { PersonAvatar, ProjectThumb, ShortThumb, TeamBadge } from "./visuals";
 import type { PersonResult, RecentItem } from "./types";
+import { startNavProgress } from "@/components/ui/nav-progress";
 
 const THUMB_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
 
@@ -154,6 +155,7 @@ export function GlobalSearch({
     (href: string, recent?: RecentItem) => {
       if (recent) pushRecent(userId, recent);
       close();
+      startNavProgress(href);
       router.push(href);
     },
     [close, router, userId]

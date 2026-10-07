@@ -26,6 +26,7 @@ import type { MentionPerson } from "../lib/mention-people";
 import type { ScriptFlow } from "../lib/flow";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import { FlowStrip, type FlowPermissions } from "./script-flow";
+import { PendingLink, PendingNav, usePendingNav } from "@/components/ui/pending-nav";
 
 type Owner = { short: string } | { long: string };
 
@@ -33,8 +34,18 @@ type Owner = { short: string } | { long: string };
  * The script workspace: documents on the left (versions + research), the
  * editor in the middle, and a right panel for a side-by-side document or
  * the comments. Built around the regular ScriptEditor.
+ * Opening another document answers at once: it lights up in the list and
+ * the page shows shimmering lines until its text is here.
  */
-export function ScriptWorkspace({
+export function ScriptWorkspace(props: React.ComponentProps<typeof Workspace>) {
+  return (
+    <PendingNav>
+      <Workspace {...props} />
+    </PendingNav>
+  );
+}
+
+function Workspace({
   owner,
   docs,
   doc,
@@ -82,6 +93,9 @@ export function ScriptWorkspace({
   const params = useSearchParams();
   const toast = useToast();
   const confirm = useConfirm();
+  // Another document is on its way (clicked in the list, the steps or the menu).
+  const pendingDoc = usePendingNav().pending;
+  const switching = pendingDoc !== null && pendingDoc !== doc.id;
   const [sideOpen, setSideOpen] = useState(!!side);
   // ?comment=<id> (from a notification): open the comments on that one.
   const linked = params.get("comment");
@@ -116,6 +130,7 @@ export function ScriptWorkspace({
     <>
     <ScriptEditor
       key={doc.id}
+      switching={switching}
       scriptId={doc.id}
       teamId={doc.teamId}
       initialContent={doc.content}
@@ -336,6 +351,9 @@ function DocRail({
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  const nav = usePendingNav();
+  // The document on its way counts as open already.
+  const shown = nav.pending ?? current;
   const [renaming, setRenaming] = useState<string | null>(null);
   // The main documents carry the colour of the role that works on them.
   const DOT: Record<string, string | undefined> = {
@@ -390,9 +408,9 @@ function DocRail({
                       className="w-36 lg:w-full rounded-lg border border-amber bg-surface px-2.5 h-9 text-[13px] font-semibold outline-none"
                     />
                   ) : (
-                    <Link
+                    <PendingLink
                       href={href(d.id)}
-                      scroll={false}
+                      navKey={d.id}
                       prefetch={false}
                       onDoubleClick={(e) => {
                         if (!canEdit) return;
@@ -400,9 +418,9 @@ function DocRail({
                         setRenaming(d.id);
                       }}
                       title={canEdit ? "Double-click to rename" : undefined}
-                      aria-current={d.id === current ? "page" : undefined}
+                      aria-current={d.id === shown ? "page" : undefined}
                       className={`flex items-center gap-2.5 rounded-lg pl-3 pr-8 h-9 lg:h-10 text-[13.5px] whitespace-nowrap transition-colors ${
-                        d.id === current ? "bg-amber/12 text-ink font-bold ring-1 ring-amber/40" : "text-ink-soft hover:text-ink hover:bg-surface-2"
+                        d.id === shown ? "bg-amber/12 text-ink font-bold ring-1 ring-amber/40" : "text-ink-soft hover:text-ink hover:bg-surface-2"
                       }`}
                     >
                       <span
@@ -412,7 +430,7 @@ function DocRail({
                       />
                       <span className="truncate">{d.name}</span>
                       <span className="hidden lg:inline ml-auto text-[11px] font-normal text-ink-faint tabular-nums">{d.wordCount}w</span>
-                    </Link>
+                    </PendingLink>
                   )}
                   {canEdit && !DEFAULTS.includes(d.name) && renaming !== d.id && (
                     <button
@@ -451,7 +469,7 @@ function DocRail({
         onClose={() => setAdding(null)}
         onCreated={(id) => {
           setAdding(null);
-          router.push(href(id), { scroll: false });
+          nav.go(href(id), id);
         }}
       />
     </nav>
@@ -593,7 +611,9 @@ function MobileDocs({
 }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
-  const router = useRouter();
+  const nav = usePendingNav();
+  // The document on its way counts as open already.
+  const shownDoc = (nav.pending && docs.find((d) => d.id === nav.pending)) || current;
   const [adding, setAdding] = useState<"script" | "research" | null>(null);
   const DOT: Record<string, string | undefined> = { Script: roleColors.scripter, Review: roleColors.master, Staging: roleColors.editor, Research: roleColors.researcher };
   const groups = [
@@ -603,8 +623,8 @@ function MobileDocs({
   return (
     <>
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-9 text-[13px] font-bold max-w-[9.5rem]">
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[current.name] ?? "rgb(var(--line) / .4)" }} />
-        <span className="truncate">{current.name}</span>
+        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
+        <span className="truncate">{shownDoc.name}</span>
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
       <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="Documents">
@@ -621,9 +641,9 @@ function MobileDocs({
                       disabled={d.id === sideId}
                       onClick={() => {
                         setOpen(false);
-                        router.push(href(d.id), { scroll: false });
+                        nav.go(href(d.id), d.id);
                       }}
-                      className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === current.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
+                      className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
                     >
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
                       <span className="truncate">{d.name}</span>
@@ -648,7 +668,7 @@ function MobileDocs({
         onCreated={(id) => {
           setAdding(null);
           setOpen(false);
-          router.push(href(id), { scroll: false });
+          nav.go(href(id), id);
         }}
       />
     </>

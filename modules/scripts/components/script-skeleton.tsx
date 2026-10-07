@@ -39,23 +39,32 @@ export function ScriptSkeleton({ backLabel }: { backLabel: string }) {
         </div>
         <div className="flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10">
           <div className="mx-auto w-full max-w-3xl rounded-2xl border border-line/10 bg-surface px-5 sm:px-14 py-8 sm:py-14 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]">
-            {[
-              ["w-24", ["w-full", "w-2/3"]],
-              ["w-20", ["w-full", "w-11/12", "w-4/5", "w-full", "w-1/2"]],
-              ["w-40", ["w-3/4"]],
-            ].map(([head, lines], k) => (
-              <div key={k} className={k ? "mt-9" : ""}>
-                <Skeleton className={`h-6 ${head} mb-4`} />
-                <div className="space-y-3">
-                  {(lines as string[]).map((w, i) => (
-                    <Skeleton key={i} className={`h-3.5 ${w}`} />
-                  ))}
-                </div>
-              </div>
-            ))}
+            <PaperLines />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A page's worth of headings and lines shimmering in (also used while switching documents). */
+export function PaperLines() {
+  return (
+    <div role="status" aria-label="Loading the document" aria-busy="true">
+      {[
+        ["w-24", ["w-full", "w-2/3"]],
+        ["w-20", ["w-full", "w-11/12", "w-4/5", "w-full", "w-1/2"]],
+        ["w-40", ["w-3/4"]],
+      ].map(([head, lines], k) => (
+        <div key={k} className={k ? "mt-9" : ""} aria-hidden>
+          <Skeleton className={`h-6 ${head} mb-4`} />
+          <div className="space-y-3">
+            {(lines as string[]).map((w, i) => (
+              <Skeleton key={i} className={`h-3.5 ${w}`} />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

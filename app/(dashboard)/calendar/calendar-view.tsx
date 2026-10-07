@@ -15,6 +15,7 @@ import { DayLimitControl } from "@/modules/short-videos/components/day-limit-con
 import { moveShortAuto, moveShortInQueue, setShortDayLimit, swapShorts, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
 import { updateExpectedDate } from "@/app/(dashboard)/videos/[id]/actions";
 import { sounds } from "@/lib/sounds";
+import { startNavProgress } from "@/components/ui/nav-progress";
 
 export type CalItem = {
   kind: "short" | "long";
@@ -138,7 +139,10 @@ export function CalendarView({
 
   // Month-to-month navigation shows a skeleton while the next month loads.
   const [navigating, startNav] = useTransition();
-  const go = (d: string, v: View = view) => startNav(() => router.push(`/calendar?d=${d}&view=${v}`, { scroll: false }));
+  const go = (d: string, v: View = view) => {
+    startNavProgress(`/calendar?d=${d}&view=${v}`);
+    startNav(() => router.push(`/calendar?d=${d}&view=${v}`, { scroll: false }));
+  };
   const [onlyMonth, setOnlyMonth] = useState(false);
   const [picker, setPicker] = useState(false);
   const pickerBtn = useRef<HTMLButtonElement>(null);

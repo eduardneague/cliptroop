@@ -19,6 +19,7 @@ import { initialsFor } from "@/lib/avatar";
 import { ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { sounds } from "@/lib/sounds";
+import { startNavProgress } from "@/components/ui/nav-progress";
 
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
@@ -577,7 +578,10 @@ export function NotificationBell({
     if (!n.is_read) markReadLocally(n.id);
     // Some notifications lead somewhere specific (a comment in a script).
     const to = notificationUrl(n);
-    if (to) router.push(to);
+    if (to) {
+      startNavProgress(to);
+      router.push(to);
+    }
   }
 
   async function respond(n: NotificationItem, accept: boolean) {

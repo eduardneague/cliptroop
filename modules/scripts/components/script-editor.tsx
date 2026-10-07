@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEditor, EditorContent, useEditorState, type Editor } from "@tiptap/react";
+import { PaperLines } from "./script-skeleton";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
@@ -143,6 +144,7 @@ export function ScriptEditor({
   onCopyFrom,
   people = [],
   roleColors = {},
+  switching = false,
 }: {
   scriptId: string;
   teamId: string;
@@ -181,6 +183,8 @@ export function ScriptEditor({
   /** Teammates for @mentions (with what they do on this video). */
   people?: MentionPerson[];
   roleColors?: Record<string, string>;
+  /** Another document is on its way: the page shows shimmering lines meanwhile. */
+  switching?: boolean;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -789,7 +793,8 @@ export function ScriptEditor({
           <h1 className="print-only text-[22px] font-bold mb-6">
             #{number} {title}
           </h1>
-          {canEdit && empty && (
+          {switching && <PaperLines />}
+          {canEdit && empty && !switching && (
             <div className="no-print mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-dashed px-4 py-3.5 script-soft-border">
               {/* Phones: the text on its own line, the buttons underneath. */}
               <div className="flex items-start sm:items-center gap-2.5 flex-1 min-w-0">
@@ -823,7 +828,8 @@ export function ScriptEditor({
               </div>
             </div>
           )}
-          <div ref={contentRef}>
+          {/* Hidden, not removed, while another document loads (the editor keeps its place). */}
+          <div ref={contentRef} className={switching ? "hidden" : undefined}>
             <EditorContent editor={editor} />
           </div>
           {pop && renderCommentPopover && (

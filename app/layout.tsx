@@ -47,9 +47,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: APP_SHORT_NAME, statusBarStyle: "default" },
   icons: { apple: [{ url: "/app-icons/apple-touch-icon.png", sizes: "180x180" }] },
   formatDetection: { telephone: false },
-  // This app is invite-only and has no public content — nothing here
-  // should ever show up in search results, regardless of auth state.
-  // Individual pages can override this, but none currently need to.
+  // Invite-only: nothing shows up in search results, except the public
+  // pages (home, privacy, terms, data deletion), which override this.
   robots: {
     index: false,
     follow: false,

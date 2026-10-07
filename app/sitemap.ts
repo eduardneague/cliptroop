@@ -1,16 +1,10 @@
 import type { MetadataRoute } from "next";
+import { PUBLIC_PAGES, siteUrl } from "@/lib/public-pages";
 
-// Every real page in this app requires login, so a normal sitemap
-// (meant to help crawlers find content) doesn't really apply here —
-// combined with robots.ts disallowing everything, this is mostly just
-// present because it's a standard file to have. Lists only the root.
+// Only the public pages (home, privacy, terms, data deletion): everything
+// else needs a sign-in and is closed to crawlers (robots.ts).
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";
-
-  return [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-    },
-  ];
+  const base = siteUrl();
+  if (!base) return [];
+  return ["/", ...PUBLIC_PAGES].map((p) => ({ url: `${base}${p === "/" ? "/" : p}`, lastModified: new Date() }));
 }

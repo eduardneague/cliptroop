@@ -33,6 +33,8 @@ import { VideoCard } from "@/modules/review/components/video-card";
 import { listNotes, listVersions } from "@/modules/review/lib/queries";
 import { ShortTypeTag } from "@/modules/short-videos/components/short-type";
 import { MobileCollapse } from "@/components/ui/mobile-collapse";
+import { PendingLink, PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { ShortStepSkeleton } from "./step-skeleton";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -209,17 +211,20 @@ export default async function ShortPage({
         {short.createdBy && <span className="hidden sm:inline text-ink-faint">Created by {short.createdBy.name}</span>}
       </div>
 
+      {/* Clicking a step answers at once: it lights up and its cards turn into a skeleton until they're here. */}
+      <PendingNav>
       <StageTracker shortId={short.id} stage={short.stage} shown={shown} viewing={!!viewStage} />
 
+      <PendingSwap fallbacks={Object.fromEntries(SHORT_STAGES.map((s) => [s, <ShortStepSkeleton key={s} step={s} current={short.stage} />]))}>
       {viewStage && (
         <div className="mb-5 flex items-center gap-3 flex-wrap rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 animate-[modalin_.2s_var(--ease-out)]">
           <span className="text-[13.5px]">
             Viewing the <b>{SHORT_STAGE_LABELS[viewStage]}</b> step. This short is in <b>{SHORT_STAGE_LABELS[short.stage]}</b>.
           </span>
           <span className="flex-1" />
-          <Link href={`/shorts/${short.id}`} className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 inline-flex items-center text-[13px]">
+          <PendingLink href={`/shorts/${short.id}`} navKey={short.stage} className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 inline-flex items-center text-[13px]">
             Back to current
-          </Link>
+          </PendingLink>
         </div>
       )}
 
@@ -347,6 +352,8 @@ export default async function ShortPage({
           </MobileCollapse>
         </div>
       </div>
+      </PendingSwap>
+      </PendingNav>
     </div>
   );
 }

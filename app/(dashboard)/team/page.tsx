@@ -37,13 +37,12 @@ import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { WhatsNewButton } from "@/components/ui/whats-new";
-
-const TEAM_TABS = ["members", "defaults", "accounts", "appearance", "team"] as const;
-type TeamTab = (typeof TEAM_TABS)[number];
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { TEAM_TABS, TeamTabSkeleton, teamTab, type TeamTab } from "./skeletons";
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab: tabParam } = await searchParams;
-  const tab: TeamTab = (TEAM_TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as TeamTab) : "members";
+  const tab: TeamTab = teamTab(tabParam);
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
 
@@ -154,7 +153,12 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         <p className="text-sm text-ink-soft">Manage {currentTeam.name} and who&rsquo;s in it.</p>
       </div>
 
+      {/* Switching tabs answers at once: the tab is underlined and its skeleton shows until it's here. */}
+      <PendingNav>
       <TeamTabs active={tab} showDefaults={userIsMaster} />
+
+      <PendingSwap fallbacks={Object.fromEntries(TEAM_TABS.map((t) => [t.id, <TeamTabSkeleton key={t.id} tab={t.id} />]))}>
+      <div className="space-y-6">
 
       {tab === "members" && (
         <div className="space-y-6">
@@ -399,6 +403,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         )}
         </div>
       )}
+      </div>
+      </PendingSwap>
+      </PendingNav>
 
       <p className="text-center text-[11.5px] text-ink-faint tabular-nums pt-2">
         {APP_NAME} {APP_VERSION_LABEL} · <WhatsNewButton className="text-[11.5px]" /> ·{" "}

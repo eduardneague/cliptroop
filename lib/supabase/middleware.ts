@@ -100,6 +100,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/privacy" ||
     request.nextUrl.pathname === "/terms" ||
     request.nextUrl.pathname === "/data-deletion" ||
+    // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
+    request.nextUrl.pathname === "/sitemap.xml" ||
     // Status page + health check: public (details only for the alert people).
     request.nextUrl.pathname === "/status" ||
     request.nextUrl.pathname === "/api/health" ||

@@ -25,6 +25,8 @@ import type { Metadata } from "next";
 import { getProject } from "@/modules/long-videos/lib/queries";
 import { LinkPendingIndicator } from "@/components/ui/link-pending";
 import { LongStepBar } from "./step-bar";
+import { LongStepSkeleton } from "./step-skeleton";
+import { PendingLink, PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { DescriptionEditor, EditPanel, FilmPanel, PostPanel, ReviewPanel } from "./step-panels";
 import { ScriptCard } from "@/modules/scripts/components/script-card";
 import { getLongScript } from "@/modules/scripts/lib/queries";
@@ -296,7 +298,15 @@ export default async function ProjectDetailPage({
       </div>
 
       {/* The steps are the tabs: every step can be opened at any time. */}
+      {/* Clicking a step answers at once: it lights up and the step turns into a skeleton until it's here. */}
+      <PendingNav>
       <LongStepBar projectId={id} stage={project.stage as PipelineStage} tab={tab} />
+
+      <PendingSwap
+        fallbacks={Object.fromEntries(
+          STAGE_ORDER.map((s) => [s, <LongStepSkeleton key={s} step={s} current={project.stage as PipelineStage} master={userIsMaster} />])
+        )}
+      >
 
       {/* Looking at another step: one click back to where the video is. */}
       {tab !== project.stage && (
@@ -305,13 +315,13 @@ export default async function ProjectDetailPage({
             Viewing the <b>{STAGE_LABELS[tab]}</b> step. This video is in <b>{STAGE_LABELS[project.stage as PipelineStage]}</b>.
           </span>
           <span className="flex-1" />
-          <Link
+          <PendingLink
             href={`/videos/${id}?tab=${project.stage}`}
-            scroll={false}
+            navKey={project.stage as string}
             className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 inline-flex items-center text-[13px] hover:brightness-110"
           >
             Go to {STAGE_LABELS[project.stage as PipelineStage]}
-          </Link>
+          </PendingLink>
         </div>
       )}
 
@@ -575,6 +585,8 @@ export default async function ProjectDetailPage({
           })()}
         />
       </div>
+      </PendingSwap>
+      </PendingNav>
     </div>
   );
 }

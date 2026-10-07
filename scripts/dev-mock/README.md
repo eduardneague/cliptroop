@@ -12,7 +12,8 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_SENT=1 short #231's script already sent to review, MOCK_DONE=1 its script marked done, MOCK_GLOBE=1 the map
 #    widget as a globe of all platforms, MOCK_CURRENCY=EUR the revenue currency,
 #    MOCK_STALE=1 analytics last copied 50 h ago (the catch-up starts),
-#    MOCK_STATUS_BAD=1 the status page with failed posts, errors and a reconnect
+#    MOCK_STATUS_BAD=1 the status page with failed posts, errors and a reconnect,
+#    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

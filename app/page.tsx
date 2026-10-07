@@ -7,7 +7,8 @@ import { Mascot } from "@/components/ui/mascot";
 import { Brand } from "@/components/ui/clip-logo";
 import { AnalyticsIcon, CalendarIcon, DocumentIcon, MeetingIcon, PostingIcon, VideoIcon } from "@/components/ui/icons";
 
-export const metadata: Metadata = { title: { absolute: `${APP_NAME}: ${APP_TAGLINE}` }, description: APP_DESCRIPTION };
+// Public (the platforms check it): findable, unlike the rest of the app.
+export const metadata: Metadata = { title: { absolute: `${APP_NAME}: ${APP_TAGLINE}` }, description: APP_DESCRIPTION, robots: { index: true, follow: true } };
 
 const FEATURES = [
   { icon: VideoIcon, title: "Every video, every step", text: "Shorts and long videos move from idea to research, script, filming, editing, review, packaging and posting, with the right person on each step." },
