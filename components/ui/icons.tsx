@@ -725,3 +725,52 @@ export function LogoutIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A bug report: a beetle (body, head, legs). */
+export function BugIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="7.5" y="8" width="9" height="12" rx="4.5" />
+      <path d="M9.5 8.2a2.5 2.5 0 0 1 5 0M12 12v8M7.5 12.5H4M7.5 16.5H4.5M16.5 12.5H20M16.5 16.5h3M8.5 9 6 6.5M15.5 9 18 6.5" />
+    </Svg>
+  );
+}
+
+/** A suggestion: a light bulb. */
+export function LightbulbIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M9 17.5h6M10 20.5h4" />
+      <path d="M12 3.5a6 6 0 0 0-3.6 10.8c.6.5 1.1 1.3 1.1 2.2v1h5v-1c0-.9.5-1.7 1.1-2.2A6 6 0 0 0 12 3.5Z" />
+    </Svg>
+  );
+}
+
+/** Add a file: an arrow going up into a tray. */
+export function UploadIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5" />
+      <path d="M4.5 14.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" />
+    </Svg>
+  );
+}
+
+/** A video file: a play triangle. */
+export function PlayIcon(p: IconProps) {
+  return (
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+    </Svg>
+  );
+}
+
+/** Try again: a circular arrow. */
+export function RetryIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+      <path d="M19.5 4.5v4h-4" />
+    </Svg>
+  );
+}

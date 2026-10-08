@@ -38,7 +38,7 @@ export async function sendAlertEmail(input: { to: string[]; subject: string; mes
 <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:16px;padding:28px" cellpadding="0" cellspacing="0">
 <tr><td style="font-size:13px;font-weight:700;color:${BRAND_COLOR};letter-spacing:.04em">${esc(APP_NAME.toUpperCase())}</td></tr>
 <tr><td style="padding-top:14px;font-size:18px;font-weight:700;line-height:1.35">${esc(input.subject)}</td></tr>
-<tr><td style="padding-top:10px;font-size:14.5px;line-height:1.55;color:#44403c">${esc(input.message)}</td></tr>
+<tr><td style="padding-top:10px;font-size:14.5px;line-height:1.55;color:#44403c;white-space:pre-line">${esc(input.message)}</td></tr>
 <tr><td style="padding-top:22px"><a href="${esc(input.href)}" style="display:inline-block;background:#e8630d;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px">${esc(input.linkText)}</a></td></tr>
 <tr><td style="padding-top:22px;font-size:12px;color:#a8a29e">${esc(input.footer ?? "You get this because you're a master or scheduler of this team.")}</td></tr>
 </table></td></tr></table></body></html>`;

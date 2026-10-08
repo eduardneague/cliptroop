@@ -81,3 +81,37 @@ export async function sendTestAlert(): Promise<{ error?: string; emails?: number
   }
   return { emails, notified: devs.userIds.length };
 }
+
+/** A report (Settings → Account → Report) is dealt with, or back to open. The sender sees Done / Received. */
+export async function setReportDone(id: string, done: boolean): Promise<{ error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Not found." };
+  const who = await requireDeveloper();
+  if ("error" in who) return { error: who.error };
+  const { error } = await createAdminClient()
+    .from("feedback_reports")
+    .update(done ? { status: "done", done_at: new Date().toISOString() } : { status: "new", done_at: null })
+    .eq("id", id);
+  if (error) return { error: "Couldn't save it." };
+  revalidatePath("/developer");
+  return {};
+}
+
+/** Deletes a report and its photos / videos for good (frees the storage). */
+export async function deleteReport(id: string): Promise<{ error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Not found." };
+  const who = await requireDeveloper();
+  if ("error" in who) return { error: who.error };
+  const admin = createAdminClient();
+  const { data: row, error: readError } = await admin.from("feedback_reports").select("files").eq("id", id).maybeSingle();
+  if (readError) return { error: "Couldn't read it." };
+  if (!row) return {};
+  const paths = ((row.files as { path?: string }[] | null) ?? []).map((f) => f.path).filter((p): p is string => !!p);
+  if (paths.length) {
+    const { error: rmError } = await admin.storage.from("feedback").remove(paths);
+    if (rmError) return { error: "Couldn't delete its files. Try again." };
+  }
+  const { error } = await admin.from("feedback_reports").delete().eq("id", id);
+  if (error) return { error: "Couldn't delete it." };
+  revalidatePath("/developer");
+  return {};
+}

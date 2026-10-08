@@ -220,6 +220,9 @@ module.exports = {
     },
     // "Staging done" (0066): marks it and says who to tell.
     script_finish: (b) => ({ done: b.p_done !== false, changed: true, staging_id: "dd000000-0000-4000-8000-000000000003", team: TEAM, short: shorts[0].id, long: null, recipients: b.p_done === false ? [] : [U[1], U[2]] }),
+    // Reports (0068). MOCK_FEEDBACK_FAIL=1 answers like the hourly limit was hit.
+    submit_feedback: () =>
+      process.env.MOCK_FEEDBACK_FAIL ? { __status: 400, __body: { code: "P0001", message: "You sent 10 in the last hour. Try again a little later.", details: null, hint: null } } : "fb000000-0000-4000-8000-000000000099",
     status_history: statusHistory,
     status_incidents: statusIncidents,
     status_current: () => [
@@ -302,6 +305,11 @@ module.exports = {
       { id: "fa000000-0000-4000-8000-000000000001", user_id: U[0], endpoint: "https://web.push.apple.com/mock-iphone", label: "iPhone · Safari", created_at: at(-2, 20), last_sent_at: at(0, 8) },
       { id: "fa000000-0000-4000-8000-000000000002", user_id: U[0], endpoint: "https://fcm.googleapis.com/fcm/send/mock-mac", label: "Mac · Chrome", created_at: at(-9, 11), last_sent_at: null },
     ] : [],
+    feedback_reports: [
+      { id: "fb000000-0000-4000-8000-000000000001", user_id: U[1], team_id: TEAM, kind: "bug", message: "When I drag a short to another day in the calendar on my phone, it jumps back and only moves the second time.\nHappens on the iPhone app, not on the laptop.", files: [{ path: `${U[1]}/a1-calendar-drag.png`, name: "calendar drag.png", type: "image/png", size: 482113 }, { path: `${U[1]}/a2-after.png`, name: "after.png", type: "image/png", size: 391020 }], context: { version: "1.9.9", copy: "production", device: "iPhone · Safari", page: "/calendar", viewport: "390×844", tz: "Europe/Bucharest" }, status: "new", created_at: new Date(Date.now() - 50 * 60e3).toISOString(), done_at: null },
+      { id: "fb000000-0000-4000-8000-000000000002", user_id: U[2], team_id: TEAM, kind: "idea", message: "Could the pipeline widget show who is on each step? A small avatar would be enough.", files: [], context: { version: "1.9.9", copy: "production", device: "Windows · Chrome", page: "/dashboard", viewport: "1536×864" }, status: "new", created_at: new Date(Date.now() - 26 * 3600e3).toISOString(), done_at: null },
+      { id: "fb000000-0000-4000-8000-000000000003", user_id: U[0], team_id: TEAM, kind: "bug", message: "The Log out button wrapped onto two lines on my laptop.", files: [], context: { version: "1.9.5", copy: "production", device: "Mac · Chrome", page: "/dashboard", viewport: "1024×768" }, status: "done", created_at: new Date(Date.now() - 4 * 86400e3).toISOString(), done_at: new Date(Date.now() - 3 * 86400e3).toISOString() },
+    ],
     app_errors: [
       { id: "ffffffff-0000-4000-8000-000000000001", source: "server", message: "Cannot read properties of undefined (reading 'title')", route: "GET /shorts/[id] (render)", count: 3, first_seen: at(-1, 14), last_seen: at(0, 8), resolved_at: null, digest: "2894517711", stack: "TypeError: Cannot read properties of undefined (reading 'title')\n    at ShortPage (app/(dashboard)/shorts/[id]/page.tsx:212:31)\n    at renderWithHooks (react-dom.development.js:15486:18)", last_user_id: U[1] },
       { id: "ffffffff-0000-4000-8000-000000000003", source: "browser", message: "Error in input stream", route: "/videos", count: 1, first_seen: at(0, 14), last_seen: at(0, 14), resolved_at: null, digest: null, stack: null, last_user_id: U[0] },

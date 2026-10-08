@@ -112,3 +112,25 @@ export function useConfirm(): ConfirmAPI {
   if (!ctx) throw new Error("useConfirm must be used within ConfirmProvider");
   return ctx;
 }
+
+/**
+ * Like useConfirm, for shared parts that can also show up outside the app
+ * shell (no ConfirmProvider there): falls back to the browser's own confirm.
+ */
+export function useConfirmSafe(): ConfirmAPI {
+  const ctx = useContext(ConfirmContext);
+  return (
+    ctx ??
+    ((opts: ConfirmOptions) => Promise.resolve(typeof window !== "undefined" && window.confirm([opts.title, opts.description].filter(Boolean).join("\n\n"))))
+  );
+}
+
+/** "Clear this date?": asked before any date is cleared (the calendar's Clear, a date chip's ×). */
+export const CLEAR_DATE_CONFIRM: ConfirmOptions = {
+  title: "Clear this date?",
+  description: "The date is removed. You can pick a date again any time.",
+  confirmLabel: "Clear date",
+  cancelLabel: "Keep it",
+  danger: true,
+};
+

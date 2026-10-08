@@ -5,10 +5,11 @@
  * aren't recorded. Firefox says "Error in input stream" / "NetworkError
  * when attempting to fetch resource", Safari "Load failed" / "The network
  * connection was lost", Chrome "Failed to fetch"; a stale tab after a
- * deploy says "Loading chunk … failed" / ChunkLoadError.
+ * deploy says "Loading chunk … failed" / ChunkLoadError; React says
+ * "Connection closed." when a page's data stops arriving half way.
  */
 const NETWORK_NOISE =
-  /Error in input stream|NetworkError when attempting|network ?error|The network connection was lost|Load failed|Failed to fetch|Loading (CSS )?chunk [^ ]+ failed|ChunkLoadError|The Internet connection appears to be offline|^cancelled$|The operation was aborted|AbortError|The user aborted/i;
+  /Error in input stream|NetworkError when attempting|network ?error|The network connection was lost|Load failed|Failed to fetch|Loading (CSS )?chunk [^ ]+ failed|ChunkLoadError|The Internet connection appears to be offline|^cancelled$|^Connection closed\.?$|The operation was aborted|AbortError|The user aborted/i;
 
 /** A dropped connection, not a bug (see above). */
 export function isNetworkNoise(message: string) {

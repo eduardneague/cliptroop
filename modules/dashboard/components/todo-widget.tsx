@@ -5,6 +5,7 @@ import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DatePicker } from "@/components/ui/date-picker";
+import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "@/components/ui/confirm-provider";
 import { CalendarIcon, ChevronDownIcon, FlagIcon, GripIcon, PlusIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
@@ -336,6 +337,7 @@ function TodoItem({
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id, disabled: !!t.doneAt });
+  const confirmClear = useConfirmSafe();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const pr = PRIORITY[t.priority] ?? PRIORITY[0];
@@ -427,7 +429,13 @@ function TodoItem({
                   {t.dueDate ? new Date(`${t.dueDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Due date"}
                 </DatePicker>
                 {t.dueDate && (
-                  <button type="button" onClick={() => onSave({ dueDate: null })} className="text-[11px] text-ink-soft hover:text-ink px-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (await confirmClear(CLEAR_DATE_CONFIRM)) onSave({ dueDate: null });
+                    }}
+                    className="text-[11px] text-ink-soft hover:text-ink px-1"
+                  >
                     Clear date
                   </button>
                 )}

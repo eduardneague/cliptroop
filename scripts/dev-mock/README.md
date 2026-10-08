@@ -15,7 +15,8 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_STALE=1 analytics last copied 50 h ago (the catch-up starts),
 #    MOCK_STATUS_BAD=1 the timer down now (status, developer, Posting), a failed + a late post
 #    and an Instagram account to reconnect (the status bars always have 3 days of sample history),
-#    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens)
+#    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
+#    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

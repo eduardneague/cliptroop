@@ -24,6 +24,7 @@ import { pushConfigured } from "@/lib/push/send";
 import { PUSH_COOKIE } from "@/lib/push/guard";
 import { isDeveloper } from "@/lib/errors";
 import { ChevronRightIcon } from "@/components/ui/icons";
+import { FeedbackForm, type SentReport } from "./feedback-form";
 import { APP_NAME } from "@/lib/brand";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
@@ -51,8 +52,33 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
   ]);
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
-  // Account tab: the developer also gets the Developer and App setup pages.
-  const showAppSetup = tab === "account" && (await isDeveloper(user!.id));
+  // Account tab: the report form (with what you sent before), and for the
+  // developer the Developer and App setup pages. One round.
+  const [showAppSetup, accountTeam, sentReports] =
+    tab === "account"
+      ? await Promise.all([
+          isDeveloper(user!.id),
+          getTeamsAndCurrent(supabase).then((t) => t.currentTeam?.id ?? null),
+          // Before migration 0068 the table doesn't exist: just no list.
+          supabase
+            .from("feedback_reports")
+            .select("id, kind, message, status, created_at, files")
+            .order("created_at", { ascending: false })
+            .limit(5)
+            .then(({ data }) =>
+              (data ?? []).map(
+                (r): SentReport => ({
+                  id: r.id as string,
+                  kind: r.kind as SentReport["kind"],
+                  message: r.message as string,
+                  status: r.status === "done" ? "done" : "new",
+                  createdAt: r.created_at as string,
+                  files: Array.isArray(r.files) ? r.files.length : 0,
+                })
+              )
+            ),
+        ])
+      : [false, null, [] as SentReport[]];
 
   // Notifications tab: your devices (this one marked), and the one-time key setup for the owner.
   let devices: PushDevice[] = [];
@@ -242,6 +268,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </section>
 
         </div>
+      )}
+      {tab === "account" && (
+        <section id="report" className="rounded-xl border border-line/10 bg-surface p-6 mb-6 scroll-mt-24">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Report a bug or suggest something</h2>
+          <p className="text-[12.5px] text-ink-soft mt-1 mb-4">Something broken, or an idea that would make {APP_NAME} better? Only the developer sees what you send.</p>
+          <FeedbackForm userId={user!.id} teamId={accountTeam} recent={sentReports} />
+        </section>
       )}
       {tab === "account" && (
         <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">

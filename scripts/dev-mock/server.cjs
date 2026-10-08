@@ -57,10 +57,17 @@ function sampleImage(res, p) {
   res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600", "Access-Control-Allow-Origin": "*" });
   res.end(svg);
 }
+// Resumable uploads (TUS, what Supabase Storage speaks): id → { length, offset, name }.
+const uploads = new Map();
+const TUS_HEADERS = { "Tus-Resumable": "1.0.0", "Access-Control-Expose-Headers": "Location, Upload-Offset, Upload-Length, Tus-Resumable" };
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   let body = "";
-  req.on("data", (c) => (body += c));
+  req.bytes = 0;
+  req.on("data", (c) => {
+    body += c;
+    req.bytes += c.length;
+  });
   // MOCK_DELAY=1500: every database answer takes that long (to see the loading screens).
   req.on("end", () => setTimeout(() => answer(req, res, url, body), Number(process.env.MOCK_DELAY) || 0));
 });
@@ -69,7 +76,8 @@ function answer(req, res, url, body) {
     const F = fixtures();
     log.push(`${req.method} ${url.pathname}${url.search}`);
     if (process.env.MOCK_LOG) console.log(req.method, decodeURIComponent(url.pathname + url.search).slice(0, 300));
-    if (req.method === "OPTIONS") return send(res, 204, undefined, { "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*" });
+    // "*" doesn't cover Authorization in browsers: echo what was asked for.
+    if (req.method === "OPTIONS") return send(res, 204, undefined, { "Access-Control-Allow-Headers": req.headers["access-control-request-headers"] || "*", "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, HEAD, OPTIONS" });
     // Sample exchange rates (start the app with FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD).
     if (url.pathname === "/fx/latest/USD")
       return send(res, 200, {
@@ -81,6 +89,24 @@ function answer(req, res, url, body) {
     if (url.pathname === "/auth/v1/user") return send(res, 200, F.user);
     if (url.pathname.startsWith("/auth/v1/")) return send(res, 200, {});
     if (url.pathname.startsWith("/storage/v1/")) {
+      // Resumable uploads (tus-js-client): create (with the first chunk), then PATCH the rest.
+      // MOCK_UPLOAD_FAIL=1 refuses them like a full bucket would.
+      if (url.pathname === "/storage/v1/upload/resumable" && req.method === "POST") {
+        if (process.env.MOCK_UPLOAD_FAIL) return send(res, 413, { error: "Payload too large", message: "The object exceeded the maximum allowed size" }, TUS_HEADERS);
+        const id = Math.random().toString(36).slice(2);
+        const meta = Object.fromEntries(String(req.headers["upload-metadata"] || "").split(",").filter(Boolean).map((kv) => { const [k, v] = kv.trim().split(" "); return [k, v ? Buffer.from(v, "base64").toString() : ""]; }));
+        uploads.set(id, { length: Number(req.headers["upload-length"] || 0), offset: req.bytes, name: `${meta.bucketName}/${meta.objectName}` });
+        return send(res, 201, undefined, { ...TUS_HEADERS, Location: `http://127.0.0.1:54321/storage/v1/upload/resumable/${id}`, "Upload-Offset": String(req.bytes) });
+      }
+      const tus = /^\/storage\/v1\/upload\/resumable\/([a-z0-9]+)$/.exec(url.pathname);
+      if (tus) {
+        const u = uploads.get(tus[1]);
+        if (!u) return send(res, 404, undefined, TUS_HEADERS);
+        if (req.method === "PATCH") u.offset += req.bytes;
+        return send(res, req.method === "PATCH" ? 204 : 200, undefined, { ...TUS_HEADERS, "Upload-Offset": String(u.offset), "Upload-Length": String(u.length), "Cache-Control": "no-store" });
+      }
+      // Removing files (storage.remove): accepted.
+      if (req.method === "DELETE" && url.pathname.startsWith("/storage/v1/object/")) return send(res, 200, []);
       // Batch signing (createSignedUrls): links to generated sample images below.
       if (req.method === "POST" && /\/object\/sign\/[^/]+\/?$/.test(url.pathname)) {
         const bucket = url.pathname.split("/sign/")[1].replace(/\/$/, "");
@@ -95,7 +121,10 @@ function answer(req, res, url, body) {
     const rpc = /^\/rest\/v1\/rpc\/([a-z0-9_]+)$/.exec(url.pathname);
     if (rpc) {
       const v = F.rpc?.[rpc[1]];
-      return send(res, 200, typeof v === "function" ? v(body ? JSON.parse(body) : {}) : v ?? null);
+      const out = typeof v === "function" ? v(body ? JSON.parse(body) : {}) : v ?? null;
+      // An RPC fixture can answer like a raised exception: { __status: 400, __body: { code, message } }.
+      if (out && typeof out === "object" && out.__status) return send(res, out.__status, out.__body);
+      return send(res, 200, out);
     }
     const t = /^\/rest\/v1\/([a-z0-9_]+)$/.exec(url.pathname);
     if (t) {

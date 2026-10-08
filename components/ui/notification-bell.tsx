@@ -74,6 +74,9 @@ export type NotificationItem = {
     toStep?: "review" | "staging";
     /** app_alert: where it happened. */
     where?: string;
+    /** feedback: a bug report or a suggestion, and how many files came with it. */
+    feedbackKind?: "bug" | "idea";
+    files?: number;
   } | null;
 };
 
@@ -377,6 +380,14 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>Something broke</b>{m.snippet ? <>: &ldquo;{m.snippet}&rdquo;</> : null}
           {m.where ? <span className="text-ink-faint"> · {m.where}</span> : null}
+        </>
+      );
+    case "feedback":
+      return (
+        <>
+          <b>{m.actor?.name}</b> {m.feedbackKind === "idea" ? "sent a suggestion" : "reported a bug"}
+          {m.snippet ? <>: &ldquo;{m.snippet}&rdquo;</> : null}
+          {m.files ? <span className="text-ink-faint"> · {m.files === 1 ? "1 file" : `${m.files} files`}</span> : null}
         </>
       );
     case "script_handoff":

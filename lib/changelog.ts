@@ -23,6 +23,17 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.9",
+    date: "2026-10-08",
+    title: "Tell us what's broken",
+    changes: [
+      { kind: "new", text: "Report a bug or suggest something from Settings → Account: pick Bug or Suggestion, write up to 500 characters and add up to 3 photos or videos (25 MB each). You can drop files in or paste a screenshot." },
+      { kind: "new", text: "You see your report uploading and sending, a big tick when it's through, and a clear message with Try again if something goes wrong (nothing you wrote is lost). Your recent reports are listed underneath and show Done once they're dealt with." },
+      { kind: "better", text: "Clearing a date now asks first, everywhere: the calendar's Clear button, the × next to a date and a to-do's Clear date." },
+      { kind: "fixed", text: "A page cut off while loading (\"Connection closed.\") is no longer counted as an error." },
+    ],
+  },
+  {
     version: "1.9.8",
     date: "2026-10-08",
     title: "A clearer status page",
@@ -31,6 +42,7 @@ export const CHANGELOG: Release[] = [
       { kind: "better", text: "The status page is only about ClipTroop as a whole and anyone can open it. Errors and the technical details moved to a separate developer page." },
       { kind: "new", text: "Posting now starts with a Problems box for your whole team: posts that failed, posts that are late, accounts that need reconnecting (with what to do), and a note when ClipTroop itself has a problem. No problems? It says so." },
       { kind: "fixed", text: "A dropped connection (switching from Wi-Fi to mobile data, a page loading while an update went live) is no longer counted as an error." },
+      { kind: "fixed", text: "Meta's checker can read the data deletion page (it was turned away, so Meta said the address wasn't valid)." },
     ],
   },
   {

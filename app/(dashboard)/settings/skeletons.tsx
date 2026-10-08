@@ -123,13 +123,48 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
   }
   if (tab === "account") {
     return (
-      <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4" aria-hidden>
-        <div>
-          <h2 className={H2}>Account</h2>
-          <Skeleton className="h-3.5 w-56 mt-2" />
-        </div>
-        <Skeleton className="h-11 w-full rounded-lg" />
-      </section>
+      <div aria-hidden>
+        <section className="rounded-xl border border-line/10 bg-surface p-6 mb-6">
+          <h2 className={H2}>Report a bug or suggest something</h2>
+          <p className="text-[12.5px] text-ink-soft mt-1 mb-4">Something broken, or an idea that would make {APP_NAME} better? Only the developer sees what you send.</p>
+          <div className="space-y-4">
+            <div>
+              <div className="text-[12.5px] font-semibold mb-2">What is it?</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {["Bug", "Suggestion"].map((t) => (
+                  <div key={t} className="flex items-center gap-3 rounded-xl border border-line/15 px-3 py-3">
+                    <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-semibold">{t}</div>
+                      <Skeleton className="h-3 w-3/4 mt-1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[12.5px] font-semibold mb-2">Details</div>
+              <Skeleton className="h-[7.5rem] w-full rounded-xl" />
+            </div>
+            <div>
+              <div className="text-[12.5px] font-semibold mb-2">Photos or videos</div>
+              <div className="rounded-xl border border-dashed border-line/20 p-2.5">
+                <Skeleton className="w-[5.5rem] h-[5.5rem] rounded-lg" />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Skeleton className="h-10 w-24 rounded-lg" />
+            </div>
+          </div>
+        </section>
+        <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
+          <div>
+            <h2 className={H2}>Account</h2>
+            <Skeleton className="h-3.5 w-56 mt-2" />
+          </div>
+          <Skeleton className="h-11 w-full rounded-lg" />
+        </section>
+      </div>
     );
   }
   return (

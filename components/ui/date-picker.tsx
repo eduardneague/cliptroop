@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { MonthCalendar, type DayInfo } from "./month-calendar";
 import { CalendarIcon, CloseIcon } from "./icons";
+import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 
 export type { DayInfo };
 
@@ -167,6 +168,7 @@ export function DateChip({
   className?: string;
 }) {
   const set = !!value;
+  const confirmClear = useConfirmSafe();
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <DatePicker
@@ -184,7 +186,13 @@ export function DateChip({
         {value ? niceDate(value) : placeholder}
       </DatePicker>
       {set && onClear && !disabled && (
-        <button type="button" onClick={onClear} aria-label="Clear date" className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
+        <button
+          type="button"
+          onClick={async () => {
+            if (await confirmClear(CLEAR_DATE_CONFIRM)) onClear();
+          }}
+          aria-label="Clear date"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
           <CloseIcon className="w-3.5 h-3.5" />
         </button>
       )}
