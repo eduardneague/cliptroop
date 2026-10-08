@@ -36,6 +36,9 @@ import { MobileCollapse } from "@/components/ui/mobile-collapse";
 import { PendingLink, PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ShortStepSkeleton } from "./step-skeleton";
 
+// "Post now" / Retry start the post right after answering: give it time to run.
+export const maxDuration = 60;
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const short = await getShortDetail(id);
@@ -248,6 +251,7 @@ export default async function ShortPage({
             <div className="order-2 lg:order-none">
               <SchedulePanel
                 shortId={short.id}
+                shortNumber={short.number}
                 teamId={short.teamId}
                 title={short.title}
                 caption={short.captionEnabled ? short.caption ?? "" : ""}
@@ -292,7 +296,6 @@ export default async function ShortPage({
                   at: e.created_at as string,
                 }))}
                 canManage={perms.isMaster || roles.includes("publisher")}
-                isDev={process.env.VERCEL_ENV !== "production"}
               />
             </div>
           )}

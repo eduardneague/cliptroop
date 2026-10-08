@@ -2,6 +2,7 @@
 
 import { APP_NAME } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMembership } from "@/lib/permissions/membership";
@@ -9,7 +10,7 @@ import { isMaster } from "@/lib/permissions/roles";
 import { getAccessToken } from "@/lib/social/tokens";
 import { tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
 import { PublishError } from "@/lib/social/publishers/common";
-import { runDuePosts } from "@/lib/social/worker";
+import { runPostsNow } from "@/lib/social/worker";
 import { YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
 
 type Result<T = object> = ({ error?: undefined } & T) | { error: string; reconnect?: boolean };
@@ -72,10 +73,12 @@ export async function getTikTokCreatorInfo(teamId: string): Promise<Result<{ inf
   }
 }
 
-export type ScheduleEntry =
+/** `now`: ignore `at` and post it straight away ("Post now"). */
+export type ScheduleEntry = (
   | { platform: "youtube"; at: string; options: { title: string; description: string; madeForKids: boolean | null; visibility: "public" | "unlisted" | "private" } }
   | { platform: "instagram"; at: string; options: { caption: string } }
-  | { platform: "tiktok"; at: string; options: TikTokOptions };
+  | { platform: "tiktok"; at: string; options: TikTokOptions }
+) & { now?: boolean };
 
 /** Schedule (or reschedule) posts for an approved short. */
 export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): Promise<Result<{ scheduled: number }>> {
@@ -116,7 +119,7 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
     .eq("team_id", short.team_id);
 
   const seen = new Set<string>();
-  const clean: { platform: Platform; at: Date; options: Record<string, unknown>; accountId: string }[] = [];
+  const clean: { platform: Platform; at: Date; now: boolean; options: Record<string, unknown>; accountId: string }[] = [];
   for (const e of entries) {
     if (!["youtube", "instagram", "tiktok"].includes(e.platform) || seen.has(e.platform)) return { error: "Invalid platform list." };
     seen.add(e.platform);
@@ -124,11 +127,11 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
     const account = (accounts ?? []).find((a) => a.platform === e.platform);
     if (!account) return { error: `${NAME[e.platform]} isn't connected. Connect it in Team → Connected accounts.` };
     if (account.status !== "active") return { error: `${NAME[e.platform]} needs reconnecting first.` };
-    const at = new Date(e.at);
+    const at = e.now === true ? new Date() : new Date(e.at);
     if (Number.isNaN(at.getTime())) return { error: `Pick a valid time for ${NAME[e.platform]}.` };
     if (at.getTime() > Date.now() + 180 * 86_400_000) return { error: "Schedule within the next 6 months." };
-    if (at.getTime() < Date.now() + MIN_LEAD_MINUTES * 60_000) {
-      return { error: `Pick a time at least ${MIN_LEAD_MINUTES} minutes from now for ${NAME[e.platform]}.` };
+    if (e.now !== true && at.getTime() < Date.now() + MIN_LEAD_MINUTES * 60_000) {
+      return { error: `Pick a time at least ${MIN_LEAD_MINUTES} minutes from now for ${NAME[e.platform]}, or post it now.` };
     }
 
     if (e.platform === "youtube") {
@@ -140,11 +143,11 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
       if (String(o.description ?? "").length > 5000) return { error: "YouTube descriptions can be up to 5,000 characters." };
       if (typeof o.madeForKids !== "boolean") return { error: "Choose whether the YouTube video is made for kids." };
       if (!["public", "unlisted", "private"].includes(o.visibility)) return { error: "Pick the YouTube visibility." };
-      clean.push({ platform: "youtube", at, accountId: account.id as string, options: { title, description: String(o.description ?? ""), madeForKids: o.madeForKids, visibility: o.visibility } });
+      clean.push({ platform: "youtube", at, now: e.now === true, accountId: account.id as string, options: { title, description: String(o.description ?? ""), madeForKids: o.madeForKids, visibility: o.visibility } });
     } else if (e.platform === "instagram") {
       const caption = String(e.options.caption ?? "");
       if (caption.length > 2200) return { error: "Instagram captions can be up to 2,200 characters." };
-      clean.push({ platform: "instagram", at, accountId: account.id as string, options: { caption } });
+      clean.push({ platform: "instagram", at, now: e.now === true, accountId: account.id as string, options: { caption } });
     } else {
       const o = e.options;
       if (!o.privacy) return { error: "Choose who can see the TikTok post." };
@@ -158,6 +161,7 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
       clean.push({
         platform: "tiktok",
         at,
+        now: e.now === true,
         accountId: account.id as string,
         options: {
           caption: String(o.caption ?? ""),
@@ -186,11 +190,12 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
     }
   }
 
+  const startNow: string[] = [];
   for (const c of clean) {
     const prev = (existing ?? []).find((p) => p.platform === c.platform);
     // YouTube uploads right away (YouTube publishes at the time itself);
-    // Instagram and TikTok start at the chosen time.
-    const nextAt = c.platform === "youtube" ? new Date() : c.at;
+    // Instagram and TikTok start at the chosen time; "Post now" starts at once.
+    const nextAt = c.platform === "youtube" || c.now ? new Date() : c.at;
     const values = {
       team_id: short.team_id,
       short_id: shortId,
@@ -218,16 +223,20 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
       : admin.from("social_posts").insert(values).select("id").single();
     const { data: row, error } = await q;
     if (error || !row) return { error: `Couldn't schedule ${NAME[c.platform]}. Try again.` };
+    if (c.now || c.platform === "youtube") startNow.push(row.id as string);
     await admin.from("social_post_events").insert({
       post_id: row.id,
       team_id: short.team_id,
       kind: prev ? "rescheduled" : "scheduled",
-      message: `Scheduled for ${c.at.toISOString()}`,
+      message: c.now ? "Posting now (no scheduled time)" : `Scheduled for ${c.at.toISOString()}`,
       actor_id: m.user.id,
     });
   }
 
+  // Start right away instead of waiting for the next timer minute.
+  if (startNow.length) after(() => runPostsNow(startNow).then(() => undefined));
   revalidatePath(`/shorts/${shortId}`);
+  revalidatePath("/posting");
   return { scheduled: clean.length };
 }
 
@@ -282,24 +291,106 @@ export async function retryPost(postId: string): Promise<Result> {
     .eq("id", postId)
     .eq("status", "failed");
   await admin.from("social_post_events").insert({ post_id: postId, team_id: post.team_id, kind: "retry", message: "Retry requested", actor_id: m.user.id });
+  after(() => runPostsNow([postId]).then(() => undefined));
   revalidatePath(`/shorts/${post.short_id}`);
+  revalidatePath("/posting");
   return {};
 }
 
-/** Testing only: process due posts now instead of waiting for the timer. */
-export async function runDuePostsNow(shortId: string): Promise<Result<{ claimed: number }>> {
-  if (process.env.VERCEL_ENV === "production") return { error: "Not available on production." };
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Your session expired. Sign in again." };
-  const r = await runDuePosts(50_000, "manual");
-  if (UUID.test(shortId)) revalidatePath(`/shorts/${shortId}`);
-  revalidatePath("/posting");
-  return { claimed: r.claimed ?? 0 };
-}
+export type PostNowResult = { started: Platform[]; skipped: { platform: Platform; why: string }[] };
 
+/**
+ * "Post now": a short's scheduled posts (one platform, or all of them) go
+ * out straight away instead of at their time. Scheduled or failed posts
+ * start now; a YouTube video already uploaded and waiting for its YouTube
+ * time is made public now; anything already uploading is left alone.
+ * The posts start right after the answer (no waiting for the timer).
+ */
+export async function postNow(shortId: string, platform: Platform | "all"): Promise<Result<PostNowResult>> {
+  if (!UUID.test(shortId)) return { error: "Short not found." };
+  if (platform !== "all" && !["youtube", "instagram", "tiktok"].includes(platform)) return { error: "Unknown platform." };
+  const supabase = await createClient();
+  const { data: short } = await supabase.from("short_videos").select("id, team_id").eq("id", shortId).maybeSingle();
+  if (!short) return { error: "Short not found." };
+  const m = await manager(short.team_id as string);
+  if (!m.user) return { error: "Your session expired. Sign in again." };
+  if (!m.ok) return { error: "Only the master or a scheduler can post." };
+
+  const admin = createAdminClient();
+  let q = admin
+    .from("social_posts")
+    .select("id, platform, status, external_id, scheduled_at, options, locked_until")
+    .eq("short_id", shortId)
+    .not("status", "in", "(cancelled,published)");
+  if (platform !== "all") q = q.eq("platform", platform);
+  const { data: rows, error } = await q;
+  if (error) return { error: "Couldn't read the posts. Try again." };
+  if (!rows?.length) return { error: platform === "all" ? "Nothing is scheduled for this short yet." : `${NAME[platform]} isn't scheduled for this short yet.` };
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const started: Platform[] = [];
+  const skipped: PostNowResult["skipped"] = [];
+  const kick: string[] = [];
+  for (const p of rows) {
+    const pf = p.platform as Platform;
+    const locked = !!p.locked_until && Date.parse(p.locked_until as string) > Date.now();
+    const soon = Date.parse(p.scheduled_at as string) <= Date.now() + 60_000;
+
+    if (pf === "youtube" && p.external_id && p.status === "waiting") {
+      // Uploaded and scheduled on YouTube: publish it there now.
+      if (soon) {
+        skipped.push({ platform: pf, why: "It's already going live." });
+        continue;
+      }
+      const yt = await youtubeAccess(short.team_id as string);
+      if ("error" in yt) {
+        skipped.push({ platform: pf, why: yt.reconnect ? "It needs one more permission to publish early: reconnect YouTube in Team → Connected accounts, then try again. Until then it goes live at its YouTube time." : yt.error });
+        continue;
+      }
+      const o = (p.options ?? {}) as { madeForKids?: boolean; visibility?: string };
+      const res = await fetch("https://www.googleapis.com/youtube/v3/videos?part=status", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${yt.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: p.external_id, status: { privacyStatus: o.visibility ?? "public", selfDeclaredMadeForKids: !!o.madeForKids } }),
+        cache: "no-store",
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        const j = res ? ((await res.json().catch(() => ({}))) as { error?: { message?: string } }) : {};
+        skipped.push({ platform: pf, why: `YouTube didn't publish it early${j.error?.message ? `: ${j.error.message}` : "."}` });
+        continue;
+      }
+      await admin
+        .from("social_posts")
+        .update({ scheduled_at: nowIso, next_attempt_at: new Date(Date.now() + 15_000).toISOString(), note: "Publishing now on YouTube.", updated_at: nowIso })
+        .eq("id", p.id);
+    } else if (pf === "youtube" && p.status === "uploading") {
+      // Still uploading: it goes live as soon as the upload is done.
+      await admin.from("social_posts").update({ scheduled_at: nowIso, updated_at: nowIso }).eq("id", p.id);
+    } else if (p.status === "scheduled" || p.status === "failed") {
+      if (locked) {
+        skipped.push({ platform: pf, why: "It's starting right now." });
+        continue;
+      }
+      await admin
+        .from("social_posts")
+        .update({ scheduled_at: nowIso, next_attempt_at: nowIso, status: "scheduled", attempts: 0, last_error: null, locked_until: null, updated_at: nowIso })
+        .eq("id", p.id)
+        .in("status", ["scheduled", "failed"]);
+      kick.push(p.id as string);
+    } else {
+      skipped.push({ platform: pf, why: "It's being posted right now." });
+      continue;
+    }
+    started.push(pf);
+    await admin.from("social_post_events").insert({ post_id: p.id, team_id: short.team_id, kind: "rescheduled", message: "Post now: the scheduled time was skipped", actor_id: m.user.id });
+  }
+
+  if (kick.length) after(() => runPostsNow(kick).then(() => undefined));
+  revalidatePath(`/shorts/${shortId}`);
+  revalidatePath("/posting");
+  return { started, skipped };
+}
 
 export type Preflight = { platform: Platform; ok: boolean; message: string };
 

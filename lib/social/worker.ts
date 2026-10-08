@@ -176,9 +176,22 @@ async function runOne(row: Claimed, deadline: number) {
   }
 }
 
+/** Runs claimed posts one after another until the time is nearly up (the rest go back for the next run). */
+async function runClaimed(posts: Claimed[], deadline: number) {
+  const admin = createAdminClient();
+  for (const post of posts) {
+    if (Date.now() > deadline - 10_000) {
+      // Out of time: hand it back for the next run.
+      await admin.from("social_posts").update({ locked_until: null }).eq("id", post.id);
+      continue;
+    }
+    await runOne(post, deadline);
+  }
+}
+
 /**
  * Move every due post forward, within a time budget. Called every minute
- * by the Supabase timer (and by "Run due posts now" when testing).
+ * by the Supabase timer.
  */
 export async function runDuePosts(budgetMs = 45_000, source: "timer" | "manual" = "timer") {
   const started = Date.now();
@@ -193,14 +206,37 @@ export async function runDuePosts(budgetMs = 45_000, source: "timer" | "manual" 
     return { claimed: 0, error: error.message };
   }
   const posts = (data ?? []) as Claimed[];
-  for (const post of posts) {
-    if (Date.now() > deadline - 10_000) {
-      // Out of time: hand it back for the next run.
-      await admin.from("social_posts").update({ locked_until: null }).eq("id", post.id);
-      continue;
-    }
-    await runOne(post, deadline);
-  }
+  await runClaimed(posts, deadline);
   await record(posts.length, null);
+  return { claimed: posts.length };
+}
+
+/**
+ * "Post now": runs exactly these posts right away (only ones that are due
+ * and not already being worked on: the same lock the timer uses, so
+ * nothing is ever sent twice). Whatever doesn't finish in time carries on
+ * with the next timer run.
+ */
+export async function runPostsNow(ids: string[], budgetMs = 50_000) {
+  const clean = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (!clean.length) return { claimed: 0 };
+  const started = Date.now();
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("social_posts")
+    .update({ locked_until: new Date(Date.now() + 3 * 60_000).toISOString() })
+    .in("id", clean)
+    .in("status", ["scheduled", "uploading", "processing", "waiting"])
+    .lte("next_attempt_at", now)
+    .or(`locked_until.is.null,locked_until.lt.${now}`)
+    .select("*");
+  if (error) {
+    await admin.from("posting_runs").insert({ source: "manual", claimed: 0, duration_ms: Date.now() - started, error: error.message });
+    return { claimed: 0, error: error.message };
+  }
+  const posts = (data ?? []) as Claimed[];
+  await runClaimed(posts, started + budgetMs);
+  await admin.from("posting_runs").insert({ source: "manual", claimed: posts.length, duration_ms: Date.now() - started, error: null });
   return { claimed: posts.length };
 }

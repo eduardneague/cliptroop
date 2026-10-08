@@ -297,7 +297,14 @@ function FinishButton({
     <button
       type="button"
       disabled={pending}
-      onClick={() => mark(true)}
+      onClick={async () => {
+        const ok = await confirm({
+          title: "Mark the script done?",
+          description: "Every step gets a tick and everyone on this script is notified. You can take it back.",
+          confirmLabel: "Mark done",
+        });
+        if (ok) mark(true);
+      }}
       title="Optional: puts a tick on every step and lets everyone on this script know"
       className="inline-flex items-center gap-1.5 rounded-lg bg-green text-white px-3.5 h-8 text-[12.5px] font-bold hover:brightness-110 disabled:opacity-60 flex-shrink-0"
     >

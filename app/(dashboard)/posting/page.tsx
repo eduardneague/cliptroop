@@ -7,12 +7,15 @@ import { isMaster } from "@/lib/permissions/roles";
 import { diagnose, type Health } from "@/lib/social/health";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { AlertIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
-import { AutoRefresh, RunNowButton, TestEmailButton, TestTimerButton, When } from "./client-bits";
+import { AutoRefresh, TestEmailButton, TestTimerButton, When } from "./client-bits";
+import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
 import { APP_CHANNEL } from "@/lib/version";
 import { APP_NAME } from "@/lib/brand";
 import { currentProblems } from "@/lib/status";
 
 export const metadata: Metadata = { title: "Posting" };
+// "Post now" starts the post right after answering: give it time to run.
+export const maxDuration = 60;
 
 const NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
 const PLURAL = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -176,6 +179,11 @@ export default async function PostingPage() {
             {r.last_error && (r.status === "failed" || r.attempts > 0) && <span className="text-red"> · {r.last_error}</span>}
           </div>
         </div>
+        {manager &&
+          r.short &&
+          (r.status === "scheduled" || r.status === "failed" || (r.platform === "youtube" && (r.status === "waiting" || r.status === "uploading") && Date.parse(r.scheduled_at) > now + 60_000)) && (
+            <PostNowButton shortId={r.short.id} platform={r.platform as "youtube"} shortRef={`#${r.short.entry_number}`} variant="row" />
+          )}
         {link && (
           <a href={link} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-amber hover:underline flex-shrink-0 inline-flex items-center gap-1">
             Open
@@ -227,7 +235,6 @@ export default async function PostingPage() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Staging only. */}
           {manager && APP_CHANNEL === "E" && <TestEmailButton teamId={currentTeam.id} />}
-          {manager && process.env.VERCEL_ENV !== "production" && <RunNowButton />}
         </div>
       </div>
 

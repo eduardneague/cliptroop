@@ -3,6 +3,7 @@
 import { useOptimistic } from "react";
 import { setShortPlatformPosted } from "@/app/(dashboard)/shorts/actions";
 import { useAction } from "@/lib/hooks/use-action";
+import { useConfirmSafe } from "@/components/ui/confirm-provider";
 import { PLATFORM_META, type Platform } from "../lib/constants";
 import { PlatformIcon } from "./platform-icon";
 
@@ -30,6 +31,7 @@ export function PostedToggles({
       change.on ? [...state.filter((p) => p !== change.platform), change.platform] : state.filter((p) => p !== change.platform)
   );
 
+  const confirm = useConfirmSafe();
   const toggle = useAction(setShortPlatformPosted, {
     optimistic: (_id, platform, on) => setShown({ platform, on }),
     success: (_id, platform, on) => `${on ? "Marked" : "Unmarked"} as posted on ${PLATFORM_META[platform].name}`,
@@ -54,9 +56,15 @@ export function PostedToggles({
             <button
               key={p}
               type="button"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.preventDefault();
-                toggle.run(shortId, p, !on);
+                const name = PLATFORM_META[p].name;
+                const ok = await confirm(
+                  on
+                    ? { title: `Unmark ${name}?`, description: "It goes back to not posted there.", confirmLabel: "Unmark", danger: true }
+                    : { title: `Mark it posted on ${name}?`, description: "When every platform is posted, the short moves to Posted.", confirmLabel: "Mark posted" }
+                );
+                if (ok) toggle.run(shortId, p, !on);
               }}
               aria-pressed={on}
               aria-label={`${label}. Click to ${on ? "unmark" : "mark as posted"}`}

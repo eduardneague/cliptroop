@@ -239,7 +239,8 @@ a report sent), not for every save. Pair it with `sounds.celebrate()`.
 
 Use `useConfirm()` (or `useConfirmSafe()` in shared parts that can render
 outside the app shell) with `danger: true`. Clearing any date uses
-`CLEAR_DATE_CONFIRM`.
+`CLEAR_DATE_CONFIRM`. Marking anything done or posted asks too
+(`markDoneConfirm(text)`), and so does every Post now.
 
 ## Search
 

@@ -23,6 +23,19 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.9.10",
+    date: "2026-10-08",
+    title: "Post now, and asking before marking done",
+    changes: [
+      { kind: "new", text: "Post now: on a short's Posting card, one big \"Post everywhere now\" button skips the scheduled times and posts on every platform right away, and each platform has its own Post now. Not scheduled yet? Next to Schedule there's Post now too, with the same checks." },
+      { kind: "new", text: "The Posting page has a Post now button on each post that's waiting. Every Post now asks first." },
+      { kind: "better", text: "A YouTube video already uploaded for a later time goes live right away with Post now (YouTube may ask you to reconnect once to allow it)." },
+      { kind: "better", text: "Retry starts again at once instead of waiting for the next minute." },
+      { kind: "better", text: "Marking something done always asks first: to-dos, meeting action items, Staging done, marking a platform posted (on the short and in the shorts list), and on the developer page." },
+      { kind: "fixed", text: "\"Run due posts now\" is gone: it only ran posts that were already due, for every short at once. Post now replaces it." },
+    ],
+  },
+  {
     version: "1.9.9",
     date: "2026-10-08",
     title: "Tell us what's broken",

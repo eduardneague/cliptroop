@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
-import { runDuePostsNow } from "@/app/(dashboard)/shorts/[id]/schedule-actions";
 import { sendTestAlertEmail, testTimer } from "./actions";
 
 /** Keeps the page live while anything is scheduled or moving. */
@@ -31,32 +30,6 @@ export function When({ iso }: { iso: string }) {
     <span title={abs}>
       {abs} · {rel}
     </span>
-  );
-}
-
-export function RunNowButton() {
-  const router = useRouter();
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        const r = await runDuePostsNow("");
-        setBusy(false);
-        if (r.error !== undefined) toast.error(r.error);
-        else {
-          toast.success(r.claimed ? `Processed ${r.claimed} post${r.claimed === 1 ? "" : "s"}` : "Nothing due right now");
-          router.refresh();
-        }
-      }}
-      className="rounded-lg border border-dashed border-amber/60 text-amber px-3 h-9 text-[12.5px] font-bold disabled:opacity-50"
-      title="Only on staging and your computer"
-    >
-      {busy ? "Running…" : "Run due posts now"}
-    </button>
   );
 }
 

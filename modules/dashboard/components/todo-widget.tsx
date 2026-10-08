@@ -5,7 +5,7 @@ import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "@/components/ui/confirm-provider";
+import { CLEAR_DATE_CONFIRM, markDoneConfirm, useConfirmSafe } from "@/components/ui/confirm-provider";
 import { CalendarIcon, ChevronDownIcon, FlagIcon, GripIcon, PlusIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
@@ -35,6 +35,7 @@ const FOLD_MS = 280;
  */
 export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
   const toast = useToast();
+  const confirmDone = useConfirmSafe();
   const [todos, setTodos] = useState(initial);
   const [filter, setFilterState] = useState<Filter>("all");
   const [title, setTitle] = useState("");
@@ -95,7 +96,8 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
   const patch = (id: string, p: Partial<Todo>) => setTodos((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
   const fail = (r: { error?: string }) => r.error && toast.error(r.error);
 
-  function toggle(t: Todo) {
+  async function toggle(t: Todo) {
+    if (!t.doneAt && !(await confirmDone(markDoneConfirm(t.title)))) return;
     const doneAt = t.doneAt ? null : new Date().toISOString();
     clearLater(t.id);
     patch(t.id, { doneAt });

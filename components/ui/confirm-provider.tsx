@@ -134,3 +134,12 @@ export const CLEAR_DATE_CONFIRM: ConfirmOptions = {
   danger: true,
 };
 
+/** "Mark it done?" before ticking something off (a to-do, an action item). */
+export function markDoneConfirm(what?: string | null): ConfirmOptions {
+  const name = (what ?? "").replace(/\s+/g, " ").trim();
+  return {
+    title: "Mark it done?",
+    description: name ? `\u201c${name.length > 80 ? `${name.slice(0, 79)}\u2026` : name}\u201d gets ticked off.` : "It gets ticked off.",
+    confirmLabel: "Mark done",
+  };
+}

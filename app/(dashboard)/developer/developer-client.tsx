@@ -8,12 +8,16 @@ import { resolveAllAppErrors, resolveAppError, sendTestAlert } from "./actions";
 
 export function ResolveButton({ id }: { id: string }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const act = useAction(resolveAppError, { success: "Marked fixed. If it happens again, you'll get an alert.", onSuccess: () => router.refresh() });
   return (
     <button
       type="button"
       disabled={act.pending}
-      onClick={() => act.run(id)}
+      onClick={async () => {
+        const ok = await confirm({ title: "Mark this error fixed?", description: "If it happens again, it shows up here again and you get an alert.", confirmLabel: "Mark fixed" });
+        if (ok) act.run(id);
+      }}
       className="rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 disabled:opacity-50 whitespace-nowrap"
     >
       {act.pending ? "Saving…" : "Mark fixed"}
