@@ -11,9 +11,10 @@ import { Select } from "@/components/ui/select";
 import { DateChip } from "@/components/ui/date-picker";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
-import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon } from "@/components/ui/icons";
+import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
+import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
 import {
   cancelPost,
   changePostTime,
@@ -22,7 +23,6 @@ import {
   getTikTokCreatorInfo,
   type Preflight,
   retryPost,
-  runDuePostsNow,
   schedulePosts,
   type CreatorInfo,
   type ScheduleEntry,
@@ -99,6 +99,9 @@ function localIso(date: string, time: string) {
   // The date and time are in the viewer's local time zone.
   return new Date(`${date}T${time}:00`).toISOString();
 }
+/** "YouTube", "YouTube and TikTok", "YouTube, Instagram and TikTok". */
+const andList = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 function fmt(iso: string) {
   return new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -188,7 +191,7 @@ export function SchedulePanel({
   posts,
   events,
   canManage,
-  isDev,
+  shortNumber,
 }: {
   shortId: string;
   teamId: string;
@@ -207,12 +210,11 @@ export function SchedulePanel({
   posts: PostInfo[];
   events: PostEvent[];
   canManage: boolean;
-  isDev: boolean;
+  shortNumber?: number;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
-  const [running, setRunning] = useState(false);
   const now = useNow(15_000);
 
   // Live status: only the posting data is fetched (not the whole page).
@@ -241,6 +243,12 @@ export function SchedulePanel({
   }, [active.length, moving, refresh]);
 
   const postFor = (p: Platform) => active.find((x) => x.platform === p) ?? null;
+  // What "Post now" can still move: not sent yet, failed, or waiting for a later time on YouTube.
+  const canPostNow = (x: PostInfo) =>
+    x.status === "scheduled" ||
+    x.status === "failed" ||
+    (x.platform === "youtube" && (x.status === "waiting" || x.status === "uploading") && Date.parse(x.scheduledAt) > now + 60_000);
+  const nowable = active.filter(canPostNow).map((x) => x.platform);
   const account = (p: Platform) => accounts.find((a) => a.platform === p) ?? null;
   const [editing, setEditing] = useState<Record<string, boolean>>({});
 
@@ -289,9 +297,9 @@ export function SchedulePanel({
   const chosen = formPlatforms.filter((p) => include[p]);
   const tooLong = !!(creator?.maxDurationSec && videoDuration && videoDuration > creator.maxDurationSec);
 
-  function problems(): string | null {
+  function problems(postingNow = false): string | null {
     if (chosen.length === 0) return "Pick at least one platform.";
-    for (const p of chosen) {
+    for (const p of postingNow ? [] : chosen) {
       if (new Date(localIso(when[p].date, when[p].time)).getTime() < Date.now() + MIN_LEAD_MS) {
         return `${NAME[p]}: pick a time at least 15 minutes from now.`;
       }
@@ -322,24 +330,28 @@ export function SchedulePanel({
       setChecks([]);
     } else setChecks(r.checks);
   }
-  function submit() {
-    const issue = problems();
+  // The same review (with the live checks) for "Schedule" and "Post now".
+  const [nowMode, setNowMode] = useState(false);
+  function submit(postingNow = false) {
+    const issue = problems(postingNow);
     if (issue) return toast.error(issue);
+    setNowMode(postingNow);
     setReviewing(true);
     void runChecks();
   }
   function confirmSchedule() {
     if (!allGood) return;
     const entries: ScheduleEntry[] = chosen.map((p) => {
-      const at = localIso(when[p].date, when[p].time);
-      if (p === "youtube") return { platform: "youtube", at, options: yt };
-      if (p === "instagram") return { platform: "instagram", at, options: ig };
-      return { platform: "tiktok", at, options: tt };
+      const at = nowMode ? new Date().toISOString() : localIso(when[p].date, when[p].time);
+      if (p === "youtube") return { platform: "youtube", at, options: yt, now: nowMode };
+      if (p === "instagram") return { platform: "instagram", at, options: ig, now: nowMode };
+      return { platform: "tiktok", at, options: tt, now: nowMode };
     });
     start(async () => {
       const r = await schedulePosts(shortId, entries);
       if (r.error !== undefined) return toast.error(r.error);
-      toast.success(`Scheduled ${r.scheduled} post${r.scheduled === 1 ? "" : "s"}`);
+      if (nowMode) toast.success(`Posting now on ${andList(chosen.map((p) => NAME[p]))}.`, { sound: "advance" });
+      else toast.success(`Scheduled ${r.scheduled} post${r.scheduled === 1 ? "" : "s"}`);
       setEditing({});
       setReviewing(false);
       await refresh();
@@ -347,6 +359,13 @@ export function SchedulePanel({
   }
 
   async function markByHand(platform: string, posted: boolean) {
+    const name = NAME[platform as Platform] ?? (platform === "facebook" ? "Facebook" : platform);
+    const ok = await confirmManual(
+      posted
+        ? { title: `Mark it posted on ${name}?`, description: "Only if you posted it there yourself. When every platform is posted, the short moves to Posted.", confirmLabel: "Mark posted" }
+        : { title: `Unmark ${name}?`, description: "It goes back to not posted there.", confirmLabel: "Unmark", danger: true }
+    );
+    if (!ok) return;
     // Facebook goes together with Instagram.
     if (platform === "instagram" && hasFacebook) await setShortPlatformPosted(shortId, "facebook" as never, posted);
     const r = await setShortPlatformPosted(shortId, platform as never, posted);
@@ -385,27 +404,14 @@ export function SchedulePanel({
     <section className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-5 space-y-3">
       <div className="flex items-center justify-between gap-3 px-1">
         <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Posting</h2>
-        {isDev && canManage && active.some((p) => ACTIVE.includes(p.status)) && (
-          <button
-            type="button"
-            disabled={running}
-            onClick={async () => {
-              setRunning(true);
-              const r = await runDuePostsNow(shortId);
-              setRunning(false);
-              if (r.error !== undefined) toast.error(r.error);
-              else {
-                toast.success(r.claimed ? `Processed ${r.claimed} post${r.claimed === 1 ? "" : "s"}` : "Nothing due right now");
-                await refresh();
-              }
-            }}
-            className="rounded-lg border border-dashed border-amber/60 text-amber px-2.5 h-8 text-[11.5px] font-bold disabled:opacity-50"
-            title="Only on staging and your computer"
-          >
-            {running ? "Running…" : "Run due posts now"}
-          </button>
-        )}
       </div>
+
+      {canManage && nowable.length > 0 && (
+        <div className="rounded-2xl border border-amber/30 bg-amber/[0.06] px-3.5 sm:px-4 py-3 space-y-2">
+          <PostNowButton shortId={shortId} platform="all" pending={nowable} shortRef={shortNumber ? `#${shortNumber}` : undefined} variant="big" onDone={refresh} />
+          <p className="text-[11.5px] text-ink-soft text-center">Skips the scheduled time{nowable.length === 1 ? "" : "s"} and posts on {andList(nowable.map((p) => NAME[p]))} right away. Each card below also has its own Post now.</p>
+        </div>
+      )}
 
       {formPlatforms.length > 1 && (
         <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 space-y-3">
@@ -505,6 +511,9 @@ export function SchedulePanel({
                 <p className="text-[12.5px] text-amber">Needs reconnecting in Team → Connected accounts.</p>
               ) : post && !showForm ? (
                 <StatusView
+                  shortId={shortId}
+                  shortRef={shortNumber ? `#${shortNumber}` : undefined}
+                  postNow={canManage && canPostNow(post)}
                   post={post}
                   account={acc}
                   events={live.events.filter((e) => e.postId === post.id)}
@@ -538,8 +547,20 @@ export function SchedulePanel({
       <Dialog
         open={reviewing}
         onClose={() => !pending && setReviewing(false)}
-        title={`Schedule ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} posts`}?`}
-        description={checking ? "Checking each account…" : allGood ? "All checks passed. Check when each one goes live." : checks ? "Fix the issues below first." : "Check when each one goes live."}
+        title={nowMode ? `Post on ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} platforms`} now?` : `Schedule ${chosen.length === 1 ? NAME[chosen[0]] : `${chosen.length} posts`}?`}
+        description={
+          checking
+            ? "Checking each account…"
+            : allGood
+              ? nowMode
+                ? "All checks passed. It starts posting as soon as you confirm."
+                : "All checks passed. Check when each one goes live."
+              : checks
+                ? "Fix the issues below first."
+                : nowMode
+                  ? "It starts posting as soon as you confirm."
+                  : "Check when each one goes live."
+        }
         footer={
           <>
             <button type="button" onClick={() => setReviewing(false)} disabled={pending} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
@@ -558,7 +579,7 @@ export function SchedulePanel({
               className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-50"
             >
               {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
-              Schedule
+              {nowMode ? "Post now" : "Schedule"}
             </button>
           </>
         }
@@ -568,12 +589,14 @@ export function SchedulePanel({
             const at = new Date(localIso(when[p].date, when[p].time));
             const detail =
               p === "youtube"
-                ? `Uploads now · YouTube publishes it (${yt.visibility})`
+                ? nowMode
+                  ? `Uploads now and goes live when YouTube has processed it (${yt.visibility})`
+                  : `Uploads now · YouTube publishes it (${yt.visibility})`
                 : p === "instagram"
                   ? hasFacebook
-                    ? "Posted as a Reel · Facebook at the same time"
-                    : "Posted as a Reel at this time"
-                  : `Posted at this time · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
+                    ? `Posted as a Reel${nowMode ? " now" : ""} · Facebook at the same time`
+                    : `Posted as a Reel ${nowMode ? "now" : "at this time"}`
+                  : `Posted ${nowMode ? "now" : "at this time"} · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
             const ck = checks?.find((x) => x.platform === p);
             return (
               <li key={p} className="flex items-center gap-3 px-3.5 py-3 bg-surface-2/30">
@@ -600,8 +623,14 @@ export function SchedulePanel({
                   ) : null}
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
-                  <div className="text-[11.5px] text-ink-soft">{at.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</div>
+                  {nowMode ? (
+                    <div className="text-[13.5px] font-bold text-amber">Now</div>
+                  ) : (
+                    <>
+                      <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
+                      <div className="text-[11.5px] text-ink-soft">{at.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</div>
+                    </>
+                  )}
                 </div>
               </li>
             );
@@ -611,10 +640,20 @@ export function SchedulePanel({
       </Dialog>
 
       {formPlatforms.length > 0 && (
-        <div className="flex justify-end px-1">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-1">
           <button
             type="button"
-            onClick={submit}
+            onClick={() => submit(true)}
+            disabled={pending || chosen.length === 0}
+            title="Ignore the date and time: post it right away"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber/50 bg-amber/[0.08] text-amber font-bold px-5 h-11 text-[14px] w-full sm:w-auto hover:bg-amber hover:text-white disabled:opacity-50"
+          >
+            <PostingIcon className="w-4 h-4" />
+            Post {chosen.length > 1 ? "all " : ""}now
+          </button>
+          <button
+            type="button"
+            onClick={() => submit(false)}
             disabled={pending || chosen.length === 0}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber text-white font-bold px-6 h-11 text-[14px] w-full sm:w-auto disabled:opacity-50"
           >
@@ -944,6 +983,9 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
 }
 
 function StatusView({
+  shortId,
+  shortRef,
+  postNow: showPostNow,
   post,
   events,
   canManage,
@@ -952,6 +994,10 @@ function StatusView({
   onEdit,
   onChanged,
 }: {
+  shortId: string;
+  shortRef?: string;
+  /** Shows "Post now" (skip the scheduled time). */
+  postNow: boolean;
   post: PostInfo;
   events: PostEvent[];
   canManage: boolean;
@@ -1067,6 +1113,7 @@ function StatusView({
           </Action>
         )}
         <span className="flex-1" />
+        {showPostNow && <PostNowButton shortId={shortId} platform={post.platform} shortRef={shortRef} onDone={onChanged} />}
         {canManage && post.status === "failed" && (
           <Action onClick={() => void act("retry")} disabled={busy} icon={<RetryIcon className="w-3.5 h-3.5" />} tone="primary">
             {busy ? "Retrying…" : "Retry"}

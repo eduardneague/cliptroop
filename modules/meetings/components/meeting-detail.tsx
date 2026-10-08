@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, CalendarIcon, CheckIcon, CloseIcon, DownloadIcon, EditIcon, ExternalIcon, PlusIcon, TrashIcon, UsersIcon } from "@/components/ui/icons";
-import { useConfirm } from "@/components/ui/confirm-provider";
+import { markDoneConfirm, useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { Dialog } from "@/components/ui/dialog";
 import { DateChip } from "@/components/ui/date-picker";
@@ -273,7 +273,8 @@ function Actions({ meeting, people, me, canOrganize }: { meeting: Meeting; peopl
       router.refresh();
     });
   }
-  function toggle(a: MeetingAction) {
+  async function toggle(a: MeetingAction) {
+    if (!a.done && !(await confirm(markDoneConfirm(a.text)))) return;
     setList((l) => l.map((x) => (x.id === a.id ? { ...x, done: !x.done } : x)));
     if (!a.done) sounds.check();
     else sounds.uncheck();

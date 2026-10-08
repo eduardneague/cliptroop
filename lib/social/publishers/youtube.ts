@@ -129,11 +129,38 @@ export async function youtubeStep(post: PostRow, token: string, deadline: number
       const e = await readError(res);
       throw new PublishError(e.msg, e.retry);
     }
-    const j = (await res.json()) as { items?: { status?: { uploadStatus?: string; privacyStatus?: string; rejectionReason?: string; failureReason?: string } }[] };
+    const j = (await res.json()) as { items?: { status?: { uploadStatus?: string; privacyStatus?: string; publishAt?: string; rejectionReason?: string; failureReason?: string } }[] };
     const s = j.items?.[0]?.status;
     if (!s) throw new PublishError("The video isn't on YouTube anymore (it may have been deleted).");
     if (s.uploadStatus === "rejected" || s.uploadStatus === "failed" || s.uploadStatus === "deleted") {
       throw new PublishError(`YouTube ${s.uploadStatus} the video${s.rejectionReason || s.failureReason ? `: ${s.rejectionReason ?? s.failureReason}` : ""}.`);
+    }
+    // "Post now" after it was uploaded with a later publish time: take YouTube's
+    // schedule off so it goes live now. If YouTube refuses (an older sign-in
+    // without the permission), it simply goes live at its YouTube time.
+    const ytLater = s.privacyStatus === "private" && s.publishAt && Date.parse(s.publishAt) > Date.now() + 60_000;
+    if (ytLater && Date.parse(post.scheduled_at) <= Date.now() + 60_000) {
+      const put = await fetch("https://www.googleapis.com/youtube/v3/videos?part=status", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: { privacyStatus: o.visibility ?? "public", selfDeclaredMadeForKids: !!o.madeForKids } }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+      }).catch(() => null);
+      if (put?.ok) {
+        return { status: "waiting", step: "check", progress: 100, state: { checks: st.checks ?? 0 }, waitSeconds: 10, note: "Publishing now on YouTube.", event: { kind: "note", message: "YouTube's schedule removed: publishing now" } };
+      }
+      const e = put ? await readError(put) : { msg: "Couldn't reach YouTube." };
+      const at = new Date(s.publishAt!);
+      return {
+        status: "waiting",
+        step: "check",
+        progress: 100,
+        state: { checks: 0 },
+        nextAt: new Date(at.getTime() + 2 * 60_000),
+        note: `YouTube didn't let ${APP_NAME} publish it early (${e.msg}). It goes live at its YouTube time. Reconnect YouTube to allow it next time.`,
+        event: { kind: "note", message: `Couldn't publish early on YouTube: ${e.msg}` },
+      };
     }
     if (s.uploadStatus === "processed") {
       const privateNote =

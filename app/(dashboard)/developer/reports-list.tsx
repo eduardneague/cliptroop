@@ -133,7 +133,14 @@ function ReportItem({ r }: { r: ReportView }) {
               <button
                 type="button"
                 disabled={done.pending}
-                onClick={() => done.run(r.id, true)}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Mark this ${r.kind === "bug" ? "bug" : "suggestion"} done?`,
+                    description: r.who ? `${r.who.name} sees it as Done in their list.` : "It moves to Done.",
+                    confirmLabel: "Mark done",
+                  });
+                  if (ok) done.run(r.id, true);
+                }}
                 className="rounded-lg bg-green text-white px-3 h-8 text-[12.5px] font-bold inline-flex items-center gap-1.5 hover:brightness-105 disabled:opacity-60"
               >
                 <CheckIcon className="w-3.5 h-3.5" />
