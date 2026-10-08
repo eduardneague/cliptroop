@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getPlannedDays, type PlannedRange } from "@/app/(dashboard)/calendar/planned-days";
 import { ArrowLeftIcon, ChevronRightIcon } from "./icons";
+import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 
 /*
  * THE calendar. Every month calendar in the app is this component (date
@@ -73,6 +74,7 @@ export function MonthCalendar({
   className?: string;
 }) {
   const router = useRouter();
+  const confirmClear = useConfirmSafe();
   const [today, setToday] = useState("");
   const [cursor, setCursor] = useState("");
   // The month on screen. Only the arrows or the keyboard change it, never
@@ -357,7 +359,13 @@ export function MonthCalendar({
             Today
           </button>
           {onClear && value && (
-            <button type="button" onClick={onClear} title={clearLabel} className={`rounded-lg px-2 ${fit ? "h-7" : "h-8"} text-[12.5px] font-semibold text-ink-soft hover:text-red hover:bg-red/10`}>
+            <button
+              type="button"
+              onClick={async () => {
+                if (await confirmClear({ ...CLEAR_DATE_CONFIRM, confirmLabel: clearLabel })) onClear();
+              }}
+              title={clearLabel}
+              className={`rounded-lg px-2 ${fit ? "h-7" : "h-8"} text-[12.5px] font-semibold text-ink-soft hover:text-red hover:bg-red/10`}>
               Clear
             </button>
           )}

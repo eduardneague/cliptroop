@@ -16,7 +16,11 @@ env.NEXT_PUBLIC_SITE_URL = "";
 env.NEXT_PUBLIC_APP_URL = "https://app.cliptroop.com/";
 
 const r = robots();
-const rule = Array.isArray(r.rules) ? r.rules[0] : r.rules;
+const rules = Array.isArray(r.rules) ? r.rules : [r.rules];
+const rule = rules.find((x) => x.userAgent === "*")!;
+// Meta's checker gets its own group that allows everything (no Allow/Disallow weighing).
+const meta = rules.find((x) => Array.isArray(x.userAgent) && x.userAgent.includes("facebookexternalhit"));
+ok(!!meta && meta.allow === "/" && meta.disallow === undefined, "facebookexternalhit has its own allow-all group");
 const list = (v: string | string[] | undefined) => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 const allow = list(rule.allow);
 const disallow = list(rule.disallow);

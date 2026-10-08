@@ -12,12 +12,18 @@ import { PUBLIC_PAGES, siteUrl } from "@/lib/public-pages";
 export default function robots(): MetadataRoute.Robots {
   const base = siteUrl();
   return {
-    rules: {
-      userAgent: "*",
-      // "/$" = only the home page itself (the longest matching rule wins).
-      allow: ["/$", ...PUBLIC_PAGES],
-      disallow: "/",
-    },
+    rules: [
+      // Meta's checker (1.9.8): its own group, with nothing to weigh up, because it
+      // answered 403 "robots.txt block" on the data deletion page even though the
+      // group below allows it. Safe: every private page just sends it to sign-in.
+      { userAgent: ["facebookexternalhit", "Facebot"], allow: "/" },
+      {
+        userAgent: "*",
+        // "/$" = only the home page itself (the longest matching rule wins).
+        allow: ["/$", ...PUBLIC_PAGES],
+        disallow: "/",
+      },
+    ],
     ...(base ? { sitemap: `${base}/sitemap.xml` } : {}),
   };
 }

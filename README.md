@@ -224,6 +224,22 @@ migration on an empty database.
   also says when the app itself has a problem (`currentProblems()`).
 - A dropped connection isn't an error (`lib/network-noise.ts`): filtered in
   the browser and again in `/api/errors`.
+- **Reports** (Settings → Account): bugs and suggestions with up to 3
+  photos / videos, saved by `submit_feedback()` (0068), files in the private
+  `feedback` bucket under the sender's own folder. Only developers are told
+  (notification + email) and see them, on `/developer#reports`.
+
+## Moments worth a celebration
+
+`<DoneBurst title subtitle />` (`components/ui/done-burst.tsx`) is the big
+"All done" tick: use it when something is finished (a script's Staging done,
+a report sent), not for every save. Pair it with `sounds.celebrate()`.
+
+## Destructive or hard-to-undo clicks ask first
+
+Use `useConfirm()` (or `useConfirmSafe()` in shared parts that can render
+outside the app shell) with `danger: true`. Clearing any date uses
+`CLEAR_DATE_CONFIRM`.
 
 ## Search
 

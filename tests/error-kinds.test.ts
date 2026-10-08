@@ -36,9 +36,10 @@ for (const m of [
   "Loading chunk 4512 failed.",
   "ChunkLoadError: Loading chunk app/page failed.",
   "cancelled",
+  "Connection closed.",
 ])
   ok(isNetworkNoise(m), `noise: ${m}`);
-for (const m of ["Cannot read properties of undefined (reading 'title')", "Post was cancelled by the master", "Minified React error #418", "relation \"tasks\" does not exist"])
+for (const m of ["Cannot read properties of undefined (reading 'title')", "Post was cancelled by the master", "Connection closed by the TikTok API while uploading", "Minified React error #418", "relation \"tasks\" does not exist"])
   ok(!isNetworkNoise(m), `a real error: ${m}`);
 
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
