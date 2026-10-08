@@ -84,7 +84,13 @@ const KIND_STYLE: Record<ChangeKind, string> = {
   fixed: "bg-green/12 text-green",
 };
 
-export function WhatsNewHost() {
+/** Clip's tour is starting: no "is here" card on top of it (the sidebar dot stays). */
+export function quietWhatsNewCard() {
+  write(TOLD, APP_VERSION);
+}
+
+/** `hold`: Clip's tour is about to start, so no update card this time. */
+export function WhatsNewHost({ hold = false }: { hold?: boolean }) {
   const [open, setOpen] = useState(false);
   const [card, setCard] = useState(false);
 
@@ -98,7 +104,7 @@ export function WhatsNewHost() {
     // After a feature update (not for small fixes), once per device.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const last = read(TOLD) ?? read(SEEN);
-    if (current && last !== APP_VERSION && isFeatureUpdate(last, APP_VERSION)) {
+    if (!hold && current && last !== APP_VERSION && isFeatureUpdate(last, APP_VERSION)) {
       timer = setTimeout(() => {
         setCard(true);
         sounds.pop();
@@ -108,7 +114,7 @@ export function WhatsNewHost() {
       window.removeEventListener(OPEN_EVENT, onOpen);
       if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [hold]);
 
   const dismissCard = () => {
     write(TOLD, APP_VERSION);

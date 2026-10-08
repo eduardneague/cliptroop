@@ -16,6 +16,7 @@ import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
+import { TutorialHost } from "@/components/tutorial/tutorial";
 import { Brand } from "@/components/ui/clip-logo";
 import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
@@ -58,7 +59,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // Everything the shell needs in ONE round trip: profile (with the colour
   // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam }, { data: notifications }] = await Promise.all([
+  const [{ data: profile }, { teams, currentTeam }, { data: notifications }, tour] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
@@ -71,7 +72,10 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       .eq("recipient_id", user!.id)
       .order("created_at", { ascending: false })
       .limit(25),
+    // Clip's tour: on its own, so a database without 0069 just skips it.
+    supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
   ]);
+  const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
   const paletteRow = profile ? { palette: (profile as { palette?: string | null }).palette ?? null } : null;
 
@@ -157,7 +161,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             <MobileBottomNav />
           </div>
         </div>
-        <WhatsNewHost />
+        <WhatsNewHost hold={tourPending} />
+        <TutorialHost pending={tourPending} />
       </ConfirmProvider>
     </ToastProvider>
   );

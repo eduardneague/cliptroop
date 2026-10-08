@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.10.0",
+    date: "2026-10-08",
+    title: "A new front door, and Clip shows you around",
+    changes: [
+      { kind: "new", text: "A home page for ClipTroop: what it does, scene by scene, from planning to posting to seeing what worked, with Clip and animations that play as you scroll. Light and dark mode. Signed in? You go straight to your dashboard." },
+      { kind: "new", text: "A new sign-in page with Clip and a tip each time. After signing in you land back on the page you were trying to open." },
+      { kind: "new", text: "Clip's tour: the first time you open ClipTroop, Clip shows you around in about a minute (on phones too). Skip it any time and it won't start again. Want to see it again? Settings → Account → Show me around again." },
+      { kind: "new", text: "Clip's icon in the browser tab, and a proper picture when a ClipTroop link is shared (Facebook, Slack, messages)." },
+      { kind: "better", text: "When the automatic posting check can't reach ClipTroop, the developer page now says why (for example Vercel's protection or a password that doesn't match) and what to change." },
+    ],
+  },
+  {
     version: "1.9.10",
     date: "2026-10-08",
     title: "Post now, and asking before marking done",

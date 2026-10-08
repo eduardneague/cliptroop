@@ -1,0 +1,127 @@
+/* ===========================================================================
+   The public home page (app/page.tsx, components/landing/*).
+   Film-set vernacular: a slate that claps shut, the production as scenes,
+   a film strip, end credits. Brand: Clip's ink #2B2118, cream #FFF4E6 and
+   the clapper amber (--amber). Every looping demo lives inside a
+   [data-ld-play] wrapper and only runs while it's on screen (data-on).
+   With animations off (setting or device) everything shows its finished
+   frame: base styles ARE the finished frame, animations only add the way
+   there.
+   ======================================================================== */
+
+.ld { --ld-ink: 43 33 24; --ld-cream: 255 244 230; --ld-chalk: 246 240 228; overflow-x: clip; }
+
+/* Header ------------------------------------------------------------------ */
+.ld-header { transition: background-color 0.25s, box-shadow 0.25s, backdrop-filter 0.25s; }
+.ld-header[data-scrolled] { background: rgb(var(--paper) / 0.92); backdrop-filter: blur(12px); box-shadow: 0 1px 0 rgb(var(--line) / 0.08); }
+
+/* The clapper stripes (amber on ink), as on Clip. */
+.ld-stripes { background: repeating-linear-gradient(-58deg, rgb(var(--amber)) 0 13px, rgb(var(--ld-ink)) 13px 26px); }
+.ld-stripes-thin { background: repeating-linear-gradient(-58deg, rgb(var(--amber)) 0 6px, transparent 6px 12px); }
+
+/* Hero: the slate ------------------------------------------------------------ */
+.ld-slate { position: relative; transform-origin: 50% 100%; animation: ld-slate-hit 0.5s 0.95s ease-out both; }
+.ld-slate-arm { transform-origin: 6px 100%; animation: ld-clap 1.05s 0.15s cubic-bezier(0.55, 0, 0.75, 0.2) both; }
+.ld-slate-face { background: radial-gradient(120% 90% at 20% 0%, rgb(255 255 255 / 0.06), transparent 60%), rgb(var(--ld-ink)); color: rgb(var(--ld-chalk)); }
+.ld-chalk { font-family: var(--font-display); letter-spacing: -0.01em; }
+.ld-chalk-line { border-bottom: 1.5px solid rgb(var(--ld-chalk) / 0.22); }
+.ld-slate-label { color: rgb(var(--ld-chalk) / 0.55); }
+.ld-clip-peek { animation: ld-peek 0.6s 1.15s var(--ease-spring) both; }
+.ld-hero-line { display: block; animation: ld-rise 0.7s var(--ease-out) both; }
+.ld-hero-line:nth-child(1) { animation-delay: 0.95s; }
+.ld-hero-line:nth-child(2) { animation-delay: 1.03s; }
+.ld-hero-line:nth-child(3) { animation-delay: 1.11s; }
+.dark .ld-slate-face { box-shadow: 0 0 0 1px rgb(255 244 230 / 0.07), 0 40px 70px -30px rgb(0 0 0 / 0.8); }
+.ld-hero-after { animation: ld-fade 0.6s 1.35s ease-out both; }
+
+@keyframes ld-clap {
+  0% { transform: rotate(-26deg); }
+  70% { transform: rotate(-30deg); }
+  88% { transform: rotate(1.5deg); }
+  94% { transform: rotate(-1.5deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes ld-slate-hit { 0% { transform: translateY(0); } 30% { transform: translateY(3px) scale(1.004, 0.996); } 100% { transform: none; } }
+@keyframes ld-peek { from { opacity: 0; transform: translate(-18px, 26px) rotate(-14deg) scale(0.7); } }
+@keyframes ld-rise { from { opacity: 0; transform: translateY(0.45em); } }
+@keyframes ld-fade { from { opacity: 0; } }
+
+/* Scenes ------------------------------------------------------------------- */
+.ld-scene-mark { font-family: var(--font-display); font-style: italic; }
+.ld-a { animation-play-state: paused !important; }
+[data-ld-play][data-on] .ld-a { animation-play-state: running !important; }
+
+/* 1. Plan: the month fills in. */
+.ld-day-pill { animation: ld-pill 8s var(--ease-out) var(--d, 0s) infinite both; }
+@keyframes ld-pill { 0% { opacity: 0; transform: translateY(-6px) scale(0.6); } 6%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; transform: none; } }
+.ld-day-move { animation: ld-move 8s var(--ease-out) infinite both; }
+@keyframes ld-move { 0%, 42% { transform: translateX(0); } 52%, 88% { transform: translateX(var(--dx, 200%)); } 96%, 100% { transform: translateX(var(--dx, 200%)); opacity: 0; } }
+.ld-cursor { animation: ld-cursor 8s var(--ease-out) infinite both; }
+@keyframes ld-cursor { 0%, 30% { opacity: 0; transform: translate(8px, 10px); } 36%, 42% { opacity: 1; transform: translate(0, 0); } 52% { opacity: 1; transform: translateX(var(--dx, 200%)); } 60%, 100% { opacity: 0; transform: translateX(var(--dx, 200%)); } }
+
+/* 2. Script: the lines write themselves, a comment, the hand-off. */
+.ld-type { transform-origin: left; animation: ld-type 9s steps(14, end) var(--d, 0s) infinite both; }
+@keyframes ld-type { 0% { transform: scaleX(0); } 8%, 92% { transform: scaleX(1); } 100% { transform: scaleX(1); opacity: 0; } }
+.ld-pop { animation: ld-pop 9s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes ld-pop { 0% { opacity: 0; transform: translateY(6px) scale(0.9); } 5%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; transform: none; } }
+.ld-tick { animation: ld-tick 9s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes ld-tick { 0% { transform: scale(0); } 5%, 92% { transform: scale(1); } 100% { transform: scale(0); } }
+
+/* 3. Film & edit: a short rides the film strip. */
+.ld-strip { background:
+  radial-gradient(circle at 50% 50%, rgb(var(--paper)) 3.5px, transparent 4px) 0 4px / 18px 14px repeat-x,
+  radial-gradient(circle at 50% 50%, rgb(var(--paper)) 3.5px, transparent 4px) 0 calc(100% - 4px) / 18px 14px repeat-x,
+  rgb(var(--ld-ink)); }
+.ld-rider { transform: translateX(400%); animation: ld-ride 10s cubic-bezier(0.7, 0, 0.3, 1) infinite both; }
+@keyframes ld-ride {
+  0%, 14% { transform: translateX(0); }
+  20%, 34% { transform: translateX(100%); }
+  40%, 54% { transform: translateX(200%); }
+  60%, 74% { transform: translateX(300%); }
+  80%, 100% { transform: translateX(400%); }
+}
+.ld-stage { animation: ld-stage 10s linear var(--d, 0s) infinite both; }
+@keyframes ld-stage { 0% { color: rgb(var(--ld-chalk) / 0.5); } 2%, 16% { color: rgb(var(--amber)); } 20%, 100% { color: rgb(var(--ld-chalk) / 0.85); } }
+.ld-who { animation: ld-who 10s linear var(--d, 0s) infinite both; }
+@keyframes ld-who { 0% { opacity: 0.35; transform: scale(0.85); } 2%, 16% { opacity: 1; transform: scale(1.12); } 20%, 100% { opacity: 0.85; transform: scale(1); } }
+
+/* 4. Review: the playhead runs, notes drop on their frame, approved. */
+.ld-playhead { animation: ld-play 7s linear infinite both; }
+@keyframes ld-play { from { left: 0%; } to { left: 100%; } }
+.ld-progress { transform-origin: left; animation: ld-progress 7s linear infinite both; }
+@keyframes ld-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.ld-pin { animation: ld-pin 7s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes ld-pin { 0% { opacity: 0; transform: translate(-50%, -6px) scale(0.6); } 4%, 90% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+.ld-stamp { animation: ld-stamp 7s cubic-bezier(0.2, 1.6, 0.4, 1) infinite both; }
+@keyframes ld-stamp { 0%, 80% { opacity: 0; transform: rotate(-12deg) scale(1.8); } 85%, 97% { opacity: 1; transform: rotate(-12deg) scale(1); } 100% { opacity: 0; transform: rotate(-12deg) scale(1); } }
+
+/* 5. Post: one press, three lanes go live. */
+.ld-press { animation: ld-press 9s ease-out infinite both; }
+@keyframes ld-press { 0%, 8% { transform: none; box-shadow: 0 0 0 0 rgb(var(--amber) / 0.5); } 10% { transform: scale(0.96); } 14% { transform: none; box-shadow: 0 0 0 14px rgb(var(--amber) / 0); } 100% { transform: none; } }
+.ld-bar { transform-origin: left; animation: ld-bar 9s var(--ease-out) var(--d, 0s) infinite both; }
+@keyframes ld-bar { 0%, 14% { transform: scaleX(0); } 70%, 96% { transform: scaleX(1); } 100% { transform: scaleX(1); opacity: 0; } }
+.ld-live { animation: ld-live 9s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes ld-live { 0%, 70% { opacity: 0; transform: scale(0.7); } 74%, 96% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.ld-pending { opacity: 0; animation: ld-pending 9s linear var(--d, 0s) infinite both; }
+@keyframes ld-pending { 0%, 70% { opacity: 1; } 72%, 100% { opacity: 0; } }
+
+/* 6. Measure: the line draws, the bars grow. */
+.ld-draw { stroke-dasharray: 600; animation: ld-draw 8s var(--ease-out) infinite both; }
+@keyframes ld-draw { 0% { stroke-dashoffset: 600; } 40%, 95% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.ld-area { animation: ld-area 8s ease-out infinite both; }
+@keyframes ld-area { 0%, 25% { opacity: 0; } 45%, 95% { opacity: 1; } 100% { opacity: 0; } }
+.ld-grow { transform-origin: left; animation: ld-grow 8s var(--ease-out) var(--d, 0s) infinite both; }
+@keyframes ld-grow { 0%, 10% { transform: scaleX(0); } 45%, 95% { transform: scaleX(1); } 100% { transform: scaleX(1); opacity: 0; } }
+
+/* Phone: notifications arrive. */
+.ld-note { animation: ld-note 10s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes ld-note { 0% { opacity: 0; transform: translateY(-14px) scale(0.96); } 4%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; transform: none; } }
+
+/* Credits: the dotted leader between part and name. */
+.ld-leader { background-image: radial-gradient(circle, rgb(var(--line) / 0.28) 1px, transparent 1.4px); background-size: 7px 3px; background-repeat: repeat-x; background-position: 0 70%; }
+
+/* Animations off (the setting or the device): the finished frame, still. */
+html[data-motion="off"] .ld *, html[data-motion="off"] .ld *::before { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .ld *, html:not([data-motion="on"]) .ld *::before { animation: none !important; }
+}

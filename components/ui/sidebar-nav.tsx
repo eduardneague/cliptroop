@@ -42,6 +42,7 @@ export function SidebarNav() {
                 <Link
                   key={href}
                   href={href}
+                  data-tour={`nav-${href.slice(1)}`}
                   aria-current={on ? "page" : undefined}
                   className={`group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-semibold transition-colors ${
                     on ? "bg-surface-2 text-ink" : "text-ink-soft hover:bg-surface-2/70 hover:text-ink"
@@ -75,14 +76,14 @@ export function BottomNavItems() {
       {BOTTOM_ITEMS.map(({ href, shortLabel, Icon }) => {
         const active = isActive(pathname, href);
         return (
-          <Link key={href} href={href} aria-current={active ? "page" : undefined} className={item(active)}>
+          <Link key={href} href={href} data-tour={`nav-${href.slice(1)}`} aria-current={active ? "page" : undefined} className={item(active)}>
             <span className={`absolute top-0 h-[2.5px] w-8 rounded-full bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
             <Icon className={`w-[22px] h-[22px] ${active ? accent(href).on : ""}`} strokeWidth={active ? 2 : 1.75} />
             <span className="text-[10px] font-semibold">{shortLabel}</span>
           </Link>
         );
       })}
-      <button type="button" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={item(moreActive)}>
+      <button type="button" data-tour="nav-more" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={item(moreActive)}>
         <span className={`absolute top-0 h-[2.5px] w-8 rounded-full bg-amber transition-opacity ${moreActive ? "opacity-100" : "opacity-0"}`} />
         <AppsIcon className="w-[22px] h-[22px]" strokeWidth={moreActive ? 2 : 1.75} />
         <span className="text-[10px] font-semibold">More</span>

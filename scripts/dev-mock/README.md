@@ -17,6 +17,7 @@ screenshots. It never touches a real Supabase project.
 #    and an Instagram account to reconnect (the status bars always have 3 days of sample history),
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
 #    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
+#    MOCK_TOUR=1 the sample user hasn't seen Clip's tour yet (it starts on the dashboard)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

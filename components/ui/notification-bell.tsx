@@ -626,6 +626,7 @@ export function NotificationBell({
     <div className="relative" ref={ref}>
       <button
         ref={bellRef}
+        data-tour="bell"
         onClick={() => {
           const rect = bellRef.current?.getBoundingClientRect();
           if (rect) setAnchor({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) });

@@ -102,6 +102,8 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/data-deletion" ||
     // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
     request.nextUrl.pathname === "/sitemap.xml" ||
+    // Link previews (Facebook, Slack, iMessage…) fetch these without signing in.
+    request.nextUrl.pathname.startsWith("/opengraph-image") ||
     // Status page + health check: public (details only for the alert people).
     request.nextUrl.pathname === "/status" ||
     request.nextUrl.pathname === "/api/health" ||

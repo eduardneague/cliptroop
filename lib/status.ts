@@ -94,14 +94,14 @@ export async function jobChecks(): Promise<Check[]> {
   if (!s) {
     out.push({ key: "jobs", name: "Timers and jobs", level: "unknown", detail: `Couldn't read them (${r.ok ? "no answer" : r.error}; the database needs migration 0063).` });
   } else {
-    const timer = s.timer_last as { at: string; status: string } | null;
+    const timer = s.timer_last as { at: string; status: string; message?: string | null } | null;
     const timerAge = timer ? (Date.now() - Date.parse(timer.at)) / 60_000 : null;
     out.push({
       key: "timer",
       name: "Automatic posting and reminders",
       publicPart: true,
       level: s.timer_scheduled === null ? "unknown" : !s.timer_scheduled ? "down" : timerAge === null || timerAge > 10 ? "down" : timer?.status === "failed" ? "warn" : "ok",
-      detail: s.timer_scheduled === null ? "Can't see the timer from here." : !s.timer_scheduled ? "The timer isn't scheduled." : timer ? `Last ran ${ago(timer.at)}${timer.status === "failed" ? " and failed" : ""}.` : "It hasn't run yet.",
+      detail: s.timer_scheduled === null ? "Can't see the timer from here." : !s.timer_scheduled ? "The timer isn't scheduled." : timer ? `Last ran ${ago(timer.at)}${timer.status === "failed" ? ` and failed${timer.message ? `: ${timer.message}` : ""}` : ""}.` : "It hasn't run yet.",
     });
     const last = s.analytics_last as string | null;
     const hours = last ? (Date.now() - Date.parse(last)) / 3_600_000 : null;
@@ -247,6 +247,17 @@ export async function statusIncidents(days = 7, details = false): Promise<Incide
     samples: i.samples,
     ...(details ? { detail: i.detail } : {}),
   }));
+}
+
+/** The 10-minute status check's last answer (0069), for /developer. */
+export async function lastStatusCall(): Promise<{ at: string | null; code: number | null; why: string | null } | null> {
+  const r = await timed(async () => {
+    const { data, error } = await createAdminClient().from("status_state").select("last_answer_at, last_answer_code, last_answer").maybeSingle();
+    if (error) throw new Error(error.message);
+    return data as { last_answer_at: string | null; last_answer_code: number | null; last_answer: string | null } | null;
+  }, 3000);
+  if (!r.ok || !r.value) return null;
+  return { at: r.value.last_answer_at, code: r.value.last_answer_code, why: r.value.last_answer };
 }
 
 /** The app-wide parts that aren't working right now (from the last status check; for the Posting page). */

@@ -28,6 +28,8 @@ import { FeedbackForm, type SentReport } from "./feedback-form";
 import { APP_NAME } from "@/lib/brand";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
+import { ReplayTutorialButton } from "@/components/tutorial/tutorial";
+import { Mascot } from "@/components/ui/mascot";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -268,6 +270,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </section>
 
         </div>
+      )}
+      {tab === "account" && (
+        <section id="tutorial" className="rounded-xl border border-line/10 bg-surface p-6 mb-6 scroll-mt-24">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Tutorial</h2>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Mascot size={56} className="flex-shrink-0 -my-1" />
+              <p className="text-[13.5px] text-ink-soft leading-relaxed">
+                Clip&rsquo;s one-minute tour of {APP_NAME}: where everything is and how a video gets from idea to posted.
+              </p>
+            </div>
+            <ReplayTutorialButton className="rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] hover:brightness-110 flex-shrink-0" />
+          </div>
+        </section>
       )}
       {tab === "account" && (
         <section id="report" className="rounded-xl border border-line/10 bg-surface p-6 mb-6 scroll-mt-24">

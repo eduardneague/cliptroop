@@ -242,6 +242,39 @@ outside the app shell) with `danger: true`. Clearing any date uses
 `CLEAR_DATE_CONFIRM`. Marking anything done or posted asks too
 (`markDoneConfirm(text)`), and so does every Post now.
 
+## Home page and sign-in (1.10.0)
+
+- **`/`** (`app/page.tsx` → `components/landing/`): the public home page;
+  signed in → `/dashboard`. Film-set theme: the slate claps shut in the
+  hero, then six "scenes" (plan, script, make, review, post, measure), each
+  a small looping demo built from HTML/CSS (`vignettes.tsx`), never
+  screenshots. Rules in `landing.css`: demos only run while on screen
+  (`<Play>` sets `data-on`), and the base styles ARE the finished frame, so
+  with animations off (setting or device) everything still reads.
+- **`/login`**: the slate with Clip and a rotating tip (desktop), the form
+  (show/hide password, forgot password). `?next=` brings you back to where
+  you were going (only same-site paths, never `/login` or `/api/`).
+- **Link previews**: `app/opengraph-image.tsx` (1200×630, every page that
+  doesn't have its own); `metadataBase` in `app/layout.tsx` makes it
+  absolute. **Tab icon**: `icons` in `app/layout.tsx` (favicon.ico + Clip's
+  icon.svg + the apple-touch icon); a config `icons` replaces the automatic
+  `app/icon.svg` link, so keep every entry listed.
+
+## Clip's tour (new people)
+
+- `components/tutorial/tutorial.tsx`: `<TutorialHost pending>` in the
+  dashboard layout starts the tour once per person, on `/dashboard`, when
+  `profiles.tutorial_done_at` is null (0069). Finishing or skipping (skip
+  asks first) calls `setTutorialDone()`; localStorage `vp-tour-done` backs
+  it up per device. Watch again: Settings → Account → "Show me around
+  again" (`ReplayTutorialButton`), or `/dashboard?tour=1`.
+- Steps point at `data-tour="…"` anchors: `nav-<path>` (sidebar and phone
+  bar), `nav-more`, `search`, `bell`, `settings`. Moving one of those?
+  Keep the attribute. A new main area? Add a step in `steps()` for both the
+  computer (sidebar, from `md`) and the phone (bottom bar + More).
+- While the tour is pending the "What's new" card waits (`WhatsNewHost hold`).
+- Preview: `MOCK_TOUR=1` on the dev mock.
+
 ## Search
 
 `global_search()` (migration 0024) is the single search backend. It is

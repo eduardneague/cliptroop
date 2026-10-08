@@ -11,6 +11,9 @@ export async function login(
 ): Promise<LoginState> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  // Back to the page that sent you here (only this site's own pages).
+  const nextRaw = String(formData.get("next") ?? "");
+  const next = /^\/(?!\/|\\)[^\s]*$/.test(nextRaw) && !nextRaw.startsWith("/login") && !nextRaw.startsWith("/api/") ? nextRaw.slice(0, 500) : "/dashboard";
 
   if (!email || !password) {
     return { error: "Enter both an email and a password." };
@@ -24,5 +27,5 @@ export async function login(
     return { error: "Incorrect email or password." };
   }
 
-  redirect("/dashboard");
+  redirect(next);
 }
