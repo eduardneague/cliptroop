@@ -229,13 +229,13 @@ export function MonthCalendar({
           role="status"
         >
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
-            {parse(peek).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+            {parse(peek).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
           </div>
           <ul className="space-y-1">
             {peekMeetings.map((m) => (
               <li key={m.id} className={`flex items-center gap-2 text-[12.5px] ${m.cancelled ? "text-ink-soft line-through" : "text-ink"}`}>
                 <span className="w-2 h-2 rounded-full flex-shrink-0 bg-violet" />
-                <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
                 <span className="truncate">{m.t}</span>
               </li>
             ))}

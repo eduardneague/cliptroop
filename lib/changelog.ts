@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.0",
+    date: "2026-10-08",
+    title: "Notification history and tidier storage",
+    changes: [
+      { kind: "new", text: "Notification history: open the bell and press History to see everything from the last 2 weeks, by day, read or not. \"Unread\" shows only what you haven't seen yet." },
+      { kind: "new", text: "Choose how long video files stay after a short is posted everywhere: 1, 2 or 3 weeks, or 1 month (Team → Defaults → Video files, masters). It also shows how much is stored right now. The short itself always stays." },
+      { kind: "better", text: "The nightly clean-up and the morning analytics copy now run on staging too, not just on the live app." },
+      { kind: "better", text: "The home page, sign-in, status and legal pages always show ClipTroop's own colours, whatever colour theme you picked for the app." },
+      { kind: "fixed", text: "Pages with times on them (a short's Posting card, the Posting page, the calendar, meetings, analytics) no longer flicker or reload part of the page when your time zone or language differs from the server's. Dates are always in English." },
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-10-08",
     title: "A new front door, and Clip shows you around",

@@ -1,5 +1,6 @@
 import { APP_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
+import { publicMetadata } from "@/lib/public-pages";
 import Link from "next/link";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { isDeveloper } from "@/lib/errors";
@@ -9,7 +10,7 @@ import { Brand } from "@/components/ui/clip-logo";
 import { AlertIcon, CheckIcon, ExternalIcon } from "@/components/ui/icons";
 import { AutoRefresh, BarsAxis, BarsLegend, LocalTime, StatusBars } from "@/components/status/status-board";
 
-export const metadata: Metadata = { title: "Status", description: `Is ${APP_NAME} working right now? Live status and the last 3 days, hour by hour.` };
+export const metadata: Metadata = publicMetadata("/status", "Status", `Is ${APP_NAME} working right now? Live status and the last 3 days, hour by hour.`);
 export const dynamic = "force-dynamic";
 
 const HOURS = 72;

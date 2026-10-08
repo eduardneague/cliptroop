@@ -1,4 +1,5 @@
 import "server-only";
+import { DEFAULT_MEDIA_KEEP_DAYS, isMediaKeepDays, type MediaKeepDays } from "@/lib/media-keep";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
@@ -310,6 +311,26 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
     defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
     youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
+  };
+}
+
+/**
+ * Team → Defaults → Video files: how long posted shorts' files stay
+ * (0070; `ready` is false until that migration is in) and what's stored now.
+ */
+export async function getMediaKeep(teamId: string): Promise<{ days: MediaKeepDays; ready: boolean; files: number; bytes: number }> {
+  const supabase = await createClient();
+  const [team, files] = await Promise.all([
+    supabase.from("teams").select("media_keep_days").eq("id", teamId).maybeSingle(),
+    supabase.from("short_video_versions").select("size_bytes").eq("team_id", teamId).is("deleted_at", null).limit(5000),
+  ]);
+  const raw = (team.data as { media_keep_days?: unknown } | null)?.media_keep_days;
+  const sizes = ((files.data ?? []) as { size_bytes: number | string }[]).map((f) => Number(f.size_bytes) || 0);
+  return {
+    days: isMediaKeepDays(raw) ? raw : DEFAULT_MEDIA_KEEP_DAYS,
+    ready: !team.error,
+    files: sizes.length,
+    bytes: sizes.reduce((a, b) => a + b, 0),
   };
 }
 

@@ -23,7 +23,7 @@ export function DateTile({ iso, size = "md", muted = false }: { iso: string; siz
       aria-hidden
       suppressHydrationWarning
     >
-      <span className={`${big ? "text-[11px]" : "text-[9.5px]"} font-extrabold uppercase tracking-[0.1em]`}>{d ? d.toLocaleDateString(undefined, { month: "short" }) : " "}</span>
+      <span className={`${big ? "text-[11px]" : "text-[9.5px]"} font-extrabold uppercase tracking-[0.1em]`}>{d ? d.toLocaleDateString("en-US", { month: "short" }) : " "}</span>
       <span className={`${big ? "text-[28px]" : "text-[20px]"} font-display font-semibold mt-0.5`}>{d ? d.getDate() : " "}</span>
     </span>
   );
@@ -114,7 +114,7 @@ export function MeetingsHome({
                       <span className="block text-[14px] font-semibold truncate">{a.text}</span>
                       <span className="block text-[12px] text-ink-soft truncate">From {a.meetingTitle}</span>
                     </span>
-                    {a.dueDate && <span className="text-[12px] font-semibold text-ink-soft tabular-nums">{new Date(`${a.dueDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
+                    {a.dueDate && <span className="text-[12px] font-semibold text-ink-soft tabular-nums">{new Date(`${a.dueDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
                   </Link>
                 ))}
               </div>

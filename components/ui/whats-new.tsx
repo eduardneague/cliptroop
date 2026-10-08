@@ -76,7 +76,7 @@ const short = (v: string) => {
   const [a, b, c] = v.split(".");
   return c && c !== "0" ? `${a}.${b}.${c}` : `${a}.${b ?? 0}`;
 };
-const niceDate = (d?: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : null);
+const niceDate = (d?: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null);
 
 const KIND_STYLE: Record<ChangeKind, string> = {
   new: "bg-amber/12 text-amber",

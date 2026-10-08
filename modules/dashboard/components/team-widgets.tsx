@@ -13,7 +13,7 @@ const dayLabel = (d: string, today: string) => {
   const t = new Date(`${today}T00:00:00`);
   const x = new Date(`${d}T00:00:00`);
   const diff = Math.round((x.getTime() - t.getTime()) / 86_400_000);
-  return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff > 1 && diff < 7 ? x.toLocaleDateString(undefined, { weekday: "long" }) : x.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff > 1 && diff < 7 ? x.toLocaleDateString("en-US", { weekday: "long" }) : x.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
 function EmptyLine({ text }: { text: string }) {
@@ -31,7 +31,7 @@ export function UpcomingShortsWidget({ items }: { items: UpcomingShort[] }) {
           <li key={s.id}>
             <Link href={`/shorts/${s.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
               <span className={`w-8 text-center flex-shrink-0 leading-none ${newDay ? "" : "invisible"}`}>
-                <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })}</span>
+                <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })}</span>
                 <span className={`block text-[14px] font-bold tabular-nums ${s.date === today ? "text-amber" : ""}`}>{Number(s.date.slice(8))}</span>
               </span>
               <span className="min-w-0 flex-1 leading-tight">
@@ -165,7 +165,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
   const today = localDay();
   const roomy = useBox().w >= 250;
-  const time = (at: string) => new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = (at: string) => new Date(at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const todays = posts.filter((p) => localDay(new Date(p.at)) === today || p.status === "failed");
   todays.sort((a, b) => (a.status === "failed" ? -1 : 0) - (b.status === "failed" ? -1 : 0) || a.at.localeCompare(b.at));
   if (!todays.length) return <EmptyLine text="Nothing posting today." />;
@@ -364,7 +364,7 @@ export function WeatherWidget({ settings }: { settings?: Record<string, unknown>
       {next.length > 0 && <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${next.length}, minmax(0, 1fr))` }}>
         {next.map((d) => (
           <div key={d.date} className="flex flex-col items-center leading-none py-0.5" title={WMO(d.code)[1]}>
-            <span className="text-[10px] font-bold text-ink-faint uppercase">{new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3)}</span>
+            <span className="text-[10px] font-bold text-ink-faint uppercase">{new Date(`${d.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3)}</span>
             <WeatherIcon sky={WMO(d.code)[0]} className="w-5 h-5 my-0.5" />
             <span className="text-[11px] tabular-nums">
               <b className="font-semibold">{d.max}°</b> <span className="text-ink-faint">{d.min}°</span>

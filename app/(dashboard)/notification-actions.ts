@@ -5,6 +5,41 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { ROLES } from "@/lib/permissions/roles";
+import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import type { NotificationItem } from "@/components/ui/notification-bell";
+
+/** How far back the bell's History goes, and how many come at a time. */
+const HISTORY_DAYS = 14;
+const HISTORY_PAGE = 40;
+
+/**
+ * The bell's History: your notifications from the last 2 weeks, newest
+ * first, 40 at a time. `before` = the oldest one already shown (that
+ * moment is asked for again, so two with the same time are never
+ * skipped; the browser drops the repeats).
+ */
+export async function getNotificationHistory(
+  before?: string | null
+): Promise<{ items: NotificationItem[]; more: boolean; error?: undefined } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const since = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString();
+  let q = supabase
+    .from("notifications")
+    .select(NOTIFICATION_SELECT)
+    .eq("recipient_id", user.id)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(HISTORY_PAGE + 1);
+  if (before && !Number.isNaN(Date.parse(before))) q = q.lte("created_at", before);
+  const { data, error } = await q;
+  if (error) return { error: "Couldn't load your notifications. Try again." };
+  const rows = (data ?? []) as unknown as NotificationItem[];
+  return { items: rows.slice(0, HISTORY_PAGE), more: rows.length > HISTORY_PAGE };
+}
 
 /**
  * The bell updates itself instantly on the client (optimistic), so these

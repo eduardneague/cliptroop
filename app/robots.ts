@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { PUBLIC_PAGES, siteUrl } from "@/lib/public-pages";
+import { OG_IMAGE, PUBLIC_PAGES, siteUrl } from "@/lib/public-pages";
 
 /*
  * The app itself is private (everything needs a sign-in), but the public
@@ -20,7 +20,8 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         // "/$" = only the home page itself (the longest matching rule wins).
-        allow: ["/$", ...PUBLIC_PAGES],
+        // The link-preview picture too, for Slack, X and the rest.
+        allow: ["/$", ...PUBLIC_PAGES, OG_IMAGE.url],
         disallow: "/",
       },
     ],

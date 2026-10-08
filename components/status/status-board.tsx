@@ -34,7 +34,7 @@ export function LocalTime({ iso, time = true, date = true }: { iso: string; time
     ...(time ? { hour: "2-digit", minute: "2-digit" } : {}),
   };
   const d = new Date(iso);
-  const text = mounted ? d.toLocaleString(undefined, opts) : `${d.toLocaleString("en-GB", { ...opts, timeZone: "UTC" })} UTC`;
+  const text = mounted ? d.toLocaleString("en-US", opts) : `${d.toLocaleString("en-US", { ...opts, timeZone: "UTC" })} UTC`;
   return (
     <time dateTime={iso} suppressHydrationWarning>
       {text}
@@ -50,8 +50,8 @@ const minutes = (n: number) => {
 function hourText(iso: string, last: boolean) {
   const a = new Date(iso);
   const b = new Date(a.getTime() + 3_600_000);
-  const day = a.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
-  const t = (x: Date) => x.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const day = a.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
+  const t = (x: Date) => x.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   return last ? `${day} · since ${t(a)} (this hour)` : `${day} · ${t(a)}–${t(b)}`;
 }
 

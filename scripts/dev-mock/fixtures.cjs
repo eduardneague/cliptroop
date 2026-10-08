@@ -205,6 +205,44 @@ const statusIncidents = () => {
   return out.sort((a, b) => b.started_at.localeCompare(a.started_at));
 };
 
+// The bell and its History (last 2 weeks): a mix of kinds over 12 days, newest first. MOCK_NOTIFS=0: none.
+function sampleNotifications() {
+  const H = 3_600_000;
+  const actor = (i) => ({ name: people[i].full_name.split(" ")[0], avatarUrl: null });
+  const team = { name: "Viverro Main", logoUrl: null, color: "#e8630d" };
+  const list = [
+    [0.3, false, "short_review_ready", { actor: actor(2), shortNumber: 231, shortTitle: "Why cats knock things over" }],
+    [2, false, "social_post", { ok: true, platform: "tiktok", shortNumber: 229, shortTitle: "Pasta from scratch" }],
+    [5, true, "short_changes_requested", { actor: actor(3), shortNumber: 230, shortTitle: "Rainy day ideas", note: "Captions a bit bigger please" }],
+    [26, true, "script_mention", { actor: actor(1), shortNumber: 232, shortTitle: "One-minute history: Dacia", snippet: "@edu can you check the hook?" }],
+    [30, false, "social_post", { ok: false, platform: "instagram", shortNumber: 228, shortTitle: "Street food in Cluj", message: "The video is still processing on Instagram." }],
+    [50, true, "short_approved", { actor: actor(3), shortNumber: 227, shortTitle: "The best desk setup" }],
+    [75, true, "meeting_reminder", { meetingTitle: "Weekly planning", when: "in 1 hour", team }],
+    [98, true, "short_assigned", { actor: actor(1), shortNumber: 226, shortTitle: "Tiny houses", readyToEdit: true }],
+    [125, true, "social_post", { ok: true, platform: "youtube", shortNumber: 225, shortTitle: "How bees talk" }],
+    [170, true, "short_review_ready", { actor: actor(2), shortNumber: 224, shortTitle: "Bakery tour" }],
+    [215, true, "short_approved", { actor: actor(3), shortNumber: 223, shortTitle: "Studio vlog" }],
+    [260, true, "social_post", { ok: true, platform: "instagram", shortNumber: 222, shortTitle: "Q&A" }],
+    [290, true, "short_assigned", { actor: actor(1), shortNumber: 221, shortTitle: "Night market" }],
+  ];
+  return list.map(([hoursAgo, read, kind, metadata], i) => ({
+    id: `eeeeeeee-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+    recipient_id: people[0].id,
+    body: "",
+    project_id: null,
+    short_id: null,
+    stage: null,
+    is_read: read,
+    created_at: new Date(Date.now() - hoursAgo * H).toISOString(),
+    kind,
+    metadata,
+    team_invite_id: null,
+    team_invites: null,
+    ownership_transfer_id: null,
+    ownership_transfer_requests: null,
+  }));
+}
+
 module.exports = {
   TEAM,
   U,
@@ -245,13 +283,18 @@ module.exports = {
     teams: [team],
     profiles: people.map((_, i) => prof(i)),
     team_members: members,
-    notifications: [],
+    notifications: process.env.MOCK_NOTIFS === "0" ? [] : sampleNotifications(),
     role_colors: [],
     short_videos: shorts,
     short_video_posts: shorts.flatMap((x) => x.short_video_posts.map((p) => ({ ...p, short_id: x.id, short_videos: { team_id: TEAM } }))),
     short_scripters: shorts.map((x) => ({ short_id: x.id, team_member_id: members[1].id })),
     short_video_events: shorts.flatMap((x) => x.short_video_events.map((e) => ({ ...e, short_id: x.id, short_videos: { team_id: TEAM } }))),
-    short_video_versions: [],
+    // MOCK_FILES=1: one uploaded video per short past Script (Team → Defaults → Video files shows the total).
+    short_video_versions: process.env.MOCK_FILES
+      ? shorts
+          .filter((x) => x.stage !== "script")
+          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+      : [],
     short_video_comments: [],
     long_video_projects: longs,
     project_titles: titles,

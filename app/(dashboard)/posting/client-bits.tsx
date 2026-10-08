@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { sendTestAlertEmail, testTimer } from "./actions";
+import { useLocalFormat } from "@/lib/hooks/use-hydrated";
 
 /** Keeps the page live while anything is scheduled or moving. */
 export function AutoRefresh({ active }: { active: boolean }) {
@@ -15,20 +16,29 @@ export function AutoRefresh({ active }: { active: boolean }) {
   return null;
 }
 
-/** "Fri 17:00 · in 2h 13m" / "5 min ago", in the viewer's time zone. */
+/**
+ * "Fri 17:00 · in 2h 13m" / "5 min ago", in the viewer's time zone. Until
+ * the page is live it shows what the server made (no countdown), so the
+ * two never disagree (React #418).
+ */
 export function When({ iso }: { iso: string }) {
-  const [now, setNow] = useState(() => Date.now());
+  const format = useLocalFormat();
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const t = Date.parse(iso);
-  const abs = new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  const m = Math.round((t - now) / 60_000);
-  const rel = m > 0 ? (m < 60 ? `in ${m} min` : m < 2880 ? `in ${Math.floor(m / 60)}h ${m % 60}m` : `in ${Math.round(m / 1440)} days`) : m > -60 ? `${-m} min ago` : m > -2880 ? `${Math.round(-m / 60)}h ago` : `${Math.round(-m / 1440)} days ago`;
+  const abs = format(iso, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  let rel = "";
+  if (now !== null) {
+    const m = Math.round((Date.parse(iso) - now) / 60_000);
+    rel = m > 0 ? (m < 60 ? `in ${m} min` : m < 2880 ? `in ${Math.floor(m / 60)}h ${m % 60}m` : `in ${Math.round(m / 1440)} days`) : m > -60 ? `${-m} min ago` : m > -2880 ? `${Math.round(-m / 60)}h ago` : `${Math.round(-m / 1440)} days ago`;
+  }
   return (
     <span title={abs}>
-      {abs} · {rel}
+      {abs}
+      {rel && ` · ${rel}`}
     </span>
   );
 }

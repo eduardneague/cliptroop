@@ -1,5 +1,6 @@
 "use client";
 
+import { useHydrated } from "@/lib/hooks/use-hydrated";
 import { APP_NAME } from "@/lib/brand";
 import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -103,7 +104,7 @@ function localIso(date: string, time: string) {
 const andList = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function tomorrow() {
   const d = new Date(Date.now() + 86_400_000);
@@ -172,10 +173,42 @@ function chip(post: PostInfo | null, now: number) {
   if (post.status === "uploading") return { text: `Uploading ${post.progress}%`, cls: "bg-amber/15 text-amber", spin: true };
   if (post.status === "processing") return { text: "Processing", cls: "bg-amber/15 text-amber", spin: true };
   if (post.status === "waiting") return { text: post.platform === "youtube" ? "Scheduled on YouTube" : "Waiting", cls: "bg-violet/15 text-violet" };
-  return { text: "Scheduled", extra: ` · ${new Date(post.scheduledAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}`, cls: "bg-surface-2 text-ink" };
+  return { text: "Scheduled", extra: ` · ${new Date(post.scheduledAt).toLocaleString("en-US", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`, cls: "bg-surface-2 text-ink" };
 }
 
-export function SchedulePanel({
+type SchedulePanelProps = Parameters<typeof SchedulePanelLive>[0];
+
+/**
+ * The Posting card works in this device's time zone (the times you pick,
+ * "Scheduled · Fri 17:00", countdowns), which the server (UTC) can't know.
+ * So it draws once the page is live in the browser, with a placeholder of
+ * the same shape until then (otherwise React #418 replaces the page part).
+ */
+export function SchedulePanel(props: SchedulePanelProps) {
+  const hydrated = useHydrated();
+  if (!hydrated) {
+    return (
+      <section aria-busy="true" aria-label="Posting" className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Posting</h2>
+        </div>
+        {props.platforms.map((p) => (
+          <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30 flex items-center gap-3 px-3.5 sm:px-4 py-3">
+            <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-semibold leading-tight">{NAME[p]}</div>
+              <span className="skeleton block h-3 w-28 mt-1.5 rounded" />
+            </div>
+            <span className="skeleton h-7 w-24 rounded-full" />
+          </div>
+        ))}
+      </section>
+    );
+  }
+  return <SchedulePanelLive {...props} />;
+}
+
+function SchedulePanelLive({
   shortId,
   teamId,
   title,
@@ -627,8 +660,8 @@ export function SchedulePanel({
                     <div className="text-[13.5px] font-bold text-amber">Now</div>
                   ) : (
                     <>
-                      <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
-                      <div className="text-[11.5px] text-ink-soft">{at.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}</div>
+                      <div className="text-[13.5px] font-bold tabular-nums">{at.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</div>
+                      <div className="text-[11.5px] text-ink-soft">{at.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" })}</div>
                     </>
                   )}
                 </div>
@@ -1146,7 +1179,7 @@ function StatusView({
           {events.map((e) => (
             <li key={e.id} className="flex gap-2 text-[12px]">
               <span className="text-ink-faint tabular-nums whitespace-nowrap">
-                {new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                {new Date(e.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </span>
               <span className={e.kind === "failed" ? "text-red" : e.kind === "retry" ? "text-amber" : "text-ink"}>{e.message}</span>
             </li>

@@ -461,7 +461,7 @@ function statusText(s: PlatformStatus) {
       : s.lastError
         ? "last sync failed"
         : s.lastOkAt
-          ? `synced ${new Date(s.lastOkAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+          ? `synced ${new Date(s.lastOkAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
           : "waiting for the first sync";
 }
 

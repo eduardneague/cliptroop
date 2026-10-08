@@ -1,9 +1,10 @@
-import { APP_NAME, APP_DESCRIPTION, APP_SHORT_NAME } from "@/lib/brand";
+import { APP_NAME, APP_DESCRIPTION, APP_SHORT_NAME, APP_TAGLINE } from "@/lib/brand";
 import { PwaRegister } from "@/components/pwa";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
-import { siteUrl } from "@/lib/public-pages";
+import { BRAND_PAGES_RE, facebookMeta, OG_IMAGE, siteUrl } from "@/lib/public-pages";
+import { BrandPages } from "@/components/ui/brand-pages";
 import { ErrorReporter } from "@/components/error-reporter";
 import "./globals.css";
 
@@ -67,8 +68,11 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: [{ url: "/app-icons/apple-touch-icon.png", sizes: "180x180" }],
   },
-  // Absolute links for link previews (og:image from app/opengraph-image.tsx).
+  // Absolute links for link previews; every page shares the picture (public/og-image.png).
   metadataBase: new URL(publicOrigin()),
+  openGraph: { type: "website", siteName: APP_NAME, title: `${APP_NAME}: ${APP_TAGLINE}`, description: APP_DESCRIPTION, locale: "en_US", images: [OG_IMAGE] },
+  twitter: { card: "summary_large_image", images: [OG_IMAGE.url] },
+  facebook: facebookMeta(),
   formatDetection: { telephone: false },
   // Invite-only: nothing shows up in search results, except the public
   // pages (home, privacy, terms, data deletion), which override this.
@@ -93,8 +97,9 @@ export default function RootLayout({
         <script
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
-            // Also applies the user's "Animations off" choice and colour theme before first paint.
-            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p))d.dataset.palette=p}catch(e){}`,
+            // Also applies the user's "Animations off" choice and colour theme before first paint
+            // (not on the brand pages: home, sign-in, status, legal; see lib/public-pages.ts).
+            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname))d.dataset.palette=p}catch(e){}`,
           }}
         />
       </head>
@@ -102,6 +107,7 @@ export default function RootLayout({
         <ErrorReporter />
         <PwaRegister />
         <AuthHashHandler />
+        <BrandPages />
         {children}
       </body>
     </html>

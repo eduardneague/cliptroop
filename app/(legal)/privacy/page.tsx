@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { publicMetadata } from "@/lib/public-pages";
 import Link from "next/link";
 import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
 import { LEGAL_CONTACT, LEGAL_CONTACT_HREF, LEGAL_UPDATED } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Privacy policy", robots: { index: true, follow: true } };
+export const metadata: Metadata = { ...publicMetadata("/privacy", "Privacy policy"), robots: { index: true, follow: true } };
 
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a className="underline" href={href} target="_blank" rel="noopener noreferrer">
@@ -97,7 +98,7 @@ export default function PrivacyPage() {
 
       <H>How long we keep it</H>
       <ul className="list-disc pl-6 space-y-1.5">
-        <li>Uploaded video files are deleted 2 days after the video is posted everywhere, unless the team marks it &ldquo;Keep&rdquo;.</li>
+        <li>Uploaded video files are deleted after the video is posted everywhere: after 1, 2 or 3 weeks or 1 month, as the team chooses (2 weeks unless it changes that).</li>
         <li>Sign-in tokens are deleted the moment an account is disconnected.</li>
         <li>Notification devices are removed when you turn them off, log out on that device, or the browser stops accepting messages.</li>
         <li>Everything else is kept while your team uses {APP_NAME}, and deleted on request (below).</li>

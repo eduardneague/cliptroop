@@ -102,6 +102,20 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
             <Skeleton className="h-9 w-20 rounded-lg" />
           </div>
         </Card>
+        <Card title="Video files" text="Shorts’ uploaded videos take the most space. Once a short is posted everywhere, its files are deleted after this long.">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold">Delete video files after posting</div>
+                <div className="text-[11.5px] text-ink-faint">Counted from the last platform a short went out on. Checked every night.</div>
+              </div>
+              <Skeleton className="h-10 w-40 rounded-lg flex-shrink-0" />
+            </div>
+            <Skeleton className="h-3 w-4/5" />
+            <Skeleton className="h-3 w-3/5" />
+            <Skeleton className="h-9 w-full rounded-lg" />
+          </div>
+        </Card>
         <Card title="Scripts" text="Script → Review → Staging: who’s next when a script is handed on.">
           <div className="space-y-5">
             {["Review", "Staging"].map((n) => (

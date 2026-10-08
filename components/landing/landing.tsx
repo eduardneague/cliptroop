@@ -99,7 +99,8 @@ function Header() {
 }
 
 /** The slate: claps shut on load, then Clip pops up beside it. */
-function Slate() {
+/** The hero's clapperboard (also used for the README and link-preview art). */
+export function Slate() {
   const field = "ld-chalk-line pb-1.5";
   return (
     <div className="relative mx-auto w-full max-w-[520px] pt-6 pr-10 sm:pr-14" aria-hidden>

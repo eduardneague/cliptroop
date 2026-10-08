@@ -4,6 +4,7 @@ import { runDuePosts } from "@/lib/social/worker";
 import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
 import { watchHealth } from "@/lib/health-watch";
 import { recordStatus } from "@/lib/status";
+import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
 
 /**
  * Called by the Supabase timers (pg_cron → pg_net), protected by
@@ -12,6 +13,8 @@ import { recordStatus } from "@/lib/status";
  *   - every 10 minutes with {"status": true} (0067): check everything,
  *     record it for the status page's hourly bars, alert the developers
  *     about anything app-wide that's down. No posts run on that call.
+ *   - once a day with {"job": "cleanup"} (03:30 UTC) and
+ *     {"job": "analytics"} (05:10 UTC), 0070: lib/daily-jobs.ts.
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,7 +31,12 @@ async function handle(request: Request) {
   if (!authorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown } | null) : null;
+  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown } | null) : null;
+  if (body?.job === "cleanup") {
+    const r = await runCleanupJob();
+    return NextResponse.json(r, { status: r.ok ? 200 : 500 });
+  }
+  if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob());
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);

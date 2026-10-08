@@ -14,7 +14,7 @@ const addDays = (day: string, n: number) => {
   d.setDate(d.getDate() + n);
   return localDay(d);
 };
-const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 /** "Overdue" · "Today" · "Tomorrow" · "Fri" (this week) · "Oct 9". */
 export function DueChip({ due, today }: { due: string | null; today: string }) {
@@ -31,14 +31,14 @@ export function DueChip({ due, today }: { due: string | null; today: string }) {
             ? "Yesterday"
             : shortDate(due)
           : inWeek
-            ? new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })
+            ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
             : shortDate(due);
   return (
     <span
       className={`flex-shrink-0 rounded-[5px] px-1.5 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${
         late ? "bg-red/12 text-red" : due === today ? "bg-amber/12 text-amber" : "bg-surface-2 text-ink-soft"
       }`}
-      title={new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+      title={new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
     >
       {label}
     </span>
@@ -126,7 +126,7 @@ const dueLabel = (due: string, today: string) =>
   due === addDays(today, 1)
     ? "Tomorrow"
     : due > today && due <= addDays(today, 6)
-      ? new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })
+      ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
       : shortDate(due);
 
 /** Today is clear: Clippy celebrates. */
@@ -227,7 +227,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
     return [...m.entries()];
   }, [done]);
   const dayName = (d: string) =>
-    d === today ? "Today" : d === addDays(today, -1) ? "Yesterday" : new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    d === today ? "Today" : d === addDays(today, -1) ? "Yesterday" : new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   const tabs: { k: Tab; label: string; n: number | null; red?: boolean }[] = [
     { k: "overdue", label: "Overdue", n: g.overdue.length, red: g.overdue.length > 0 },
@@ -303,7 +303,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
                         {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
                       </span>
                     </span>
-                    <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
                   </Link>
                 ))}
               </div>

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { publicMetadata } from "@/lib/public-pages";
 import Link from "next/link";
 import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
 import { LEGAL_CONTACT, LEGAL_CONTACT_HREF, LEGAL_UPDATED } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Terms of service", robots: { index: true, follow: true } };
+export const metadata: Metadata = { ...publicMetadata("/terms", "Terms of service"), robots: { index: true, follow: true } };
 
 const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a className="underline" href={href} target="_blank" rel="noopener noreferrer">

@@ -5,7 +5,7 @@ import { FB_GRAPH, hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/l
 
 /*
  * Copies the platforms' numbers into our analytics tables (migration 0058).
- * Runs once a day for every team (/api/cron/analytics) and on "Sync now".
+ * Runs once a day for every team (Supabase's timer, {"job": "analytics"}; lib/daily-jobs.ts) and on "Sync now".
  * The first copy fetches history (90 days of totals, 28 days of the per-day
  * details); later copies refresh the last few days (platforms keep updating
  * recent numbers for a couple of days). Every platform call is official API,

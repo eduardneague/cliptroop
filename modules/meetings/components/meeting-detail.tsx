@@ -318,7 +318,7 @@ function Actions({ meeting, people, me, canOrganize }: { meeting: Meeting; peopl
             <span className={`flex-1 min-w-0 text-[14px] leading-snug break-words ${a.done ? "line-through text-ink-faint" : ""}`}>{a.text}</span>
             {a.dueDate && (
               <span className="flex-shrink-0 text-[11.5px] font-semibold text-ink-soft tabular-nums mt-0.5">
-                {new Date(`${a.dueDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                {new Date(`${a.dueDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
             )}
             {a.owner && <PersonAvatar name={a.owner.name} avatarUrl={a.owner.avatarUrl} color={a.owner.color} className="w-6 h-6 text-[9px] mt-[-1px]" />}

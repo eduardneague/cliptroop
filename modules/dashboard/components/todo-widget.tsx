@@ -216,7 +216,7 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
           <FlagIcon filled={priority > 0} className="w-3.5 h-3.5" />
         </button>}
         {!narrow && <DatePicker value={due} onChange={setDue} onClear={() => setDue(null)} ariaLabel="Due date" triggerClassName={`h-6 rounded-md flex items-center justify-center flex-shrink-0 hover:bg-surface-2 ${due ? "px-1.5 text-[11px] font-bold text-ink" : "w-6 text-ink-faint hover:text-ink"}`}>
-          {due ? new Date(`${due}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : <CalendarIcon className="w-3.5 h-3.5" />}
+          {due ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : <CalendarIcon className="w-3.5 h-3.5" />}
         </DatePicker>}
         <button type="button" onClick={() => void add()} disabled={!title.trim()} aria-label="Add to-do" className="w-6 h-6 rounded-md bg-amber text-white flex items-center justify-center flex-shrink-0 transition-opacity disabled:opacity-35">
           <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -428,7 +428,7 @@ function TodoItem({
                   </button>
                 ))}
                 <DatePicker value={t.dueDate} onChange={(d) => onSave({ dueDate: d })} ariaLabel="Due date" triggerClassName="rounded-md px-1.5 h-6 text-[11px] font-semibold border border-line/15 text-ink-soft">
-                  {t.dueDate ? new Date(`${t.dueDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Due date"}
+                  {t.dueDate ? new Date(`${t.dueDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Due date"}
                 </DatePicker>
                 {t.dueDate && (
                   <button

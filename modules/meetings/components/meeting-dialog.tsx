@@ -78,7 +78,7 @@ export function MeetingDialog({
   }, [open, meeting, people]);
 
   const timeOptions = useMemo(
-    () => TIMES.map((t) => ({ value: t, label: new Date(`2000-01-01T${t}:00`).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) })),
+    () => TIMES.map((t) => ({ value: t, label: new Date(`2000-01-01T${t}:00`).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) })),
     []
   );
   const durationOptions = useMemo(() => {

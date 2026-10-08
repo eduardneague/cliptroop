@@ -93,7 +93,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/auth") ||
     // Where the sign-in emails lead (invites, password resets): signs you in.
     request.nextUrl.pathname === "/welcome" ||
-    // Scheduled jobs (Vercel Cron). Each route checks CRON_SECRET itself.
+    // Scheduled jobs (Supabase's timer). Each route checks CRON_SECRET itself.
     request.nextUrl.pathname.startsWith("/api/cron/") ||
     // Public pages the platform reviews require (the home page signs you in or sends you on).
     request.nextUrl.pathname === "/" ||
@@ -102,8 +102,6 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/data-deletion" ||
     // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
     request.nextUrl.pathname === "/sitemap.xml" ||
-    // Link previews (Facebook, Slack, iMessage…) fetch these without signing in.
-    request.nextUrl.pathname.startsWith("/opengraph-image") ||
     // Status page + health check: public (details only for the alert people).
     request.nextUrl.pathname === "/status" ||
     request.nextUrl.pathname === "/api/health" ||
