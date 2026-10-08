@@ -58,7 +58,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
       const col: string[] = [];
       for (let d = 0; d < 7; d++) {
         col.push(localDay(cur));
-        if (cur.getDate() === 1 || (w === 0 && d === 0)) months.push({ col: w, label: cur.toLocaleDateString(undefined, { month: "short" }) });
+        if (cur.getDate() === 1 || (w === 0 && d === 0)) months.push({ col: w, label: cur.toLocaleDateString("en-US", { month: "short" }) });
         cur.setDate(cur.getDate() + 1);
       }
       weeks.push(col);
@@ -150,7 +150,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
                       type="button"
                       disabled={future}
                       onClick={() => setOpen(d)}
-                      title={`${n || "No"} task${n === 1 ? "" : "s"} on ${new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`}
+                      title={`${n || "No"} task${n === 1 ? "" : "s"} on ${new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`}
                       className={`rounded-[2px] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${future ? "opacity-0 pointer-events-none" : ""} ${d === today ? "ring-1 ring-ink/40" : ""}`}
                       style={{ background: shade(n), width: cell, height: cell }}
                     />
@@ -165,7 +165,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
       <Dialog
         open={!!open}
         onClose={() => setOpen(null)}
-        title={open ? new Date(`${open}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}
+        title={open ? new Date(`${open}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}
         description={open ? `${byDay.get(open)?.length ?? 0} task${(byDay.get(open)?.length ?? 0) === 1 ? "" : "s"} finished` : undefined}
       >
         {open && (byDay.get(open)?.length ? (
@@ -182,7 +182,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
                       {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
                     </span>
                   </span>
-                  <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
                 </Link>
               </li>
             ))}

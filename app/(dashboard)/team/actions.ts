@@ -12,6 +12,7 @@ import { displayName } from "@/lib/avatar";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { isOwnStorageUrl } from "@/lib/storage-url";
+import { isMediaKeepDays } from "@/lib/media-keep";
 
 async function requireMaster(teamId: string) {
   const supabase = await createClient();
@@ -562,6 +563,21 @@ export async function updateShortSettings(
 
   revalidatePath("/team");
   revalidatePath("/shorts");
+  return { success: true };
+}
+
+/** Team → Defaults → Video files: how long posted shorts' files stay (masters). */
+export async function updateMediaKeepDays(teamId: string, days: number) {
+  const check = await requireMaster(teamId);
+  if (!check.ok) return { error: check.error };
+  if (!isMediaKeepDays(days)) return { error: "Pick 1, 2 or 3 weeks, or 1 month." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("teams").update({ media_keep_days: days }).eq("id", teamId).select("id");
+  if (error) {
+    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0070)." : "Couldn't save. Try again." };
+  }
+  if (!data?.length) return { error: "Only the master can do this." };
+  revalidatePath("/team");
   return { success: true };
 }
 

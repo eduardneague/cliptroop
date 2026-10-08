@@ -118,7 +118,7 @@ function AnalogClock({ now, seconds }: { now: Date; seconds: boolean }) {
     <line x1="50" y1="50" x2="50" y2={50 - len} stroke={color} strokeWidth={w} strokeLinecap="round" transform={`rotate(${deg} 50 50)`} style={{ transition: "transform .3s cubic-bezier(.4,2.3,.6,1)" }} />
   );
   return (
-    <svg viewBox="0 0 100 100" className="w-full h-full" role="img" aria-label={now.toLocaleTimeString()}>
+    <svg viewBox="0 0 100 100" className="w-full h-full" role="img" aria-label={now.toLocaleTimeString("en-US")}>
       <circle cx="50" cy="50" r="47" fill="rgb(var(--surface-2))" stroke="rgb(var(--line) / 0.2)" strokeWidth="1.5" />
       {Array.from({ length: 60 }, (_, i) => (
         <line
@@ -166,9 +166,9 @@ export function ClockWidget({ settings }: { settings?: Record<string, unknown> }
       )}
       <div className="min-w-0">
         <div className="font-display font-semibold leading-none tabular-nums tracking-tight" style={{ fontSize: side || stacked ? Math.min(big, 30) : big }}>
-          {now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: !h24 })}
+          {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: !h24 })}
         </div>
-        <div className="text-[12px] text-ink-soft mt-1.5 leading-tight truncate">{now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</div>
+        <div className="text-[12px] text-ink-soft mt-1.5 leading-tight truncate">{now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
         <div className="text-[10.5px] text-ink-faint truncate">{Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}</div>
       </div>
     </div>

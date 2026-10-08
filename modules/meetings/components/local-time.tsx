@@ -12,16 +12,16 @@ export type TimeFormat = "full" | "day" | "time" | "short" | "range";
 
 const fmt = (iso: string, f: TimeFormat, durationMin = 60) => {
   const d = new Date(iso);
-  const time = (x: Date) => x.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = (x: Date) => x.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   switch (f) {
     case "full":
-      return `${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })} · ${time(d)}`;
+      return `${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} · ${time(d)}`;
     case "day":
-      return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     case "time":
       return time(d);
     case "short":
-      return `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}, ${time(d)}`;
+      return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${time(d)}`;
     case "range":
       return `${time(d)} – ${time(new Date(d.getTime() + durationMin * 60_000))}`;
   }

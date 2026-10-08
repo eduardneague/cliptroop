@@ -140,7 +140,7 @@ export function DatePicker({
 const niceDate = (d: string) => {
   const date = new Date(`${d}T00:00:00`);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 };
 
 /**

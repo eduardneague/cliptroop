@@ -32,7 +32,7 @@ function allowed(path: string) {
   const d = disallow.filter((p) => matches(p, path)).reduce((m, p) => Math.max(m, p.length), -1);
   return a >= d;
 }
-for (const p of ["/", "/privacy", "/terms", "/data-deletion"]) ok(allowed(p), `${p} is readable by robots`);
+for (const p of ["/", "/privacy", "/terms", "/data-deletion", "/og-image.png"]) ok(allowed(p), `${p} is readable by robots`);
 for (const p of ["/dashboard", "/login", "/welcome", "/shorts/123", "/api/health", "/setup"]) ok(!allowed(p), `${p} stays closed`);
 ok(r.sitemap === "https://app.cliptroop.com/sitemap.xml", "sitemap address (no double slash)");
 const urls = sitemap().map((x) => x.url);

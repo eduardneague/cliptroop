@@ -18,7 +18,7 @@ export function Ago({ iso, className }: { iso: string; className?: string }) {
     return () => clearInterval(t);
   }, []);
   return (
-    <time dateTime={iso} className={className} title={mounted ? new Date(iso).toLocaleString() : undefined} suppressHydrationWarning>
+    <time dateTime={iso} className={className} title={mounted ? new Date(iso).toLocaleString("en-US") : undefined} suppressHydrationWarning>
       {relativeTime(iso)}
     </time>
   );

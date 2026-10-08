@@ -3,7 +3,7 @@
 import { notificationUrl } from "@/lib/notification-url";
 import Link from "next/link";
 import { Ago } from "@/components/ui/ago";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
@@ -11,8 +11,10 @@ import {
   markAllNotificationsRead,
   respondToTeamInvite,
   respondToOwnershipTransfer,
+  getNotificationHistory,
 } from "@/app/(dashboard)/notification-actions";
-import { BellIcon } from "./icons";
+import { BellIcon, HistoryIcon } from "./icons";
+import { Dialog } from "./dialog";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
@@ -185,7 +187,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
 /** "Sat, Oct 10, 18:00" in your own time zone (the list only renders in the browser). */
 function meetingWhen(iso: string) {
   const d = new Date(iso);
-  return `${d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}, ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 // Rich, structured body — bold names/teams, colored role pills — for
@@ -444,6 +446,207 @@ function RichBody({ n }: { n: NotificationItem }) {
   }
 }
 
+/** One notification: who / what, when, and Accept / Decline when it asks for an answer. */
+function NotificationRow({
+  n,
+  onOpen,
+  onRespond,
+  responding,
+  time,
+}: {
+  n: NotificationItem;
+  onOpen: (n: NotificationItem) => void;
+  onRespond: (n: NotificationItem, accept: boolean) => void;
+  responding: boolean;
+  /** Instead of "5m ago" (History shows the time of day under each date). */
+  time?: string;
+}) {
+  const actionable = Boolean(n.team_invite_id || n.ownership_transfer_id);
+  const status = actionableStatus(n);
+  const isPendingAction = actionable && status === "pending";
+  const visual = <LeadingVisual n={n} />;
+  return (
+    <div
+      onClick={() => onOpen(n)}
+      className={`flex gap-2.5 px-4 py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
+    >
+      {visual ?? <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
+      <div className="min-w-0 flex-1">
+        <span className="block text-[12.5px] leading-snug text-ink">
+          <RichBody n={n} />
+          {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber ml-1.5 align-middle" />}
+        </span>
+        <span className="block text-[10.5px] text-ink-soft mt-1">{time ?? <Ago iso={n.created_at} />}</span>
+        {isPendingAction && (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRespond(n, true);
+              }}
+              disabled={responding}
+              className="rounded-md bg-amber text-white text-[11.5px] font-semibold px-3 py-1.5 disabled:opacity-50"
+            >
+              Accept
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRespond(n, false);
+              }}
+              disabled={responding}
+              className="rounded-md border border-line/15 text-ink-soft text-[11.5px] font-semibold px-3 py-1.5 disabled:opacity-50"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+        {actionable && status && status !== "pending" && (
+          <span className="inline-block mt-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{status}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** "Today", "Yesterday", "Monday, 5 October" (this device's calendar). */
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (key(d) === key(today)) return "Today";
+  if (key(d) === key(yesterday)) return "Yesterday";
+  return d.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+}
+
+/**
+ * The bell's History: the last 2 weeks of notifications, by day, 40 at a
+ * time ("Show older"). Opening one works like in the bell.
+ */
+function HistoryDialog({
+  open,
+  onClose,
+  onOpenItem,
+  onRespond,
+  respondingId,
+  readIds,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onOpenItem: (n: NotificationItem) => void;
+  onRespond: (n: NotificationItem, accept: boolean) => void;
+  respondingId: string | null;
+  /** Read in the bell meanwhile: shown read here too. */
+  readIds: Set<string>;
+}) {
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [more, setMore] = useState(false);
+  const [state, setState] = useState<"loading" | "ready" | "error" | "more">("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [onlyUnread, setOnlyUnread] = useState(false);
+
+  const load = useCallback(async (before: string | null) => {
+    setState(before ? "more" : "loading");
+    setError(null);
+    const r = await getNotificationHistory(before);
+    if (r.error !== undefined) {
+      setError(r.error);
+      setState("error");
+      return;
+    }
+    setItems((cur) => {
+      const seen = new Set(cur.map((n) => n.id));
+      return before ? [...cur, ...r.items.filter((n) => !seen.has(n.id))] : r.items;
+    });
+    setMore(r.more);
+    setState("ready");
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setOnlyUnread(false);
+    void load(null);
+  }, [open, load]);
+
+  const shown = items.map((n) => (readIds.has(n.id) ? { ...n, is_read: true } : n)).filter((n) => !onlyUnread || !n.is_read);
+  const unread = items.filter((n) => !n.is_read && !readIds.has(n.id)).length;
+  const groups: { day: string; list: NotificationItem[] }[] = [];
+  for (const n of shown) {
+    const day = dayLabel(n.created_at);
+    const last = groups[groups.length - 1];
+    if (last?.day === day) last.list.push(n);
+    else groups.push({ day, list: [n] });
+  }
+  const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  const chip = (on: boolean) =>
+    `rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
+
+  return (
+    <Dialog open={open} onClose={onClose} title="Notification history" description="Everything from the last 2 weeks, newest first." width="sm:max-w-xl">
+      <div className="-mx-5 -my-4">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-line/10" role="group" aria-label="Show">
+          <button type="button" aria-pressed={!onlyUnread} onClick={() => setOnlyUnread(false)} className={chip(!onlyUnread)}>
+            All
+          </button>
+          <button type="button" aria-pressed={onlyUnread} onClick={() => setOnlyUnread(true)} className={chip(onlyUnread)}>
+            Unread{unread > 0 ? ` · ${unread}` : ""}
+          </button>
+        </div>
+
+        {state === "loading" ? (
+          <div className="px-5 py-4 space-y-4" aria-busy="true" aria-label="Loading">
+            {[0, 1, 2, 3, 4].map((k) => (
+              <div key={k} className="flex gap-2.5">
+                <span className="skeleton w-7 h-7 rounded-full flex-shrink-0" />
+                <span className="flex-1 space-y-1.5">
+                  <span className="skeleton block h-3 w-4/5 rounded" />
+                  <span className="skeleton block h-2.5 w-16 rounded" />
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : state === "error" && items.length === 0 ? (
+          <div className="px-5 py-10 text-center" role="alert">
+            <p className="text-[13px] text-ink-soft">{error}</p>
+            <button type="button" onClick={() => void load(null)} className="mt-3 rounded-lg border border-line/15 px-3 h-9 text-[12.5px] font-semibold hover:border-line/30">
+              Try again
+            </button>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="px-5 py-12 text-center text-[13px] text-ink-soft">
+            {onlyUnread ? "You've read everything from the last 2 weeks." : "Nothing in the last 2 weeks."}
+          </div>
+        ) : (
+          <div>
+            {groups.map((g) => (
+              <section key={g.day} aria-label={g.day}>
+                <h3 className="sticky top-0 z-[1] bg-surface/95 backdrop-blur px-5 pt-3 pb-1.5 text-[11.5px] font-bold text-ink-soft">{g.day}</h3>
+                {g.list.map((n) => (
+                  <NotificationRow key={n.id} n={n} onOpen={onOpenItem} onRespond={onRespond} responding={respondingId === n.id} time={time(n.created_at)} />
+                ))}
+              </section>
+            ))}
+            {(more || state === "more" || (state === "error" && items.length > 0)) && (
+              <div className="px-5 py-4 text-center border-t border-line/10">
+                {state === "error" && <p className="text-[12.5px] text-red mb-2" role="alert">{error}</p>}
+                <button
+                  type="button"
+                  disabled={state === "more"}
+                  onClick={() => void load(items[items.length - 1]?.created_at ?? null)}
+                  className="rounded-lg border border-line/15 px-4 h-9 text-[12.5px] font-semibold hover:border-line/30 disabled:opacity-60"
+                >
+                  {state === "more" ? "Loading…" : "Show older"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Dialog>
+  );
+}
+
 export function NotificationBell({
   notifications,
   userId,
@@ -454,6 +657,9 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // Read from anywhere this visit (bell or History), so both lists agree.
+  const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
   const ref = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
@@ -548,6 +754,7 @@ export function NotificationBell({
 
   function markReadLocally(id: string) {
     setItems((cur) => cur.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    setReadIds((cur) => new Set(cur).add(id));
     startTransition(() => {
       markNotificationRead(id);
     });
@@ -555,6 +762,7 @@ export function NotificationBell({
 
   function markAllReadLocally() {
     setItems((cur) => cur.map((n) => ({ ...n, is_read: true })));
+    setReadIds((cur) => new Set([...cur, ...items.map((n) => n.id)]));
     startTransition(() => {
       markAllNotificationsRead();
     });
@@ -586,6 +794,7 @@ export function NotificationBell({
   function handleClick(n: NotificationItem) {
     if (isActionable(n)) return; // handled by its own Accept/Decline buttons
     setOpen(false);
+    setHistoryOpen(false);
     if (!n.is_read) markReadLocally(n.id);
     // Some notifications lead somewhere specific (a comment in a script).
     const to = notificationUrl(n);
@@ -661,18 +870,28 @@ export function NotificationBell({
           aria-label="Notifications"
           className="fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] rounded-2xl sm:rounded-xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line/10">
+          <div className="flex items-center justify-between gap-2 pl-4 pr-2.5 py-2.5 border-b border-line/10">
             <span className="font-display font-semibold text-[13.5px]">
               Notifications
             </span>
-            {unreadCount > 0 && (
+            <span className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button onClick={markAllReadLocally} className="rounded-lg px-2 h-8 text-[11.5px] font-semibold text-amber hover:bg-amber/10">
+                  Mark all read
+                </button>
+              )}
               <button
-                onClick={markAllReadLocally}
-                className="text-[11.5px] font-semibold text-amber"
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setHistoryOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 h-8 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
               >
-                Mark all read
+                <HistoryIcon className="w-[15px] h-[15px]" />
+                History
               </button>
-            )}
+            </span>
           </div>
           <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {items.length === 0 ? (
@@ -681,66 +900,7 @@ export function NotificationBell({
               </div>
             ) : (
               items.map((n) => {
-                const status = actionableStatus(n);
-                const isPendingAction = isActionable(n) && status === "pending";
-                const visual = <LeadingVisual n={n} />;
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => handleClick(n)}
-                    className={`flex gap-2.5 px-4 py-3 border-b border-line/10 last:border-none transition-colors ${
-                      isActionable(n) ? "" : "hover:bg-surface-2 cursor-pointer"
-                    }`}
-                  >
-                    {visual ?? (
-                      <span
-                        className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                          n.is_read ? "bg-transparent" : "bg-amber"
-                        }`}
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] leading-snug text-ink">
-                        <RichBody n={n} />
-                        {visual && !n.is_read && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber ml-1.5 align-middle" />
-                        )}
-                      </span>
-                      <span className="block text-[10.5px] text-ink-soft mt-1">
-                        <Ago iso={n.created_at} />
-                      </span>
-                      {isPendingAction && (
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              respond(n, true);
-                            }}
-                            disabled={respondingId === n.id}
-                            className="rounded-md bg-amber text-white text-[11.5px] font-semibold px-3 py-1.5 disabled:opacity-50"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              respond(n, false);
-                            }}
-                            disabled={respondingId === n.id}
-                            className="rounded-md border border-line/15 text-ink-soft text-[11.5px] font-semibold px-3 py-1.5 disabled:opacity-50"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      )}
-                      {isActionable(n) && status && status !== "pending" && (
-                        <span className="inline-block mt-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
-                          {status}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
+                return <NotificationRow key={n.id} n={n} onOpen={handleClick} onRespond={respond} responding={respondingId === n.id} />;
               })
             )}
           </div>
@@ -758,6 +918,14 @@ export function NotificationBell({
       </>,
           document.body
         )}
+      <HistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onOpenItem={handleClick}
+        onRespond={respond}
+        respondingId={respondingId}
+        readIds={readIds}
+      />
     </div>
   );
 }

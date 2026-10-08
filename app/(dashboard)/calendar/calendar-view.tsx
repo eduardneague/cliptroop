@@ -64,14 +64,14 @@ const localToday = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 const nice = (s: string, opts: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" }) =>
-  parse(s).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
+  parse(s).toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PLATFORM_NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const ACCENT: Record<string, string | undefined> = { sponsorship: "rgb(var(--blue))", big: "rgb(var(--gold))" };
 
 function postTime(it: CalItem) {
   const times = it.posts.map((p) => Date.parse(p.at)).filter(Number.isFinite).sort((a, b) => a - b);
-  return times.length ? new Date(times[0]).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : null;
+  return times.length ? new Date(times[0]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : null;
 }
 
 export function CalendarView({
@@ -149,7 +149,7 @@ export function CalendarView({
   const title =
     view === "week"
       ? `${nice(mondayOf(focus), { month: "short", day: "numeric" })} – ${nice(addDays(mondayOf(focus), 6), { month: "short", day: "numeric", year: "numeric" })}`
-      : parse(`${focus.slice(0, 7)}-01`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+      : parse(`${focus.slice(0, 7)}-01`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
   // ---- quick view, day panel, moving ----------------------------------------
   const [quick, setQuick] = useState<CalItem | null>(null);
@@ -855,7 +855,7 @@ function CapacityDots({ count, limit, label = false }: { count: number; limit: n
 
 /** A meeting on the calendar: its time and name, in the meetings colour. Opens the meeting. */
 function MeetingChip({ m, size = "sm" }: { m: CalMeeting; size?: "sm" | "lg" }) {
-  const time = new Date(m.at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   if (size === "sm")
     return (
       <Link
@@ -1208,7 +1208,7 @@ function QuickView({
                   : post?.status === "failed"
                     ? { text: "Failed", cls: "text-red" }
                     : post
-                      ? { text: `Scheduled · ${new Date(post.at).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}`, cls: "text-ink" }
+                      ? { text: `Scheduled · ${new Date(post.at).toLocaleString("en-US", { weekday: "short", hour: "2-digit", minute: "2-digit" })}`, cls: "text-ink" }
                       : { text: "Not scheduled yet", cls: "text-ink-soft" };
                 return (
                   <li key={p} className="flex items-center gap-2.5 rounded-lg bg-surface-2/60 px-3 py-2">
@@ -1267,7 +1267,7 @@ function MonthPicker({ focus, onPick }: { focus: string; onPick: (d: string) => 
       <div className="grid grid-cols-3 gap-1.5">
         {Array.from({ length: 12 }, (_, m) => {
           const key = `${year}-${String(m + 1).padStart(2, "0")}`;
-          const label = new Date(Date.UTC(year, m, 1)).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
+          const label = new Date(Date.UTC(year, m, 1)).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
           return (
             <button
               key={key}

@@ -35,7 +35,8 @@ import { PROVIDERS, YOUTUBE_EDIT_SCOPE, hasStatsScopes, statsEnabled, type Socia
 import { getSocialSetup } from "@/lib/social/setup";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 
-import { getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { getMediaKeep, getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { MediaKeepForm } from "./media-keep-form";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { TEAM_TABS, TeamTabSkeleton, teamTab, type TeamTab } from "./skeletons";
@@ -67,6 +68,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     scriptDefaultsAny,
     { data: transferRow },
     setupAny,
+    mediaKeep,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -108,6 +110,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     supabase.from("ownership_transfer_requests").select("id, to_user_id, expires_at").eq("team_id", currentTeam.id).eq("status", "pending").gt("expires_at", nowIso).maybeSingle(),
     // Setup check: staging and your computer only (production keeps it out of sight).
     tab === "accounts" && process.env.VERCEL_ENV !== "production" ? getSocialSetup() : Promise.resolve(null),
+    // Video files: how long they stay after posting (0070), and what's stored.
+    tab === "defaults" ? getMediaKeep(currentTeam.id) : Promise.resolve(null),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -234,6 +238,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             }}
               people={longPeople}
             />
+          </section>
+        )}
+        {userIsMaster && mediaKeep && (
+          <section id="video-files" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Video files</h2>
+            <p className="text-[12px] text-ink-soft mb-5">Shorts&rsquo; uploaded videos take the most space. Once a short is posted everywhere, its files are deleted after this long.</p>
+            <MediaKeepForm teamId={currentTeam.id} days={mediaKeep.days} ready={mediaKeep.ready} files={mediaKeep.files} bytes={mediaKeep.bytes} />
           </section>
         )}
         {userIsMaster && (
