@@ -39,7 +39,7 @@ const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-output", type: "output", x: 10, y: 10, w: 2, h: 2 },
   { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null });
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,

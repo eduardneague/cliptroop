@@ -1,3 +1,4 @@
+import { Mascot } from "@/components/ui/mascot";
 import { APP_NAME } from "@/lib/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InstallAppSkeleton, PushSettingsSkeleton } from "@/components/pwa";
@@ -124,6 +125,18 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
   if (tab === "account") {
     return (
       <div aria-hidden>
+        <section className="rounded-xl border border-line/10 bg-surface p-6 mb-6">
+          <h2 className={H2}>Tutorial</h2>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Mascot size={56} className="flex-shrink-0 -my-1" />
+              <p className="text-[13.5px] text-ink-soft leading-relaxed">
+                Clip&rsquo;s one-minute tour of {APP_NAME}: where everything is and how a video gets from idea to posted.
+              </p>
+            </div>
+            <Skeleton className="h-10 w-44 rounded-lg flex-shrink-0" />
+          </div>
+        </section>
         <section className="rounded-xl border border-line/10 bg-surface p-6 mb-6">
           <h2 className={H2}>Report a bug or suggest something</h2>
           <p className="text-[12.5px] text-ink-soft mt-1 mb-4">Something broken, or an idea that would make {APP_NAME} better? Only the developer sees what you send.</p>

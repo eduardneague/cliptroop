@@ -514,6 +514,7 @@ export function GlobalSearch({
       <button
         type="button"
         onClick={openPalette}
+        data-tour="search"
         className="hidden md:flex items-center gap-2.5 w-full h-9 rounded-xl border border-line/15 bg-surface/60 px-3 text-[13px] text-ink-faint hover:border-line/30 hover:text-ink-soft transition-colors"
         aria-label="Search"
       >
@@ -538,6 +539,7 @@ export function GlobalSearch({
       <button
         type="button"
         onClick={openPalette}
+        data-tour="search"
         className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-2 hover:text-ink transition-colors"
         aria-label="Search"
       >

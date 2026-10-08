@@ -6,7 +6,7 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { developers, isDeveloper, shouldAlert } from "@/lib/errors";
 import { emailConfigured } from "@/lib/email";
-import { coreChecks, jobChecks, PARTS, partName, statusHistory, statusIncidents, VENDORS, vendorChecks, type Check, type Level } from "@/lib/status";
+import { coreChecks, jobChecks, lastStatusCall, PARTS, partName, statusHistory, statusIncidents, VENDORS, vendorChecks, type Check, type Level } from "@/lib/status";
 import { BAR_COLOR, durationText, LEVEL } from "@/lib/status-levels";
 import { AutoRefresh, BarsAxis, BarsLegend, LocalTime, StatusBars } from "@/components/status/status-board";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
@@ -46,7 +46,8 @@ export default async function DeveloperPage() {
   const admin = createAdminClient();
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
 
-  const [core, jobs, vendors, history, incidents, devs, { data: errorRows }, { data: failedRows }, { data: reconnectRows }, { data: reportRows, error: reportsError }] = await Promise.all([
+  const [statusCall, core, jobs, vendors, history, incidents, devs, { data: errorRows }, { data: failedRows }, { data: reconnectRows }, { data: reportRows, error: reportsError }] = await Promise.all([
+    lastStatusCall(),
     coreChecks(),
     jobChecks(),
     vendorChecks(),
@@ -190,6 +191,16 @@ export default async function DeveloperPage() {
           {[...core, ...jobs].map((c) => (
             <CheckRow key={c.key} c={c} />
           ))}
+          <CheckRow
+            c={{
+              key: "status-call",
+              name: "Status check (every 10 minutes)",
+              level: !statusCall?.at ? "unknown" : statusCall.code !== null && statusCall.code >= 200 && statusCall.code < 300 ? "ok" : statusCall.code !== null && statusCall.code < 500 ? "warn" : "down",
+              detail: !statusCall?.at
+                ? "No answer recorded yet (needs migration 0069 and the Vault secrets; it runs every 10 minutes)."
+                : `${statusCall.why ?? "No details."} Last check ${new Date(statusCall.at).toISOString().slice(11, 16)} UTC.`,
+            }}
+          />
           {vendors.map((v) => (
             <CheckRow key={v.key} c={{ ...v, name: `${v.name} (status page)`, url: v.url }} />
           ))}

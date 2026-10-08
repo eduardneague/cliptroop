@@ -67,6 +67,7 @@ export function Sidebar({
           </Link>
           <Link
             href="/settings"
+            data-tour="settings"
             aria-label="Settings"
             title="Settings"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-faint hover:bg-surface-2 hover:text-ink transition-colors flex-shrink-0"

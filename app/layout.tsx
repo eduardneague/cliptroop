@@ -3,8 +3,20 @@ import { PwaRegister } from "@/components/pwa";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
+import { siteUrl } from "@/lib/public-pages";
 import { ErrorReporter } from "@/components/error-reporter";
 import "./globals.css";
+
+/** This copy's public address (link previews need absolute URLs). */
+function publicOrigin() {
+  const staging = process.env.VERCEL_ENV === "preview" ? process.env.STAGING_URL?.trim() : "";
+  const raw = staging || siteUrl() || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -45,7 +57,18 @@ export const metadata: Metadata = {
   applicationName: APP_NAME,
   // The installable app (app/manifest.ts): iPhone home-screen icon and full-screen mode.
   appleWebApp: { capable: true, title: APP_SHORT_NAME, statusBarStyle: "default" },
-  icons: { apple: [{ url: "/app-icons/apple-touch-icon.png", sizes: "180x180" }] },
+  // The browser tab: Clip (app/icon.svg) where SVG works, favicon.ico everywhere else.
+  // Listed here because a config `icons` replaces the automatic app/icon.svg link.
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [{ url: "/app-icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // Absolute links for link previews (og:image from app/opengraph-image.tsx).
+  metadataBase: new URL(publicOrigin()),
   formatDetection: { telephone: false },
   // Invite-only: nothing shows up in search results, except the public
   // pages (home, privacy, terms, data deletion), which override this.
