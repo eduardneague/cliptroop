@@ -11,14 +11,19 @@ import { getAccessToken } from "@/lib/social/tokens";
 import { tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
 import { PublishError } from "@/lib/social/publishers/common";
 import { runPostsNow } from "@/lib/social/worker";
-import { YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
+import { FACEBOOK_POST_SCOPE, FB_GRAPH, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
+import { FACEBOOK_MAX_SECONDS, FACEBOOK_MIN_SECONDS } from "@/lib/social/publishers/facebook";
 
 type Result<T = object> = ({ error?: undefined } & T) | { error: string; reconnect?: boolean };
 
 /** Posts must be at least this far ahead, so there's always time to change them. */
 const MIN_LEAD_MINUTES = 15;
-type Platform = "youtube" | "instagram" | "tiktok";
-const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
+const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
+const PLATFORM_LIST: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
+/** Facebook allows this many API posts per Page in any 24 hours. */
+const FACEBOOK_DAILY_MAX = 30;
+const FACEBOOK_NEEDS_PERMISSION = `${APP_NAME} needs permission to post on your Page. Reconnect Facebook in Team → Connected accounts and allow managing posts.`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function manager(teamId: string) {
@@ -78,6 +83,7 @@ export type ScheduleEntry = (
   | { platform: "youtube"; at: string; options: { title: string; description: string; madeForKids: boolean | null; visibility: "public" | "unlisted" | "private" } }
   | { platform: "instagram"; at: string; options: { caption: string } }
   | { platform: "tiktok"; at: string; options: TikTokOptions }
+  | { platform: "facebook"; at: string; options: { caption: string } }
 ) & { now?: boolean };
 
 /** Schedule (or reschedule) posts for an approved short. */
@@ -115,13 +121,13 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
 
   const { data: accounts } = await admin
     .from("social_accounts")
-    .select("id, platform, status")
+    .select("id, platform, status, scopes")
     .eq("team_id", short.team_id);
 
   const seen = new Set<string>();
   const clean: { platform: Platform; at: Date; now: boolean; options: Record<string, unknown>; accountId: string }[] = [];
   for (const e of entries) {
-    if (!["youtube", "instagram", "tiktok"].includes(e.platform) || seen.has(e.platform)) return { error: "Invalid platform list." };
+    if (!PLATFORM_LIST.includes(e.platform) || seen.has(e.platform)) return { error: "Invalid platform list." };
     seen.add(e.platform);
     if (!(short.platforms as string[]).includes(e.platform)) return { error: `This short isn't planned for ${NAME[e.platform]}.` };
     const account = (accounts ?? []).find((a) => a.platform === e.platform);
@@ -148,6 +154,29 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
       const caption = String(e.options.caption ?? "");
       if (caption.length > 2200) return { error: "Instagram captions can be up to 2,200 characters." };
       clean.push({ platform: "instagram", at, now: e.now === true, accountId: account.id as string, options: { caption } });
+    } else if (e.platform === "facebook") {
+      const caption = String(e.options.caption ?? "");
+      if (caption.length > 5000) return { error: "Facebook captions can be up to 5,000 characters." };
+      if (!((account.scopes as string[] | null) ?? []).includes(FACEBOOK_POST_SCOPE)) return { error: FACEBOOK_NEEDS_PERMISSION };
+      const { data: v } = await admin.from("short_video_versions").select("duration_sec").eq("id", versionId).maybeSingle();
+      const secs = v?.duration_sec === null || v?.duration_sec === undefined ? null : Number(v.duration_sec);
+      if (secs !== null && (secs < FACEBOOK_MIN_SECONDS || secs > FACEBOOK_MAX_SECONDS + 0.5)) {
+        return { error: `Facebook Reels must be ${FACEBOOK_MIN_SECONDS} to ${FACEBOOK_MAX_SECONDS} seconds long; this video is ${Math.round(secs)}.` };
+      }
+      // Facebook's limit: 30 posts per Page in any 24 hours (counted around this time).
+      const { count } = await admin
+        .from("social_posts")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", account.id)
+        .eq("platform", "facebook")
+        .neq("status", "cancelled")
+        .neq("short_id", shortId)
+        .gt("scheduled_at", new Date(at.getTime() - 86_400_000).toISOString())
+        .lt("scheduled_at", new Date(at.getTime() + 86_400_000).toISOString());
+      if ((count ?? 0) >= FACEBOOK_DAILY_MAX) {
+        return { error: `Facebook allows ${FACEBOOK_DAILY_MAX} Reels per Page in 24 hours, and that many are already around this time. Pick another day.` };
+      }
+      clean.push({ platform: "facebook", at, now: e.now === true, accountId: account.id as string, options: { caption } });
     } else {
       const o = e.options;
       if (!o.privacy) return { error: "Choose who can see the TikTok post." };
@@ -194,7 +223,7 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
   for (const c of clean) {
     const prev = (existing ?? []).find((p) => p.platform === c.platform);
     // YouTube uploads right away (YouTube publishes at the time itself);
-    // Instagram and TikTok start at the chosen time; "Post now" starts at once.
+    // Instagram, TikTok and Facebook start at the chosen time; "Post now" starts at once.
     const nextAt = c.platform === "youtube" || c.now ? new Date() : c.at;
     const values = {
       team_id: short.team_id,
@@ -308,7 +337,7 @@ export type PostNowResult = { started: Platform[]; skipped: { platform: Platform
  */
 export async function postNow(shortId: string, platform: Platform | "all"): Promise<Result<PostNowResult>> {
   if (!UUID.test(shortId)) return { error: "Short not found." };
-  if (platform !== "all" && !["youtube", "instagram", "tiktok"].includes(platform)) return { error: "Unknown platform." };
+  if (platform !== "all" && !PLATFORM_LIST.includes(platform)) return { error: "Unknown platform." };
   const supabase = await createClient();
   const { data: short } = await supabase.from("short_videos").select("id, team_id").eq("id", shortId).maybeSingle();
   if (!short) return { error: "Short not found." };
@@ -420,7 +449,7 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
     fileOk = !!head?.ok;
   }
   const duration = version?.duration_sec === null || version?.duration_sec === undefined ? null : Number(version.duration_sec);
-  const { data: accounts } = await admin.from("social_accounts").select("id, platform, status").eq("team_id", short.team_id);
+  const { data: accounts } = await admin.from("social_accounts").select("id, platform, status, scopes, external_id").eq("team_id", short.team_id);
 
   const checks = await Promise.all(
     platforms.map(async (platform): Promise<Preflight> => {
@@ -441,6 +470,16 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
           if (!r.ok) return { platform, ok: false, message: "Instagram refused the sign-in. Reconnect Instagram." };
           if (j.account_type && !/business|creator/i.test(j.account_type)) return { platform, ok: false, message: "The Instagram account must be Professional (Business or Creator)." };
           return { platform, ok: true, message: `Signed in as @${j.username ?? "account"}. ${APP_NAME} sends it at your time.` };
+        }
+        if (platform === "facebook") {
+          if (!((account.scopes as string[] | null) ?? []).includes(FACEBOOK_POST_SCOPE)) return { platform, ok: false, message: FACEBOOK_NEEDS_PERMISSION };
+          if (duration !== null && (duration < FACEBOOK_MIN_SECONDS || duration > FACEBOOK_MAX_SECONDS + 0.5)) {
+            return { platform, ok: false, message: `Facebook Reels must be ${FACEBOOK_MIN_SECONDS} to ${FACEBOOK_MAX_SECONDS} seconds; the video is ${Math.round(duration)}s.` };
+          }
+          const r = await fetch(`${FB_GRAPH()}/${encodeURIComponent(String(account.external_id))}?${new URLSearchParams({ fields: "id,name", access_token: token })}`, { cache: "no-store" });
+          const j = (await r.json().catch(() => ({}))) as { name?: string };
+          if (!r.ok) return { platform, ok: false, message: "Facebook refused the Page's sign-in. Reconnect Facebook." };
+          return { platform, ok: true, message: `Posting to ${j.name ?? "your Page"} as a public Reel. ${APP_NAME} sends it at your time.` };
         }
         const d = await tiktokCall("/post/publish/creator_info/query/", token, {});
         const max = Number(d.max_video_post_duration_sec ?? 0);
@@ -471,7 +510,7 @@ async function youtubeAccess(teamId: string): Promise<{ token: string } | { erro
 }
 
 /**
- * Change when a post goes live. Instagram/TikTok: any time before they're
+ * Change when a post goes live. Instagram/TikTok/Facebook: any time before they're
  * sent. YouTube: before upload, or after upload while it's still
  * scheduled on YouTube (changed there directly).
  */

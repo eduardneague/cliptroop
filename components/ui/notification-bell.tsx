@@ -23,6 +23,8 @@ import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { sounds } from "@/lib/sounds";
 import { startNavProgress } from "@/components/ui/nav-progress";
 
+const PLATFORM_NAMES: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
+
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
 type RoleMeta = { name: string; color: string };
@@ -233,11 +235,11 @@ function RichBody({ n }: { n: NotificationItem }) {
     case "social_post":
       return m.ok ? (
         <>
-          <ShortRef m={m} /> is live on <b>{m.platform === "youtube" ? "YouTube" : m.platform === "instagram" ? "Instagram" : "TikTok"}</b>.
+          <ShortRef m={m} /> is live on <b>{PLATFORM_NAMES[m.platform as string] ?? "TikTok"}</b>.
         </>
       ) : (
         <>
-          <ShortRef m={m} /> couldn&rsquo;t post to <b>{m.platform === "youtube" ? "YouTube" : m.platform === "instagram" ? "Instagram" : "TikTok"}</b>: {m.message}
+          <ShortRef m={m} /> couldn&rsquo;t post to <b>{PLATFORM_NAMES[m.platform as string] ?? "TikTok"}</b>: {m.message}
         </>
       );
     case "social_reconnect":

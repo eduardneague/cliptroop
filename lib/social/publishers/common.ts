@@ -30,7 +30,7 @@ export type PostRow = {
   id: string;
   team_id: string;
   short_id: string;
-  platform: "youtube" | "instagram" | "tiktok";
+  platform: "youtube" | "instagram" | "tiktok" | "facebook";
   account_id: string | null;
   version_id: string | null;
   scheduled_at: string;

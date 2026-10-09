@@ -13,13 +13,16 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_SENT=1 short #231's script already sent to review, MOCK_DONE=1 its script marked done, MOCK_GLOBE=1 the map
 #    widget as a globe of all platforms, MOCK_CURRENCY=EUR the revenue currency,
 #    MOCK_STALE=1 analytics last copied 50 h ago (the catch-up starts),
-#    MOCK_STATUS_BAD=1 the timer down now (status, developer, Posting), a failed + a late post
+#    MOCK_STATUS_BAD=1 the timer down now (status, developer, Posting), a failed + a late post, Facebook uploading on #234
 #    and an Instagram account to reconnect (the status bars always have 3 days of sample history),
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
 #    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
 #    MOCK_TOUR=1 the sample user hasn't seen Clip's tour yet (it starts on the dashboard),
 #    MOCK_NOTIFS=0 no notifications (otherwise 13 over the last 12 days, for the bell and its History),
-#    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total)
+#    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),
+#    MOCK_VIDEO=/path/to/any.mp4 the file those videos play (Posting card preview, review player;
+#    use a .webm for Playwright: its Chromium can't play H.264),
+#    MOCK_FB_ANALYTICS_ONLY=1 the Facebook Page connected before posting existed (no pages_manage_posts)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

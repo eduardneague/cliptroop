@@ -45,8 +45,8 @@ const SCENES = [
   {
     id: "post",
     title: "Out everywhere, on time",
-    text: "Schedule each approved short for YouTube, Instagram and TikTok from your team's own accounts, or post it everywhere right now. You see every step, and anything that goes wrong shows up on the Posting page.",
-    facts: ["YouTube, Instagram and TikTok", "Scheduled or right now", "Problems explained, with a retry"],
+    text: "Schedule each approved short for YouTube, Instagram, Facebook and TikTok from your team's own accounts, or post it everywhere right now. You see every step, and anything that goes wrong shows up on the Posting page.",
+    facts: ["YouTube, Instagram, Facebook and TikTok", "Scheduled or right now", "Problems explained, with a retry"],
     Vignette: PostVignette,
   },
   {
@@ -165,7 +165,7 @@ function Hero() {
         </h1>
         <div className="ld-hero-after">
           <p className="mt-6 text-[17px] sm:text-[18px] leading-relaxed text-ink-soft max-w-[34rem]">
-            {APP_NAME} is where your team plans, scripts, films, edits, reviews and posts its YouTube, Instagram and TikTok videos. Everyone sees what&rsquo;s next and whose turn it is.
+            {APP_NAME} is where your team plans, scripts, films, edits, reviews and posts its YouTube, Instagram, Facebook and TikTok videos. Everyone sees what&rsquo;s next and whose turn it is.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href="/login" className={`${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`}>

@@ -31,7 +31,7 @@ import { ScriptSettingsForm } from "./script-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 import { ConnectedAccounts } from "./connected-accounts";
-import { PROVIDERS, YOUTUBE_EDIT_SCOPE, hasStatsScopes, statsEnabled, type SocialPlatform } from "@/lib/social/providers";
+import { FACEBOOK_POST_SCOPE, PROVIDERS, YOUTUBE_EDIT_SCOPE, hasStatsScopes, statsEnabled, type SocialPlatform } from "@/lib/social/providers";
 import { getSocialSetup } from "@/lib/social/setup";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 
@@ -287,9 +287,11 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 status: r.status as "active" | "needs_reconnect",
                 lastError: (r.last_error as string | null) ?? null,
                 connectedAt: r.connected_at as string,
-                // YouTube connected before "change scheduled videos" existed.
+                // YouTube connected before "change scheduled videos" existed;
+                // a Facebook Page connected before posting to it existed.
                 missingPermission:
-                  r.platform === "youtube" && !((r.scopes as string[] | null) ?? []).includes(YOUTUBE_EDIT_SCOPE),
+                  (r.platform === "youtube" && !((r.scopes as string[] | null) ?? []).includes(YOUTUBE_EDIT_SCOPE)) ||
+                  (r.platform === "facebook" && !((r.scopes as string[] | null) ?? []).includes(FACEBOOK_POST_SCOPE)),
                 // Analytics is switched on for this platform, but this sign-in predates it.
                 statsMissing:
                   statsEnabled(r.platform as SocialPlatform) && !hasStatsScopes(r.platform as SocialPlatform, (r.scopes as string[] | null) ?? []),

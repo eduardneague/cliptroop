@@ -7,8 +7,8 @@ import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { PostingIcon } from "@/components/ui/icons";
 
-type Platform = "youtube" | "instagram" | "tiktok";
-const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
+const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const list = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 
 /**

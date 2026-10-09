@@ -623,7 +623,7 @@ export async function disconnectSocialAccount(teamId: string, platform: string) 
   return { success: true };
 }
 
-/** The Facebook Pages the person who connected Facebook manages (to pick which one feeds Analytics). */
+/** The Facebook Pages the person who connected Facebook manages (to pick which one is posted to and feeds Analytics). */
 export async function listFacebookPages(teamId: string): Promise<{ error: string } | { pages: { id: string; name: string; picture: string | null; current: boolean }[] }> {
   const { facebookPages } = await import("@/lib/social/providers");
   const { requireSocialManager } = await import("@/lib/social/access");
@@ -643,7 +643,7 @@ export async function listFacebookPages(teamId: string): Promise<{ error: string
   }
 }
 
-/** Use another of your Pages for Analytics (its numbers are copied from the next sync). */
+/** Use another of your Pages for posting and Analytics (its numbers are copied from the next sync). */
 export async function chooseFacebookPage(teamId: string, pageId: string) {
   const { facebookPages } = await import("@/lib/social/providers");
   const { requireSocialManager } = await import("@/lib/social/access");

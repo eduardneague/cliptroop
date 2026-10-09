@@ -76,7 +76,7 @@ const shorts = SHORT_TITLES.map((title, i) => {
   const planned = day(i - 3 + Math.floor(i / 2));
   return {
     id, team_id: TEAM, entry_number: 231 + i, title, stage, planned_date: planned, schedule_mode: i === 6 ? "pinned" : "auto", pin_kind: i === 6 ? "oneoff" : null, queue_position: i,
-    platforms: ["youtube", "instagram", "tiktok"], file_link: stage === "script" ? null : "https://drive.google.com/x", short_type: i === 4 ? "sponsorship" : i === 9 ? "big" : "filler",
+    platforms: ["youtube", "instagram", "facebook", "tiktok"], file_link: stage === "script" ? null : "https://drive.google.com/x", short_type: i === 4 ? "sponsorship" : i === 9 ? "big" : "filler",
     caption_enabled: i % 3 === 0, caption: i % 3 === 0 ? "Did you know? #shorts" : null, review_note: stage === "editing" && i === 7 ? "Cut the intro by 2 seconds and add captions." : null,
     created_at: at(-20 + i), created_by: U[0], creator: { username: "edu", full_name: "Edu Marin", email: "edu@example.com", avatar_url: null },
     editor: stage === "script" && i > 11 ? null : mem(i % 2 ? 2 : 1), reviewer: mem(0), scheduler: mem(3),
@@ -166,7 +166,13 @@ const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000003", team_id: TEAM, day: day(-20), source: "affiliate", amount: 86.4, currency: "USD", note: null, short_id: null, project_id: null, short_videos: null, long_video_projects: null },
 ];
 const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
-const STATS = { youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"], instagram: ["instagram_business_manage_insights"], tiktok: ["user.info.stats", "video.list"], facebook: ["pages_show_list", "pages_read_engagement", "read_insights"] };
+// MOCK_FB_ANALYTICS_ONLY=1: a Facebook Page connected before posting (no pages_manage_posts).
+const STATS = {
+  youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
+  instagram: ["instagram_business_manage_insights"],
+  tiktok: ["user.info.stats", "video.list"],
+  facebook: ["pages_show_list", "pages_read_engagement", "read_insights", ...(process.env.MOCK_FB_ANALYTICS_ONLY ? [] : ["pages_manage_posts"])],
+};
 
 // Status history (0067): 3 days of hourly checks with a few problems in them.
 const HOUR = 3600e3;
@@ -293,7 +299,7 @@ module.exports = {
     short_video_versions: process.env.MOCK_FILES
       ? shorts
           .filter((x) => x.stage !== "script")
-          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 7, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
       : [],
     short_video_comments: [],
     long_video_projects: longs,
@@ -332,6 +338,8 @@ module.exports = {
           // #234 (ready): TikTok scheduled for tomorrow, YouTube uploaded and waiting for its YouTube time ("Post now").
           { id: "sp000000-0000-4000-8000-000000000003", team_id: TEAM, short_id: shorts[3].id, platform: "tiktok", status: "scheduled", progress: 0, scheduled_at: new Date(Date.now() + 28 * 3600e3).toISOString(), next_attempt_at: new Date(Date.now() + 28 * 3600e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: null, published_at: null, updated_at: at(-1), step: "start", note: null, options: { caption: "Morning routine", privacy: "PUBLIC_TO_EVERYONE" }, locked_until: null, short: { id: shorts[3].id, entry_number: shorts[3].entry_number, title: shorts[3].title } },
           { id: "sp000000-0000-4000-8000-000000000004", team_id: TEAM, short_id: shorts[3].id, platform: "youtube", status: "waiting", progress: 100, scheduled_at: new Date(Date.now() + 26 * 3600e3).toISOString(), next_attempt_at: new Date(Date.now() + 26 * 3600e3).toISOString(), last_error: null, attempts: 0, permalink: "https://youtube.com/shorts/abc", external_id: "abc", published_at: null, updated_at: at(-1), step: "check", note: "Uploaded. YouTube will publish it then.", options: { title: "Morning routine", visibility: "public", madeForKids: false }, locked_until: null, short: { id: shorts[3].id, entry_number: shorts[3].entry_number, title: shorts[3].title } },
+          // #234: Facebook uploading.
+          { id: "sp000000-0000-4000-8000-000000000005", team_id: TEAM, short_id: shorts[3].id, platform: "facebook", status: "uploading", progress: 40, scheduled_at: at(0, -1), next_attempt_at: new Date(Date.now() - 60e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: "998877", published_at: null, updated_at: at(-1), step: "uploaded", note: null, options: { caption: "Morning routine" }, locked_until: null, short: { id: shorts[3].id, entry_number: shorts[3].entry_number, title: shorts[3].title } },
           { id: "sp000000-0000-4000-8000-000000000002", team_id: TEAM, short_id: shorts[1].id, platform: "youtube", status: "scheduled", progress: 0, scheduled_at: at(0, -1), next_attempt_at: new Date(Date.now() - 20 * 60e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: null, published_at: null, updated_at: at(-1), short: { id: shorts[1].id, entry_number: shorts[1].entry_number, title: shorts[1].title } },
         ]
       : [],

@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Posting" };
 // "Post now" starts the post right after answering: give it time to run.
 export const maxDuration = 60;
 
-const NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+const NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const PLURAL = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const ACTIVE = ["scheduled", "uploading", "processing", "waiting"];
 
@@ -52,7 +52,7 @@ export default async function PostingPage() {
       .neq("status", "cancelled")
       .order("scheduled_at", { ascending: true })
       .limit(200),
-    supabase.from("social_accounts").select("platform, display_name, username, status, last_error").eq("team_id", currentTeam.id).in("platform", ["youtube", "instagram", "tiktok"]),
+    supabase.from("social_accounts").select("platform, display_name, username, status, last_error, scopes").eq("team_id", currentTeam.id).in("platform", ["youtube", "instagram", "tiktok", "facebook"]),
     // Managers only: asked as soon as the roles are known, alongside the rest.
     getMembership(supabase, currentTeam.id).then((m) =>
       isManager(m?.roles ?? []) ? supabase.rpc("posting_health", { p_team: currentTeam.id }).then((r) => ({ data: r.data as unknown })) : { data: null as unknown }
@@ -300,8 +300,15 @@ export default async function PostingPage() {
                 <div>
                   <div className="text-[13.5px] font-semibold">
                     {NAME[a.platform as string]} · {(a.display_name as string) ?? (a.username as string)}{" "}
-                    <span className={a.status === "active" ? "text-green" : "text-amber"}>{a.status === "active" ? "connected" : "needs reconnecting"}</span>
+                    {a.status === "active" && a.platform === "facebook" && !((a.scopes as string[] | null) ?? []).includes("pages_manage_posts") ? (
+                      <span className="text-amber">connected for Analytics only</span>
+                    ) : (
+                      <span className={a.status === "active" ? "text-green" : "text-amber"}>{a.status === "active" ? "connected" : "needs reconnecting"}</span>
+                    )}
                   </div>
+                  {a.status === "active" && a.platform === "facebook" && !((a.scopes as string[] | null) ?? []).includes("pages_manage_posts") && (
+                    <div className="text-[12.5px] text-ink-soft">Reconnect it in Team → Connected accounts and allow managing posts to post to the Page.</div>
+                  )}
                   {a.status !== "active" && a.last_error && <div className="text-[12.5px] text-amber">{a.last_error as string}</div>}
                 </div>
               </li>

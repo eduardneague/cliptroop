@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.11.1" src="https://img.shields.io/badge/version-1.11.1-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.12.0" src="https://img.shields.io/badge/version-1.12.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -89,8 +89,8 @@ when it's right.
 
 ### Out everywhere, on time
 
-Schedule each approved short for YouTube, Instagram and TikTok from your
-team's own accounts, or post it everywhere right now. Every step is visible,
+Schedule each approved short for YouTube, Instagram, Facebook and TikTok from
+your team's own accounts, or post it everywhere right now. Every step is visible,
 and anything that goes wrong is explained, with a retry.
 
 <picture>

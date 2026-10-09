@@ -454,7 +454,7 @@ async function syncTikTok(admin: Admin, acc: Account, links: Links) {
 }
 
 // ---------------------------------------------------------------------------
-// Facebook (a Page: analytics only)
+// Facebook (a Page)
 // ---------------------------------------------------------------------------
 
 /** Facebook's daily values end at midnight Pacific: the value belongs to the day before end_time. */

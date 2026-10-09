@@ -20,7 +20,7 @@ export type AccountView = {
   status: "active" | "needs_reconnect";
   lastError: string | null;
   connectedAt: string;
-  /** Connected, but missing a permission added later (YouTube). */
+  /** Connected, but missing a permission added later (YouTube: change scheduled videos; Facebook: post Reels). */
   missingPermission?: boolean;
   /** Analytics is on for this platform, but this sign-in predates it. */
   statsMissing?: boolean;
@@ -31,7 +31,7 @@ const META = {
   youtube: { name: "YouTube", hint: "Your channel. Posts are uploaded and scheduled on YouTube itself." },
   instagram: { name: "Instagram", hint: "A Professional (Business or Creator) account." },
   tiktok: { name: "TikTok", hint: "Your TikTok account." },
-  facebook: { name: "Facebook", hint: "A Facebook Page you manage. Used for Analytics only: posting to Facebook stays by hand." },
+  facebook: { name: "Facebook", hint: "A Facebook Page you manage. Shorts are posted to it as Reels, and Analytics reads its numbers." },
 } as const;
 const ORDER: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 
@@ -253,7 +253,11 @@ export function ConnectedAccounts({
               )}
               {needs && a?.lastError && <p className="text-[12px] text-amber">{a.lastError}</p>}
               {!needs && a?.missingPermission && (
-                <p className="text-[12px] text-amber">Reconnect once to allow changing and cancelling videos already scheduled on YouTube.</p>
+                <p className="text-[12px] text-amber">
+                  {p === "facebook"
+                    ? "Reconnect once and allow managing posts, so shorts can be posted to this Page."
+                    : "Reconnect once to allow changing and cancelling videos already scheduled on YouTube."}
+                </p>
               )}
               {!needs && !a?.missingPermission && a?.statsMissing && <p className="text-[12px] text-amber">Reconnect once to allow Analytics to read its numbers.</p>}
               {p === "facebook" && a && canManage && <FacebookPagePicker teamId={teamId} current={a.displayName} />}
@@ -397,7 +401,7 @@ function SetupCheck({ setup }: { setup: SocialSetup }) {
                 <span>
                   Analytics permission:{" "}
                   <b className={p.stats || p.platform === "facebook" ? "text-ink" : "text-ink-faint"}>
-                    {p.platform === "facebook" ? "always (Facebook is for Analytics only)" : p.stats ? "asked for" : "not asked (not in SOCIAL_STATS_PLATFORMS)"}
+                    {p.platform === "facebook" ? "always (with posting: pages_manage_posts)" : p.stats ? "asked for" : "not asked (not in SOCIAL_STATS_PLATFORMS)"}
                   </b>
                 </span>
               </div>
@@ -427,7 +431,7 @@ function SetupCheck({ setup }: { setup: SocialSetup }) {
   );
 }
 
-/** Which of your Facebook Pages feeds Analytics (when you manage more than one). */
+/** Which of your Facebook Pages is posted to and feeds Analytics (when you manage more than one). */
 function FacebookPagePicker({ teamId, current }: { teamId: string; current: string | null }) {
   const toast = useToast();
   const router = useRouter();
@@ -465,7 +469,7 @@ function FacebookPagePicker({ teamId, current }: { teamId: string; current: stri
               setSaving(null);
               if ("error" in r && r.error) toast.error(r.error);
               else {
-                toast.success(`Analytics now follows ${pg.name}. Its numbers arrive with the next sync.`);
+                toast.success(`Now posting to ${pg.name}. Its numbers arrive in Analytics with the next sync.`);
                 setPages(null);
                 router.refresh();
               }
