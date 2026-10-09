@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { KindIcon } from "@/components/ui/kind-icon";
+import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import { PlatformFilter, type PlatformChoice } from "@/modules/short-videos/components/platform-filter";
+import { PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
 import type { Pipeline, PostToday, UpcomingLong, UpcomingShort } from "../lib/queries";
 import { DueChip, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
@@ -154,49 +157,188 @@ export function PipelineWidget({ pipeline }: { pipeline: Pipeline }) {
   );
 }
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  scheduled: { label: "Scheduled", cls: "text-ink-soft" },
-  uploading: { label: "Uploading", cls: "text-amber" },
-  publishing: { label: "Posting", cls: "text-amber" },
-  published: { label: "Posted", cls: "text-green" },
-  failed: { label: "Failed", cls: "text-red" },
+type PostKind = "upcoming" | "moving" | "posted" | "problem";
+type Show = "all" | "upcoming" | "posted" | "problem";
+// YouTube "waiting": uploaded, and YouTube itself publishes it at its time (so: upcoming).
+const kindOf = (p: PostToday): PostKind =>
+  p.status === "failed" || p.late ? "problem" : p.status === "published" ? "posted" : p.status === "scheduled" || p.status === "waiting" ? "upcoming" : "moving";
+const SHOW: [Exclude<Show, "all">, string, (p: { className?: string }) => React.ReactNode][] = [
+  ["upcoming", "Upcoming", ClockIcon],
+  ["posted", "Posted", CheckIcon],
+  ["problem", "Problems", AlertIcon],
+];
+const matches = (k: PostKind, show: Show) => show === "all" || k === show || (show === "upcoming" && k === "moving");
+const TONE: Record<PostKind, string> = {
+  upcoming: "bg-surface-2 text-ink-soft",
+  moving: "bg-amber/[0.14] text-amber",
+  posted: "bg-green/[0.13] text-green",
+  problem: "bg-red/[0.13] text-red",
 };
+const BAR: Record<PostKind, string> = { posted: "bg-green", moving: "bg-amber", upcoming: "bg-line/25", problem: "bg-red" };
 
+/**
+ * Today's posts, one row per short with a pill per platform (its time and
+ * where it stands), problems first. Filters: platform chips and
+ * Upcoming / Posted / Problems. A bar on top when there's room: how much of
+ * today has gone out.
+ */
 export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
+  const box = useBox();
   const today = localDay();
-  const roomy = useBox().w >= 250;
-  const time = (at: string) => new Date(at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-  const todays = posts.filter((p) => localDay(new Date(p.at)) === today || p.status === "failed");
-  todays.sort((a, b) => (a.status === "failed" ? -1 : 0) - (b.status === "failed" ? -1 : 0) || a.at.localeCompare(b.at));
+  const [platform, setPlatform] = useState<PlatformChoice>("all");
+  const [show, setShow] = useState<Show>("all");
+  const time = (at: string) => new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const todays = useMemo(
+    () => posts.filter((p) => localDay(new Date(p.publishedAt ?? p.at)) === today || p.status === "failed" || p.late),
+    [posts, today]
+  );
   if (!todays.length) return <EmptyLine text="Nothing posting today." />;
+
+  const onPlatform = todays.filter((p) => platform === "all" || p.platform === platform);
+  const visible = onPlatform.filter((p) => matches(kindOf(p), show));
+  // Each filter counts what the other one leaves.
+  const byStatus = todays.filter((p) => matches(kindOf(p), show));
+  const counts: Partial<Record<Platform, number>> = {};
+  for (const p of byStatus) counts[p.platform as Platform] = (counts[p.platform as Platform] ?? 0) + 1;
+  const showCount = (s: Exclude<Show, "all">) => onPlatform.filter((p) => matches(kindOf(p), s)).length;
+
+  // One group per short: problems first, then by the earliest time.
+  const groups = new Map<string, PostToday[]>();
+  for (const p of visible) groups.set(p.shortId, [...(groups.get(p.shortId) ?? []), p]);
+  const list = [...groups.values()]
+    .map((ps) => ps.sort((a, b) => a.at.localeCompare(b.at)))
+    .sort((a, b) => Number(b.some((p) => kindOf(p) === "problem")) - Number(a.some((p) => kindOf(p) === "problem")) || a[0].at.localeCompare(b[0].at));
+
+  const tally = { posted: 0, moving: 0, upcoming: 0, problem: 0 } as Record<PostKind, number>;
+  for (const p of onPlatform) tally[kindOf(p)]++;
+  const next = onPlatform.filter((p) => p.status === "scheduled" && !p.late).sort((a, b) => a.at.localeCompare(b.at))[0];
+  // What fits: the summary from ~4 rows tall, the status filter from ~3; labels from ~300 px wide.
+  const roomy = box.h >= 170;
+  const withStatus = box.h >= 110 || show !== "all";
+  const wide = box.w >= 230;
+  const labels = box.w >= 300;
+  const filtered = platform !== "all" || show !== "all";
+
   return (
-    <ul className="h-full widget-scroll -mx-1 motion-stagger">
-      {todays.map((p) => {
-        const st = STATUS[p.status] ?? { label: p.status, cls: "text-ink-soft" };
-        return (
-          <li key={p.id}>
-            <Link href={`/shorts/${p.shortId}`} className={`flex items-center gap-2 rounded-md px-1 py-[3px] hover:bg-surface-2/70 ${p.status === "failed" ? "bg-red/[0.06]" : ""}`}>
-              {roomy && <span className="min-w-[2.25rem] text-[11.5px] font-bold tabular-nums whitespace-nowrap flex-shrink-0">{time(p.at)}</span>}
-              <PlatformIcon platform={p.platform as "youtube"} className="w-4 h-4 rounded-[4px] flex-shrink-0" />
-              <span className="min-w-0 flex-1 leading-tight">
-                <span className="block text-[12px] truncate">
-                  <span className="font-mono text-ink-faint">#{p.number}</span> {p.title}
-                </span>
-                {!roomy && <span className="block text-[10.5px] font-semibold text-ink-soft tabular-nums">{time(p.at)}</span>}
-              </span>
-              {roomy ? (
-                <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold flex-shrink-0 ${st.cls}`}>
-                  {(p.status === "uploading" || p.status === "publishing") && <span className="live-dot w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
-                  {st.label}
-                </span>
-              ) : (
-                <span title={st.label} className={`w-2 h-2 rounded-full flex-shrink-0 bg-current ${st.cls} ${p.status === "uploading" || p.status === "publishing" || p.status === "failed" ? "live-dot" : ""}`} />
-              )}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="h-full flex flex-col gap-2 min-h-0">
+      {roomy && (
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[20px] leading-none font-bold tabular-nums">
+              <CountUp value={tally.posted} />
+            </span>
+            <span className="text-[12px] text-ink-soft">of {onPlatform.length} posted</span>
+            {next && wide && <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap">next {time(next.at)}</span>}
+          </div>
+          <div className="mt-1.5 flex h-1.5 gap-[2px] rounded-full overflow-hidden" role="img" aria-label={`${tally.posted} posted, ${tally.moving} posting now, ${tally.upcoming} to go, ${tally.problem} with problems`}>
+            {(["posted", "moving", "upcoming", "problem"] as PostKind[]).map((k) => (tally[k] ? <span key={k} className={BAR[k]} style={{ flexGrow: tally[k] }} /> : null))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <PlatformFilter compact iconsOnly={!wide} value={platform} onChange={setPlatform} counts={counts} total={byStatus.length} />
+        {withStatus && (
+          <div className="flex items-center gap-1" role="group" aria-label="Status">
+            {SHOW.map(([k, label, Icon]) => {
+              const n = showCount(k);
+              if (!n && show !== k && k === "problem") return null;
+              const on = show === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${label}: ${n}`}
+                  title={labels ? undefined : `${label}: ${n}`}
+                  onClick={() => setShow(on ? "all" : k)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-[11px] font-semibold tabular-nums flex-shrink-0 transition-colors ${
+                    on
+                      ? k === "problem"
+                        ? "bg-red text-white border-red"
+                        : "bg-ink text-paper border-ink"
+                      : k === "problem"
+                        ? "border-red/40 text-red hover:bg-red/[0.06]"
+                        : `border-line/15 hover:text-ink ${k === "posted" ? "text-green" : "text-ink-soft"}`
+                  }`}
+                >
+                  <Icon className="w-3 h-3" />
+                  {labels && <span className={on ? "" : "text-ink"}>{label}</span>}
+                  <span className={labels ? "font-medium opacity-70" : ""}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {list.length ? (
+        <ul className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {list.map((ps) => {
+            const first = ps[0];
+            const bad = ps.some((p) => kindOf(p) === "problem");
+            const all = todays.filter((p) => p.shortId === first.shortId);
+            const done = all.filter((p) => p.status === "published").length;
+            return (
+              <li key={first.shortId}>
+                <Link href={`/shorts/${first.shortId}`} className={`block rounded-lg px-1.5 py-1 hover:bg-surface-2/70 ${bad ? "bg-red/[0.06]" : ""}`}>
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 text-[12px] font-semibold truncate">
+                      <span className="font-mono font-normal text-ink-faint">#{first.number}</span> {first.title || "A deleted short"}
+                    </span>
+                    <span className={`text-[10.5px] tabular-nums flex-shrink-0 ${done === all.length ? "text-green font-bold" : "text-ink-faint"}`} title={`${done} of ${all.length} posted`}>
+                      {done}/{all.length}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 flex flex-wrap gap-1">
+                    {ps.map((p) => {
+                      const k = kindOf(p);
+                      const name = PLATFORM_META[p.platform as Platform]?.name ?? p.platform;
+                      const label =
+                        k === "problem" ? (p.status === "failed" ? "Failed" : "Late") : k === "posted" ? time(p.publishedAt ?? p.at) : p.status === "uploading" && p.progress ? `${p.progress}%` : time(p.at);
+                      const what =
+                        k === "problem"
+                          ? p.status === "failed"
+                            ? `failed${p.error ? `: ${p.error}` : ""}`
+                            : `late: hasn't started (planned ${time(p.at)})`
+                          : k === "posted"
+                            ? `posted at ${time(p.publishedAt ?? p.at)}`
+                            : k === "moving"
+                              ? `posting now (planned ${time(p.at)})`
+                              : p.status === "waiting"
+                                ? `uploaded; YouTube publishes it at ${time(p.at)}`
+                                : `scheduled for ${time(p.at)}`;
+                      return (
+                        <span key={p.id} title={`${name}: ${what}`} className={`inline-flex items-center gap-1 h-5 rounded-full pl-[2px] ${wide ? "pr-1.5" : "pr-[3px]"} text-[10.5px] font-semibold tabular-nums ${TONE[k]}`}>
+                          <PlatformIcon platform={p.platform as Platform} className="w-4 h-4 rounded-full" />
+                          <span className="sr-only">{`${name}: ${what}`}</span>
+                          {k === "posted" && <CheckIcon className="w-3 h-3" />}
+                          {k === "moving" && <span className="live-dot w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
+                          {k === "problem" && !wide && <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
+                          {wide && <span aria-hidden>{label}</span>}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1 text-center">
+          <p className="text-[12px] text-ink-soft">{filtered ? "Nothing here with these filters." : "Nothing posting today."}</p>
+          {filtered && (
+            <button type="button" onClick={() => {
+                setPlatform("all");
+                setShow("all");
+              }} className="text-[11.5px] font-semibold text-amber hover:underline">
+              Show everything
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

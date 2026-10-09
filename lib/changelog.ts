@@ -23,6 +23,19 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.2",
+    date: "2026-10-09",
+    title: "Facebook earnings, and filters for posts",
+    changes: [
+      { kind: "new", text: "Analytics → Revenue includes Facebook: a Page in Facebook's Content Monetization brings its daily earnings with every sync, next to YouTube's. It gets its own tile, its colour in the chart, a line in Where it comes from and a column in By month (and in the CSV). A Page that isn't in the program says so under the tiles." },
+      { kind: "new", text: "Posting has filters for every list (Needs attention, In progress, Upcoming, Published recently): platform buttons with counts, a search by #number or title, and a day (today, tomorrow, yesterday, the next or last 7 days). Each list says how many of its posts match, and the ones with matches open by themselves." },
+      { kind: "new", text: "Published recently goes further back: the latest 100 posts, 20 at a time with Show more, and the filters search all of them." },
+      { kind: "better", text: "The Posting today widget is redone: one row per short with a pill for each platform (its time, posted, posting now, failed or late), problems first, how much of today has gone out, and filters: platform and Upcoming / Posted / Problems. It fits any size, down to the smallest." },
+      { kind: "fixed", text: "Posting listed the oldest 200 posts, so a team with many posts could miss its newest ones. Unfinished posts and the latest published ones are now read separately." },
+      { kind: "fixed", text: "In the Calendar, post and meeting times are now worked out on your device from the start. In far-away time zones they could show the wrong time for a moment." },
+    ],
+  },
+  {
     version: "1.12.1",
     date: "2026-10-09",
     title: "The video always in view, and tidier controls",

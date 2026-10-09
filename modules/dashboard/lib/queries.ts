@@ -303,7 +303,22 @@ export async function listTeamCards(teamIds: string[]): Promise<TeamCard[]> {
 export type UpcomingShort = { id: string; number: number; title: string; date: string; stage: string; editor: { name: string; avatarUrl: string | null; color: string } | null };
 export type UpcomingLong = { id: string; number: number; title: string; date: string | null; stage: string; thumb: string | null };
 export type Pipeline = { shorts: Record<string, number>; longs: Record<string, number> };
-export type PostToday = { id: string; platform: string; status: string; at: string; shortId: string; number: number; title: string };
+export type PostToday = {
+  id: string;
+  platform: string;
+  status: string;
+  /** When it's planned for. */
+  at: string;
+  /** When it went out (published only). */
+  publishedAt: string | null;
+  /** Scheduled, but it hasn't started a few minutes after its time. */
+  late: boolean;
+  progress: number;
+  error: string | null;
+  shortId: string;
+  number: number;
+  title: string;
+};
 
 export async function listUpcoming(teamId: string, today: string) {
   const supabase = await createClient();
@@ -360,16 +375,30 @@ export async function listPostsAroundToday(teamId: string): Promise<PostToday[]>
   const supabase = await createClient();
   const from = new Date(Date.now() - 36 * 3_600_000).toISOString();
   const to = new Date(Date.now() + 36 * 3_600_000).toISOString();
+  // Around today (the browser picks its own "today" from these), and every failed post, however old.
   const { data } = await supabase
     .from("social_posts")
-    .select("id, platform, status, scheduled_at, short_id, short_videos(entry_number, title)")
+    .select("id, platform, status, progress, scheduled_at, next_attempt_at, published_at, last_error, short_id, short_videos(entry_number, title)")
     .eq("team_id", teamId)
     .neq("status", "cancelled")
-    .gte("scheduled_at", from)
-    .lte("scheduled_at", to)
-    .order("scheduled_at");
+    .or(`status.eq.failed,and(scheduled_at.gte.${from},scheduled_at.lte.${to})`)
+    .order("scheduled_at")
+    .limit(300);
+  const now = Date.now();
   return (data ?? []).map((p) => {
     const sv = (Array.isArray(p.short_videos) ? p.short_videos[0] : p.short_videos) as { entry_number: number; title: string } | null;
-    return { id: p.id as string, platform: p.platform as string, status: p.status as string, at: p.scheduled_at as string, shortId: p.short_id as string, number: sv?.entry_number ?? 0, title: sv?.title ?? "" };
+    return {
+      id: p.id as string,
+      platform: p.platform as string,
+      status: p.status as string,
+      at: p.scheduled_at as string,
+      publishedAt: (p.published_at as string | null) ?? null,
+      late: p.status === "scheduled" && Date.parse(p.next_attempt_at as string) < now - 3 * 60_000,
+      progress: Number(p.progress) || 0,
+      error: (p.last_error as string | null) ?? null,
+      shortId: p.short_id as string,
+      number: sv?.entry_number ?? 0,
+      title: sv?.title ?? "",
+    };
   });
 }

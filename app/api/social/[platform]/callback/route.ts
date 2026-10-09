@@ -176,7 +176,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // A different channel / account / Page than before: its old numbers don't belong to this one.
     if (existing?.external_id && existing.external_id !== profile.externalId) {
       await Promise.all(
-        ["analytics_daily", "analytics_countries", "analytics_content", "analytics_syncs", ...(platform === "youtube" ? ["analytics_revenue_daily"] : [])].map((t) =>
+        ["analytics_daily", "analytics_countries", "analytics_content", "analytics_syncs", ...(platform === "youtube" || platform === "facebook" ? ["analytics_revenue_daily"] : [])].map((t) =>
           admin.from(t).delete().eq("team_id", saved.team_id).eq("platform", platform)
         )
       );

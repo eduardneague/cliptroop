@@ -1,13 +1,13 @@
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 
-/** Posting: health card, then the four groups (two open, like the real page). */
+/** Posting: health card, the filters, then the four groups (two open, like the real page). */
 export default function Loading() {
   return (
     <SkeletonPage width="max-w-5xl" className="px-4 sm:px-8 py-6 space-y-5">
       <div className="flex items-end justify-between gap-3 flex-wrap" aria-hidden>
         <div>
           <h1 className="text-[28px] font-display font-semibold">Posting</h1>
-          <p className="text-[13px] text-ink-faint">Everything scheduled, in progress and posted, and whether the system behind it is healthy.</p>
+          <p className="text-[13px] text-ink-faint">Everything scheduled, in progress and posted, and anything that stops your team&rsquo;s posts.</p>
         </div>
         <Skeleton className="h-9 w-28 rounded-lg" />
       </div>
@@ -29,6 +29,20 @@ export default function Loading() {
           ))}
         </div>
       </section>
+
+      {/* The filters: platform chips, then search and day. */}
+      <div className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-3.5 space-y-2.5" aria-hidden>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Skeleton className="h-8 w-14 rounded-full" />
+          {["w-[7.5rem]", "w-[7.5rem]", "w-[7rem]", "w-24"].map((w, i) => (
+            <Skeleton key={i} className={`h-8 ${w} max-sm:w-14 rounded-full`} />
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 flex-1 rounded-lg" />
+          <Skeleton className="h-10 w-[9.5rem] sm:w-[10.5rem] rounded-lg" />
+        </div>
+      </div>
 
       {[
         { title: "Needs attention", rows: 0 },

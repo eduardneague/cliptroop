@@ -179,8 +179,8 @@ export function AnalyticsView({
         ...r.streams.map((x) => [x.label, x.amount.toFixed(2)]),
         ["All streams", (r.all.value ?? 0).toFixed(2)],
         [],
-        ["Month", `YouTube (${r.currency})`, `Other income (${r.currency})`, `Total (${r.currency})`, "YouTube views"],
-        ...r.months.map((m) => [m.month, m.revenue.toFixed(2), m.other.toFixed(2), (m.revenue + m.other).toFixed(2), m.views]),
+        ["Month", `YouTube (${r.currency})`, `Facebook (${r.currency})`, `Other income (${r.currency})`, `Total (${r.currency})`, "YouTube views"],
+        ...r.months.map((m) => [m.month, m.revenue.toFixed(2), m.facebook.toFixed(2), m.other.toFixed(2), (m.revenue + m.facebook + m.other).toFixed(2), m.views]),
         [],
         ["Date", "Other income", `Amount (${r.currency})`, "Note"],
         ...r.entries.map((e) => [e.day, e.source, e.amount.toFixed(2), e.note]),
@@ -984,7 +984,9 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
 // ---------------------------------------------------------------------------
 
 const YT_COLOR = "rgb(var(--chart-yt))";
+const FB_COLOR = "rgb(var(--chart-fb))";
 const OTHER_COLOR = "rgb(var(--chart-tt))";
+const STREAM_COLOR = { youtube: YT_COLOR, facebook: FB_COLOR, other: OTHER_COLOR } as const;
 
 function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; teamId: string }) {
   const [adding, setAdding] = useState(false);
@@ -1008,29 +1010,45 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
   const streamTotal = r.streams.reduce((t, x) => t + x.amount, 0);
   const splitTotal = r.split ? r.split.shorts + r.split.long : 0;
   const hasOther = r.perBucket.some((b) => b.other > 0);
+  const hasFb = r.hasFacebook;
+  const fbMonths = r.months.some((m) => m.facebook);
   return (
     <div className="space-y-5">
       <CurrencyBar r={r} />
       {r.note && <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-[13px] text-ink">{r.note}</p>}
       {r.fxNote && <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5 text-[13px] text-ink">{r.fxNote}</p>}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <StatTile className="ring-1 ring-amber/30" label="All streams together" value={r.all.value} prev={r.all.prev} compare={compare} format={money} />
+      <div className={`grid gap-3 grid-cols-2 ${hasFb ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+        <StatTile className={`ring-1 ring-amber/30 ${hasFb ? "col-span-2 lg:col-span-1" : ""}`} label="All streams together" value={r.all.value} prev={r.all.prev} compare={compare} format={money} />
         <StatTile label="YouTube (estimated)" value={r.total.value} prev={r.total.prev} compare={compare} format={money} hint={r.bestDay ? `best day ${niceDay(r.bestDay.day)}: ${cents(r.bestDay.revenue)}` : undefined} />
+        {hasFb && <StatTile label="Facebook" value={r.facebook.value} prev={r.facebook.prev} compare={compare} format={money} hint="Content Monetization" />}
         <StatTile label="Other income" value={r.other.value} prev={r.other.prev} compare={compare} format={money} hint={r.other.value === null ? "sponsorships, deals, other platforms" : undefined} />
         <StatTile label="Per 1,000 views" value={r.rpm.value} prev={r.rpm.prev} compare={compare} format={(n) => (n === null ? "–" : cents(n))} hint="YouTube revenue ÷ views" />
       </div>
+      {r.facebookNote && <p className="-mt-2 text-[12.5px] text-ink-soft">{r.facebookNote}</p>}
 
       {r.hasData ? (
         <ChartCard
           title="Revenue"
           sub={`${!r.buckets.length || r.buckets[0].from === r.buckets[0].to ? "Per day" : r.buckets[0].key.length === 7 ? "Per month" : "Per week"} · ${r.currency}`}
-          right={hasOther ? <Legend shape="rect" items={[{ key: "yt", label: "YouTube", color: YT_COLOR }, { key: "other", label: "Other income", color: OTHER_COLOR }]} /> : undefined}
+          right={
+            hasOther || hasFb ? (
+              <Legend
+                shape="rect"
+                items={[
+                  { key: "yt", label: "YouTube", color: YT_COLOR },
+                  ...(hasFb ? [{ key: "fb", label: "Facebook", color: FB_COLOR }] : []),
+                  ...(hasOther ? [{ key: "other", label: "Other income", color: OTHER_COLOR }] : []),
+                ]}
+              />
+            ) : undefined
+          }
         >
           <StackedColumns
             ariaLabel="Revenue per period"
             labels={r.buckets.map((b) => b.label)}
             series={[
               { key: "rev", label: "YouTube", color: YT_COLOR, values: r.perBucket.map((b) => b.revenue) },
+              ...(hasFb ? [{ key: "fb", label: "Facebook", color: FB_COLOR, values: r.perBucket.map((b) => b.facebook) }] : []),
               ...(hasOther ? [{ key: "other", label: "Other income", color: OTHER_COLOR, values: r.perBucket.map((b) => b.other) }] : []),
             ]}
             format={money}
@@ -1038,7 +1056,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
         </ChartCard>
       ) : (
         <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">
-          No revenue yet. YouTube&rsquo;s comes with a sync (YouTube connected with stats allowed, a monetized channel); other income you add below.
+          No revenue yet. YouTube&rsquo;s and Facebook&rsquo;s come with a sync (a monetized channel, or a Page in Facebook&rsquo;s Content Monetization); other income you add below.
         </p>
       )}
 
@@ -1049,7 +1067,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
               {r.streams.map((x) => (
                 <li key={x.key} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 items-center">
                   <span className="flex items-center gap-2 min-w-0 text-[13px]">
-                    <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: x.youtube ? YT_COLOR : OTHER_COLOR }} aria-hidden />
+                    <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: STREAM_COLOR[x.kind] }} aria-hidden />
                     <span className="truncate">{x.label}</span>
                   </span>
                   <span className="text-[13px] tabular-nums">
@@ -1057,7 +1075,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
                     <span className="text-ink-faint ml-2 inline-block w-10 text-right">{streamTotal ? `${Math.round((x.amount / streamTotal) * 100)}%` : ""}</span>
                   </span>
                   <span className="col-span-2 mt-1 h-1.5 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
-                    <span className="block h-full rounded-full" style={{ width: `${streamTotal ? Math.max(2, (x.amount / streamTotal) * 100) : 0}%`, background: x.youtube ? YT_COLOR : OTHER_COLOR }} />
+                    <span className="block h-full rounded-full" style={{ width: `${streamTotal ? Math.max(2, (x.amount / streamTotal) * 100) : 0}%`, background: STREAM_COLOR[x.kind] }} />
                   </span>
                 </li>
               ))}
@@ -1088,7 +1106,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
 
         <ChartCard
           title="Other income"
-          sub="Sponsorships, brand deals, affiliate links, other platforms: anything YouTube's numbers don't show"
+          sub="Sponsorships, brand deals, affiliate links, other platforms: anything the synced numbers don't show"
           right={
             r.isMaster && !adding ? (
               <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] hover:brightness-110">
@@ -1120,6 +1138,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
                   <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-faint text-left">
                     <th className="font-bold pb-2 px-1">Month</th>
                     <th className="font-bold pb-2 px-1 text-right">YouTube</th>
+                    {fbMonths && <th className="font-bold pb-2 px-1 text-right">Facebook</th>}
                     <th className="font-bold pb-2 px-1 text-right">Other</th>
                     <th className="font-bold pb-2 px-1 text-right">Total</th>
                     <th className="font-bold pb-2 px-1 text-right">RPM</th>
@@ -1130,8 +1149,9 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
                     <tr key={m.month} className="border-t border-line/10">
                       <td className="py-2 px-1 whitespace-nowrap">{new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}</td>
                       <td className="py-2 px-1 text-right tabular-nums">{cents(m.revenue)}</td>
+                      {fbMonths && <td className="py-2 px-1 text-right tabular-nums">{m.facebook ? cents(m.facebook) : "–"}</td>}
                       <td className="py-2 px-1 text-right tabular-nums text-ink-soft">{m.other ? cents(m.other) : "–"}</td>
-                      <td className="py-2 px-1 text-right tabular-nums font-semibold">{cents(m.revenue + m.other)}</td>
+                      <td className="py-2 px-1 text-right tabular-nums font-semibold">{cents(m.revenue + m.facebook + m.other)}</td>
                       <td className="py-2 px-1 text-right tabular-nums text-ink-soft">{m.views ? cents((m.revenue / m.views) * 1000) : "–"}</td>
                     </tr>
                   ))}

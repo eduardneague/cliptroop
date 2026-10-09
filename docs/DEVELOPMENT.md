@@ -203,6 +203,19 @@ Posting card refuses until it's there. The Posting card always shows the exact
 file that gets posted (`post-video-preview.tsx`, the review player). How long a
 short may be per platform lives in `lib/short-length.ts` (used by the cards and
 by the server before scheduling).
+The Posting page reads unfinished posts (soonest first) and the latest 100
+published ones separately, then `posting/post-sections.tsx` filters them in
+the browser (platform, #number/title, day). Platform chips everywhere are
+`modules/short-videos/components/platform-filter.tsx` (also the dashboard's
+Posting today widget, `compact`).
+
+**Revenue.** `analytics_revenue_daily` holds what the sync copies: YouTube's
+estimate (with Shorts/long and stream splits) and, since 0074, a Facebook
+Page's Content Monetization earnings (`platform = 'facebook'`, content
+`all`). Meta's value shape isn't documented well, so
+`modules/analytics/lib/fb-money.ts` reads any of them (tests/fb-money.test.ts).
+TikTok and Instagram have no earnings API: masters add those by hand
+(`revenue_entries`).
 
 **Who may change what.** Dates (Calendar moves, long video dates): masters and
 schedulers, enforced in the database (shorts' functions, 0073 for long videos).
