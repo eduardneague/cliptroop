@@ -70,7 +70,7 @@ export function PaletteChoice({ value }: { value: string | null }) {
         setCurrent(prev);
         apply(prev);
         toast.error(res.error);
-      }
+      } else toast.success(`Colour theme: ${PALETTES.find((p) => p.id === id)?.name ?? "Default"}`);
     });
   }
   return (

@@ -843,33 +843,65 @@ function CountryMap({ a }: { a: Audience }) {
 // Content
 // ---------------------------------------------------------------------------
 
+/**
+ * One row of platform chips, like the Audience tab's: All, then every
+ * platform (with its count and how its copy is doing). Pick one to see only
+ * its videos; pick it again, or All, for everything.
+ */
+function ContentFilter({ items, status, platform, setPlatform }: { items: ContentItem[]; status: PlatformStatus[]; platform: "all" | P; setPlatform: (p: "all" | P) => void }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Platform">
+      <button
+        type="button"
+        onClick={() => setPlatform("all")}
+        aria-pressed={platform === "all"}
+        className={`inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[12px] font-semibold border transition-colors ${
+          platform === "all" ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"
+        }`}
+      >
+        All
+        <span className={`font-medium tabular-nums ${platform === "all" ? "text-paper/60" : "text-ink-faint"}`}>{items.length}</span>
+      </button>
+      {ALL_P.map((p) => {
+        const s = status.find((x) => x.platform === p);
+        const n = items.filter((i) => i.platform === p).length;
+        const on = platform === p;
+        return (
+          <button
+            key={p}
+            type="button"
+            aria-pressed={on}
+            title={s?.lastError ?? undefined}
+            onClick={() => setPlatform(on ? "all" : p)}
+            className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors ${
+              on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)]" : "border-line/15 bg-surface/50 hover:bg-surface"
+            } ${s?.lastError && s.connected ? "!border-red/40" : ""}`}
+          >
+            <PlatformIcon platform={p} className={`w-6 h-6 rounded-full ${s?.connected || n ? "" : "opacity-40 grayscale"}`} />
+            <span className="text-ink">{PLATFORM[p].name}</span>
+            <span className="text-ink-faint font-medium tabular-nums">{n}</span>
+            {s && <span className="hidden sm:inline text-ink-faint font-medium">· {statusText(s)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformStatus[] }) {
   const [platform, setPlatform] = useState<"all" | P>("all");
   const list = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
-  if (!status.some((s) => s.connected && s.statsReady) && !items.length)
+  if (!status.some((s) => s.connected) && !items.length)
     return (
       <>
         <StatusRow status={status} />
         <SetupCard status={status} />
       </>
     );
+  const picked = platform === "all" ? null : status.find((s) => s.platform === platform) ?? null;
   return (
     <div className="space-y-4">
-      <StatusRow status={status} />
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {(["all", ...ALL_P.filter((x) => items.some((i) => i.platform === x))] as ("all" | P)[]).map((p) => (
-          <button
-            key={p}
-            type="button"
-            aria-pressed={platform === p}
-            onClick={() => setPlatform(p)}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12.5px] font-semibold transition-colors ${platform === p ? "bg-ink text-paper" : "text-ink-soft hover:bg-surface-2 hover:text-ink"}`}
-          >
-            {p === "all" ? "All platforms" : PLATFORM[p].name}
-            <span className={`text-[11px] font-medium ${platform === p ? "text-paper/60" : "text-ink-faint"}`}>{p === "all" ? items.length : items.filter((i) => i.platform === p).length}</span>
-          </button>
-        ))}
-      </div>
+      <ContentFilter items={items} status={status} platform={platform} setPlatform={setPlatform} />
       {list.length ? (
         <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto">
           <table className="w-full min-w-[720px] text-[13px]">
@@ -905,7 +937,10 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
                         ) : (
                           <span className="font-semibold truncate block max-w-[22rem]">{c.title || "Untitled"}</span>
                         )}
-                        <span className="text-[11.5px] text-ink-faint">{c.kind === "short" ? "Short" : c.kind === "long" ? "Long video" : "Post"}</span>
+                        <span className="text-[11.5px] text-ink-faint">
+                          {c.kind === "short" ? "Short" : c.kind === "long" ? "Long video" : "Post"}
+                          {c.noNumbers ? ` · no numbers from ${PLATFORM[c.platform].name} yet` : ""}
+                        </span>
                       </span>
                     </span>
                   </td>
@@ -929,9 +964,17 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
           </table>
         </div>
       ) : (
-        <p className="rounded-2xl border border-dashed border-line/20 py-10 text-center text-[13.5px] text-ink-soft">Nothing published in this range.</p>
+        <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">
+          {picked && !picked.connected
+            ? `${PLATFORM[picked.platform].name} isn't connected, and nothing was posted there in this range.`
+            : picked && !picked.statsReady
+              ? `Nothing posted to ${PLATFORM[picked.platform].name} in this range. Its numbers need one more permission: reconnect it in Team → Connected accounts.`
+              : `Nothing published${picked ? ` on ${PLATFORM[picked.platform].name}` : ""} in this range.`}
+        </p>
       )}
-      <p className="text-[12px] text-ink-faint">Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts.</p>
+      <p className="text-[12px] text-ink-faint">
+        Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts and Reels. Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their numbers.
+      </p>
     </div>
   );
 }

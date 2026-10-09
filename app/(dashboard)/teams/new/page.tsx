@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 import Link from "next/link";
 import { createTeam } from "./actions";
 import { ArrowLeftIcon } from "@/components/ui/icons";
@@ -28,7 +28,15 @@ export default function NewTeamPage() {
           teammates and create more teams later.
         </p>
 
-        <form action={formAction} className="space-y-5">
+        <form
+          // Not a form action: React would empty the name after an error.
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            startTransition(() => formAction(fd));
+          }}
+          className="space-y-5"
+        >
           <div>
             <label
               htmlFor="name"

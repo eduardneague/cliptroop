@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SunIcon, MoonIcon } from "./icons";
+import { sounds } from "@/lib/sounds";
 
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState(false);
@@ -17,7 +18,12 @@ export function ThemeToggle() {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("vp-theme", next ? "dark" : "light");
+    try {
+      localStorage.setItem("vp-theme", next ? "dark" : "light");
+    } catch {
+      /* private mode: dark mode just lasts this visit */
+    }
+    sounds.tick();
   }
 
   return (

@@ -6,7 +6,7 @@ import { formatTime } from "../lib/limits";
 import { playbackUrl, prefetchPlayback } from "../lib/playback";
 import type { VideoVersion } from "../lib/queries";
 import { CtrlButton, SpeedPills, Timeline } from "./player";
-import { Back5Icon, Forward5Icon, FrameBackIcon, FrameForwardIcon, PauseIcon, PlayIcon } from "./player-icons";
+import { Back5Icon, Forward5Icon, FrameBackIcon, FrameForwardIcon, PauseIcon, PlayIcon, SoundIcon } from "./player-icons";
 
 const FRAME = 1 / 30;
 
@@ -28,7 +28,8 @@ function useSignedUrl(versionId: string | null) {
 
 /**
  * Two versions side by side. One set of controls drives both: play,
- * pause, scrub, ±5s, frame step and speed stay in sync.
+ * pause, scrub, ±5s, frame step and speed stay in sync. The speaker next
+ * to each version picks whose sound you hear (one at a time, or none).
  * Keyboard: Space/K, J/L, , and . — Esc leaves compare.
  */
 export function CompareView({ versions, onClose }: { versions: VideoVersion[]; onClose: () => void }) {
@@ -45,6 +46,12 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
   const [speed, setSpeed] = useState(1);
   const [glide, setGlide] = useState(false);
   const [loaded, setLoaded] = useState({ a: false, b: false });
+  // Whose sound plays: the left one at first.
+  const [sound, setSound] = useState<"a" | "b" | null>("a");
+  useEffect(() => {
+    if (a.current) a.current.muted = sound !== "a";
+    if (b.current) b.current.muted = sound !== "b";
+  }, [sound, left.url, right.url, loaded]);
   const timeRef = useRef(0);
   timeRef.current = time;
 
@@ -121,7 +128,8 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
     key: "a" | "b"
   ) => (
     <div className="min-w-0 flex flex-col gap-2">
-      <div className="w-40">
+      <div className="flex items-center gap-2">
+      <div className="w-40 min-w-0">
         <Select
           value={id}
           onChange={(v) => {
@@ -134,6 +142,20 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
           ariaLabel={key === "a" ? "Left version" : "Right version"}
         />
       </div>
+      <button
+        type="button"
+        onClick={() => setSound((s) => (s === key ? null : key))}
+        aria-pressed={sound === key}
+        aria-label={sound === key ? `Mute this version` : `Hear this version`}
+        title={sound === key ? "You hear this one. Click to mute it." : "Hear this one instead"}
+        className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-[12.5px] font-semibold transition-colors ${
+          sound === key ? "bg-amber text-white" : "border border-line/15 text-ink-soft hover:text-ink hover:border-line/30"
+        }`}
+      >
+        <SoundIcon className="w-4 h-4" muted={sound !== key} />
+        <span className="hidden sm:inline">{sound === key ? "Sound on" : "Hear this"}</span>
+      </button>
+      </div>
       <div className="relative flex items-center justify-center rounded-2xl bg-black overflow-hidden ring-1 ring-white/5 h-[42vh] sm:h-[min(62vh,700px)]">
         {src.url && (
           <video
@@ -141,7 +163,7 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
             key={src.url}
             src={src.url}
             playsInline
-            muted={key === "b"}
+            muted={sound !== key}
             preload="auto"
             className={`max-h-full max-w-full transition-opacity duration-300 ${loaded[key] ? "opacity-100" : "opacity-0"}`}
             onLoadedMetadata={(e) => {
@@ -202,7 +224,9 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
             {formatTime(time, true)}
             <span className="text-white/40 ml-1">/ {formatTime(duration)}</span>
           </span>
-          <span className="hidden md:inline ml-2 text-[11px] text-white/40">Sound from the left</span>
+          <span className="hidden md:inline ml-2 text-[11px] text-white/40">
+            {sound ? `Sound from ${options.find((o) => o.value === (sound === "a" ? leftId : rightId))?.label ?? (sound === "a" ? "the left" : "the right")}` : "Sound off"}
+          </span>
           <span className="flex-1" />
           <span className="hidden sm:block">
             <SpeedPills

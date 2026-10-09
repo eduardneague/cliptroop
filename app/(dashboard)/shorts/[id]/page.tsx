@@ -255,6 +255,25 @@ export default async function ShortPage({
         {/* Below lg the two columns dissolve ("contents") and every card is
             placed on its own: action box, final file, script, activity last. */}
         <div className="contents lg:block lg:space-y-6 min-w-0">
+          {/* What to do now comes first: review it (Open review, Approve, Needs changes), or what to fix. */}
+          {short.stage === "review" && !viewStage && (
+            <div className="order-2 lg:order-none">
+            <ReviewCard
+              id={short.id}
+              number={short.number}
+              link={short.fileLink}
+              latestVersion={latestVersion?.number ?? null}
+              openNotes={openNotes}
+              canReview={perms.canReview}
+              reviewerName={short.reviewer?.name ?? null}
+            />
+            </div>
+          )}
+          {short.stage === "editing" && short.reviewNote && !viewStage && (
+            <div className="order-2 lg:order-none">
+              <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
+            </div>
+          )}
           {posting && (
             <div className="order-2 lg:order-none">
               <SchedulePanel
@@ -336,33 +355,14 @@ export default async function ShortPage({
                 // Uploading only while editing (not in review or later, not while looking back).
                 canUpload={canUploadVideo && short.stage === "editing" && !viewStage}
                 prominent={short.stage === "editing" && !viewStage}
+                platforms={short.platforms}
               />
             </div>
           )}
         </div>
 
         <div className="contents lg:block lg:space-y-6">
-          {/* The right column follows the stage:
-              Review → orange review box · Editing after a review → what to fix
-              · Ready / Posted → Posted · otherwise → Post to. */}
-          {short.stage === "review" && !viewStage && (
-            <div className="order-2 lg:order-none">
-            <ReviewCard
-              id={short.id}
-              number={short.number}
-              link={short.fileLink}
-              latestVersion={latestVersion?.number ?? null}
-              openNotes={openNotes}
-              canReview={perms.canReview}
-              reviewerName={short.reviewer?.name ?? null}
-            />
-            </div>
-          )}
-          {short.stage === "editing" && short.reviewNote && !viewStage && (
-            <div className="order-2 lg:order-none">
-              <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
-            </div>
-          )}
+          {/* The right column is the short's history. */}
 
           <MobileCollapse label="Activity" count={short.events.length} className="order-9 lg:order-none">
             <ActivityCard events={short.events} />

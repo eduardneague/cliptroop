@@ -17,6 +17,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
 import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
 import { PostVideoPreview, type PreviewVideo } from "./post-video-preview";
+import { lengthNotes } from "@/lib/short-length";
+import { PlayerSkeleton } from "./step-skeleton";
 import {
   cancelPost,
   changePostTime,
@@ -33,9 +35,6 @@ import {
 type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const ACTIVE = ["scheduled", "uploading", "processing", "waiting"];
-/** Facebook Reels: 3 to 90 seconds (the server checks this too). */
-const FB_MIN_SECONDS = 3;
-const FB_MAX_SECONDS = 90;
 
 export type AccountInfo = {
   platform: Platform;
@@ -206,6 +205,7 @@ export function SchedulePanel(props: SchedulePanelProps) {
         <div className="flex items-center justify-between gap-3 px-1">
           <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Posting</h2>
         </div>
+        {props.video && <PlayerSkeleton />}
         {props.platforms.map((p) => (
           <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30 flex items-center gap-3 px-3.5 sm:px-4 py-3">
             <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
@@ -342,7 +342,9 @@ function SchedulePanelLive({
 
   const chosen = formPlatforms.filter((p) => include[p]);
   const tooLong = !!(creator?.maxDurationSec && videoDuration && videoDuration > creator.maxDurationSec);
-  const fbLength = videoDuration !== null && (videoDuration < FB_MIN_SECONDS || videoDuration > FB_MAX_SECONDS + 0.5);
+  // Too long (or short) for a platform: that one can't be scheduled (the server checks too).
+  const blocked = lengthNotes(videoDuration, platforms).filter((n) => n.level === "block");
+  const fbBlock = blocked.find((n) => n.platform === "facebook") ?? null;
 
   function problems(postingNow = false): string | null {
     if (chosen.length === 0) return "Pick at least one platform.";
@@ -359,7 +361,8 @@ function SchedulePanelLive({
       if (tt.commercial && tt.brandedContent && tt.privacy === "SELF_ONLY") return "Branded content can't be private on TikTok.";
       if (tooLong) return `TikTok allows up to ${creator.maxDurationSec}s for this account.`;
     }
-    if (chosen.includes("facebook") && fbLength) return `Facebook Reels must be ${FB_MIN_SECONDS} to ${FB_MAX_SECONDS} seconds long.`;
+    const misfit = blocked.find((n) => chosen.includes(n.platform as Platform));
+    if (misfit) return misfit.text;
     return null;
   }
 
@@ -456,7 +459,7 @@ function SchedulePanelLive({
         </div>
       )}
 
-      {formPlatforms.length > 0 && <PostVideoPreview video={video} />}
+      <PostVideoPreview video={video} platforms={platforms} />
 
       {formPlatforms.length > 1 && (
         <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 space-y-3">
@@ -604,11 +607,7 @@ function SchedulePanelLive({
                           Posting to <b className="text-ink">{acc.name}</b> as a Reel
                         </span>
                       </div>
-                      {fbLength && (
-                        <p className="text-[12.5px] text-red">
-                          Facebook Reels must be {FB_MIN_SECONDS} to {FB_MAX_SECONDS} seconds long; this video is {Math.round(videoDuration ?? 0)}.
-                        </p>
-                      )}
+                      {fbBlock && <p className="text-[12.5px] text-red">{fbBlock.text}</p>}
                       <div>
                         <span className={label}>Caption</span>
                         <textarea value={fb.caption} maxLength={5000} rows={3} onChange={(e) => setFb({ caption: e.target.value })} className={field} />

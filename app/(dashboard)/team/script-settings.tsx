@@ -23,7 +23,10 @@ export function ScriptSettingsForm({ teamId, defaults, people, ready }: { teamId
     if (r.error !== undefined) {
       setLists((l) => ({ ...l, [step]: prev }));
       toast.error(r.error);
-    } else router.refresh();
+    } else {
+      toast.success(step === "review" ? "Script reviewers saved" : "Staging people saved");
+      router.refresh();
+    }
   }
   if (!ready) return <p className="text-[13px] text-ink-soft">Run migration 0062 to choose who reviews and stages scripts.</p>;
   const rows = [

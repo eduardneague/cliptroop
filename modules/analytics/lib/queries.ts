@@ -501,12 +501,21 @@ export type ContentItem = {
   comments: number | null;
   shares: number | null;
   ours: { kind: "short" | "long"; id: string; number: number | null } | null;
+  /** Posted by the team (from ClipTroop or marked by hand) but the platform hasn't shared it or its numbers. */
+  noNumbers?: boolean;
 };
 
-/** Videos and posts published in the range, with their latest numbers. */
+/**
+ * Videos and posts published in the range, with their latest numbers, plus
+ * every short the team posted in the range that the platform's copy doesn't
+ * have (TikTok without stats, a Reel posted today, one marked by hand…), so
+ * everything published is listed, with "–" where there are no numbers.
+ */
 export async function getContent(teamId: string, w: Window): Promise<{ items: ContentItem[]; status: PlatformStatus[] }> {
   const supabase = await createClient();
-  const [{ data }, status] = await Promise.all([
+  const from = `${w.from}T00:00:00Z`;
+  const to = `${w.to}T23:59:59Z`;
+  const [{ data }, status, { data: posted }, { data: marked }] = await Promise.all([
     supabase
       .from("analytics_content")
       .select("platform, external_id, kind, title, url, thumbnail_url, published_at, views, likes, comments, shares, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)")
@@ -516,11 +525,24 @@ export async function getContent(teamId: string, w: Window): Promise<{ items: Co
       .order("views", { ascending: false, nullsFirst: false })
       .limit(200),
     getPlatformStatus(teamId),
+    supabase
+      .from("social_posts")
+      .select("platform, short_id, permalink, published_at, short:short_videos!social_posts_short_id_fkey(id, entry_number, title)")
+      .eq("team_id", teamId)
+      .eq("status", "published")
+      .gte("published_at", from)
+      .lte("published_at", to)
+      .limit(300),
+    supabase
+      .from("short_video_posts")
+      .select("platform, short_id, post_url, posted_at, short_videos!inner(team_id, entry_number, title)")
+      .eq("short_videos.team_id", teamId)
+      .gte("posted_at", from)
+      .lte("posted_at", to)
+      .limit(400),
   ]);
   const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
-  return {
-    status,
-    items: (data ?? []).map((r) => {
+  const items: ContentItem[] = (data ?? []).map((r) => {
       const s = one(r.short_videos as { entry_number: number } | { entry_number: number }[] | null);
       const l = one(r.long_video_projects as { entry_number: number } | { entry_number: number }[] | null);
       return {
@@ -537,8 +559,40 @@ export async function getContent(teamId: string, w: Window): Promise<{ items: Co
         shares: r.shares === null ? null : Number(r.shares),
         ours: r.short_id ? { kind: "short", id: r.short_id as string, number: s?.entry_number ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: l?.entry_number ?? null } : null,
       };
-    }),
+    });
+
+  // Our own posts the platform's copy doesn't have yet (one row per short and platform).
+  const have = new Set(items.filter((i) => i.ours?.kind === "short").map((i) => `${i.platform}:${i.ours!.id}`));
+  type ShortRef = { entry_number?: number; title?: string } | null;
+  const add = (platform: string, shortId: string, url: string | null, at: string | null, short: ShortRef) => {
+    const key = `${platform}:${shortId}`;
+    if (have.has(key) || !["youtube", "instagram", "tiktok", "facebook"].includes(platform)) return;
+    have.add(key);
+    items.push({
+      platform: platform as SocialPlatform,
+      id: `ours-${shortId}`,
+      kind: "short",
+      title: short?.title ?? null,
+      url,
+      thumbnail: null,
+      publishedAt: at,
+      views: null,
+      likes: null,
+      comments: null,
+      shares: null,
+      ours: { kind: "short", id: shortId, number: short?.entry_number ?? null },
+      noNumbers: true,
+    });
   };
+  for (const p of posted ?? []) {
+    add(p.platform as string, p.short_id as string, (p.permalink as string | null) ?? null, (p.published_at as string | null) ?? null, one(p.short as ShortRef | ShortRef[]));
+  }
+  for (const p of marked ?? []) {
+    add(p.platform as string, p.short_id as string, (p.post_url as string | null) ?? null, (p.posted_at as string | null) ?? null, one(p.short_videos as ShortRef | ShortRef[]));
+  }
+  // Most viewed first; posts without numbers after them, newest first.
+  items.sort((a, b) => (b.views ?? -1) - (a.views ?? -1) || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+  return { status, items };
 }
 
 // ---------------------------------------------------------------------------

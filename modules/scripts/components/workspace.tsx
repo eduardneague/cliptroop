@@ -50,6 +50,7 @@ function Workspace({
   docs,
   doc,
   canEdit,
+  canComment = canEdit,
   canCreate,
   side,
   comments,
@@ -67,6 +68,12 @@ function Workspace({
   docs: DocListItem[];
   doc: ScriptRow;
   canEdit: boolean;
+  /**
+   * Add comments and editing ideas, resolve them: the people working on this
+   * video's script (masters, its scripters, its Review / Staging people;
+   * researchers on research). Everyone else on the team reads them.
+   */
+  canComment?: boolean;
   canCreate: { script: boolean; research: boolean };
   side: ScriptRow | null;
   comments: ScriptComment[];
@@ -150,14 +157,18 @@ function Workspace({
       }}
       people={people}
       roleColors={roleColors}
-      onAddComment={async (quote, occurrence, body, kind, sketch) => {
-        const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch });
-        if (r.error !== undefined) return r.error;
-        setChatOpen(true);
-        setActive(r.id);
-        router.refresh();
-        return null;
-      }}
+      onAddComment={
+        canComment
+          ? async (quote, occurrence, body, kind, sketch) => {
+              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch });
+              if (r.error !== undefined) return r.error;
+              setChatOpen(true);
+              setActive(r.id);
+              router.refresh();
+              return null;
+            }
+          : undefined
+      }
       copySources={docs.filter((d) => d.id !== doc.id).map((d) => ({ id: d.id, name: `${d.kind === "research" ? "Research · " : ""}${d.name}` }))}
       onCopyFrom={async (id) => {
         const r = await getDocContent(id);
@@ -234,6 +245,7 @@ function Workspace({
             </div>
             <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
             <div className="flex items-center gap-1 mt-2 -mb-1">
+              {canComment && (
               <button
                 type="button"
                 onClick={async () => {
@@ -249,6 +261,7 @@ function Workspace({
               >
                 {c.resolved ? "Reopen" : "Resolve"}
               </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -281,6 +294,7 @@ function Workspace({
           exportTitle={title}
           people={people}
           onSketch={setZoomed}
+          canComment={canComment}
         />
       }
     />
@@ -776,7 +790,9 @@ function CommentsChat({
   exportTitle,
   people,
   onSketch,
+  canComment,
 }: {
+  canComment: boolean;
   open: boolean;
   setOpen: (v: boolean) => void;
   comments: ScriptComment[];
@@ -903,7 +919,7 @@ function CommentsChat({
                     “{c.quote}”{missing.has(c.id) && <span className="ml-1.5 rounded bg-surface-2 px-1.5 text-[10.5px] font-bold">text changed</span>}
                   </div>
                   <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => onSketch(c)} />
-                  <div className="flex items-center gap-1 mt-1.5 -mb-1">
+                  {canComment && <div className="flex items-center gap-1 mt-1.5 -mb-1">
                     <button
                       type="button"
                       onClick={async (e) => {
@@ -932,13 +948,13 @@ function CommentsChat({
                     >
                       Delete
                     </button>
-                  </div>
+                  </div>}
                 </article>
               );
             })}
           </div>
           <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
-            <span className="flex-1 min-w-[8rem]">Select text, then Enter to add.</span>
+            <span className="flex-1 min-w-[8rem]">{canComment ? "Select text, then Enter to add." : "Only this video's scripters and its Review and Staging people can comment."}</span>
             {comments.some((c) => c.kind === "edit_idea") && (
               <span className="inline-flex items-center gap-1">
                 <span className="font-semibold">Export ideas</span>
