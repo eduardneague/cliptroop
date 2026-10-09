@@ -8,8 +8,9 @@ import { PublishError, type PostRow, type StepResult } from "./publishers/common
 import { youtubeStep } from "./publishers/youtube";
 import { instagramStep } from "./publishers/instagram";
 import { tiktokStep } from "./publishers/tiktok";
+import { facebookStep } from "./publishers/facebook";
 
-const NAME = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" } as const;
+const NAME = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
 /** Minutes to wait before retry 1, 2, 3, 4, 5. Then it fails. */
 const BACKOFF = [1, 2, 5, 15, 30];
 
@@ -68,19 +69,6 @@ async function markPosted(post: Claimed, permalink: string | null) {
     .from("short_video_posts")
     .upsert({ short_id: post.short_id, platform: post.platform, post_url: permalink }, { onConflict: "short_id,platform", ignoreDuplicates: true });
   if (error) await event(post.id, post.team_id, "note", `Posted, but couldn't mark it on the short: ${error.message}`);
-
-  // Instagram shares Reels to Facebook automatically (account setting), so
-  // Facebook counts as posted too, if the short lists it. Can be undone by hand.
-  if (post.platform === "instagram") {
-    const admin = createAdminClient();
-    const { data: short } = await admin.from("short_videos").select("platforms").eq("id", post.short_id).maybeSingle();
-    if ((short?.platforms as string[] | undefined)?.includes("facebook")) {
-      const { error: fb } = await admin
-        .from("short_video_posts")
-        .upsert({ short_id: post.short_id, platform: "facebook", post_url: null }, { onConflict: "short_id,platform", ignoreDuplicates: true });
-      if (!fb) await event(post.id, post.team_id, "note", "Facebook marked as posted (shared from Instagram)");
-    }
-  }
 }
 
 async function save(post: Claimed, r: StepResult, keepLock: boolean) {
@@ -131,7 +119,9 @@ async function runOne(row: Claimed, deadline: number) {
           ? await youtubeStep(post, token, deadline)
           : post.platform === "instagram"
             ? await instagramStep(post, token, account.external_id as string)
-            : await tiktokStep(post, token, deadline);
+            : post.platform === "facebook"
+              ? await facebookStep(post, token, account.external_id as string, deadline)
+              : await tiktokStep(post, token, deadline);
 
       const continueNow = r.status !== "published" && !r.nextAt && (r.waitSeconds ?? 0) === 0 && Date.now() < deadline - 12_000;
       await save(post, r, continueNow);

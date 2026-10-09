@@ -1,6 +1,7 @@
 // A tiny stand-in for Supabase (Auth + PostgREST) so the real pages render with sample data.
 const http = require("http");
 const path = require("path");
+const fs = require("fs");
 const FIX = path.join(__dirname, "fixtures.cjs");
 const log = [];
 function fixtures() {
@@ -58,6 +59,24 @@ function sampleImage(res, p) {
   res.end(svg);
 }
 // Resumable uploads (TUS, what Supabase Storage speaks): id → { length, offset, name }.
+/** MOCK_VIDEO=/path/to/file.mp4 (or .webm): the file every signed review-videos link plays (with Range support). */
+function sampleVideo(req, res) {
+  const file = process.env.MOCK_VIDEO;
+  if (!file || !fs.existsSync(file)) return send(res, 404, { error: "no sample video (set MOCK_VIDEO)" });
+  const size = fs.statSync(file).size;
+  const m = /bytes=(\d*)-(\d*)/.exec(String(req.headers.range || ""));
+  // (Headless Chromium can't play H.264: a .webm sample works there.)
+  const head = { "Content-Type": file.endsWith(".webm") ? "video/webm" : "video/mp4", "Accept-Ranges": "bytes", "Access-Control-Allow-Origin": "*" };
+  if (!m) {
+    res.writeHead(200, { ...head, "Content-Length": size });
+    return req.method === "HEAD" ? res.end() : fs.createReadStream(file).pipe(res);
+  }
+  const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+  const end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+  res.writeHead(206, { ...head, "Content-Length": end - start + 1, "Content-Range": `bytes ${start}-${end}/${size}` });
+  return req.method === "HEAD" ? res.end() : fs.createReadStream(file, { start, end }).pipe(res);
+}
+
 const uploads = new Map();
 const TUS_HEADERS = { "Tus-Resumable": "1.0.0", "Access-Control-Expose-Headers": "Location, Upload-Offset, Upload-Length, Tus-Resumable" };
 const server = http.createServer((req, res) => {
@@ -113,7 +132,11 @@ function answer(req, res, url, body) {
         const paths = (body ? JSON.parse(body).paths : null) ?? [];
         return send(res, 200, paths.map((p) => ({ path: p, signedURL: `/object/img/${bucket}/${p}?token=mock`, error: null })));
       }
+      if (url.pathname.includes("/sign/review-videos/") && process.env.MOCK_VIDEO) {
+        return send(res, 200, { signedURL: `/object/video/${url.pathname.split("/sign/")[1]}?token=mock` });
+      }
       if (url.pathname.includes("/sign/")) return send(res, 200, { signedURL: "/missing.png" });
+      if (url.pathname.startsWith("/storage/v1/object/video/")) return sampleVideo(req, res);
       if (url.pathname === "/storage/v1/bucket") return send(res, 200, [{ id: "thumbnails", name: "thumbnails", public: true }]);
       if (url.pathname.startsWith("/storage/v1/object/img/")) return sampleImage(res, decodeURIComponent(url.pathname));
       return send(res, 404, { error: "not found" });

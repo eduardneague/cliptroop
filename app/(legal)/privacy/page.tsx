@@ -68,7 +68,7 @@ export default function PrivacyPage() {
 
       <H>Instagram, Facebook and TikTok</H>
       <p>
-        Instagram and Facebook Page access is used to publish your team&rsquo;s approved posts (Instagram) and read the account&rsquo;s or Page&rsquo;s insights. TikTok access
+        Instagram and Facebook Page access is used to publish your team&rsquo;s approved videos (as Reels, publicly on a Page) and read the account&rsquo;s or Page&rsquo;s insights. TikTok access
         is used to post your team&rsquo;s approved videos and read the account&rsquo;s profile and video statistics. You can remove access in Instagram (Settings → Apps and
         websites), Facebook (Settings → Business integrations) and TikTok (Settings → Security → Manage app permissions).
       </p>

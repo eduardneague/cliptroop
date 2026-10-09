@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.0",
+    date: "2026-10-09",
+    title: "Posting to Facebook",
+    changes: [
+      { kind: "new", text: "Shorts now post to your Facebook Page as Reels, on their own schedule, from the short's Posting card, with their own caption and time, Post now and a link to the Reel once it's live. Reels on a Page are always public." },
+      { kind: "new", text: "The Posting card shows the exact video that gets posted before you schedule it. Tap it to watch." },
+      { kind: "better", text: "Facebook is no longer marked as posted when Instagram posts: Instagram doesn't share posts made by apps to Facebook. Facebook is posted (or marked by hand) on its own, like every other platform." },
+      { kind: "better", text: "A Facebook Page connected for Analytics only shows \"Reconnect once and allow managing posts\" in Team → Connected accounts. Reconnect it once to post there." },
+      { kind: "fixed", text: "On phones, tapping a Saturday or Sunday in the Calendar now highlights it like any other day." },
+    ],
+  },
+  {
     version: "1.11.1",
     date: "2026-10-09",
     title: "Connecting Instagram, without the false alarm",

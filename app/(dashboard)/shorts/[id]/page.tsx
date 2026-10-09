@@ -36,6 +36,10 @@ import { MobileCollapse } from "@/components/ui/mobile-collapse";
 import { PendingLink, PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ShortStepSkeleton } from "./step-skeleton";
 
+/** The platforms the Posting card posts to, all four. */
+const POSTING_ORDER = ["youtube", "instagram", "facebook", "tiktok"] as const;
+type PostingPlatform = (typeof POSTING_ORDER)[number];
+
 // "Post now" / Retry start the post right after answering: give it time to run.
 export const maxDuration = 60;
 
@@ -82,18 +86,20 @@ export default async function ShortPage({
   const posting = shown === "ready" || shown === "posted";
   const postingPromise = posting
     ? Promise.all([
-        supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status").eq("team_id", short.teamId).in("platform", ["youtube", "instagram", "tiktok"]),
+        supabase.from("social_accounts").select("platform, display_name, username, avatar_url, status, scopes").eq("team_id", short.teamId).in("platform", ["youtube", "instagram", "tiktok", "facebook"]),
         supabase
           .from("social_posts")
           .select("id, platform, status, step, progress, scheduled_at, last_error, attempts, next_attempt_at, permalink, note, external_id, options")
           .eq("short_id", short.id)
           .neq("status", "cancelled"),
-        supabase.from("teams").select("post_time_youtube, post_time_instagram, post_time_tiktok").eq("id", short.teamId).maybeSingle(),
+        supabase.from("teams").select("post_time_youtube, post_time_instagram, post_time_tiktok, post_time_facebook").eq("id", short.teamId).maybeSingle(),
         supabase
           .from("social_post_events")
           .select("id, post_id, kind, message, created_at, social_posts!inner(short_id)")
           .eq("social_posts.short_id", short.id)
           .order("created_at", { ascending: true }),
+        // The version that gets posted (shown in the Posting card's preview).
+        supabase.from("short_videos").select("approved_version_id").eq("id", short.id).maybeSingle(),
       ])
     : null;
   postingPromise?.catch(() => {});
@@ -118,12 +124,14 @@ export default async function ShortPage({
     postingPromise,
   ]);
   const latestVersion = versions.find((v) => !v.deleted) ?? null;
-  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }] = postingRows ?? [
+  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }, { data: approved }] = postingRows ?? [
+    { data: null },
     { data: null },
     { data: null },
     { data: null },
     { data: null },
   ];
+  const postVersion = (approved?.approved_version_id ? versions.find((v) => v.id === approved.approved_version_id) : null) ?? latestVersion;
 
 
   const openNotes = latestVersion
@@ -256,26 +264,32 @@ export default async function ShortPage({
                 title={short.title}
                 caption={short.captionEnabled ? short.caption ?? "" : ""}
                 plannedDate={short.plannedDate}
-                platforms={short.platforms.filter((x): x is "youtube" | "instagram" | "tiktok" => x === "youtube" || x === "instagram" || x === "tiktok")}
-                hasFacebook={short.platforms.includes("facebook")}
+                platforms={short.platforms.filter((x): x is PostingPlatform => (POSTING_ORDER as readonly string[]).includes(x))}
                 youtubeDescription={settings.youtubeDescription}
                 manualPosts={short.posts.map((x) => ({ platform: x.platform, url: x.url, postedAt: x.postedAt }))}
-                videoDuration={latestVersion?.duration ?? null}
+                video={
+                  postVersion
+                    ? { id: postVersion.id, number: postVersion.number, duration: postVersion.duration, width: postVersion.width, height: postVersion.height, deleted: postVersion.deleted }
+                    : null
+                }
                 defaultTimes={{
                   youtube: String(postTimes?.post_time_youtube ?? "17:00").slice(0, 5),
                   instagram: String(postTimes?.post_time_instagram ?? "18:00").slice(0, 5),
                   tiktok: String(postTimes?.post_time_tiktok ?? "19:00").slice(0, 5),
+                  facebook: String(postTimes?.post_time_facebook ?? "18:00").slice(0, 5),
                 }}
                 accounts={(socialAccounts ?? []).map((a) => ({
-                  platform: a.platform as "youtube" | "instagram" | "tiktok",
+                  platform: a.platform as PostingPlatform,
                   name: (a.display_name as string | null) ?? (a.username as string | null) ?? "Connected account",
                   username: (a.username as string | null) ?? null,
                   avatarUrl: (a.avatar_url as string | null) ?? null,
                   status: a.status as "active" | "needs_reconnect",
+                  // A Page connected for Analytics only, before posting existed.
+                  cannotPost: a.platform === "facebook" && !((a.scopes as string[] | null) ?? []).includes("pages_manage_posts"),
                 }))}
                 posts={(socialPosts ?? []).map((p) => ({
                   id: p.id as string,
-                  platform: p.platform as "youtube" | "instagram" | "tiktok",
+                  platform: p.platform as PostingPlatform,
                   status: p.status as string,
                   step: (p.step as string) ?? undefined,
                   progress: (p.progress as number) ?? 0,

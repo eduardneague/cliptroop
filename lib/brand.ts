@@ -29,7 +29,7 @@ export const MASCOT_NAME = "Clip";
 export const APP_TAGLINE = "Plan, make and post your videos, together.";
 
 export const APP_DESCRIPTION =
-  "The production planner for video teams: ideas, scripts, filming, editing, review, thumbnails and posting to YouTube, Instagram and TikTok, with tasks, meetings and analytics in one place.";
+  "The production planner for video teams: ideas, scripts, filming, editing, review, thumbnails and posting to YouTube, Instagram, Facebook and TikTok, with tasks, meetings and analytics in one place.";
 
 /** Who runs it (legal pages). Set NEXT_PUBLIC_COMPANY_NAME once there's a company. */
 export const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || `the ${APP_NAME} team`;

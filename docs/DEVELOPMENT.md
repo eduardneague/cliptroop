@@ -171,7 +171,7 @@ the page is live, or React throws that part away (production error #418).
 (`vignettes.tsx`); demos only run on screen (`<Play>` sets `data-on`), and
 the base styles are the finished frame, so animations off still reads.
 `/login` honours `?next=` (same-site paths only). Link previews:
-`app/opengraph-image.tsx`. Tab icon: `icons` in `app/layout.tsx` (keep every
+`public/og-image.png` + `publicMetadata()` in `lib/public-pages.ts`. Tab icon: `icons` in `app/layout.tsx` (keep every
 entry listed: a config `icons` replaces the automatic one).
 
 **Clip's tour.** `components/tutorial/tutorial.tsx`: starts once per person
@@ -189,6 +189,18 @@ time, through `getNotificationHistory()`.
 nightly clean-up once a short is posted everywhere, after the team's choice
 (`teams.media_keep_days`: 7, 14, 21 or 30 days; Team → Defaults → Video
 files; 0070). The short itself always stays. Code: `lib/media-cleanup.ts`.
+
+**Posting.** One `social_posts` row per short and platform (YouTube,
+Instagram, Facebook, TikTok), moved forward one step at a time by
+`lib/social/worker.ts`; each platform's steps live in
+`lib/social/publishers/<platform>.ts` and save their progress in `state`
+after every step (a timeout never loses work). Platforms never post for
+each other: Instagram doesn't share API posts to Facebook, so Facebook is its
+own post (a Reel on the team's Page, `pages_manage_posts`). A permission
+added after people connected (YouTube's edit scope, Facebook's posting) is
+never required to connect: the account card asks to reconnect and the
+Posting card refuses until it's there. The Posting card shows the exact file
+that gets posted (`post-video-preview.tsx`).
 
 **Search.** `global_search()` (0024) is SECURITY INVOKER on purpose: RLS
 decides what anyone can find. To make something searchable, add a trigram

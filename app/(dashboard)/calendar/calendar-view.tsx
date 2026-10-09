@@ -535,9 +535,9 @@ export function CalendarView({
                   onClick={() => {
                     if (window.matchMedia("(max-width: 639px)").matches) setPicked(day);
                   }}
-                  className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-1 sm:p-2 border-line/15 ${picked === day ? "sm:!bg-transparent bg-amber/10" : ""} ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""} ${
+                  className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-1 sm:p-2 border-line/15 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""} ${
                     inMonth ? (i % 7 >= 5 ? "bg-surface-2/20" : "") : "bg-surface-2/45 opacity-70"
-                  } ${dragOver === day ? "!bg-amber/10 ring-2 ring-inset ring-amber" : ""} transition-colors`}
+                  } ${picked === day ? "max-sm:!bg-amber/10" : ""} ${dragOver === day ? "!bg-amber/10 ring-2 ring-inset ring-amber" : ""} transition-colors`}
                 >
                   <div className="mb-1.5">{dayHeader(day)}</div>
                   {/* Phones: just markers; the day's list shows below the grid. */}

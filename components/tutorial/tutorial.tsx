@@ -64,7 +64,7 @@ function steps(phone: boolean, mac: boolean): Step[] {
       only: "desktop",
       targets: ["nav-calendar", "nav-meetings", "nav-posting"],
       title: "Plan and post",
-      text: "The calendar shows what's due and when each video goes out. Meetings keep your calls in one place. Posting sends videos to YouTube, Instagram and TikTok on time.",
+      text: "The calendar shows what's due and when each video goes out. Meetings keep your calls in one place. Posting sends videos to YouTube, Instagram, Facebook and TikTok on time.",
     },
     {
       id: "insights",
@@ -85,7 +85,7 @@ function steps(phone: boolean, mac: boolean): Step[] {
       only: "phone",
       targets: ["nav-more"],
       title: "Everything else",
-      text: "Meetings, posting to YouTube, Instagram and TikTok, analytics and your team are under More.",
+      text: "Meetings, posting to YouTube, Instagram, Facebook and TikTok, analytics and your team are under More.",
     },
     {
       id: "search",

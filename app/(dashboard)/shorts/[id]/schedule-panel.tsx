@@ -16,6 +16,7 @@ import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } f
 import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
 import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
+import { PostVideoPreview, type PreviewVideo } from "./post-video-preview";
 import {
   cancelPost,
   changePostTime,
@@ -29,11 +30,24 @@ import {
   type ScheduleEntry,
 } from "./schedule-actions";
 
-type Platform = "youtube" | "instagram" | "tiktok";
-const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
+const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const ACTIVE = ["scheduled", "uploading", "processing", "waiting"];
+/** Facebook Reels: 3 to 90 seconds (the server checks this too). */
+const FB_MIN_SECONDS = 3;
+const FB_MAX_SECONDS = 90;
 
-export type AccountInfo = { platform: Platform; name: string; username?: string | null; avatarUrl: string | null; status: "active" | "needs_reconnect" };
+export type AccountInfo = {
+  platform: Platform;
+  name: string;
+  username?: string | null;
+  avatarUrl: string | null;
+  status: "active" | "needs_reconnect";
+  /** Connected, but without the permission to post (Facebook connected for analytics only). */
+  cannotPost?: boolean;
+};
+/** The video file that gets posted (the approved version, or the latest). */
+export type PostVideo = PreviewVideo;
 export type PostInfo = {
   id: string;
   platform: Platform;
@@ -215,10 +229,9 @@ function SchedulePanelLive({
   caption,
   plannedDate,
   platforms,
-  hasFacebook,
   youtubeDescription,
   manualPosts,
-  videoDuration,
+  video,
   defaultTimes,
   accounts,
   posts,
@@ -232,12 +245,10 @@ function SchedulePanelLive({
   caption: string;
   plannedDate: string | null;
   platforms: Platform[];
-  /** Facebook is planned: it posts together with Instagram. */
-  hasFacebook: boolean;
   /** The team's default YouTube description. */
   youtubeDescription: string;
   manualPosts: ManualPost[];
-  videoDuration: number | null;
+  video: PostVideo | null;
   defaultTimes: Record<Platform, string>;
   accounts: AccountInfo[];
   posts: PostInfo[];
@@ -249,6 +260,7 @@ function SchedulePanelLive({
   const toast = useToast();
   const [pending, start] = useTransition();
   const now = useNow(15_000);
+  const videoDuration = video?.duration ?? null;
 
   // Live status: only the posting data is fetched (not the whole page).
   const [live, setLive] = useState({ posts, events });
@@ -286,10 +298,10 @@ function SchedulePanelLive({
   const [editing, setEditing] = useState<Record<string, boolean>>({});
 
   // ---- form state ----------------------------------------------------------
-  const [include, setInclude] = useState<Record<Platform, boolean>>({ youtube: true, instagram: true, tiktok: true });
+  const [include, setInclude] = useState<Record<Platform, boolean>>({ youtube: true, instagram: true, tiktok: true, facebook: true });
   // By default: 30 minutes from now on this device, on the next quarter hour.
   const soon = soonSlot();
-  const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({ youtube: soon, instagram: soon, tiktok: soon });
+  const [when, setWhen] = useState<Record<Platform, { date: string; time: string }>>({ youtube: soon, instagram: soon, tiktok: soon, facebook: soon });
   // "Post all at the same time": one date and time for every platform.
   const [sameTime, setSameTime] = useState(false);
   // The short's title goes in by default everywhere (plus its caption, if it has one).
@@ -301,6 +313,7 @@ function SchedulePanelLive({
     visibility: "public" as "public" | "unlisted" | "private",
   });
   const [ig, setIg] = useState({ caption: defaultCaption });
+  const [fb, setFb] = useState({ caption: defaultCaption });
   const [tt, setTt] = useState({
     caption: defaultCaption,
     privacy: "",
@@ -316,7 +329,7 @@ function SchedulePanelLive({
 
   const formPlatforms = platforms.filter((p) => {
     const post = postFor(p);
-    return canManage && account(p)?.status === "active" && (!post || ((post.status === "scheduled" || post.status === "failed") && editing[p]));
+    return canManage && account(p)?.status === "active" && !account(p)?.cannotPost && (!post || ((post.status === "scheduled" || post.status === "failed") && editing[p]));
   });
   const needsTikTok = formPlatforms.includes("tiktok");
   useEffect(() => {
@@ -329,6 +342,7 @@ function SchedulePanelLive({
 
   const chosen = formPlatforms.filter((p) => include[p]);
   const tooLong = !!(creator?.maxDurationSec && videoDuration && videoDuration > creator.maxDurationSec);
+  const fbLength = videoDuration !== null && (videoDuration < FB_MIN_SECONDS || videoDuration > FB_MAX_SECONDS + 0.5);
 
   function problems(postingNow = false): string | null {
     if (chosen.length === 0) return "Pick at least one platform.";
@@ -345,6 +359,7 @@ function SchedulePanelLive({
       if (tt.commercial && tt.brandedContent && tt.privacy === "SELF_ONLY") return "Branded content can't be private on TikTok.";
       if (tooLong) return `TikTok allows up to ${creator.maxDurationSec}s for this account.`;
     }
+    if (chosen.includes("facebook") && fbLength) return `Facebook Reels must be ${FB_MIN_SECONDS} to ${FB_MAX_SECONDS} seconds long.`;
     return null;
   }
 
@@ -378,6 +393,7 @@ function SchedulePanelLive({
       const at = nowMode ? new Date().toISOString() : localIso(when[p].date, when[p].time);
       if (p === "youtube") return { platform: "youtube", at, options: yt, now: nowMode };
       if (p === "instagram") return { platform: "instagram", at, options: ig, now: nowMode };
+      if (p === "facebook") return { platform: "facebook", at, options: fb, now: nowMode };
       return { platform: "tiktok", at, options: tt, now: nowMode };
     });
     start(async () => {
@@ -392,15 +408,13 @@ function SchedulePanelLive({
   }
 
   async function markByHand(platform: string, posted: boolean) {
-    const name = NAME[platform as Platform] ?? (platform === "facebook" ? "Facebook" : platform);
+    const name = NAME[platform as Platform] ?? platform;
     const ok = await confirmManual(
       posted
         ? { title: `Mark it posted on ${name}?`, description: "Only if you posted it there yourself. When every platform is posted, the short moves to Posted.", confirmLabel: "Mark posted" }
         : { title: `Unmark ${name}?`, description: "It goes back to not posted there.", confirmLabel: "Unmark", danger: true }
     );
     if (!ok) return;
-    // Facebook goes together with Instagram.
-    if (platform === "instagram" && hasFacebook) await setShortPlatformPosted(shortId, "facebook" as never, posted);
     const r = await setShortPlatformPosted(shortId, platform as never, posted);
     if (r && "error" in r && r.error) toast.error(r.error);
     else {
@@ -413,9 +427,7 @@ function SchedulePanelLive({
   // "Manually post this video": you posted it yourself, everywhere.
   const confirmManual = useConfirm();
   const [manualOpen, setManualOpen] = useState(false);
-  const remaining = [...platforms, ...(hasFacebook ? (["facebook"] as const) : [])].filter(
-    (p) => !byHand(p) && !active.some((x) => x.platform === p && x.status === "published")
-  );
+  const remaining = platforms.filter((p) => !byHand(p) && !active.some((x) => x.platform === p && x.status === "published"));
   async function postAllManually() {
     const ok = await confirmManual({
       title: "Mark this short as posted?",
@@ -431,8 +443,6 @@ function SchedulePanelLive({
     router.refresh();
   }
 
-  const withFacebook = (p: Platform) => p === "instagram" && hasFacebook;
-
   return (
     <section className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-5 space-y-3">
       <div className="flex items-center justify-between gap-3 px-1">
@@ -446,6 +456,8 @@ function SchedulePanelLive({
         </div>
       )}
 
+      {formPlatforms.length > 0 && <PostVideoPreview video={video} />}
+
       {formPlatforms.length > 1 && (
         <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 space-y-3">
           <div className="flex items-center gap-3">
@@ -458,7 +470,13 @@ function SchedulePanelLive({
               onClick={() => {
                 const next = !sameTime;
                 setSameTime(next);
-                if (next) setWhen((w) => ({ youtube: w.youtube, instagram: w.youtube, tiktok: w.youtube }));
+                if (next) {
+                  // Everyone takes the time of the first platform in the form.
+                  setWhen((w) => {
+                    const v = w[formPlatforms[0] ?? "youtube"];
+                    return { youtube: v, instagram: v, tiktok: v, facebook: v };
+                  });
+                }
               }}
               className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
               style={{ background: sameTime ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}
@@ -466,7 +484,7 @@ function SchedulePanelLive({
               <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${sameTime ? "translate-x-[18px]" : "translate-x-0.5"}`} />
             </button>
           </div>
-          {sameTime && <When value={when.youtube} onChange={(v) => setWhen({ youtube: v, instagram: v, tiktok: v })} />}
+          {sameTime && <When value={when[formPlatforms[0] ?? "youtube"]} onChange={(v) => setWhen({ youtube: v, instagram: v, tiktok: v, facebook: v })} />}
         </div>
       )}
       {platforms.map((p) => {
@@ -477,24 +495,10 @@ function SchedulePanelLive({
         return (
           <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30">
             <div className="flex items-center gap-3 px-3.5 sm:px-4 py-3">
-              <span className="flex items-center -space-x-1.5 flex-shrink-0">
-                <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
-                {withFacebook(p) && <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg ring-2 ring-surface" />}
-              </span>
+              <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-[14px] font-semibold leading-tight truncate">
-                  {NAME[p]}
-                  {withFacebook(p) && <span className="hidden sm:inline font-normal text-ink-soft whitespace-nowrap"> + Facebook</span>}
-                </div>
-                <div className="text-[12px] text-ink-soft truncate">
-                  {acc ? acc.name : "Not connected"}
-                  {withFacebook(p) && (
-                    <>
-                      <span className="sm:hidden"> · + Facebook</span>
-                      <span className="hidden sm:inline"> · Facebook posts at the same time</span>
-                    </>
-                  )}
-                </div>
+                <div className="text-[14px] font-semibold leading-tight truncate">{NAME[p]}</div>
+                <div className="text-[12px] text-ink-soft truncate">{acc ? acc.name : "Not connected"}</div>
               </div>
               {c && (
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[11.5px] font-bold whitespace-nowrap ${c.cls}`}>
@@ -542,6 +546,30 @@ function SchedulePanelLive({
                 )
               ) : acc.status !== "active" ? (
                 <p className="text-[12.5px] text-amber">Needs reconnecting in Team → Connected accounts.</p>
+              ) : acc.cannotPost && !post ? (
+                byHand(p) ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[12.5px] font-semibold text-green">✓ Marked as posted</span>
+                    <span className="text-[12px] text-ink-soft"><Ago iso={byHand(p)!.postedAt} /></span>
+                    {canManage && (
+                      <Action onClick={() => void markByHand(p, false)} icon={<CloseIcon className="w-3.5 h-3.5" />}>
+                        Undo
+                      </Action>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-[12.5px] text-amber">
+                      Connected for Analytics only. Reconnect it in{" "}
+                      <Link href="/team?tab=accounts#connected-accounts" className="underline font-semibold">Team → Connected accounts</Link> and allow managing posts to post here.
+                    </p>
+                    {canManage && (
+                      <Action onClick={() => void markByHand(p, true)} icon={<span className="text-[13px] leading-none">✓</span>}>
+                        Mark as posted
+                      </Action>
+                    )}
+                  </div>
+                )
               ) : post && !showForm ? (
                 <StatusView
                   shortId={shortId}
@@ -551,7 +579,6 @@ function SchedulePanelLive({
                   account={acc}
                   events={live.events.filter((e) => e.postId === post.id)}
                   canManage={canManage}
-                  facebookPosted={withFacebook(p) ? !!byHand("facebook") : null}
                   onEdit={() => setEditing((s) => ({ ...s, [p]: true }))}
                   onChanged={refresh}
                 />
@@ -566,6 +593,33 @@ function SchedulePanelLive({
                     </div>
                   )}
                   {p === "tiktok" && <TikTokFields v={tt} set={setTt} creator={creator} error={creatorError} tooLong={tooLong} />}
+                  {p === "facebook" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
+                        {acc.avatarUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={acc.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+                        )}
+                        <span>
+                          Posting to <b className="text-ink">{acc.name}</b> as a Reel
+                        </span>
+                      </div>
+                      {fbLength && (
+                        <p className="text-[12.5px] text-red">
+                          Facebook Reels must be {FB_MIN_SECONDS} to {FB_MAX_SECONDS} seconds long; this video is {Math.round(videoDuration ?? 0)}.
+                        </p>
+                      )}
+                      <div>
+                        <span className={label}>Caption</span>
+                        <textarea value={fb.caption} maxLength={5000} rows={3} onChange={(e) => setFb({ caption: e.target.value })} className={field} />
+                      </div>
+                      <div className="w-56">
+                        <span className={label}>Who can see this Reel</span>
+                        <Select value="public" onChange={() => {}} options={[{ value: "public", label: "Public" }]} ariaLabel="Who can see this Reel" />
+                      </div>
+                      <p className="text-[11.5px] text-ink-soft">Reels on a Facebook Page are always public. It goes out on your Page and can be shown to people in Reels on Facebook.</p>
+                    </div>
+                  )}
                 </div>
               ) : showForm ? (
                 <p className="text-[12.5px] text-ink-soft">Not posting to {NAME[p]}.</p>
@@ -626,21 +680,17 @@ function SchedulePanelLive({
                   ? `Uploads now and goes live when YouTube has processed it (${yt.visibility})`
                   : `Uploads now · YouTube publishes it (${yt.visibility})`
                 : p === "instagram"
-                  ? hasFacebook
-                    ? `Posted as a Reel${nowMode ? " now" : ""} · Facebook at the same time`
-                    : `Posted as a Reel ${nowMode ? "now" : "at this time"}`
-                  : `Posted ${nowMode ? "now" : "at this time"} · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
+                  ? `Posted as a Reel ${nowMode ? "now" : "at this time"}`
+                  : p === "facebook"
+                    ? `Posted to the Page as a Reel ${nowMode ? "now" : "at this time"} · Public`
+                    : `Posted ${nowMode ? "now" : "at this time"} · ${TIKTOK_PRIVACY[tt.privacy] ?? tt.privacy}`;
             const ck = checks?.find((x) => x.platform === p);
             return (
               <li key={p} className="flex items-center gap-3 px-3.5 py-3 bg-surface-2/30">
-                <span className="flex items-center -space-x-1.5 flex-shrink-0">
-                  <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface" />
-                  {withFacebook(p) && <PlatformIcon platform="facebook" className="w-8 h-8 rounded-lg ring-2 ring-surface" />}
-                </span>
+                <PlatformIcon platform={p} className="w-8 h-8 rounded-lg ring-2 ring-surface flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-[13.5px] font-semibold truncate">
-                    {NAME[p]}
-                    {withFacebook(p) ? " + Facebook" : ""} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
+                    {NAME[p]} <span className="font-normal text-ink-soft">· {account(p)?.name}</span>
                   </div>
                   <div className="text-[11.5px] text-ink-soft truncate">{detail}</div>
                   {checking || !checks ? (
@@ -999,13 +1049,19 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
     ];
   }
 
-  const name = post.platform === "instagram" ? "Instagram" : "TikTok";
+  const name = NAME[post.platform];
   const step = post.status === "published" ? "done" : post.step ?? (post.status === "uploading" ? "upload" : post.status === "scheduled" ? "start" : "status");
-  current = step === "done" ? 4 : step === "status" || step === "publish" ? 2 : 1;
+  // Facebook: start → upload → uploaded (sending), then finish → check (Facebook processes it).
+  current = step === "done" ? 4 : ["status", "publish", "finish", "check"].includes(step) ? 2 : 1;
   return [
-    { label: `Scheduled in ${APP_NAME}`, state: "done", detail: current === 1 && post.status === "scheduled" ? `${name} can't hold scheduled posts, so ${APP_NAME} keeps it and sends it at ${when}.` : null, at: at(["scheduled", "rescheduled"]) },
+    { label: `Scheduled in ${APP_NAME}`, state: "done", detail:
+        current === 1 && post.status === "scheduled"
+          ? post.platform === "facebook"
+            ? `${APP_NAME} keeps it and sends it to your Page at ${when}.`
+            : `${name} can't hold scheduled posts, so ${APP_NAME} keeps it and sends it at ${when}.`
+          : null, at: at(["scheduled", "rescheduled"]) },
     {
-      label: post.platform === "instagram" ? `Sent to Instagram at ${when}` : `Uploaded to TikTok at ${when}`,
+      label: post.platform === "tiktok" ? `Uploaded to TikTok at ${when}` : `Sent to ${name} at ${when}`,
       state: bad(1, current),
       detail: current === 1 ? errDetail(post.status === "uploading" ? `${post.progress}% uploaded` : `Sends ${countdown(post.scheduledAt, now)}`) : null,
       at: current > 1 ? at(["started", "uploaded"]) : null,
@@ -1023,7 +1079,6 @@ function StatusView({
   events,
   canManage,
   account,
-  facebookPosted,
   onEdit,
   onChanged,
 }: {
@@ -1035,8 +1090,6 @@ function StatusView({
   events: PostEvent[];
   canManage: boolean;
   account: AccountInfo | null;
-  /** Instagram card only: whether Facebook is marked posted too. */
-  facebookPosted: boolean | null;
   onEdit: () => void;
   onChanged: () => void | Promise<void>;
 }) {
@@ -1118,7 +1171,6 @@ function StatusView({
           </li>
         ))}
       </ol>
-      {facebookPosted && <p className="text-[12px] font-semibold text-green">✓ Facebook posted (shared from Instagram)</p>}
 
       <div className="flex flex-wrap items-center gap-1 -mx-1.5">
         {post.platform === "youtube" && post.externalId && (
@@ -1138,6 +1190,11 @@ function StatusView({
             tone="link"
           >
             {post.permalink ? "Open post" : "Profile"}
+          </Action>
+        )}
+        {post.platform === "facebook" && post.permalink && (
+          <Action href={post.permalink} icon={<ExternalIcon className="w-3.5 h-3.5" />} tone="link">
+            Open Reel
           </Action>
         )}
         {post.platform === "tiktok" && (

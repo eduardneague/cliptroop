@@ -10,14 +10,14 @@ import "server-only";
  *   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET          (YouTube)
  *   INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET          (Instagram API with Instagram Login)
  *   TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET         (TikTok Login Kit + Content Posting)
- *   FACEBOOK_APP_ID / FACEBOOK_APP_SECRET            (Facebook Login: Page analytics only)
+ *   FACEBOOK_APP_ID / FACEBOOK_APP_SECRET            (Facebook Login: Page Reels + analytics)
  *     optional FACEBOOK_LOGIN_CONFIG_ID (Facebook Login for Business) and
  *     FACEBOOK_GRAPH_VERSION (default v23.0)
  */
 
 export const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
-/** Platforms VPlanner posts to (Facebook is connected for analytics only). */
-export const POSTING_PLATFORMS = ["youtube", "instagram", "tiktok"] as const;
+/** Platforms the app posts to (all four: Facebook as Reels on the team's Page). */
+export const POSTING_PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
 export type SocialPlatform = (typeof PLATFORMS)[number];
 export const isSocialPlatform = (p: unknown): p is SocialPlatform =>
   typeof p === "string" && (PLATFORMS as readonly string[]).includes(p);
@@ -50,7 +50,7 @@ export const STATS_SCOPES: Record<SocialPlatform, string[]> = {
   youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
   instagram: ["instagram_business_manage_insights"],
   tiktok: ["user.info.stats", "video.list"],
-  // Facebook is only connected for analytics: its permissions are the required ones.
+  // Facebook's analytics permissions are among the required ones.
   facebook: [],
 };
 export function statsEnabled(p: SocialPlatform) {
@@ -372,10 +372,17 @@ const tiktok: Provider = {
 };
 
 // ---------------------------------------------------------------------------
-// Facebook (Facebook Login → one Page; analytics only)
+// Facebook (Facebook Login → one Page; Reels + analytics)
 // ---------------------------------------------------------------------------
 
-const FB_SCOPES = ["pages_show_list", "pages_read_engagement", "read_insights"];
+/**
+ * Posting Reels to the Page. Not required to connect (a Page connected for
+ * analytics keeps working without it): the Facebook card asks to reconnect
+ * and scheduling refuses until it's there, like YOUTUBE_EDIT_SCOPE.
+ * With Facebook Login for Business, tick it in the configuration too.
+ */
+export const FACEBOOK_POST_SCOPE = "pages_manage_posts";
+const FB_SCOPES = ["pages_show_list", "pages_read_engagement", "read_insights", FACEBOOK_POST_SCOPE];
 export const FB_GRAPH = () => `https://graph.facebook.com/${env("FACEBOOK_GRAPH_VERSION") || "v23.0"}`;
 
 type FbPage = { id: string; name: string; token: string; picture: string | null; canAnalyze: boolean };
