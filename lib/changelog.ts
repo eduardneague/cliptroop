@@ -23,6 +23,14 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.11.1",
+    date: "2026-10-09",
+    title: "Connecting Instagram, without the false alarm",
+    changes: [
+      { kind: "fixed", text: "Connecting Instagram no longer shows \"sign-in expired\" after it actually connected. Instagram sometimes sends the same sign-in back twice, and the repeat is now recognised as the same successful connection." },
+    ],
+  },
+  {
     version: "1.11.0",
     date: "2026-10-08",
     title: "Notification history and tidier storage",

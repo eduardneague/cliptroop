@@ -88,14 +88,34 @@ export function ConnectedAccounts({
   // How connecting went: from the connect window (message / storage event),
   // or from the URL when it happened in this tab.
   const handled = useRef<string | null>(null);
+  // A platform can send the same sign-in back twice: the repeat finds its
+  // one-time code used ("expired") right next to the real success. So an
+  // "expired" waits a moment and is dropped if that platform connected.
+  const lastOk = useRef<{ platform: string | null; at: number } | null>(null);
+  const heldError = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showResult = useCallback(
-    (r: { ok: boolean; platform: string | null; error?: string | null; message?: string | null; note?: string | null }) => {
+    (r: { ok: boolean; platform: string | null; error?: string | null; message?: string | null; note?: string | null }, held = false) => {
       const key = JSON.stringify([r.ok, r.platform, r.error ?? null, r.message ?? null, r.note ?? null]);
-      if (handled.current === key) return; // the same result can arrive by two routes
+      if (!held && handled.current === key) return; // the same result can arrive by two routes
       handled.current = key;
       setTimeout(() => {
         if (handled.current === key) handled.current = null;
       }, 3000);
+      if (r.ok) {
+        lastOk.current = { platform: r.platform, at: Date.now() };
+        if (heldError.current) clearTimeout(heldError.current);
+        heldError.current = null;
+      } else if (r.error === "expired") {
+        if (lastOk.current?.platform === r.platform && Date.now() - lastOk.current.at < 60_000) return;
+        if (!held) {
+          if (heldError.current) clearTimeout(heldError.current);
+          heldError.current = setTimeout(() => {
+            heldError.current = null;
+            showResult(r, true);
+          }, 2500);
+          return;
+        }
+      }
       setBusy(null);
       if (r.ok) setGone([]);
       const name = r.platform && r.platform in META ? META[r.platform as Platform].name : "The account";

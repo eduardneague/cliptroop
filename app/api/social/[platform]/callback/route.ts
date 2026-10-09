@@ -1,6 +1,7 @@
 import { APP_NAME } from "@/lib/brand";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { PROVIDERS, ProviderError, hasStatsScopes, isSocialPlatform, missingRequired, redirectUriFor, statsEnabled } from "@/lib/social/providers";
 import { requireSocialManager } from "@/lib/social/access";
 import { encryptToken } from "@/lib/social/crypto";
@@ -32,6 +33,28 @@ setTimeout(function(){window.close();setTimeout(function(){location.replace(${JS
   const res = new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" } });
   res.cookies.set(POPUP_COOKIE, "", { path: "/api/social", maxAge: 0 });
   return res;
+}
+
+/** This person connected this platform in the last 2 minutes (a repeat of that sign-in). */
+async function justConnected(admin: ReturnType<typeof createAdminClient>, platform: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data } = await admin
+      .from("social_accounts")
+      .select("id")
+      .eq("platform", platform)
+      .eq("connected_by", user.id)
+      .eq("status", "active")
+      .gte("connected_at", new Date(Date.now() - 2 * 60_000).toISOString())
+      .limit(1);
+    return !!data?.length;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -69,7 +92,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq("platform", platform)
       .select("team_id, user_id, code_verifier, created_at")
       .maybeSingle();
-    if (!saved || Date.now() - Date.parse(saved.created_at as string) > 15 * 60_000) return finish({ ok: false, platform, error: "expired" });
+    if (!saved) {
+      // The same sign-in can arrive twice (Instagram does this): the first
+      // one already connected the account, so this one is that success, not
+      // an expired attempt.
+      if (await justConnected(admin, platform)) return finish({ ok: true, platform });
+      return finish({ ok: false, platform, error: "expired" });
+    }
+    if (Date.now() - Date.parse(saved.created_at as string) > 15 * 60_000) return finish({ ok: false, platform, error: "expired" });
 
     const access = await requireSocialManager(saved.team_id as string);
     if (!access.user || access.user.id !== saved.user_id) return finish({ ok: false, platform, error: "expired" });
