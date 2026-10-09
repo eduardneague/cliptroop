@@ -16,6 +16,7 @@ import { moveShortAuto, moveShortInQueue, setShortDayLimit, swapShorts, updateSh
 import { updateExpectedDate } from "@/app/(dashboard)/videos/[id]/actions";
 import { sounds } from "@/lib/sounds";
 import { startNavProgress } from "@/components/ui/nav-progress";
+import { useLocalFormat } from "@/lib/hooks/use-hydrated";
 
 export type CalItem = {
   kind: "short" | "long";
@@ -69,9 +70,10 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PLATFORM_NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const ACCENT: Record<string, string | undefined> = { sponsorship: "rgb(var(--blue))", big: "rgb(var(--gold))" };
 
-function postTime(it: CalItem) {
+/** The first post's time, in this device's time zone once the page is live (useLocalFormat). */
+function postTime(it: CalItem, format: ReturnType<typeof useLocalFormat>) {
   const times = it.posts.map((p) => Date.parse(p.at)).filter(Number.isFinite).sort((a, b) => a - b);
-  return times.length ? new Date(times[0]).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : null;
+  return times.length ? format(times[0], { hour: "2-digit", minute: "2-digit" }) : null;
 }
 
 export function CalendarView({
@@ -855,7 +857,8 @@ function CapacityDots({ count, limit, label = false }: { count: number; limit: n
 
 /** A meeting on the calendar: its time and name, in the meetings colour. Opens the meeting. */
 function MeetingChip({ m, size = "sm" }: { m: CalMeeting; size?: "sm" | "lg" }) {
-  const time = new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  const format = useLocalFormat();
+  const time = format(m.at, { hour: "2-digit", minute: "2-digit" });
   if (size === "sm")
     return (
       <Link
@@ -947,7 +950,8 @@ function Chip({
   onDragEnd: () => void;
 }) {
   const overdue = !it.done && it.date < today;
-  const time = postTime(it);
+  const format = useLocalFormat();
+  const time = postTime(it, format);
   const accent = it.shortType ? ACCENT[it.shortType] : undefined;
   const lg = size === "lg";
   // Sponsor / Big: a tint across the whole card plus the coloured edge.

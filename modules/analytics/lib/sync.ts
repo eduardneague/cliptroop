@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAccessToken } from "@/lib/social/tokens";
 import { FB_GRAPH, hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
+import { facebookEarnings } from "./fb-money";
 
 /*
  * Copies the platforms' numbers into our analytics tables (migration 0058).
@@ -500,6 +501,27 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
   // Pages with mostly video: if media views were refused, video views stand in.
   for (const [day, v] of videoViews) if (daily.get(day)?.views === undefined) put(day, { views: v });
 
+  // Earnings, for a Page in Facebook's Content Monetization (Graph API v23+):
+  // one amount per day, into Revenue next to YouTube's. Pages that aren't
+  // monetized get none (or zeros), and the sync note says so.
+  const earnings = await facebookEarnings(q, { pageId, since, until, currency: (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase(), dayOf: fbDay });
+  let revenueNote = earnings.note;
+  const earningDays = earnings.days.length;
+  const earned = earnings.days.reduce((t, d) => t + d.amount, 0);
+  if (earningDays) {
+    const now = new Date().toISOString();
+    try {
+      rows += await upsert(
+        admin,
+        "analytics_revenue_daily",
+        earnings.days.map((d) => ({ team_id: acc.team_id, platform: "facebook", day: d.day, content: "all", revenue: d.amount, currency: d.currency, updated_at: now })),
+        "team_id,platform,day,content"
+      );
+    } catch (e) {
+      revenueNote = /check constraint/i.test(e instanceof Error ? e.message : "") ? "Facebook earnings need database migration 0074." : `Facebook earnings: ${e instanceof Error ? e.message : "couldn't be saved"}`;
+    }
+  }
+
   // Followers right now (on today's row, like the other snapshots).
   try {
     const page = (await q(pageId, { fields: "followers_count,fan_count" })) as { followers_count?: number; fan_count?: number };
@@ -626,7 +648,11 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
   }
   rows += await upsert(admin, "analytics_content", recs, "team_id,platform,external_id");
   if (!ok) throw new ApiError(`Facebook refused every Page metric${failed.length ? ` (${failed[0]})` : ""}. Check the Page permissions (read_insights).`);
-  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length - reelCount} posts${reelCount ? `, ${reelCount} Reels` : ""}${countries ? `, ${countries} countries` : ""}` };
+  return {
+    rows,
+    revenueNote,
+    note: `${ok} of ${METRICS.length} metrics, ${recs.length - reelCount} posts${reelCount ? `, ${reelCount} Reels` : ""}${countries ? `, ${countries} countries` : ""}${earningDays ? `, earnings on ${earningDays} days (${earned.toFixed(2)})` : ""}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -695,7 +721,7 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
       let note: string | null = null;
       if (a.platform === "youtube") ({ rows, revenueNote, note } = await syncYouTube(admin, a, backfill, links));
       else if (a.platform === "instagram") ({ rows } = await syncInstagram(admin, a, backfill, links));
-      else if (a.platform === "facebook") ({ rows, note } = await syncFacebook(admin, a, backfill, links));
+      else if (a.platform === "facebook") ({ rows, note, revenueNote } = await syncFacebook(admin, a, backfill, links));
       else ({ rows, note } = await syncTikTok(admin, a, links));
       const now = new Date().toISOString();
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: now, last_ok_at: now, last_error: null, backfilled: true, revenue_note: revenueNote }, { onConflict: "team_id,platform" });

@@ -6,9 +6,10 @@ import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { diagnose, type Health } from "@/lib/social/health";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { AlertIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon } from "@/components/ui/icons";
 import { AutoRefresh, TestEmailButton, TestTimerButton, When } from "./client-bits";
-import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
+import { PostSections, type PostRow, type SectionKey } from "./post-sections";
+import type { Platform } from "@/modules/short-videos/lib/constants";
 import { APP_CHANNEL } from "@/lib/version";
 import { APP_NAME } from "@/lib/brand";
 import { currentProblems } from "@/lib/status";
@@ -41,17 +42,14 @@ export default async function PostingPage() {
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
   const isManager = (roles: string[]) => isMaster(roles as Parameters<typeof isMaster>[0]) || roles.includes("publisher");
-  const [membership, { data: rows }, { data: accounts }, health, appWide] = await Promise.all([
+  const COLS =
+    "id, platform, status, progress, scheduled_at, next_attempt_at, last_error, attempts, permalink, external_id, published_at, short:short_videos!social_posts_short_id_fkey(id, entry_number, title)";
+  const [membership, { data: rows }, { data: done }, { data: accounts }, health, appWide] = await Promise.all([
     getMembership(supabase, currentTeam.id),
-    supabase
-      .from("social_posts")
-      .select(
-        "id, platform, status, progress, scheduled_at, next_attempt_at, last_error, attempts, permalink, external_id, published_at, short:short_videos!social_posts_short_id_fkey(id, entry_number, title)"
-      )
-      .eq("team_id", currentTeam.id)
-      .neq("status", "cancelled")
-      .order("scheduled_at", { ascending: true })
-      .limit(200),
+    // Everything not finished yet (soonest first)…
+    supabase.from("social_posts").select(COLS).eq("team_id", currentTeam.id).in("status", [...ACTIVE, "failed"]).order("scheduled_at", { ascending: true }).limit(300),
+    // …and the latest published ones (newest first; the filters work on these 100).
+    supabase.from("social_posts").select(COLS).eq("team_id", currentTeam.id).eq("status", "published").order("published_at", { ascending: false, nullsFirst: false }).limit(100),
     supabase.from("social_accounts").select("platform, display_name, username, status, last_error, scopes").eq("team_id", currentTeam.id).in("platform", ["youtube", "instagram", "tiktok", "facebook"]),
     // Managers only: asked as soon as the roles are known, alongside the rest.
     getMembership(supabase, currentTeam.id).then((m) =>
@@ -64,17 +62,36 @@ export default async function PostingPage() {
   const manager = isManager(roles);
 
   const now = Date.now();
-  const posts = ((rows ?? []) as unknown as Row[]).map((r) => ({ ...r, short: Array.isArray(r.short) ? r.short[0] : r.short }));
+  const tidy = (list: unknown) => ((list ?? []) as Row[]).map((r) => ({ ...r, short: Array.isArray(r.short) ? r.short[0] : r.short }));
+  const posts = tidy(rows);
   const late = (r: Row) => r.status === "scheduled" && Date.parse(r.next_attempt_at) < now - 3 * 60_000;
-  const attention = posts.filter((r) => r.status === "failed" || late(r) || (r.attempts > 0 && ACTIVE.includes(r.status)));
-  const moving = posts.filter((r) => ["uploading", "processing", "waiting"].includes(r.status) && !attention.includes(r));
-  const upcoming = posts.filter((r) => r.status === "scheduled" && !attention.includes(r));
-  const published = posts
-    .filter((r) => r.status === "published")
-    .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""))
-    .slice(0, 20);
+  const sectionOf = (r: Row): SectionKey =>
+    r.status === "published"
+      ? "published"
+      : r.status === "failed" || late(r) || (r.attempts > 0 && ACTIVE.includes(r.status))
+        ? "attention"
+        : r.status === "scheduled"
+          ? "upcoming"
+          : "moving";
+  const list: PostRow[] = [...posts, ...tidy(done)].map((r) => ({
+    id: r.id,
+    platform: r.platform as Platform,
+    status: r.status,
+    progress: r.progress,
+    scheduledAt: r.scheduled_at,
+    publishedAt: r.published_at,
+    lastError: r.last_error,
+    attempts: r.attempts,
+    late: late(r),
+    link:
+      r.permalink ??
+      (r.platform === "youtube" && r.external_id ? `https://studio.youtube.com/video/${r.external_id}/edit` : r.platform === "tiktok" && r.status === "published" ? "https://www.tiktok.com/tiktokstudio/content" : null),
+    canPostNow: r.status === "scheduled" || r.status === "failed" || (r.platform === "youtube" && (r.status === "waiting" || r.status === "uploading") && Date.parse(r.scheduled_at) > now + 60_000),
+    short: r.short ? { id: r.short.id, number: r.short.entry_number, title: r.short.title } : null,
+    section: sectionOf(r),
+  }));
   const findings = health.data ? diagnose(health.data as Health) : [];
-  const anyActive = attention.length + moving.length + upcoming.length > 0;
+  const anyActive = posts.length > 0;
   const master = isMaster(roles as Parameters<typeof isMaster>[0]);
 
   // Your team's problems, for everyone on the team (the app's own are on /status).
@@ -142,87 +159,6 @@ export default async function PostingPage() {
         ]
       : []),
   ];
-
-  const row = (r: Row) => {
-    const link =
-      r.permalink ??
-      (r.platform === "youtube" && r.external_id ? `https://studio.youtube.com/video/${r.external_id}/edit` : r.platform === "tiktok" && r.status === "published" ? "https://www.tiktok.com/tiktokstudio/content" : null);
-    const status =
-      r.status === "failed"
-        ? { text: "Failed", cls: "text-red" }
-        : late(r)
-          ? { text: "Late: hasn't started", cls: "text-amber" }
-          : r.status === "uploading"
-            ? { text: `Uploading ${r.progress}%`, cls: "text-amber" }
-            : r.status === "processing"
-              ? { text: "Processing", cls: "text-amber" }
-              : r.status === "waiting"
-                ? { text: r.platform === "youtube" ? "Scheduled on YouTube" : "Waiting", cls: "text-violet" }
-                : r.status === "published"
-                  ? { text: "Published", cls: "text-green" }
-                  : { text: "Scheduled", cls: "text-ink" };
-    return (
-      <li key={r.id} className="flex items-center gap-3 px-4 py-3">
-        <PlatformIcon platform={r.platform as "youtube"} className="w-7 h-7 rounded-lg flex-shrink-0" />
-        <div className="min-w-0 flex-1">
-          {r.short ? (
-            <Link href={`/shorts/${r.short.id}`} className="text-[13.5px] font-semibold hover:underline truncate block">
-              <span className="font-mono text-ink-soft mr-1.5">#{r.short.entry_number}</span>
-              {r.short.title}
-            </Link>
-          ) : (
-            <span className="text-[13.5px] font-semibold">A deleted short</span>
-          )}
-          <div className="text-[12px] text-ink-soft truncate">
-            <span className={`font-semibold ${status.cls}`}>{status.text}</span> · {NAME[r.platform]} ·{" "}
-            <When iso={r.status === "published" && r.published_at ? r.published_at : r.scheduled_at} />
-            {r.last_error && (r.status === "failed" || r.attempts > 0) && <span className="text-red"> · {r.last_error}</span>}
-          </div>
-        </div>
-        {manager &&
-          r.short &&
-          (r.status === "scheduled" || r.status === "failed" || (r.platform === "youtube" && (r.status === "waiting" || r.status === "uploading") && Date.parse(r.scheduled_at) > now + 60_000)) && (
-            <PostNowButton shortId={r.short.id} platform={r.platform as "youtube"} shortRef={`#${r.short.entry_number}`} variant="row" />
-          )}
-        {link && (
-          <a href={link} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-amber hover:underline flex-shrink-0 inline-flex items-center gap-1">
-            Open
-            <ExternalIcon className="w-3.5 h-3.5" />
-          </a>
-        )}
-      </li>
-    );
-  };
-
-  // Each section is a dropdown. "Needs attention" turns red when it has anything.
-  const group = (title: string, list: Row[], empty: string, opts: { open?: boolean; danger?: boolean } = {}) => {
-    const danger = opts.danger && list.length > 0;
-    return (
-      <details
-        open={opts.open}
-        className={`group rounded-2xl border overflow-hidden ${danger ? "border-red/50 bg-red/[0.07]" : "border-line/10 bg-surface"}`}
-      >
-        <summary className="flex items-center gap-2 px-4 py-3.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-          {danger && <span className="w-2 h-2 rounded-full bg-red animate-pulse" aria-hidden />}
-          <span className={`text-[11.5px] font-bold uppercase tracking-wide ${danger ? "text-red" : "text-ink-soft"}`}>{title}</span>
-          <span
-            className={`rounded-full px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${
-              danger ? "bg-red text-white" : "bg-surface-2 text-ink-soft"
-            }`}
-          >
-            {list.length}
-          </span>
-          <span className="flex-1" />
-          <ChevronDownIcon className="w-4 h-4 text-ink-soft transition-transform duration-200 group-open:rotate-180" />
-        </summary>
-        {list.length ? (
-          <ul className={`divide-y border-t ${danger ? "divide-red/15 border-red/20" : "divide-line/10 border-line/10"}`}>{list.map(row)}</ul>
-        ) : (
-          <p className="px-4 pb-4 text-[13px] text-ink-soft">{empty}</p>
-        )}
-      </details>
-    );
-  };
 
   return (
     <div className="px-4 sm:px-8 py-6 max-w-5xl mx-auto space-y-5">
@@ -323,10 +259,7 @@ export default async function PostingPage() {
         </section>
       )}
 
-      {group("Needs attention", attention, "Nothing needs attention.", { open: attention.length > 0, danger: true })}
-      {group("In progress", moving, "Nothing is uploading right now.", { open: true })}
-      {group("Upcoming", upcoming, "Nothing scheduled. Approve a short and schedule it from its page.", { open: true })}
-      {group("Published recently", published, "Nothing posted yet.")}
+      <PostSections rows={list} manager={manager} />
     </div>
   );
 }

@@ -628,10 +628,14 @@ export type Revenue = {
   allowed: boolean;
   isMaster: boolean;
   buckets: Bucket[];
-  /** Per bucket: YouTube's estimate and the other income added by hand. */
-  perBucket: { key: string; revenue: number; other: number }[];
+  /** Per bucket: YouTube's estimate, Facebook's earnings and the other income added by hand. */
+  perBucket: { key: string; revenue: number; facebook: number; other: number }[];
   /** YouTube's estimated revenue. */
   total: Kpi;
+  /** Facebook Content Monetization earnings (a Page that's in the program; migration 0074). */
+  facebook: Kpi;
+  /** Whether there are Facebook earnings to show at all (in the last year). */
+  hasFacebook: boolean;
   /** Income added by hand (sponsorships, brand deals, other platforms…). */
   other: Kpi;
   /** Everything together. */
@@ -647,13 +651,15 @@ export type Revenue = {
   fxNote: string | null;
   bestDay: { day: string; revenue: number } | null;
   /** Where the money in this range came from, biggest first. */
-  streams: { key: string; label: string; amount: number; youtube: boolean }[];
+  streams: { key: string; label: string; amount: number; kind: "youtube" | "facebook" | "other" }[];
   /** YouTube revenue from Shorts vs long videos in this range. */
   split: { shorts: number; long: number } | null;
   entries: RevenueEntry[];
-  months: { month: string; revenue: number; other: number; views: number | null }[];
+  months: { month: string; revenue: number; facebook: number; other: number; views: number | null }[];
   access: { userId: string; name: string; avatarUrl: string | null; color: string; master: boolean; granted: boolean }[];
   note: string | null;
+  /** What the Facebook sync said about earnings (not in Content Monetization…), when there are none. */
+  facebookNote: string | null;
   hasData: boolean;
 };
 
@@ -682,6 +688,8 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     buckets,
     perBucket: [],
     total: zero,
+    facebook: zero,
+    hasFacebook: false,
     other: zero,
     all: zero,
     rpm: zero,
@@ -696,6 +704,7 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     months: [],
     access: [],
     note: null,
+    facebookNote: null,
     hasData: false,
   };
   if (!allowed) return empty;
@@ -706,7 +715,7 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     all((a, b) => supabase.from("analytics_daily").select("day, views").eq("team_id", teamId).eq("platform", "youtube").eq("content", "all").gte("day", from).lte("day", w.to).range(a, b)),
     isMaster ? listTeamPeople(teamId) : Promise.resolve([]),
     isMaster ? supabase.from("revenue_access").select("user_id").eq("team_id", teamId) : Promise.resolve({ data: [] as Row[] }),
-    supabase.from("analytics_syncs").select("revenue_note").eq("team_id", teamId).eq("platform", "youtube").maybeSingle(),
+    supabase.from("analytics_syncs").select("platform, revenue_note").eq("team_id", teamId).in("platform", ["youtube", "facebook"]),
     // Before migration 0061 this table doesn't exist: then there's simply no other income.
     all((a, b) =>
       supabase
@@ -736,8 +745,14 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     const from = isCurrencyCode(r.currency) ? (r.currency as string) : stored;
     for (const f of ["revenue", "ad_revenue", "premium_revenue", "gross_revenue"]) if (r[f] !== null && r[f] !== undefined) r[f] = conv(Number(r[f]) || 0, from);
   }
-  const allRows = rev.filter((r) => r.content === "all");
+  // YouTube's estimate and Facebook's earnings are kept apart (rows from before 0074 are all YouTube's).
+  const ytRev = rev.filter((r) => (r.platform ?? "youtube") === "youtube");
+  const allRows = ytRev.filter((r) => r.content === "all");
   const revOn = new Map(allRows.map((r) => [r.day as string, Number(r.revenue) || 0]));
+  const fbRows = rev.filter((r) => r.platform === "facebook" && r.content === "all");
+  // A Page outside the program can report zeros: that's no Facebook income to show.
+  const hasFacebook = fbRows.some((r) => (Number(r.revenue) || 0) !== 0);
+  const fbOn = new Map(hasFacebook ? fbRows.map((r) => [r.day as string, Number(r.revenue) || 0]) : []);
   const viewsOn = new Map(views.map((r) => [r.day as string, Number(r.views) || 0]));
   const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
   const entries: RevenueEntry[] = entryRows.map((e) => {
@@ -772,6 +787,7 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
   };
   const both = (x: number | null, y: number | null) => (x === null && y === null ? null : (x ?? 0) + (y ?? 0));
   const total = { value: sumMap(w.from, w.to, revOn), prev: sumMap(w.prevFrom, w.prevTo, revOn) };
+  const facebook = { value: sumMap(w.from, w.to, fbOn), prev: sumMap(w.prevFrom, w.prevTo, fbOn) };
   const other = { value: sumEntries(w.from, w.to), prev: sumEntries(w.prevFrom, w.prevTo) };
   // Per 1,000 views, only over days that have both numbers (views and revenue can start on different days).
   const rpmIn = (a: string, b: string) => {
@@ -797,30 +813,37 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
   const streams: Revenue["streams"] = [];
   if (total.value !== null) {
     if (ads !== null || premium !== null) {
-      streams.push({ key: "yt_ads", label: "YouTube ads", amount: ads ?? 0, youtube: true });
-      streams.push({ key: "yt_premium", label: "YouTube Premium", amount: premium ?? 0, youtube: true });
+      streams.push({ key: "yt_ads", label: "YouTube ads", amount: ads ?? 0, kind: "youtube" });
+      streams.push({ key: "yt_premium", label: "YouTube Premium", amount: premium ?? 0, kind: "youtube" });
       const rest = total.value - (ads ?? 0) - (premium ?? 0);
-      if (rest > 0.005) streams.push({ key: "yt_other", label: "YouTube memberships, Supers & Shopping", amount: rest, youtube: true });
-    } else streams.push({ key: "yt", label: "YouTube (estimated)", amount: total.value, youtube: true });
+      if (rest > 0.005) streams.push({ key: "yt_other", label: "YouTube memberships, Supers & Shopping", amount: rest, kind: "youtube" });
+    } else streams.push({ key: "yt", label: "YouTube (estimated)", amount: total.value, kind: "youtube" });
   }
+  if (facebook.value) streams.push({ key: "fb_cm", label: "Facebook (Content Monetization)", amount: facebook.value, kind: "facebook" });
   for (const [src, label] of Object.entries(INCOME_SOURCES)) {
     const amt = entries.filter((e) => e.source === src && e.day >= w.from && e.day <= w.to).reduce((t, e) => t + e.amount, 0);
-    if (amt > 0) streams.push({ key: src, label, amount: amt, youtube: false });
+    if (amt > 0) streams.push({ key: src, label, amount: amt, kind: "other" });
   }
   streams.sort((a, b) => b.amount - a.amount);
   const sumContent = (c: string) => {
-    const xs = rev.filter((r) => r.content === c && inRange(r.day as string, w.from, w.to)).map((r) => Number(r.revenue) || 0);
+    const xs = ytRev.filter((r) => r.content === c && inRange(r.day as string, w.from, w.to)).map((r) => Number(r.revenue) || 0);
     return xs.length ? xs.reduce((a, b) => a + b, 0) : null;
   };
   const sh = sumContent("shorts");
   const lo = sumContent("long");
 
-  const months = new Map<string, { revenue: number; other: number; views: number | null }>();
-  const monthOf = (m: string) => months.get(m) ?? { revenue: 0, other: 0, views: null };
+  const months = new Map<string, { revenue: number; facebook: number; other: number; views: number | null }>();
+  const monthOf = (m: string) => months.get(m) ?? { revenue: 0, facebook: 0, other: 0, views: null };
   for (const [d, v] of revOn) {
     if (d < yearAgo) continue;
     const m = monthOf(d.slice(0, 7));
     m.revenue += v;
+    months.set(d.slice(0, 7), m);
+  }
+  for (const [d, v] of fbOn) {
+    if (d < yearAgo) continue;
+    const m = monthOf(d.slice(0, 7));
+    m.facebook += v;
     months.set(d.slice(0, 7), m);
   }
   for (const e of entries) {
@@ -833,13 +856,16 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     const m = months.get(d.slice(0, 7));
     if (m) m.views = (m.views ?? 0) + v;
   }
+  const noteOf = (p: string) => ((sync.data ?? []) as Row[]).find((x) => x.platform === p)?.revenue_note ?? null;
   const granted = new Set(((access as { data: Row[] | null }).data ?? []).map((r) => r.user_id as string));
   return {
     ...empty,
-    perBucket: buckets.map((b) => ({ key: b.key, revenue: sumMap(b.from, b.to, revOn) ?? 0, other: sumEntries(b.from, b.to) ?? 0 })),
+    perBucket: buckets.map((b) => ({ key: b.key, revenue: sumMap(b.from, b.to, revOn) ?? 0, facebook: sumMap(b.from, b.to, fbOn) ?? 0, other: sumEntries(b.from, b.to) ?? 0 })),
     total,
+    facebook,
+    hasFacebook,
     other,
-    all: { value: both(total.value, other.value), prev: both(total.prev, other.prev) },
+    all: { value: both(both(total.value, facebook.value), other.value), prev: both(both(total.prev, facebook.prev), other.prev) },
     rpm: { value: rpmIn(w.from, w.to), prev: rpmIn(w.prevFrom, w.prevTo) },
     fx: fx ? { updatedAt: fx.updatedAt, converted } : null,
     fxNote: empty.fxNote ?? (missingRate ? `Some amounts are in ${missingRate} (no exchange rate for it right now).` : null),
@@ -849,8 +875,9 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
     entries: entries.filter((e) => e.day >= w.from && e.day <= w.to),
     months: [...months.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([month, v]) => ({ month, ...v })),
     access: (people as Awaited<ReturnType<typeof listTeamPeople>>).map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, color: p.color, master: p.roles.includes("master"), granted: granted.has(p.userId) })),
-    note: (sync.data?.revenue_note as string | null) ?? null,
-    hasData: total.value !== null || other.value !== null,
+    note: (noteOf("youtube") as string | null) ?? null,
+    facebookNote: hasFacebook ? null : ((noteOf("facebook") as string | null) ?? null),
+    hasData: total.value !== null || facebook.value !== null || other.value !== null,
   };
 }
 

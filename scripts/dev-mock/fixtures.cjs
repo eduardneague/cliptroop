@@ -160,12 +160,47 @@ for (let d = -400; d <= -1; d++) {
   revenue.push({ team_id: TEAM, platform: "youtube", day: day(d), content: "shorts", revenue: Math.round(total * 0.35 * 100) / 100, currency: "USD" });
   revenue.push({ team_id: TEAM, platform: "youtube", day: day(d), content: "long", revenue: Math.round(total * 0.65 * 100) / 100, currency: "USD" });
 }
+// Facebook Content Monetization earnings for the last 120 days (migration 0074);
+// MOCK_FB_NO_EARNINGS=1: a Page outside the program (no rows, and the sync says so).
+if (!process.env.MOCK_FB_NO_EARNINGS)
+  for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
 const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000001", team_id: TEAM, day: day(-5), source: "sponsorship", amount: 750, currency: "USD", note: "Brand X: street food short", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000003", team_id: TEAM, day: day(-20), source: "affiliate", amount: 86.4, currency: "USD", note: null, short_id: null, project_id: null, short_videos: null, long_video_projects: null },
 ];
-const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: null }));
+// MOCK_POSTS=1: a busy posting week around the real "now" (Posting filters, the Posting today widget).
+const morePosts = [];
+if (process.env.MOCK_POSTS) {
+  const rel = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+  let n = 0;
+  const post = (i, platform, status, h, extra = {}) => {
+    const x = shorts[i];
+    n++;
+    morePosts.push({
+      id: `sq000000-0000-4000-8000-${String(n).padStart(12, "0")}`, team_id: TEAM, short_id: x.id, platform, status, progress: status === "uploading" ? 40 : status === "published" ? 100 : 0,
+      scheduled_at: rel(h), next_attempt_at: rel(h), last_error: null, attempts: 0, permalink: status === "published" ? `https://example.com/${platform}/${n}` : null, external_id: null,
+      published_at: status === "published" ? rel(h + 0.05) : null, updated_at: rel(h), step: "start", note: null, options: {}, locked_until: null,
+      short: { id: x.id, entry_number: x.entry_number, title: x.title }, short_videos: { entry_number: x.entry_number, title: x.title }, ...extra,
+    });
+  };
+  const ALL4 = ["youtube", "instagram", "facebook", "tiktok"];
+  ALL4.forEach((pl, k) => post(0, pl, "published", -50 + k * 0.5));
+  ALL4.forEach((pl, k) => post(1, pl, "published", -26 + k * 0.5));
+  post(2, "youtube", "published", -3);
+  post(2, "instagram", "published", -2.5);
+  post(2, "tiktok", "scheduled", 2);
+  post(2, "facebook", "failed", -1, { attempts: 3, last_error: "Facebook takes Reels up to 1:30 and this video is 1:38." });
+  post(3, "youtube", "waiting", 5, { progress: 100, external_id: "abc", permalink: "https://youtube.com/shorts/abc" });
+  post(3, "instagram", "uploading", -0.1);
+  post(3, "tiktok", "scheduled", 6);
+  post(3, "facebook", "scheduled", 7);
+  ALL4.forEach((pl, k) => post(4, pl, "scheduled", 26 + k));
+  post(5, "youtube", "scheduled", -0.4);
+  // Older ones, so "Published recently" has more than one page.
+  for (let i = 6; i < 16; i++) ["youtube", "tiktok", i % 2 ? "instagram" : "facebook"].forEach((pl, k) => post(i, pl, "published", -24 * (i - 3) - k));
+}
+const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: pl === "facebook" && process.env.MOCK_FB_NO_EARNINGS ? "Facebook shared no earnings: the Page isn't in Content Monetization (or hasn't earned yet)." : null }));
 // MOCK_FB_ANALYTICS_ONLY=1: a Facebook Page connected before posting (no pages_manage_posts).
 const STATS = {
   youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
@@ -346,8 +381,8 @@ module.exports = {
           // #234: Facebook uploading.
           { id: "sp000000-0000-4000-8000-000000000005", team_id: TEAM, short_id: shorts[3].id, platform: "facebook", status: "uploading", progress: 40, scheduled_at: at(0, -1), next_attempt_at: new Date(Date.now() - 60e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: "998877", published_at: null, updated_at: at(-1), step: "uploaded", note: null, options: { caption: "Morning routine" }, locked_until: null, short: { id: shorts[3].id, entry_number: shorts[3].entry_number, title: shorts[3].title } },
           { id: "sp000000-0000-4000-8000-000000000002", team_id: TEAM, short_id: shorts[1].id, platform: "youtube", status: "scheduled", progress: 0, scheduled_at: at(0, -1), next_attempt_at: new Date(Date.now() - 20 * 60e3).toISOString(), last_error: null, attempts: 0, permalink: null, external_id: null, published_at: null, updated_at: at(-1), short: { id: shorts[1].id, entry_number: shorts[1].entry_number, title: shorts[1].title } },
-        ]
-      : [],
+        ].concat(morePosts)
+      : morePosts,
     team_day_limits: [],
     meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
     meeting_actions: [
