@@ -564,9 +564,69 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
       updated_at: new Date().toISOString(),
     };
   });
+  // Reels (what ClipTroop posts to the Page) live apart from Page posts:
+  // read them too, with plays and reactions when Meta shares them.
+  let reels: Record<string, unknown>[] = [];
+  try {
+    reels = (((await q(`${pageId}/video_reels`, { fields: "id,description,created_time,permalink_url,picture", limit: "25" })) as { data?: Record<string, unknown>[] }).data ?? []);
+  } catch {
+    /* no Reels edge for this Page: Page posts only */
+  }
+  const postLinks = posts.map((m) => String(m.permalink_url ?? ""));
+  const total = (v: unknown) =>
+    v && typeof v === "object" ? Object.values(v as Record<string, unknown>).reduce<number>((t, x) => t + (num(x) ?? 0), 0) : num(v);
+  const part = (v: unknown, key: string) =>
+    v && typeof v === "object" ? num(Object.entries(v as Record<string, unknown>).find(([k]) => k.toLowerCase() === key)?.[1]) : null;
+  let reelCount = 0;
+  for (const m of reels) {
+    const id = String(m.id);
+    // A Reel that also shows up as a Page post is already listed.
+    if (postLinks.some((u) => u.includes(id))) continue;
+    const raw = (m.permalink_url as string | undefined) ?? "";
+    const permalink = raw ? (raw.startsWith("http") ? raw : `https://www.facebook.com${raw.startsWith("/") ? "" : "/"}${raw}`) : `https://www.facebook.com/reel/${id}`;
+    let views: number | null = null;
+    let likes: number | null = null;
+    let comments: number | null = null;
+    let shares: number | null = null;
+    try {
+      const ins = (await q(`${id}/video_insights`, { metric: "blue_reels_play_count,post_video_likes_by_reaction_type,post_video_social_actions", period: "lifetime" })) as {
+        data?: { name: string; values?: { value: unknown }[] }[];
+      };
+      for (const d of ins.data ?? []) {
+        const v = d.values?.[0]?.value;
+        if (d.name === "blue_reels_play_count") views = num(v);
+        else if (d.name === "post_video_likes_by_reaction_type") likes = total(v);
+        else if (d.name === "post_video_social_actions") {
+          comments = part(v, "comment");
+          shares = part(v, "share");
+        }
+      }
+    } catch {
+      /* Meta didn't share this Reel's numbers: it's listed without them */
+    }
+    const link = links.byExternal.get(`facebook:${id}`) ?? links.byUrl(id);
+    reelCount++;
+    recs.push({
+      team_id: acc.team_id,
+      platform: "facebook",
+      external_id: id,
+      kind: link?.project ? "long" : "short",
+      title: String(m.description ?? "").split("\n")[0].slice(0, 200) || null,
+      url: permalink,
+      thumbnail_url: (m.picture as string | undefined) ?? null,
+      published_at: (m.created_time as string | undefined) ? new Date(m.created_time as string).toISOString() : null,
+      views,
+      likes,
+      comments,
+      shares: shares ?? 0,
+      short_id: link?.short ?? null,
+      project_id: link?.project ?? null,
+      updated_at: new Date().toISOString(),
+    });
+  }
   rows += await upsert(admin, "analytics_content", recs, "team_id,platform,external_id");
   if (!ok) throw new ApiError(`Facebook refused every Page metric${failed.length ? ` (${failed[0]})` : ""}. Check the Page permissions (read_insights).`);
-  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length} posts${countries ? `, ${countries} countries` : ""}` };
+  return { rows, note: `${ok} of ${METRICS.length} metrics, ${recs.length - reelCount} posts${reelCount ? `, ${reelCount} Reels` : ""}${countries ? `, ${countries} countries` : ""}` };
 }
 
 // ---------------------------------------------------------------------------

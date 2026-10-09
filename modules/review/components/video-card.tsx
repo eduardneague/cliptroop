@@ -8,6 +8,8 @@ import { ExternalIcon } from "@/components/ui/icons";
 import { formatBytes, formatTime } from "../lib/limits";
 import type { VideoVersion } from "../lib/queries";
 import { VersionUploader } from "./uploader";
+import { lengthNotes } from "@/lib/short-length";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 
 /** The short's video at a glance: latest version, open notes, review. */
 export function VideoCard({
@@ -17,6 +19,7 @@ export function VideoCard({
   openNotes,
   canUpload,
   prominent,
+  platforms = [],
 }: {
   shortId: string;
   teamId: string;
@@ -24,6 +27,8 @@ export function VideoCard({
   openNotes: number;
   canUpload: boolean;
   prominent: boolean;
+  /** Where the short is planned to go: a video too long for one of them says so here. */
+  platforms?: readonly string[];
 }) {
   const router = useRouter();
   const latest = versions.find((v) => !v.deleted) ?? null;
@@ -81,6 +86,8 @@ export function VideoCard({
         <p className="text-[13.5px] text-ink-soft">{canUpload ? "No video yet. Upload the first version." : "The editor will upload the video here."}</p>
       )}
 
+      {latest && !(pending && !arrived) && <LengthNotes duration={latest.duration} platforms={platforms} />}
+
       <div className="flex items-center gap-2 mt-3 flex-wrap">
         {latest && (
           <Link
@@ -106,5 +113,24 @@ export function VideoCard({
         )}
       </div>
     </section>
+  );
+}
+
+/** "Too long for Facebook" and the like, one line per platform. */
+export function LengthNotes({ duration, platforms, className = "mt-3" }: { duration: number | null; platforms: readonly string[]; className?: string }) {
+  const notes = lengthNotes(duration, platforms);
+  if (!notes.length) return null;
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {notes.map((n) => (
+        <li
+          key={n.platform}
+          className={`flex items-start gap-2 rounded-lg px-3 py-2 text-[12.5px] leading-snug ${n.level === "block" ? "bg-red/[0.07] text-red" : "bg-amber/10 text-ink"}`}
+        >
+          <PlatformIcon platform={n.platform} className="w-4 h-4 rounded mt-[1px] flex-shrink-0" />
+          <span>{n.text}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

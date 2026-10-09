@@ -17,7 +17,7 @@ export function TeamsVisibilityToggle({ initialValue }: { initialValue: boolean 
       if (result?.error) {
         setVisible(!next);
         toast.error(result.error);
-      }
+      } else toast.success(next ? "Your teams show on your public profile" : "Your teams are hidden from people outside them");
     });
   }
 
@@ -27,6 +27,7 @@ export function TeamsVisibilityToggle({ initialValue }: { initialValue: boolean 
       disabled={pending}
       role="switch"
       aria-checked={visible}
+      aria-label="Show my teams publicly"
       className={`w-10 h-6 rounded-full relative transition-colors flex-shrink-0 disabled:opacity-50 ${
         visible ? "bg-amber" : "bg-line/20"
       }`}

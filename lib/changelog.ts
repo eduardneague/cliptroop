@@ -23,6 +23,22 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.1",
+    date: "2026-10-09",
+    title: "The video always in view, and tidier controls",
+    changes: [
+      { kind: "new", text: "A short's Posting card now always shows the video that gets posted, with the same player as the review page: before, during and after posting." },
+      { kind: "new", text: "Too long for a platform? The short's Video card and Posting card say so: Facebook Reels can be at most 1:30 (longer ones can't be posted there), Instagram Reels at most 15:00, and over 3:00 YouTube posts a regular video instead of a Short." },
+      { kind: "new", text: "Compare two versions and choose whose sound you hear: the speaker next to each one (or none)." },
+      { kind: "better", text: "In review, Open review, Approve and Needs changes are in the main column, right above the video, instead of next to Activity. What to fix after a review is there too." },
+      { kind: "better", text: "Analytics → Content: one row of platform buttons (All, YouTube, Instagram, Facebook, TikTok), always all four, each with its count. Shorts the team posted are listed even before the platform shares their numbers, and Facebook Reels are read too." },
+      { kind: "better", text: "Comments and editing ideas on a script are for the people working on it: its scripters, its Review and Staging people, and masters. Everyone else on the team can still read them." },
+      { kind: "better", text: "Only masters and schedulers can change dates: moving shorts and long videos on the Calendar, and a long video's date. Schedulers can now move long videos on the Calendar too." },
+      { kind: "better", text: "Settings: saving your profile says so (with its sound), so do showing your teams, your colour theme, role colours and script people. Removing a device from notifications asks first." },
+      { kind: "fixed", text: "A profile that couldn't be saved (say, a username with a space) no longer empties every box: what you typed stays, and the username is checked as you type. Signing in with a wrong password keeps the email, and a team name stays after an error." },
+    ],
+  },
+  {
     version: "1.12.0",
     date: "2026-10-09",
     title: "Posting to Facebook",

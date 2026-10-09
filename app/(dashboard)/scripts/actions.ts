@@ -142,6 +142,7 @@ export async function prepareSketchUpload(scriptId: string): Promise<DocResult<{
   if (!user) return { error: "Your session expired. Sign in again." };
   const { data: doc } = await supabase.from("scripts").select("id, team_id").eq("id", scriptId).maybeSingle();
   if (!doc) return { error: "You can't add drawings to this document." };
+  if (!(await mayComment(supabase, scriptId))) return { error: NOT_ON_SCRIPT };
 
   const admin = createAdminClient();
   if (!sketchBucketReady) {
@@ -162,6 +163,19 @@ export async function prepareSketchUpload(scriptId: string): Promise<DocResult<{
     png: { path: png.data.path, token: png.data.token },
     json: json.data ? { path: json.data.path, token: json.data.token } : { path: "", token: "" },
   };
+}
+
+const NOT_ON_SCRIPT = "Only this video's scripters and its Review and Staging people can comment on its script.";
+
+/**
+ * Comments and editing ideas are for the people working on the video's
+ * script (0072; the database checks it too). Before that migration the
+ * check doesn't exist: anyone on the team, as before.
+ */
+async function mayComment(supabase: Awaited<ReturnType<typeof createClient>>, scriptId: string) {
+  const { data, error } = await supabase.rpc("can_comment_script", { p_script: scriptId });
+  if (error) return true;
+  return data === true;
 }
 
 /**
@@ -191,6 +205,7 @@ export async function addComment(input: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
+  if (!(await mayComment(supabase, input.scriptId))) return { error: NOT_ON_SCRIPT };
   const { data, error } = await supabase
     .from("script_comments")
     .insert({
@@ -277,7 +292,7 @@ export async function resolveComment(id: string, resolved: boolean): Promise<Doc
     .update({ resolved_at: resolved ? new Date().toISOString() : null })
     .eq("id", id)
     .select("scripts(short_video_id, long_video_id)");
-  if (error || !data?.length) return { error: "Couldn't update the comment." };
+  if (error || !data?.length) return { error: "Couldn't update the comment. Only this video's scripters and its Review and Staging people can resolve comments." };
   const s = (Array.isArray(data[0].scripts) ? data[0].scripts[0] : data[0].scripts) as { short_video_id: string | null; long_video_id: string | null } | null;
   refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
   return {};

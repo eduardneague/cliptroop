@@ -104,6 +104,8 @@ export default async function LongScriptPage({
       doc={doc}
       // Reviewers edit Review, staging people edit Staging (0062).
       canEdit={doc.kind === "research" ? canEditResearch : canEditScript || isStepPerson(flow, doc.id, me)}
+      // Comments and editing ideas: masters, the scripters, the Review / Staging people, researchers on research (0072).
+      canComment={canEditScript || (doc.kind === "research" && canEditResearch) || flow.steps.some((s) => isStepPerson(flow, s.docId, me))}
       canCreate={{ script: canEditScript, research: canEditResearch }}
       side={side}
       comments={comments}

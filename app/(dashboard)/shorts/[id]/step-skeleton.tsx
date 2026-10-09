@@ -29,6 +29,18 @@ export function ShortStepSkeleton({ step, current }: { step: ShortStage; current
 
       <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5 sm:gap-6">
         <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
+          {step === "review" && !viewing && (
+            <section className="rounded-2xl border border-amber/40 bg-amber/[0.06] p-4 sm:p-5">
+              <h2 className="text-[12px] font-bold uppercase tracking-wide text-amber mb-3">In review</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <Skeleton className="h-[62px] flex-1 rounded-xl" />
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <Skeleton className="h-10 sm:w-28 rounded-lg" />
+                  <Skeleton className="h-10 sm:w-36 rounded-lg" />
+                </div>
+              </div>
+            </section>
+          )}
           {posting && <PostingSkeleton />}
           {(step === "script" || step === "editing") && (
             <Card title="Script" prominent={step === "script" && !viewing}>
@@ -51,13 +63,6 @@ export function ShortStepSkeleton({ step, current }: { step: ShortStage; current
           )}
         </div>
         <div className="flex flex-col gap-5 sm:gap-6">
-          {step === "review" && !viewing && (
-            <section className="rounded-2xl border border-amber/40 bg-amber/[0.06] p-5">
-              <h2 className="text-[12px] font-bold uppercase tracking-wide text-amber mb-3">In review</h2>
-              <SkeletonLines lines={2} className="mb-4" />
-              <Skeleton className="h-10 w-full rounded-lg" />
-            </section>
-          )}
           {/* Phones: Activity is a folded row; computers: the full card. */}
           <Skeleton className="h-12 w-full rounded-2xl lg:hidden" />
           <section className="hidden lg:block rounded-2xl border border-line/10 bg-surface p-5">
@@ -97,16 +102,35 @@ function PostingSkeleton() {
         <span className="flex-1" />
         <Skeleton className="h-8 w-28 rounded-lg" />
       </div>
-      {[0, 1, 2].map((i) => (
+      <PlayerSkeleton />
+      {[0, 1, 2, 3].map((i) => (
         <div key={i} className="flex items-center gap-3 rounded-xl border border-line/10 px-3 py-3">
           <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
           <div className="flex-1 min-w-0 space-y-1.5">
-            <Skeleton className={`h-3.5 ${["w-28", "w-32", "w-24"][i]}`} />
+            <Skeleton className={`h-3.5 ${["w-28", "w-32", "w-24", "w-28"][i]}`} />
             <Skeleton className="h-3 w-40 max-w-full" />
           </div>
           <Skeleton className="h-8 w-20 rounded-lg" />
         </div>
       ))}
     </section>
+  );
+}
+
+/** The Posting card's player while it loads: same size, so nothing jumps. */
+export function PlayerSkeleton() {
+  return (
+    <div className="space-y-2.5" aria-hidden>
+      <div className="flex items-center justify-between gap-3 px-1">
+        <Skeleton className="h-3.5 w-44" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+      <div className="rounded-2xl overflow-hidden bg-black/85 ring-1 ring-white/5">
+        <div className="h-[48vh] sm:h-[min(58vh,560px)] flex items-center justify-center">
+          <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
+        </div>
+        <div className="h-[76px] bg-[#100e0c] border-t border-white/5" />
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import { setRoleColor } from "./actions";
 import { useToast } from "@/components/ui/toast-provider";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -16,11 +16,18 @@ export function RoleColorPicker({
 }) {
   const [, startTransition] = useTransition();
   const toast = useToast();
+  // Typing a colour saves on every valid code: one "saved" toast once you stop.
+  const said = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleChange(role: RoleId, color: string) {
     startTransition(async () => {
       const result = await setRoleColor(teamId, role, color);
       if (result?.error) toast.error(result.error);
+      else {
+        if (said.current) clearTimeout(said.current);
+        const name = ROLES.find((r) => r.id === role)?.name ?? "Role";
+        said.current = setTimeout(() => toast.success(`${name} colour saved`), 700);
+      }
     });
   }
 

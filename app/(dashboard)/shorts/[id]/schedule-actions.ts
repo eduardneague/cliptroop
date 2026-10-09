@@ -12,7 +12,7 @@ import { tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
 import { PublishError } from "@/lib/social/publishers/common";
 import { runPostsNow } from "@/lib/social/worker";
 import { FACEBOOK_POST_SCOPE, FB_GRAPH, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
-import { FACEBOOK_MAX_SECONDS, FACEBOOK_MIN_SECONDS } from "@/lib/social/publishers/facebook";
+import { lengthNotes } from "@/lib/short-length";
 
 type Result<T = object> = ({ error?: undefined } & T) | { error: string; reconnect?: boolean };
 
@@ -118,6 +118,11 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
     versionId = (v?.id as string | undefined) ?? null;
   }
   if (!versionId) return { error: "There's no uploaded video to post." };
+  // Too long (or short) for a platform: refused here, before anything is sent.
+  const { data: ver } = await admin.from("short_video_versions").select("duration_sec").eq("id", versionId).maybeSingle();
+  const secs = ver?.duration_sec === null || ver?.duration_sec === undefined ? null : Number(ver.duration_sec);
+  const misfits = lengthNotes(secs, entries.map((e) => e.platform)).filter((n) => n.level === "block");
+  if (misfits.length) return { error: misfits[0].text };
 
   const { data: accounts } = await admin
     .from("social_accounts")
@@ -158,11 +163,6 @@ export async function schedulePosts(shortId: string, entries: ScheduleEntry[]): 
       const caption = String(e.options.caption ?? "");
       if (caption.length > 5000) return { error: "Facebook captions can be up to 5,000 characters." };
       if (!((account.scopes as string[] | null) ?? []).includes(FACEBOOK_POST_SCOPE)) return { error: FACEBOOK_NEEDS_PERMISSION };
-      const { data: v } = await admin.from("short_video_versions").select("duration_sec").eq("id", versionId).maybeSingle();
-      const secs = v?.duration_sec === null || v?.duration_sec === undefined ? null : Number(v.duration_sec);
-      if (secs !== null && (secs < FACEBOOK_MIN_SECONDS || secs > FACEBOOK_MAX_SECONDS + 0.5)) {
-        return { error: `Facebook Reels must be ${FACEBOOK_MIN_SECONDS} to ${FACEBOOK_MAX_SECONDS} seconds long; this video is ${Math.round(secs)}.` };
-      }
       // Facebook's limit: 30 posts per Page in any 24 hours (counted around this time).
       const { count } = await admin
         .from("social_posts")
@@ -469,13 +469,14 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
           const j = (await r.json().catch(() => ({}))) as { account_type?: string; username?: string };
           if (!r.ok) return { platform, ok: false, message: "Instagram refused the sign-in. Reconnect Instagram." };
           if (j.account_type && !/business|creator/i.test(j.account_type)) return { platform, ok: false, message: "The Instagram account must be Professional (Business or Creator)." };
+          const misfit = lengthNotes(duration, ["instagram"]).find((n) => n.level === "block");
+          if (misfit) return { platform, ok: false, message: misfit.text };
           return { platform, ok: true, message: `Signed in as @${j.username ?? "account"}. ${APP_NAME} sends it at your time.` };
         }
         if (platform === "facebook") {
           if (!((account.scopes as string[] | null) ?? []).includes(FACEBOOK_POST_SCOPE)) return { platform, ok: false, message: FACEBOOK_NEEDS_PERMISSION };
-          if (duration !== null && (duration < FACEBOOK_MIN_SECONDS || duration > FACEBOOK_MAX_SECONDS + 0.5)) {
-            return { platform, ok: false, message: `Facebook Reels must be ${FACEBOOK_MIN_SECONDS} to ${FACEBOOK_MAX_SECONDS} seconds; the video is ${Math.round(duration)}s.` };
-          }
+          const misfit = lengthNotes(duration, ["facebook"]).find((n) => n.level === "block");
+          if (misfit) return { platform, ok: false, message: misfit.text };
           const r = await fetch(`${FB_GRAPH()}/${encodeURIComponent(String(account.external_id))}?${new URLSearchParams({ fields: "id,name", access_token: token })}`, { cache: "no-store" });
           const j = (await r.json().catch(() => ({}))) as { name?: string };
           if (!r.ok) return { platform, ok: false, message: "Facebook refused the Page's sign-in. Reconnect Facebook." };

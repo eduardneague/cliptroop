@@ -22,7 +22,9 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),
 #    MOCK_VIDEO=/path/to/any.mp4 the file those videos play (Posting card preview, review player;
 #    use a .webm for Playwright: its Chromium can't play H.264),
-#    MOCK_FB_ANALYTICS_ONLY=1 the Facebook Page connected before posting existed (no pages_manage_posts)
+#    MOCK_FB_ANALYTICS_ONLY=1 the Facebook Page connected before posting existed (no pages_manage_posts),
+#    MOCK_NO_COMMENT=1 the server says the sample user may not comment on scripts (can_comment_script),
+#    MOCK_NO_COMMENT=1 the server says the sample user may not comment on scripts (can_comment_script)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

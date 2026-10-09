@@ -91,6 +91,8 @@ export default async function ShortScriptPage({
       doc={doc}
       // Reviewers edit Review, staging people edit Staging (0062).
       canEdit={canEdit || isStepPerson(flow, doc.id, me)}
+      // Comments and editing ideas: masters, the scripters and the Review / Staging people (0072).
+      canComment={canEdit || flow.steps.some((s) => isStepPerson(flow, s.docId, me))}
       canCreate={{ script: canEdit, research: false }}
       side={side}
       comments={comments}

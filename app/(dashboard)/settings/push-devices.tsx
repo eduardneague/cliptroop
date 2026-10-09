@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-provider";
 import { Ago } from "@/components/ui/ago";
 import { removePushDevice } from "./actions";
 
@@ -11,6 +12,7 @@ export type PushDevice = { id: string; label: string; createdAt: string; lastSen
 export function PushDevices({ devices }: { devices: PushDevice[] }) {
   const [busy, start] = useTransition();
   const toast = useToast();
+  const confirm = useConfirm();
   if (!devices.length) return <p className="text-[12.5px] text-ink-faint">No devices yet.</p>;
   return (
     <ul className="divide-y divide-line/10 rounded-xl border border-line/10">
@@ -34,13 +36,22 @@ export function PushDevices({ devices }: { devices: PushDevice[] }) {
           <button
             type="button"
             disabled={busy}
-            onClick={() =>
+            onClick={async () => {
+              const ok = await confirm({
+                title: `Stop notifications on ${d.label}?`,
+                description: d.thisDevice
+                  ? "This device stops getting notifications. Turn them on again here any time."
+                  : "That device stops getting notifications. It can turn them on again from its own Settings.",
+                confirmLabel: "Remove",
+                danger: true,
+              });
+              if (!ok) return;
               start(async () => {
                 const r = await removePushDevice(d.id);
                 if (r.error) toast.error(r.error);
                 else toast.success(`${d.label} won't get notifications any more.`);
-              })
-            }
+              });
+            }}
             className="rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold hover:border-red/40 hover:text-red disabled:opacity-60"
           >
             Remove

@@ -1,6 +1,7 @@
 import { APP_NAME } from "@/lib/brand";
 import "server-only";
 import { FB_GRAPH } from "../providers";
+import { FACEBOOK_MAX, REELS_MIN } from "@/lib/short-length";
 import { PublishError, api, signedVideoUrl, videoFor, type PostRow, type StepResult } from "./common";
 
 /**
@@ -36,8 +37,8 @@ type FbStatus = {
 };
 
 const RUPLOAD = () => `https://rupload.facebook.com/video-upload/${FB_GRAPH().split("/").pop()}`;
-export const FACEBOOK_MIN_SECONDS = 3;
-export const FACEBOOK_MAX_SECONDS = 90;
+export const FACEBOOK_MIN_SECONDS = REELS_MIN;
+export const FACEBOOK_MAX_SECONDS = FACEBOOK_MAX;
 
 const phaseError = (p?: Phase) => p?.error?.message || p?.errors?.find((e) => e.message)?.message || "";
 

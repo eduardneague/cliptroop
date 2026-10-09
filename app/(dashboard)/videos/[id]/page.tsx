@@ -293,7 +293,8 @@ export default async function ProjectDetailPage({
           projectId={id}
           teamId={teamId}
           date={project.expected_date}
-          canEdit={canActOnStage(membership, "ideate")}
+          // Dates: masters and schedulers (as on the Calendar).
+          canEdit={userIsMaster || (membership?.roles ?? []).includes("publisher")}
         />
       </div>
 

@@ -199,8 +199,20 @@ each other: Instagram doesn't share API posts to Facebook, so Facebook is its
 own post (a Reel on the team's Page, `pages_manage_posts`). A permission
 added after people connected (YouTube's edit scope, Facebook's posting) is
 never required to connect: the account card asks to reconnect and the
-Posting card refuses until it's there. The Posting card shows the exact file
-that gets posted (`post-video-preview.tsx`).
+Posting card refuses until it's there. The Posting card always shows the exact
+file that gets posted (`post-video-preview.tsx`, the review player). How long a
+short may be per platform lives in `lib/short-length.ts` (used by the cards and
+by the server before scheduling).
+
+**Who may change what.** Dates (Calendar moves, long video dates): masters and
+schedulers, enforced in the database (shorts' functions, 0073 for long videos).
+Script comments and editing ideas: the video's scripters, its Review/Staging
+people and masters (`can_comment_script`, 0072); the rest of the team reads.
+
+**Forms.** Don't use `<form action={…}>` for anything that can fail: React 19
+empties every uncontrolled box after the action, error or not. Use onSubmit +
+`startTransition(() => formAction(fd))` (or controlled inputs), and answer
+every save with a toast (it plays the sound).
 
 **Search.** `global_search()` (0024) is SECURITY INVOKER on purpose: RLS
 decides what anyone can find. To make something searchable, add a trigram

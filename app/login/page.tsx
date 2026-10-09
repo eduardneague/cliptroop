@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { login } from "./actions";
 import { createClient } from "@/lib/supabase/client";
@@ -47,6 +47,7 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [tip, setTip] = useState(0);
   const [resetEmail, setResetEmail] = useState("");
+  const [email, setEmail] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [resetPending, setResetPending] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
@@ -151,13 +152,21 @@ export default function LoginPage() {
 
             <div className="mt-8">
               {mode === "signin" ? (
-                <form action={formAction} className="space-y-4">
+                <form
+                  // Not a form action: React would empty the boxes after a wrong password.
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.currentTarget);
+                    startTransition(() => formAction(fd));
+                  }}
+                  className="space-y-4"
+                >
                   <input type="hidden" name="next" value={next} />
                   <div>
                     <label htmlFor="email" className="block text-[13px] font-semibold mb-1.5">
                       Email
                     </label>
-                    <input id="email" name="email" type="email" required autoComplete="email" inputMode="email" className={input} />
+                    <input id="email" name="email" type="email" required autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
@@ -168,6 +177,7 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => {
                           setMode("forgot");
+                          setResetEmail((r) => r || email);
                           setResetSent(false);
                           setResetError(null);
                         }}

@@ -56,13 +56,15 @@ export function ReviewCard({
   }
 
   return (
-    <section className="rounded-2xl border border-amber/40 bg-amber/[0.06] p-5">
+    <section className="rounded-2xl border border-amber/40 bg-amber/[0.06] p-4 sm:p-5">
       <h2 className="text-[12px] font-bold uppercase tracking-wide text-amber mb-3">In review</h2>
 
+      {/* Wide screens: the video on the left, the decision on the right. */}
+      <div className={`flex flex-col gap-4 ${asking ? "" : "sm:flex-row sm:items-center"}`}>
       {latestVersion ? (
         <Link
           href={`/shorts/${id}/review`}
-          className="group flex items-center gap-3 rounded-xl bg-surface border border-line/15 px-3.5 py-3 mb-4 hover:border-green transition-colors"
+          className="group flex flex-1 min-w-0 items-center gap-3 rounded-xl bg-surface border border-line/15 px-3.5 py-3 hover:border-green transition-colors"
         >
           <span className="w-9 h-9 rounded-lg bg-green text-white flex items-center justify-center flex-shrink-0">
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" /></svg>
@@ -75,11 +77,11 @@ export function ReviewCard({
           </span>
         </Link>
       ) : (
-        <p className="text-[13px] text-ink mb-4">No video uploaded yet.</p>
+        <p className="text-[13px] text-ink flex-1">No video uploaded yet.</p>
       )}
 
       {!canReview ? (
-        <p className="text-[13px] text-ink">
+        <p className="text-[13px] text-ink sm:max-w-[16rem]">
           {reviewerName ? `Waiting for ${reviewerName} to review.` : "Waiting for the master to review."}
         </p>
       ) : asking ? (
@@ -117,12 +119,12 @@ export function ReviewCard({
           <p className="hidden sm:block mt-1.5 text-[11.5px] text-ink-soft">Ctrl or ⌘ + Enter sends.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-shrink-0">
           <button
             type="button"
             onClick={approve}
             disabled={review.pending}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green text-white font-bold h-10 text-[13.5px] disabled:opacity-50 hover:brightness-110"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green text-white font-bold h-10 px-5 text-[13.5px] disabled:opacity-50 hover:brightness-110"
           >
             <CheckIcon className="w-4 h-4" />
             Approve
@@ -131,12 +133,13 @@ export function ReviewCard({
             type="button"
             onClick={() => setAsking(true)}
             disabled={review.pending}
-            className="rounded-lg bg-amber text-white font-bold h-10 text-[13.5px] disabled:opacity-50 hover:brightness-110"
+            className="rounded-lg bg-amber text-white font-bold h-10 px-5 text-[13.5px] disabled:opacity-50 hover:brightness-110"
           >
             Needs changes
           </button>
         </div>
       )}
+      </div>
     </section>
   );
 }

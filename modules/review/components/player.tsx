@@ -191,7 +191,9 @@ export function Timeline({
 
 /**
  * Review player. Keyboard (when not typing): Space/K play, J/L ±5s,
- * ←/→ ±1s, , and . one frame, F fullscreen, M mute.
+ * ←/→ ±1s, , and . one frame, F fullscreen, M mute. `shortcuts="focus"`
+ * keeps the keys inside the player (for pages with other things to type
+ * or press), and `stageClass` sets the picture's height.
  */
 export const ReviewPlayer = forwardRef<
   PlayerHandle,
@@ -203,8 +205,16 @@ export const ReviewPlayer = forwardRef<
     onMarker?: (id: string) => void;
     /** Fired when a jump finishes (the new frame is ready). */
     onSeeked?: () => void;
+    /** "page": keys work anywhere on the page (the review page). "focus": only while the player has focus. */
+    shortcuts?: "page" | "focus";
+    /** Height of the picture area. */
+    stageClass?: string;
+    preload?: "auto" | "metadata";
   }
->(function ReviewPlayer({ src, error, markers, onTime, onMarker, onSeeked }, ref) {
+>(function ReviewPlayer(
+  { src, error, markers, onTime, onMarker, onSeeked, shortcuts = "page", stageClass = "h-[50vh] lg:h-[min(72vh,780px)]", preload = "auto" },
+  ref
+) {
   const video = useRef<HTMLVideoElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -297,21 +307,29 @@ export const ReviewPlayer = forwardRef<
         setMuted(v.muted);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [seek, toggle]);
+    const target: HTMLElement | Window | null = shortcuts === "page" ? window : box.current;
+    if (!target) return;
+    const handler = onKey as EventListener;
+    target.addEventListener("keydown", handler);
+    return () => target.removeEventListener("keydown", handler);
+  }, [seek, toggle, shortcuts]);
 
   return (
-    <div ref={box} className="relative w-full rounded-2xl overflow-hidden bg-black select-none ring-1 ring-white/5">
+    <div
+      ref={box}
+      tabIndex={shortcuts === "focus" ? 0 : undefined}
+      aria-label={shortcuts === "focus" ? "Video player" : undefined}
+      className="relative w-full rounded-2xl overflow-hidden bg-black select-none ring-1 ring-white/5 outline-none focus-visible:ring-2 focus-visible:ring-amber"
+    >
       {/* Shorter on phones so the controls clear the floating Notes / + buttons. */}
-      <div className="relative flex items-center justify-center bg-black h-[50vh] lg:h-[min(72vh,780px)]">
+      <div className={`relative flex items-center justify-center bg-black ${stageClass}`}>
         {src ? (
           <video
             ref={video}
             key={src}
             src={src}
             playsInline
-            preload="auto"
+            preload={preload}
             className="max-h-full max-w-full"
             onClick={toggle}
             onLoadedMetadata={(e) => {

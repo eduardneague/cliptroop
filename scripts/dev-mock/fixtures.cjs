@@ -255,6 +255,8 @@ module.exports = {
   user: { id: U[0], aud: "authenticated", role: "authenticated", email: "edu@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // MOCK_NO_COMMENT=1: the sample user isn't on the script (reads comments, can't add them).
+    can_comment_script: !process.env.MOCK_NO_COMMENT,
     is_master_of: true,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
     // "Ready for review / staging" (0062): Script → Review → Staging of short #231.
@@ -292,14 +294,17 @@ module.exports = {
     notifications: process.env.MOCK_NOTIFS === "0" ? [] : sampleNotifications(),
     role_colors: [],
     short_videos: shorts,
-    short_video_posts: shorts.flatMap((x) => x.short_video_posts.map((p) => ({ ...p, short_id: x.id, short_videos: { team_id: TEAM } }))),
+    short_video_posts: shorts.flatMap((x) => x.short_video_posts.map((p) => ({ ...p, short_id: x.id, short_videos: { team_id: TEAM, entry_number: x.entry_number, title: x.title } }))),
     short_scripters: shorts.map((x) => ({ short_id: x.id, team_member_id: members[1].id })),
     short_video_events: shorts.flatMap((x) => x.short_video_events.map((e) => ({ ...e, short_id: x.id, short_videos: { team_id: TEAM } }))),
     // MOCK_FILES=1: one uploaded video per short past Script (Team → Defaults → Video files shows the total).
     short_video_versions: process.env.MOCK_FILES
       ? shorts
           .filter((x) => x.stage !== "script")
-          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 7, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 12, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+          // #235 (in review) has a second cut, to compare (v2 is 1:38: too long for Facebook).
+          .concat([{ id: "ffffffff-0000-4000-8000-0000000000a2", short_id: shorts[4].id, team_id: TEAM, version_number: 2, storage_path: `${TEAM}/${shorts[4].id}/v2.mp4`, file_name: "cut-v2.mp4", size_bytes: 91_000_000, mime_type: "video/mp4", duration_sec: 98, width: 1080, height: 1920, created_at: new Date(Date.now() - 1 * 86_400_000).toISOString(), deleted_at: null }])
+          .sort((a, b) => b.version_number - a.version_number)
       : [],
     short_video_comments: [],
     long_video_projects: longs,

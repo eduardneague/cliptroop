@@ -127,15 +127,22 @@ export async function updateExpectedDate(
 
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "That date isn't valid." };
 
-  const membership = await getMembership(supabase, teamId);
-  if (!isMaster(membership?.roles ?? []) && !canActOnStage(membership, "ideate")) {
-    return { error: "You don't have access to edit this." };
+  // Dates (here, on the Calendar, in Settings): masters and schedulers only (0073 checks it too).
+  const roles = (await getMembership(supabase, teamId))?.roles ?? [];
+  if (!isMaster(roles) && !roles.includes("publisher")) {
+    return { error: "Only the master or a scheduler can change the date." };
   }
+  // It must be this team's video (read through the person's own access).
+  const { data: project } = await supabase.from("long_video_projects").select("id, team_id").eq("id", projectId).maybeSingle();
+  if (!project || project.team_id !== teamId) return { error: "Video not found." };
 
-  const { error } = await supabase
+  // Schedulers may not write a video outside its Publish step through the
+  // database rules, so the date is saved here, now that the role is checked.
+  const { error } = await createAdminClient()
     .from("long_video_projects")
     .update({ expected_date: date || null, updated_at: new Date().toISOString(), updated_by: user.id })
-    .eq("id", projectId);
+    .eq("id", projectId)
+    .eq("team_id", teamId);
 
   if (error) return { error: "Couldn't save. Try again." };
 
