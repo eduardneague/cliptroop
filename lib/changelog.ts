@@ -23,6 +23,15 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.12.3",
+    date: "2026-10-09",
+    title: "Calmer Posting card, steadier widget filters",
+    changes: [
+      { kind: "better", text: "The video on a short's Posting card starts closed: one bar with its version, length and size. Watch opens the player (the file only loads then), Hide closes it. Warnings about the length stay in view." },
+      { kind: "fixed", text: "Posting today widget: the platform buttons always show every platform posting today with all of its posts, so they no longer change or disappear when you pick Upcoming or Posted. A status with nothing in it can't be picked, and picking a platform that has none of the status shown goes back to All: the widget never ends up empty." },
+    ],
+  },
+  {
     version: "1.12.2",
     date: "2026-10-09",
     title: "Facebook earnings, and filters for posts",

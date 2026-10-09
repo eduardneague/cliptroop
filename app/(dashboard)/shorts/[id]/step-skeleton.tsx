@@ -117,20 +117,16 @@ function PostingSkeleton() {
   );
 }
 
-/** The Posting card's player while it loads: same size, so nothing jumps. */
+/** The Posting card's (closed) video bar while it loads: same size, so nothing jumps. */
 export function PlayerSkeleton() {
   return (
-    <div className="space-y-2.5" aria-hidden>
-      <div className="flex items-center justify-between gap-3 px-1">
-        <Skeleton className="h-3.5 w-44" />
+    <div className="rounded-2xl border border-line/10 bg-surface-2/30 flex items-center gap-3 px-3 py-2.5" aria-hidden>
+      <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <Skeleton className="h-3.5 w-44 max-w-full" />
         <Skeleton className="h-3 w-32" />
       </div>
-      <div className="rounded-2xl overflow-hidden bg-black/85 ring-1 ring-white/5">
-        <div className="h-[48vh] sm:h-[min(58vh,560px)] flex items-center justify-center">
-          <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
-        </div>
-        <div className="h-[76px] bg-[#100e0c] border-t border-white/5" />
-      </div>
+      <Skeleton className="h-3.5 w-14" />
     </div>
   );
 }
