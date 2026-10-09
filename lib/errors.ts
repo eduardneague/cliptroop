@@ -16,8 +16,9 @@ import { sendNotifications } from "./notify";
  * Details: /developer (developer accounts only).
  *
  * Developers: DEVELOPER_EMAILS (comma-separated; ALERT_EMAILS, its old
- * name, still works) or, if neither is set, the owner of the first team ever
- * made. Team owners don't get these: one team's problems (a failed post, an
+ * name, still works), matched against the email people SIGN IN with. If
+ * neither is set: nobody in production; the owner of the first team ever
+ * made on staging and on a computer. Team owners don't get these: one team's problems (a failed post, an
  * account to reconnect) show on that team's Posting page instead.
  * Alerts are sent from production (and from staging too with
  * ALERT_ON_PREVIEW=1); everything is still recorded everywhere.
@@ -35,16 +36,27 @@ const emailList = (v: string | undefined) =>
 
 export type Developers = { emails: string[]; userIds: string[]; source: "DEVELOPER_EMAILS" | "ALERT_EMAILS" | "first team owner" | "none" };
 
-/** The developer accounts (once per request). */
-export const developers = cache(async (): Promise<Developers> => {
-  const admin = createAdminClient();
+/** The allow-list: DEVELOPER_EMAILS (or ALERT_EMAILS, its old name), lower-case, at most 10. */
+function allowList() {
   const named = emailList(process.env.DEVELOPER_EMAILS);
   const legacy = named.length ? [] : emailList(process.env.ALERT_EMAILS);
-  const fromEnv = [...new Set([...named, ...legacy])].slice(0, 10);
-  if (fromEnv.length) {
-    const { data } = await admin.from("profiles").select("id, email").in("email", fromEnv);
-    return { emails: fromEnv, userIds: (data ?? []).map((p) => p.id as string), source: named.length ? "DEVELOPER_EMAILS" : "ALERT_EMAILS" };
+  return { emails: [...new Set([...named, ...legacy])].slice(0, 10), source: (named.length ? "DEVELOPER_EMAILS" : "ALERT_EMAILS") as Developers["source"] };
+}
+const isProduction = () => process.env.VERCEL_ENV === "production";
+
+/**
+ * The developer accounts (once per request): who gets the alerts. In
+ * production that's ONLY the allow-list; on staging and on a computer, with
+ * no list, the owner of the first team ever made (so a fresh copy works).
+ */
+export const developers = cache(async (): Promise<Developers> => {
+  const admin = createAdminClient();
+  const list = allowList();
+  if (list.emails.length) {
+    const { data } = await admin.from("profiles").select("id, email").in("email", list.emails);
+    return { emails: list.emails, userIds: (data ?? []).map((p) => p.id as string), source: list.source };
   }
+  if (isProduction()) return { emails: [], userIds: [], source: "none" };
   const { data: team } = await admin.from("teams").select("owner_id").order("created_at", { ascending: true }).limit(1).maybeSingle();
   const id = (team?.owner_id as string | undefined) ?? null;
   if (!id) return { emails: [], userIds: [], source: "none" };
@@ -55,11 +67,30 @@ export const developers = cache(async (): Promise<Developers> => {
 /** Who gets the app-wide alerts: the developers, nobody else. */
 export const alertRecipients = developers;
 
-/** Is this signed-in person a developer (opens /developer and /setup, gets the alerts)? */
-export async function isDeveloper(userId: string | null | undefined) {
-  if (!userId) return false;
+/**
+ * Is this signed-in person a developer (opens /developer and /setup, gets the alerts)?
+ *
+ * Decided by the email they're SIGNED IN with: the verified session's email
+ * (getCachedUser() / auth.getUser()), or Supabase Auth's record when only
+ * an id is given. Never the copy in profiles. That email can only change
+ * through Supabase's confirmed email change, so nobody can name themselves a
+ * developer. Production: the allow-list only (no list = no developers).
+ */
+export async function isDeveloper(who: { id: string; email: string | null } | string | null | undefined) {
+  if (!who) return false;
   try {
-    return (await developers()).userIds.includes(userId);
+    const id = typeof who === "string" ? who : who.id;
+    let email = typeof who === "string" ? null : who.email;
+    const list = allowList();
+    if (list.emails.length) {
+      if (!email) {
+        const { data } = await createAdminClient().auth.admin.getUserById(id);
+        email = data.user?.email ?? null;
+      }
+      return !!email && list.emails.includes(email.trim().toLowerCase());
+    }
+    if (isProduction()) return false;
+    return (await developers()).userIds.includes(id);
   } catch {
     return false;
   }
@@ -96,7 +127,7 @@ export async function reportError(input: { source: ErrorSource; message: string;
           recipient_id,
           kind: "app_alert",
           body: `Something broke: ${message.slice(0, 140)} (${where})`,
-          metadata: { snippet: message.slice(0, 140), where, href: "/developer" },
+          metadata: { snippet: message.slice(0, 140), where, href: "/developer?tab=problems#errors" },
         }))
       );
     }
@@ -108,7 +139,7 @@ export async function reportError(input: { source: ErrorSource; message: string;
             subject: r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
             message: `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
             linkText: "Open the developer page",
-            href: `${appUrl()}/developer`,
+            href: `${appUrl()}/developer?tab=problems#errors`,
             footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
           })
         )

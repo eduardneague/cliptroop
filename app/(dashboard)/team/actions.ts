@@ -733,3 +733,20 @@ export async function updateLongSettings(
   revalidatePath("/team");
   return { success: true };
 }
+
+const TASKS_VISIBILITY = ["own", "masters", "team"] as const;
+export type TasksVisibility = (typeof TASKS_VISIBILITY)[number];
+
+/** Team → Defaults → Tasks (masters): who can see everyone's tasks in My tasks → Team (0076). */
+export async function updateTasksVisibility(teamId: string, value: string) {
+  const check = await requireMaster(teamId);
+  if (!check.ok) return { error: check.error };
+  if (!(TASKS_VISIBILITY as readonly string[]).includes(value)) return { error: "Pick who can see everyone's tasks." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("teams").update({ tasks_visibility: value }).eq("id", teamId).select("id");
+  if (error) return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0076)." : "Couldn't save. Try again." };
+  if (!data?.length) return { error: "Only the master can do this." };
+  revalidatePath("/team");
+  revalidatePath("/dashboard");
+  return { success: true };
+}

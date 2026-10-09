@@ -15,17 +15,25 @@ import { CheckIcon } from "./icons";
 
 export const PALETTES = [
   { id: "default", name: "Default", note: "Bone paper, orange", light: { paper: "237 238 231", surface: "255 255 255", accent: "232 99 13" }, dark: { paper: "18 15 11", surface: "28 24 17", accent: "232 99 13" } },
+  { id: "coral", name: "Coral", note: "Peach paper, coral", light: { paper: "244 233 228", surface: "255 255 255", accent: "208 70 50" }, dark: { paper: "21 13 11", surface: "35 23 20", accent: "226 88 64" } },
   { id: "sand", name: "Sand", note: "Warm sand, golden brown", light: { paper: "243 237 225", surface: "255 253 249", accent: "161 98 7" }, dark: { paper: "20 16 10", surface: "33 27 18", accent: "178 120 8" } },
+  { id: "solar", name: "Solar", note: "Cream paper, deep-sea blue", light: { paper: "248 241 222", surface: "255 252 242", accent: "33 113 181" }, dark: { paper: "0 28 36", surface: "6 36 45", accent: "45 140 210" } },
   { id: "cherry", name: "Cherry", note: "Rosy paper, cherry red", light: { paper: "242 233 233", surface: "255 255 255", accent: "200 30 48" }, dark: { paper: "20 11 12", surface: "33 21 23", accent: "229 62 74" } },
   { id: "berry", name: "Berry", note: "Blush, raspberry", light: { paper: "241 233 236", surface: "255 255 255", accent: "196 37 99" }, dark: { paper: "19 12 15", surface: "32 22 27", accent: "225 62 120" } },
+  { id: "sakura", name: "Sakura", note: "Cherry blossom, leaf green", light: { paper: "245 233 238", surface: "255 255 255", accent: "46 125 72" }, dark: { paper: "20 13 16", surface: "35 24 29", accent: "64 150 92" } },
   { id: "orchid", name: "Orchid", note: "Pale lilac, orchid", light: { paper: "241 232 242", surface: "255 255 255", accent: "162 28 175" }, dark: { paper: "18 11 19", surface: "31 21 33", accent: "192 72 206" } },
   { id: "grape", name: "Grape", note: "Lavender, violet", light: { paper: "236 233 243", surface: "255 255 255", accent: "109 64 214" }, dark: { paper: "15 13 22", surface: "26 23 36", accent: "139 102 240" } },
+  { id: "indigo", name: "Indigo", note: "Periwinkle, indigo", light: { paper: "234 234 245", surface: "255 255 255", accent: "79 70 229" }, dark: { paper: "13 13 24", surface: "24 24 41", accent: "109 100 240" } },
   { id: "ocean", name: "Ocean", note: "Cool grey-blue, blue", light: { paper: "233 237 242", surface: "255 255 255", accent: "37 99 235" }, dark: { paper: "12 15 21", surface: "21 26 35", accent: "59 130 246" } },
+  { id: "sky", name: "Sky", note: "Icy blue, sky", light: { paper: "230 238 244", surface: "255 255 255", accent: "3 116 176" }, dark: { paper: "9 15 20", surface: "18 28 37", accent: "14 140 205" } },
+  { id: "nord", name: "Nord", note: "Frost grey, steel blue", light: { paper: "229 233 240", surface: "255 255 255", accent: "76 106 150" }, dark: { paper: "22 26 33", surface: "34 39 49", accent: "98 134 178" } },
   { id: "lagoon", name: "Lagoon", note: "Sea glass, teal", light: { paper: "229 237 236", surface: "255 255 255", accent: "13 124 128" }, dark: { paper: "10 16 17", surface: "19 28 29", accent: "20 150 150" } },
   { id: "forest", name: "Forest", note: "Soft sage, green", light: { paper: "231 236 229", surface: "255 255 255", accent: "22 128 74" }, dark: { paper: "12 16 13", surface: "21 28 23", accent: "31 150 88" } },
+  { id: "pine", name: "Pine", note: "Misty paper, deep pine", light: { paper: "230 236 233", surface: "255 255 255", accent: "22 101 72" }, dark: { paper: "10 16 13", surface: "19 29 24", accent: "34 140 100" } },
   { id: "lime", name: "Lime", note: "Pale olive, leaf green", light: { paper: "236 239 226", surface: "255 255 255", accent: "77 124 15" }, dark: { paper: "14 17 10", surface: "25 30 19", accent: "88 142 14" } },
   { id: "mocha", name: "Mocha", note: "Latte, coffee brown", light: { paper: "238 233 228", surface: "255 254 252", accent: "120 82 52" }, dark: { paper: "19 15 12", surface: "32 26 21", accent: "166 118 78" } },
   { id: "slate", name: "Slate", note: "Cool grey, graphite", light: { paper: "232 234 238", surface: "255 255 255", accent: "51 65 85" }, dark: { paper: "13 15 19", surface: "24 27 33", accent: "100 116 139" } },
+  { id: "ink", name: "Ink", note: "Plain grey, black ink", light: { paper: "236 236 236", surface: "255 255 255", accent: "28 28 30" }, dark: { paper: "12 12 13", surface: "24 24 26", accent: "120 120 128" } },
 ] as const;
 export type PaletteId = (typeof PALETTES)[number]["id"];
 export const isPalette = (v: unknown): v is PaletteId => typeof v === "string" && PALETTES.some((p) => p.id === v);

@@ -10,13 +10,14 @@ import { sounds } from "@/lib/sounds";
 import { saveLayout } from "../actions";
 import { COLS, bottom, fill, preview as previewBoxes, compact, readingOrder, type Box, type Interaction } from "../grid";
 import { CATALOG, DEFAULT_LAYOUT, addWidget, applyBoxes, limitsFor, toBox, type Layout, type WidgetInstance, type WidgetType } from "../layout";
-import type { Done, Pipeline, PostToday, Task, TeamCard, Todo, UpcomingLong, UpcomingShort } from "../lib/queries";
+import type { Done, Pipeline, PostToday, Task, TeamCard, TeamTasks, Todo, UpcomingLong, UpcomingShort } from "../lib/queries";
 import { BoxContext } from "./widget-box";
 import { TasksWidget } from "./tasks-widget";
 import { CONTRIB_COLORS, ContributionsWidget } from "./contributions-widget";
 import { TodoWidget } from "./todo-widget";
 import { ClockWidget, MiniCalendarWidget, TeamsWidget } from "./small-widgets";
 import { PipelineWidget, PostingTodayWidget, UpcomingLongsWidget, UpcomingShortsWidget, WeatherCitySearch, WeatherWidget } from "./team-widgets";
+import { WordWidget } from "./word-widget";
 import { MeetingsWidget } from "./meetings-widget";
 import { AudienceMapWidget, FollowersWidget, OutputWidget, TopVideosWidget, ViewsWidget } from "./analytics-widgets";
 import type { Meeting } from "@/modules/meetings/lib/types";
@@ -24,6 +25,8 @@ import type { Meeting } from "@/modules/meetings/lib/types";
 export type StudioData = {
   tasks: Task[];
   done: Done[];
+  /** Everyone's tasks, when the team shares them (null: it doesn't, or before 0076). */
+  teamTasks?: TeamTasks | null;
   todos: Todo[];
   teams: TeamCard[];
   teamId: string;
@@ -572,7 +575,7 @@ const vars = (b: Box, extra: Record<string, string | number> = {}) =>
 export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data: StudioData) {
   switch (w.type) {
     case "tasks":
-      return <TasksWidget tasks={data.tasks} done={data.done} settings={w.settings} />;
+      return <TasksWidget tasks={data.tasks} done={data.done} teamTasks={data.teamTasks ?? null} settings={w.settings} />;
     case "contributions":
       return <ContributionsWidget done={data.done} teamId={data.teamId} settings={w.settings} />;
     case "todo":
@@ -605,6 +608,8 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <AudienceMapWidget teamId={data.teamId} settings={w.settings} />;
     case "output":
       return <OutputWidget teamId={data.teamId} />;
+    case "word":
+      return <WordWidget />;
   }
 }
 const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap"];
@@ -915,7 +920,7 @@ function WidgetSettings({ w, onChange }: { w: WidgetInstance; onChange: (s: Reco
       <div className={row}>
         <span className="text-[13.5px] font-semibold">Opens on</span>
         <div className="flex rounded-lg border border-line/15 p-0.5">
-          {(["overdue", "today", "upcoming", "all"] as const).map((v) => (
+          {(["overdue", "today", "upcoming", "all", "team"] as const).map((v) => (
             <button key={v} type="button" onClick={() => onChange({ tab: v })} className={`px-3 h-8 rounded-md text-[12.5px] font-semibold capitalize ${(s.tab ?? "today") === v ? "bg-surface-2 text-ink" : "text-ink-soft"}`}>
               {v}
             </button>

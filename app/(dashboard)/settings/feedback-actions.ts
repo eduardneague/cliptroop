@@ -97,7 +97,7 @@ async function tellDevelopers(r: { userId: string; email: string | null; kind: F
           recipient_id,
           kind: "feedback",
           body: `${actor.name} ${what}: "${snippet}"`,
-          metadata: { actor, snippet, feedbackKind: r.kind, files: r.files, href: "/developer#reports" },
+          metadata: { actor, snippet, feedbackKind: r.kind, files: r.files, href: "/developer?tab=problems#reports" },
         }))
       );
     }
@@ -113,7 +113,7 @@ async function tellDevelopers(r: { userId: string; email: string | null; kind: F
             subject: `${prefix}${APP_NAME}: ${FEEDBACK_KIND_LABEL[r.kind].toLowerCase()} from ${actor.name}`,
             message: `${r.message}\n\nFrom ${actor.name}${r.email ? ` (${r.email})` : ""}. ${where}.${r.files ? ` ${r.files} attachment${r.files === 1 ? "" : "s"}: open the developer page to see ${r.files === 1 ? "it" : "them"}.` : ""}`,
             linkText: "Open the developer page",
-            href: `${appUrl()}/developer#reports`,
+            href: `${appUrl()}/developer?tab=problems#reports`,
             footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets reports.`,
           })
         )

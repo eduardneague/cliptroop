@@ -6,7 +6,7 @@ import { KindIcon } from "@/components/ui/kind-icon";
 import { CheckIcon } from "@/components/ui/icons";
 import { Mascot } from "@/components/ui/mascot";
 import { useBox } from "./widget-box";
-import type { Done, Task } from "../lib/queries";
+import type { Done, Task, TeamPersonLite, TeamTask, TeamTasks } from "../lib/queries";
 
 export const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (day: string, n: number) => {
@@ -191,10 +191,115 @@ function NothingOverdue() {
   );
 }
 
-type Tab = "overdue" | "today" | "upcoming" | "all" | "done";
+/** A person's picture (or initial) in their colour. */
+function Face({ p, size = 20 }: { p: TeamPersonLite; size?: number }) {
+  return p.avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={p.avatarUrl} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size }} />
+  ) : (
+    <span className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ width: size, height: size, background: p.color, fontSize: size * 0.45 }} aria-hidden>
+      {p.name.slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
+
+/**
+ * My tasks → Team (when the team shares tasks): who has what to do. One chip
+ * per person (with how many tasks they have now, red when any is late); pick
+ * one to see theirs, coming-up ones included, or Everyone, grouped by person.
+ */
+function TeamTab({ team, today }: { team: TeamTasks; today: string }) {
+  const [who, setWho] = useState<string>("all");
+  const first = (n: string) => n.split(" ")[0];
+  const byPerson = useMemo(() => {
+    const m = new Map<string, TeamTask[]>();
+    for (const t of team.tasks) m.set(t.userId, [...(m.get(t.userId) ?? []), t]);
+    return m;
+  }, [team.tasks]);
+  const byDue = (a: Task, b: Task) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || a.number - b.number;
+  const now = (id: string) => (byPerson.get(id) ?? []).filter((t) => t.state === "active").sort(byDue);
+  const later = (id: string) => (byPerson.get(id) ?? []).filter((t) => t.state === "waiting").sort(byDue);
+  const late = (id: string) => now(id).filter((t) => t.dueDate && t.dueDate < today).length;
+  // You first, then whoever has the most to do now.
+  const people = [...team.people].sort((a, b) => Number(b.userId === team.me) - Number(a.userId === team.me) || now(b.userId).length - now(a.userId).length || a.name.localeCompare(b.name));
+  const name = (p: TeamPersonLite) => (p.userId === team.me ? "You" : first(p.name));
+  const picked = people.find((p) => p.userId === who) ?? null;
+
+  return (
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-1 pb-1.5 flex-shrink-0" role="group" aria-label="Whose tasks">
+        <button
+          type="button"
+          aria-pressed={who === "all"}
+          onClick={() => setWho("all")}
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${who === "all" ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+        >
+          Everyone
+        </button>
+        {people.map((p) => {
+          const on = who === p.userId;
+          const n = now(p.userId).length;
+          const red = late(p.userId) > 0;
+          return (
+            <button
+              key={p.userId}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setWho(on ? "all" : p.userId)}
+              title={`${p.name}: ${n} to do now${red ? `, ${late(p.userId)} late` : ""}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border pl-0.5 pr-2 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${
+                on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)] text-ink" : "border-line/15 text-ink-soft hover:text-ink"
+              } ${n ? "" : "opacity-60"}`}
+            >
+              <Face p={p} size={22} />
+              {name(p)}
+              <span className={`tabular-nums ${red ? "text-red" : "text-ink-faint"}`}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex-1 min-h-0 widget-scroll">
+        {picked ? (
+          now(picked.userId).length + later(picked.userId).length ? (
+            <>
+              <Section label="Now" tasks={now(picked.userId)} today={today} />
+              <Section label="Waiting on earlier steps" tasks={later(picked.userId)} today={today} />
+            </>
+          ) : (
+            <Empty text={`${picked.userId === team.me ? "You have" : `${first(picked.name)} has`} nothing to do right now.`} />
+          )
+        ) : people.some((p) => now(p.userId).length) ? (
+          people
+            .filter((p) => now(p.userId).length)
+            .map((p) => (
+              <div key={p.userId}>
+                <div className="sticky top-0 z-[1] bg-surface flex items-center gap-1.5 px-2 pt-1.5 pb-0.5">
+                  <Face p={p} size={16} />
+                  <span className="text-[11px] font-bold text-ink-soft truncate">{p.userId === team.me ? "You" : p.name}</span>
+                  <span className="text-[11px] font-semibold text-ink-faint tabular-nums">{now(p.userId).length}</span>
+                  {late(p.userId) > 0 && <span className="text-[10.5px] font-bold text-red">{late(p.userId)} late</span>}
+                </div>
+                <div className="motion-stagger">
+                  {now(p.userId).map((t) => (
+                    <TaskRow key={t.id} t={t} today={today} />
+                  ))}
+                </div>
+              </div>
+            ))
+        ) : (
+          <Empty text="Nobody has anything to do right now." />
+        )}
+      </div>
+      <p className="flex-shrink-0 pt-1 px-2 text-[10.5px] text-ink-faint">{team.visibility === "masters" ? "Only masters see everyone's tasks." : "Everyone on the team sees this."}</p>
+    </div>
+  );
+}
+
+type Tab = "overdue" | "today" | "upcoming" | "all" | "team" | "done";
 
 /** My tasks: tabs (Overdue in red when anything is late), compact rows. */
-export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Done[]; settings?: Record<string, unknown> }) {
+export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks: Task[]; done: Done[]; teamTasks?: TeamTasks | null; settings?: Record<string, unknown> }) {
   const today = localDay();
   const g = useMemo(() => {
     const byDue = (a: Task, b: Task) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || a.number - b.number;
@@ -215,12 +320,15 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
   const upCount = g.tomorrow.length + g.week.length + g.later.length + g.waiting.length;
   // All done for today: Next up stays short so Clippy gets the room.
   const nextUp = useMemo(() => [...g.tomorrow, ...g.week, ...g.later].slice(0, g.today.length ? 3 : 2), [g]);
-  const wanted = (settings?.tab as Tab | undefined) ?? "today";
+  const asked = (settings?.tab as Tab | undefined) ?? "today";
+  // "Team" only when the team shares tasks.
+  const wanted: Tab = asked === "team" && !teamTasks ? "today" : asked;
   const [tab, setTab] = useState<Tab>(wanted);
 
   const doneByDay = useMemo(() => {
     const m = new Map<string, Done[]>();
-    for (const d of done.slice(0, 60)) {
+    // Tasks only (the daily word counts on the contribution grid, not here).
+    for (const d of done.filter((x) => x.kind !== "word").slice(0, 60)) {
       const k = localDay(new Date(d.at));
       m.set(k, [...(m.get(k) ?? []), d]);
     }
@@ -234,6 +342,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
     { k: "today", label: "Today", n: g.today.length },
     { k: "upcoming", label: "Upcoming", n: upCount },
     { k: "all", label: "All", n: g.all.length },
+    ...(teamTasks ? [{ k: "team" as Tab, label: "Team", n: teamTasks.tasks.filter((t) => t.state === "active").length }] : []),
     { k: "done", label: "Done", n: null },
   ];
 
@@ -260,7 +369,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
         })}
       </div>
 
-      <div key={tab} className={`flex-1 min-h-0 -mx-1 animate-[fadein_.15s_ease-out] ${tab === "today" ? "overflow-hidden" : "widget-scroll"}`}>
+      <div key={tab} className={`flex-1 min-h-0 -mx-1 animate-[fadein_.15s_ease-out] ${tab === "today" || tab === "team" ? "overflow-hidden" : "widget-scroll"}`}>
         {tab === "overdue" &&
           (g.overdue.length ? (
             <Section tasks={g.overdue} today={today} />
@@ -285,6 +394,7 @@ export function TasksWidget({ tasks, done, settings }: { tasks: Task[]; done: Do
             <Empty text="Nothing coming up yet." />
           ))}
         {tab === "all" && (g.all.length ? <Section tasks={g.all} today={today} /> : <Empty text="No tasks right now." />)}
+        {tab === "team" && teamTasks && <TeamTab team={teamTasks} today={today} />}
         {tab === "done" &&
           (doneByDay.length ? (
             doneByDay.map(([day, list]) => (

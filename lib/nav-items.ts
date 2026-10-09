@@ -1,4 +1,4 @@
-import { HomeIcon, VideoIcon, ShortsIcon, CalendarIcon, UsersIcon, PostingIcon, MeetingIcon, AnalyticsIcon } from "@/components/ui/icons";
+import { HomeIcon, VideoIcon, ShortsIcon, CalendarIcon, UsersIcon, PostingIcon, MeetingIcon, AnalyticsIcon, CodeIcon } from "@/components/ui/icons";
 
 /**
  * Sidebar + phone bar destinations, in groups. Icons are SVG components,
@@ -12,8 +12,10 @@ const MEETINGS = { href: "/meetings", label: "Meetings", shortLabel: "Meetings",
 const POSTING = { href: "/posting", label: "Posting", shortLabel: "Posting", Icon: PostingIcon, available: true } as const;
 const ANALYTICS = { href: "/analytics", label: "Analytics", shortLabel: "Analytics", Icon: AnalyticsIcon, available: true } as const;
 const TEAM = { href: "/team", label: "Team", shortLabel: "Team", Icon: UsersIcon, available: true } as const;
+/** Developer accounts only (the layout decides; see isDeveloper in lib/errors.ts). */
+export const DEVELOPER = { href: "/developer", label: "Developer", shortLabel: "Developer", Icon: CodeIcon, available: true } as const;
 
-export type NavItem = typeof DASHBOARD | typeof SHORTS | typeof VIDEOS | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof TEAM;
+export type NavItem = typeof DASHBOARD | typeof SHORTS | typeof VIDEOS | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof TEAM | typeof DEVELOPER;
 
 export const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   { label: null, items: [DASHBOARD] },

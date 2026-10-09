@@ -785,3 +785,24 @@ export function HistoryIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** Developer: code brackets. */
+export function CodeIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 5l-3 14" />
+    </Svg>
+  );
+}
+
+/** The daily word: a 2×2 of letter tiles. */
+export function WordIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.6" />
+      <rect x="13" y="3.5" width="7.5" height="7.5" rx="1.6" />
+      <rect x="3.5" y="13" width="7.5" height="7.5" rx="1.6" />
+      <rect x="13" y="13" width="7.5" height="7.5" rx="1.6" />
+    </Svg>
+  );
+}

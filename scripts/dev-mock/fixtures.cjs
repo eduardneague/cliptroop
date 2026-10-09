@@ -38,6 +38,7 @@ const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-map", type: "audienceMap", x: 6, y: 9, w: 4, h: 4, settings: { view: process.env.MOCK_GLOBE ? "globe" : "map", mode: "all" } },
   { id: "w-output", type: "output", x: 10, y: 10, w: 2, h: 2 },
   { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
+  { id: "w-word", type: "word", x: 6, y: 13, w: 2, h: 4 },
 ] };
 const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
@@ -64,6 +65,7 @@ const team = {
   short_color: null,
   long_color: null,
   shorts_per_day: 2,
+  tasks_visibility: process.env.MOCK_TEAM_TASKS || "own",
   team_members: members.map((m) => ({ user_id: m.user_id, status: "active" })),
 };
 // ---- Shorts
@@ -169,6 +171,40 @@ const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000003", team_id: TEAM, day: day(-20), source: "affiliate", amount: 86.4, currency: "USD", note: null, short_id: null, project_id: null, short_videos: null, long_video_projects: null },
 ];
+// The developer's Usage page (developer_usage(), 0075): this team and three made-up ones.
+function developerUsage() {
+  const MB = 1024 ** 2;
+  const day0 = Date.now();
+  const iso = (dAgo) => new Date(day0 - dAgo * 86400e3).toISOString();
+  const teams = [
+    { id: TEAM, name: team.name, createdAt: team.created_at, members: people.length, shorts: shorts.length, longs: longs.length, videoFiles: 11, videoBytes: 612 * MB, files: 184, storageBytes: 701 * MB, rows: 4120, dbBytes: 9.4 * MB, postsPublished: 41, lastActivity: iso(0.1) },
+    { id: "22222222-2222-4222-8222-222222222222", name: "Cluj Food Club", createdAt: iso(40), members: 3, shorts: 22, longs: 2, videoFiles: 4, videoBytes: 188 * MB, files: 61, storageBytes: 205 * MB, rows: 1210, dbBytes: 2.1 * MB, postsPublished: 12, lastActivity: iso(1.5) },
+    { id: "33333333-3333-4333-8333-333333333333", name: "Night Market Media", createdAt: iso(12), members: 2, shorts: 5, longs: 0, videoFiles: 0, videoBytes: 0, files: 7, storageBytes: 3.2 * MB, rows: 160, dbBytes: 0.3 * MB, postsPublished: 0, lastActivity: iso(9) },
+    { id: "44444444-4444-4444-8444-444444444444", name: "ClipTroop Review", createdAt: iso(1), members: 1, shorts: 1, longs: 0, videoFiles: 1, videoBytes: 42 * MB, files: 2, storageBytes: 42.1 * MB, rows: 30, dbBytes: 0.05 * MB, postsPublished: 1, lastActivity: iso(0.9) },
+  ];
+  const peopleRows = [
+    ...people.map((p, i) => ({ id: p.id, email: p.email, name: p.full_name, username: p.username, createdAt: iso(200 - i * 20), lastSignIn: iso([0.05, 1, 3, 20][i] ?? 5), teams: [team.name], videos: [0, 6, 5, 0][i] ?? 0, videoBytes: [0, 340, 272, 0][i] * MB || 0, files: [14, 52, 31, 9][i] ?? 0, fileBytes: [3, 41, 12, 2][i] * MB || 0, tasksDone: [61, 140, 97, 44][i] ?? 0 })),
+    { id: "aaaaaaaa-0000-4000-8000-000000000011", email: "ana@cluj.example", name: "Ana Pop", username: "anapop", createdAt: iso(40), lastSignIn: iso(1.5), teams: ["Cluj Food Club"], videos: 4, videoBytes: 188 * MB, files: 30, fileBytes: 9 * MB, tasksDone: 38 },
+    { id: "aaaaaaaa-0000-4000-8000-000000000012", email: "review@cliptroop.com", name: "Google Review", username: "googlereview", createdAt: iso(1), lastSignIn: null, teams: ["ClipTroop Review"], videos: 1, videoBytes: 42 * MB, files: 1, fileBytes: 0.1 * MB, tasksDone: 2 },
+  ];
+  const uploads = [];
+  for (let d = 29; d >= 0; d--) if (d % 4 !== 1) uploads.push({ day: new Date(day0 - d * 86400e3).toISOString().slice(0, 10), files: 2 + ((d * 7) % 9), bytes: (20 + ((d * 37) % 90)) * MB });
+  const buckets = [
+    ["review-videos", 16, 842], ["package-thumbs", 120, 61], ["mockup-library", 40, 22], ["script-sketches", 38, 9], ["avatars", 9, 2.1], ["comment-attachments", 12, 6], ["script-images", 21, 4.4], ["team-logos", 4, 0.4], ["feedback", 3, 4.8],
+  ].map(([id, files, mb]) => ({ id, files, bytes: mb * MB, last: iso(files % 5) }));
+  const tables = [
+    ["public", "analytics_daily", 3.1, 9800], ["public", "analytics_content", 2.4, 1450], ["public", "notifications", 1.9, 3100], ["auth", "audit_log_entries", 1.7, 5200], ["public", "short_video_events", 1.2, 2900], ["public", "script_versions", 1.1, 640],
+    ["storage", "objects", 0.9, 263], ["public", "tasks", 0.8, 1900], ["public", "short_videos", 0.6, 30], ["public", "analytics_countries", 0.55, 2400], ["public", "social_posts", 0.4, 120], ["public", "app_errors", 0.2, 14], ["public", "status_samples", 0.18, 2100], ["auth", "users", 0.1, 6],
+  ].map(([schema, name, mb, rows]) => ({ schema, name, bytes: mb * MB, rows, exact: schema === "public" }));
+  return {
+    at: new Date().toISOString(),
+    database: { bytes: process.env.MOCK_USAGE_FULL ? 470 * MB : 38.6 * MB },
+    storage: { bytes: buckets.reduce((t, b) => t + b.bytes, 0), files: buckets.reduce((t, b) => t + b.files, 0) },
+    counts: { people: peopleRows.length, people7: 4, people30: 5, newPeople30: 2, teams: teams.length, shorts: 44, longs: longs.length + 2, videoFiles: 16, videoBytes: 842 * MB, videoFilesCleaned: 23, scripts: 58, postsPublished: 54, tasksDone: 382 },
+    buckets, tables, uploads, teams, people: peopleRows,
+  };
+}
+
 // MOCK_POSTS=1: a busy posting week around the real "now" (Posting filters, the Posting today widget).
 const morePosts = [];
 if (process.env.MOCK_POSTS) {
@@ -290,6 +326,16 @@ module.exports = {
   user: { id: U[0], aud: "authenticated", role: "authenticated", email: "edu@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // The developer's Usage page (0075). MOCK_USAGE_FULL=1: the database at 94 % of the Free plan.
+    developer_usage: () => developerUsage(),
+    // My tasks → Team (0076): MOCK_TEAM_TASKS=team or masters shares them.
+    can_see_team_tasks: !!process.env.MOCK_TEAM_TASKS,
+    // The daily word (0077): how the team did today (tries only).
+    daily_word_team: () => [
+      { user_id: U[1], tries: 3, solved: true, finished: true },
+      { user_id: U[2], tries: 6, solved: false, finished: true },
+      { user_id: U[3], tries: 2, solved: false, finished: false },
+    ],
     // MOCK_NO_COMMENT=1: the sample user isn't on the script (reads comments, can't add them).
     can_comment_script: !process.env.MOCK_NO_COMMENT,
     is_master_of: true,
@@ -384,6 +430,11 @@ module.exports = {
         ].concat(morePosts)
       : morePosts,
     team_day_limits: [],
+    // The daily word: the sample user's past days (a 3-day streak before today). Today's play is made by playing.
+    daily_word_plays: [1, 2, 3, 5, 6].map((d) => ({
+      user_id: U[0], day: new Date(Date.now() - d * 86400e3).toISOString().slice(0, 10), puzzle: 10 - d, guesses: ["crane", "slate", "trace", "brace"].slice(0, 2 + (d % 3)), solved: d !== 5,
+      finished_at: new Date(Date.now() - d * 86400e3).toISOString(), updated_at: new Date(Date.now() - d * 86400e3).toISOString(),
+    })),
     meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
     meeting_actions: [
       { id: "ca000000-0000-4000-8000-000000000001", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Send the sponsor the draft cut", owner_id: U[0], done_at: null, created_by: U[0], team_id: TEAM, created_at: at(-1, 10), due_date: day(2), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
@@ -394,6 +445,11 @@ module.exports = {
       { id: "ta000000-0000-4000-8000-000000000001", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000001", stage: "action", state: "active", due_date: day(2), team_id: TEAM, user_id: U[0], completed_at: null },
       { id: "ta000000-0000-4000-8000-000000000002", kind: "script", item_id: "dd000000-0000-4000-8000-000000000002", stage: "review", state: "active", due_date: null, team_id: TEAM, user_id: U[0], completed_at: null },
       { id: "ta000000-0000-4000-8000-000000000003", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000002", stage: "action", state: "done", due_date: day(-1), team_id: TEAM, user_id: U[0], completed_at: at(-1, 15) },
+      // Teammates' tasks (My tasks → Team, MOCK_TEAM_TASKS=team|masters).
+      ...shorts.filter((x) => x.stage !== "posted").slice(0, 9).map((x, i) => ({
+        id: `tb000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, kind: "short", item_id: x.id, stage: x.stage, state: i === 8 ? "waiting" : "active",
+        due_date: x.planned_date, team_id: TEAM, user_id: x.stage === "editing" ? U[1 + (i % 2)] : x.stage === "ready" ? U[3] : x.stage === "review" ? U[0] : U[1 + (i % 3)], completed_at: null,
+      })),
     ],
     push_subscriptions: process.env.MOCK_PUSH ? [
       { id: "fa000000-0000-4000-8000-000000000001", user_id: U[0], endpoint: "https://web.push.apple.com/mock-iphone", label: "iPhone · Safari", created_at: at(-2, 20), last_sent_at: at(0, 8) },

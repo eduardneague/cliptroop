@@ -23,6 +23,20 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.13.0",
+    date: "2026-10-09",
+    title: "The daily word, team tasks, 20 colour themes",
+    changes: [
+      { kind: "new", text: "The daily word: a five-letter word to guess in six tries, the same for everyone each day, with the board, colours and keyboard you'd expect. Finishing it, solved or not, counts as that day's contribution, so a day without tasks can still have its square. Add the Daily word widget to your dashboard, or open it from there." },
+      { kind: "new", text: "After the daily word: your stats (played, win %, streak, best), how many tries each solve took, and how your teammates did today (tries only, never their letters). Copy my squares puts your result in a chat without giving the word away." },
+      { kind: "new", text: "Team tasks: masters choose who can see everyone's tasks (Team → Defaults → Tasks): only their own (as before), masters, or the whole team. When it's on, My tasks gets a Team tab with everyone's tasks and a button per person to see just theirs, late ones in red." },
+      { kind: "new", text: "Eight more colour themes, twenty in all: Coral, Solar, Sakura, Indigo, Sky, Nord, Pine and Ink (Settings → Preferences → Colours)." },
+      { kind: "new", text: "For developer accounts: a Developer page in the menu with an Overview dashboard (status, errors, reports, database and storage, people, teams, uploads, posting, incidents, alerts), a Usage tab (everything stored, by team and by person, the biggest tables, against the Supabase plan's limits), Problems and Status." },
+      { kind: "better", text: "Developer accounts are recognised by the email they sign in with, checked on every visit, and production has none unless they're listed." },
+      { kind: "better", text: "The contribution grid counts the daily word too, and its squares say contributions instead of tasks." },
+    ],
+  },
+  {
     version: "1.12.3",
     date: "2026-10-09",
     title: "Calmer Posting card, steadier widget filters",

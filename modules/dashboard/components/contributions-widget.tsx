@@ -7,12 +7,13 @@ import { KindIcon } from "@/components/ui/kind-icon";
 import type { Done } from "../lib/queries";
 import { localDay } from "./tasks-widget";
 import { CountUp } from "@/components/ui/count-up";
+import { WordIcon } from "@/components/ui/icons";
 
 const LEVEL_MIX = [0, 30, 55, 78, 100];
 const level = (n: number) => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4);
 export const CONTRIB_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#f97316", "#eab308", "#14b8a6"];
 
-/** GitHub-style grid: one square per day, more tasks = more intense. */
+/** GitHub-style grid: one square per day, more finished tasks (and the daily word) = more intense. */
 export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; teamId: string; settings?: Record<string, unknown> }) {
   const color = (settings?.color as string) || "#22c55e";
   const scope = (settings?.scope as string) === "team" ? "team" : "all";
@@ -150,7 +151,7 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
                       type="button"
                       disabled={future}
                       onClick={() => setOpen(d)}
-                      title={`${n || "No"} task${n === 1 ? "" : "s"} on ${new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`}
+                      title={`${n || "No"} contribution${n === 1 ? "" : "s"} on ${new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`}
                       className={`rounded-[2px] transition-transform hover:scale-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${future ? "opacity-0 pointer-events-none" : ""} ${d === today ? "ring-1 ring-ink/40" : ""}`}
                       style={{ background: shade(n), width: cell, height: cell }}
                     />
@@ -166,20 +167,20 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
         open={!!open}
         onClose={() => setOpen(null)}
         title={open ? new Date(`${open}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}
-        description={open ? `${byDay.get(open)?.length ?? 0} task${(byDay.get(open)?.length ?? 0) === 1 ? "" : "s"} finished` : undefined}
+        description={open ? `${byDay.get(open)?.length ?? 0} contribution${(byDay.get(open)?.length ?? 0) === 1 ? "" : "s"}: tasks finished and the daily word` : undefined}
       >
         {open && (byDay.get(open)?.length ? (
           <ul className="space-y-1">
             {byDay.get(open)!.map((d) => (
               <li key={d.id}>
                 <Link href={d.href} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-surface-2">
-                  <span className="w-9 h-9 rounded-lg bg-surface-2 flex items-center justify-center flex-shrink-0">
-                    <KindIcon kind={d.kind} className="w-4 h-4" />
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${d.kind === "word" ? "bg-green/12 text-green" : "bg-surface-2"}`}>
+                    {d.kind === "word" ? <WordIcon className="w-4 h-4" /> : <KindIcon kind={d.kind} className="w-4 h-4" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-semibold truncate">{d.action}</span>
                     <span className="block text-[12.5px] text-ink-soft truncate">
-                      {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
+                      {d.kind === "word" ? "Counts as a contribution" : d.kind === "meeting" ? <><span className="text-ink-faint">From</span> {d.title}</> : <><span className="font-mono text-ink-faint">#{d.number}</span> {d.title}</>}
                     </span>
                   </span>
                   <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
