@@ -199,8 +199,9 @@ each other: Instagram doesn't share API posts to Facebook, so Facebook is its
 own post (a Reel on the team's Page, `pages_manage_posts`). A permission
 added after people connected (YouTube's edit scope, Facebook's posting) is
 never required to connect: the account card asks to reconnect and the
-Posting card refuses until it's there. The Posting card always shows the exact
-file that gets posted (`post-video-preview.tsx`, the review player). How long a
+Posting card refuses until it's there. The Posting card always has the exact
+file that gets posted (`post-video-preview.tsx`): a closed bar, Watch opens the
+review player. How long a
 short may be per platform lives in `lib/short-length.ts` (used by the cards and
 by the server before scheduling).
 The Posting page reads unfinished posts (soonest first) and the latest 100

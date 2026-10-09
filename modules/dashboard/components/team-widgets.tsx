@@ -192,15 +192,29 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
     () => posts.filter((p) => localDay(new Date(p.publishedAt ?? p.at)) === today || p.status === "failed" || p.late),
     [posts, today]
   );
+  const countOf = (pl: PlatformChoice, s: Show) => todays.filter((p) => (pl === "all" || p.platform === pl) && matches(kindOf(p), s)).length;
+  // A filter never sticks on nothing: when the posts change (one goes out,
+  // fails…) and a filter is left with none, it goes back to All.
+  useEffect(() => {
+    if (platform !== "all" && !countOf(platform, "all")) setPlatform("all");
+    else if (show !== "all" && !countOf(platform, show)) setShow("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todays]);
   if (!todays.length) return <EmptyLine text="Nothing posting today." />;
 
   const onPlatform = todays.filter((p) => platform === "all" || p.platform === platform);
   const visible = onPlatform.filter((p) => matches(kindOf(p), show));
-  // Each filter counts what the other one leaves.
-  const byStatus = todays.filter((p) => matches(kindOf(p), show));
+  // Platform chips: every platform posting today, with all its posts today
+  // (they don't change with the status filter, so none disappears). The
+  // status chips count within the platform picked.
   const counts: Partial<Record<Platform, number>> = {};
-  for (const p of byStatus) counts[p.platform as Platform] = (counts[p.platform as Platform] ?? 0) + 1;
-  const showCount = (s: Exclude<Show, "all">) => onPlatform.filter((p) => matches(kindOf(p), s)).length;
+  for (const p of todays) counts[p.platform as Platform] = (counts[p.platform as Platform] ?? 0) + 1;
+  const showCount = (s: Exclude<Show, "all">) => countOf(platform, s);
+  // Picking a platform that has none of the status picked: the status goes back to All.
+  const pickPlatform = (pl: PlatformChoice) => {
+    setPlatform(pl);
+    if (show !== "all" && !countOf(pl, show)) setShow("all");
+  };
 
   // One group per short: problems first, then by the earliest time.
   const groups = new Map<string, PostToday[]>();
@@ -237,7 +251,7 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
       )}
 
       <div className="space-y-1.5">
-        <PlatformFilter compact iconsOnly={!wide} value={platform} onChange={setPlatform} counts={counts} total={byStatus.length} />
+        <PlatformFilter compact iconsOnly={!wide} value={platform} onChange={pickPlatform} counts={counts} total={todays.length} />
         {withStatus && (
           <div className="flex items-center gap-1" role="group" aria-label="Status">
             {SHOW.map(([k, label, Icon]) => {
@@ -249,10 +263,12 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
                   key={k}
                   type="button"
                   aria-pressed={on}
+                  // Nothing to show: can't be picked (it would only empty the list).
+                  disabled={!n && !on}
                   aria-label={`${label}: ${n}`}
                   title={labels ? undefined : `${label}: ${n}`}
                   onClick={() => setShow(on ? "all" : k)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-[11px] font-semibold tabular-nums flex-shrink-0 transition-colors ${
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-[11px] font-semibold tabular-nums flex-shrink-0 transition-colors disabled:opacity-40 disabled:pointer-events-none ${
                     on
                       ? k === "problem"
                         ? "bg-red text-white border-red"
