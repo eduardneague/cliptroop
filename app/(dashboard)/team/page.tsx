@@ -37,6 +37,7 @@ import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getMediaKeep, getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { MediaKeepForm } from "./media-keep-form";
+import { TasksVisibilityForm } from "./tasks-visibility-form";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { TEAM_TABS, TeamTabSkeleton, teamTab, type TeamTab } from "./skeletons";
@@ -69,6 +70,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     { data: transferRow },
     setupAny,
     mediaKeep,
+    tasksVis,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -112,6 +114,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     tab === "accounts" && process.env.VERCEL_ENV !== "production" ? getSocialSetup() : Promise.resolve(null),
     // Video files: how long they stay after posting (0070), and what's stored.
     tab === "defaults" ? getMediaKeep(currentTeam.id) : Promise.resolve(null),
+    // Who sees everyone's tasks (0076): its own query, so an older database just says so.
+    tab === "defaults" ? supabase.from("teams").select("tasks_visibility").eq("id", currentTeam.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -237,6 +241,17 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               publisher: (longDefaults?.default_long_publisher_id as string | null) ?? null,
             }}
               people={longPeople}
+            />
+          </section>
+        )}
+        {userIsMaster && (
+          <section id="tasks" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Tasks</h2>
+            <p className="text-[12px] text-ink-soft mb-5">Who can see everyone&rsquo;s tasks (who has to do what, and what&rsquo;s late) in My tasks on the dashboard.</p>
+            <TasksVisibilityForm
+              teamId={currentTeam.id}
+              ready={!tasksVis.error}
+              value={((tasksVis.data as { tasks_visibility?: string } | null)?.tasks_visibility as "own" | "masters" | "team" | undefined) ?? "own"}
             />
           </section>
         )}

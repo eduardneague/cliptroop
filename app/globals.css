@@ -99,6 +99,23 @@ html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223
 html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 166 118 78; }
 html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; }
 html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; }
+/* 1.13.0: eight more. Some pair a tinted paper with a different-coloured accent (Solar, Sakura). */
+html[data-palette="coral"]:not(.dark) { --paper: 244 233 228; --paper-2: 238 224 218; --surface: 255 255 255; --surface-2: 251 245 242; --amber: 208 70 50; }
+html.dark[data-palette="coral"] { --paper: 21 13 11; --paper-2: 28 18 15; --surface: 35 23 20; --surface-2: 43 29 25; --amber: 226 88 64; }
+html[data-palette="solar"]:not(.dark) { --paper: 248 241 222; --paper-2: 241 232 208; --surface: 255 252 242; --surface-2: 251 246 232; --amber: 33 113 181; }
+html.dark[data-palette="solar"] { --paper: 0 28 36; --paper-2: 2 32 41; --surface: 6 36 45; --surface-2: 12 46 56; --amber: 45 140 210; }
+html[data-palette="sakura"]:not(.dark) { --paper: 245 233 238; --paper-2: 239 224 231; --surface: 255 255 255; --surface-2: 252 245 248; --amber: 46 125 72; }
+html.dark[data-palette="sakura"] { --paper: 20 13 16; --paper-2: 27 18 22; --surface: 35 24 29; --surface-2: 43 30 36; --amber: 64 150 92; }
+html[data-palette="indigo"]:not(.dark) { --paper: 234 234 245; --paper-2: 225 225 240; --surface: 255 255 255; --surface-2: 246 246 252; --amber: 79 70 229; }
+html.dark[data-palette="indigo"] { --paper: 13 13 24; --paper-2: 18 18 32; --surface: 24 24 41; --surface-2: 31 31 52; --amber: 109 100 240; }
+html[data-palette="sky"]:not(.dark) { --paper: 230 238 244; --paper-2: 220 231 239; --surface: 255 255 255; --surface-2: 243 248 251; --amber: 3 116 176; }
+html.dark[data-palette="sky"] { --paper: 9 15 20; --paper-2: 13 21 28; --surface: 18 28 37; --surface-2: 24 35 46; --amber: 14 140 205; }
+html[data-palette="nord"]:not(.dark) { --paper: 229 233 240; --paper-2: 216 222 233; --surface: 255 255 255; --surface-2: 240 243 247; --amber: 76 106 150; }
+html.dark[data-palette="nord"] { --paper: 22 26 33; --paper-2: 27 31 39; --surface: 34 39 49; --surface-2: 42 48 60; --amber: 98 134 178; }
+html[data-palette="pine"]:not(.dark) { --paper: 230 236 233; --paper-2: 220 229 225; --surface: 255 255 255; --surface-2: 243 247 245; --amber: 22 101 72; }
+html.dark[data-palette="pine"] { --paper: 10 16 13; --paper-2: 14 22 18; --surface: 19 29 24; --surface-2: 25 37 31; --amber: 34 140 100; }
+html[data-palette="ink"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 28 28 30; }
+html.dark[data-palette="ink"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 120 120 128; }
 
 body {
   background: rgb(var(--paper));
@@ -767,3 +784,20 @@ html[data-motion="off"] .nav-progress[data-state="loading"] { transition-duratio
 
 /* A step or tab you just clicked while its page is on the way. */
 .nav-pending-dim { opacity: 0.55; transition: opacity 0.15s ease; }
+
+/* The daily word (1.13.0): a tile pops when typed, flips to show its colour
+   (the colour changes at the halfway point), a refused word shakes, and a
+   solved row hops. The motion setting above turns them all off. */
+@keyframes word-pop { 0% { transform: scale(1); } 45% { transform: scale(1.1); } 100% { transform: scale(1); } }
+@keyframes word-flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+@keyframes word-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(3px); } 30%, 50%, 70% { transform: translateX(-6px); } 40%, 60% { transform: translateX(6px); } }
+@keyframes word-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-14px); } 60% { transform: translateY(2px); } }
+.word-pop { animation: word-pop 0.12s ease-out; }
+.word-flip { animation: word-flip 0.5s ease-in-out both; }
+.word-shake { animation: word-shake 0.45s ease-in-out; }
+.word-hop { animation: word-hop 0.5s ease-out both; }
+/* The tiles' colours are fixed (not the palette's), so white letters stay readable in every theme. */
+.word-correct { background: #2b9757; border-color: #2b9757; color: #fff; }
+.word-present { background: #b8890f; border-color: #b8890f; color: #fff; }
+.word-absent { background: #787266; border-color: #787266; color: #fff; }
+html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }

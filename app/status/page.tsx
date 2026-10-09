@@ -38,7 +38,7 @@ export default async function StatusPage() {
     statusIncidents(7),
     getCachedUser(),
   ]);
-  const developer = await isDeveloper(user?.id);
+  const developer = await isDeveloper(user);
 
   // Right now: the app answered this request, so "Website and app" is up.
   const now: Record<string, Level> = { app: "ok" };

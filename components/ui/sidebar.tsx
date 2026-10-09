@@ -16,6 +16,7 @@ export function Sidebar({
   userAvatarUrl,
   userColor,
   username,
+  developer = false,
 }: {
   teams: TeamSummary[];
   currentTeam: TeamSummary | null;
@@ -24,6 +25,8 @@ export function Sidebar({
   userAvatarUrl: string | null;
   userColor: string;
   username: string | null;
+  /** A developer account: the Developer page in the menu. */
+  developer?: boolean;
 }) {
   return (
     <aside className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden styled-scroll">
@@ -34,7 +37,7 @@ export function Sidebar({
         <WorkspaceSwitcher teams={teams} currentTeam={currentTeam} />
       </div>
 
-      <SidebarNav />
+      <SidebarNav developer={developer} />
 
       <div className="mt-auto">
         <WhatsNewButton variant="sidebar" className="mb-2" />

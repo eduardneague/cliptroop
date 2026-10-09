@@ -25,7 +25,10 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_FB_ANALYTICS_ONLY=1 the Facebook Page connected before posting existed (no pages_manage_posts),
 #    MOCK_NO_COMMENT=1 the server says the sample user may not comment on scripts (can_comment_script),
 #    MOCK_FB_NO_EARNINGS=1 the Facebook Page isn't in Content Monetization (no Facebook earnings in Revenue),
-#    MOCK_POSTS=1 a busy posting week around the real "now" (Posting's filters, the Posting today widget)
+#    MOCK_POSTS=1 a busy posting week around the real "now" (Posting's filters, the Posting today widget),
+#    MOCK_USAGE_FULL=1 the developer's Usage page with the database nearly full (Free plan),
+#    MOCK_TEAM_TASKS=team (or masters) the team shares everyone's tasks (My tasks → Team),
+#    MOCK_WRITES=table1,table2 those tables keep what's inserted / updated (daily_word_plays always does)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

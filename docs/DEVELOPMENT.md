@@ -210,6 +210,25 @@ the browser (platform, #number/title, day). Platform chips everywhere are
 `modules/short-videos/components/platform-filter.tsx` (also the dashboard's
 Posting today widget, `compact`).
 
+**Developer accounts.** `isDeveloper(user)` (lib/errors.ts) compares the
+email the person is signed in with (the verified session, never the copy in
+profiles) with `DEVELOPER_EMAILS`. No list: nobody in production; staging and
+your computer fall back to the first team's owner. Every developer page and
+action checks it itself. `/developer` has tabs (Overview, Usage, Problems,
+Status; only the open one loads); Usage reads `developer_usage()` (0075,
+service role only). `SUPABASE_PLAN=pro` switches the limits it measures against.
+
+**Team tasks.** `tasks` stay readable by their owner, plus everyone's in a team
+whose `tasks_visibility` (0076: own / masters / team) allows it
+(`shared_task_team_ids()`). So queries for "my tasks" must filter by
+`user_id` themselves (listMyTasks, listDone do).
+
+**Daily word.** `lib/word/` (answers and valid guesses are server-only;
+`score.ts` is shared). Plays (`daily_word_plays`, 0077) are written only by the
+server after checking a guess (`modules/word/lib/state.ts`); people read their
+own; `daily_word_team()` gives teammates' tries. The day is the team's time
+zone. Finished plays count on the contribution grid (listDone).
+
 **Revenue.** `analytics_revenue_daily` holds what the sync copies: YouTube's
 estimate (with Shorts/long and stream splits) and, since 0074, a Facebook
 Page's Content Monetization earnings (`platform = 'facebook'`, content

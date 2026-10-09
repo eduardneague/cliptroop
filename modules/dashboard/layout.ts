@@ -18,7 +18,8 @@ export type WidgetType =
   | "followers"
   | "topVideos"
   | "audienceMap"
-  | "output";
+  | "output"
+  | "word";
 
 /**
  * One widget on the 12 column grid: x/y = column/row of its top-left
@@ -43,6 +44,7 @@ export const CATALOG: Record<WidgetType, Meta> = {
   tasks: { name: "My tasks", description: "What you need to do: overdue, today, coming up.", w: 4, h: 6, limits: { minW: 3, minH: 3, maxW: 12, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
   teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 6 } , stack: { min: 2, max: 4 } },
   clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } , stack: { min: 2, max: 3, phone: 2 } },
+  word: { name: "Daily word", description: "Start your day with a five-letter word. Finishing it counts as a contribution.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 4, maxH: 6 }, stack: { min: 3, max: 4, phone: 4 } },
   posting: { name: "Posting today", description: "Today's posts per short, where each platform stands, with filters; and anything that failed.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } , stack: { min: 2, max: 4, phone: 3 } },
   todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
   upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 6 } },

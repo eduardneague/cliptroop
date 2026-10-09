@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
+import { getCachedUser } from "@/lib/supabase/get-user";
+import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 
 export type TaskKind = "short" | "long";
 /** What a task row looks like: a short, a long video, or a meeting action item. */
@@ -28,7 +30,13 @@ export type Task = {
   step: number;
   steps: number;
 };
-export type Done = { id: string; at: string; kind: TaskLook; action: string; number: number; title: string; href: string; teamId: string };
+/** A finished thing on the contribution grid: a task, or the daily word ("word"). */
+export type DoneLook = TaskLook | "word";
+export type Done = { id: string; at: string; kind: DoneLook; action: string; number: number; title: string; href: string; teamId: string };
+/** Someone's open task, for My tasks → Team (when the team shares them, 0076). */
+export type TeamPersonLite = { userId: string; name: string; avatarUrl: string | null; color: string };
+export type TeamTask = Task & { userId: string };
+export type TeamTasks = { visibility: "masters" | "team"; people: TeamPersonLite[]; tasks: TeamTask[]; me: string };
 export type Todo = { id: string; title: string; notes: string | null; dueDate: string | null; priority: number; position: number; doneAt: string | null };
 export type TeamCard = {
   id: string;
@@ -185,16 +193,58 @@ function videoIds(rows: TaskRow[], ex: Extra) {
  */
 export async function listMyTasks(teamId: string): Promise<Task[]> {
   const supabase = await createClient();
+  const user = await getCachedUser();
+  if (!user) return [];
+  // Your own: since 0076 the team's can be readable too (My tasks → Team).
   const { data } = await supabase
     .from("tasks")
     .select("id, kind, item_id, stage, state, due_date, team_id, completed_at")
     .eq("team_id", teamId)
+    .eq("user_id", user.id)
     .neq("state", "done")
     .order("due_date", { ascending: true, nullsFirst: false });
   const rows = (data ?? []) as TaskRow[];
   const ex = await extrasFor(supabase, rows);
   const ids = videoIds(rows, ex);
   const { info, thumb } = await itemsFor(supabase, ids.shorts, ids.longs);
+  return toTasks(rows, ex, info, thumb);
+}
+
+/**
+ * Everyone's open tasks in this team, with whose they are: only when the
+ * team shares them with you (Team → Defaults → Tasks; 0076). null = not
+ * shared (or before 0076): My tasks shows no Team tab.
+ */
+export async function listTeamTasks(teamId: string): Promise<TeamTasks | null> {
+  const supabase = await createClient();
+  const [{ data: allowed, error }, user] = await Promise.all([supabase.rpc("can_see_team_tasks", { p_team: teamId }), getCachedUser()]);
+  if (error || allowed !== true || !user) return null;
+  const [{ data }, { data: team }, people] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id, kind, item_id, stage, state, due_date, team_id, completed_at, user_id")
+      .eq("team_id", teamId)
+      .neq("state", "done")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(600),
+    supabase.from("teams").select("tasks_visibility").eq("id", teamId).maybeSingle(),
+    listTeamPeople(teamId),
+  ]);
+  const rows = (data ?? []) as (TaskRow & { user_id: string })[];
+  const ex = await extrasFor(supabase, rows);
+  const ids = videoIds(rows, ex);
+  // No thumbnails here: the list is about who, not what it looks like.
+  const { info } = await itemsFor(supabase, ids.shorts, ids.longs, false);
+  const owner = new Map(rows.map((r) => [r.id, r.user_id]));
+  return {
+    visibility: (team?.tasks_visibility as string) === "masters" ? "masters" : "team",
+    me: user.id,
+    people: people.map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, color: p.color })),
+    tasks: toTasks(rows, ex, info, null).map((t) => ({ ...t, userId: owner.get(t.id) ?? "" })),
+  };
+}
+
+function toTasks(rows: TaskRow[], ex: Extra, info: Map<string, ItemInfo>, thumb: ((id: string) => string | null) | null): Task[] {
   return rows.flatMap((r) => {
     const t = describe(r, ex, info, thumb);
     if (!t) return [];
@@ -222,22 +272,43 @@ export async function listMyTasks(teamId: string): Promise<Task[]> {
   });
 }
 
-/** Your completed tasks for the past year (every team): the contribution grid. */
-export async function listDone(sinceIso: string): Promise<Done[]> {
+/**
+ * Your completed tasks for the past year (every team), and the daily words
+ * you finished (they count too; 0077): the contribution grid. `teamId`: the
+ * team the daily words are shown under (they belong to no team).
+ */
+export async function listDone(sinceIso: string, teamId = ""): Promise<Done[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("tasks")
-    .select("id, kind, item_id, stage, completed_at, team_id")
-    .eq("state", "done")
-    .gte("completed_at", sinceIso)
-    .order("completed_at", { ascending: false })
-    .limit(5000);
+  const user = await getCachedUser();
+  if (!user) return [];
+  const [{ data }, { data: words }] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id, kind, item_id, stage, completed_at, team_id")
+      .eq("user_id", user.id)
+      .eq("state", "done")
+      .gte("completed_at", sinceIso)
+      .order("completed_at", { ascending: false })
+      .limit(5000),
+    // Before migration 0077 the table doesn't exist: just no words.
+    supabase.from("daily_word_plays").select("day, puzzle, guesses, solved, finished_at").eq("user_id", user.id).not("finished_at", "is", null).gte("finished_at", sinceIso).limit(400),
+  ]);
   const rows = (data ?? []) as TaskRow[];
   const ex = await extrasFor(supabase, rows);
   const ids = videoIds(rows, ex);
   // Titles only: no thumbnails needed for the grid (skips the signing round trip).
   const { info } = await itemsFor(supabase, ids.shorts, ids.longs, false);
-  return rows.map((r) => {
+  const played: Done[] = ((words ?? []) as { day: string; puzzle: number; guesses: string[] | null; solved: boolean; finished_at: string }[]).map((w) => ({
+    id: `word-${w.day}`,
+    at: w.finished_at,
+    kind: "word",
+    action: w.solved ? `Solved the daily word in ${w.guesses?.length ?? 0}` : "Played the daily word",
+    number: w.puzzle,
+    title: `Daily word #${w.puzzle}`,
+    href: "/word",
+    teamId,
+  }));
+  const tasks: Done[] = rows.map((r) => {
     const t = describe(r, ex, info, null);
     return {
       id: r.id,
@@ -250,6 +321,7 @@ export async function listDone(sinceIso: string): Promise<Done[]> {
       teamId: r.team_id,
     };
   });
+  return [...tasks, ...played].sort((a, b) => b.at.localeCompare(a.at));
 }
 
 export async function listTodos(): Promise<Todo[]> {

@@ -89,7 +89,7 @@ function Where({ children }: { children: React.ReactNode }) {
 
 export default async function SetupPage() {
   const user = await getCachedUser();
-  if (!(await isDeveloper(user?.id))) notFound();
+  if (!(await isDeveloper(user))) notFound();
   const setup = await getSocialSetup();
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
@@ -141,8 +141,9 @@ export default async function SetupPage() {
     { name: "FACEBOOK_APP_SECRET", what: "Meta app secret.", set: env("FACEBOOK_APP_SECRET"), need: "optional" },
     { name: "SOCIAL_STATS_PLATFORMS", what: "Which platforms also ask for stats (youtube,instagram,tiktok).", set: env("SOCIAL_STATS_PLATFORMS"), need: "optional" },
     { name: "NEXT_PUBLIC_MAX_VIDEO_MB", what: "Largest upload in MB (50 on the free Supabase plan, 2048 on Pro).", set: env("NEXT_PUBLIC_MAX_VIDEO_MB"), need: "optional" },
-    { name: "DEVELOPER_EMAILS", what: "Developer accounts (comma list): open /developer and /setup, and are the only ones who get app-wide alerts. Empty = ALERT_EMAILS (old name), else the owner of the first team.", set: env("DEVELOPER_EMAILS") || env("ALERT_EMAILS"), need: "optional" },
+    { name: "DEVELOPER_EMAILS", what: "Developer accounts (comma list of the emails they sign in with): open /developer and /setup, and are the only ones who get app-wide alerts. Empty = ALERT_EMAILS (old name); with neither, production has NO developer (staging falls back to the owner of the first team).", set: env("DEVELOPER_EMAILS") || env("ALERT_EMAILS"), need: "yes" },
     { name: "GIPHY_API_KEY", what: "GIFs in comments.", set: env("GIPHY_API_KEY"), need: "optional" },
+    { name: "SUPABASE_PLAN", what: "pro once this Supabase project is on the Pro plan: the developer's Usage page then measures against Pro's 8 GB database and 100 GB of files (else Free's 500 MB and 1 GB).", set: env("SUPABASE_PLAN"), need: "optional" },
   ];
 
   return (

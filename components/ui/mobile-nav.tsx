@@ -42,13 +42,13 @@ export function MobileTopBar({
   );
 }
 
-export function MobileBottomNav() {
+export function MobileBottomNav({ developer = false }: { developer?: boolean }) {
   return (
     <nav
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface/95 backdrop-blur border-t border-line/10 flex"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <BottomNavItems />
+      <BottomNavItems developer={developer} />
     </nav>
   );
 }

@@ -27,6 +27,7 @@ import { PushKeeper } from "@/components/pwa";
 import { PUSH_COOKIE } from "@/lib/push/guard";
 import { Suspense } from "react";
 import { AppSplash } from "@/components/ui/app-splash";
+import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
 
 // Every route under here reads the session and shows per-user data —
@@ -59,7 +60,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // Everything the shell needs in ONE round trip: profile (with the colour
   // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam }, { data: notifications }, tour] = await Promise.all([
+  const [{ data: profile }, { teams, currentTeam }, { data: notifications }, tour, developer] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
@@ -74,6 +75,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       .limit(25),
     // Clip's tour: on its own, so a database without 0069 just skips it.
     supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
+    // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
+    isDeveloper(user),
   ]);
   const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
@@ -111,6 +114,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             userAvatarUrl={resolvedAvatar}
             userColor={resolvedColor}
             username={profile?.username ?? null}
+            developer={developer}
           />
           <div className="flex-1 min-w-0 flex flex-col">
             {/* Three columns on desktop so the search bar sits in the true
@@ -158,7 +162,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
               userColor={resolvedColor}
             />
             <main className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
-            <MobileBottomNav />
+            <MobileBottomNav developer={developer} />
           </div>
         </div>
         <WhatsNewHost hold={tourPending} />

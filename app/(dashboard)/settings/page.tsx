@@ -59,7 +59,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const [showAppSetup, accountTeam, sentReports] =
     tab === "account"
       ? await Promise.all([
-          isDeveloper(user!.id),
+          isDeveloper(user),
           getTeamsAndCurrent(supabase).then((t) => t.currentTeam?.id ?? null),
           // Before migration 0068 the table doesn't exist: just no list.
           supabase
@@ -88,7 +88,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (tab === "notifications") {
     const [{ data: rows }, alertPerson, cookieStore] = await Promise.all([
       supabase.from("push_subscriptions").select("id, endpoint, label, created_at, last_sent_at").eq("user_id", user!.id).order("created_at", { ascending: false }),
-      pushConfigured() ? Promise.resolve(false) : isDeveloper(user!.id),
+      pushConfigured() ? Promise.resolve(false) : isDeveloper(user),
       cookies(),
     ]);
     const mine = cookieStore.get(PUSH_COOKIE)?.value ?? null;
@@ -307,7 +307,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <span className="flex-1 min-w-0">
                   <span className="block text-[14px] font-semibold">Developer</span>
                   <span className="block text-[12.5px] text-ink-soft">
-                    App-wide problems: errors, every check in full, the last 3 days. Only developer accounts see this.
+                    The whole app: status, errors and reports, how much the database and storage hold, every team and person. Only developer accounts see this.
                   </span>
                 </span>
                 <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />

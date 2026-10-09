@@ -12,6 +12,15 @@ function send(res, status, body, headers = {}) {
   res.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", ...headers });
   res.end(body === undefined ? "" : JSON.stringify(body));
 }
+const WRITABLE = new Set(["daily_word_plays", ...String(process.env.MOCK_WRITES || "").split(",").filter(Boolean)]);
+// The fixtures are read again on every request; tables that remember writes keep their rows here.
+const stores = new Map();
+const tableRows = (F, name) => {
+  if (!WRITABLE.has(name)) return F.tables[name];
+  if (!stores.has(name)) stores.set(name, [...(F.tables[name] ?? [])]);
+  return stores.get(name);
+};
+
 function applyFilters(rows, params) {
   let out = rows;
   for (const [k, v] of params) {
@@ -151,12 +160,26 @@ function answer(req, res, url, body) {
     }
     const t = /^\/rest\/v1\/([a-z0-9_]+)$/.exec(url.pathname);
     if (t) {
+      // Tables that remember writes (the daily word's plays, and any in MOCK_WRITES=a,b):
+      // inserts are kept, updates change the rows they match.
+      const writable = WRITABLE.has(t[1]);
+      if (writable && req.method === "POST") {
+        const rows = [].concat(body ? JSON.parse(body) : []).map((r) => ({ created_at: new Date().toISOString(), ...r }));
+        tableRows(F, t[1]).push(...rows);
+        return send(res, 201, rows);
+      }
+      if (writable && req.method === "PATCH") {
+        const hit = applyFilters(tableRows(F, t[1]), url.searchParams);
+        const patch = body ? JSON.parse(body) : {};
+        for (const r of hit) Object.assign(r, patch);
+        return send(res, 200, hit);
+      }
       // An update answers with the rows it matched (like "update … returning").
       if (req.method === "PATCH") return send(res, 200, applyFilters(F.tables[t[1]] ?? [], url.searchParams));
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, req.method === "POST" ? 201 : 200, []);
       const table = t[1];
       if (!F.tables[table] && process.env.MOCK_LOG) console.log("   (no fixture for", table + ")");
-      let rows = applyFilters(F.tables[table] ?? [], url.searchParams);
+      let rows = applyFilters(tableRows(F, table) ?? [], url.searchParams);
       const range = req.headers["range"];
       const total = rows.length;
       if (range) {

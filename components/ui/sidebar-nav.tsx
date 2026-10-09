@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BOTTOM_ITEMS, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
+import { BOTTOM_ITEMS, DEVELOPER, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
 import { AppsIcon, LogoutIcon, SettingsIcon } from "./icons";
 import { ClipLogo } from "./clip-logo";
 import { openWhatsNew, SparkIcon } from "./whats-new";
@@ -28,11 +28,12 @@ function isActive(pathname: string, href: string) {
 }
 
 /** Desktop sidebar navigation, in groups, with the current section highlighted. */
-export function SidebarNav() {
+export function SidebarNav({ developer = false }: { developer?: boolean }) {
   const pathname = usePathname();
+  const groups = developer ? [...NAV_GROUPS, { label: "Developer", items: [DEVELOPER] }] : NAV_GROUPS;
   return (
     <nav className="flex flex-col" aria-label="Main">
-      {NAV_GROUPS.map((g, gi) => (
+      {groups.map((g, gi) => (
         <div key={g.label ?? gi} className={gi ? "mt-4" : ""}>
           {g.label && <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{g.label}</div>}
           <div className="flex flex-col gap-0.5">
@@ -62,10 +63,11 @@ export function SidebarNav() {
 }
 
 /** Phone bottom bar: the four most used places + More (everything else). */
-export function BottomNavItems() {
+export function BottomNavItems({ developer = false }: { developer?: boolean }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
-  const moreActive = MORE_ITEMS.some((i) => isActive(pathname, i.href)) || isActive(pathname, "/settings");
+  const moreItems = developer ? [...MORE_ITEMS, DEVELOPER] : MORE_ITEMS;
+  const moreActive = moreItems.some((i) => isActive(pathname, i.href)) || isActive(pathname, "/settings");
   // Close the sheet when you go somewhere.
   useEffect(() => setMore(false), [pathname]);
 
@@ -88,12 +90,12 @@ export function BottomNavItems() {
         <AppsIcon className="w-[22px] h-[22px]" strokeWidth={moreActive ? 2 : 1.75} />
         <span className="text-[10px] font-semibold">More</span>
       </button>
-      {more && <MoreSheet onClose={() => setMore(false)} pathname={pathname} />}
+      {more && <MoreSheet onClose={() => setMore(false)} pathname={pathname} items={moreItems} />}
     </>
   );
 }
 
-function MoreSheet({ onClose, pathname }: { onClose: () => void; pathname: string }) {
+function MoreSheet({ onClose, pathname, items }: { onClose: () => void; pathname: string; items: typeof MORE_ITEMS }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -114,7 +116,7 @@ function MoreSheet({ onClose, pathname }: { onClose: () => void; pathname: strin
           <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {MORE_ITEMS.map(({ href, label, Icon }) => {
+          {items.map(({ href, label, Icon }) => {
             const on = isActive(pathname, href);
             return (
               <Link

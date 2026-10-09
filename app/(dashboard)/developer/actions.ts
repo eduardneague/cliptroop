@@ -16,7 +16,7 @@ async function requireDeveloper() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." } as const;
-  if (!(await isDeveloper(user.id))) return { error: "Only developer accounts can do this." } as const;
+  if (!(await isDeveloper({ id: user.id, email: user.email ?? null }))) return { error: "Only developer accounts can do this." } as const;
   return { user } as const;
 }
 
@@ -59,7 +59,7 @@ export async function sendTestAlert(): Promise<{ error?: string; emails?: number
         recipient_id,
         kind: "app_alert",
         body: `Something broke: ${message}`,
-        metadata: { snippet: "Test alert", where: "developer page", href: "/developer" },
+        metadata: { snippet: "Test alert", where: "developer page", href: "/developer?tab=problems#errors" },
       }))
     );
   }
@@ -72,7 +72,7 @@ export async function sendTestAlert(): Promise<{ error?: string; emails?: number
           subject: `${APP_NAME}: test alert`,
           message,
           linkText: "Open the developer page",
-          href: `${appUrl()}/developer`,
+          href: `${appUrl()}/developer?tab=problems#errors`,
           footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
         })
       )
