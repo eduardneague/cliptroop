@@ -69,9 +69,9 @@ function steps(phone: boolean, mac: boolean): Step[] {
     {
       id: "insights",
       only: "desktop",
-      targets: ["nav-analytics", "nav-team"],
+      targets: ["nav-analytics", "nav-objectives", "nav-team"],
       title: "How it's going",
-      text: "Analytics shows views and growth on every platform. Team is who's on it and what each person can do.",
+      text: "Analytics shows views and growth on every platform. Objectives are the team's goals, filling up live as videos go out. Team is who's on it and what each person can do.",
     },
     {
       id: "calendar",
@@ -85,7 +85,7 @@ function steps(phone: boolean, mac: boolean): Step[] {
       only: "phone",
       targets: ["nav-more"],
       title: "Everything else",
-      text: "Meetings, posting to YouTube, Instagram, Facebook and TikTok, analytics and your team are under More.",
+      text: "Meetings, posting to YouTube, Instagram, Facebook and TikTok, analytics, the team's objectives and your team are under More.",
     },
     {
       id: "search",

@@ -23,6 +23,19 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.14.0",
+    date: "2026-10-10",
+    title: "Objectives: the team's goals, live",
+    changes: [
+      { kind: "new", text: "Objectives: goals for the team that fill up live as videos go out. Shorts a week, Instagram-only reels, TikTok-only shorts, long videos a month, posts on each platform, new ideas, edits, approvals, filming, and the platforms' own numbers (views, followers, likes, watch hours). Each one counts per day, week, month, quarter or year, in the team's time zone." },
+      { kind: "new", text: "Make them yours: narrow any goal to some platforms (posted there, or only there), short types, long video types, Shorts or long video views, or one person's work. As many goals as you like, each with its own colour and place in the list." },
+      { kind: "new", text: "Masters set them in Team settings → Objectives, with a live preview of how the goal would have gone, quick starts, and a different target for any week or month ahead (or that one off) without changing the usual one. Pause, copy, or drag to reorder." },
+      { kind: "new", text: "The Objectives page (in the menu, under Insights): rings for the goals, where each one stands, the pace it needs, a forecast, its history with streaks and the best so far, who helped, and every goal reached in the last 90 days. Open a goal to see everything it counted." },
+      { kind: "new", text: "When a goal is reached, the whole team is congratulated: confetti and Clip on every open screen, a fanfare (with sounds on), and a notification on everyone's phone. Missed it? It shows the next time you open the dashboard or the Objectives page." },
+      { kind: "new", text: "An Objectives widget for the dashboard: the rings fill up live, with each goal's count and what's left. It fits any size, and shows all goals, one cadence, or the ones you pick." },
+    ],
+  },
+  {
     version: "1.13.0",
     date: "2026-10-09",
     title: "The daily word, team tasks, 20 colour themes",

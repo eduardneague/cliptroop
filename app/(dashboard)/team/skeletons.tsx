@@ -5,6 +5,7 @@ import { ROLES } from "@/lib/permissions/roles";
 export const TEAM_TABS = [
   { id: "members", label: "Members" },
   { id: "defaults", label: "Defaults", masterOnly: true },
+  { id: "objectives", label: "Objectives" },
   { id: "accounts", label: "Connected accounts" },
   { id: "appearance", label: "Appearance" },
   { id: "team", label: "Team" },
@@ -128,6 +129,36 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
           </div>
         </Card>
       </div>
+    );
+  }
+  if (tab === "objectives") {
+    return (
+      <section className="rounded-xl border border-line/10 bg-surface p-6" aria-hidden>
+        <div className="flex items-start gap-3 flex-wrap mb-5">
+          <div className="flex-1 min-w-[min(100%,16rem)]">
+            <h2 className={`${H2} mb-1`}>Objectives</h2>
+            <Skeleton className="h-3 w-full max-w-xl mt-2" />
+            <Skeleton className="h-3 w-2/3 max-w-md mt-1.5" />
+          </div>
+          <Skeleton className="h-9 w-32 rounded-lg" />
+        </div>
+        <div className="rounded-2xl border border-line/15 divide-y divide-line/10 overflow-hidden">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3">
+              <Skeleton className="w-8 h-8 rounded-lg" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <Skeleton className={`h-3.5 ${["w-40", "w-52", "w-36"][i]}`} />
+                <Skeleton className="h-3 w-64 max-w-full" />
+              </div>
+              <div className="hidden md:block w-[300px] space-y-1.5">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+              <Skeleton className="h-8 w-16 rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </section>
     );
   }
   if (tab === "accounts") {

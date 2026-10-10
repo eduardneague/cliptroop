@@ -115,7 +115,8 @@ function MoreSheet({ onClose, pathname, items }: { onClose: () => void; pathname
           <ClipLogo size={26} />
           <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        {/* Two columns for four places; three once there are more (Objectives, Developer). */}
+        <div className={`grid gap-2 ${items.length > 4 ? "grid-cols-3" : "grid-cols-2"}`}>
           {items.map(({ href, label, Icon }) => {
             const on = isActive(pathname, href);
             return (

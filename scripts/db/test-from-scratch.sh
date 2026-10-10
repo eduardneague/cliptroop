@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs every migration, in order, on an EMPTY Postgres database, then runs the
 # newest one a second time (a migration that stopped halfway must be safe to
-# run again).
+# run again), then the access checks in supabase/tests/*.test.sql.
 #
 #   TEST_DB_URL=postgres://postgres:postgres@localhost:5432/postgres scripts/db/test-from-scratch.sh
 #
@@ -48,3 +48,15 @@ echo "✓ ${#files[@]} migrations applied to an empty database"
 last="${files[${#files[@]}-1]}"
 apply "$last" "second run"
 echo "✓ $(basename "$last") is safe to run twice"
+
+# Access checks (supabase/tests/*.test.sql) on the database just built: who
+# may read and write what. Each raises on the first thing that's wrong.
+for t in "$ROOT"/supabase/tests/*.test.sql; do
+  [ -e "$t" ] || continue
+  if ! psql "$SCRATCH_URL" -qX -v ON_ERROR_STOP=1 -f "$t" >/dev/null 2>"$LOG"; then
+    echo "✗ $(basename "$t") failed:" >&2
+    grep -v -E 'NOTICE:' "$LOG" >&2 || true
+    exit 1
+  fi
+  echo "✓ $(basename "$t") passed"
+done

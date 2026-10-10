@@ -9,6 +9,7 @@ import { youtubeStep } from "./publishers/youtube";
 import { instagramStep } from "./publishers/instagram";
 import { tiktokStep } from "./publishers/tiktok";
 import { facebookStep } from "./publishers/facebook";
+import { syncObjectives } from "@/modules/objectives/lib/sync";
 
 const NAME = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
 /** Minutes to wait before retry 1, 2, 3, 4, 5. Then it fails. */
@@ -94,7 +95,8 @@ async function save(post: Claimed, r: StepResult, keepLock: boolean) {
   if (r.event) await event(post.id, post.team_id, r.event.kind, r.event.message);
 }
 
-async function runOne(row: Claimed, deadline: number) {
+/** `sent`: the teams that had a post go out (their objectives are counted after the run). */
+async function runOne(row: Claimed, deadline: number, sent?: Set<string>) {
   const admin = createAdminClient();
   let post = row;
   try {
@@ -128,6 +130,7 @@ async function runOne(row: Claimed, deadline: number) {
 
       if (r.status === "published") {
         await markPosted(post, r.permalink ?? null);
+        sent?.add(post.team_id);
         await notify(post, true, r.note ?? "");
         return;
       }
@@ -169,13 +172,23 @@ async function runOne(row: Claimed, deadline: number) {
 /** Runs claimed posts one after another until the time is nearly up (the rest go back for the next run). */
 async function runClaimed(posts: Claimed[], deadline: number) {
   const admin = createAdminClient();
+  const sent = new Set<string>();
   for (const post of posts) {
     if (Date.now() > deadline - 10_000) {
       // Out of time: hand it back for the next run.
       await admin.from("social_posts").update({ locked_until: null }).eq("id", post.id);
       continue;
     }
-    await runOne(post, deadline);
+    await runOne(post, deadline, sent);
+  }
+  // Something went out: the team's objectives are counted again (a goal reached
+  // by an automatic post gets its confetti too). Never holds up or breaks posting.
+  for (const teamId of sent) {
+    try {
+      await syncObjectives(teamId, { change: "posted" });
+    } catch (e) {
+      console.error("[objectives] after posting", e instanceof Error ? e.message : e);
+    }
   }
 }
 

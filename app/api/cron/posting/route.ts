@@ -5,6 +5,7 @@ import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
 import { watchHealth } from "@/lib/health-watch";
 import { recordStatus } from "@/lib/status";
 import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
+import { syncAllObjectives } from "@/modules/objectives/lib/sync";
 
 /**
  * Called by the Supabase timers (pg_cron → pg_net), protected by
@@ -12,7 +13,8 @@ import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
  *   - every minute when a post or a meeting reminder is due;
  *   - every 10 minutes with {"status": true} (0067): check everything,
  *     record it for the status page's hourly bars, alert the developers
- *     about anything app-wide that's down. No posts run on that call.
+ *     about anything app-wide that's down, and count every team's
+ *     objectives (the safety net, 1.14.0). No posts run on that call.
  *   - once a day with {"job": "cleanup"} (03:30 UTC) and
  *     {"job": "analytics"} (05:10 UTC), 0070: lib/daily-jobs.ts.
  */
@@ -40,7 +42,10 @@ async function handle(request: Request) {
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);
-    return NextResponse.json({ ok: true, recorded: s.recorded, problems, ...(s.error ? { error: s.error } : {}) });
+    // Objectives' safety net (1.14.0): every team counted at least every 10 minutes,
+    // so a goal reached by something no action told the server about is still celebrated.
+    const objectives = await syncAllObjectives(15_000).catch((e) => ({ teams: 0, wins: 0, error: e instanceof Error ? e.message : String(e) }));
+    return NextResponse.json({ ok: true, recorded: s.recorded, problems, objectives, ...(s.error ? { error: s.error } : {}) });
   }
   // Meeting reminders first (quick), then the posts.
   const meetings = await runMeetingReminders();

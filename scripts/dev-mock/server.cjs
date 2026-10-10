@@ -4,9 +4,18 @@ const path = require("path");
 const fs = require("fs");
 const FIX = path.join(__dirname, "fixtures.cjs");
 const log = [];
+// The fixtures are read again (so edits apply without a restart), at most once a second.
+let cached = null;
 function fixtures() {
-  delete require.cache[require.resolve(FIX)];
-  return require(FIX);
+  if (cached && Date.now() - cached.at < 1000) return cached.F;
+  const id = require.resolve(FIX);
+  delete require.cache[id];
+  const F = require(FIX);
+  // require() also keeps every fresh copy in module.children: let the old ones go
+  // (otherwise memory grows with every request until the process is killed).
+  module.children = module.children.filter((m) => m.id !== id || m.exports === F);
+  cached = { at: Date.now(), F };
+  return F;
 }
 function send(res, status, body, headers = {}) {
   res.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", ...headers });

@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.13.0" src="https://img.shields.io/badge/version-1.13.0-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.14.0" src="https://img.shields.io/badge/version-1.14.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -117,7 +117,8 @@ audience is, and how much the team made, side by side. Copied every morning.
 - **Your turn, on your phone**: Install it from the browser on iPhone or Android and get a notification when it's your turn. No app store.
 - **Clip**: The clapperboard who shows new people around, cheers when things are done and keeps you company while pages load.
 - **Meetings**: Agenda, notes and action items that land in each person's tasks.
-- **Your dashboard**: Widgets you arrange, from today's tasks and the calendar to what's posting and the numbers.
+- **Objectives**: The team's goals (shorts a week, Instagram-only reels, long videos a month, views) fill up live, and everyone gets confetti when one is reached.
+- **Your dashboard**: Widgets you arrange, from today's tasks and the calendar to what's posting, the numbers and the team's goals.
 - **Thumbnail studio**: Thumbnail ideas side by side, so the team can pick the winner.
 - **Search**: Any video, script or person, from anywhere.
 - **Status**: A public page that shows whether everything is running, hour by hour.

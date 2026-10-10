@@ -41,9 +41,11 @@ import { TasksVisibilityForm } from "./tasks-visibility-form";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { TEAM_TABS, TeamTabSkeleton, teamTab, type TeamTab } from "./skeletons";
+import { ObjectivesSettings } from "./objectives-settings";
+import { getObjectivesBoard } from "@/modules/objectives/lib/board";
 
-export default async function TeamPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab: tabParam } = await searchParams;
+export default async function TeamPage({ searchParams }: { searchParams: Promise<{ tab?: string; edit?: string }> }) {
+  const { tab: tabParam, edit: editParam } = await searchParams;
   const tab: TeamTab = teamTab(tabParam);
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
@@ -71,6 +73,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     setupAny,
     mediaKeep,
     tasksVis,
+    objectivesBoard,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -116,6 +119,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     tab === "defaults" ? getMediaKeep(currentTeam.id) : Promise.resolve(null),
     // Who sees everyone's tasks (0076): its own query, so an older database just says so.
     tab === "defaults" ? supabase.from("teams").select("tasks_visibility").eq("id", currentTeam.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    // Objectives (0078): the team's goals with where each stands now.
+    tab === "objectives" ? getObjectivesBoard(supabase, currentTeam.id, { history: "none" }) : Promise.resolve(null),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -278,6 +283,12 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           </section>
         )}
         </div>
+      )}
+
+      {tab === "objectives" && objectivesBoard && (
+        <section id="objectives" className="rounded-xl border border-line/10 bg-surface p-4 sm:p-6 scroll-mt-20">
+          <ObjectivesSettings teamId={currentTeam.id} canEdit={userIsMaster} initial={objectivesBoard} people={people} editId={editParam ?? null} />
+        </section>
       )}
 
       {tab === "accounts" && (
