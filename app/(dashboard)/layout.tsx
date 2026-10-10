@@ -29,6 +29,8 @@ import { Suspense } from "react";
 import { AppSplash } from "@/components/ui/app-splash";
 import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
+import { ConfettiHost } from "@/components/ui/confetti";
+import { ObjectiveCelebrations } from "@/modules/objectives/components/celebrations";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -167,6 +169,9 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
         <WhatsNewHost hold={tourPending} />
         <TutorialHost pending={tourPending} />
+        {/* Objectives (1.14.0): confetti and Clip for everyone looking when the team reaches one. */}
+        <ConfettiHost />
+        <ObjectiveCelebrations teamId={currentTeam?.id ?? null} />
       </ConfirmProvider>
     </ToastProvider>
   );

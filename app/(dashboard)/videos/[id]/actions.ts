@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { queueObjectivesSync, queueObjectivesSyncFor, type Change } from "@/modules/objectives/lib/sync";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -65,6 +66,7 @@ export async function deleteProject(projectId: string, _teamId?: string) {
   const { error } = await admin.from("long_video_projects").delete().eq("id", projectId);
   if (error) return { error: "Couldn't delete the project. Try again." };
 
+  queueObjectivesSync(check.project.team_id as string);
   revalidatePath("/videos");
   redirect("/videos");
 }
@@ -111,6 +113,7 @@ export async function updateTypeTheme(
 
   revalidatePath("/calendar");
   revalidatePath("/videos");
+  queueObjectivesSyncFor("long", projectId, "any");
   return { success: true };
 }
 
@@ -252,6 +255,7 @@ export async function regressStage(projectId: string) {
 
   revalidatePath("/calendar");
   revalidatePath("/videos");
+  queueObjectivesSyncFor("long", projectId, "stage");
   return { success: true };
 }
 
@@ -316,6 +320,7 @@ export async function advanceStage(projectId: string) {
 
   revalidatePath("/calendar");
   revalidatePath("/videos");
+  queueObjectivesSyncFor("long", projectId, "stage");
   return { success: true };
 }
 
@@ -374,6 +379,7 @@ export async function assignMember(
   revalidatePath("/videos");
 
   revalidatePath("/calendar");
+  queueObjectivesSyncFor("long", projectId, "people");
   return { success: true };
 }
 
@@ -393,6 +399,7 @@ export async function removeAssignee(projectId: string, assigneeRowId: string) {
   revalidatePath("/videos");
 
   revalidatePath("/calendar");
+  queueObjectivesSyncFor("long", projectId, "people");
   return { success: true };
 }
 
@@ -585,10 +592,12 @@ async function notifyStage(projectId: string, stage: PipelineStage, extra = "") 
   );
 }
 
-function refreshLong(projectId: string) {
+function refreshLong(projectId: string, change?: Change) {
   revalidatePath(`/videos/${projectId}`);
   revalidatePath("/videos");
   revalidatePath("/calendar");
+  // The team's objectives are counted again (after the response).
+  if (change) queueObjectivesSyncFor("long", projectId, change);
 }
 
 /** Film: "Filmed and uploaded to the NAS" (+ optional folder path). → Edit */
@@ -599,7 +608,7 @@ export async function markFilmed(projectId: string, nasPath: string): Promise<St
   const msg = stepError(error, "Couldn't mark it filmed. Try again.");
   if (msg) return { error: msg };
   await notifyStage(projectId, "edit", nasPath?.trim() ? `The footage is on the NAS: ${nasPath.trim()}` : "");
-  refreshLong(projectId);
+  refreshLong(projectId, "stage");
   return {};
 }
 
@@ -611,7 +620,7 @@ export async function markEdited(projectId: string, note: string): Promise<StepR
   const msg = stepError(error, "Couldn't mark editing complete. Try again.");
   if (msg) return { error: msg };
   await notifyStage(projectId, "review", "The edit is ready for review.");
-  refreshLong(projectId);
+  refreshLong(projectId, "stage");
   return {};
 }
 
@@ -623,7 +632,7 @@ export async function reviewLong(projectId: string, approve: boolean, note: stri
   const msg = stepError(error, "Couldn't save the review. Try again.");
   if (msg) return { error: msg };
   await notifyStage(projectId, approve ? "package" : "edit", approve ? "" : `Changes requested: ${String(note).trim().slice(0, 200)}`);
-  refreshLong(projectId);
+  refreshLong(projectId, "stage");
   return {};
 }
 
@@ -634,7 +643,7 @@ export async function setLongPosted(projectId: string, platform: string, posted:
   const { data, error } = await supabase.rpc("long_set_posted", { p_project: projectId, p_platform: platform, p_posted: !!posted, p_url: url });
   const msg = stepError(error, "Couldn't update it. Try again.");
   if (msg) return { error: msg };
-  refreshLong(projectId);
+  refreshLong(projectId, "posted");
   return { stage: data as string };
 }
 
@@ -646,7 +655,7 @@ export async function setLongPlatforms(projectId: string, platforms: string[]): 
   const supabase = await createClient();
   const { data, error } = await supabase.from("long_video_projects").update({ platforms: list }).eq("id", projectId).select("id");
   if (error || !data?.length) return { error: "Only the master can change the platforms." };
-  refreshLong(projectId);
+  refreshLong(projectId, "any");
   return {};
 }
 
@@ -674,5 +683,6 @@ export async function setLongScripter(projectId: string, memberId: string, add: 
   else await supabase.from("project_assignees").delete().eq("project_id", projectId).eq("stage", "script").eq("team_member_id", memberId);
   revalidatePath(`/videos/${projectId}`);
   revalidatePath(`/videos/${projectId}/script`);
+  queueObjectivesSyncFor("long", projectId, "people");
   return {};
 }

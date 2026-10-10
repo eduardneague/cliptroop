@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAccessToken } from "@/lib/social/tokens";
 import { FB_GRAPH, hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
 import { facebookEarnings } from "./fb-money";
+import { syncObjectives } from "@/modules/objectives/lib/sync";
 
 /*
  * Copies the platforms' numbers into our analytics tables (migration 0058).
@@ -730,6 +731,14 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
       const message = (e instanceof Error ? e.message : "Unknown error").slice(0, 300);
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: new Date().toISOString(), last_error: message }, { onConflict: "team_id,platform" });
       out.push({ platform: a.platform, ok: false, error: message, rows: 0 });
+    }
+  }
+  // New numbers can finish a views / followers objective (yesterday's numbers arrive this morning).
+  if (out.some((r) => r.ok)) {
+    try {
+      await syncObjectives(teamId, { change: "numbers" });
+    } catch (e) {
+      console.error("[objectives] after analytics", e instanceof Error ? e.message : e);
     }
   }
   return out;

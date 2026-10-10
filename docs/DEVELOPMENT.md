@@ -22,7 +22,11 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
   Merge with a pull request staging → main, "Create a merge commit" (never
   squash), and never delete `staging`.
 - Every push runs **CI**: type check, lint, `npm test`, a production build,
-  and every migration on an empty database.
+  and every migration on an empty database, followed by the access checks in
+  `supabase/tests/*.test.sql` (plain SQL that signs in as different people
+  and raises when someone can read or write what they shouldn't; start with
+  `objectives.test.sql`). Run it yourself with `npm run db:test` and a
+  throwaway Postgres (`TEST_DB_URL`).
 - Files in `supabase/migrations/` run in order on both Supabase projects.
   The **Database** GitHub Action applies them (push to `staging` → staging,
   push to `main` → production); see `scripts/db/README.md`. A migration
@@ -58,7 +62,7 @@ when set, Vercel's protection bypass:
 | Job | When | Body | What it does |
 |---|---|---|---|
 | `vplanner-posting` | every minute, when something is due | `{}` | posts, meeting reminders |
-| `vplanner-status` | every 10 minutes | `{"status": true}` | the status page's hourly bars, alerts |
+| `vplanner-status` | every 10 minutes | `{"status": true}` | the status page's hourly bars, alerts, the objectives' safety-net count |
 | `vplanner-cleanup` | 03:30 UTC | `{"job": "cleanup"}` | deletes posted shorts' video files after the team's choice, refreshes sign-ins |
 | `vplanner-analytics` | 05:10 UTC | `{"job": "analytics"}` | copies every team's numbers |
 
@@ -236,6 +240,31 @@ Page's Content Monetization earnings (`platform = 'facebook'`, content
 `modules/analytics/lib/fb-money.ts` reads any of them (tests/fb-money.test.ts).
 TikTok and Instagram have no earnings API: masters add those by hand
 (`revenue_entries`).
+
+**Objectives (0078).** `objectives` holds each goal (masters write it: a
+metric id, a period, a target, `filters` jsonb, a colour, its position,
+paused), `objective_targets` a different target for one period (0 = that
+period off), and `objective_periods` the server's record of the current and
+previous periods (value, `reached_at`, the winner). Only the service role
+writes that record, through `objective_record()`: a period is won once per
+target (raising the target past the count can win again), and masters' own
+changes record quietly (no confetti). Progress itself is never stored: it's
+worked out from the data every time by `modules/objectives/lib/`:
+`periods.ts` (days, weeks Monday to Sunday, months, quarters, years in the
+team's time zone), `metrics.ts` (what each metric is, its filters and words),
+`hits.ts` (what counted and on which day: pure and tested),
+`compute.ts` (pace, forecast, streaks), `sources.ts` (loads only the rows the
+goals need), `board.ts` (the page, widget and Team tab data) and `sync.ts`
+(records wins and congratulates the whole team with `sendNotifications`, kind
+`objective_reached`). The count runs after every change that can move a goal
+(shorts and long video actions, the posting worker, the analytics sync:
+`queueObjectivesSync*`), when a page or widget loads (at most every 30 s per
+team, `objective_claim_sync()`), and in the 10-minute status job. Screens
+listen to `objective_periods` (plus `objectives`, `objective_targets`) and
+reload through `loadObjectivesBoard()`; `ObjectiveCelebrations` (app shell)
+throws the confetti for new wins and for the ones missed in the last two
+days. A new metric = an entry in `METRICS` and its case in `hitsFor()` (with
+a test); the database only checks the id's shape, so no migration.
 
 **Who may change what.** Dates (Calendar moves, long video dates): masters and
 schedulers, enforced in the database (shorts' functions, 0073 for long videos).

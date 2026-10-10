@@ -13,7 +13,7 @@ import {
   respondToOwnershipTransfer,
   getNotificationHistory,
 } from "@/app/(dashboard)/notification-actions";
-import { BellIcon, HistoryIcon } from "./icons";
+import { BellIcon, HistoryIcon, TrophyIcon } from "./icons";
 import { Dialog } from "./dialog";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,7 @@ import { ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { sounds } from "@/lib/sounds";
 import { startNavProgress } from "@/components/ui/nav-progress";
+import { periodPhrase } from "@/modules/objectives/lib/periods";
 
 const PLATFORM_NAMES: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 
@@ -81,6 +82,14 @@ export type NotificationItem = {
     /** feedback: a bug report or a suggestion, and how many files came with it. */
     feedbackKind?: "bug" | "idea";
     files?: number;
+    /** objective_reached (1.14.0): which goal, for which period, and what took it over the line. */
+    objectiveTitle?: string;
+    periodLabel?: string;
+    valueText?: string;
+    targetText?: string;
+    unit?: string;
+    color?: string;
+    winner?: { kind?: string; number?: number; title?: string; people?: string[] } | null;
   } | null;
 };
 
@@ -118,6 +127,13 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   const TypeIcon = n.short_id ? ShortsIcon : n.project_id ? VideoIcon : null;
   const failed = m?.ok === false;
 
+  if (n.kind === "objective_reached") {
+    return (
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }} aria-label="Objective reached">
+        <TrophyIcon className="w-4 h-4" />
+      </span>
+    );
+  }
   if (n.kind?.startsWith("meeting") && !m?.actor) {
     return (
       <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-violet/15 text-violet" aria-label="Meeting">
@@ -408,6 +424,14 @@ function RichBody({ n }: { n: NotificationItem }) {
           <span className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
         </>
       );
+    case "objective_reached": {
+      return (
+        <>
+          <b>{m.objectiveTitle}</b> reached: {m.valueText} of {m.targetText} {m.unit} {periodPhrase(m.periodLabel ?? "")}. Well done, everyone!
+          {m.winner?.number ? <span className="text-ink-faint"> #{m.winner.number} took it over the line.</span> : null}
+        </>
+      );
+    }
     case "meeting_scheduled":
     case "meeting_changed":
     case "meeting_cancelled":

@@ -18,6 +18,7 @@ import { TodoWidget } from "./todo-widget";
 import { ClockWidget, MiniCalendarWidget, TeamsWidget } from "./small-widgets";
 import { PipelineWidget, PostingTodayWidget, UpcomingLongsWidget, UpcomingShortsWidget, WeatherCitySearch, WeatherWidget } from "./team-widgets";
 import { WordWidget } from "./word-widget";
+import { ObjectivesWidget, ObjectivesWidgetSettingsForm } from "./objectives-widget";
 import { MeetingsWidget } from "./meetings-widget";
 import { AudienceMapWidget, FollowersWidget, OutputWidget, TopVideosWidget, ViewsWidget } from "./analytics-widgets";
 import type { Meeting } from "@/modules/meetings/lib/types";
@@ -190,6 +191,7 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
         {editingWidget && (
           <WidgetSettings
             w={editingWidget}
+            teamId={data.teamId}
             onChange={(settings) => {
               // Settings apply right away (saved with the layout).
               const apply = (ws: WidgetInstance[]) => ws.map((x) => (x.id === editingWidget.id ? { ...x, settings: { ...x.settings, ...settings } } : x));
@@ -610,9 +612,11 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <OutputWidget teamId={data.teamId} />;
     case "word":
       return <WordWidget />;
+    case "objectives":
+      return <ObjectivesWidget teamId={data.teamId} settings={w.settings} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives"];
 
 /** Measures its content box so widgets can adapt to the space they get. */
 function Measured({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -816,8 +820,9 @@ function LibraryTile({ type, added, data, onAdd }: { type: WidgetType; added: bo
 // Per-widget settings
 // ---------------------------------------------------------------------------
 
-function WidgetSettings({ w, onChange }: { w: WidgetInstance; onChange: (s: Record<string, unknown>) => void }) {
+function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: string; onChange: (s: Record<string, unknown>) => void }) {
   const s = w.settings ?? {};
+  if (w.type === "objectives") return <ObjectivesWidgetSettingsForm teamId={teamId} settings={s} onChange={onChange} />;
   const row = "flex items-center justify-between gap-4 py-3 border-b border-line/10 last:border-none";
   const Switch = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => (
     <button type="button" role="switch" aria-checked={on} onClick={() => set(!on)} className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0" style={{ background: on ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}>

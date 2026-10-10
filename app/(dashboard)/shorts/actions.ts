@@ -6,6 +6,7 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, type RoleId } from "@/lib/permissions/roles";
 import { actorMeta, sendNotifications, type NotificationInsert } from "@/lib/notify";
+import { queueObjectivesSync, queueObjectivesSyncFor, type Change } from "@/modules/objectives/lib/sync";
 import {
   PLATFORMS,
   isPlatform,
@@ -113,12 +114,16 @@ function notifyMany(
   return sendNotifications(unique.map(build));
 }
 
-/** Every page that shows shorts: the list, the calendar, posting. */
-function revalidateShort(id?: string) {
+/**
+ * Every page that shows shorts: the list, the calendar, posting. `change`:
+ * what moved, so the team's objectives are counted again (after the response).
+ */
+function revalidateShort(id?: string, change?: Change) {
   revalidatePath("/shorts");
   revalidatePath("/calendar");
   revalidatePath("/posting");
   if (id) revalidatePath(`/shorts/${id}`);
+  if (id && change) queueObjectivesSyncFor("short", id, change);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +252,7 @@ export async function createShort(input: {
   }
 
   revalidateShort();
+  queueObjectivesSync(currentTeam.id, { change: "created" });
   return { id: data.id, number: data.entry_number, plannedDate: (dated?.planned_date as string | null) ?? null };
 }
 
@@ -318,7 +324,7 @@ export async function updateShortDetails(
   if (error) return { error: friendlyDbError(error, "Couldn't save. Try again.") };
   if (!data || data.length === 0) return { error: "Short not found." };
 
-  revalidateShort(id);
+  revalidateShort(id, "any");
   return {};
 }
 
@@ -374,7 +380,7 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
     }));
   }
 
-  revalidateShort(id);
+  revalidateShort(id, "people");
   return {};
 }
 
@@ -441,7 +447,7 @@ export async function sendShortToEditing(id: string): Promise<Result> {
     body: `#${short.entry_number} "${short.title}" is ready for you to edit.`,
   }));
 
-  revalidateShort(id);
+  revalidateShort(id, "stage");
   return {};
 }
 
@@ -469,7 +475,7 @@ export async function submitShortForReview(id: string): Promise<Result> {
     body: `${actor.name} finished editing #${short.entry_number} "${short.title}". Ready for your review.`,
   }));
 
-  revalidateShort(id);
+  revalidateShort(id, "stage");
   return {};
 }
 
@@ -539,7 +545,7 @@ export async function reviewShort(
     ]);
   }
 
-  revalidateShort(id);
+  revalidateShort(id, "stage");
   return {};
 }
 
@@ -560,7 +566,7 @@ export async function moveShortStage(id: string, to: ShortStage): Promise<Result
   const res = await setStage(supabase, id, short.stage, to);
   if (res.error) return res;
 
-  revalidateShort(id);
+  revalidateShort(id, "stage");
   return {};
 }
 
@@ -592,7 +598,7 @@ export async function setShortPlatformPosted(
     if (error) return { error: friendlyDbError(error, "Couldn't update. Only the master or a scheduler can.") };
   }
 
-  revalidateShort(id);
+  revalidateShort(id, "posted");
   return {};
 }
 
@@ -659,6 +665,7 @@ export async function deleteShort(
   }
 
   revalidateShort();
+  if (before?.team_id) queueObjectivesSync(before.team_id as string);
   return { vacated };
 }
 
@@ -737,7 +744,7 @@ export async function setShortScripter(id: string, memberId: string, add: boolea
     if (error) return { error: friendlyDbError(error, "Couldn't remove the scripter. Only the master or a scheduler can.") };
   }
 
-  revalidateShort(id);
+  revalidateShort(id, "people");
   return {};
 }
 

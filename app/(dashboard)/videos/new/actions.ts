@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
+import { queueObjectivesSync } from "@/modules/objectives/lib/sync";
 
 export type CreateProjectState = { error?: string } | undefined;
 
@@ -98,5 +99,7 @@ export async function createProject(
   const platforms = formData.getAll("platforms").map(String).filter((x) => ["youtube", "facebook", "instagram", "tiktok"].includes(x));
   if (platforms.length) await supabase.from("long_video_projects").update({ platforms }).eq("id", project.id);
 
+  // A new idea can move the team's objectives (counted again after the response).
+  queueObjectivesSync(currentTeam.id, { change: "created" });
   redirect(`/videos/${project.id}`);
 }

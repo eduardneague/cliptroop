@@ -4,6 +4,9 @@ const U = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-0000
 const NOW = Date.parse("2026-10-03T09:00:00Z");
 const day = (n) => new Date(NOW + n * 86400000).toISOString().slice(0, 10);
 const at = (n, h = 10) => new Date(NOW + n * 86400000 + (h - 9) * 3600000).toISOString();
+// MOCK_USER=2, 3 or 4: signed in as Maria, Andrei or Ioana instead of Edu (the owner): not masters.
+// (Set it for the screenshot scripts too: cookie.cjs reads the user from here.)
+const ME = Math.max(0, Math.min(3, Number(process.env.MOCK_USER || 1) - 1));
 const people = [
   { id: U[0], username: "edu", full_name: "Edu Marin", email: "edu@example.com", avatar_url: null, color: "#e8630d" },
   { id: U[1], username: "maria", full_name: "Maria Popescu", email: "maria@example.com", avatar_url: null, color: "#583ac8" },
@@ -39,8 +42,18 @@ const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-output", type: "output", x: 10, y: 10, w: 2, h: 2 },
   { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
   { id: "w-word", type: "word", x: 6, y: 13, w: 2, h: 4 },
+  { id: "w-objectives", type: "objectives", x: 8, y: 13, w: 4, h: 4 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+// MOCK_LAYOUT=objectives: the Objectives widget at MOCK_OBJ_SIZE (columns x rows, default 4x3) with a few others,
+// MOCK_OBJ_SHOW=week (or day, month…) shows one cadence, MOCK_OBJ_IDS=1,2 picks objectives by number.
+const [OW, OH] = String(process.env.MOCK_OBJ_SIZE || "4x3").split("x").map(Number);
+const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
+  { id: "w-objectives", type: "objectives", x: 0, y: 0, w: OW, h: OH, settings: { show: process.env.MOCK_OBJ_SHOW || "all", ids: String(process.env.MOCK_OBJ_IDS || "").split(",").filter(Boolean).map((n) => `0b000000-0000-4000-8000-${n.padStart(12, "0")}`) } },
+  { id: "w-tasks", type: "tasks", x: Math.min(OW, 8), y: 0, w: 4, h: 5 },
+  { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
+  { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
+] };
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -92,6 +105,8 @@ const shorts = SHORT_TITLES.map((title, i) => {
     short_videos: { entry_number: 231 + i, title, team_id: TEAM },
   };
 });
+// ---- Objectives (0078): MOCK_OBJECTIVES=1, around the real "now" (scripts/dev-mock/objectives.cjs).
+const OBJ = process.env.MOCK_OBJECTIVES ? require("./objectives.cjs").objectivesFixtures({ TEAM, U, people, members, base: shorts }) : null;
 // ---- Long videos
 const LONG = [
   ["The real cost of living in Bucharest", "publish", 6, "Documentary"],
@@ -135,7 +150,8 @@ const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 const daily = [];
 const countriesRows = [];
 const CC = [["RO", 0.42], ["US", 0.17], ["MD", 0.08], ["GB", 0.06], ["DE", 0.055], ["IT", 0.05], ["ES", 0.035], ["FR", 0.03], ["CA", 0.02], ["AU", 0.015], ["NL", 0.012], ["HU", 0.012], ["PL", 0.01], ["BR", 0.008], ["IN", 0.008], ["JP", 0.004], ["MX", 0.004], ["ZA", 0.003]];
-for (let d = -60; d <= 0; d++) {
+const LAST_DAY = OBJ ? Math.max(0, Math.round((Date.parse(OBJ.today) - NOW) / 86400000) - 1) : 0;
+for (let d = OBJ ? -90 : -60; d <= LAST_DAY; d++) {
   const dd = day(d);
   const yt = Math.round(14000 + 3000 * Math.sin(d / 3.1) + 5000 * rnd() + d * -40);
   const ig = Math.round(6200 + 1500 * Math.sin(d / 4) + 2000 * rnd());
@@ -288,6 +304,10 @@ function sampleNotifications() {
   const actor = (i) => ({ name: people[i].full_name.split(" ")[0], avatarUrl: null });
   const team = { name: "Viverro Main", logoUrl: null, color: "#e8630d" };
   const list = [
+    // MOCK_OBJECTIVES=1: the team reached an objective (1.14.0).
+    ...(process.env.MOCK_OBJECTIVES
+      ? [[0.1, false, "objective_reached", { team, objectiveId: "0b000000-0000-4000-8000-000000000002", objectiveTitle: "Instagram-only reels", color: "magenta", periodLabel: "This week", valueText: "3", targetText: "3", unit: "reels", winner: { kind: "short", number: 227, title: "Why the sky is blue (part 4)", people: ["maria"] }, href: "/objectives?o=0b000000-0000-4000-8000-000000000002" }], [30, true, "objective_reached", { team, objectiveId: "0b000000-0000-4000-8000-000000000001", objectiveTitle: "Shorts every week", color: "blue", periodLabel: "Week of Sep 21", valueText: "12", targetText: "10", unit: "shorts", winner: null, href: "/objectives?o=0b000000-0000-4000-8000-000000000001" }]]
+      : []),
     [0.3, false, "short_review_ready", { actor: actor(2), shortNumber: 231, shortTitle: "Why cats knock things over" }],
     [2, false, "social_post", { ok: true, platform: "tiktok", shortNumber: 229, shortTitle: "Pasta from scratch" }],
     [5, true, "short_changes_requested", { actor: actor(3), shortNumber: 230, shortTitle: "Rainy day ideas", note: "Captions a bit bigger please" }],
@@ -304,7 +324,7 @@ function sampleNotifications() {
   ];
   return list.map(([hoursAgo, read, kind, metadata], i) => ({
     id: `eeeeeeee-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
-    recipient_id: people[0].id,
+    recipient_id: people[ME].id,
     body: "",
     project_id: null,
     short_id: null,
@@ -323,9 +343,12 @@ function sampleNotifications() {
 module.exports = {
   TEAM,
   U,
-  user: { id: U[0], aud: "authenticated", role: "authenticated", email: "edu@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
+  user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // Objectives (0078): the server's count says "counted moments ago", so the mock never records wins.
+    objective_claim_sync: false,
+    objective_record: [],
     // The developer's Usage page (0075). MOCK_USAGE_FULL=1: the database at 94 % of the Free plan.
     developer_usage: () => developerUsage(),
     // My tasks → Team (0076): MOCK_TEAM_TASKS=team or masters shares them.
@@ -338,7 +361,7 @@ module.exports = {
     ],
     // MOCK_NO_COMMENT=1: the sample user isn't on the script (reads comments, can't add them).
     can_comment_script: !process.env.MOCK_NO_COMMENT,
-    is_master_of: true,
+    is_master_of: ME === 0,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
     // "Ready for review / staging" (0062): Script → Review → Staging of short #231.
     script_hand_off: (b) => {
@@ -374,10 +397,10 @@ module.exports = {
     team_members: members,
     notifications: process.env.MOCK_NOTIFS === "0" ? [] : sampleNotifications(),
     role_colors: [],
-    short_videos: shorts,
-    short_video_posts: shorts.flatMap((x) => x.short_video_posts.map((p) => ({ ...p, short_id: x.id, short_videos: { team_id: TEAM, entry_number: x.entry_number, title: x.title } }))),
-    short_scripters: shorts.map((x) => ({ short_id: x.id, team_member_id: members[1].id })),
-    short_video_events: shorts.flatMap((x) => x.short_video_events.map((e) => ({ ...e, short_id: x.id, short_videos: { team_id: TEAM } }))),
+    short_videos: OBJ ? [...shorts, ...OBJ.shorts] : shorts,
+    short_video_posts: shorts.flatMap((x) => x.short_video_posts.map((p) => ({ ...p, short_id: x.id, short_videos: { team_id: TEAM, entry_number: x.entry_number, title: x.title } }))).concat(OBJ ? OBJ.shortPosts : []),
+    short_scripters: (OBJ ? [...shorts, ...OBJ.shorts] : shorts).map((x) => ({ short_id: x.id, team_member_id: members[1].id })),
+    short_video_events: shorts.flatMap((x) => x.short_video_events.map((e) => ({ ...e, short_id: x.id, short_videos: { team_id: TEAM } }))).concat(OBJ ? OBJ.shortEvents : []),
     // MOCK_FILES=1: one uploaded video per short past Script (Team → Defaults → Video files shows the total).
     short_video_versions: process.env.MOCK_FILES
       ? shorts
@@ -388,14 +411,17 @@ module.exports = {
           .sort((a, b) => b.version_number - a.version_number)
       : [],
     short_video_comments: [],
-    long_video_projects: longs,
+    long_video_projects: OBJ ? [...longs, ...OBJ.longs] : longs,
     project_titles: titles,
     project_assignees: assignees,
     project_comments: [],
     project_thumbnails: [],
     comment_attachments: [],
-    long_video_posts: [],
-    long_video_scripters: longs.map((l) => ({ project_id: l.id, team_member_id: members[1].id })),
+    long_video_posts: OBJ ? OBJ.longPosts : [],
+    long_video_scripters: (OBJ ? [...longs, ...OBJ.longs] : longs).map((l) => ({ project_id: l.id, team_member_id: members[1].id })),
+    objectives: OBJ ? OBJ.objectives : [],
+    objective_targets: OBJ ? OBJ.targets : [],
+    objective_periods: OBJ ? OBJ.periods : [],
     package_entries: packageEntries,
     scripts: scriptDocs,
     script_comments: [],

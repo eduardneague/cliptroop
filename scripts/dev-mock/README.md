@@ -18,6 +18,7 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
 #    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
 #    MOCK_TOUR=1 the sample user hasn't seen Clip's tour yet (it starts on the dashboard),
+#    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),
 #    MOCK_NOTIFS=0 no notifications (otherwise 13 over the last 12 days, for the bell and its History),
 #    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),
 #    MOCK_VIDEO=/path/to/any.mp4 the file those videos play (Posting card preview, review player;
@@ -28,7 +29,11 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_POSTS=1 a busy posting week around the real "now" (Posting's filters, the Posting today widget),
 #    MOCK_USAGE_FULL=1 the developer's Usage page with the database nearly full (Free plan),
 #    MOCK_TEAM_TASKS=team (or masters) the team shares everyone's tasks (My tasks → Team),
-#    MOCK_WRITES=table1,table2 those tables keep what's inserted / updated (daily_word_plays always does)
+#    MOCK_WRITES=table1,table2 those tables keep what's inserted / updated (daily_word_plays always does),
+#    MOCK_OBJECTIVES=1 eight objectives with 12 weeks of shorts and a year of long videos around the real "now"
+#    (objectives.cjs; extra shorts and long videos appear on the other pages too), MOCK_CHEER=1 their wins of the
+#    last two days not seen yet (the "While you were away" card), MOCK_LAYOUT=objectives the Objectives widget at
+#    MOCK_OBJ_SIZE=6x3 (columns x rows; MOCK_OBJ_SHOW=week one cadence, MOCK_OBJ_IDS=1,2 picked objectives)
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

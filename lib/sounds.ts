@@ -120,6 +120,14 @@ export const sounds = {
       [523.3, 659.3, 784, 1046.5].forEach((f, k) => note(ac, f, k * 0.075, 0.22, 0.04));
       note(ac, 1568, 0.33, 0.45, 0.03);
     }),
+  /** An objective reached: a proper fanfare (da da da DAAA), a ringing chord and a sparkle on top. */
+  fanfare: () =>
+    play((ac) => {
+      [392, 523.3, 659.3].forEach((f, k) => note(ac, f, k * 0.12, 0.17, 0.045, "triangle"));
+      note(ac, 784, 0.36, 0.62, 0.055, "triangle");
+      [523.3, 659.3, 784, 1046.5].forEach((f) => note(ac, f, 0.4, 1.1, 0.02));
+      [1568, 2093, 2637, 3136].forEach((f, k) => note(ac, f, 0.62 + k * 0.07, 0.3, 0.012));
+    }),
 };
 
 export type SoundName = keyof typeof sounds;
