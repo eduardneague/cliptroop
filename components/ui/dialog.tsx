@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { CloseIcon } from "./icons";
 
 /**
@@ -29,23 +30,29 @@ export function Dialog({
   const titleId = useId();
   const boxRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+  // Set up once per opening: a parent that re-renders (live updates, a new
+  // inline onClose) never moves the focus or resets the scroll inside.
+  const close = useLatest(onClose);
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
     opener.current = document.activeElement as HTMLElement | null;
     const box = boxRef.current;
-    requestAnimationFrame(() => {
+    const raf = requestAnimationFrame(() => {
       const first = box?.querySelector<HTMLElement>(
         '[data-autofocus], button:not([disabled]):not([data-close]), input:not([disabled]), textarea, [tabindex="0"]'
       );
-      (first ?? box)?.focus();
+      // Without scrolling: a long window opens at its top even when the
+      // first button is at the bottom (What's new's "Earlier updates").
+      (first ?? box)?.focus({ preventScroll: true });
     });
 
     function onKey(e: KeyboardEvent) {
       // Inner menus (dropdowns, calendar) handle their own Esc first.
       if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
-        onClose();
+        close.current();
       }
       if (e.key === "Tab" && box) {
         const items = Array.from(
@@ -64,14 +71,14 @@ export function Dialog({
       }
     }
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-      opener.current?.focus?.();
+      // Back to what opened it (unless it's gone, or focus already moved to another popup).
+      const back = opener.current;
+      if (back && back.isConnected && (!document.activeElement || document.activeElement === document.body || box?.contains(document.activeElement))) back.focus?.({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open, close]);
 
   if (!open) return null;
 

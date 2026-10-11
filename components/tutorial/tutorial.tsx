@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { usePathname, useRouter } from "next/navigation";
 import { Mascot } from "@/components/ui/mascot";
 import { quietWhatsNewCard } from "@/components/ui/whats-new";
@@ -295,13 +296,9 @@ function Tour({
     const onResize = () => setView({ w: window.innerWidth, h: window.innerHeight });
     onResize();
     window.addEventListener("resize", onResize);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("resize", onResize);
-      document.body.style.overflow = prev;
-    };
+    return () => window.removeEventListener("resize", onResize);
   }, []);
+  useScrollLock();
 
   // Light up this step's part of the app and put the bubble beside it.
   useLayoutEffect(() => {
@@ -484,7 +481,7 @@ function Tour({
                   <span
                     key={k}
                     aria-hidden
-                    className={`h-1.5 rounded-full transition-all duration-300 ${k + 1 === i ? "w-4 bg-amber" : k + 1 < i ? "w-1.5 bg-amber/50" : "w-1.5 bg-line/25"}`}
+                    className={`h-1.5 rounded-[3px] transition-all duration-300 ${k + 1 === i ? "w-4 bg-amber" : k + 1 < i ? "w-1.5 bg-amber/50" : "w-1.5 bg-line/25"}`}
                   />
                 ))}
               </span>

@@ -86,7 +86,7 @@ export function FiltersMenu({ sections, chips }: { sections: FilterSection[]; ch
           key={c.key}
           href={c.clearHref}
           scroll={false}
-          className="inline-flex items-center gap-1 rounded-full bg-surface-2 border border-line/15 pl-2.5 pr-1.5 h-7 text-[12px] font-semibold text-ink hover:border-line/30"
+          className="inline-flex items-center gap-1 rounded-lg bg-surface-2 border border-line/15 pl-2.5 pr-1.5 h-7 text-[12px] font-semibold text-ink hover:border-line/30"
           aria-label={`Remove filter: ${c.label}`}
         >
           {c.label}
@@ -123,7 +123,7 @@ export function FiltersMenu({ sections, chips }: { sections: FilterSection[]; ch
                         {it.active && <CheckIcon className="w-3 h-3 text-white" />}
                       </span>
                     ) : (
-                      <span className={`w-4 h-4 rounded-full border-2 ${it.active ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} />
+                      <span className={`w-4 h-4 rounded-[4px] border-2 ${it.active ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} />
                     )}
                     <span className="flex-1">{it.label}</span>
                     {it.count !== undefined && <span className="text-[12px] text-ink-soft tabular-nums">{it.count}</span>}

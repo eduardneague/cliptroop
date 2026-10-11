@@ -116,7 +116,7 @@ export function Slate() {
               <div className="ld-chalk text-[30px] sm:text-[38px] font-semibold leading-tight">{APP_NAME}</div>
             </div>
             <span className="mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-bold tracking-[0.14em] text-[rgb(246_240_228/0.6)]">
-              <span className="w-2 h-2 rounded-full bg-[#E5484D] animate-pulse" />
+              <span className="w-2 h-2 rounded-[3px] bg-[#E5484D] animate-pulse" />
               REC
             </span>
           </div>
@@ -190,14 +190,14 @@ function Scene({ n, scene, flip }: { n: number; scene: (typeof SCENES)[number]; 
       <article className={`grid gap-8 lg:gap-14 items-center lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}>
         <div className="max-w-[32rem]">
           <div className="flex items-center gap-3 mb-4">
-            <span className="w-9 h-[7px] rounded-full ld-stripes" aria-hidden />
+            <span className="w-9 h-[7px] rounded-[3px] ld-stripes" aria-hidden />
             <span className="ld-scene-mark text-[17px] text-amber">Scene {n}</span>
           </div>
           <h3 className="font-display text-[32px] sm:text-[40px] font-semibold leading-[1.05] tracking-[-0.02em]">{scene.title}</h3>
           <p className="mt-4 text-[16px] leading-relaxed text-ink-soft">{scene.text}</p>
           <ul className="mt-5 flex flex-wrap gap-2">
             {scene.facts.map((f) => (
-              <li key={f} className="rounded-full border border-line/15 px-3 h-8 inline-flex items-center text-[13px] text-ink-soft">
+              <li key={f} className="rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[13px] text-ink-soft">
                 {f}
               </li>
             ))}
@@ -244,7 +244,7 @@ export function Landing() {
               <p className="mt-4 text-[17px] leading-relaxed text-[rgb(246_240_228/0.75)]">
                 When a script is handed to you, a cut needs your review or a short goes live, you hear about it right away, in the app and on your phone. Add {APP_NAME} to your home screen on iPhone or Android: no app store, nothing to update.
               </p>
-              <div className="mt-8 h-[7px] w-24 rounded-full ld-stripes" aria-hidden />
+              <div className="mt-8 h-[7px] w-24 rounded-[3px] ld-stripes" aria-hidden />
             </div>
             <PhoneVignette />
           </Play>

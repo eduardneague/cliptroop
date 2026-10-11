@@ -8,7 +8,7 @@
  * shimmers. That way the page "arrives" in place instead of swapping.
  */
 export function Skeleton({ className = "" }: { className?: string }) {
-  // Own rounding when the caller gives one (rounded-full, rounded-xl…), so
+  // Own rounding when the caller gives one (rounded-lg, rounded-xl…), so
   // the two never fight over which wins in the CSS.
   const round = /(^|\s)rounded/.test(className) ? "" : "rounded-md ";
   return <div aria-hidden className={`skeleton ${round}${className}`} />;
@@ -76,7 +76,7 @@ export function SkeletonTabs({ tabs, active }: { tabs: string[]; active?: string
           className={`relative px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap ${t === active ? "text-ink" : "text-ink-faint"}`}
         >
           {t}
-          {t === active && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-amber" />}
+          {t === active && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber" />}
         </span>
       ))}
     </div>
@@ -129,10 +129,10 @@ export function SkeletonSteps({ labels }: { labels: string[] }) {
       {labels.map((label, i) => (
         <div key={label} className="flex items-center flex-shrink-0">
           <div className="flex flex-col items-center gap-1.5 min-w-[64px] sm:min-w-[76px] pt-1">
-            <div className="w-7 h-7 rounded-full border-2 border-line/20 flex items-center justify-center text-[11px] font-bold text-ink-faint">{i + 1}</div>
+            <div className="w-7 h-7 rounded-lg border-2 border-line/20 flex items-center justify-center text-[11px] font-bold text-ink-faint">{i + 1}</div>
             <span className="text-[10.5px] font-bold whitespace-nowrap text-ink-faint">{label}</span>
           </div>
-          {i < labels.length - 1 && <div className="w-5 sm:w-8 h-[2px] mb-6 rounded-full bg-line/15" />}
+          {i < labels.length - 1 && <div className="w-5 sm:w-8 h-[2px] mb-6 rounded-[2px] bg-line/15" />}
         </div>
       ))}
     </div>

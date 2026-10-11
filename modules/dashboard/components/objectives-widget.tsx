@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Mascot } from "@/components/ui/mascot";
-import { CheckIcon } from "@/components/ui/icons";
+import { CheckIcon, PlusIcon } from "@/components/ui/icons";
+import { useNewObjective } from "@/modules/objectives/components/new-objective";
 import { useLiveBoard } from "@/modules/objectives/components/use-live-board";
 import { Meter, Rings, StatusPill, useWhen, type Ring } from "@/modules/objectives/components/parts";
 import { progressWords } from "@/modules/objectives/components/objective-card";
@@ -20,6 +22,7 @@ import { useBox } from "./widget-box";
  */
 
 export type ObjectivesWidgetSettings = { show?: "all" | PeriodKind; ids?: string[] };
+
 
 const daysWord = (kind: PeriodKind, n: number) => {
   const s = timeLeft(kind, n);
@@ -50,11 +53,11 @@ function Row({ o, wide }: { o: ObjectiveView; wide: boolean }) {
           {c.target > 0 ? <>/{formatAmount(o.metric, c.target)}</> : null}
         </span>
         {reached ? (
-          <span className="w-4 h-4 rounded-full bg-green/15 text-green flex items-center justify-center flex-shrink-0" title="Reached">
+          <span className="w-4 h-4 rounded-[4px] bg-green/15 text-green flex items-center justify-center flex-shrink-0" title="Reached">
             <CheckIcon className="w-2.5 h-2.5" />
           </span>
         ) : c.status === "behind" ? (
-          <span className="w-1.5 h-1.5 rounded-full bg-coral flex-shrink-0" title="Behind" />
+          <span className="w-1.5 h-1.5 rounded-[2px] bg-coral flex-shrink-0" title="Behind" />
         ) : null}
       </div>
       {wide && (
@@ -72,7 +75,22 @@ function Row({ o, wide }: { o: ObjectiveView; wide: boolean }) {
 export function ObjectivesWidget({ teamId, settings }: { teamId: string; settings?: Record<string, unknown> }) {
   const box = useBox();
   const when = useWhen();
-  const { board, error } = useLiveBoard(teamId, "widget");
+  const { board, error, reload } = useLiveBoard(teamId, "widget");
+  const add = useNewObjective(teamId, board?.objectives.map((o) => o.color) ?? [], () => void reload());
+  const canAdd = !!board?.canEdit && board.ready;
+  // "+": over the widget's title row, beside its settings button.
+  const plus = canAdd ? (
+    <button
+      type="button"
+      onClick={add.open}
+      disabled={add.opening}
+      aria-label="New objective"
+      title="New objective"
+      className="absolute top-[10px] right-9 z-10 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-70 transition-opacity disabled:opacity-40"
+    >
+      <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+    </button>
+  ) : null;
 
   if (!board && !error)
     return (
@@ -96,11 +114,21 @@ export function ObjectivesWidget({ teamId, settings }: { teamId: string; setting
       <div className="h-full flex items-center gap-3">
         {box.w >= 230 && box.h >= 80 && <Mascot mood="idle" size={Math.max(44, Math.min(78, box.h - 20))} />}
         <div className="min-w-0">
-          <p className="text-[12.5px] text-ink-soft leading-snug">{board.objectives.length ? "Nothing to show with these settings." : "No objectives yet. Masters set the team's goals in Team settings."}</p>
-          <Link href={board.objectives.length ? "/objectives" : "/team?tab=objectives"} className="text-[12.5px] font-semibold text-amber hover:brightness-110">
-            {board.objectives.length ? "See them all" : "Set objectives"} →
-          </Link>
+          <p className="text-[12.5px] text-ink-soft leading-snug">
+            {board.objectives.length ? "Nothing to show with these settings." : canAdd ? "No objectives yet. Set the team's first goal here." : "No objectives yet. Masters set the team's goals."}
+          </p>
+          {!board.objectives.length && canAdd ? (
+            <button type="button" onClick={add.open} disabled={add.opening} className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber text-white px-2.5 h-7 text-[12px] font-bold hover:brightness-110 disabled:opacity-60">
+              <PlusIcon className="w-3 h-3" strokeWidth={2.5} />
+              New objective
+            </button>
+          ) : (
+            <Link href="/objectives" className="text-[12.5px] font-semibold text-amber hover:brightness-110">
+              See {board.objectives.length ? "them all" : "Objectives"} →
+            </Link>
+          )}
         </div>
+        {add.editor}
       </div>
     );
 
@@ -152,11 +180,15 @@ export function ObjectivesWidget({ teamId, settings }: { teamId: string; setting
 
   if (tiny)
     return (
-      <Link href="/objectives" className="h-full flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber" aria-label="Objectives">
-        <Rings rings={rings} size={ringSize}>
-          {center}
-        </Rings>
-      </Link>
+      <>
+        <Link href="/objectives" className="h-full flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber" aria-label="Objectives">
+          <Rings rings={rings} size={ringSize}>
+            {center}
+          </Rings>
+        </Link>
+        {plus}
+        {add.editor}
+      </>
     );
 
   const wide = W >= 470 && !stacked && !strip;
@@ -199,6 +231,8 @@ export function ObjectivesWidget({ teamId, settings }: { teamId: string; setting
           </Link>
         )}
       </div>
+      {plus}
+      {add.editor}
     </div>
   );
 }

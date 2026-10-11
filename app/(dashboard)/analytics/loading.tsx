@@ -9,7 +9,7 @@ export default function Loading() {
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
       <div className="flex gap-5 border-b border-line/15 h-11 items-center mb-4 px-3.5" aria-hidden>
-        {["w-20", "w-16", "w-16", "w-16"].map((w, i) => (
+        {["w-20", "w-16", "w-16", "w-20", "w-16"].map((w, i) => (
           <Skeleton key={i} className={`h-3.5 ${w}`} />
         ))}
       </div>
@@ -46,7 +46,7 @@ export default function Loading() {
                 {[0, 1, 2, 3].map((i) => (
                   <div key={i} className="flex items-center gap-3">
                     <Skeleton className="h-3 w-24" />
-                    <Skeleton className={`h-3 rounded-full ${["w-3/5", "w-2/5", "w-1/3", "w-1/5"][i]}`} />
+                    <Skeleton className={`h-3 rounded-[3px] ${["w-3/5", "w-2/5", "w-1/3", "w-1/5"][i]}`} />
                   </div>
                 ))}
               </div>

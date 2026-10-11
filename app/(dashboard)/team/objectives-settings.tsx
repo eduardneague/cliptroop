@@ -181,9 +181,9 @@ function Row({ o, canEdit, onEdit, onSchedule }: { o: ObjectiveView; canEdit: bo
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[14px] font-semibold truncate max-w-full">{o.title}</span>
             <span className="text-[11px] font-semibold text-ink-faint">{CADENCE[o.period]}</span>
-            {o.paused && <span className="rounded-full bg-surface-2 px-2 h-5 inline-flex items-center text-[10.5px] font-bold text-ink-soft">Paused</span>}
+            {o.paused && <span className="rounded-md bg-surface-2 px-2 h-5 inline-flex items-center text-[10.5px] font-bold text-ink-soft">Paused</span>}
             {changed > 0 && (
-              <button type="button" onClick={onSchedule} className="rounded-full bg-amber/10 text-ink px-2 h-5 inline-flex items-center text-[10.5px] font-bold hover:bg-amber/20" title="Targets set for single periods">
+              <button type="button" onClick={onSchedule} className="rounded-md bg-amber/10 text-ink px-2 h-5 inline-flex items-center text-[10.5px] font-bold hover:bg-amber/20" title="Targets set for single periods">
                 {changed} {ONE[o.period]}
                 {changed === 1 ? "" : "s"} changed
               </button>

@@ -90,6 +90,10 @@ export type NotificationItem = {
     unit?: string;
     color?: string;
     winner?: { kind?: string; number?: number; title?: string; people?: string[] } | null;
+    /** projection_reached / projection_ended (1.15.0). */
+    title?: string;
+    early?: number;
+    made?: boolean;
   } | null;
 };
 
@@ -127,10 +131,20 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   const TypeIcon = n.short_id ? ShortsIcon : n.project_id ? VideoIcon : null;
   const failed = m?.ok === false;
 
-  if (n.kind === "objective_reached") {
+  if (n.kind === "objective_reached" || n.kind === "projection_reached" || (n.kind === "projection_ended" && m?.made)) {
     return (
-      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }} aria-label="Objective reached">
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }} aria-label={n.kind === "objective_reached" ? "Objective reached" : "Projection reached"}>
         <TrophyIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  if (n.kind === "projection_ended") {
+    return (
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-surface-2 text-ink-soft" aria-label="Projection ended">
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M5 21V4" />
+          <path d="M5 4h11l-2 4 2 4H5" />
+        </svg>
       </span>
     );
   }
@@ -192,10 +206,10 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   if (m.stageColor) {
     return (
       <span
-        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{ background: `color-mix(in srgb, ${stageTone(m)} 18%, transparent)` }}
       >
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: stageTone(m) }} />
+        <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: stageTone(m) }} />
       </span>
     );
   }
@@ -332,7 +346,7 @@ function RichBody({ n }: { n: NotificationItem }) {
             (m.roles ?? []).map((r, i) => (
               <span key={r.name}>
                 <span
-                  className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+                  className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
                   style={{ color: r.color, background: `color-mix(in srgb, ${r.color} 14%, transparent)` }}
                 >
                   {r.name}
@@ -349,7 +363,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           You&rsquo;ve been tagged on <b>&ldquo;{m.projectTitle}&rdquo;</b> for{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -362,7 +376,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>&ldquo;{m.projectTitle}&rdquo;</b> moved into{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -421,7 +435,7 @@ function RichBody({ n }: { n: NotificationItem }) {
       return (
         <>
           <b>{m.actor?.name}</b> marked <ShortRef m={m} /> as done{" "}
-          <span className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
+          <span className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
         </>
       );
     case "objective_reached": {
@@ -432,6 +446,25 @@ function RichBody({ n }: { n: NotificationItem }) {
         </>
       );
     }
+    case "projection_reached":
+      return (
+        <>
+          Projection reached: <b>{m.title}</b>, {m.targetText}
+          {m.unit ? ` ${m.unit}` : ""}
+          {m.early ? <span className="text-ink-soft">, {m.early} day{m.early === 1 ? "" : "s"} early</span> : null}. Well done, everyone!
+        </>
+      );
+    case "projection_ended":
+      return m.made ? (
+        <>
+          <b>{m.title}</b> ended on target at {m.valueText}.
+        </>
+      ) : (
+        <>
+          <b>{m.title}</b> ended at {m.valueText} of {m.targetText}
+          {m.unit ? ` ${m.unit}` : ""}. <span className="text-ink-soft">Set the next one?</span>
+        </>
+      );
     case "meeting_scheduled":
     case "meeting_changed":
     case "meeting_cancelled":
@@ -459,7 +492,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> mentioned you in{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -496,11 +529,11 @@ function NotificationRow({
       onClick={() => onOpen(n)}
       className={`flex gap-2.5 px-4 py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
     >
-      {visual ?? <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
+      {visual ?? <span className={`w-2 h-2 rounded-[3px] mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
       <div className="min-w-0 flex-1">
         <span className="block text-[12.5px] leading-snug text-ink">
           <RichBody n={n} />
-          {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber ml-1.5 align-middle" />}
+          {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-[2px] bg-amber ml-1.5 align-middle" />}
         </span>
         <span className="block text-[10.5px] text-ink-soft mt-1">{time ?? <Ago iso={n.created_at} />}</span>
         {isPendingAction && (
@@ -606,7 +639,7 @@ function HistoryDialog({
   }
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const chip = (on: boolean) =>
-    `rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
+    `rounded-lg px-3 h-8 text-[12.5px] font-semibold border transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
 
   return (
     <Dialog open={open} onClose={onClose} title="Notification history" description="Everything from the last 2 weeks, newest first." width="sm:max-w-xl">
@@ -872,7 +905,7 @@ export function NotificationBell({
       >
         <BellIcon className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-full bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-md bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}

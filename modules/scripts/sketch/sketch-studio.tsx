@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
@@ -831,13 +832,7 @@ export function SketchStudio({ initial, onCancel, onConfirm, title = "Sketch you
   }, [menu, requestClose]);
 
   // No page scrolling underneath while the studio is open.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  useScrollLock();
 
   async function finish() {
     if (editingRef.current) commitText();
@@ -938,7 +933,7 @@ export function SketchStudio({ initial, onCancel, onConfirm, title = "Sketch you
   );
 
   const swatch = (c: string, on: boolean, onClick: () => void, label: string) => (
-    <button key={c} type="button" onClick={onClick} aria-label={label} aria-pressed={on} className={`w-6 h-6 rounded-full flex-shrink-0 transition-transform hover:scale-110 ${on ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`} style={{ background: shownOn(c, paper), boxShadow: "inset 0 0 0 1px rgba(0,0,0,.15)" }} />
+    <button key={c} type="button" onClick={onClick} aria-label={label} aria-pressed={on} className={`w-6 h-6 rounded-md flex-shrink-0 transition-transform hover:scale-110 ${on ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`} style={{ background: shownOn(c, paper), boxShadow: "inset 0 0 0 1px rgba(0,0,0,.15)" }} />
   );
   const props = (
     <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden no-scrollbar px-1 py-1">

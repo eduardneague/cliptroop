@@ -59,7 +59,7 @@ export function TasksVisibilityForm({ teamId, value: initial, ready }: { teamId:
             className={`text-left rounded-xl border px-3.5 py-3 transition-colors disabled:opacity-60 ${on ? "border-amber bg-amber/[0.07] ring-1 ring-amber/40" : "border-line/15 hover:border-line/30"}`}
           >
             <span className="flex items-center gap-2">
-              <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${on ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} aria-hidden />
+              <span className={`w-4 h-4 rounded-[4px] border-2 flex-shrink-0 ${on ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} aria-hidden />
               <span className="text-[13.5px] font-semibold">{c.label}</span>
             </span>
             <span className="block mt-1.5 text-[12px] text-ink-soft leading-snug">{c.hint}</span>

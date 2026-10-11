@@ -157,7 +157,7 @@ export function ScheduleField({
                   }`}
                 >
                   <span className={`flex items-center gap-2 text-[12.5px] font-semibold ${on ? "text-amber" : "text-ink"}`}>
-                    <span className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${on ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} />
+                    <span className={`w-3.5 h-3.5 rounded-[4px] border-2 flex-shrink-0 ${on ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} />
                     {label}
                   </span>
                   <span className="block text-[11.5px] text-ink-soft mt-0.5 pl-[22px]">

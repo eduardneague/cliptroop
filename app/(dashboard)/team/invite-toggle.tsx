@@ -11,7 +11,7 @@ export function MembersHeader({ count, canInvite, children }: { count: number; c
     <>
       <div className="flex items-center gap-2 mb-3">
         <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Members</h2>
-        <span className="rounded-full bg-surface-2 px-2 h-5 inline-flex items-center text-[11.5px] font-bold text-ink-soft tabular-nums">{count}</span>
+        <span className="rounded-md bg-surface-2 px-2 h-5 inline-flex items-center text-[11.5px] font-bold text-ink-soft tabular-nums">{count}</span>
         <span className="flex-1" />
         {canInvite && (
           <button

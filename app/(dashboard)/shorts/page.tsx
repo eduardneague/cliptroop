@@ -262,7 +262,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                         : "text-ink-soft hover:bg-surface-2 hover:text-ink"
                   }`}
                 >
-                  {f.color && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: f.color, opacity: f.count ? 1 : 0.45 }} aria-hidden />}
+                  {f.color && <span className="w-1.5 h-1.5 rounded-[2px] flex-shrink-0" style={{ background: f.color, opacity: f.count ? 1 : 0.45 }} aria-hidden />}
                   {f.label}
                   <span className={`text-[11px] tabular-nums font-medium ${active ? "text-paper/60" : "text-ink-faint"}`}>
                     {f.count}
@@ -565,7 +565,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                     </span>
                     {/* Smaller screens: just the count; tick platforms on the short's page. */}
                     <span
-                      className={`xl:hidden text-[11.5px] font-bold tabular-nums rounded-full px-2 py-0.5 ${
+                      className={`xl:hidden text-[11.5px] font-bold tabular-nums rounded-md px-2 py-0.5 ${
                         s.postedPlatforms.length >= s.platforms.length
                           ? "bg-green/15 text-green"
                           : s.postedPlatforms.length

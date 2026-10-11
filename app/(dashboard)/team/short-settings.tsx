@@ -83,8 +83,8 @@ export function ShortSettingsForm({
             onClick={() => setWeekends((w) => !w)}
             className="inline-flex items-center gap-2.5 h-10"
           >
-            <span className={`relative w-10 h-6 rounded-full transition-colors ${weekends ? "bg-green" : "bg-line/20"}`}>
-              <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${weekends ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+            <span className={`relative w-10 h-6 rounded-lg transition-colors ${weekends ? "bg-green" : "bg-line/20"}`}>
+              <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${weekends ? "translate-x-[18px]" : "translate-x-0.5"}`} />
             </span>
             <span className="text-[13px] font-semibold">{weekends ? "Yes" : "No, weekdays only"}</span>
           </button>
@@ -109,8 +109,8 @@ export function ShortSettingsForm({
         onClick={() => setRollForward((r) => !r)}
         className="flex items-start gap-3 text-left"
       >
-        <span className={`relative mt-0.5 w-10 h-6 flex-shrink-0 rounded-full transition-colors ${rollForward ? "bg-green" : "bg-line/20"}`}>
-          <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${rollForward ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+        <span className={`relative mt-0.5 w-10 h-6 flex-shrink-0 rounded-lg transition-colors ${rollForward ? "bg-green" : "bg-line/20"}`}>
+          <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${rollForward ? "translate-x-[18px]" : "translate-x-0.5"}`} />
         </span>
         <span>
           <span className="block text-[13px] font-semibold">Roll unposted shorts forward</span>

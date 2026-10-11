@@ -3,6 +3,7 @@
 import { APP_NAME } from "@/lib/brand";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BOTTOM_ITEMS, DEVELOPER, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
@@ -49,7 +50,7 @@ export function SidebarNav({ developer = false }: { developer?: boolean }) {
                     on ? "bg-surface-2 text-ink" : "text-ink-soft hover:bg-surface-2/70 hover:text-ink"
                   }`}
                 >
-                  <span aria-hidden className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full bg-amber transition-all duration-200 ${on ? "h-4 opacity-100" : "h-0 opacity-0"}`} />
+                  <span aria-hidden className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-[2px] bg-amber transition-all duration-200 ${on ? "h-4 opacity-100" : "h-0 opacity-0"}`} />
                   <Icon className={`w-[18px] h-[18px] flex-shrink-0 transition-colors duration-200 ${on ? accent(href).on : `text-ink-faint ${accent(href).hover}`}`} />
                   {label}
                 </Link>
@@ -79,14 +80,14 @@ export function BottomNavItems({ developer = false }: { developer?: boolean }) {
         const active = isActive(pathname, href);
         return (
           <Link key={href} href={href} data-tour={`nav-${href.slice(1)}`} aria-current={active ? "page" : undefined} className={item(active)}>
-            <span className={`absolute top-0 h-[2.5px] w-8 rounded-full bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
+            <span className={`absolute top-0 h-[2.5px] w-8 rounded-[2px] bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
             <Icon className={`w-[22px] h-[22px] ${active ? accent(href).on : ""}`} strokeWidth={active ? 2 : 1.75} />
             <span className="text-[10px] font-semibold">{shortLabel}</span>
           </Link>
         );
       })}
       <button type="button" data-tour="nav-more" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={item(moreActive)}>
-        <span className={`absolute top-0 h-[2.5px] w-8 rounded-full bg-amber transition-opacity ${moreActive ? "opacity-100" : "opacity-0"}`} />
+        <span className={`absolute top-0 h-[2.5px] w-8 rounded-[2px] bg-amber transition-opacity ${moreActive ? "opacity-100" : "opacity-0"}`} />
         <AppsIcon className="w-[22px] h-[22px]" strokeWidth={moreActive ? 2 : 1.75} />
         <span className="text-[10px] font-semibold">More</span>
       </button>
@@ -96,21 +97,18 @@ export function BottomNavItems({ developer = false }: { developer?: boolean }) {
 }
 
 function MoreSheet({ onClose, pathname, items }: { onClose: () => void; pathname: string; items: typeof MORE_ITEMS }) {
+  const close = useLatest(onClose);
+  useScrollLock();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close.current();
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [close]);
   return createPortal(
     <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="More">
       <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
       <div className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line/15 bg-surface shadow-2xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[sheetup_.28s_var(--ease-out)]">
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line/25" aria-hidden />
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-[3px] bg-line/25" aria-hidden />
         <div className="flex items-center gap-2 px-1 mb-3">
           <ClipLogo size={26} />
           <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>

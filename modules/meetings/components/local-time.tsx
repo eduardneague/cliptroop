@@ -64,7 +64,7 @@ export function Countdown({ iso, durationMin, className = "" }: { iso: string; d
   const c = countdown(iso, durationMin, now);
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
-      {c.live && <span className="live-dot w-2 h-2 rounded-full bg-red" aria-hidden />}
+      {c.live && <span className="live-dot w-2 h-2 rounded-[3px] bg-red" aria-hidden />}
       {c.label}
     </span>
   );

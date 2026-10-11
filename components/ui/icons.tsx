@@ -908,3 +908,23 @@ export function PauseIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A box with a lid (archive). */
+export function ArchiveIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="5" rx="1.5" />
+      <path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4" />
+    </Svg>
+  );
+}
+
+/** A line going up (projections). */
+export function TrendIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M14 7h7v7" />
+    </Svg>
+  );
+}

@@ -173,7 +173,7 @@ export function StatusBars({ name, bars, phoneHours = 36 }: { name: string; bars
         >
           <div className="text-[11.5px] text-ink-soft">{hourText(b.hour, sel === bars.length - 1)}</div>
           <div className="mt-1 flex items-start gap-2">
-            <span className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${BAR[b.level]}`} aria-hidden />
+            <span className={`mt-1 w-2 h-2 rounded-[3px] flex-shrink-0 ${BAR[b.level]}`} aria-hidden />
             <span className="text-[13px] font-semibold leading-snug">{barSummary(b)}</span>
           </div>
           {b.detail && b.level !== "ok" && b.level !== "none" && <div className="mt-1.5 text-[11.5px] text-ink-soft break-words font-mono leading-snug">{b.detail}</div>}

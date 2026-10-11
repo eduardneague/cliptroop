@@ -204,7 +204,7 @@ export function ShortRowMenu({
                       toAuto.run(id, { pin_kind: k });
                     }}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 ${pinKind === k ? "border-amber bg-amber" : "border-line/40"}`} />
+                    <span className={`w-3.5 h-3.5 rounded-[4px] border-2 flex-shrink-0 ${pinKind === k ? "border-amber bg-amber" : "border-line/40"}`} />
                     {label}
                   </button>
                 ))}

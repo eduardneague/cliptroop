@@ -39,7 +39,7 @@ export default function Loading() {
             <div className="space-y-2.5">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-2.5">
-                  <Skeleton className="w-5 h-5 rounded-full" />
+                  <Skeleton className="w-5 h-5 rounded-md" />
                   <Skeleton className={`h-4 ${["w-3/4", "w-2/3", "w-1/2"][i]}`} />
                 </div>
               ))}

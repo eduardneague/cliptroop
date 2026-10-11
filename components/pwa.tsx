@@ -136,7 +136,7 @@ function Steps({ items }: { items: React.ReactNode[] }) {
     <ol className="space-y-2.5">
       {items.map((it, i) => (
         <li key={i} className="flex gap-3 text-[13.5px] leading-snug">
-          <span className="w-6 h-6 rounded-full bg-amber/15 text-amber text-[12px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+          <span className="w-6 h-6 rounded-md bg-amber/15 text-amber text-[12px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
           <span className="pt-0.5">{it}</span>
         </li>
       ))}
@@ -170,7 +170,7 @@ export function InstallApp() {
   if (p.standalone || installed) {
     return (
       <p className="text-[13.5px] flex items-center gap-2">
-        <span className="w-5 h-5 rounded-full bg-green/15 text-green flex items-center justify-center text-[12px] font-bold">✓</span>
+        <span className="w-5 h-5 rounded-md bg-green/15 text-green flex items-center justify-center text-[12px] font-bold">✓</span>
         {installed ? `${APP_NAME} is installed. Open it from your home screen or app list.` : `You're using the installed ${APP_NAME} app.`}
       </p>
     );
@@ -319,7 +319,7 @@ export function PushSettings({ userId }: { userId: string }) {
   const btn = "inline-flex items-center justify-center rounded-xl font-semibold text-[13.5px] px-4 h-10 disabled:opacity-60";
   const status = (dot: string, text: string) => (
     <p className="text-[13.5px] flex items-center gap-2">
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} aria-hidden />
+      <span className={`w-2 h-2 rounded-[3px] flex-shrink-0 ${dot}`} aria-hidden />
       {text}
     </p>
   );
@@ -440,7 +440,7 @@ export function InstallAppSkeleton() {
       <SkeletonLines lines={1} />
       {[0, 1, 2].map((i) => (
         <div key={i} className="flex items-center gap-3">
-          <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
+          <Skeleton className="w-6 h-6 rounded-md flex-shrink-0" />
           <Skeleton className={`h-3.5 ${["w-3/4", "w-2/3", "w-4/5"][i]}`} />
         </div>
       ))}
@@ -453,7 +453,7 @@ export function PushSettingsSkeleton() {
   return (
     <div className="space-y-3" aria-hidden>
       <div className="flex items-center gap-2">
-        <Skeleton className="w-2 h-2 rounded-full" />
+        <Skeleton className="w-2 h-2 rounded-[3px]" />
         <Skeleton className="h-3.5 w-48" />
       </div>
       <Skeleton className="h-10 w-44 rounded-xl" />

@@ -45,7 +45,7 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
           <p className="text-[12px] text-ink-soft truncate">
             <LocalTime iso={next.startsAt} format="time" /> · {durationLabel(next.durationMin)} · {next.location}
           </p>
-          <span className="mt-1 inline-flex rounded-full bg-violet/12 text-violet px-2 h-5 items-center text-[11px] font-bold">
+          <span className="mt-1 inline-flex rounded-md bg-violet/12 text-violet px-2 h-5 items-center text-[11px] font-bold">
             <Countdown iso={next.startsAt} durationMin={next.durationMin} />
           </span>
         </div>
@@ -71,7 +71,7 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
           {list.slice(1, 4).map((m) => (
             <li key={m.id}>
               <Link href={`/meetings/${m.id}`} className="flex items-center gap-2 text-[12.5px] hover:text-ink text-ink-soft">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet flex-shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-[2px] bg-violet flex-shrink-0" />
                 <span className="truncate flex-1 text-ink">{m.title}</span>
                 <LocalTime iso={m.startsAt} format="day" className="flex-shrink-0 tabular-nums" />
               </Link>

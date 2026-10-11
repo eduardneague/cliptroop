@@ -107,6 +107,8 @@ const shorts = SHORT_TITLES.map((title, i) => {
 });
 // ---- Objectives (0078): MOCK_OBJECTIVES=1, around the real "now" (scripts/dev-mock/objectives.cjs).
 const OBJ = process.env.MOCK_OBJECTIVES ? require("./objectives.cjs").objectivesFixtures({ TEAM, U, people, members, base: shorts }) : null;
+// MOCK_PROJECTIONS=1 (with MOCK_OBJECTIVES=1): long-term targets with their history (0080).
+const PROJ = process.env.MOCK_PROJECTIONS ? require("./projections.cjs").projectionsFixtures({ TEAM, U }) : null;
 // ---- Long videos
 const LONG = [
   ["The real cost of living in Bucharest", "publish", 6, "Documentary"],
@@ -166,9 +168,23 @@ for (let d = OBJ ? -90 : -60; d <= LAST_DAY; d++) {
   if (d >= -28 && d <= -1) for (const [c, share] of CC) countriesRows.push({ team_id: TEAM, platform: "youtube", metric: "views", day: dd, country: c, value: Math.round(yt * share * (0.85 + rnd() * 0.3)), watch_minutes: Math.round(yt * share * 0.5) });
 }
 const IGC = [["RO", 38100], ["MD", 7200], ["IT", 4900], ["US", 3100], ["ES", 2400], ["DE", 1900]].map(([c, v]) => ({ team_id: TEAM, platform: "instagram", metric: "followers", day: day(-1), country: c, value: v }));
-const contentRows = shorts.filter((x) => x.stage === "posted").flatMap((x, i) => ["youtube", "instagram", "tiktok"].map((pl, k) => ({ team_id: TEAM, platform: pl, external_id: `${pl}-${i}`, kind: "short", title: x.title, url: "https://example.com", thumbnail_url: null, published_at: at(-3 + i), duration_seconds: 45, views: Math.round(20000 + 90000 * rnd()), likes: Math.round(4000 * rnd()), comments: Math.round(300 * rnd()), shares: Math.round(400 * rnd()), saves: null, reach: null, short_id: x.id, project_id: null, short_videos: { entry_number: x.entry_number }, long_video_projects: null })));
-contentRows.push({ team_id: TEAM, platform: "youtube", external_id: "yt-long-1", kind: "long", title: "Inside a 400-year-old salt mine", url: "https://example.com", thumbnail_url: null, published_at: at(-9), duration_seconds: 1240, views: 214000, likes: 9800, comments: 640, shares: 410, short_id: null, project_id: longs[5].id, short_videos: null, long_video_projects: { entry_number: 46 } });
+const contentRows = shorts.filter((x) => x.stage === "posted").flatMap((x, i) => ["youtube", "instagram", "tiktok"].map((pl, k) => ({ team_id: TEAM, platform: pl, external_id: `${pl}-${i}`, kind: "short", title: x.title, url: "https://example.com", thumbnail_url: null, published_at: at(-3 + i), duration_seconds: 45, views: Math.round(20000 + 90000 * rnd()), likes: Math.round(4000 * rnd()), comments: Math.round(300 * rnd()), shares: Math.round(400 * rnd()), saves: null, reach: null, short_id: x.id, project_id: null, short_videos: { entry_number: x.entry_number }, long_video_projects: null,
+  // Per-video analytics (0079): YouTube's watch numbers, Instagram's Reels skip rate.
+  ...(pl === "youtube" ? { avg_view_seconds: Math.round(24 + 14 * rnd()), avg_view_pct: Math.round((70 + 30 * rnd()) * 10) / 10, engaged_views: null, subscribers_gained: Math.round(30 + 90 * rnd()) } : pl === "instagram" ? { skip_rate: Math.round((22 + 14 * rnd()) * 10) / 10, avg_view_seconds: Math.round(8 + 6 * rnd()) } : {}) })));
+contentRows.push({ team_id: TEAM, platform: "youtube", external_id: "yt-long-1", kind: "long", title: "Inside a 400-year-old salt mine", url: "https://example.com", thumbnail_url: null, published_at: at(-9), duration_seconds: 1240, views: 214000, likes: 9800, comments: 640, shares: 410, short_id: null, project_id: longs[5].id, short_videos: null, long_video_projects: { entry_number: 46 }, avg_view_seconds: 506, avg_view_pct: 42.6, subscribers_gained: 1840 });
 contentRows.sort((a, b) => b.views - a.views);
+// Each video's views per day (0079): YouTube's own number per day, the others' running totals per morning copy.
+const contentDays = [];
+// The last day with numbers (yesterday; with MOCK_OBJECTIVES, the real yesterday).
+const TODAY_N = OBJ ? LAST_DAY + 1 : 0;
+for (let d = 1; d <= 28; d++)
+  for (const c of contentRows.filter((r) => r.platform === "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d))) {
+    const v = Math.round((c.views / 30) * (0.35 + rnd()) * (c.kind === "long" ? 1.6 : 1));
+    contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: day(TODAY_N - d), source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+  }
+for (let d = 0; d <= 6; d++)
+  for (const c of contentRows.filter((r) => r.platform !== "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d)))
+    contentDays.push({ team_id: TEAM, platform: c.platform, external_id: c.external_id, day: day(TODAY_N - d), source: "total", views: Math.round(c.views * (1 - d * (0.05 + 0.04 * rnd()))), likes: Math.round(c.likes * (1 - d * 0.05)), comments: Math.round(c.comments * (1 - d * 0.04)), shares: Math.round(c.shares * (1 - d * 0.05)), updated_at: at(TODAY_N - d, 8) });
 const revenue = [];
 for (let d = -400; d <= -1; d++) {
   const total = Math.round((30 + 12 * Math.sin(d / 9) + 10 * rnd()) * 100) / 100;
@@ -182,6 +198,8 @@ for (let d = -400; d <= -1; d++) {
 // MOCK_FB_NO_EARNINGS=1: a Page outside the program (no rows, and the sync says so).
 if (!process.env.MOCK_FB_NO_EARNINGS)
   for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
+// Analytics → Advanced (0081): every other number, the splits, retention curves, each video's money, more videos.
+const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, contentRows, revenue, shorts, LAST_DAY });
 const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000001", team_id: TEAM, day: day(-5), source: "sponsorship", amount: 750, currency: "USD", note: "Brand X: street food short", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
@@ -252,7 +270,13 @@ if (process.env.MOCK_POSTS) {
   // Older ones, so "Published recently" has more than one page.
   for (let i = 6; i < 16; i++) ["youtube", "tiktok", i % 2 ? "instagram" : "facebook"].forEach((pl, k) => post(i, pl, "published", -24 * (i - 3) - k));
 }
-const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({ team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true, revenue_note: pl === "facebook" && process.env.MOCK_FB_NO_EARNINGS ? "Facebook shared no earnings: the Page isn't in Content Monetization (or hasn't earned yet)." : null }));
+const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({
+  team_id: TEAM, platform: pl, last_run_at: process.env.MOCK_STALE ? new Date(Date.now() - 50 * 3600e3).toISOString() : at(0, 8), last_ok_at: at(0, 8), last_error: null, backfilled: true,
+  revenue_note: pl === "facebook" && process.env.MOCK_FB_NO_EARNINGS ? "Facebook shared no earnings: the Page isn't in Content Monetization (or hasn't earned yet)." : null,
+  // Whose numbers (0079). MOCK_SWITCHED=1: the Facebook Page was replaced 5 days ago.
+  account_ref: pl === "facebook" ? "123456789" : "ext-" + pl,
+  account_since: pl === "facebook" && process.env.MOCK_SWITCHED ? at(-5, 14) : null,
+}));
 // MOCK_FB_ANALYTICS_ONLY=1: a Facebook Page connected before posting (no pages_manage_posts).
 const STATS = {
   youtube: ["https://www.googleapis.com/auth/yt-analytics.readonly", "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"],
@@ -346,6 +370,24 @@ module.exports = {
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // Advanced (0081): the per-day splits added up over a range.
+    analytics_breakdown_sums: (b) => {
+      const sums = new Map();
+      for (const r of ADV.breakdowns) {
+        if (r.platform !== b.p_platform || r.external_id !== "" || r.span !== 1 || r.day < b.p_from || r.day > b.p_to) continue;
+        const k = `${r.dimension}|${r.key}`;
+        const cur = sums.get(k) ?? { dimension: r.dimension, key: r.key, views: 0, watch_minutes: 0, vw: 0, w: 0, days: new Set() };
+        cur.views += r.views ?? 0;
+        cur.watch_minutes += r.watch_minutes ?? 0;
+        if (r.value !== null && r.views) {
+          cur.vw += r.value * r.views;
+          cur.w += r.views;
+        }
+        cur.days.add(r.day);
+        sums.set(k, cur);
+      }
+      return [...sums.values()].map((x) => ({ dimension: x.dimension, key: x.key, views: x.views, watch_minutes: x.watch_minutes, value: x.w ? x.vw / x.w : null, days: x.days.size }));
+    },
     // Objectives (0078): the server's count says "counted moments ago", so the mock never records wins.
     objective_claim_sync: false,
     objective_record: [],
@@ -405,9 +447,10 @@ module.exports = {
     short_video_versions: process.env.MOCK_FILES
       ? shorts
           .filter((x) => x.stage !== "script")
-          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 12, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+          // (frames_path, 0081: eight frames of each, for the PDF made for Claude.)
+          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 12, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null, frames_path: `${TEAM}/${x.id}/ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}.jpg` }))
           // #235 (in review) has a second cut, to compare (v2 is 1:38: too long for Facebook).
-          .concat([{ id: "ffffffff-0000-4000-8000-0000000000a2", short_id: shorts[4].id, team_id: TEAM, version_number: 2, storage_path: `${TEAM}/${shorts[4].id}/v2.mp4`, file_name: "cut-v2.mp4", size_bytes: 91_000_000, mime_type: "video/mp4", duration_sec: 98, width: 1080, height: 1920, created_at: new Date(Date.now() - 1 * 86_400_000).toISOString(), deleted_at: null }])
+          .concat([{ id: "ffffffff-0000-4000-8000-0000000000a2", short_id: shorts[4].id, team_id: TEAM, version_number: 2, storage_path: `${TEAM}/${shorts[4].id}/v2.mp4`, file_name: "cut-v2.mp4", size_bytes: 91_000_000, mime_type: "video/mp4", duration_sec: 98, width: 1080, height: 1920, created_at: new Date(Date.now() - 1 * 86_400_000).toISOString(), deleted_at: null, frames_path: null }])
           .sort((a, b) => b.version_number - a.version_number)
       : [],
     short_video_comments: [],
@@ -420,11 +463,24 @@ module.exports = {
     long_video_posts: OBJ ? OBJ.longPosts : [],
     long_video_scripters: (OBJ ? [...longs, ...OBJ.longs] : longs).map((l) => ({ project_id: l.id, team_member_id: members[1].id })),
     objectives: OBJ ? OBJ.objectives : [],
+    projections: PROJ ? PROJ.projections : [],
+    projection_points: PROJ ? PROJ.projection_points : [],
     objective_targets: OBJ ? OBJ.targets : [],
     objective_periods: OBJ ? OBJ.periods : [],
     package_entries: packageEntries,
-    scripts: scriptDocs,
-    script_comments: [],
+    scripts: [...scriptDocs, ...ADV.scripts],
+    // MOCK_COMMENTS=1: comments on short #231's Script, two of them on words rewritten since.
+    script_comments: process.env.MOCK_COMMENTS
+      ? [
+          ["cm000000-0000-4000-8000-000000000001", "comment", "three stalls, three prices", 0, "Can we show the prices on screen as they say them?", U[1], at(-2, 11)],
+          ["cm000000-0000-4000-8000-000000000002", "edit_idea", "follow for part two", 0, "Freeze frame + the part two title card here", U[2], at(-1, 15)],
+          ["cm000000-0000-4000-8000-000000000003", "comment", "the cheapest one tasted the best", 0, "Love this line, keep it", U[0], at(-4, 10)],
+          ["cm000000-0000-4000-8000-000000000004", "edit_idea", "slow zoom on the grill", 0, "Use the B-roll from Tuesday", U[2], at(-4, 12)],
+        ].map(([id, kind, quote, occurrence, body, author, created]) => ({
+          id, kind, quote, occurrence, body, created_at: created, resolved_at: null, author_id: author, sketch_path: null, sketch_w: null, sketch_h: null, script_id: "dd000000-0000-4000-8000-000000000001", team_id: TEAM,
+          author: { username: people[U.indexOf(author)]?.username ?? null, full_name: people[U.indexOf(author)]?.full_name ?? null, email: null, avatar_url: null },
+        }))
+      : [],
     script_doc_people: [{ script_id: "dd000000-0000-4000-8000-000000000002", team_member_id: members[2].id, team_id: TEAM }],
     team_script_people: [{ team_id: TEAM, step: "review", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[0].id }, { team_id: TEAM, step: "staging", team_member_id: members[3].id }],
     script_handoffs: [
@@ -440,8 +496,12 @@ module.exports = {
     analytics_daily: daily,
     analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
+    analytics_content_days: contentDays,
     analytics_syncs: syncs,
     analytics_revenue_daily: revenue,
+    analytics_breakdowns: ADV.breakdowns,
+    analytics_retention: ADV.retention,
+    analytics_content_revenue: ADV.contentRevenue,
     revenue_entries: incomes,
     revenue_access: [],
     social_posts: process.env.MOCK_STATUS_BAD

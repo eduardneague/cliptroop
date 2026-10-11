@@ -242,7 +242,7 @@ export default async function VideosPage({
                 </span>
                 <span className="hidden sm:block">
                   <span
-                    className="text-[10.5px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-[10.5px] font-bold px-2 py-0.5 rounded-md"
                     style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
                   >
                     {STAGE_LABELS[p.stage as PipelineStage]}
@@ -279,11 +279,11 @@ export default async function VideosPage({
                       <span className="text-[12px] font-medium">No thumbnail yet</span>
                     </div>
                   )}
-                  <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 text-[11px] font-bold pl-2 pr-2.5 h-6 rounded-full bg-black/60 text-white backdrop-blur-sm">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} aria-hidden />
+                  <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 text-[11px] font-bold pl-2 pr-2.5 h-6 rounded-lg bg-black/60 text-white backdrop-blur-sm">
+                    <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: c }} aria-hidden />
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
-                  <span className="absolute top-2.5 right-2.5 font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-full bg-black/60 text-white backdrop-blur-sm tabular-nums">
+                  <span className="absolute top-2.5 right-2.5 font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
                     #{p.entry_number}
                   </span>
                   {/* Where it is in the pipeline: one segment per step. */}
@@ -293,7 +293,7 @@ export default async function VideosPage({
                       return (
                         <span
                           key={st}
-                          className="flex-1 h-[4px] rounded-full"
+                          className="flex-1 h-[4px] rounded-[2px]"
                           style={{ background: state === "upcoming" ? "rgb(255 255 255 / 0.55)" : STAGE_STATE_COLOR[state], boxShadow: "0 0 0 1px rgb(0 0 0 / 0.12)" }}
                         />
                       );

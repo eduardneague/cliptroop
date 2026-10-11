@@ -101,7 +101,7 @@ function layout(o: {
 <span class="ink" style="display:inline-block;vertical-align:middle;padding-left:9px;font:700 18px ${SERIF};color:${INK};">${esc(APP_NAME)}</span>
 </td></tr>
 <tr><td class="card" style="background:#FFFFFF;border:1px solid ${LINE};border-radius:20px;padding:32px 28px;">
-<span style="display:inline-block;padding:5px 11px;border-radius:999px;background:${TINT};color:${BRAND_COLOR};font:700 12px ${SANS};letter-spacing:.02em;">${esc(o.eyebrow)}</span>
+<span style="display:inline-block;padding:5px 11px;border-radius:6px;background:${TINT};color:${BRAND_COLOR};font:700 12px ${SANS};letter-spacing:.02em;">${esc(o.eyebrow)}</span>
 <h1 class="ink" style="margin:16px 0 10px;font:700 26px/1.25 ${SERIF};color:${INK};">${esc(o.title)}</h1>
 <p class="soft" style="margin:0 0 20px;font:15px/1.6 ${SANS};color:${SOFT};">${esc(o.intro)}</p>
 ${steps}<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:12px;background:${BRAND_COLOR};">

@@ -50,7 +50,7 @@ export function ActivityCard({ events }: { events: ShortEvent[] }) {
               ) : (
                 // No person: VPlanner did it automatically (e.g. posting).
                 <span
-                  className="w-6 h-6 rounded-full bg-amber text-white ring-2 ring-surface flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                  className="w-6 h-6 rounded-md bg-amber text-white ring-2 ring-surface flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
                   aria-hidden
                 >
                   V

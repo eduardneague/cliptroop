@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Upload as TusUpload } from "tus-js-client";
+// The upload library itself is downloaded with the first upload, not with the page.
+import type { Upload as TusUpload } from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
-import { registerVersion } from "@/app/(dashboard)/shorts/[id]/review/actions";
+import { registerVersion, saveVersionFrames } from "@/app/(dashboard)/shorts/[id]/review/actions";
 import { useToast } from "@/components/ui/toast-provider";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_MB, UPLOAD_CHUNK_BYTES, VIDEO_TYPES, formatBytes } from "../lib/limits";
+import { captureFrames } from "../lib/frames";
 
 /** Length and size of a local video file, read by the browser. */
 function readMeta(file: File): Promise<{ duration: number | null; width: number | null; height: number | null }> {
@@ -83,12 +85,23 @@ export function VersionUploader({
       return;
     }
 
-    const meta = await readMeta(file);
+    let meta: Awaited<ReturnType<typeof readMeta>>;
+    let Upload: typeof TusUpload;
+    try {
+      // The file's details and the upload library, together.
+      [meta, { Upload }] = await Promise.all([readMeta(file), import("tus-js-client")]);
+    } catch {
+      toast.error("The uploader didn't load. Check your connection and try again.");
+      return;
+    }
+    // Eight frames of it (the hook and the story), read from the file while it uploads:
+    // kept for the PDF made for Claude, after the video itself is cleaned up.
+    const framesPromise = captureFrames(file).catch(() => null);
     const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "mp4";
     const path = `${teamId}/${shortId}/${crypto.randomUUID()}.${ext}`;
     setProgress({ sent: 0, total: file.size, name: file.name });
 
-    const upload = new TusUpload(file, {
+    const upload = new Upload(file, {
       endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,
       retryDelays: [0, 2000, 5000, 10000, 20000, 30000],
       headers: { authorization: `Bearer ${session.access_token}`, "x-upsert": "false" },
@@ -135,6 +148,15 @@ export function VersionUploader({
           return;
         }
         toast.success(`v${res.number} uploaded`);
+        // The frames, quietly (never in the way of the upload).
+        const versionId = res.id;
+        void (async () => {
+          const blob = await framesPromise;
+          if (!blob) return;
+          const framesPath = `${teamId}/${shortId}/${versionId}.jpg`;
+          const { error } = await supabase.storage.from("video-frames").upload(framesPath, blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" });
+          if (!error) await saveVersionFrames(versionId, framesPath);
+        })().catch(() => undefined);
         onUploaded?.(res.id);
         setFinished(true);
         startRefresh(() => router.refresh());
@@ -161,7 +183,7 @@ export function VersionUploader({
             {formatBytes(progress.sent)} / {formatBytes(progress.total)}
           </span>
         </div>
-        <div className="mt-2 h-1.5 rounded-full bg-surface-2 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div className="mt-2 h-1.5 rounded-[3px] bg-surface-2 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
           <div className="h-full bg-amber transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
         {!saving && !finished && (

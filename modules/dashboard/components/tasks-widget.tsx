@@ -55,7 +55,7 @@ export function TaskRow({ t, today }: { t: Task; today: string }) {
       title={t.kind === "meeting" ? `${t.action} (from ${t.title})` : `${t.action}: #${t.number} ${t.title} (${t.stageLabel}, step ${t.step} of ${t.steps})`}
       className={`group relative flex items-center gap-2.5 rounded-lg pl-2 pr-1.5 py-1.5 transition-colors hover:bg-surface-2/70 ${waiting ? "opacity-70 hover:opacity-100" : ""}`}
     >
-      {late && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-red" aria-hidden />}
+      {late && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-[2px] bg-red" aria-hidden />}
       {t.thumb ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={t.thumb} alt="" className="w-[46px] h-[26px] rounded-[5px] object-cover flex-shrink-0 bg-surface-2" />
@@ -232,7 +232,7 @@ function TeamTab({ team, today }: { team: TeamTasks; today: string }) {
           type="button"
           aria-pressed={who === "all"}
           onClick={() => setWho("all")}
-          className={`inline-flex items-center gap-1 rounded-full border px-2.5 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${who === "all" ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${who === "all" ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
         >
           Everyone
         </button>
@@ -247,7 +247,7 @@ function TeamTab({ team, today }: { team: TeamTasks; today: string }) {
               aria-pressed={on}
               onClick={() => setWho(on ? "all" : p.userId)}
               title={`${p.name}: ${n} to do now${red ? `, ${late(p.userId)} late` : ""}`}
-              className={`inline-flex items-center gap-1.5 rounded-full border pl-0.5 pr-2 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg border pl-0.5 pr-2 h-7 text-[11.5px] font-semibold flex-shrink-0 transition-colors ${
                 on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)] text-ink" : "border-line/15 text-ink-soft hover:text-ink"
               } ${n ? "" : "opacity-60"}`}
             >
@@ -429,7 +429,7 @@ export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks
 function Empty({ text }: { text: string }) {
   return (
     <div className="h-full min-h-[80px] flex flex-col items-center justify-center gap-1.5 text-center">
-      <span className="w-7 h-7 rounded-full bg-green/12 text-green flex items-center justify-center">
+      <span className="w-7 h-7 rounded-lg bg-green/12 text-green flex items-center justify-center">
         <CheckIcon className="w-3.5 h-3.5" />
       </span>
       <p className="text-[12.5px] text-ink-soft">{text}</p>

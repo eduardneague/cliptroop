@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { NAV_START_EVENT, NUDGE_EVENT, nudgeReact, startNavProgress } from "@/lib/nav-events";
+import { releaseStrayScrollLock } from "@/lib/hooks/use-scroll-lock";
 
 export { startNavProgress };
 
@@ -167,6 +168,8 @@ export function NavProgress() {
   useEffect(() => {
     here.current = pathname + (search ? `?${search}` : "");
     finishRef.current();
+    // A page never arrives without scrolling unless a popup is really open.
+    releaseStrayScrollLock();
   }, [pathname, search]);
 
   return <div ref={bar} className="nav-progress" aria-hidden />;

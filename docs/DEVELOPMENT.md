@@ -125,6 +125,17 @@ the page is live, or React throws that part away (production error #418).
   (`components/ui/pending-nav.tsx`).
 - Images: upload through `compressImage()` with an `IMAGE_PRESETS` entry
   and `UPLOAD_CACHE_CONTROL`; render with `loading="lazy" decoding="async"`.
+- Code that only one tab, dialog or widget needs is loaded with
+  `next/dynamic` from a `"use client"` file (in a server component it does
+  NOT split: both sides end up in the page's chunk). Examples:
+  `app/(dashboard)/objectives/views.tsx`, `app/(dashboard)/team/lazy-tabs.tsx`,
+  the dashboard widgets in `modules/dashboard/components/studio.tsx`. A big
+  library used on one action (tus uploads) is `await import()`ed there.
+- Dashboard widgets: a new one gets its `dynamic()` line and its `PRELOAD`
+  entry in `studio.tsx` (the board's widgets start downloading while the page
+  hydrates; Customize fetches the rest for the library). Each renders inside
+  `WidgetBoundary`, so one failing widget shows its own Try again instead of
+  taking the dashboard down.
 
 ## UI conventions
 
@@ -149,7 +160,28 @@ the page is live, or React throws that part away (production error #418).
 - **Destructive or hard-to-undo clicks ask first:** `useConfirm()` (or
   `useConfirmSafe()` outside the app shell) with `danger: true`. Clearing a
   date uses `CLEAR_DATE_CONFIRM`; marking anything done or posted uses
-  `markDoneConfirm(text)`; every Post now asks.
+  `markDoneConfirm(text)`; every Post now asks. Archiving asks too (not
+  `danger`: it can be undone).
+- **Shapes (1.16.0): rounded squares, not pills or circles.** Buttons,
+  chips, tags, badges and inputs `rounded-md` / `rounded-lg`, small dots and
+  thin bars `rounded-[2px]`–`rounded-[3px]`, cards `rounded-2xl`.
+  `rounded-full` is kept for avatars, spinners, progress rings and large
+  decorative circles only.
+- **One choice out of a few** (views, tabs inside a page, short filters):
+  `<Segmented>` (`components/ui/segmented.tsx`: a radio group, arrow keys,
+  optional counts). On phones put it in a `-mx-4 px-4 overflow-x-auto
+  no-scrollbar sm:mx-0 sm:px-0` row so it scrolls instead of overflowing.
+- **Popups:** lock the page with `useScrollLock(open)` or `lockScroll()`
+  (`lib/hooks/use-scroll-lock.ts`). The locks are counted, so popups can
+  close in any order; never set `document.body.style.overflow` yourself.
+  Callbacks a popup's listeners call go through `useLatest()`, so a parent's
+  inline `onClose` doesn't re-run its setup (focus jumping, locks taken
+  again). A popup with a form fills it with `useFillOnOpen(open, key, fill)`
+  (`lib/hooks/use-fill-on-open.ts`): when it opens, never again while it
+  stays open, so a live update can't wipe what someone is typing.
+- A `<fieldset>` only shrinks below its content with `min-w-0` (browsers
+  give it `min-width: min-content`): add it to any fieldset inside a grid or
+  a phone-width dialog.
 
 ## Status, errors and alerts (who sees what)
 
@@ -227,8 +259,9 @@ whose `tasks_visibility` (0076: own / masters / team) allows it
 (`shared_task_team_ids()`). So queries for "my tasks" must filter by
 `user_id` themselves (listMyTasks, listDone do).
 
-**Daily word.** `lib/word/` (answers and valid guesses are server-only;
-`score.ts` is shared). Plays (`daily_word_plays`, 0077) are written only by the
+**Daily word.** `lib/word/` (answers are server-only; the list of valid
+guesses, `words.ts`, is shared since 1.15.0 so the board can refuse a
+non-word at once; `score.ts` is shared). Plays (`daily_word_plays`, 0077) are written only by the
 server after checking a guess (`modules/word/lib/state.ts`); people read their
 own; `daily_word_team()` gives teammates' tries. The day is the team's time
 zone. Finished plays count on the contribution grid (listDone).
@@ -265,6 +298,124 @@ reload through `loadObjectivesBoard()`; `ObjectiveCelebrations` (app shell)
 throws the confetti for new wins and for the ones missed in the last two
 days. A new metric = an entry in `METRICS` and its case in `hitsFor()` (with
 a test); the database only checks the id's shape, so no migration.
+A goal only judges the time since it was set (1.15.0): periods before its
+creation day are `before`, a finished period with no platform numbers is
+`nodata`, and streaks, bests and "reached N of M" come from `statsOf()` over
+the counted periods only (`firstCounted()`, `compute.ts`). The editor's
+preview (`whatIf`) still shows how the target would have gone.
+
+**Whose numbers (0079).** Analytics only ever shows the accounts connected
+now. `analytics_syncs.account_ref` says whose numbers a platform's rows are
+(the platform's own id, or `name:<name>` for rows from before 0079) and
+`account_since` when that account was connected. `adoptAccount()`
+(`modules/analytics/lib/accounts.ts`) runs on every connect, reconnect and
+Facebook Page pick: the same account keeps its numbers, a different one
+purges the old rows (`purgeNumbers`, every table in `NUMBER_TABLES`) and the
+next sync backfills. Every reader of the analytics tables filters through
+`numbersVisibility()` (`visibleRows()`, `inAccountTime()` for our own posts),
+so a disconnected account's numbers leave without being deleted and come
+back if the same account is connected again. Add any new analytics table to
+`NUMBER_TABLES` and filter its readers the same way.
+`analytics_claim_legacy()` (service role only) cleaned the rows mixed before.
+
+**Views on a day (0079).** `analytics_content_days` keeps each video's views
+per day: YouTube's real per-day numbers (`source = 'daily'`, one report per
+day, `syncYouTubeVideoDays`) and, for the others, the running totals of each
+morning's copy (`'total'`), whose differences give the day.
+`getViewsDay()` builds the Views per day dialog; `loadViewsDay()` asks YouTube
+for a day the copies missed (at most every 10 minutes per team and day).
+
+**Projections (0080).** `projections` (masters write; immutable once set:
+metric, scope, start day and value, the `baseline` for Compare) and
+`projection_points` (one value per day, written only by the service role).
+Money metrics (`money`, generated) are readable only with
+`can_view_revenue()`. Code in `modules/projections/lib/`: `metrics.ts` (every
+metric, its units and words), `compute.ts` (`valueAt()` from the rows, the
+trend, `assess()`: pure and tested), `data.ts` (loads only connected
+accounts' rows), `board.ts`, `record.ts` (today's points, reached and ended
+once each, notifications `projection_reached` / `projection_ended`). Points
+are recorded by the morning analytics job (all teams) and when the page is
+opened before it ran (`queueRecordIfDue`). A new metric = an entry in
+`PROJ_METRICS` and its case in `valueAt()` (with a test); no migration.
+
+**Daily word guesses (0079).** The server scores a guess against today's word
+(the browser never knows it) and saves it in one step with
+`daily_word_guess()` (service role only: appends under a row lock, refuses a
+repeat or a seventh try). The browser checks the word list itself
+(`words.ts`, loaded after the page is up) and starts flipping the tiles at
+once; the colours land when the answer comes.
+
+**Advanced analytics (0081).** The sync is split in three:
+`modules/analytics/lib/sync.ts` (per platform: the daily copy, as before),
+`sync-core.ts` (the shared plumbing: `upsert`, `ytFirst` (tries metric sets
+until YouTube accepts one), dates) and `sync-advanced.ts` (everything extra).
+The extras get a time budget (`deadline`: 30 s after they start) and stop
+cleanly when it runs out; the next run carries on. They write:
+- `analytics_breakdowns`: one row per dimension × key. `span = 1` is one
+  day (YouTube's traffic sources, devices, operating systems, playback
+  locations, subscribed or not, YouTube product); `span` 7 / 28 / 90 / 365
+  is a window ending on `day` (age × gender, sharing services, traffic by
+  content type, search terms, outside sites, suggesting videos, playlists;
+  Instagram's 7 / 28-day splits and follower / engaged-audience
+  demographics), replaced whole each time and fetched again after 20
+  hours; `span = 0` is everything up to `day`, used with `external_id` for
+  one video's traffic sources and search terms since it was published.
+  `analytics_breakdown_sums()` (security invoker) adds the per-day rows over
+  a range, weighting `value` by views.
+- `analytics_retention`: each video's curve, up to 101 points `[where 0…1,
+  share still watching, vs similar videos or null]` (YouTube's
+  `elapsedVideoTimeRatio`; Facebook's `post_video_retention_graph`). New
+  videos are fetched every two days for their first month, then every two
+  weeks, 6 per run.
+- `analytics_content_revenue`: each video's revenue, CPM, ad impressions
+  and monetized playbacks (`can_view_revenue()` only).
+- `metrics` jsonb on `analytics_daily` and `analytics_content` (≤ 8000
+  bytes): every other number a platform shares (Premium views, cards,
+  playlist removals, accounts engaged, profile link taps, Reels replays…).
+  supabase-js upserts fill missing keys with null, so the sync merges the
+  stored `metrics` first (`keepStoredMetrics()`, `sync-core.ts`).
+  `analytics_revenue_daily` gets CPM, playback CPM, ad impressions and
+  monetized playbacks.
+All three tables are in `NUMBER_TABLES` and read through
+`numbersVisibility()`, like the rest. The page is `getAdvanced()`
+(`modules/analytics/lib/advanced.ts`): groups of numbers with the range
+before, the series, retention (`lib/retention.ts`, pure and tested), the
+breakdowns, every video, and `findPatterns()` (`lib/patterns.ts`, pure and
+tested: medians per group, at least 3 videos in a group and 6 in all, only
+videos a week old or more, "strong" when both groups have 6+ and one is 1.5×
+the other). Hooks come from the video's own script (`lib/hooks.ts`:
+staging, then review, then write). A new number = a column (migration), the
+sync line that fills it, a tile in `advanced.ts` and its label in
+`advanced-labels.ts`.
+
+**Download for Claude.** `modules/analytics/export/`: the dialog
+(`claude-export.tsx`), `build-text.ts` and `build-pdf.ts`, all in the
+browser: `loadClaudeExport()` gathers the numbers server side
+(`gatherClaudeExport()`, the person's own visibility, revenue only with
+`can_view_revenue()`), the files are made on the device. The PDF uses
+pdf-lib + fontkit, served from `/vendor` (copied by `scripts/copy-vendor.mjs`
+on install, like the other vendored files) and loaded only when someone
+downloads. Fonts are in `public/fonts/pdf/` (OFL, `LICENSE.txt`): Inter is
+embedded whole (`subset: false`: subsetting dropped letters) and Fraunces
+subset (`subset: true`: whole, its spacing broke). Images are turned into
+JPEG through a canvas before embedding. Thumbnails come through
+`/api/analytics/thumb` (signed in, platform image hosts only, images up to
+6 MB, never cached publicly), so the canvas isn't tainted. Claude reads PDFs
+under 100 pages, so the PDF stops at 95 (about 240 videos).
+
+**Opening frames.** When a short's cut is uploaded for review, the browser
+grabs eight frames from the file (`modules/review/lib/frames.ts`: 0, 1, 2
+and 3 s for the hook, then 25 %, 50 %, 75 % and the end) into one JPEG
+strip in the private `video-frames` bucket
+(`<team>/<short>/<version>.jpg`) and records it with `set_version_frames()`
+(checks the path and that the file exists; people can't set
+`frames_path` directly). Only uploads from 1.16.0 on have one. The strips
+go into Download for Claude as signed URLs that last an hour.
+
+**Script comments.** Each belongs to one document (`script_comments.script_id`:
+one short's or long video's script). Comments whose quoted words were since
+rewritten or deleted are grouped under "On text that changed since", with
+Resolve all (`resolveComments()`).
 
 **Who may change what.** Dates (Calendar moves, long video dates): masters and
 schedulers, enforced in the database (shorts' functions, 0073 for long videos).

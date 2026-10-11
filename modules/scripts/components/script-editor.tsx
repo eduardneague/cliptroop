@@ -893,7 +893,7 @@ export function ScriptEditor({
       {sel && onAddComment && draft !== null && isPhone &&
         createPortal(
           <div className="no-print fixed inset-x-0 bottom-0 z-[95] rounded-t-2xl border-t border-line/15 bg-surface shadow-[0_-20px_50px_-20px_rgb(0_0_0/0.45)] animate-[sheetup_.22s_var(--ease-out)]">
-            <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line/20" aria-hidden />
+            <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/20" aria-hidden />
             <CommentComposer
               kind={draftKind}
               quote={sel.quote}

@@ -46,7 +46,7 @@ export function StageTracker({
             label={SHORT_STAGE_LABELS[s]}
           >
             <div
-              className={`rounded-full flex items-center justify-center font-bold border-2 ${
+              className={`rounded-lg flex items-center justify-center font-bold border-2 ${
                 state === "current" ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"
               }`}
               style={{
@@ -87,7 +87,7 @@ function StepLink({ stage, href, selected, label, children }: { stage: ShortStag
       {children}
       <span
         aria-hidden
-        className={`h-1 rounded-full bg-amber transition-all duration-300 ${selected ? "w-4 opacity-100" : "w-0 opacity-0"}`}
+        className={`h-1 rounded-[2px] bg-amber transition-all duration-300 ${selected ? "w-4 opacity-100" : "w-0 opacity-0"}`}
       />
     </>
   );

@@ -105,7 +105,7 @@ export function FlowStrip({
                     on ? "bg-amber/12 text-ink ring-1 ring-amber/40" : "text-ink-soft hover:text-ink hover:bg-surface-2"
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: dot[s.step] ?? "rgb(var(--line) / .4)" }} aria-hidden />
+                  <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: dot[s.step] ?? "rgb(var(--line) / .4)" }} aria-hidden />
                   {s.name}
                   {ticked && (
                     <span key={celebrate ? `t${celebrate}` : "t"} className={celebrate ? "done-step-tick inline-flex" : "inline-flex"} style={{ "--d": `${i * 120}ms` } as React.CSSProperties}>
@@ -133,9 +133,9 @@ export function FlowStrip({
               <span
                 key={celebrate}
                 title={`Marked done${done.by ? ` by ${done.by}` : ""}`}
-                className={`inline-flex items-center gap-1.5 rounded-full bg-green/15 text-green pl-1 pr-2.5 h-7 text-[12px] font-bold ${celebrate ? "done-chip" : ""}`}
+                className={`inline-flex items-center gap-1.5 rounded-lg bg-green/15 text-green pl-1 pr-2.5 h-7 text-[12px] font-bold ${celebrate ? "done-chip" : ""}`}
               >
-                <span className="grid place-items-center w-5 h-5 rounded-full bg-green text-white">
+                <span className="grid place-items-center w-5 h-5 rounded-md bg-green text-white">
                   <CheckIcon className="w-3 h-3" />
                 </span>
                 Done

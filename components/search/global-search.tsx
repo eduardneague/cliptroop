@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { useRouter } from "next/navigation";
 import { switchTeam } from "@/app/(dashboard)/actions";
 import { colorForId, displayName } from "@/lib/avatar";
@@ -140,15 +141,11 @@ export function GlobalSearch({
   }, [open, close, openPalette]);
 
   // Lock page scroll behind the palette; focus the input.
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const t = setTimeout(() => inputRef.current?.focus(), 10);
-    return () => {
-      document.body.style.overflow = prev;
-      clearTimeout(t);
-    };
+    return () => clearTimeout(t);
   }, [open]);
 
   const go = useCallback(
@@ -283,7 +280,7 @@ export function GlobalSearch({
         ),
         trailing: (
           <span
-            className="text-[10.5px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+            className="text-[10.5px] font-bold px-2 py-0.5 rounded-md flex-shrink-0"
             style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
           >
             {STAGE_LABELS[p.stage]}
@@ -333,7 +330,7 @@ export function GlobalSearch({
               </span>
             )}
             <span
-              className="text-[10.5px] font-bold px-2 py-0.5 rounded-full"
+              className="text-[10.5px] font-bold px-2 py-0.5 rounded-md"
               style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
             >
               {SHORT_STAGE_LABELS[sh.stage]}

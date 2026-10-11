@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.14.0" src="https://img.shields.io/badge/version-1.14.0-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.16.0" src="https://img.shields.io/badge/version-1.16.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -104,6 +104,9 @@ and anything that goes wrong is explained, with a retry.
 
 Views, watch time, followers and revenue from every platform, where your
 audience is, and how much the team made, side by side. Copied every morning.
+Advanced has every number the platforms share (retention, traffic sources,
+search terms, who's watching, each video in detail) and What works, the
+patterns in your own videos.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/scene-measure-dark.png">
@@ -118,6 +121,8 @@ audience is, and how much the team made, side by side. Copied every morning.
 - **Clip**: The clapperboard who shows new people around, cheers when things are done and keeps you company while pages load.
 - **Meetings**: Agenda, notes and action items that land in each person's tasks.
 - **Objectives**: The team's goals (shorts a week, Instagram-only reels, long videos a month, views) fill up live, and everyone gets confetti when one is reached.
+- **Projections**: Long-term targets with a date (200K subscribers by December, a Reels skip rate under 22% by spring), kept every morning with the pace it needs, where it lands and a Compare of then and now.
+- **Download for Claude**: Your numbers, hooks, thumbnails and opening frames in a text file and a PDF to drop into a chat with Claude (the free plan works) and ask what works.
 - **Your dashboard**: Widgets you arrange, from today's tasks and the calendar to what's posting, the numbers and the team's goals.
 - **Thumbnail studio**: Thumbnail ideas side by side, so the team can pick the winner.
 - **Search**: Any video, script or person, from anywhere.

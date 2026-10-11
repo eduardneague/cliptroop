@@ -23,9 +23,9 @@ export default function Loading() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Skeleton className="h-8 w-24 rounded-full" />
-          <Skeleton className="h-8 w-32 rounded-full" />
-          <Skeleton className="h-8 w-28 rounded-full" />
+          <Skeleton className="h-8 w-24 rounded-lg" />
+          <Skeleton className="h-8 w-32 rounded-lg" />
+          <Skeleton className="h-8 w-28 rounded-lg" />
         </div>
         <div className="rounded-2xl border border-line/15 overflow-hidden bg-surface">
           <div className="grid grid-cols-7 border-b border-line/15 bg-surface-2/40">
@@ -39,7 +39,7 @@ export default function Loading() {
           <div className="grid grid-cols-7">
             {Array.from({ length: 42 }, (_, i) => (
               <div key={i} className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-1.5 sm:p-2 border-line/15 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""}`}>
-                <Skeleton className="w-6 h-6 sm:w-7 sm:h-7 rounded-full" />
+                <Skeleton className="w-6 h-6 sm:w-7 sm:h-7 rounded-md" />
                 {(i * 7) % 5 < 2 && <Skeleton className="hidden sm:block mt-2 h-7 rounded-lg" />}
                 {(i * 3) % 7 === 0 && <Skeleton className="hidden sm:block mt-1 h-7 w-3/4 rounded-lg" />}
               </div>

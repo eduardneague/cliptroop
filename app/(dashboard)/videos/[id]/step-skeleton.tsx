@@ -48,7 +48,7 @@ function IdeaSkeleton() {
       <div className="rounded-2xl border border-line/10 bg-surface-2/30 px-4 py-3 flex items-center gap-3 flex-wrap">
         <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Idea checklist</span>
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className={`h-7 rounded-full ${["w-24", "w-16", "w-40", "w-20"][i]}`} />
+          <Skeleton key={i} className={`h-7 rounded-lg ${["w-24", "w-16", "w-40", "w-20"][i]}`} />
         ))}
         <Skeleton className="ml-auto h-3 w-8" />
       </div>
@@ -56,7 +56,7 @@ function IdeaSkeleton() {
         <div className="space-y-2.5">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex items-center gap-2.5">
-              <Skeleton className="w-5 h-5 rounded-full" />
+              <Skeleton className="w-5 h-5 rounded-md" />
               <Skeleton className={`h-4 ${["w-3/4", "w-2/3", "w-1/2"][i]}`} />
             </div>
           ))}
@@ -92,8 +92,8 @@ function WorkSkeleton({ step }: { step: PipelineStage }) {
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2.5">{step === "script" ? "Scripters" : `People · ${STAGE_LABELS[step]}`}</div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Skeleton className="h-9 w-36 rounded-full" />
-            <Skeleton className="h-9 w-28 rounded-full" />
+            <Skeleton className="h-9 w-36 rounded-lg" />
+            <Skeleton className="h-9 w-28 rounded-lg" />
           </div>
         </div>
       )}

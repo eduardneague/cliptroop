@@ -8,7 +8,7 @@ export default function Loading() {
       <div className="flex items-center gap-3 flex-wrap mb-5" aria-hidden>
         <Skeleton className="h-4 w-8" />
         <Skeleton className="h-7 w-80 max-w-[60vw]" />
-        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-24 rounded-lg" />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]" aria-hidden>
@@ -32,7 +32,7 @@ export default function Loading() {
             <Skeleton className="h-7 w-24 rounded-lg" />
           </div>
           <div className="px-4 pb-3 border-b border-line/10 flex gap-2.5">
-            <Skeleton className="w-8 h-8 rounded-full" />
+            <Skeleton className="w-8 h-8 rounded-lg" />
             <Skeleton className="flex-1 h-16 rounded-xl" />
           </div>
           <div className="p-4 space-y-5">

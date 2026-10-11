@@ -321,7 +321,7 @@ export function MentionInput({
           {files.map((f, i) => (
             <span
               key={i}
-              className="flex items-center gap-1.5 rounded-full border border-line/15 bg-surface-2 pl-2 pr-1.5 py-1 text-[11px] font-medium"
+              className="flex items-center gap-1.5 rounded-md border border-line/15 bg-surface-2 pl-2 pr-1.5 py-1 text-[11px] font-medium"
             >
               {f.name.length > 20 ? `${f.name.slice(0, 17)}…` : f.name}
               <button
@@ -353,7 +353,7 @@ export function MentionInput({
                       active ? "bg-surface-2" : ""
                     }`}
                   >
-                    <span className="w-2 h-2 rounded-full bg-ink-faint flex-shrink-0" />
+                    <span className="w-2 h-2 rounded-[3px] bg-ink-faint flex-shrink-0" />
                     Roles
                     <span className="text-ink-faint text-[10.5px] font-normal ml-auto inline-flex items-center gap-0.5">Enter to expand <ChevronRightIcon className="w-3 h-3" /></span>
                   </button>
@@ -377,7 +377,7 @@ export function MentionInput({
                       active ? "bg-surface-2" : ""
                     }`}
                   >
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                    <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: color }} />
                     <span style={{ color }} className="font-semibold">
                       @{targetLabel(t)}
                     </span>

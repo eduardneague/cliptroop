@@ -120,7 +120,7 @@ export default function LoginPage() {
             <span>TAKE 1</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#E5484D] animate-pulse" />
+            <span className="w-2 h-2 rounded-[3px] bg-[#E5484D] animate-pulse" />
             REC
           </span>
         </div>

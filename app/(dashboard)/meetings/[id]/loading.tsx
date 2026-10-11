@@ -10,7 +10,7 @@ export default function Loading() {
         <Skeleton className="h-9 w-[420px] max-w-[70vw]" />
       </div>
       <div className="flex items-center gap-3 mb-6 pl-[52px]" aria-hidden>
-        <Skeleton className="h-6 w-24 rounded-full" />
+        <Skeleton className="h-6 w-24 rounded-lg" />
         <Skeleton className="h-4 w-60" />
       </div>
       <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_340px] gap-5 sm:gap-6" aria-hidden>

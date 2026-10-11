@@ -11,7 +11,7 @@ export const config = {
      * Match all routes except static files and images, so the auth
      * session gets refreshed on every navigation.
      */
-    // vendor/ = public library files (e.g. the Word export), cacheable.
+    // vendor/ = public library files (e.g. the Word export), cacheable. fonts/ = the PDF export's fonts.
 // sw.js / manifest.webmanifest / app-icons = the installable app: public, no session needed.
-"/((?!_next/static|_next/image|favicon.ico|vendor/|app-icons/|sw\\.js$|manifest\\.webmanifest$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)",  ],
+"/((?!_next/static|_next/image|favicon.ico|vendor/|fonts/|app-icons/|sw\\.js$|manifest\\.webmanifest$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|txt)$).*)",  ],
 };

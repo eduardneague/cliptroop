@@ -220,7 +220,7 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
               <FrameForwardIcon className="w-4 h-4" />
             </CtrlButton>
           </span>
-          <span className="ml-1 rounded-full bg-white/[0.06] px-2.5 h-7 inline-flex items-center text-[12px] font-semibold tabular-nums text-white/90">
+          <span className="ml-1 rounded-lg bg-white/[0.06] px-2.5 h-7 inline-flex items-center text-[12px] font-semibold tabular-nums text-white/90">
             {formatTime(time, true)}
             <span className="text-white/40 ml-1">/ {formatTime(duration)}</span>
           </span>

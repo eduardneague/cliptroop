@@ -3,6 +3,7 @@
 import { Ago } from "@/components/ui/ago";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast-provider";
@@ -452,17 +453,17 @@ export function ReviewWorkspace({
           <button
             type="button"
             onClick={() => setSheet(true)}
-            className="inline-flex items-center gap-2 rounded-full bg-ink text-paper pl-3.5 pr-4 h-11 text-[13.5px] font-bold shadow-lg active:scale-95 transition-transform"
+            className="inline-flex items-center gap-2 rounded-xl bg-ink text-paper pl-3.5 pr-4 h-11 text-[13.5px] font-bold shadow-lg active:scale-95 transition-transform"
             aria-label={`Notes, ${openCount} open`}
           >
             <ChatIcon className="w-[18px] h-[18px]" />
             Notes
-            {openCount > 0 && <span className="rounded-full bg-amber text-white text-[11px] px-1.5 min-w-[20px] text-center">{openCount}</span>}
+            {openCount > 0 && <span className="rounded-md bg-amber text-white text-[11px] px-1.5 min-w-[20px] text-center">{openCount}</span>}
           </button>
           <button
             type="button"
             onClick={openComposer}
-            className="w-11 h-11 rounded-full bg-amber text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+            className="w-11 h-11 rounded-xl bg-amber text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
             aria-label="Add a note at this moment"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
@@ -662,16 +663,13 @@ function TopComposer({
 }
 
 function BottomSheet({ title, extra, onClose, children }: { title: string; extra?: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
+  const close = useLatest(onClose);
+  useScrollLock();
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close.current();
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [close]);
   return createPortal(
     <div className="fixed inset-0 z-[110]">
       <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
@@ -681,7 +679,7 @@ function BottomSheet({ title, extra, onClose, children }: { title: string; extra
         className="absolute inset-x-0 bottom-0 max-h-[78dvh] flex flex-col rounded-t-2xl border border-line/15 bg-surface shadow-2xl animate-[sheetup_.32s_var(--ease-out)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line/25" aria-hidden />
+        <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/25" aria-hidden />
         <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
           <h2 className="text-[13px] font-bold">{title}</h2>
           <div className="flex items-center gap-2">
@@ -956,14 +954,14 @@ function NoteThread({
                 if (e.key === "Escape") setReplying(false);
               }}
               placeholder="Reply…"
-              className="w-full rounded-full border border-line/15 bg-surface pl-3.5 pr-10 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
+              className="w-full rounded-lg border border-line/15 bg-surface pl-3.5 pr-10 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
             />
             <button
               type="button"
               onClick={() => void sendReply()}
               disabled={!reply.trim() || sending}
               aria-label="Send reply"
-              className="absolute right-1 top-1 w-7 h-7 rounded-full bg-amber text-white flex items-center justify-center disabled:opacity-40 active:scale-90 transition-transform"
+              className="absolute right-1 top-1 w-7 h-7 rounded-lg bg-amber text-white flex items-center justify-center disabled:opacity-40 active:scale-90 transition-transform"
             >
               {sending ? <Spinner className="w-3 h-3" /> : <SendIcon className="w-3.5 h-3.5" />}
             </button>

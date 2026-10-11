@@ -53,8 +53,8 @@ export function CtrlButton({
       title={shortcut ? `${label} (${shortcut})` : label}
       className={
         primary
-          ? "w-10 h-10 rounded-full bg-amber text-white flex items-center justify-center shadow-[0_4px_14px_-4px_rgb(var(--amber)/0.8)] hover:brightness-110 transition-[filter,scale] duration-150"
-          : "w-9 h-9 rounded-full flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+          ? "w-10 h-10 rounded-xl bg-amber text-white flex items-center justify-center shadow-[0_4px_14px_-4px_rgb(var(--amber)/0.8)] hover:brightness-110 transition-[filter,scale] duration-150"
+          : "w-9 h-9 rounded-xl flex items-center justify-center text-white/75 hover:text-white hover:bg-white/10 transition-colors"
       }
     >
       {children}
@@ -65,7 +65,7 @@ export function CtrlButton({
 /** Shared speed pills. */
 export function SpeedPills({ speed, onChange }: { speed: number; onChange: (s: number) => void }) {
   return (
-    <div className="flex items-center rounded-full bg-white/[0.06] p-0.5" role="radiogroup" aria-label="Speed">
+    <div className="flex items-center rounded-lg bg-white/[0.06] p-0.5" role="radiogroup" aria-label="Speed">
       {SPEEDS.map((s) => (
         <button
           key={s}
@@ -73,7 +73,7 @@ export function SpeedPills({ speed, onChange }: { speed: number; onChange: (s: n
           role="radio"
           aria-checked={speed === s}
           onClick={() => onChange(s)}
-          className={`px-2 h-7 rounded-full text-[11px] font-bold tabular-nums transition-colors ${
+          className={`px-2 h-7 rounded-md text-[11px] font-bold tabular-nums transition-colors ${
             speed === s ? "bg-white text-black" : "text-white/55 hover:text-white"
           }`}
         >
@@ -138,9 +138,9 @@ export function Timeline({
       onPointerLeave={() => setHover(null)}
       className="group/bar relative h-7 cursor-pointer flex items-center touch-none"
     >
-      <div className="absolute inset-x-0 h-1.5 group-hover/bar:h-2.5 rounded-full bg-white/12 transition-[height] duration-150 overflow-hidden" style={{ background: "rgb(255 255 255 / 0.12)" }}>
+      <div className="absolute inset-x-0 h-1.5 group-hover/bar:h-2.5 rounded-[3px] bg-white/12 transition-[height] duration-150 overflow-hidden" style={{ background: "rgb(255 255 255 / 0.12)" }}>
         <div className="absolute inset-y-0 left-0 bg-white/15" style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }} />
-        <div className={`absolute inset-y-0 left-0 rounded-full bg-amber ${move}`} style={{ width: `${pct}%` }} />
+        <div className={`absolute inset-y-0 left-0 rounded-[3px] bg-amber ${move}`} style={{ width: `${pct}%` }} />
       </div>
 
       {hover !== null && duration > 0 && (
@@ -176,13 +176,13 @@ export function Timeline({
                 )}
               </span>
             ) : (
-              <span className={`block w-2.5 h-2.5 rounded-full ${m.resolved ? "bg-white/40" : "bg-amber"}`} />
+              <span className={`block w-2.5 h-2.5 rounded-[3px] ${m.resolved ? "bg-white/40" : "bg-amber"}`} />
             )}
           </button>
         ))}
 
       <div
-        className={`absolute -translate-x-1/2 w-3.5 h-3.5 group-hover/bar:w-4 group-hover/bar:h-4 rounded-full bg-white shadow-[0_0_0_4px_rgb(var(--amber)/0.25)] transition-[width,height] duration-150 ${move}`}
+        className={`absolute -translate-x-1/2 w-3.5 h-3.5 group-hover/bar:w-4 group-hover/bar:h-4 rounded-[4px] bg-white shadow-[0_0_0_4px_rgb(var(--amber)/0.25)] transition-[width,height] duration-150 ${move}`}
         style={{ left: `${pct}%` }}
       />
     </div>
@@ -373,7 +373,7 @@ export const ReviewPlayer = forwardRef<
             type="button"
             onClick={toggle}
             aria-label="Play"
-            className="absolute w-16 h-16 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center ring-1 ring-white/15 hover:bg-black/60 transition-colors animate-[modalin_.2s_var(--ease-out)]"
+            className="absolute w-16 h-16 rounded-2xl bg-black/45 backdrop-blur-md text-white flex items-center justify-center ring-1 ring-white/15 hover:bg-black/60 transition-colors animate-[modalin_.2s_var(--ease-out)]"
           >
             <PlayIcon className="w-7 h-7 translate-x-[2px]" />
           </button>
@@ -414,7 +414,7 @@ export const ReviewPlayer = forwardRef<
               <FrameForwardIcon className="w-4 h-4" />
             </CtrlButton>
           </span>
-          <span className="ml-1 rounded-full bg-white/[0.06] px-2.5 h-7 inline-flex items-center text-[12px] font-semibold tabular-nums text-white/90">
+          <span className="ml-1 rounded-lg bg-white/[0.06] px-2.5 h-7 inline-flex items-center text-[12px] font-semibold tabular-nums text-white/90">
             {formatTime(time, true)}
             <span className="text-white/40 ml-1">/ {formatTime(duration)}</span>
           </span>

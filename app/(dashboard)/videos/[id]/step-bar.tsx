@@ -32,7 +32,7 @@ export function LongStepBar({ projectId, stage, tab: tabProp }: { projectId: str
               className="group flex flex-col items-center gap-1.5 min-w-[70px] sm:min-w-[80px] pt-1 pb-0.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
             >
               <span
-                className={`rounded-full flex items-center justify-center font-bold border-2 transition-all ${current ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"}`}
+                className={`rounded-lg flex items-center justify-center font-bold border-2 transition-all ${current ? "w-8 h-8 text-[12px] current-stage-pulse" : "w-7 h-7 text-[11px]"}`}
                 style={{
                   borderColor: on ? color : "rgb(var(--line) / 0.25)",
                   background: on ? color : "transparent",
@@ -49,7 +49,7 @@ export function LongStepBar({ projectId, stage, tab: tabProp }: { projectId: str
               >
                 {STAGE_LABELS[s]}
               </span>
-              <span aria-hidden className={`h-1 rounded-full bg-amber transition-all duration-300 ${selected ? "w-4 opacity-100" : "w-0 opacity-0"}`} />
+              <span aria-hidden className={`h-1 rounded-[2px] bg-amber transition-all duration-300 ${selected ? "w-4 opacity-100" : "w-0 opacity-0"}`} />
             </PendingLink>
             {i < STAGE_ORDER.length - 1 && (
               <span

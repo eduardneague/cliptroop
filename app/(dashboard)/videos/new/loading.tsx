@@ -17,7 +17,7 @@ export default function Loading() {
           <Section title="Titles">
             {[0, 1].map((i) => (
               <div key={i} className="flex items-center gap-2">
-                <Skeleton className="w-8 h-8 rounded-full" />
+                <Skeleton className="w-8 h-8 rounded-lg" />
                 <Skeleton className="h-11 flex-1 rounded-xl" />
               </div>
             ))}

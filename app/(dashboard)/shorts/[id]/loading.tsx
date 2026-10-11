@@ -17,7 +17,7 @@ export default function Loading() {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-5" aria-hidden>
-        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-24 rounded-lg" />
         <Skeleton className="h-5 w-16 rounded-md" />
         <Skeleton className="h-4 w-44" />
         <Skeleton className="h-3 w-24" />

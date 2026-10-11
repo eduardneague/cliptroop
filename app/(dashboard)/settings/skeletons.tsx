@@ -36,7 +36,7 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
             <div className="text-[13px] font-semibold">Show my teams publicly</div>
             <div className="text-[11.5px] text-ink-faint">When off, only people who share a team with you can see this list</div>
           </div>
-          <Skeleton className="h-6 w-11 rounded-full flex-shrink-0" />
+          <Skeleton className="h-6 w-11 rounded-lg flex-shrink-0" />
         </div>
         <div className="space-y-2">
           {[0, 1].map((i) => (

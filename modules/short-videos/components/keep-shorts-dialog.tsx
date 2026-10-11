@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { LockIcon } from "@/components/ui/icons";
 
 export type DayShort = { id: string; number: number; title: string; locked: boolean; fixed: boolean };
@@ -32,22 +33,19 @@ export function KeepShortsDialog({
   const single = limit === 1;
   const tooManyLocked = locked.length > limit;
 
+  const cancel = useLatest(onCancel);
+  useScrollLock();
   useEffect(() => {
     boxRef.current?.querySelector<HTMLInputElement>("input:not(:disabled)")?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cancel.current();
       }
     };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onCancel]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [cancel]);
 
   function toggle(id: string) {
     if (locked.includes(id)) return;

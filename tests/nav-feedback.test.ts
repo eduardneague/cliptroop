@@ -35,7 +35,7 @@ ok(settingsTab("nope") === "profile" && settingsTab(null) === "profile", "settin
 ok(SETTINGS_TABS.some((t) => t.label === "Notifications & app"), "settings: the loading tabs include Notifications & app");
 ok(teamTab("accounts") === "accounts" && teamTab(undefined) === "members", "team: tab or Members");
 ok(teamTab("objectives") === "objectives", "team: the Objectives tab is a real tab");
-ok(TEAM_TABS.map((t) => t.id).join() === "members,defaults,objectives,accounts,appearance,team", "team: tabs in the page's order");
+ok(TEAM_TABS.map((t) => t.id).join() === "members,defaults,objectives,projections,accounts,appearance,team", "team: tabs in the page's order");
 
 if (fails) process.exit(1);
 console.log("nav feedback ok");

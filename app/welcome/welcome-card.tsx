@@ -123,14 +123,14 @@ export function WelcomeCard({ tokenHash, type, expired }: { tokenHash: string | 
             </p>
           )}
         </div>
-        <span className="inline-block rounded-full bg-amber/12 text-amber text-[12px] font-bold px-2.5 py-1">{copy.eyebrow}</span>
+        <span className="inline-block rounded-md bg-amber/12 text-amber text-[12px] font-bold px-2.5 py-1">{copy.eyebrow}</span>
         <h1 className="font-display text-[28px] leading-tight font-semibold mt-3 mb-2">{copy.title}</h1>
         <p className="text-[14.5px] text-ink-soft mb-5">{copy.text}</p>
         {type === "invite" && (
           <ol className="space-y-2 mb-6">
             {STEPS.map((s, i) => (
               <li key={s} className="flex items-center gap-3 text-[14px]">
-                <span className="w-6 h-6 rounded-full bg-amber/15 text-amber text-[12px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                <span className="w-6 h-6 rounded-md bg-amber/15 text-amber text-[12px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
                 {s}
               </li>
             ))}

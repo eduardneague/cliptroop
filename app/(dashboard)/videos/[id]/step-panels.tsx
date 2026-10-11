@@ -32,7 +32,7 @@ function TurnBox({ title, children }: { title: string; children: React.ReactNode
 function DoneBox({ title, by, at, children }: { title: string; by: string | null; at: string | null; children?: React.ReactNode }) {
   return (
     <section className="rounded-2xl border border-line/10 bg-surface-2/40 p-4 flex gap-3">
-      <span className="w-7 h-7 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background: "rgb(var(--teal))" }}>
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white flex-shrink-0" style={{ background: "rgb(var(--teal))" }}>
         <CheckIcon className="w-4 h-4" />
       </span>
       <div className="min-w-0 space-y-1.5">
@@ -403,10 +403,10 @@ export function PostPanel({
                     aria-label={`Posted on ${meta?.name ?? pid}`}
                     disabled={!isCurrent || !canAct || pending}
                     onClick={() => void toggle(pid, meta?.name ?? pid, !!post)}
-                    className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50"
+                    className="relative w-11 h-6 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50"
                     style={{ background: post ? "rgb(var(--green))" : "rgb(var(--line) / 0.25)" }}
                   >
-                    <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${post ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+                    <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${post ? "translate-x-[22px]" : "translate-x-0.5"}`} />
                   </button>
                 </div>
                 {isCurrent && canAct && (

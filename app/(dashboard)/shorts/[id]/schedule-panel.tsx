@@ -213,7 +213,7 @@ export function SchedulePanel(props: SchedulePanelProps) {
               <div className="text-[14px] font-semibold leading-tight">{NAME[p]}</div>
               <span className="skeleton block h-3 w-28 mt-1.5 rounded" />
             </div>
-            <span className="skeleton h-7 w-24 rounded-full" />
+            <span className="skeleton h-7 w-24 rounded-lg" />
           </div>
         ))}
       </section>
@@ -481,10 +481,10 @@ function SchedulePanelLive({
                   });
                 }
               }}
-              className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+              className="relative w-10 h-6 rounded-lg transition-colors flex-shrink-0"
               style={{ background: sameTime ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}
             >
-              <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${sameTime ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+              <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${sameTime ? "translate-x-[18px]" : "translate-x-0.5"}`} />
             </button>
           </div>
           {sameTime && <When value={when[formPlatforms[0] ?? "youtube"]} onChange={(v) => setWhen({ youtube: v, instagram: v, tiktok: v, facebook: v })} />}
@@ -504,7 +504,7 @@ function SchedulePanelLive({
                 <div className="text-[12px] text-ink-soft truncate">{acc ? acc.name : "Not connected"}</div>
               </div>
               {c && (
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[11.5px] font-bold whitespace-nowrap ${c.cls}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[11.5px] font-bold whitespace-nowrap ${c.cls}`}>
                   {"spin" in c && c.spin && <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
                   {c.text}
                   {"extra" in c && c.extra && <span className="hidden sm:inline">{c.extra}</span>}
@@ -517,10 +517,10 @@ function SchedulePanelLive({
                   aria-checked={include[p]}
                   aria-label={`Post to ${NAME[p]}`}
                   onClick={() => setInclude((s) => ({ ...s, [p]: !s[p] }))}
-                  className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0"
+                  className="relative w-10 h-6 rounded-lg transition-colors flex-shrink-0"
                   style={{ background: include[p] ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}
                 >
-                  <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${include[p] ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+                  <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${include[p] ? "translate-x-[18px]" : "translate-x-0.5"}`} />
                 </button>
               )}
             </div>
@@ -1127,15 +1127,15 @@ function StatusView({
 
   const dot = (st: StepView["state"]) =>
     st === "done" ? (
-      <span className="flex w-5 h-5 rounded-full bg-green text-white items-center justify-center text-[11px] font-bold">✓</span>
+      <span className="flex w-5 h-5 rounded-md bg-green text-white items-center justify-center text-[11px] font-bold">✓</span>
     ) : st === "failed" ? (
-      <span className="flex w-5 h-5 rounded-full bg-red text-white items-center justify-center text-[11px] font-bold">!</span>
+      <span className="flex w-5 h-5 rounded-md bg-red text-white items-center justify-center text-[11px] font-bold">!</span>
     ) : st === "late" ? (
-      <span className="flex w-5 h-5 rounded-full bg-amber text-white items-center justify-center text-[11px] font-bold">!</span>
+      <span className="flex w-5 h-5 rounded-md bg-amber text-white items-center justify-center text-[11px] font-bold">!</span>
     ) : st === "current" ? (
       <span className="block w-5 h-5 rounded-full border-2 border-amber border-t-transparent animate-spin" />
     ) : (
-      <span className="block w-5 h-5 rounded-full border-2 border-line/25" />
+      <span className="block w-5 h-5 rounded-md border-2 border-line/25" />
     );
 
   return (
@@ -1162,7 +1162,7 @@ function StatusView({
                 </div>
               )}
               {st.state === "current" && post.status === "uploading" && i === 1 && (
-                <div className="mt-1.5 h-1.5 rounded-full bg-surface-2 overflow-hidden max-w-xs">
+                <div className="mt-1.5 h-1.5 rounded-[3px] bg-surface-2 overflow-hidden max-w-xs">
                   <div className="h-full bg-amber transition-[width] duration-500" style={{ width: `${post.progress}%` }} />
                 </div>
               )}

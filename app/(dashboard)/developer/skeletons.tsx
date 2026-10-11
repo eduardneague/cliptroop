@@ -92,7 +92,7 @@ export function DevTabSkeleton({ tab }: { tab: DevTab }) {
         <Skeleton className="h-3 w-24 mb-1" />
         {Array.from({ length: 6 }, (_, i) => (
           <div key={i} className="flex items-center gap-3 py-3 border-b border-line/10 last:border-none">
-            <Skeleton className="w-2.5 h-2.5 rounded-full" />
+            <Skeleton className="w-2.5 h-2.5 rounded-[3px]" />
             <div className="flex-1 space-y-1.5">
               <Skeleton className={`h-3.5 ${["w-32", "w-40", "w-28", "w-56", "w-36", "w-24"][i]}`} />
               <Skeleton className="h-3 w-48 max-w-full" />

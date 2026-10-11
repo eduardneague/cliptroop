@@ -54,7 +54,7 @@ export default function Loading() {
               <Skeleton className="w-6 h-6 rounded-full" />
               <Skeleton className="h-3 w-16" />
             </div>
-            <Skeleton className="hidden md:block h-6 w-20 rounded-full" />
+            <Skeleton className="hidden md:block h-6 w-20 rounded-lg" />
             <Skeleton className="hidden md:block h-5 w-12" />
             <Skeleton className="h-7 w-14 rounded-lg justify-self-end md:justify-self-start" />
           </div>

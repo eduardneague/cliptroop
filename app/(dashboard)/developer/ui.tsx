@@ -48,14 +48,14 @@ export function Meter({ used, limit, unit = "bytes" }: { used: number; limit: nu
         <span className={`text-[12px] font-semibold tabular-nums ${text}`}>{pct < 1 && used > 0 ? "<1" : Math.round(pct)}%</span>
       </div>
       <div
-        className="mt-2.5 h-2 rounded-full bg-line/10 overflow-hidden"
+        className="mt-2.5 h-2 rounded-[3px] bg-line/10 overflow-hidden"
         role="meter"
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={Math.min(used, limit)}
         aria-label={`${f(used)} of ${f(limit)}`}
       >
-        <span className={`block h-full rounded-full ${tone}`} style={{ width: `${Math.min(100, Math.max(used > 0 ? 1.5 : 0, pct))}%` }} />
+        <span className={`block h-full rounded-[3px] ${tone}`} style={{ width: `${Math.min(100, Math.max(used > 0 ? 1.5 : 0, pct))}%` }} />
       </div>
       <div className="mt-1.5 text-[12px] text-ink-faint tabular-nums">of {f(limit)} included</div>
     </div>
@@ -105,8 +105,8 @@ export function ShareRow({ label, sub, value, total, right }: { label: React.Rea
         <span className="text-[12.5px] tabular-nums text-ink-soft flex-shrink-0">{right}</span>
       </div>
       {sub && <div className="text-[11.5px] text-ink-faint truncate">{sub}</div>}
-      <div className="mt-1.5 h-1.5 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
-        <span className="block h-full rounded-full bg-amber/80" style={{ width: `${total ? Math.max(1.5, (value / total) * 100) : 0}%` }} />
+      <div className="mt-1.5 h-1.5 rounded-[3px] bg-line/[0.07] overflow-hidden" aria-hidden>
+        <span className="block h-full rounded-[3px] bg-amber/80" style={{ width: `${total ? Math.max(1.5, (value / total) * 100) : 0}%` }} />
       </div>
     </li>
   );
