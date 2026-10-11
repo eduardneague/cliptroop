@@ -249,8 +249,8 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
         )}
       </div>
       {total > 0 && (
-        <div className="h-1 rounded-full bg-line/10 mt-1 mb-1 overflow-hidden flex-shrink-0" aria-hidden>
-          <div className="h-full rounded-full bg-green transition-[width] duration-500 ease-out" style={{ width: `${(doneCount / total) * 100}%` }} />
+        <div className="h-1 rounded-[2px] bg-line/10 mt-1 mb-1 overflow-hidden flex-shrink-0" aria-hidden>
+          <div className="h-full rounded-[3px] bg-green transition-[width] duration-500 ease-out" style={{ width: `${(doneCount / total) * 100}%` }} />
         </div>
       )}
 

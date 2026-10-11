@@ -109,7 +109,7 @@ export function MeetingsHome({
               <div className="rounded-2xl border border-line/10 bg-surface divide-y divide-line/10 overflow-hidden">
                 {myActions.map((a) => (
                   <Link key={a.id} href={`/meetings/${a.meetingId}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2/60">
-                    <span className="w-2 h-2 rounded-full bg-violet flex-shrink-0" />
+                    <span className="w-2 h-2 rounded-[3px] bg-violet flex-shrink-0" />
                     <span className="flex-1 min-w-0">
                       <span className="block text-[14px] font-semibold truncate">{a.text}</span>
                       <span className="block text-[12px] text-ink-soft truncate">From {a.meetingTitle}</span>
@@ -159,7 +159,7 @@ function NextUp({ m }: { m: Meeting }) {
       <div className="relative p-5 sm:p-7">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-violet">Next meeting</span>
-          <span className="rounded-full bg-violet/12 text-violet px-2.5 h-6 inline-flex items-center text-[12px] font-bold">
+          <span className="rounded-lg bg-violet/12 text-violet px-2.5 h-6 inline-flex items-center text-[12px] font-bold">
             <Countdown iso={m.startsAt} durationMin={m.durationMin} />
           </span>
         </div>

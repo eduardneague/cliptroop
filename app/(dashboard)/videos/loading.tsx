@@ -32,7 +32,7 @@ export default function Loading() {
           <div key={i} className={`rounded-2xl border-2 border-line/10 bg-surface overflow-hidden flex flex-col ${i >= 4 ? "hidden sm:flex" : ""}`}>
             <div className="relative">
               <Skeleton className="aspect-video w-full rounded-none" />
-              <div className="absolute top-2.5 left-2.5 h-6 w-16 rounded-full bg-surface/70" />
+              <div className="absolute top-2.5 left-2.5 h-6 w-16 rounded-lg bg-surface/70" />
             </div>
             <div className="p-4 flex flex-col gap-2.5">
               <Skeleton className={`h-4 ${["w-5/6", "w-3/4", "w-2/3", "w-4/5"][i % 4]}`} />

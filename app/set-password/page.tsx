@@ -181,7 +181,7 @@ export default function SetUpAccountPage() {
       <ol className="flex items-center gap-1.5 mb-7" aria-label="Setup steps">
         {ORDER.map((s, i) => (
           <li key={s} className="flex-1 min-w-0">
-            <span className={`block h-1.5 rounded-full transition-colors duration-500 ${i <= idx ? "bg-amber" : "bg-line/15"}`} />
+            <span className={`block h-1.5 rounded-[3px] transition-colors duration-500 ${i <= idx ? "bg-amber" : "bg-line/15"}`} />
             <span className={`mt-1.5 block truncate text-[11px] font-semibold ${i === idx ? "text-ink" : "text-ink-faint"}`} aria-current={i === idx ? "step" : undefined}>
               {LABEL[s]}
             </span>
@@ -237,7 +237,7 @@ export default function SetUpAccountPage() {
                 [matches, "Both are the same"],
               ].map(([ok, text]) => (
                 <li key={text as string} className={`flex items-center gap-2 ${ok ? "text-green" : "text-ink-faint"}`}>
-                  <span className={`w-[18px] h-[18px] rounded-full flex items-center justify-center ${ok ? "bg-green text-white" : "border border-line/30"}`}>
+                  <span className={`w-[18px] h-[18px] rounded-md flex items-center justify-center ${ok ? "bg-green text-white" : "border border-line/30"}`}>
                     {ok ? <CheckIcon className="w-3 h-3" /> : null}
                   </span>
                   {text as string}
@@ -392,7 +392,7 @@ export default function SetUpAccountPage() {
               ["The bell", "news from your team (and on your phone, if you turned it on)."],
             ].map(([t, d]) => (
               <li key={t} className="flex gap-2.5">
-                <span className="mt-0.5 w-5 h-5 rounded-full bg-green/15 text-green flex items-center justify-center flex-shrink-0">
+                <span className="mt-0.5 w-5 h-5 rounded-md bg-green/15 text-green flex items-center justify-center flex-shrink-0">
                   <CheckIcon className="w-3 h-3" />
                 </span>
                 <span>

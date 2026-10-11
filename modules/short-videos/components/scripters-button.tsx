@@ -76,7 +76,7 @@ export function ScriptersButton({
         ) : shown.length ? (
           <div className="flex flex-wrap gap-2">
             {shown.map((p) => (
-              <span key={p.memberId} className="inline-flex items-center gap-1.5 rounded-full border border-line/15 bg-surface-2 pl-1 pr-3 h-8">
+              <span key={p.memberId} className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 bg-surface-2 pl-1 pr-3 h-8">
                 <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} />
                 <span className="text-[13px] font-semibold">{p.name}</span>
               </span>

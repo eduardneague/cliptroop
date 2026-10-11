@@ -15,6 +15,7 @@ import { useConfirm } from "@/components/ui/confirm-provider";
 import { DateChip } from "@/components/ui/date-picker";
 import { RANGES, type RangeId, type TabId, type Window } from "../lib/ranges";
 import type { Audience, ContentItem, PlatformStatus, Production, Revenue } from "../lib/queries";
+import type { AdvancedData, Content as AdvContent } from "../lib/advanced";
 import { BarList, ChartCard, fmtCompact, fmtInt, Legend, LineChart, StackedColumns, StatTile } from "./charts";
 import { countryName } from "./world-map";
 import { AudienceMapView, MAP_MODES, sourcesOf, type MapMode, type MapView } from "./audience-map";
@@ -22,11 +23,15 @@ import { startNavProgress } from "@/components/ui/nav-progress";
 
 // Only loaded when a day on the Views chart is clicked.
 const DayVideos = dynamic(() => import("./day-videos").then((m) => m.DayVideos), { ssr: false });
+// The Advanced tab's code comes with the tab; the export for Claude with its button.
+const AdvancedTab = dynamic(() => import("./advanced/advanced-tab").then((m) => m.AdvancedTab), { loading: () => <AdvancedLoading /> });
+const ClaudeExport = dynamic(() => import("../export/claude-export").then((m) => m.ClaudeExport), { ssr: false });
 
 type Data =
   | { tab: "production"; production: Production }
   | { tab: "audience"; audience: Audience }
   | { tab: "content"; content: { items: ContentItem[]; status: PlatformStatus[] } }
+  | { tab: "advanced"; advanced: AdvancedData }
   | { tab: "revenue"; revenue: Revenue };
 
 const PLATFORM = {
@@ -133,9 +138,26 @@ export function AnalyticsView({
   };
   const [navigating, startNav] = useTransition();
   const [syncing, startSync] = useTransition();
-  const href = (p: { tab?: TabId; range?: RangeId; compare?: boolean }) => {
-    const q = new URLSearchParams({ tab: p.tab ?? data.tab, range: p.range ?? range });
+  // Advanced: the platform last looked at (this device), for the tab's link.
+  const [advPref, setAdvPref] = useState<string | null>(null);
+  const advPlatform = data.tab === "advanced" ? data.advanced.platform : null;
+  useEffect(() => {
+    try {
+      if (advPlatform) window.localStorage.setItem("vp-adv-platform", advPlatform);
+      setAdvPref(advPlatform ?? window.localStorage.getItem("vp-adv-platform"));
+    } catch {}
+  }, [advPlatform]);
+  const [claudeOpen, setClaudeOpen] = useState(false);
+  const href = (p: { tab?: TabId; range?: RangeId; compare?: boolean; platform?: string; content?: AdvContent }) => {
+    const tab = p.tab ?? data.tab;
+    const q = new URLSearchParams({ tab, range: p.range ?? range });
     if (!(p.compare ?? compare)) q.set("compare", "0");
+    if (tab === "advanced") {
+      const platform = p.platform ?? (data.tab === "advanced" ? data.advanced.platform : advPref);
+      const content = p.content ?? (data.tab === "advanced" && !p.platform ? data.advanced.content : "all");
+      if (platform && /^(youtube|instagram|facebook|tiktok)$/.test(platform)) q.set("platform", platform);
+      if (content !== "all") q.set("content", content);
+    }
     return `/analytics?${q}`;
   };
   const go = (p: Parameters<typeof href>[0]) => {
@@ -146,6 +168,7 @@ export function AnalyticsView({
     { id: "production", label: "Production" },
     { id: "audience", label: "Audience" },
     { id: "content", label: "Content" },
+    { id: "advanced", label: "Advanced" },
     { id: "revenue", label: "Revenue", locked: !revenueAllowed },
   ];
 
@@ -175,6 +198,33 @@ export function AnalyticsView({
       csvDownload(`content_${stamp}.csv`, [
         ["Platform", "Title", "Published", "Views", "Likes", "Comments", "Shares", "Link"],
         ...data.content.items.map((c) => [PLATFORM[c.platform].name, c.title, c.publishedAt?.slice(0, 10) ?? null, c.views, c.likes, c.comments, c.shares, c.url]),
+      ]);
+    } else if (data.tab === "advanced") {
+      const a = data.advanced;
+      const keys = [...new Set(a.videos.flatMap((v) => Object.keys(v.metrics)))].sort();
+      const money = a.videos.some((v) => v.revenue);
+      csvDownload(`advanced_${a.platform}_${stamp}.csv`, [
+        [
+          "Platform", "Title", "Published", "Kind", "Length (s)", "Views", "Engaged views", "Watch hours", "Average view (s)", "Average % viewed", "Still watching after 3 s (%)", "Halfway (%)", "At the end (%)",
+          "Likes", "Comments", "Shares", "Saves", "Reach", "Subscribers gained", "Skipped (%)", "Reposts", ...keys,
+          ...(money ? [`Revenue (${a.currency})`, `RPM (${a.currency})`, `CPM (${a.currency})`, "Ad impressions", "Monetized playbacks"] : []),
+          "Ours", "Hook", "Link",
+        ],
+        ...a.videos.map((v) => [
+          a.platform, v.title, v.publishedAt?.slice(0, 16).replace("T", " ") ?? null, v.kind, v.durationSec, v.views, v.engagedViews, v.watchMinutes === null ? null : Math.round((v.watchMinutes / 60) * 10) / 10, v.avgViewSeconds, v.avgViewPct,
+          v.retention?.at3s === null || v.retention?.at3s === undefined ? null : Math.round(v.retention.at3s * 100),
+          v.retention?.at50 === null || v.retention?.at50 === undefined ? null : Math.round(v.retention.at50 * 100),
+          v.retention?.end === null || v.retention?.end === undefined ? null : Math.round(v.retention.end * 100),
+          v.likes, v.comments, v.shares, v.saves, v.reach, v.subscribersGained, v.skipRate, v.reposts, ...keys.map((k) => v.metrics[k] ?? null),
+          ...(money ? [v.revenue?.revenue?.toFixed(2) ?? null, v.revenue?.rpm?.toFixed(2) ?? null, v.revenue?.cpm?.toFixed(2) ?? null, v.revenue?.adImpressions ?? null, v.revenue?.monetizedPlaybacks ?? null] : []),
+          v.ours ? `#${v.ours.number ?? "?"}` : null, v.hook, v.url,
+        ]),
+        [],
+        ["Group", "Number", "This range", "Before"],
+        ...a.groups.flatMap((g) => g.tiles.map((t) => [g.title, t.label, t.value === null ? null : Math.round(t.value * 100) / 100, t.prev === null ? null : Math.round(t.prev * 100) / 100])),
+        [],
+        ["Breakdown", "Where it's from", "Name", "Views", "Watch hours", "Value"],
+        ...a.breakdowns.flatMap((b) => b.rows.map((r) => [b.title, b.sub, r.label, r.views, r.watchMinutes === null ? null : Math.round((r.watchMinutes / 60) * 10) / 10, r.value])),
       ]);
     } else if (data.revenue.allowed) {
       const r = data.revenue;
@@ -229,7 +279,7 @@ export function AnalyticsView({
           <p className="text-[11.5px] text-ink-faint sm:text-right max-w-[260px]" role="status">
             {updating ? (
               <span className="flex items-start sm:justify-end gap-1.5 text-ink-soft">
-                <span aria-hidden className="mt-[5px] w-1.5 h-1.5 shrink-0 rounded-full bg-amber animate-pulse" />
+                <span aria-hidden className="mt-[5px] w-1.5 h-1.5 shrink-0 rounded-[2px] bg-amber animate-pulse" />
                 <span>Getting the latest numbers… this page updates by itself.</span>
               </span>
             ) : (
@@ -253,7 +303,7 @@ export function AnalyticsView({
             >
               {t.label}
               {t.locked && <LockIcon className="w-3.5 h-3.5 text-ink-faint" />}
-              <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+              <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
             </Link>
           );
         })}
@@ -282,8 +332,8 @@ export function AnalyticsView({
           onClick={() => go({ compare: !compare })}
           className={`inline-flex items-center gap-2 rounded-lg border px-3 h-9 text-[12.5px] font-semibold transition-colors ${compare ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
         >
-          <span className={`w-7 h-4 rounded-full relative transition-colors ${compare ? "bg-amber" : "bg-line/20"}`}>
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${compare ? "left-3.5" : "left-0.5"}`} />
+          <span className={`w-7 h-4 rounded-[5px] relative transition-colors ${compare ? "bg-amber" : "bg-line/20"}`}>
+            <span className={`absolute top-0.5 w-3 h-3 rounded-[3px] bg-white transition-all ${compare ? "left-3.5" : "left-0.5"}`} />
           </span>
           Compare with the {RANGES.find((r) => r.id === range)!.label} before
         </button>
@@ -299,8 +349,47 @@ export function AnalyticsView({
       <div className={`transition-opacity duration-200 ${navigating ? "opacity-50" : ""}`}>
         {data.tab === "production" && <ProductionTab p={data.production} compare={compare} w={w} />}
         {data.tab === "audience" && <AudienceTab teamId={teamId} a={data.audience} compare={compare} picked={pickedIn(data.audience, picked)} setPicked={setPicked} />}
-        {data.tab === "content" && <ContentTab items={data.content.items} status={data.content.status} />}
+        {data.tab === "content" && <ContentTab items={data.content.items} status={data.content.status} advancedHref={href({ tab: "advanced" })} />}
+        {data.tab === "advanced" && (
+          <AdvancedTab
+            teamId={teamId}
+            data={data.advanced}
+            compare={compare}
+            onPlatform={(platform) => go({ platform, content: "all" })}
+            onContent={(content) => go({ content })}
+            onDownload={() => setClaudeOpen(true)}
+          />
+        )}
         {data.tab === "revenue" && <RevenueTab r={data.revenue} compare={compare} teamId={teamId} />}
+      </div>
+      {claudeOpen && <ClaudeExport teamId={teamId} teamName={teamName} range={range} platform={advPlatform} revenueAllowed={revenueAllowed} onClose={() => setClaudeOpen(false)} />}
+    </div>
+  );
+}
+
+/** While the Advanced tab's code arrives: its shape. */
+function AdvancedLoading() {
+  return (
+    <div className="space-y-5" aria-hidden>
+      <div className="flex items-center gap-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="skeleton h-9 w-28 rounded-lg" />
+        ))}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className="rounded-2xl border border-line/10 bg-surface p-5 space-y-3">
+            <div className="skeleton h-3 w-32 rounded" />
+            <div className="grid grid-cols-3 gap-4">
+              {[0, 1, 2, 3, 4, 5].map((k) => (
+                <div key={k} className="space-y-2">
+                  <div className="skeleton h-3 w-20 rounded" />
+                  <div className="skeleton h-6 w-16 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -476,9 +565,9 @@ function StatusRow({ status }: { status: PlatformStatus[] }) {
         <span
           key={s.platform}
           title={s.lastError ?? undefined}
-          className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold ${s.lastError && s.connected ? "border-red/30 bg-red/5" : "border-line/15 bg-surface"}`}
+          className={`inline-flex items-center gap-2 rounded-lg border pl-1 pr-3 h-8 text-[12px] font-semibold ${s.lastError && s.connected ? "border-red/30 bg-red/5" : "border-line/15 bg-surface"}`}
         >
-          <PlatformIcon platform={s.platform} className={`w-6 h-6 rounded-full ${s.connected ? "" : "opacity-40 grayscale"}`} />
+          <PlatformIcon platform={s.platform} className={`w-6 h-6 rounded-md ${s.connected ? "" : "opacity-40 grayscale"}`} />
           <span className="text-ink">{PLATFORM[s.platform].name}</span>
           <span className="text-ink-faint font-medium">{statusText(s)}</span>
         </span>
@@ -505,7 +594,7 @@ function PlatformFilter({ a, picked, setPicked }: { a: Audience; picked: P[]; se
           type="button"
           onClick={() => setPicked(null)}
           aria-pressed={all}
-          className={`inline-flex items-center rounded-full px-3 h-8 text-[12px] font-semibold border transition-colors ${all ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+          className={`inline-flex items-center rounded-lg px-3 h-8 text-[12px] font-semibold border transition-colors ${all ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
         >
           All together
         </button>
@@ -527,13 +616,13 @@ function PlatformFilter({ a, picked, setPicked }: { a: Audience; picked: P[]; se
               const next = on ? picked.filter((x) => x !== p) : [...picked, p];
               setPicked(next.length === 0 || next.length === usable.length ? null : next);
             }}
-            className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors disabled:cursor-default ${
+            className={`inline-flex items-center gap-2 rounded-lg border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors disabled:cursor-default ${
               on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)]" : can ? "border-line/15 bg-surface/50 opacity-70 hover:opacity-100" : "border-line/10 bg-transparent"
             } ${s.lastError && s.connected ? "!border-red/40" : ""}`}
           >
-            <PlatformIcon platform={p} className={`w-6 h-6 rounded-full ${can ? "" : "opacity-40 grayscale"}`} />
+            <PlatformIcon platform={p} className={`w-6 h-6 rounded-md ${can ? "" : "opacity-40 grayscale"}`} />
             <span className={can ? "text-ink" : "text-ink-faint"}>{PLATFORM[p].name}</span>
-            {on && usable.length > 1 && <span className="w-1.5 h-1.5 rounded-full" style={{ background: PLATFORM[p].color }} aria-hidden />}
+            {on && usable.length > 1 && <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: PLATFORM[p].color }} aria-hidden />}
             <span className="text-ink-faint font-medium">{statusText(s)}</span>
           </button>
         );
@@ -888,7 +977,7 @@ function ContentFilter({ items, status, platform, setPlatform }: { items: Conten
         type="button"
         onClick={() => setPlatform("all")}
         aria-pressed={platform === "all"}
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[12px] font-semibold border transition-colors ${
+        className={`inline-flex items-center gap-1.5 rounded-lg px-3 h-8 text-[12px] font-semibold border transition-colors ${
           platform === "all" ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"
         }`}
       >
@@ -906,11 +995,11 @@ function ContentFilter({ items, status, platform, setPlatform }: { items: Conten
             aria-pressed={on}
             title={s?.lastError ?? undefined}
             onClick={() => setPlatform(on ? "all" : p)}
-            className={`inline-flex items-center gap-2 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors ${
+            className={`inline-flex items-center gap-2 rounded-lg border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors ${
               on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)]" : "border-line/15 bg-surface/50 hover:bg-surface"
             } ${s?.lastError && s.connected ? "!border-red/40" : ""}`}
           >
-            <PlatformIcon platform={p} className={`w-6 h-6 rounded-full ${s?.connected || n ? "" : "opacity-40 grayscale"}`} />
+            <PlatformIcon platform={p} className={`w-6 h-6 rounded-md ${s?.connected || n ? "" : "opacity-40 grayscale"}`} />
             <span className="text-ink">{PLATFORM[p].name}</span>
             <span className="text-ink-faint font-medium tabular-nums">{n}</span>
             {s && <span className="hidden sm:inline text-ink-faint font-medium">· {statusText(s)}</span>}
@@ -921,7 +1010,7 @@ function ContentFilter({ items, status, platform, setPlatform }: { items: Conten
   );
 }
 
-function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformStatus[] }) {
+function ContentTab({ items, status, advancedHref }: { items: ContentItem[]; status: PlatformStatus[]; advancedHref: string }) {
   const [platform, setPlatform] = useState<"all" | P>("all");
   const list = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
   if (!status.some((s) => s.connected) && !items.length)
@@ -1008,6 +1097,12 @@ function ContentTab({ items, status }: { items: ContentItem[]; status: PlatformS
       )}
       <p className="text-[12px] text-ink-faint">
         Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts and Reels. Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their numbers. Only the accounts connected now are listed: posts on a disconnected or earlier account never are.
+      </p>
+      <p className="text-[12.5px] text-ink-soft">
+        Every number about each video (watch time, retention, where its views came from, what works):{" "}
+        <Link href={advancedHref} scroll={false} className="font-semibold text-amber hover:underline">
+          Advanced →
+        </Link>
       </p>
     </div>
   );
@@ -1108,8 +1203,8 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
                     <b>{cents(x.amount)}</b>
                     <span className="text-ink-faint ml-2 inline-block w-10 text-right">{streamTotal ? `${Math.round((x.amount / streamTotal) * 100)}%` : ""}</span>
                   </span>
-                  <span className="col-span-2 mt-1 h-1.5 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
-                    <span className="block h-full rounded-full" style={{ width: `${streamTotal ? Math.max(2, (x.amount / streamTotal) * 100) : 0}%`, background: STREAM_COLOR[x.kind] }} />
+                  <span className="col-span-2 mt-1 h-1.5 rounded-[3px] bg-line/[0.07] overflow-hidden" aria-hidden>
+                    <span className="block h-full rounded-[3px]" style={{ width: `${streamTotal ? Math.max(2, (x.amount / streamTotal) * 100) : 0}%`, background: STREAM_COLOR[x.kind] }} />
                   </span>
                 </li>
               ))}
@@ -1120,7 +1215,7 @@ function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolean; team
           {r.split && splitTotal > 0 && (
             <div className="mt-5 pt-4 border-t border-line/10">
               <div className="text-[12px] font-semibold text-ink-soft mb-2">YouTube revenue: Shorts vs long videos</div>
-              <div className="flex h-3 rounded-full overflow-hidden gap-[2px]" role="img" aria-label={`Shorts ${cents(r.split.shorts)}, long videos ${cents(r.split.long)}`}>
+              <div className="flex h-3 rounded-[3px] overflow-hidden gap-[2px]" role="img" aria-label={`Shorts ${cents(r.split.shorts)}, long videos ${cents(r.split.long)}`}>
                 <span style={{ width: `${(r.split.shorts / splitTotal) * 100}%`, background: SHORT_COLOR }} />
                 <span style={{ width: `${(r.split.long / splitTotal) * 100}%`, background: LONG_COLOR }} />
               </div>
@@ -1333,7 +1428,7 @@ function IncomeForm({ teamId, currency, onDone }: { teamId: string; currency: st
         ariaLabel="Where it came from"
         className="!h-9 !text-[13px]"
         menuMinWidth={240}
-        options={Object.entries(SOURCE_LABEL).map(([k, v]) => ({ value: k, label: v, icon: <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SOURCE_TONE[k] ?? OTHER_COLOR }} aria-hidden /> }))}
+        options={Object.entries(SOURCE_LABEL).map(([k, v]) => ({ value: k, label: v, icon: <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: SOURCE_TONE[k] ?? OTHER_COLOR }} aria-hidden /> }))}
       />
       <label className="flex items-center h-9 rounded-lg border border-line/15 bg-surface px-2.5 text-[13px] focus-within:ring-2 focus-within:ring-amber/40">
         <span className="text-ink-faint mr-1.5 text-[12px] font-semibold">{currency}</span>
@@ -1433,9 +1528,9 @@ function AccessCard({ r, teamId }: { r: Revenue; teamId: string }) {
                     if (res.error !== undefined) toast.error(res.error);
                     else router.refresh();
                   }}
-                  className={`w-10 h-6 rounded-full relative transition-colors disabled:opacity-60 ${on ? "bg-amber" : "bg-line/20"}`}
+                  className={`w-10 h-6 rounded-lg relative transition-colors disabled:opacity-60 ${on ? "bg-amber" : "bg-line/20"}`}
                 >
-                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-md bg-white shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
                 </button>
               )}
             </li>

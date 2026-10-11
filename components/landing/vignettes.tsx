@@ -62,10 +62,10 @@ export function PlanVignette() {
         <div className="font-display text-[19px] font-semibold">October</div>
         <div className="flex items-center gap-3 text-[11.5px] text-ink-soft">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-short" /> Short
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-short" /> Short
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-long" /> Long video
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-long" /> Long video
           </span>
         </div>
       </div>
@@ -147,7 +147,7 @@ export function ScriptVignette() {
         <div className="space-y-2.5 min-w-0">
           <div className="text-[11px] font-semibold text-ink-faint">Hook</div>
           {lines.map((l, i) => (
-            <span key={i} className="ld-a ld-type block h-[9px] rounded-full bg-ink/15" style={{ width: l.w, ...d(l.d) }} />
+            <span key={i} className="ld-a ld-type block h-[9px] rounded-[3px] bg-ink/15" style={{ width: l.w, ...d(l.d) }} />
           ))}
         </div>
         {/* A sketched editing idea. */}
@@ -172,10 +172,10 @@ export function ScriptVignette() {
         {steps.map((s, i) => (
           <span key={s.name} className="inline-flex items-center gap-2">
             {i > 0 && <span className="w-5 h-px bg-line/25" />}
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-line/15 pl-1 pr-2.5 h-8 text-[12.5px] font-semibold">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 pl-1 pr-2.5 h-8 text-[12.5px] font-semibold">
               <span className="relative w-6 h-6">
                 <Face who={s.who} className="w-6 h-6 text-[10px] ring-0" />
-                <span className="ld-a ld-tick absolute -right-1 -bottom-1 w-3.5 h-3.5 rounded-full bg-green text-white grid place-items-center ring-2 ring-surface" style={d(s.d)}>
+                <span className="ld-a ld-tick absolute -right-1 -bottom-1 w-3.5 h-3.5 rounded-[4px] bg-green text-white grid place-items-center ring-2 ring-surface" style={d(s.d)}>
                   <CheckIcon className="w-2 h-2" />
                 </span>
               </span>
@@ -183,7 +183,7 @@ export function ScriptVignette() {
             </span>
           </span>
         ))}
-        <span className="ld-a ld-pop ml-auto rounded-full bg-amber/12 text-amber px-3 h-7 inline-flex items-center text-[12px] font-bold" style={d(4.9)}>
+        <span className="ld-a ld-pop ml-auto rounded-lg bg-amber/12 text-amber px-3 h-7 inline-flex items-center text-[12px] font-bold" style={d(4.9)}>
           Radu, it&rsquo;s your turn
         </span>
       </div>
@@ -263,9 +263,9 @@ export function ReviewVignette() {
             Approved
           </span>
         </div>
-        <div className="relative mt-3 h-1.5 rounded-full bg-line/15">
-          <span className="ld-a ld-progress absolute inset-0 rounded-full bg-amber" />
-          <span className="ld-a ld-playhead absolute -top-1 w-3.5 h-3.5 -ml-[7px] rounded-full bg-amber ring-2 ring-surface" style={{ left: "100%" }} />
+        <div className="relative mt-3 h-1.5 rounded-[3px] bg-line/15">
+          <span className="ld-a ld-progress absolute inset-0 rounded-[3px] bg-amber" />
+          <span className="ld-a ld-playhead absolute -top-1 w-3.5 h-3.5 -ml-[7px] rounded-[4px] bg-amber ring-2 ring-surface" style={{ left: "100%" }} />
           {NOTES.map((n) => (
             <span key={n.tc} className="ld-a ld-pin absolute -top-[15px] w-2.5 h-2.5 rounded-full rounded-br-none rotate-45 ring-2 ring-surface" style={{ left: `${n.at}%`, background: PEOPLE[n.who].color, transform: "translate(-50%, 0)", ...d(n.d) }} />
           ))}
@@ -340,8 +340,8 @@ export function PostVignette() {
                   </span>
                 </span>
               </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-line/10 overflow-hidden">
-                <span className="ld-a ld-bar block h-full rounded-full bg-amber" style={d(l.d)} />
+              <div className="mt-1.5 h-1.5 rounded-[3px] bg-line/10 overflow-hidden">
+                <span className="ld-a ld-bar block h-full rounded-[3px] bg-amber" style={d(l.d)} />
               </div>
             </div>
           </li>
@@ -399,8 +399,8 @@ export function MeasureVignette() {
         {COUNTRIES.map(([c, v], i) => (
           <li key={c} className="grid grid-cols-[72px_1fr_36px] items-center gap-2 text-[12px]">
             <span className="text-ink-soft">{c}</span>
-            <span className="h-2 rounded-full bg-line/10 overflow-hidden">
-              <span className="ld-a ld-grow block h-full rounded-full bg-amber/80" style={{ width: `${(v / 41) * 100}%`, ...d(0.3 + i * 0.25) }} />
+            <span className="h-2 rounded-[3px] bg-line/10 overflow-hidden">
+              <span className="ld-a ld-grow block h-full rounded-[3px] bg-amber/80" style={{ width: `${(v / 41) * 100}%`, ...d(0.3 + i * 0.25) }} />
             </span>
             <span className="text-right tabular-nums font-semibold">{v}%</span>
           </li>

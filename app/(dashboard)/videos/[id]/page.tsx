@@ -354,9 +354,9 @@ export default async function ProjectDetailPage({
                     {checks.map((c) => (
                       <span
                         key={c.label}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 h-7 text-[12px] font-semibold ${c.ok ? "bg-green/12 text-green" : "bg-surface-2 text-ink-soft"}`}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 h-7 text-[12px] font-semibold ${c.ok ? "bg-green/12 text-green" : "bg-surface-2 text-ink-soft"}`}
                       >
-                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${c.ok ? "bg-green text-white" : "border border-line/30"}`}>{c.ok ? "✓" : ""}</span>
+                        <span className={`w-4 h-4 rounded-[4px] flex items-center justify-center text-[10px] ${c.ok ? "bg-green text-white" : "border border-line/30"}`}>{c.ok ? "✓" : ""}</span>
                         {c.label}
                       </span>
                     ))}

@@ -14,11 +14,11 @@ const NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram
 export function CheckRow({ c }: { c: Check & { url?: string } }) {
   return (
     <li className="flex items-start gap-3 py-3">
-      <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${LEVEL[c.level].dot}`} aria-hidden />
+      <span className={`mt-1.5 w-2.5 h-2.5 rounded-[3px] flex-shrink-0 ${LEVEL[c.level].dot}`} aria-hidden />
       <span className="flex-1 min-w-0">
         <span className="block text-[13.5px] font-semibold">
           {c.name}
-          {!c.publicPart && !c.url && <span className="ml-2 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Only here</span>}
+          {!c.publicPart && !c.url && <span className="ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Only here</span>}
         </span>
         <span className="block text-[12.5px] text-ink-soft break-words">{c.detail}</span>
       </span>
@@ -203,11 +203,11 @@ function IncidentRow({ i }: { i: Incident }) {
   const end = i.endedAt ? Date.parse(i.endedAt) : Date.now();
   return (
     <li className="py-3 flex items-start gap-3">
-      <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${BAR_COLOR[i.level]}`} aria-hidden />
+      <span className={`mt-1.5 w-2.5 h-2.5 rounded-[3px] flex-shrink-0 ${BAR_COLOR[i.level]}`} aria-hidden />
       <span className="flex-1 min-w-0">
         <span className="block text-[13.5px] font-semibold">
           {partName(i.part)} · {i.level === "down" ? "not working" : "slow or partly working"}
-          {!i.endedAt && <span className="ml-2 rounded-full bg-red/15 text-red px-2 py-0.5 text-[11px] font-bold">Ongoing</span>}
+          {!i.endedAt && <span className="ml-2 rounded-md bg-red/15 text-red px-2 py-0.5 text-[11px] font-bold">Ongoing</span>}
         </span>
         <span className="block text-[12.5px] text-ink-soft">
           <LocalTime iso={i.startedAt} /> · {durationText(end - Date.parse(i.startedAt))}

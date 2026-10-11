@@ -72,7 +72,7 @@ export default async function StatusPage() {
             {caption && <span className="ml-1.5 text-[12px] font-normal text-ink-faint">{caption}</span>}
           </span>
           <span className={`inline-flex items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap ${LEVEL[level].tone}`}>
-            <span className={`w-2 h-2 rounded-full ${LEVEL[level].dot}`} aria-hidden />
+            <span className={`w-2 h-2 rounded-[3px] ${LEVEL[level].dot}`} aria-hidden />
             {LEVEL[level].label}
           </span>
         </div>
@@ -94,7 +94,7 @@ export default async function StatusPage() {
         </header>
 
         <section className={`rounded-2xl border px-5 py-4 flex items-start gap-3.5 ${BANNER[overall].box}`}>
-          <span className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center text-white flex-shrink-0 ${BANNER[overall].icon}`} aria-hidden>
+          <span className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0 ${BANNER[overall].icon}`} aria-hidden>
             {overall === "ok" ? <CheckIcon className="w-4 h-4" /> : <AlertIcon className="w-4 h-4" />}
           </span>
           <div className="min-w-0">
@@ -201,11 +201,11 @@ function IncidentItem({ i }: { i: Incident }) {
   const end = i.endedAt ? Date.parse(i.endedAt) : Date.now();
   return (
     <li className="py-3 flex items-start gap-3">
-      <span className={`mt-1.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${BAR_COLOR[i.level]}`} aria-hidden />
+      <span className={`mt-1.5 w-2.5 h-2.5 rounded-[3px] flex-shrink-0 ${BAR_COLOR[i.level]}`} aria-hidden />
       <span className="flex-1 min-w-0">
         <span className="block text-[13.5px] font-semibold">
           {partName(i.part)} · {i.level === "down" ? "not working" : "slow or partly working"}
-          {!i.endedAt && <span className="ml-2 rounded-full bg-red/15 text-red px-2 py-0.5 text-[11px] font-bold">Ongoing</span>}
+          {!i.endedAt && <span className="ml-2 rounded-md bg-red/15 text-red px-2 py-0.5 text-[11px] font-bold">Ongoing</span>}
         </span>
         <span className="block text-[12.5px] text-ink-soft">
           <LocalTime iso={i.startedAt} /> · {i.endedAt ? `for ${durationText(end - Date.parse(i.startedAt))}` : `for ${durationText(end - Date.parse(i.startedAt))} so far`}

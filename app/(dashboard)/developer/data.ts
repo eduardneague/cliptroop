@@ -97,6 +97,7 @@ export function supabaseUsageUrl() {
 
 const BUCKETS: Record<string, string> = {
   "review-videos": "Short videos (uploads for review and posting)",
+  "video-frames": "Frames of uploaded shorts (for the Claude export)",
   "package-thumbs": "Long video thumbnails (Package)",
   thumbnails: "Long video thumbnails (older)",
   "mockup-library": "Mockup library",

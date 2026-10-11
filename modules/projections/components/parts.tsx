@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AlertIcon, CheckIcon } from "@/components/ui/icons";
 import { colorVar } from "@/modules/objectives/lib/metrics";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { ProjStatus } from "../lib/compute";
 import { formatValue, metricOf } from "../lib/metrics";
 import type { ProjectionView } from "../lib/types";
@@ -25,10 +26,28 @@ export const STATUS: Record<ProjStatus, { label: string; cls: string }> = {
   missed: { label: "Ended short", cls: "text-ink-faint bg-surface-2" },
 };
 
+/** A projection's mark: the platform's logo when it's about one, else a rising line, on its colour. */
+export function ProjIcon({ p, size = "md" }: { p: Pick<ProjectionView, "platform" | "color">; size?: "sm" | "md" }) {
+  const box = size === "sm" ? "w-6 h-6 rounded-md" : "w-8 h-8 rounded-lg";
+  const inner = size === "sm" ? "w-3.5 h-3.5" : "w-[18px] h-[18px]";
+  return (
+    <span className={`${box} flex-shrink-0 flex items-center justify-center`} style={{ background: colorVar(p.color, 0.14), color: colorVar(p.color) }} aria-hidden>
+      {p.platform ? (
+        <PlatformIcon platform={p.platform} className={`${inner} rounded-[5px]`} />
+      ) : (
+        <svg viewBox="0 0 24 24" className={inner} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 17l6-6 4 4 8-8" />
+          <path d="M14 7h7v7" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 export function ProjStatusPill({ status, className = "" }: { status: ProjStatus; className?: string }) {
   const m = STATUS[status];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-[22px] text-[11.5px] font-bold whitespace-nowrap ${m.cls} ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 h-[22px] text-[11.5px] font-bold whitespace-nowrap ${m.cls} ${className}`}>
       {status === "reached" || status === "done" ? (
         <CheckIcon className="w-3 h-3" />
       ) : status === "behind" ? (
@@ -38,7 +57,7 @@ export function ProjStatusPill({ status, className = "" }: { status: ProjStatus;
           <path d="M5 1.5 9 8.5H1Z" fill="currentColor" />
         </svg>
       ) : (
-        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden />
+        <span className="w-1.5 h-1.5 rounded-[2px] bg-current opacity-70" aria-hidden />
       )}
       {m.label}
     </span>
@@ -73,11 +92,11 @@ export function ProgressTrack({ p, height = 10, className = "" }: { p: Projectio
   const pace = !done && p.a.timeFraction > 0 && p.a.timeFraction < 1 ? p.a.timeFraction : null;
   return (
     <div className={`relative w-full obj-bar-in ${className}`} style={{ height }}>
-      <div className="absolute inset-0 rounded-full overflow-hidden" style={{ background: colorVar(p.color, 0.16) }}>
-        <div className="obj-bar-fill h-full rounded-full" style={{ width: `${f * 100}%`, background: colorVar(p.color) }} />
+      <div className="absolute inset-0 rounded-[3px] overflow-hidden" style={{ background: colorVar(p.color, 0.16) }}>
+        <div className="obj-bar-fill h-full rounded-[3px]" style={{ width: `${f * 100}%`, background: colorVar(p.color) }} />
       </div>
       {pace !== null && (
-        <span className="absolute -top-[3px] -bottom-[3px] w-[2px] rounded-full bg-ink/70" style={{ left: `calc(${pace * 100}% - 1px)` }} title="Where an even pace would be by now" aria-hidden />
+        <span className="absolute -top-[3px] -bottom-[3px] w-[2px] rounded-[2px] bg-ink/70" style={{ left: `calc(${pace * 100}% - 1px)` }} title="Where an even pace would be by now" aria-hidden />
       )}
     </div>
   );
@@ -87,8 +106,8 @@ export function ProgressTrack({ p, height = 10, className = "" }: { p: Projectio
 export function TimeTrack({ p, className = "" }: { p: ProjectionView; className?: string }) {
   const f = p.a.timeFraction;
   return (
-    <div className={`relative h-1.5 w-full rounded-full bg-line/10 overflow-hidden ${className}`} aria-hidden>
-      <div className="h-full rounded-full bg-ink/25 transition-[width] duration-700" style={{ width: `${f * 100}%` }} />
+    <div className={`relative h-1.5 w-full rounded-[3px] bg-line/10 overflow-hidden ${className}`} aria-hidden>
+      <div className="h-full rounded-[3px] bg-ink/25 transition-[width] duration-700" style={{ width: `${f * 100}%` }} />
     </div>
   );
 }

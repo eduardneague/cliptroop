@@ -199,8 +199,8 @@ export function FollowersWidget({ teamId }: { teamId: string }) {
             <li key={p} className="flex items-center gap-2 text-[12.5px]">
               <PlatformIcon platform={p} className="w-5 h-5 rounded-md" />
               <span className="flex-1 text-ink-soft truncate">{NAME[p]}</span>
-              <span className="w-16 h-1.5 rounded-full bg-line/[0.07] overflow-hidden hidden min-[300px]:block" aria-hidden>
-                <span className="block h-full rounded-full" style={{ width: `${Math.max(4, ((a.followersNow[p] ?? 0) / Math.max(1, ...list.map((x) => a.followersNow[x] ?? 0))) * 100)}%`, background: COLOR[p] }} />
+              <span className="w-16 h-1.5 rounded-[3px] bg-line/[0.07] overflow-hidden hidden min-[300px]:block" aria-hidden>
+                <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(4, ((a.followersNow[p] ?? 0) / Math.max(1, ...list.map((x) => a.followersNow[x] ?? 0))) * 100)}%`, background: COLOR[p] }} />
               </span>
               <b className="tabular-nums w-14 text-right">{fmtCompact(a.followersNow[p]!)}</b>
             </li>
@@ -262,8 +262,8 @@ export function TopVideosWidget({ teamId }: { teamId: string }) {
               </span>
               {thumbs && (
                 <span className="mt-1 flex items-center gap-2">
-                  <span className="flex-1 h-1 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
-                    <span className="block h-full rounded-full" style={{ width: `${Math.max(3, ((v.views ?? 0) / max) * 100)}%`, background: COLOR[v.platform] }} />
+                  <span className="flex-1 h-1 rounded-[2px] bg-line/[0.07] overflow-hidden" aria-hidden>
+                    <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((v.views ?? 0) / max) * 100)}%`, background: COLOR[v.platform] }} />
                   </span>
                   {v.publishedAt && box.w >= 360 && <span className="text-[10.5px] text-ink-faint whitespace-nowrap">{ago(v.publishedAt)}</span>}
                 </span>
@@ -334,8 +334,8 @@ export function AudienceMapWidget({ teamId, settings }: { teamId: string; settin
                   <span className="flex-1 truncate text-ink-soft">{countryName(c.code)}</span>
                   <b className="tabular-nums">{pct(c.value)}%</b>
                 </div>
-                <div className="mt-1 h-1 rounded-full bg-line/10 overflow-hidden" aria-hidden>
-                  <div className="h-full rounded-full bg-amber" style={{ width: `${Math.max(3, (c.value / most) * 100)}%` }} />
+                <div className="mt-1 h-1 rounded-[2px] bg-line/10 overflow-hidden" aria-hidden>
+                  <div className="h-full rounded-[3px] bg-amber" style={{ width: `${Math.max(3, (c.value / most) * 100)}%` }} />
                 </div>
               </li>
             ))}

@@ -70,7 +70,7 @@ export function ShortStepSkeleton({ step, current }: { step: ShortStage; current
             <div className="space-y-4">
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className="flex gap-3">
-                  <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
+                  <Skeleton className="w-6 h-6 rounded-md flex-shrink-0" />
                   <div className="flex-1 space-y-1.5 pt-0.5">
                     <Skeleton className={`h-3 ${["w-48", "w-40", "w-52", "w-36"][i]}`} />
                     <Skeleton className="h-2.5 w-16" />

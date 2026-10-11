@@ -57,7 +57,7 @@ export function ShortTypePicker({
             }`}
             style={on ? { borderColor: c, background: `color-mix(in srgb, ${c} 12%, transparent)` } : undefined}
           >
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: meta.color ?? "rgb(var(--line) / 0.3)" }} aria-hidden />
+            <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: meta.color ?? "rgb(var(--line) / 0.3)" }} aria-hidden />
             {meta.label}
           </button>
         );
@@ -89,8 +89,8 @@ export function Switch({
       onClick={() => onChange(!checked)}
       className="flex items-start gap-3 text-left disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded-lg"
     >
-      <span className={`relative mt-0.5 w-10 h-6 flex-shrink-0 rounded-full transition-colors ${checked ? "bg-green" : "bg-line/20"}`}>
-        <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+      <span className={`relative mt-0.5 w-10 h-6 flex-shrink-0 rounded-lg transition-colors ${checked ? "bg-green" : "bg-line/20"}`}>
+        <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
       </span>
       <span>
         <span className="block text-[13.5px] font-semibold">{label}</span>

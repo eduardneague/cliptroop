@@ -78,7 +78,7 @@ export async function ProblemsTab() {
       <section className={`${card} px-4 sm:px-5 py-4 scroll-mt-24`} id="reports">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className={h2}>Reports</h2>
-          <span className={`rounded-full px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${openReports ? "bg-amber text-white" : "bg-surface-2 text-ink-soft"}`}>{openReports}</span>
+          <span className={`rounded-md px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${openReports ? "bg-amber text-white" : "bg-surface-2 text-ink-soft"}`}>{openReports}</span>
         </div>
         <p className="mt-1 text-[12.5px] text-ink-soft">Bugs and suggestions people sent from Settings → Account. Mark one done and its sender sees it as Done.</p>
         {reportsError ? <p className="pt-3 text-[13.5px] text-ink-soft">Reports need migration 0068 on this database.</p> : <ReportsList reports={reports} />}
@@ -88,7 +88,7 @@ export async function ProblemsTab() {
       <section className={`${card} px-4 sm:px-5 py-4 scroll-mt-24`} id="errors">
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className={h2}>Errors</h2>
-          <span className={`rounded-full px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${open.length ? "bg-red text-white" : "bg-surface-2 text-ink-soft"}`}>{open.length}</span>
+          <span className={`rounded-md px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${open.length ? "bg-red text-white" : "bg-surface-2 text-ink-soft"}`}>{open.length}</span>
           <span className="flex-1" />
           {open.length > 1 && <ResolveAllButton count={open.length} />}
         </div>

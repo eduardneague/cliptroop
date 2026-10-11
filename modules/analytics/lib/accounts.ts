@@ -17,8 +17,17 @@ export { inAccountTime, sameAccount, visibleRows, type NumbersVisibility } from 
 
 type Db = SupabaseClient<any, any, any>;
 
-/** Every table with a platform's copied numbers. */
-const NUMBER_TABLES = ["analytics_daily", "analytics_countries", "analytics_content", "analytics_content_days", "analytics_revenue_daily"] as const;
+/** Every table with a platform's copied numbers (0081 added the breakdowns, retention curves and each video's money). */
+const NUMBER_TABLES = [
+  "analytics_daily",
+  "analytics_countries",
+  "analytics_content",
+  "analytics_content_days",
+  "analytics_revenue_daily",
+  "analytics_breakdowns",
+  "analytics_retention",
+  "analytics_content_revenue",
+] as const;
 
 
 /** Delete a team's numbers for one platform (they belonged to another account). */

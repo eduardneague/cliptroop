@@ -191,9 +191,9 @@ export function PostSections({ rows, manager }: { rows: PostRow[]; manager: bool
             className={`group rounded-2xl border overflow-hidden ${danger ? "border-red/50 bg-red/[0.07]" : "border-line/10 bg-surface"}`}
           >
             <summary className="flex items-center gap-2 px-4 py-3.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-              {danger && <span className="w-2 h-2 rounded-full bg-red animate-pulse" aria-hidden />}
+              {danger && <span className="w-2 h-2 rounded-[3px] bg-red animate-pulse" aria-hidden />}
               <span className={`text-[11.5px] font-bold uppercase tracking-wide ${danger ? "text-red" : "text-ink-soft"}`}>{s.title}</span>
-              <span className={`rounded-full px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${danger ? "bg-red text-white" : "bg-surface-2 text-ink-soft"}`}>
+              <span className={`rounded-md px-2 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${danger ? "bg-red text-white" : "bg-surface-2 text-ink-soft"}`}>
                 {filtered && list.length !== totals[s.key] ? `${list.length} of ${totals[s.key]}` : list.length}
               </span>
               <span className="flex-1" />

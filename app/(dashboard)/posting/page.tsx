@@ -176,7 +176,7 @@ export default async function PostingPage() {
 
       {problems.length === 0 ? (
         <div className="flex items-center gap-2.5 rounded-2xl border border-green/25 bg-green/[0.07] px-4 py-3">
-          <span className="w-5 h-5 rounded-full bg-green text-white flex items-center justify-center flex-shrink-0" aria-hidden>
+          <span className="w-5 h-5 rounded-md bg-green text-white flex items-center justify-center flex-shrink-0" aria-hidden>
             <CheckIcon className="w-3 h-3" />
           </span>
           <span className="text-[13.5px] font-semibold">No problems with your team&rsquo;s posting.</span>
@@ -193,7 +193,7 @@ export default async function PostingPage() {
           <ul className="space-y-3">
             {problems.map((p) => (
               <li key={p.key} className="flex gap-2.5">
-                <span className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 ${p.tone === "red" ? "bg-red" : "bg-gold"}`} aria-hidden>
+                <span className={`mt-0.5 w-5 h-5 rounded-md flex items-center justify-center text-white flex-shrink-0 ${p.tone === "red" ? "bg-red" : "bg-gold"}`} aria-hidden>
                   <AlertIcon className="w-3 h-3" />
                 </span>
                 <div className="min-w-0">
@@ -217,7 +217,7 @@ export default async function PostingPage() {
             {findings.map((f, i) => (
               <li key={i} className="flex gap-2.5">
                 <span
-                  className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0 ${
+                  className={`mt-0.5 w-5 h-5 rounded-md flex items-center justify-center text-white flex-shrink-0 ${
                     f.level === "ok" ? "bg-green" : f.level === "warn" ? "bg-amber" : "bg-red"
                   }`}
                   aria-hidden

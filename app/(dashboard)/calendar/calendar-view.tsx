@@ -409,7 +409,7 @@ export function CalendarView({
               setPicked(day);
             } else setDayOpen(day);
           }}
-          className={`rounded-full flex items-center justify-center font-bold tabular-nums transition-colors ${
+          className={`rounded-lg flex items-center justify-center font-bold tabular-nums transition-colors ${
             big ? "w-9 h-9 text-[15px]" : "w-7 h-7 text-[13px]"
           } ${day === today ? "bg-amber text-white" : "text-ink hover:bg-surface-2"} ${big ? "" : "max-sm:w-7 max-sm:h-7 max-sm:mx-auto max-sm:text-[12.5px]"}`}
           aria-label={`Open ${nice(day)}`}
@@ -489,7 +489,7 @@ export function CalendarView({
       <div className="flex items-center gap-2 flex-wrap text-[13px]">
         <Filter on={showShorts} set={setShowShorts} icon={<KindIcon kind="short" className="w-3.5 h-3.5" />} tone="short">Shorts</Filter>
         <Filter on={showLong} set={setShowLong} icon={<KindIcon kind="long" className="w-3.5 h-3.5" />} tone="long">Long videos</Filter>
-        <Filter on={showMeetings} set={setShowMeetings} icon={<span className="w-2.5 h-2.5 rounded-full bg-violet" />} tone="meeting">Meetings</Filter>
+        <Filter on={showMeetings} set={setShowMeetings} icon={<span className="w-2.5 h-2.5 rounded-[3px] bg-violet" />} tone="meeting">Meetings</Filter>
         <Filter on={hidePosted} set={setHidePosted}>Hide posted</Filter>
         {view === "month" && (
           <Filter on={onlyMonth} set={setOnlyMonth}>
@@ -504,7 +504,7 @@ export function CalendarView({
           <div className="grid grid-cols-7">
             {Array.from({ length: 42 }, (_, i) => (
               <div key={i} className={`min-h-[3.4rem] sm:min-h-[9.5rem] p-2 border-line/15 ${i % 7 !== 6 ? "border-r" : ""} ${i < 35 ? "border-b" : ""}`}>
-                <div className="skeleton w-7 h-7 rounded-full" />
+                <div className="skeleton w-7 h-7 rounded-lg" />
                 {i % 3 === 0 && <div className="skeleton hidden sm:block mt-2 h-7 rounded-lg" />}
                 {i % 5 === 0 && <div className="skeleton hidden sm:block mt-1 h-7 w-3/4 rounded-lg" />}
               </div>
@@ -545,7 +545,7 @@ export function CalendarView({
                   {/* Phones: just markers; the day's list shows below the grid. */}
                   <div className="sm:hidden flex items-center justify-center gap-0.5 min-h-[8px]">
                     {meetingsOn(day).slice(0, 1).map((m) => (
-                      <span key={m.id} className={`w-1.5 h-1.5 rounded-full bg-violet ${m.cancelled ? "opacity-40" : ""}`} />
+                      <span key={m.id} className={`w-1.5 h-1.5 rounded-[2px] bg-violet ${m.cancelled ? "opacity-40" : ""}`} />
                     ))}
                     {list.slice(0, 3).map((it) => (
                       <span key={it.id} className={`w-1.5 h-1.5 rounded-[1.5px] ${it.done ? "opacity-40" : ""} ${it.kind === "short" ? "bg-short" : "bg-long"}`} />
@@ -866,7 +866,7 @@ function MeetingChip({ m, size = "sm" }: { m: CalMeeting; size?: "sm" | "lg" }) 
         title={`${m.title} · ${time} · ${m.location}`}
         className={`flex items-center gap-1.5 rounded-md bg-violet/10 text-violet px-1.5 py-[3px] text-[11.5px] font-semibold hover:bg-violet/15 transition-colors ${m.cancelled ? "opacity-50 line-through" : ""}`}
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-violet flex-shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-[2px] bg-violet flex-shrink-0" />
         <span className="tabular-nums flex-shrink-0">{time}</span>
         <span className="truncate text-ink">{m.title}</span>
       </Link>
@@ -877,7 +877,7 @@ function MeetingChip({ m, size = "sm" }: { m: CalMeeting; size?: "sm" | "lg" }) 
       className={`flex items-center gap-3 rounded-xl border border-violet/25 bg-violet/[0.06] px-3 py-2.5 hover:border-violet/50 transition-colors ${m.cancelled ? "opacity-60" : ""}`}
     >
       <span className="w-8 h-8 rounded-lg bg-violet/15 text-violet flex items-center justify-center flex-shrink-0" aria-hidden>
-        <span className="w-2.5 h-2.5 rounded-full bg-violet" />
+        <span className="w-2.5 h-2.5 rounded-[3px] bg-violet" />
       </span>
       <span className="min-w-0 flex-1">
         <span className={`block text-[13.5px] font-semibold truncate ${m.cancelled ? "line-through" : ""}`}>{m.title}</span>
@@ -911,7 +911,7 @@ function Filter({
       role="switch"
       aria-checked={on}
       onClick={() => set(!on)}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 h-9 font-semibold transition-colors ${on ? onCls : "border-line/20 text-ink-soft hover:text-ink"}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 h-9 font-semibold transition-colors ${on ? onCls : "border-line/20 text-ink-soft hover:text-ink"}`}
     >
       {icon}
       {children}
@@ -989,7 +989,7 @@ function Chip({
       {it.posts.length > 0 && (
         <span className="flex items-center gap-0.5 flex-shrink-0" aria-hidden>
           {it.posts.map((p) => (
-            <span key={p.platform} className={`w-1.5 h-1.5 rounded-full ${p.status === "published" ? "bg-green" : p.status === "failed" ? "bg-red" : "bg-ink-soft"}`} />
+            <span key={p.platform} className={`w-1.5 h-1.5 rounded-[2px] ${p.status === "published" ? "bg-green" : p.status === "failed" ? "bg-red" : "bg-ink-soft"}`} />
           ))}
         </span>
       )}
@@ -997,7 +997,7 @@ function Chip({
       {it.done && (
         // Posted: the same teal check as a finished step in the step bar.
         <span
-          className={`${lg ? "w-5 h-5" : "w-4 h-4"} rounded-full flex items-center justify-center text-white flex-shrink-0`}
+          className={`${lg ? "w-5 h-5" : "w-4 h-4"} rounded-md flex items-center justify-center text-white flex-shrink-0`}
           style={{ background: "rgb(var(--teal))" }}
           aria-label="Posted"
         >
@@ -1144,13 +1144,13 @@ function QuickView({
           <div className="space-y-3 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <KindIcon kind={item.kind} tile className="w-4 h-4" />
-              <span className={`rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold ${item.done ? "bg-green/15 text-green" : "bg-surface-2 text-ink"}`}>{item.stageLabel}</span>
+              <span className={`rounded-lg px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold ${item.done ? "bg-green/15 text-green" : "bg-surface-2 text-ink"}`}>{item.stageLabel}</span>
               {item.shortType && item.shortType !== "filler" && (
-                <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold" style={{ background: `color-mix(in srgb, ${ACCENT[item.shortType]} 18%, transparent)`, color: ACCENT[item.shortType] }}>
+                <span className="rounded-lg px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold" style={{ background: `color-mix(in srgb, ${ACCENT[item.shortType]} 18%, transparent)`, color: ACCENT[item.shortType] }}>
                   {item.shortType === "sponsorship" ? "Sponsor" : "Big"}
                 </span>
               )}
-              {overdue && <span className="rounded-full px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold bg-red/15 text-red">Overdue</span>}
+              {overdue && <span className="rounded-lg px-2.5 h-7 inline-flex items-center text-[12.5px] font-bold bg-red/15 text-red">Overdue</span>}
             </div>
             {/* Date and where it posts, side by side */}
             <div className="grid grid-cols-2 gap-3">

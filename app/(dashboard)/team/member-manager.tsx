@@ -90,12 +90,12 @@ export function MemberManager({
               <MemberNameLink userId={member.userId} username={member.username} name={member.name} />
             </span>
             {member.isOwner && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber/12 text-amber px-2 h-5 text-[10.5px] font-bold">
+              <span className="inline-flex items-center gap-1 rounded-md bg-amber/12 text-amber px-2 h-5 text-[10.5px] font-bold">
                 <StarIcon filled className="w-3 h-3" /> Owner
               </span>
             )}
-            {isSelf && <span className="rounded-full bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold">You</span>}
-            {member.status === "invited" && <span className="rounded-full bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold uppercase">Invited</span>}
+            {isSelf && <span className="rounded-md bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold">You</span>}
+            {member.status === "invited" && <span className="rounded-md bg-surface-2 text-ink-soft px-2 h-5 inline-flex items-center text-[10.5px] font-bold uppercase">Invited</span>}
           </div>
           <div className="text-[12.5px] text-ink-soft truncate">{member.email}</div>
         </div>

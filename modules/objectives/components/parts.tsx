@@ -61,7 +61,7 @@ export const unjudged = (p: Pick<PeriodView, "status">) => p.status === "before"
 export function StatusPill({ status, className = "" }: { status: Status; className?: string }) {
   const m = STATUS_META[status];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 h-[22px] text-[11.5px] font-bold whitespace-nowrap ${m.cls} ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 h-[22px] text-[11.5px] font-bold whitespace-nowrap ${m.cls} ${className}`}>
       {status === "reached" ? (
         <CheckIcon className="w-3 h-3" />
       ) : status === "behind" ? (
@@ -71,7 +71,7 @@ export function StatusPill({ status, className = "" }: { status: Status; classNa
           <path d="M5 1.5 9 8.5H1Z" fill="currentColor" />
         </svg>
       ) : (
-        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" aria-hidden />
+        <span className="w-1.5 h-1.5 rounded-[2px] bg-current opacity-70" aria-hidden />
       )}
       {m.label}
     </span>
@@ -170,12 +170,12 @@ export function Meter({ value, target, expected, color, height = 10, className =
   const pace = target > 0 && expected !== null && expected !== undefined && expected > 0 && expected < target ? expected / target : null;
   return (
     <div className={`relative w-full obj-bar-in ${className}`} style={{ height }}>
-      <div className="absolute inset-0 rounded-full overflow-hidden" style={{ background: colorVar(color, 0.16) }}>
-        <div className="obj-bar-fill h-full rounded-full" style={{ width: `${f * 100}%`, background: colorVar(color) }} />
+      <div className="absolute inset-0 rounded-[3px] overflow-hidden" style={{ background: colorVar(color, 0.16) }}>
+        <div className="obj-bar-fill h-full rounded-[3px]" style={{ width: `${f * 100}%`, background: colorVar(color) }} />
       </div>
       {pace !== null && (
         <span
-          className="absolute -top-[3px] -bottom-[3px] w-[2px] rounded-full bg-ink/70"
+          className="absolute -top-[3px] -bottom-[3px] w-[2px] rounded-[2px] bg-ink/70"
           style={{ left: `calc(${pace * 100}% - 1px)` }}
           title="Where it should be by now"
           aria-hidden

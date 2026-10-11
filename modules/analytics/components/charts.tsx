@@ -64,7 +64,7 @@ export function Legend({ items, shape = "line" }: { items: { key: string; label:
                 <line x1="1" x2="15" y1="1" y2="1" stroke={s.color} strokeWidth="1.5" strokeDasharray="4 3" strokeLinecap="round" />
               </svg>
             ) : (
-              <span className="w-4 h-[2px] rounded-full" style={{ background: s.color }} aria-hidden />
+              <span className="w-4 h-[2px] rounded-[1px]" style={{ background: s.color }} aria-hidden />
             )
           ) : (
             <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: s.color }} aria-hidden />
@@ -205,14 +205,14 @@ export function LineChart({
           <div className="text-[11px] font-semibold text-ink-faint mb-1">{labels[hover]}</div>
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2 py-0.5">
-              <span className="w-3 h-[2px] rounded-full flex-shrink-0" style={{ background: s.color }} />
+              <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
               <span className="font-bold tabular-nums text-ink">{format(s.values[hover])}</span>
               <span className="text-ink-soft truncate">{s.label}</span>
             </div>
           ))}
           {previous && (
             <div className="flex items-center gap-2 py-0.5">
-              <span className="w-3 h-[2px] rounded-full flex-shrink-0 bg-ink-faint/60" />
+              <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0 bg-ink-faint/60" />
               <span className="font-bold tabular-nums text-ink">{format(previous.values[hover] ?? null)}</span>
               <span className="text-ink-soft truncate">{previous.label}</span>
             </div>
@@ -352,8 +352,8 @@ export function BarList({
         >
           <span className="text-[13px] text-ink-soft truncate">{it.label}</span>
           <span className="flex items-center gap-2 min-w-0">
-            <span className="flex-1 min-w-0 h-2.5 rounded-full bg-line/[0.06] overflow-hidden">
-              <span className="block h-full rounded-full" style={{ width: `${max ? Math.max(2, ((it.value ?? 0) / max) * 100) : 0}%`, background: it.color ?? color, opacity: it.value === null ? 0 : 1 }} />
+            <span className="flex-1 min-w-0 h-2.5 rounded-[3px] bg-line/[0.06] overflow-hidden">
+              <span className="block h-full rounded-[3px]" style={{ width: `${max ? Math.max(2, ((it.value ?? 0) / max) * 100) : 0}%`, background: it.color ?? color, opacity: it.value === null ? 0 : 1 }} />
             </span>
             <span className="w-14 text-right text-[12.5px] font-semibold tabular-nums text-ink flex-shrink-0">{format(it.value)}</span>
           </span>

@@ -234,7 +234,7 @@ export function MonthCalendar({
           <ul className="space-y-1">
             {peekMeetings.map((m) => (
               <li key={m.id} className={`flex items-center gap-2 text-[12.5px] ${m.cancelled ? "text-ink-soft line-through" : "text-ink"}`}>
-                <span className="w-2 h-2 rounded-full flex-shrink-0 bg-violet" />
+                <span className="w-2 h-2 rounded-[3px] flex-shrink-0 bg-violet" />
                 <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
                 <span className="truncate">{m.t}</span>
               </li>
@@ -325,7 +325,7 @@ export function MonthCalendar({
             >
               <span className={fit ? "-mt-1" : ""}>{Number(d.slice(8))}</span>
               {meetingsN > 0 && (
-                <span className={`absolute ${fit ? "top-[3px] right-[3px]" : "top-1 right-1"} w-[5px] h-[5px] rounded-full ${selected ? "bg-white" : "bg-violet"}`} aria-hidden />
+                <span className={`absolute ${fit ? "top-[3px] right-[3px]" : "top-1 right-1"} w-[5px] h-[5px] rounded-[2px] ${selected ? "bg-white" : "bg-violet"}`} aria-hidden />
               )}
               {shortsN + longsN > 0 && (
                 <span className={`absolute ${fit ? "bottom-[2px]" : "bottom-1"} flex items-center gap-[2px]`} aria-hidden>
@@ -389,7 +389,7 @@ export function Legend({ compact = false, className = "" }: { compact?: boolean;
       {item("border-[1.5px] border-short", "planned")}
       {item("bg-short", "full")}
       {item("bg-long", "long")}
-      {item("bg-violet !rounded-full", "meeting")}
+      {item("bg-violet", "meeting")}
     </span>
   );
 }

@@ -38,7 +38,7 @@ export default function Loading() {
                   <Skeleton className={`h-4 ${["w-1/2", "w-2/5", "w-3/5"][i]}`} />
                   <Skeleton className="h-3 w-40" />
                 </div>
-                <Skeleton className="h-6 w-16 rounded-full" />
+                <Skeleton className="h-6 w-16 rounded-lg" />
               </div>
             ))}
           </div>

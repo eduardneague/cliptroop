@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useFillOnOpen } from "@/lib/hooks/use-fill-on-open";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, CalendarIcon, CheckIcon, CloseIcon, DownloadIcon, EditIcon, ExternalIcon, PlusIcon, TrashIcon, UsersIcon } from "@/components/ui/icons";
@@ -80,9 +81,9 @@ export function MeetingDetail({ meeting, people, canOrganize, me }: { meeting: M
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-6 text-[13.5px] text-ink-soft pl-[52px]">
         {cancelled ? (
-          <span className="rounded-full bg-red/12 text-red px-2.5 h-6 inline-flex items-center text-[11.5px] font-bold uppercase tracking-wide">Cancelled</span>
+          <span className="rounded-lg bg-red/12 text-red px-2.5 h-6 inline-flex items-center text-[11.5px] font-bold uppercase tracking-wide">Cancelled</span>
         ) : (
-          <span className={`rounded-full px-2.5 h-6 inline-flex items-center text-[12px] font-bold ${past ? "bg-surface-2 text-ink-soft" : "bg-violet/12 text-violet"}`}>
+          <span className={`rounded-lg px-2.5 h-6 inline-flex items-center text-[12px] font-bold ${past ? "bg-surface-2 text-ink-soft" : "bg-violet/12 text-violet"}`}>
             <Countdown iso={meeting.startsAt} durationMin={meeting.durationMin} />
           </span>
         )}
@@ -146,7 +147,7 @@ export function MeetingDetail({ meeting, people, canOrganize, me }: { meeting: M
               {(["yes", "maybe", "no", "pending"] as Rsvp[]).map((r) =>
                 counts[r] ? (
                   <span key={r} className="inline-flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${RSVP_DOT[r]}`} />
+                    <span className={`w-2 h-2 rounded-[3px] ${RSVP_DOT[r]}`} />
                     <b className="text-ink tabular-nums">{counts[r]}</b> {RSVP_LABEL[r].toLowerCase()}
                   </span>
                 ) : null
@@ -157,7 +158,7 @@ export function MeetingDetail({ meeting, people, canOrganize, me }: { meeting: M
                 <li key={a.person.userId} className="flex items-center gap-2.5 py-1.5">
                   <span className="relative">
                     <PersonAvatar name={a.person.name} avatarUrl={a.person.avatarUrl} color={a.person.color} className="w-8 h-8 text-[11px]" />
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-surface ${RSVP_DOT[a.rsvp]}`} aria-hidden />
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-[3px] ring-2 ring-surface ${RSVP_DOT[a.rsvp]}`} aria-hidden />
                   </span>
                   <span className="flex-1 min-w-0 text-[13.5px] font-semibold truncate">
                     {a.person.name}
@@ -358,9 +359,7 @@ function InviteDialog({ open, onClose, meeting, people, me }: { open: boolean; o
   const router = useRouter();
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (open) setChosen(new Set(meeting.attendees.map((a) => a.person.userId)));
-  }, [open, meeting.attendees]);
+  useFillOnOpen(open, meeting.id, () => setChosen(new Set(meeting.attendees.map((a) => a.person.userId))));
   async function save() {
     setBusy(true);
     const r = await setInvitees(meeting.id, [...chosen]);

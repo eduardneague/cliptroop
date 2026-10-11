@@ -206,10 +206,10 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
   if (m.stageColor) {
     return (
       <span
-        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{ background: `color-mix(in srgb, ${stageTone(m)} 18%, transparent)` }}
       >
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: stageTone(m) }} />
+        <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: stageTone(m) }} />
       </span>
     );
   }
@@ -346,7 +346,7 @@ function RichBody({ n }: { n: NotificationItem }) {
             (m.roles ?? []).map((r, i) => (
               <span key={r.name}>
                 <span
-                  className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+                  className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
                   style={{ color: r.color, background: `color-mix(in srgb, ${r.color} 14%, transparent)` }}
                 >
                   {r.name}
@@ -363,7 +363,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           You&rsquo;ve been tagged on <b>&ldquo;{m.projectTitle}&rdquo;</b> for{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -376,7 +376,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>&ldquo;{m.projectTitle}&rdquo;</b> moved into{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -435,7 +435,7 @@ function RichBody({ n }: { n: NotificationItem }) {
       return (
         <>
           <b>{m.actor?.name}</b> marked <ShortRef m={m} /> as done{" "}
-          <span className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
+          <span className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px] text-green bg-green/15 whitespace-nowrap">Script ✓ Review ✓ Staging ✓</span>
         </>
       );
     case "objective_reached": {
@@ -492,7 +492,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> mentioned you in{" "}
           <span
-            className="font-bold px-1.5 py-0.5 rounded-full text-[10.5px]"
+            className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
             style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
@@ -529,11 +529,11 @@ function NotificationRow({
       onClick={() => onOpen(n)}
       className={`flex gap-2.5 px-4 py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
     >
-      {visual ?? <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
+      {visual ?? <span className={`w-2 h-2 rounded-[3px] mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
       <div className="min-w-0 flex-1">
         <span className="block text-[12.5px] leading-snug text-ink">
           <RichBody n={n} />
-          {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber ml-1.5 align-middle" />}
+          {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-[2px] bg-amber ml-1.5 align-middle" />}
         </span>
         <span className="block text-[10.5px] text-ink-soft mt-1">{time ?? <Ago iso={n.created_at} />}</span>
         {isPendingAction && (
@@ -639,7 +639,7 @@ function HistoryDialog({
   }
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const chip = (on: boolean) =>
-    `rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
+    `rounded-lg px-3 h-8 text-[12.5px] font-semibold border transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
 
   return (
     <Dialog open={open} onClose={onClose} title="Notification history" description="Everything from the last 2 weeks, newest first." width="sm:max-w-xl">
@@ -905,7 +905,7 @@ export function NotificationBell({
       >
         <BellIcon className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-full bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-md bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}

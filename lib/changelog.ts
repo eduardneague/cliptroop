@@ -23,6 +23,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.16.0",
+    date: "2026-10-11",
+    title: "Advanced analytics, What works, Download for Claude",
+    changes: [
+      { kind: "new", text: "Analytics → Advanced: every number YouTube, Instagram, Facebook and TikTok share, one platform at a time, for everything, Shorts or long videos. At a glance (views and watch time, engagement, subscribers, and money for the people who see revenue, each with the change from the stretch before), Day by day for any of them, Retention, Traffic and Audience." },
+      { kind: "new", text: "Retention: the share of viewers still watching at each moment of a video, averaged over your Shorts and your long videos, with how many are left after the first seconds, at the half and at the end, and how that compares with similar videos." },
+      { kind: "new", text: "Traffic and Audience: where views come from (search, suggested, browse, outside sites, playlists, shares), the exact search terms and the videos that sent people to yours, age and gender, countries, devices and systems, where videos were played, subscribers or not. On Instagram, followers and engaged viewers by age, gender, country and city." },
+      { kind: "new", text: "Videos: every video with everything its platform says about it (views, watch time, % viewed, how many stayed past the first seconds, likes, comments, shares, saves, new subscribers, revenue for those who see it). Sort by any column; open one for its retention curve, traffic sources and search terms." },
+      { kind: "new", text: "What works: patterns found in your own videos, strongest first. Length, posting hour, weekdays or weekends, titles (questions, numbers, capitals, emoji, length), hooks, short types, how many keep watching past the first seconds, plus your best videos next to the rest and how the platforms compare. Only with enough videos (6 or more, a week old), and it says how sure it is." },
+      { kind: "new", text: "Download for Claude (on the Advanced tab): a text file and a PDF with your channels' numbers and every video's numbers, hook, thumbnail and opening frames (scripts and revenue if you want them). Drop them into a chat with Claude (any plan, the free one included), send the request it gives you, and ask what works. The files are made on your device." },
+      { kind: "new", text: "Team settings → Projections: masters change, archive, bring back or delete the team's projections there too, live. The Objectives and Projections pages get a Manage button that goes there." },
+      { kind: "new", text: "New objective right on the Objectives page, for masters." },
+      { kind: "better", text: "A new look: buttons, chips, tags, badges, bars and dots are rounded squares everywhere (photos, spinners and rings stay round)." },
+      { kind: "better", text: "Objectives and Projections pages, redone for phones and computers: a cleaner overview (a row for today, this week, this month… with each goal filled in its own colour, and the longest run), the goals that need a push first, one row of filters, and cards that fit any screen." },
+      { kind: "better", text: "Archiving a projection asks first." },
+      { kind: "better", text: "Shorts uploaded for review keep eight small frames (their first seconds, then the rest of the video), so Download for Claude can show how each one opens." },
+      { kind: "better", text: "Analytics → Content links to Advanced for everything about each video." },
+      { kind: "fixed", text: "The page could lose its scrollbar after closing a window until you refreshed (when two were open and closed in another order). Scrolling now always comes back, whatever the order." },
+      { kind: "fixed", text: "Editing a projection, objective, meeting or a goal's schedule no longer resets what you typed when something updates in the background, and a link to a projection doesn't open it again after you save." },
+      { kind: "fixed", text: "Long windows, like this one, open at the top instead of scrolled to the end." },
+    ],
+  },
+  {
     version: "1.15.0",
     date: "2026-10-10",
     title: "Projections, and only your accounts' numbers",

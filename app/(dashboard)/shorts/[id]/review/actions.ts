@@ -70,6 +70,21 @@ export async function registerVersion(input: {
 }
 
 /**
+ * Eight frames of a version (its first seconds and the story), uploaded by
+ * the uploader right after the version was saved, kept for the PDF made for
+ * Claude. The database checks who may and that the file is there (0081).
+ * Never in the way: a failure here is silent.
+ */
+export async function saveVersionFrames(versionId: string, path: string): Promise<Result> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!UUID.test(versionId) || typeof path !== "string" || path.length > 300) return { error: "Version not found." };
+  const { error } = await supabase.rpc("set_version_frames", { p_version: versionId, p_path: path });
+  if (error) return { error: "Couldn't keep the frames." };
+  return {};
+}
+
+/**
  * A short-lived private link to play one version. Storage rules only let
  * teammates create it; it expires after 3 hours.
  */

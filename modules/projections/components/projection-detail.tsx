@@ -91,7 +91,7 @@ export function ProjectionDetail({
           <ProjectionChart p={p} height={230} currency={currency} />
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-faint">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-4 h-[2px] rounded-full" style={{ background: colorVar(p.color) }} />
+              <span className="w-4 h-[2px] rounded-[1px]" style={{ background: colorVar(p.color) }} />
               Each day
             </span>
             <span className="inline-flex items-center gap-1.5">

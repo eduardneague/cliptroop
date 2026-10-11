@@ -402,7 +402,7 @@ function DocRail({
                 <div key={d.id} className="group relative flex-shrink-0">
                   {d.id === sideId ? (
                     <div className="flex items-center gap-2.5 rounded-lg pl-3 pr-3 h-9 lg:h-10 text-[13.5px] whitespace-nowrap text-ink-faint cursor-default" title="Open on the right">
-                      <span aria-hidden className="w-2 h-2 rounded-full flex-shrink-0 opacity-60" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
+                      <span aria-hidden className="w-2 h-2 rounded-[3px] flex-shrink-0 opacity-60" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
                       <span className="truncate">{d.name}</span>
                       <span className="hidden lg:inline ml-auto text-[10.5px] font-bold uppercase">On the right</span>
                     </div>
@@ -444,7 +444,7 @@ function DocRail({
                     >
                       <span
                         aria-hidden
-                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        className="w-2 h-2 rounded-[3px] flex-shrink-0"
                         style={{ background: DOT[d.name] ?? "transparent", boxShadow: DOT[d.name] ? undefined : "inset 0 0 0 1.5px rgb(var(--line) / 0.35)" }}
                       />
                       <span className="truncate">{d.name}</span>
@@ -642,7 +642,7 @@ function MobileDocs({
   return (
     <>
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-9 text-[13px] font-bold max-w-[9.5rem]">
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
+        <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
         <span className="truncate">{shownDoc.name}</span>
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
@@ -664,7 +664,7 @@ function MobileDocs({
                       }}
                       className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
+                      <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
                       <span className="truncate">{d.name}</span>
                       <span className="ml-auto text-[12px] text-ink-faint">{d.wordCount} words</span>
                     </button>
@@ -943,10 +943,10 @@ function CommentsChat({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="no-print fixed z-30 right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] lg:bottom-6 inline-flex items-center gap-2 rounded-full bg-surface-2 text-ink border border-line/20 pl-4 pr-3 h-11 text-[13.5px] font-bold shadow-[0_12px_30px_-10px_rgb(0_0_0/0.6)] hover:border-line/40 hover:scale-[1.03] transition-transform"
+          className="no-print fixed z-30 right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] lg:bottom-6 inline-flex items-center gap-2 rounded-xl bg-surface-2 text-ink border border-line/20 pl-4 pr-3 h-11 text-[13.5px] font-bold shadow-[0_12px_30px_-10px_rgb(0_0_0/0.6)] hover:border-line/40 hover:scale-[1.03] transition-transform"
         >
           Comments
-          <span className={`rounded-full px-2 h-6 inline-flex items-center text-[12px] ${openCount ? "bg-amber text-white" : "bg-line/15 text-ink-soft"}`}>{openCount}</span>
+          <span className={`rounded-lg px-2 h-6 inline-flex items-center text-[12px] ${openCount ? "bg-amber text-white" : "bg-line/15 text-ink-soft"}`}>{openCount}</span>
         </button>
       )}
       {open && big && (
@@ -990,7 +990,7 @@ function CommentsChat({
                   role="radio"
                   aria-checked={filter === k}
                   onClick={() => setFilter(k)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
                 >
                   {dot && <span className="w-2 h-2 rounded-[3px]" style={{ background: dot }} />}
                   {label}

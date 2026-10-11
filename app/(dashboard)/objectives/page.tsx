@@ -19,12 +19,12 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Objectives or Projections. */
+/** Objectives or Projections (shown in each view's header, beside the title). */
 function Tabs({ view }: { view: "objectives" | "projections" }) {
   const tab = (on: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-lg px-3.5 h-8 text-[13px] font-semibold transition-colors ${on ? "bg-ink text-paper shadow-sm" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`;
+    `flex-1 sm:flex-none inline-flex items-center justify-center rounded-md px-3.5 h-8 text-[13px] font-semibold transition-colors ${on ? "bg-ink text-paper shadow-sm" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`;
   return (
-    <nav className="mb-5 inline-flex rounded-xl border border-line/15 bg-surface p-1 gap-1" aria-label="Objectives or projections">
+    <nav className="flex sm:inline-flex rounded-lg border border-line/15 bg-surface p-0.5 gap-0.5" aria-label="Objectives or projections">
       <Link href="/objectives" aria-current={view === "objectives" ? "page" : undefined} className={tab(view === "objectives")}>
         Objectives
       </Link>
@@ -57,8 +57,7 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
       );
     return (
       <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-[1500px] mx-auto">
-        <Tabs view="projections" />
-        <ProjectionsView initial={board} canEdit={isMaster(membership?.roles ?? [])} openId={p && UUID.test(p) ? p : null} />
+        <ProjectionsView initial={board} canEdit={isMaster(membership?.roles ?? [])} openId={p && UUID.test(p) ? p : null} tabs={<Tabs view="projections" />} />
       </div>
     );
   }
@@ -78,8 +77,7 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
   const onDashboard = readLayout((profile as { dashboard_layout?: unknown } | null)?.dashboard_layout).widgets.some((w) => w.type === "objectives");
   return (
     <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-[1500px] mx-auto">
-      <Tabs view="objectives" />
-      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} />
+      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} tabs={<Tabs view="objectives" />} />
     </div>
   );
 }

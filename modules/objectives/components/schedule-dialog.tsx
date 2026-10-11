@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useFillOnOpen } from "@/lib/hooks/use-fill-on-open";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast-provider";
 import { setPeriodTarget } from "@/app/(dashboard)/objectives/actions";
@@ -23,11 +24,11 @@ export function ScheduleDialog({ open, onClose, objective, canEdit }: { open: bo
   const [local, setLocal] = useState<Map<string, number>>(new Map());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open || !objective) return;
+  useFillOnOpen(open && !!objective, objective?.id ?? "", () => {
+    if (!objective) return;
     setLocal(new Map(objective.overrides.map((o) => [o.start, o.target])));
     setDrafts({});
-  }, [open, objective]);
+  });
   if (!objective) return null;
   const o = objective;
   const kind = o.period;

@@ -140,8 +140,8 @@ export function PipelineWidget({ pipeline }: { pipeline: Pipeline }) {
                 return (
                   <li key={k} className="grid grid-cols-[3.5rem_1fr_1.25rem] items-center gap-1.5 text-[11.5px] leading-4" style={{ height: rowH }}>
                     <span className={`truncate ${n ? "text-ink-soft" : "text-ink-faint"}`}>{label}</span>
-                    <span className="rounded-full bg-line/10 overflow-hidden" style={{ height: rowH >= 26 ? 8 : 6 }}>
-                      <span className="bar-grow block h-full rounded-full transition-[width] duration-500" style={{ width: `${(n / max) * 100}%`, background: g.color, opacity: n ? 1 : 0, animationDelay: `${idx * 60 + (g.kind === "long" ? 120 : 0)}ms` }} />
+                    <span className="rounded-[3px] bg-line/10 overflow-hidden" style={{ height: rowH >= 26 ? 8 : 6 }}>
+                      <span className="bar-grow block h-full rounded-[3px] transition-[width] duration-500" style={{ width: `${(n / max) * 100}%`, background: g.color, opacity: n ? 1 : 0, animationDelay: `${idx * 60 + (g.kind === "long" ? 120 : 0)}ms` }} />
                     </span>
                     <span className={`text-right font-bold tabular-nums ${n ? "" : "text-ink-faint font-normal"}`}>
                       <CountUp value={n} />
@@ -244,7 +244,7 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
             <span className="text-[12px] text-ink-soft">of {onPlatform.length} posted</span>
             {next && wide && <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap">next {time(next.at)}</span>}
           </div>
-          <div className="mt-1.5 flex h-1.5 gap-[2px] rounded-full overflow-hidden" role="img" aria-label={`${tally.posted} posted, ${tally.moving} posting now, ${tally.upcoming} to go, ${tally.problem} with problems`}>
+          <div className="mt-1.5 flex h-1.5 gap-[2px] rounded-[3px] overflow-hidden" role="img" aria-label={`${tally.posted} posted, ${tally.moving} posting now, ${tally.upcoming} to go, ${tally.problem} with problems`}>
             {(["posted", "moving", "upcoming", "problem"] as PostKind[]).map((k) => (tally[k] ? <span key={k} className={BAR[k]} style={{ flexGrow: tally[k] }} /> : null))}
           </div>
         </div>
@@ -268,7 +268,7 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
                   aria-label={`${label}: ${n}`}
                   title={labels ? undefined : `${label}: ${n}`}
                   onClick={() => setShow(on ? "all" : k)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 h-6 text-[11px] font-semibold tabular-nums flex-shrink-0 transition-colors disabled:opacity-40 disabled:pointer-events-none ${
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 h-6 text-[11px] font-semibold tabular-nums flex-shrink-0 transition-colors disabled:opacity-40 disabled:pointer-events-none ${
                     on
                       ? k === "problem"
                         ? "bg-red text-white border-red"
@@ -325,12 +325,12 @@ export function PostingTodayWidget({ posts }: { posts: PostToday[] }) {
                                 ? `uploaded; YouTube publishes it at ${time(p.at)}`
                                 : `scheduled for ${time(p.at)}`;
                       return (
-                        <span key={p.id} title={`${name}: ${what}`} className={`inline-flex items-center gap-1 h-5 rounded-full pl-[2px] ${wide ? "pr-1.5" : "pr-[3px]"} text-[10.5px] font-semibold tabular-nums ${TONE[k]}`}>
-                          <PlatformIcon platform={p.platform as Platform} className="w-4 h-4 rounded-full" />
+                        <span key={p.id} title={`${name}: ${what}`} className={`inline-flex items-center gap-1 h-5 rounded-md pl-[2px] ${wide ? "pr-1.5" : "pr-[3px]"} text-[10.5px] font-semibold tabular-nums ${TONE[k]}`}>
+                          <PlatformIcon platform={p.platform as Platform} className="w-4 h-4 rounded-[4px]" />
                           <span className="sr-only">{`${name}: ${what}`}</span>
                           {k === "posted" && <CheckIcon className="w-3 h-3" />}
-                          {k === "moving" && <span className="live-dot w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
-                          {k === "problem" && !wide && <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />}
+                          {k === "moving" && <span className="live-dot w-1.5 h-1.5 rounded-[2px] bg-current" aria-hidden />}
+                          {k === "problem" && !wide && <span className="w-1.5 h-1.5 rounded-[2px] bg-current" aria-hidden />}
                           {wide && <span aria-hidden>{label}</span>}
                         </span>
                       );

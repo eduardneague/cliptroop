@@ -57,7 +57,7 @@ function Section({ n, title, intro, children }: { n: number; title: string; intr
   return (
     <section className="rounded-2xl border border-line/10 bg-surface p-5 sm:p-6">
       <div className="flex items-start gap-3 mb-4">
-        <span className="w-7 h-7 rounded-full bg-amber/15 text-amber text-[13px] font-bold flex items-center justify-center flex-shrink-0">{n}</span>
+        <span className="w-7 h-7 rounded-lg bg-amber/15 text-amber text-[13px] font-bold flex items-center justify-center flex-shrink-0">{n}</span>
         <div className="min-w-0">
           <h2 className="font-display text-[18px] font-semibold leading-snug">{title}</h2>
           {intro ? <div className="text-[13px] text-ink-soft mt-1 space-y-1">{intro}</div> : null}
@@ -151,7 +151,7 @@ export default async function SetupPage() {
       <header>
         <div className="flex flex-wrap items-center gap-2 mb-1.5">
           <h1 className="font-display text-[28px] font-semibold">App setup</h1>
-          <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${prod ? "bg-green/15 text-green" : "bg-gold/15 text-gold"}`}>{ENV_LABEL[setup.env]}</span>
+          <span className={`rounded-md px-2.5 py-1 text-[12px] font-bold ${prod ? "bg-green/15 text-green" : "bg-gold/15 text-gold"}`}>{ENV_LABEL[setup.env]}</span>
         </div>
         <p className="text-[14px] text-ink-soft">
           What to paste where, so {APP_NAME}&rsquo;s {prod ? "production" : staging ? "staging" : "copy"} runs on <b className="text-ink break-all">{target}</b>. Open this page on

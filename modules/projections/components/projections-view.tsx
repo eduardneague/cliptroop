@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Mascot } from "@/components/ui/mascot";
-import { PlusIcon } from "@/components/ui/icons";
+import Link from "next/link";
+import { PlusIcon, SettingsIcon } from "@/components/ui/icons";
+import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { archiveProjection, deleteProjection, loadProjectionsBoard } from "@/app/(dashboard)/objectives/projection-actions";
@@ -25,11 +27,11 @@ type Tab = "active" | "reached" | "ended" | "archived";
 const TAB_LABEL: Record<Tab, string> = { active: "Running", reached: "Reached", ended: "Ended", archived: "Archived" };
 const tabOf = (p: ProjectionView): Tab => (p.archived ? "archived" : p.a.status === "done" || p.a.status === "missed" ? "ended" : p.a.status === "reached" ? "reached" : "active");
 
-function chip(on: boolean) {
-  return `inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[12.5px] font-semibold border transition-colors whitespace-nowrap ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
-}
+// Running ones that need a push first, then the nearest deadline.
+const NEED: Record<string, number> = { behind: 0, new: 1, waiting: 1, on_track: 2, ahead: 3, reached: 4, done: 5, missed: 5 };
+const byNeed = (a: ProjectionView, b: ProjectionView) => (NEED[a.a.status] ?? 2) - (NEED[b.a.status] ?? 2) || a.deadline.localeCompare(b.deadline);
 
-export function ProjectionsView({ initial, canEdit, openId }: { initial: ProjectionsBoard; canEdit: boolean; openId: string | null }) {
+export function ProjectionsView({ initial, canEdit, openId, tabs }: { initial: ProjectionsBoard; canEdit: boolean; openId: string | null; tabs?: React.ReactNode }) {
   const [board, setBoard] = useState(initial);
   const toast = useToast();
   const confirm = useConfirm();
@@ -38,12 +40,15 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
   const [compareId, setCompareId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ open: boolean; editing: ProjectionView | null; start: EditorStart | null }>({ open: false, editing: null, start: null });
   useEffect(() => setBoard(initial), [initial]);
+  // A link to one (?p=) opens it once: the page refreshing after a save
+  // doesn't open it again over whatever is open now.
+  const openedFromLink = useRef<string | null>(null);
   useEffect(() => {
-    if (openId) {
-      setDetailId(openId);
-      const p = initial.projections.find((x) => x.id === openId);
-      if (p) setTab(tabOf(p));
-    }
+    if (!openId || openedFromLink.current === openId) return;
+    openedFromLink.current = openId;
+    setDetailId(openId);
+    const p = initial.projections.find((x) => x.id === openId);
+    if (p) setTab(tabOf(p));
   }, [openId, initial.projections]);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,7 +86,7 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
     for (const p of list) c[tabOf(p)]++;
     return c;
   }, [list]);
-  const shown = list.filter((p) => tabOf(p) === tab);
+  const shown = list.filter((p) => tabOf(p) === tab).sort(byNeed);
   const running = list.filter((p) => tabOf(p) === "active");
   const onTrack = running.filter((p) => p.a.status === "on_track" || p.a.status === "ahead").length;
   const behind = running.filter((p) => p.a.status === "behind").length;
@@ -104,6 +109,14 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
   const closeEditor = useCallback(() => setEditor((e) => ({ ...e, open: false })), []);
 
   async function archive(p: ProjectionView) {
+    if (!p.archived) {
+      const ok = await confirm({
+        title: `Archive "${p.title}"?`,
+        description: "It stops being measured each morning and moves to Archived, with its history kept. You can bring it back any time.",
+        confirmLabel: "Archive",
+      });
+      if (!ok) return;
+    }
     const r = await archiveProjection(p.id, !p.archived);
     if (r.error !== undefined) return toast.error(r.error);
     toast.success(p.archived ? "Back with the others" : "Archived");
@@ -121,17 +134,27 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
   }
 
   const header = (
-    <header className="flex items-start gap-3 flex-wrap mb-5">
-      <div className="flex-1 min-w-[min(100%,16rem)]">
-        <h1 className="font-display text-[34px] sm:text-[40px] leading-none font-semibold">Projections</h1>
-        <p className="mt-2 text-[13.5px] text-ink-soft">Long-term targets with a date. Set one, then check back: every morning it&rsquo;s measured again.</p>
+    <header className="mb-4 sm:mb-5">
+      <div className="flex items-center gap-x-4 gap-y-3 flex-wrap">
+        <h1 className="font-display text-[30px] sm:text-[34px] leading-none font-semibold">Projections</h1>
+        {tabs && <div className="order-last w-full sm:order-none sm:w-auto">{tabs}</div>}
+        {canEdit && board.ready && (
+          <div className="ml-auto flex items-center gap-2">
+            {list.length > 0 && (
+              <Link href="/team?tab=projections" title="Change, archive or delete" className="rounded-lg border border-line/15 px-2.5 sm:px-3 h-9 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
+                <SettingsIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Manage</span>
+              </Link>
+            )}
+            <button type="button" onClick={() => setEditor({ open: true, editing: null, start: null })} className="rounded-lg bg-amber text-white px-3 sm:px-3.5 h-9 inline-flex items-center gap-1.5 text-[12.5px] font-bold hover:brightness-110">
+              <PlusIcon className="w-4 h-4" strokeWidth={2.5} />
+              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">New projection</span>
+            </button>
+          </div>
+        )}
       </div>
-      {canEdit && board.ready && (
-        <button type="button" onClick={() => setEditor({ open: true, editing: null, start: null })} className="rounded-lg bg-amber text-white px-3.5 h-9 inline-flex items-center gap-1.5 text-[12.5px] font-bold hover:brightness-110">
-          <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-          New projection
-        </button>
-      )}
+      <p className="mt-2.5 text-[13px] text-ink-soft">Long-term targets with a date. Set one and check back: it&rsquo;s measured again every morning.</p>
     </header>
   );
 
@@ -169,7 +192,7 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
     return (
       <div>
         {header}
-        <div className="rounded-3xl border border-dashed border-line/25 px-6 py-12 flex flex-col items-center text-center">
+        <div className="rounded-2xl border border-dashed border-line/25 px-6 py-12 flex flex-col items-center text-center">
           <Mascot mood="idle" size={120} />
           <h2 className="mt-3 font-display text-[22px] font-semibold">No projections yet</h2>
           <p className="mt-1 text-[13.5px] text-ink-soft max-w-lg">
@@ -178,11 +201,11 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
           {canEdit ? (
             <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-2xl">
               {TEMPLATES.filter((t) => board.money || !/^(revenue|rpm)/.test(t.start.metric ?? "")).map((t) => (
-                <button key={t.key} type="button" onClick={() => setEditor({ open: true, editing: null, start: t.start })} className="rounded-full border border-line/20 bg-surface px-3.5 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-amber/50 transition-colors">
+                <button key={t.key} type="button" onClick={() => setEditor({ open: true, editing: null, start: t.start })} className="rounded-lg border border-line/20 bg-surface px-3.5 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-amber/50 transition-colors">
                   {t.label}
                 </button>
               ))}
-              <button type="button" onClick={() => setEditor({ open: true, editing: null, start: null })} className="rounded-full bg-amber text-white px-4 h-9 inline-flex items-center gap-1.5 text-[12.5px] font-bold hover:brightness-110">
+              <button type="button" onClick={() => setEditor({ open: true, editing: null, start: null })} className="rounded-lg bg-amber text-white px-4 h-9 inline-flex items-center gap-1.5 text-[12.5px] font-bold hover:brightness-110">
                 <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
                 Something else
               </button>
@@ -198,19 +221,21 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
   return (
     <div>
       {header}
-      <section className="rounded-3xl border border-line/10 bg-surface p-4 sm:p-5 mb-5 grid gap-4 grid-cols-2 sm:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.6fr)] items-center">
-        {[
-          ["Running", counts.active],
-          ["On track", onTrack],
-          ["Behind", behind],
-          ["Reached", counts.reached + list.filter((p) => p.a.status === "done").length],
-        ].map(([label, n]) => (
-          <div key={label as string} className="min-w-0">
-            <div className="text-[11.5px] text-ink-soft">{label}</div>
-            <div className="font-display text-[26px] font-semibold tabular-nums leading-tight">{n}</div>
+      <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:px-5 mb-4 grid gap-x-4 gap-y-3 grid-cols-4 sm:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,2fr)] items-center" aria-label="Overview">
+        {(
+          [
+            ["Running", counts.active, ""],
+            ["On track", onTrack, ""],
+            ["Behind", behind, behind ? "text-coral" : ""],
+            ["Reached", counts.reached + list.filter((p) => p.a.status === "done").length, "text-green"],
+          ] as const
+        ).map(([label, n, tone]) => (
+          <div key={label} className="min-w-0">
+            <div className="text-[11.5px] text-ink-soft truncate">{label}</div>
+            <div className={`font-display text-[24px] sm:text-[26px] font-semibold tabular-nums leading-tight ${n ? tone : ""}`}>{n}</div>
           </div>
         ))}
-        <div className="min-w-0 col-span-2 sm:col-span-1 border-t border-line/10 pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4">
+        <div className="min-w-0 col-span-4 sm:col-span-1 border-t border-line/10 pt-3 sm:border-t-0 sm:pt-0 sm:border-l sm:pl-4">
           <div className="text-[11.5px] text-ink-soft">Next deadline</div>
           {next ? (
             <button type="button" onClick={() => setDetailId(next.id)} className="text-left min-w-0 w-full">
@@ -226,21 +251,19 @@ export function ProjectionsView({ initial, canEdit, openId }: { initial: Project
         </div>
       </section>
 
-      <div className="flex items-center gap-2 flex-wrap mb-4" role="tablist" aria-label="Which">
-        {(Object.keys(TAB_LABEL) as Tab[])
-          .filter((t) => t === "active" || counts[t] > 0)
-          .map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={chip(tab === t)}>
-              {TAB_LABEL[t]}
-              <span className="text-ink-faint font-medium tabular-nums">{counts[t]}</span>
-            </button>
-          ))}
+      <div className="flex items-center gap-2 mb-4 -mx-4 px-4 overflow-x-auto no-scrollbar sm:mx-0 sm:px-0">
+        <Segmented
+          ariaLabel="Which projections"
+          value={tab}
+          onChange={setTab}
+          options={(Object.keys(TAB_LABEL) as Tab[]).filter((t) => t === "active" || counts[t] > 0).map((t) => ({ value: t, label: TAB_LABEL[t], count: counts[t] }))}
+        />
       </div>
 
       {shown.length ? (
-        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,330px),1fr))]">
           {shown.map((p, i) => (
-            <div key={p.id} className="animate-[fadein_.35s_ease_both]" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+            <div key={p.id} className="flex animate-[fadein_.35s_ease_both]" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
               <ProjectionCard p={p} currency={board.currency} onOpen={() => setDetailId(p.id)} onCompare={() => setCompareId(p.id)} />
             </div>
           ))}

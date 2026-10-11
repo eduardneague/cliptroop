@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useFillOnOpen } from "@/lib/hooks/use-fill-on-open";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { DateChip } from "@/components/ui/date-picker";
@@ -52,8 +53,8 @@ export function MeetingDialog({
   const [busy, setBusy] = useState(false);
 
   // Fill in when it opens (a new one: tomorrow at 18:00 on Discord).
-  useEffect(() => {
-    if (!open) return;
+  // Once per opening: a refresh behind it (someone answering, a live update) keeps what's typed.
+  useFillOnOpen(open, meeting?.id ?? "new", () => {
     if (meeting) {
       const d = new Date(meeting.startsAt);
       setTitle(meeting.title);
@@ -75,7 +76,7 @@ export function MeetingDialog({
       setEveryone(true);
       setChosen(new Set(people.map((p) => p.userId)));
     }
-  }, [open, meeting, people]);
+  });
 
   const timeOptions = useMemo(
     () => TIMES.map((t) => ({ value: t, label: new Date(`2000-01-01T${t}:00`).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) })),
@@ -219,7 +220,7 @@ export function MeetingDialog({
                             return n;
                           })
                         }
-                        className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-3 h-8 text-[12.5px] font-semibold transition-colors ${
+                        className={`inline-flex items-center gap-1.5 rounded-lg border pl-1 pr-3 h-8 text-[12.5px] font-semibold transition-colors ${
                           on ? "border-violet/50 bg-violet/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink"
                         }`}
                       >

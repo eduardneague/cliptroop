@@ -8,3 +8,4 @@ import dynamic from "next/dynamic";
  */
 export const ConnectedAccounts = dynamic(() => import("./connected-accounts").then((m) => m.ConnectedAccounts));
 export const ObjectivesSettings = dynamic(() => import("./objectives-settings").then((m) => m.ObjectivesSettings));
+export const ProjectionsSettings = dynamic(() => import("./projections-settings").then((m) => m.ProjectionsSettings));

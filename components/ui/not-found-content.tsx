@@ -15,8 +15,8 @@ export function NotFoundContent({ inShell = true }: { inShell?: boolean }) {
     >
       <div className="max-w-md text-center animate-[modalin_.35s_ease]">
         <div className="relative mx-auto mb-7 w-24 h-24">
-          <div className="absolute inset-0 rounded-full bg-amber/10 animate-[pulse-ring_2.4s_ease-out_infinite]" />
-          <div className="relative w-24 h-24 rounded-full border border-amber/25 bg-surface flex items-center justify-center shadow-[0_10px_30px_-12px_rgb(var(--amber)/0.45)]">
+          <div className="absolute inset-0 rounded-[28px] bg-amber/10 animate-[pulse-ring_2.4s_ease-out_infinite]" />
+          <div className="relative w-24 h-24 rounded-[28px] border border-amber/25 bg-surface flex items-center justify-center shadow-[0_10px_30px_-12px_rgb(var(--amber)/0.45)]">
             <CompassIcon className="w-11 h-11 text-amber animate-[compass-wobble_4s_ease-in-out_infinite]" />
           </div>
         </div>

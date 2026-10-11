@@ -37,6 +37,10 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_PROJECTIONS=1 (with MOCK_OBJECTIVES=1) eight projections with a value per day since each was set
 #    (projections.cjs: running, reached, ended, money), MOCK_SWITCHED=1 the Facebook Page replaced 5 days ago
 #    (Analytics says whose numbers it shows)
+#    Always on: Analytics → Advanced's sample numbers (advanced.cjs: splits, retention curves, each video's
+#    money, more videos per platform with patterns to find, hooks in their scripts); with MOCK_FILES=1 the
+#    versions have a frames_path (the mock has no image for it: stub `**/storage/v1/object/**/video-frames/**`
+#    and `**/api/analytics/thumb**` with page.route in Playwright to test Download for Claude's PDF).
 node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)

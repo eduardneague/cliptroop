@@ -198,6 +198,8 @@ for (let d = -400; d <= -1; d++) {
 // MOCK_FB_NO_EARNINGS=1: a Page outside the program (no rows, and the sync says so).
 if (!process.env.MOCK_FB_NO_EARNINGS)
   for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
+// Analytics → Advanced (0081): every other number, the splits, retention curves, each video's money, more videos.
+const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, contentRows, revenue, shorts, LAST_DAY });
 const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000001", team_id: TEAM, day: day(-5), source: "sponsorship", amount: 750, currency: "USD", note: "Brand X: street food short", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
@@ -368,6 +370,24 @@ module.exports = {
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // Advanced (0081): the per-day splits added up over a range.
+    analytics_breakdown_sums: (b) => {
+      const sums = new Map();
+      for (const r of ADV.breakdowns) {
+        if (r.platform !== b.p_platform || r.external_id !== "" || r.span !== 1 || r.day < b.p_from || r.day > b.p_to) continue;
+        const k = `${r.dimension}|${r.key}`;
+        const cur = sums.get(k) ?? { dimension: r.dimension, key: r.key, views: 0, watch_minutes: 0, vw: 0, w: 0, days: new Set() };
+        cur.views += r.views ?? 0;
+        cur.watch_minutes += r.watch_minutes ?? 0;
+        if (r.value !== null && r.views) {
+          cur.vw += r.value * r.views;
+          cur.w += r.views;
+        }
+        cur.days.add(r.day);
+        sums.set(k, cur);
+      }
+      return [...sums.values()].map((x) => ({ dimension: x.dimension, key: x.key, views: x.views, watch_minutes: x.watch_minutes, value: x.w ? x.vw / x.w : null, days: x.days.size }));
+    },
     // Objectives (0078): the server's count says "counted moments ago", so the mock never records wins.
     objective_claim_sync: false,
     objective_record: [],
@@ -427,9 +447,10 @@ module.exports = {
     short_video_versions: process.env.MOCK_FILES
       ? shorts
           .filter((x) => x.stage !== "script")
-          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 12, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null }))
+          // (frames_path, 0081: eight frames of each, for the PDF made for Claude.)
+          .map((x, i) => ({ id: `ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, short_id: x.id, team_id: TEAM, version_number: 1, storage_path: `${TEAM}/${x.id}/v1.mp4`, file_name: "cut.mp4", size_bytes: 84_000_000 + i * 3_100_000, mime_type: "video/mp4", duration_sec: 38 + i * 12, width: 1080, height: 1920, created_at: new Date(Date.now() - 5 * 86_400_000).toISOString(), deleted_at: null, frames_path: `${TEAM}/${x.id}/ffffffff-0000-4000-8000-${String(i + 1).padStart(12, "0")}.jpg` }))
           // #235 (in review) has a second cut, to compare (v2 is 1:38: too long for Facebook).
-          .concat([{ id: "ffffffff-0000-4000-8000-0000000000a2", short_id: shorts[4].id, team_id: TEAM, version_number: 2, storage_path: `${TEAM}/${shorts[4].id}/v2.mp4`, file_name: "cut-v2.mp4", size_bytes: 91_000_000, mime_type: "video/mp4", duration_sec: 98, width: 1080, height: 1920, created_at: new Date(Date.now() - 1 * 86_400_000).toISOString(), deleted_at: null }])
+          .concat([{ id: "ffffffff-0000-4000-8000-0000000000a2", short_id: shorts[4].id, team_id: TEAM, version_number: 2, storage_path: `${TEAM}/${shorts[4].id}/v2.mp4`, file_name: "cut-v2.mp4", size_bytes: 91_000_000, mime_type: "video/mp4", duration_sec: 98, width: 1080, height: 1920, created_at: new Date(Date.now() - 1 * 86_400_000).toISOString(), deleted_at: null, frames_path: null }])
           .sort((a, b) => b.version_number - a.version_number)
       : [],
     short_video_comments: [],
@@ -447,7 +468,7 @@ module.exports = {
     objective_targets: OBJ ? OBJ.targets : [],
     objective_periods: OBJ ? OBJ.periods : [],
     package_entries: packageEntries,
-    scripts: scriptDocs,
+    scripts: [...scriptDocs, ...ADV.scripts],
     // MOCK_COMMENTS=1: comments on short #231's Script, two of them on words rewritten since.
     script_comments: process.env.MOCK_COMMENTS
       ? [
@@ -478,6 +499,9 @@ module.exports = {
     analytics_content_days: contentDays,
     analytics_syncs: syncs,
     analytics_revenue_daily: revenue,
+    analytics_breakdowns: ADV.breakdowns,
+    analytics_retention: ADV.retention,
+    analytics_content_revenue: ADV.contentRevenue,
     revenue_entries: incomes,
     revenue_access: [],
     social_posts: process.env.MOCK_STATUS_BAD

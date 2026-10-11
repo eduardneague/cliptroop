@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import dynamic from "next/dynamic";
+import { useState } from "react";
 import Link from "next/link";
 import { Mascot } from "@/components/ui/mascot";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
-import { useToast } from "@/components/ui/toast-provider";
-import { objectiveEditorPeople } from "@/app/(dashboard)/objectives/actions";
-import type { TeamPerson } from "@/modules/short-videos/lib/queries";
+import { useNewObjective } from "@/modules/objectives/components/new-objective";
 import { useLiveBoard } from "@/modules/objectives/components/use-live-board";
 import { Meter, Rings, StatusPill, useWhen, type Ring } from "@/modules/objectives/components/parts";
 import { progressWords } from "@/modules/objectives/components/objective-card";
@@ -26,38 +23,6 @@ import { useBox } from "./widget-box";
 
 export type ObjectivesWidgetSettings = { show?: "all" | PeriodKind; ids?: string[] };
 
-// The editor only loads when a master opens it from the widget.
-const ObjectiveEditor = dynamic(() => import("@/modules/objectives/components/objective-editor").then((m) => m.ObjectiveEditor), { ssr: false });
-
-/**
- * Masters set a new objective right from the dashboard: the same editor as
- * Team settings, in a window over the dashboard. The ring fills in as soon
- * as it's saved (realtime, or the reload when the window closes).
- */
-function useNewObjective(teamId: string, used: string[], onDone: () => void) {
-  const toast = useToast();
-  const [people, setPeople] = useState<TeamPerson[] | null>(null);
-  const [opening, start] = useTransition();
-  const open = () =>
-    start(async () => {
-      const r = await objectiveEditorPeople(teamId);
-      if (r.error !== undefined) return void toast.error(r.error);
-      setPeople(r.people);
-    });
-  const editor = people ? (
-    <ObjectiveEditor
-      open
-      onClose={() => {
-        setPeople(null);
-        onDone();
-      }}
-      teamId={teamId}
-      people={people}
-      usedColors={used}
-    />
-  ) : null;
-  return { open, opening, editor };
-}
 
 const daysWord = (kind: PeriodKind, n: number) => {
   const s = timeLeft(kind, n);
@@ -88,11 +53,11 @@ function Row({ o, wide }: { o: ObjectiveView; wide: boolean }) {
           {c.target > 0 ? <>/{formatAmount(o.metric, c.target)}</> : null}
         </span>
         {reached ? (
-          <span className="w-4 h-4 rounded-full bg-green/15 text-green flex items-center justify-center flex-shrink-0" title="Reached">
+          <span className="w-4 h-4 rounded-[4px] bg-green/15 text-green flex items-center justify-center flex-shrink-0" title="Reached">
             <CheckIcon className="w-2.5 h-2.5" />
           </span>
         ) : c.status === "behind" ? (
-          <span className="w-1.5 h-1.5 rounded-full bg-coral flex-shrink-0" title="Behind" />
+          <span className="w-1.5 h-1.5 rounded-[2px] bg-coral flex-shrink-0" title="Behind" />
         ) : null}
       </div>
       {wide && (

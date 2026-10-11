@@ -311,7 +311,7 @@ export function ConnectedAccounts({
         <details className="group rounded-xl border border-line/10">
           <summary className="flex items-center gap-2 px-3.5 py-2.5 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
             <span className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">History</span>
-            <span className="rounded-full bg-surface-2 px-2 h-5 inline-flex items-center text-[11px] font-bold text-ink-soft tabular-nums">{history.length}</span>
+            <span className="rounded-md bg-surface-2 px-2 h-5 inline-flex items-center text-[11px] font-bold text-ink-soft tabular-nums">{history.length}</span>
             <span className="flex-1" />
             <ChevronDownIcon className="w-4 h-4 text-ink-soft transition-transform duration-200 group-open:rotate-180" />
           </summary>
@@ -359,7 +359,7 @@ function SetupCheck({ setup }: { setup: SocialSetup }) {
   const local = setup.env === "local";
   const ok = (on: boolean, yes: string, no: string) => (
     <span className={`inline-flex items-center gap-1 font-semibold ${on ? "text-green" : "text-red"}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${on ? "bg-green" : "bg-red"}`} aria-hidden />
+      <span className={`w-1.5 h-1.5 rounded-[2px] ${on ? "bg-green" : "bg-red"}`} aria-hidden />
       {on ? yes : no}
     </span>
   );

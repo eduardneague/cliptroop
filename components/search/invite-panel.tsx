@@ -168,7 +168,7 @@ export function InvitePanel({
               type="button"
               onClick={() => toggleRole(r.id)}
               aria-pressed={active}
-              className="rounded-full px-3 py-1.5 text-[12px] font-semibold border transition-colors"
+              className="rounded-md px-3 py-1.5 text-[12px] font-semibold border transition-colors"
               style={
                 active
                   ? { background: c, borderColor: c, color: "#fff" }

@@ -355,7 +355,7 @@ function Result({ state, winRate, maxDist, onShare, hidden }: { state: WordState
               </>
             )}
           </p>
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green/12 text-green px-2.5 h-6 text-[12px] font-bold">
+          <span className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-green/12 text-green px-2.5 h-6 text-[12px] font-bold">
             <CheckIcon className="w-3 h-3" />
             Today&rsquo;s contribution
           </span>

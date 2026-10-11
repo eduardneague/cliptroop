@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useFillOnOpen } from "@/lib/hooks/use-fill-on-open";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast-provider";
@@ -129,13 +130,13 @@ export function ObjectiveEditor({
   const [targetTouched, setTargetTouched] = useState(editing);
   const [group, setGroup] = useState<MetricGroup>(METRICS[start.metric].group);
   const [saving, startSaving] = useTransition();
-  useEffect(() => {
-    if (!open) return;
+  // Filled once per opening: the live board reloading behind it never wipes what's being typed.
+  useFillOnOpen(open, objective ? `edit:${objective.id}` : `new:${JSON.stringify(seed ?? null)}`, () => {
     setD(start);
     setTitleTouched(!!objective || !!seed?.title);
     setTargetTouched(!!objective);
     setGroup(METRICS[start.metric].group);
-  }, [open, start, objective, seed]);
+  });
 
   const m = METRICS[d.metric];
   const filters = cleanFilters(d.metric, d.filters);
@@ -464,7 +465,7 @@ export function ObjectiveEditor({
                     style={{ background: colorVar(c) }}
                   >
                     {on && <CheckIcon className="absolute inset-0 m-auto w-4 h-4 text-white" />}
-                    {taken && !on && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-surface ring-1 ring-line/30" aria-hidden />}
+                    {taken && !on && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-[3px] bg-surface ring-1 ring-line/30" aria-hidden />}
                   </button>
                 );
               })}
@@ -486,7 +487,7 @@ export function ObjectiveEditor({
           ) : !v ? (
             <div className="space-y-2" aria-busy="true">
               <div className="skeleton h-7 w-24 rounded" />
-              <div className="skeleton h-2.5 w-full rounded-full" />
+              <div className="skeleton h-2.5 w-full rounded-[3px]" />
               <div className="skeleton h-14 w-full rounded" />
             </div>
           ) : (

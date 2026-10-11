@@ -31,7 +31,7 @@ import { ScriptSettingsForm } from "./script-settings";
 import { DEFAULT_LONG_COLOR, DEFAULT_SHORT_COLOR } from "@/lib/kind-colors";
 import { Suspense } from "react";
 // Each tab's heavy parts load only on that tab (the page shows one tab at a time).
-import { ConnectedAccounts, ObjectivesSettings } from "./lazy-tabs";
+import { ConnectedAccounts, ObjectivesSettings, ProjectionsSettings } from "./lazy-tabs";
 import { FACEBOOK_POST_SCOPE, PROVIDERS, YOUTUBE_EDIT_SCOPE, hasStatsScopes, statsEnabled, type SocialPlatform } from "@/lib/social/providers";
 import { getSocialSetup } from "@/lib/social/setup";
 import { socialKeyConfigured } from "@/lib/social/crypto";
@@ -292,6 +292,12 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         </section>
       )}
 
+      {tab === "projections" && (
+        <section id="projections" className="rounded-xl border border-line/10 bg-surface p-4 sm:p-6 scroll-mt-20">
+          <ProjectionsSettings teamId={currentTeam.id} canEdit={userIsMaster} />
+        </section>
+      )}
+
       {tab === "accounts" && (
         <div className="space-y-6">
         <section id="connected-accounts" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
@@ -372,7 +378,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {ROLES.map((r) => (
                 <div key={r.id} className="flex items-center gap-2.5 rounded-lg border border-line/10 px-3 py-2.5">
-                  <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: roleColors[r.id] }} />
+                  <span className="w-4 h-4 rounded-[4px] flex-shrink-0" style={{ background: roleColors[r.id] }} />
                   <span className="text-[12.5px] font-semibold">{r.name}</span>
                 </div>
               ))}

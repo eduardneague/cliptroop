@@ -108,7 +108,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
               key={r.id}
               type="button"
               onClick={() => toggleRole(r.id)}
-              className={`rounded-full px-3 py-1 text-[11.5px] font-semibold border transition-colors ${
+              className={`rounded-md px-3 py-1 text-[11.5px] font-semibold border transition-colors ${
                 roles.includes(r.id)
                   ? "border-amber bg-amber/10 text-amber"
                   : "border-line/15 text-ink-soft"

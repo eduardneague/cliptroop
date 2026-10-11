@@ -12,7 +12,7 @@ export default function Loading() {
           <Skeleton className="h-3 w-20" />
         </header>
         <section className="rounded-2xl border border-line/10 bg-surface px-5 py-4 flex items-start gap-3.5">
-          <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+          <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
           <div className="flex-1">
             <Skeleton className="h-6 w-56 mb-2" />
             <Skeleton className="h-3 w-72 max-w-full" />

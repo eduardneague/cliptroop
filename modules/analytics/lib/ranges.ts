@@ -7,11 +7,16 @@ export const RANGES = [
   { id: "12m", label: "12 months", days: 365 },
 ] as const;
 export type RangeId = (typeof RANGES)[number]["id"];
-export const TABS = ["production", "audience", "content", "revenue"] as const;
+export const TABS = ["production", "audience", "content", "advanced", "revenue"] as const;
 export type TabId = (typeof TABS)[number];
 
 export const readRange = (v: unknown): RangeId => (RANGES.some((r) => r.id === v) ? (v as RangeId) : "28d");
 export const readTab = (v: unknown): TabId => (TABS.includes(v as TabId) ? (v as TabId) : "production");
+/** Advanced: which platform (none = the first with numbers) and which videos. */
+export const ADV_PLATFORMS = ["youtube", "instagram", "facebook", "tiktok"] as const;
+export type AdvPlatform = (typeof ADV_PLATFORMS)[number];
+export const readAdvPlatform = (v: unknown): AdvPlatform | null => (ADV_PLATFORMS.includes(v as AdvPlatform) ? (v as AdvPlatform) : null);
+export const readAdvContent = (v: unknown): "all" | "shorts" | "long" => (v === "shorts" || v === "long" ? v : "all");
 
 const DAY = 86_400_000;
 export const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);

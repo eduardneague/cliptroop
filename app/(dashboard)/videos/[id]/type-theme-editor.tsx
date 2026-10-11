@@ -125,7 +125,7 @@ export function TypeThemeEditor({
         canEdit ? "cursor-pointer hover:bg-surface-2 hover:text-ink" : "cursor-default"
       }`}
     >
-      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} aria-hidden />
+      <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: color }} aria-hidden />
       <span>
         {videoType.join(" + ")} · {theme}
         {subtheme ? ` · ${subtheme}` : ""}

@@ -160,8 +160,8 @@ export function TablesList({ tables, total }: { tables: { schema: string; name: 
               {fmtNum(t.rows)} rows · <b className="text-ink">{fmtBytes(t.bytes)}</b>
               <span className="text-ink-faint inline-block w-11 text-right">{total ? `${Math.max(0.1, (t.bytes / total) * 100).toFixed(t.bytes / total >= 0.1 ? 0 : 1)}%` : ""}</span>
             </span>
-            <span className="col-span-2 mt-1 h-1 rounded-full bg-line/[0.07] overflow-hidden" aria-hidden>
-              <span className="block h-full rounded-full bg-amber/70" style={{ width: `${Math.max(1, (t.bytes / max) * 100)}%` }} />
+            <span className="col-span-2 mt-1 h-1 rounded-[2px] bg-line/[0.07] overflow-hidden" aria-hidden>
+              <span className="block h-full rounded-[3px] bg-amber/70" style={{ width: `${Math.max(1, (t.bytes / max) * 100)}%` }} />
             </span>
           </li>
         ))}

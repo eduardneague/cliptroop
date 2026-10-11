@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
-import { readRange, readTab, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
+import { readAdvContent, readAdvPlatform, readRange, readTab, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
 import { canViewRevenue, getAudience, getContent, getProduction, getRevenue } from "@/modules/analytics/lib/queries";
+import { getAdvanced } from "@/modules/analytics/lib/advanced";
 import { AnalyticsView } from "@/modules/analytics/components/analytics-view";
 import { cookies } from "next/headers";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -15,7 +16,7 @@ export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
 export const maxDuration = 60;
 
-export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string }> }) {
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string; platform?: string; content?: string }> }) {
   const sp = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
@@ -27,7 +28,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
     getMembership(supabase, currentTeam.id),
     supabase.from("teams").select("timezone").eq("id", currentTeam.id).maybeSingle(),
     canViewRevenue(supabase, currentTeam.id),
-    tab === "revenue" ? revenueCurrency(supabase) : Promise.resolve(null),
+    tab === "revenue" || tab === "advanced" ? revenueCurrency(supabase) : Promise.resolve(null),
     // Copied every morning on its own; if that was missed, start it now.
     claimAnalyticsCatchUp(currentTeam.id),
   ]);
@@ -56,7 +57,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         ? { tab, audience: await getAudience(currentTeam.id, w) }
         : tab === "content"
           ? { tab, content: await getContent(currentTeam.id, w) }
-          : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster, wantedCurrency, revenueAllowed) };
+          : tab === "advanced"
+            ? { tab, advanced: await getAdvanced(currentTeam.id, w, { platform: readAdvPlatform(sp.platform), content: readAdvContent(sp.content), tz, revenueAllowed, currency: wantedCurrency }) }
+            : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster, wantedCurrency, revenueAllowed) };
 
   return (
     <AnalyticsView

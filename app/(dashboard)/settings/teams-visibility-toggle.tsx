@@ -28,12 +28,12 @@ export function TeamsVisibilityToggle({ initialValue }: { initialValue: boolean 
       role="switch"
       aria-checked={visible}
       aria-label="Show my teams publicly"
-      className={`w-10 h-6 rounded-full relative transition-colors flex-shrink-0 disabled:opacity-50 ${
+      className={`w-10 h-6 rounded-lg relative transition-colors flex-shrink-0 disabled:opacity-50 ${
         visible ? "bg-amber" : "bg-line/20"
       }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-md bg-white transition-transform ${
           visible ? "translate-x-[18px]" : "translate-x-0"
         }`}
       />

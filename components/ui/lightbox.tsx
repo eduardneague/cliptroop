@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { CloseIcon, DownloadIcon } from "./icons";
 
 /**
@@ -16,6 +17,8 @@ export function Lightbox({ src, alt, onClose, download }: { src: string; alt: st
   const drag = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
 
+  const close = useLatest(onClose);
+  useScrollLock();
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     closeBtn.current?.focus();
@@ -23,29 +26,26 @@ export function Lightbox({ src, alt, onClose, download }: { src: string; alt: st
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        onClose();
+        close.current();
       }
     };
     window.addEventListener("keydown", onKey, true);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      document.body.style.overflow = prev;
-      opener?.focus?.();
+      if (opener?.isConnected) opener.focus?.({ preventScroll: true });
     };
-  }, [onClose]);
+  }, [close]);
 
   return createPortal(
     <div className="fixed inset-0 z-[160] flex items-center justify-center animate-[fadein_.15s_ease]" role="dialog" aria-modal="true" aria-label={alt}>
       <div className="absolute inset-0 bg-black/85" onClick={onClose} aria-hidden style={{ opacity: 1 - Math.min(0.6, Math.abs(dy) / 400) }} />
       <div className="absolute top-0 inset-x-0 flex items-center justify-end gap-2 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] z-10">
         {download && (
-          <a href={src} download={download} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-full bg-white/12 text-white flex items-center justify-center hover:bg-white/20" aria-label="Download">
+          <a href={src} download={download} target="_blank" rel="noreferrer" className="w-10 h-10 rounded-xl bg-white/12 text-white flex items-center justify-center hover:bg-white/20" aria-label="Download">
             <DownloadIcon className="w-5 h-5" />
           </a>
         )}
-        <button ref={closeBtn} type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-full bg-white/12 text-white flex items-center justify-center hover:bg-white/20">
+        <button ref={closeBtn} type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-xl bg-white/12 text-white flex items-center justify-center hover:bg-white/20">
           <CloseIcon className="w-5 h-5" />
         </button>
       </div>

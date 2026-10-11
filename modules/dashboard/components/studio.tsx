@@ -796,10 +796,10 @@ function WidgetCard({
       {canDrag && (
         <>
           <span onPointerDown={(e) => onResize(e, "r")} className="dash-resize absolute top-3 bottom-6 right-0 w-2.5 cursor-ew-resize group/edge flex items-center justify-center" aria-hidden>
-            <span className="w-[3px] h-8 rounded-full bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
+            <span className="w-[3px] h-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
           </span>
           <span onPointerDown={(e) => onResize(e, "b")} className="dash-resize absolute left-3 right-6 bottom-0 h-2.5 cursor-ns-resize group/edge flex items-center justify-center" aria-hidden>
-            <span className="h-[3px] w-8 rounded-full bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
+            <span className="h-[3px] w-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
           </span>
           <span
             onPointerDown={(e) => onResize(e, "rb")}
@@ -864,7 +864,7 @@ function LibraryTile({ type, added, data, onAdd }: { type: WidgetType; added: bo
       <div className="flex items-center gap-2 px-1 pt-2">
         <span className="text-[13.5px] font-semibold flex-1 min-w-0 truncate">
           {meta.name}
-          {meta.isNew && <span className="ml-1.5 align-[1px] rounded-full bg-amber text-white px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide">New</span>}
+          {meta.isNew && <span className="ml-1.5 align-[1px] rounded-md bg-amber text-white px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide">New</span>}
         </span>
         {!added && (
           <span className="inline-flex items-center gap-1 rounded-md bg-amber/10 text-amber px-1.5 h-6 text-[11.5px] font-bold opacity-80 group-hover:opacity-100">
@@ -888,8 +888,8 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
   if (w.type === "objectives") return <ObjectivesWidgetSettingsForm teamId={teamId} settings={s} onChange={onChange} />;
   const row = "flex items-center justify-between gap-4 py-3 border-b border-line/10 last:border-none";
   const Switch = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => (
-    <button type="button" role="switch" aria-checked={on} onClick={() => set(!on)} className="relative w-10 h-6 rounded-full transition-colors flex-shrink-0" style={{ background: on ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}>
-      <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+    <button type="button" role="switch" aria-checked={on} onClick={() => set(!on)} className="relative w-10 h-6 rounded-lg transition-colors flex-shrink-0" style={{ background: on ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}>
+      <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
     </button>
   );
   if (w.type === "contributions") {

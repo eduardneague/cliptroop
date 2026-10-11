@@ -138,8 +138,8 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
                       {NAME[p.platform as P]}
                     </span>
                     <span className="block font-display text-[19px] font-semibold tabular-nums leading-tight mt-0.5">{p.views === null ? "–" : fmtCompact(p.views)}</span>
-                    <span className="block h-1 rounded-full bg-line/10 mt-1.5 overflow-hidden">
-                      <span className="block h-full rounded-full" style={{ width: `${share ?? 0}%`, background: COLOR[p.platform as P] }} />
+                    <span className="block h-1 rounded-[2px] bg-line/10 mt-1.5 overflow-hidden">
+                      <span className="block h-full rounded-[3px]" style={{ width: `${share ?? 0}%`, background: COLOR[p.platform as P] }} />
                     </span>
                     <span className="block text-[11px] text-ink-faint mt-1 truncate">
                       {share !== null ? `${share}% of the day` : ""}
@@ -159,7 +159,7 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
                     type="button"
                     aria-pressed={kind === k}
                     onClick={() => setKind(k)}
-                    className={`rounded-full px-3 h-7 text-[12px] font-semibold border transition-colors ${kind === k ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+                    className={`rounded-lg px-3 h-7 text-[12px] font-semibold border transition-colors ${kind === k ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
                   >
                     {k === "all" ? "Everything" : k === "short" ? "Shorts" : k === "long" ? "Long videos" : "Posts"}
                   </button>
@@ -219,8 +219,8 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
                       </span>
                       <span className="text-right flex-shrink-0 w-[4.75rem] sm:w-[6.5rem]">
                         <span className="block text-[14px] font-bold tabular-nums">{fmtInt(v.views)}</span>
-                        <span className="block h-1 rounded-full bg-line/10 mt-1 overflow-hidden" aria-hidden>
-                          <span className="block h-full rounded-full" style={{ width: `${Math.max(3, (v.views / top) * 100)}%`, background: COLOR[v.platform as P] }} />
+                        <span className="block h-1 rounded-[2px] bg-line/10 mt-1 overflow-hidden" aria-hidden>
+                          <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, (v.views / top) * 100)}%`, background: COLOR[v.platform as P] }} />
                         </span>
                         <span className="block text-[10.5px] text-ink-faint mt-0.5">{share !== null && share <= 100 ? `${share}% of ${NAME[v.platform as P]}` : v.how === "change" ? "between copies" : ""}</span>
                       </span>

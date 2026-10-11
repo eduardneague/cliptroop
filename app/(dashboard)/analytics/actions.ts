@@ -7,7 +7,9 @@ import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
 import { fetchYouTubeDay, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 import { getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production } from "@/modules/analytics/lib/queries";
-import { addDays, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
+import { addDays, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
+import { getVideoSplits } from "@/modules/analytics/lib/advanced";
+import { gatherClaudeExport, type ClaudeExportData } from "@/modules/analytics/lib/claude-export";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Result<T = object> = ({ error?: undefined } & T) | { error: string };
@@ -187,4 +189,55 @@ export async function deleteRevenueEntry(teamId: string, id: string): Promise<Re
   if (error || !data?.length) return { error: "Only masters can remove income." };
   revalidatePath("/analytics");
   return {};
+}
+
+/** One video's own traffic sources and search terms (Advanced → a video's details). */
+export async function loadVideoSplits(teamId: string, platform: string, id: string): Promise<Awaited<ReturnType<typeof getVideoSplits>> | null> {
+  if (!UUID.test(teamId) || !["youtube", "instagram", "tiktok", "facebook"].includes(platform) || typeof id !== "string" || !id || id.length > 200) return null;
+  if (!(await teamTz(teamId))) return null;
+  try {
+    return await getVideoSplits(teamId, platform as "youtube", id);
+  } catch {
+    return { traffic: [], searches: [], asOf: null };
+  }
+}
+
+/**
+ * Everything for "Download for Claude": the chosen platforms' numbers and
+ * videos, scripts, frames and each video's own traffic (the browser makes
+ * the .txt and the PDF from it). Teammates only; money only for the people
+ * who see revenue, and only when they ask for it.
+ */
+export async function loadClaudeExport(
+  teamId: string,
+  input: { platforms: string[]; range: string; which: string; top?: number; scripts?: boolean; revenue?: boolean }
+): Promise<Result<{ data: ClaudeExportData }>> {
+  const tz = await teamTz(teamId);
+  if (!tz) return { error: "You're not on this team." };
+  const platforms = [...new Set((Array.isArray(input.platforms) ? input.platforms : []).filter((p): p is "youtube" | "instagram" | "facebook" | "tiktok" => ["youtube", "instagram", "facebook", "tiktok"].includes(p)))];
+  if (!platforms.length) return { error: "Pick at least one platform." };
+  const supabase = await createClient();
+  const { data: team } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  // Platform numbers arrive a day late: the range ends yesterday.
+  const yesterday = addDays(todayIn(tz), -1);
+  try {
+    const data = await gatherClaudeExport(
+      teamId,
+      { name: (team?.name as string | undefined) ?? "Team", tz },
+      {
+        platforms,
+        range: readRange(input.range),
+        which: input.which === "top" || input.which === "range" ? input.which : "all",
+        top: Math.max(5, Math.min(200, Math.round(Number(input.top) || 50))),
+        scripts: input.scripts !== false,
+        revenue: input.revenue === true,
+      },
+      yesterday
+    );
+    if (!data.platforms.length) return { error: "None of these platforms has numbers yet." };
+    return { data };
+  } catch (e) {
+    console.error("[claude export]", e instanceof Error ? e.message : e);
+    return { error: "Couldn't gather everything. Try again in a moment." };
+  }
 }

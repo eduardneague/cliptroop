@@ -298,7 +298,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
 
       {phase === "sent" && sent ? (
         <div className="rounded-2xl border border-green/30 bg-green/[0.07] p-4 sm:p-5 flex items-start gap-3.5" role="status">
-          <span className="w-9 h-9 rounded-full bg-green text-white grid place-items-center flex-shrink-0" aria-hidden>
+          <span className="w-9 h-9 rounded-xl bg-green text-white grid place-items-center flex-shrink-0" aria-hidden>
             <CheckIcon className="w-5 h-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -468,20 +468,20 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                           <img src={it.url} alt="" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
                         )}
                         {it.video && !it.broken && (
-                          <span className="absolute left-1.5 bottom-1.5 w-5 h-5 rounded-full bg-black/55 text-white grid place-items-center" aria-hidden>
+                          <span className="absolute left-1.5 bottom-1.5 w-5 h-5 rounded-md bg-black/55 text-white grid place-items-center" aria-hidden>
                             <PlayIcon className="w-3 h-3" />
                           </span>
                         )}
                         {it.state === "uploading" && (
                           <span className="absolute inset-0 bg-black/45 text-white grid place-items-center text-[12px] font-bold tabular-nums">
                             {p}%
-                            <span className="absolute left-1.5 right-1.5 bottom-1.5 h-1 rounded-full bg-white/30 overflow-hidden">
+                            <span className="absolute left-1.5 right-1.5 bottom-1.5 h-1 rounded-[2px] bg-white/30 overflow-hidden">
                               <span className="block h-full bg-white transition-[width] duration-200" style={{ width: `${p}%` }} />
                             </span>
                           </span>
                         )}
                         {it.state === "uploaded" && (
-                          <span className="absolute right-1.5 bottom-1.5 w-5 h-5 rounded-full bg-green text-white grid place-items-center" aria-label="Uploaded">
+                          <span className="absolute right-1.5 bottom-1.5 w-5 h-5 rounded-md bg-green text-white grid place-items-center" aria-label="Uploaded">
                             <CheckIcon className="w-3 h-3" />
                           </span>
                         )}
@@ -495,7 +495,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                             type="button"
                             onClick={() => removeItem(it)}
                             aria-label={`Remove ${it.file.name}`}
-                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white grid place-items-center hover:bg-black/75"
+                            className="absolute top-1 right-1 w-6 h-6 rounded-md bg-black/60 text-white grid place-items-center hover:bg-black/75"
                           >
                             <CloseIcon className="w-3.5 h-3.5" />
                           </button>
@@ -556,8 +556,8 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                 </span>
                 {phase === "uploading" && <span className="tabular-nums text-ink-soft">{pct}%</span>}
               </div>
-              <div className="mt-2 h-1.5 rounded-full bg-line/10 overflow-hidden">
-                <div className={`h-full rounded-full bg-amber transition-[width] duration-300 ${phase === "saving" ? "animate-pulse" : ""}`} style={{ width: `${Math.max(4, pct)}%` }} />
+              <div className="mt-2 h-1.5 rounded-[3px] bg-line/10 overflow-hidden">
+                <div className={`h-full rounded-[3px] bg-amber transition-[width] duration-300 ${phase === "saving" ? "animate-pulse" : ""}`} style={{ width: `${Math.max(4, pct)}%` }} />
               </div>
             </div>
           )}
@@ -620,12 +620,12 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                   </span>
                 </span>
                 {r.status === "done" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green/15 text-green px-2 h-6 text-[11.5px] font-bold whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-green/15 text-green px-2 h-6 text-[11.5px] font-bold whitespace-nowrap">
                     <CheckIcon className="w-3 h-3" />
                     Done
                   </span>
                 ) : (
-                  <span className="rounded-full bg-surface-2 text-ink-soft px-2 h-6 inline-flex items-center text-[11.5px] font-semibold whitespace-nowrap">Received</span>
+                  <span className="rounded-lg bg-surface-2 text-ink-soft px-2 h-6 inline-flex items-center text-[11.5px] font-semibold whitespace-nowrap">Received</span>
                 )}
               </li>
             ))}

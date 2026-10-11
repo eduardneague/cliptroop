@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { DateChip } from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast-provider";
+import { CheckIcon } from "@/components/ui/icons";
+import { useFillOnOpen } from "@/lib/hooks/use-fill-on-open";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { COLOR_LABEL, COLOR_WHEEL, colorVar, nextColor } from "@/modules/objectives/lib/metrics";
 import type { Platform } from "@/modules/short-videos/lib/constants";
@@ -109,9 +111,12 @@ export function ProjectionEditor({
   const [saving, startSaving] = useTransition();
   const lift = useRef<number | null>(null);
 
-  // Fill the form when it opens.
-  useEffect(() => {
-    if (!open) return;
+  const [colorTouched, setColorTouched] = useState(false);
+
+  // Fill the form when it opens: once. The list behind it reloads (a
+  // projection just saved arriving, a live update) without touching it.
+  useFillOnOpen(open, editing ? `edit:${editing.id}` : `new:${JSON.stringify(start ?? null)}`, () => {
+    setColorTouched(!!editing);
     if (editing) {
       const m = (editing.metric in PROJ_METRICS ? editing.metric : "followers") as ProjMetricId;
       setMetric(m);
@@ -144,7 +149,15 @@ export function ProjectionEditor({
     setColor(nextColor(used));
     setNote("");
     lift.current = start?.lift ?? null;
-  }, [open, editing, start, today, used]);
+  });
+
+  // A projection saved a moment ago may arrive with this colour: move on to a
+  // free one, unless it was picked by hand. Nothing else changes.
+  const usedKey = used.join(",");
+  useEffect(() => {
+    if (open && !editing && !colorTouched && used.includes(color)) setColor(nextColor(used));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usedKey]);
 
   const m = metricOf(metric)!;
   const scope = useMemo(
@@ -235,7 +248,7 @@ export function ProjectionEditor({
                     role="tab"
                     aria-selected={group === g}
                     onClick={() => setGroup(g)}
-                    className={`rounded-full px-3 h-7 text-[12px] font-semibold border transition-colors ${group === g ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
+                    className={`rounded-lg px-3 h-7 text-[12px] font-semibold border transition-colors ${group === g ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}
                   >
                     {GROUP_LABEL[g]}
                   </button>
@@ -290,9 +303,9 @@ export function ProjectionEditor({
                           const next = on ? all.filter((x) => x !== p) : [...all, p];
                           setPlatforms(next.length === 0 || next.length === m.platforms.length ? [] : next);
                         }}
-                        className={`inline-flex items-center gap-1.5 rounded-full border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors ${on ? "border-ink/40 bg-surface" : "border-line/10 text-ink-faint opacity-70 hover:opacity-100"}`}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border pl-1 pr-3 h-8 text-[12px] font-semibold transition-colors ${on ? "border-ink/40 bg-surface" : "border-line/10 text-ink-faint opacity-70 hover:opacity-100"}`}
                       >
-                        <PlatformIcon platform={p} className="w-6 h-6 rounded-full" />
+                        <PlatformIcon platform={p} className="w-6 h-6 rounded-md" />
                         {platformName(p)}
                       </button>
                     );
@@ -365,7 +378,7 @@ export function ProjectionEditor({
             {preview.current !== null && preview.current !== 0 && (
               <div className="flex gap-1.5 flex-wrap">
                 {(direction === "up" ? [1.1, 1.25, 1.5, 2] : [0.9, 0.75, 0.5]).map((k) => (
-                  <button key={k} type="button" onClick={() => setTarget(String(nice(preview.current! * k, metric)))} className="rounded-full border border-line/15 px-2.5 h-7 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 tabular-nums">
+                  <button key={k} type="button" onClick={() => setTarget(String(nice(preview.current! * k, metric)))} className="rounded-lg border border-line/15 px-2.5 h-7 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 tabular-nums">
                     {k >= 1 ? (k === 2 ? "×2" : `+${Math.round((k - 1) * 100)}%`) : `−${Math.round((1 - k) * 100)}%`} · {formatValue(metric, nice(preview.current! * k, metric), { currency })}
                   </button>
                 ))}
@@ -379,7 +392,7 @@ export function ProjectionEditor({
               {DEADLINE_PRESETS.map((d) => {
                 const day = addMonths(today, d.months);
                 return (
-                  <button key={d.label} type="button" onClick={() => setDeadline(day)} aria-pressed={deadline === day} className={`rounded-full px-3 h-8 text-[12px] font-semibold border transition-colors ${deadline === day ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}>
+                  <button key={d.label} type="button" onClick={() => setDeadline(day)} aria-pressed={deadline === day} className={`rounded-lg px-3 h-8 text-[12px] font-semibold border transition-colors ${deadline === day ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}>
                     {d.label}
                   </button>
                 );
@@ -422,10 +435,15 @@ export function ProjectionEditor({
                   aria-checked={color === c}
                   aria-label={COLOR_LABEL[c]}
                   title={COLOR_LABEL[c]}
-                  onClick={() => setColor(c)}
-                  className={`w-7 h-7 rounded-full transition-transform ${color === c ? "ring-2 ring-offset-2 ring-offset-surface scale-110" : "hover:scale-110"}`}
-                  style={{ background: colorVar(c), ["--tw-ring-color" as string]: colorVar(c) }}
-                />
+                  onClick={() => {
+                    setColor(c);
+                    setColorTouched(true);
+                  }}
+                  className={`relative w-8 h-8 rounded-lg transition-transform hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-surface ring-ink" : ""}`}
+                  style={{ background: colorVar(c) }}
+                >
+                  {color === c && <CheckIcon className="absolute inset-0 m-auto w-4 h-4 text-white" />}
+                </button>
               ))}
             </div>
           </section>

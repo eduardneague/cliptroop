@@ -225,7 +225,7 @@ export function WhatsNewButton({ variant = "link", className = "" }: { variant?:
         <SparkIcon className="w-4 h-4 text-amber" />
         <span className="flex-1 text-left">What&rsquo;s new</span>
         {unseen ? (
-          <span className="w-2 h-2 rounded-full bg-amber animate-[whats-new-dot_2s_ease-in-out_infinite]" aria-label="New update" />
+          <span className="w-2 h-2 rounded-[3px] bg-amber animate-[whats-new-dot_2s_ease-in-out_infinite]" aria-label="New update" />
         ) : (
           <span className="text-[10.5px] font-medium text-ink-faint tabular-nums">{APP_VERSION}</span>
         )}
@@ -235,7 +235,7 @@ export function WhatsNewButton({ variant = "link", className = "" }: { variant?:
     <button type="button" onClick={openWhatsNew} className={`relative inline-flex items-center gap-1.5 font-semibold text-amber hover:brightness-110 ${className}`}>
       <SparkIcon className="w-3.5 h-3.5" />
       What&rsquo;s new
-      {unseen && <span className="w-1.5 h-1.5 rounded-full bg-amber" aria-label="New update" />}
+      {unseen && <span className="w-1.5 h-1.5 rounded-[2px] bg-amber" aria-label="New update" />}
     </button>
   );
 }

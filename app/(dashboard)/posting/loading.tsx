@@ -33,9 +33,9 @@ export default function Loading() {
       {/* The filters: platform chips, then search and day. */}
       <div className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-3.5 space-y-2.5" aria-hidden>
         <div className="flex items-center gap-2 flex-wrap">
-          <Skeleton className="h-8 w-14 rounded-full" />
+          <Skeleton className="h-8 w-14 rounded-lg" />
           {["w-[7.5rem]", "w-[7.5rem]", "w-[7rem]", "w-24"].map((w, i) => (
-            <Skeleton key={i} className={`h-8 ${w} max-sm:w-14 rounded-full`} />
+            <Skeleton key={i} className={`h-8 ${w} max-sm:w-14 rounded-lg`} />
           ))}
         </div>
         <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export default function Loading() {
         <div key={g.title} className="rounded-2xl border border-line/10 bg-surface overflow-hidden" aria-hidden>
           <div className="flex items-center gap-2 px-4 py-3.5">
             <span className="text-[11.5px] font-bold uppercase tracking-wide text-ink-faint">{g.title}</span>
-            <Skeleton className="h-5 w-7 rounded-full" />
+            <Skeleton className="h-5 w-7 rounded-md" />
           </div>
           {g.rows > 0 && (
             <div className="divide-y divide-line/10 border-t border-line/10">

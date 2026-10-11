@@ -6,6 +6,7 @@ export const TEAM_TABS = [
   { id: "members", label: "Members" },
   { id: "defaults", label: "Defaults", masterOnly: true },
   { id: "objectives", label: "Objectives" },
+  { id: "projections", label: "Projections" },
   { id: "accounts", label: "Connected accounts" },
   { id: "appearance", label: "Appearance" },
   { id: "team", label: "Team" },
@@ -69,7 +70,7 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
               ))}
             </div>
             <div className="flex items-center gap-3">
-              <Skeleton className="h-6 w-11 rounded-full flex-shrink-0" />
+              <Skeleton className="h-6 w-11 rounded-lg flex-shrink-0" />
               <span className="text-[13px] font-semibold">Roll unposted shorts forward</span>
             </div>
             <div>
@@ -131,12 +132,12 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
       </div>
     );
   }
-  if (tab === "objectives") {
+  if (tab === "objectives" || tab === "projections") {
     return (
       <section className="rounded-xl border border-line/10 bg-surface p-6" aria-hidden>
         <div className="flex items-start gap-3 flex-wrap mb-5">
           <div className="flex-1 min-w-[min(100%,16rem)]">
-            <h2 className={`${H2} mb-1`}>Objectives</h2>
+            <h2 className={`${H2} mb-1`}>{tab === "objectives" ? "Objectives" : "Projections"}</h2>
             <Skeleton className="h-3 w-full max-w-xl mt-2" />
             <Skeleton className="h-3 w-2/3 max-w-md mt-1.5" />
           </div>
@@ -152,7 +153,7 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
               </div>
               <div className="hidden md:block w-[300px] space-y-1.5">
                 <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-1.5 w-full rounded-full" />
+                <Skeleton className="h-1.5 w-full rounded-[3px]" />
               </div>
               <Skeleton className="h-8 w-16 rounded-lg" />
             </div>
@@ -252,7 +253,7 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
     <section aria-hidden>
       <div className="flex items-center gap-2 mb-3">
         <h2 className={H2}>Members</h2>
-        <Skeleton className="h-5 w-7 rounded-full" />
+        <Skeleton className="h-5 w-7 rounded-md" />
         <span className="flex-1" />
         <Skeleton className="h-9 w-32 rounded-lg" />
       </div>
@@ -265,8 +266,8 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
               <Skeleton className="h-3 w-24" />
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
-              <Skeleton className="h-6 w-16 rounded-full" />
-              {i % 2 === 0 && <Skeleton className="h-6 w-20 rounded-full" />}
+              <Skeleton className="h-6 w-16 rounded-md" />
+              {i % 2 === 0 && <Skeleton className="h-6 w-20 rounded-md" />}
             </div>
             <Skeleton className="h-8 w-8 rounded-lg" />
           </div>

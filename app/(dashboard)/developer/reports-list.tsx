@@ -32,7 +32,7 @@ export function ReportsList({ reports }: { reports: ReportView[] }) {
   const list = reports.filter((r) => r.status === show && (kind === "all" || r.kind === kind));
 
   const chip = (on: boolean) =>
-    `rounded-full px-3 h-8 text-[12.5px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${on ? "border-amber/60 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
+    `rounded-lg px-3 h-8 text-[12.5px] font-semibold inline-flex items-center gap-1.5 border transition-colors ${on ? "border-amber/60 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
 
   return (
     <div>
@@ -148,7 +148,7 @@ function ReportItem({ r }: { r: ReportView }) {
               </button>
             ) : (
               <>
-                <span className="inline-flex items-center gap-1 rounded-full bg-green/15 text-green px-2 h-6 text-[11.5px] font-bold">
+                <span className="inline-flex items-center gap-1 rounded-lg bg-green/15 text-green px-2 h-6 text-[11.5px] font-bold">
                   <CheckIcon className="w-3 h-3" />
                   Done{r.doneAt ? <>&nbsp;<LocalTime iso={r.doneAt} /></> : null}
                 </span>

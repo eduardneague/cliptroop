@@ -50,7 +50,7 @@ export async function OverviewTab() {
       {/* What needs you: the app's health, errors, reports. */}
       <Widget title="Status" href={T("status")} link="All checks" className="sm:col-span-2">
         <div className="flex items-center gap-2.5">
-          <span className={`w-3 h-3 rounded-full ${LEVEL[worst].dot} ${worst === "down" ? "animate-pulse" : ""}`} aria-hidden />
+          <span className={`w-3 h-3 rounded-[3px] ${LEVEL[worst].dot} ${worst === "down" ? "animate-pulse" : ""}`} aria-hidden />
           <span className="text-[16px] font-semibold">
             {worst === "ok" ? "Everything is working" : worst === "unknown" ? "Some checks have no answer yet" : `${bad.length} part${bad.length === 1 ? "" : "s"} ${worst === "down" ? "not working" : "slow or partly working"}`}
           </span>
@@ -58,7 +58,7 @@ export async function OverviewTab() {
         <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1.5">
           {checks.map((c) => (
             <li key={c.key} className="flex items-center gap-2 min-w-0 text-[12.5px]">
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${LEVEL[c.level].dot}`} aria-hidden />
+              <span className={`w-2 h-2 rounded-[3px] flex-shrink-0 ${LEVEL[c.level].dot}`} aria-hidden />
               <span className="truncate flex-1">{c.name}</span>
               <span className={`flex-shrink-0 font-semibold ${LEVEL[c.level].tone}`}>{c.level === "ok" ? "" : LEVEL[c.level].label}</span>
             </li>
