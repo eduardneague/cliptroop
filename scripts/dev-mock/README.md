@@ -36,8 +36,11 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_OBJ_SIZE=6x3 (columns x rows; MOCK_OBJ_SHOW=week one cadence, MOCK_OBJ_IDS=1,2 picked objectives),
 #    MOCK_PROJECTIONS=1 (with MOCK_OBJECTIVES=1) eight projections with a value per day since each was set
 #    (projections.cjs: running, reached, ended, money), MOCK_SWITCHED=1 the Facebook Page replaced 5 days ago
-#    (Analytics says whose numbers it shows)
-#    Always on: Analytics → Advanced's sample numbers (advanced.cjs: splits, retention curves, each video's
+#    (Analytics says whose numbers it shows), MOCK_LIVE=0 no live counts yet (Realtime waits for its first reads),
+#    MOCK_LIVE_FRESH=1 realtime started 3 hours ago, MOCK_NO_REACH=1 no impressions / CTR yet (the YouTube
+#    Reporting API isn't on: Analytics says so)
+#    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
+#    every 10 minutes for the busiest videos), and Analytics → Advanced's sample numbers (advanced.cjs: splits, retention curves, each video's
 #    money, more videos per platform with patterns to find, hooks in their scripts); with MOCK_FILES=1 the
 #    versions have a frames_path (the mock has no image for it: stub `**/storage/v1/object/**/video-frames/**`
 #    and `**/api/analytics/thumb**` with page.route in Playwright to test Download for Claude's PDF).

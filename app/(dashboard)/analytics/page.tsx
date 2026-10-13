@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
 export const maxDuration = 60;
 
-export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string; platform?: string; content?: string }> }) {
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string; platform?: string; content?: string; every?: string }> }) {
   const sp = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
@@ -56,7 +56,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       : tab === "audience"
         ? { tab, audience: await getAudience(currentTeam.id, w) }
         : tab === "content"
-          ? { tab, content: await getContent(currentTeam.id, w) }
+          ? { tab, content: { ...(await getContent(currentTeam.id, w, {}, { every: sp.every === "1" })), every: sp.every === "1" } }
           : tab === "advanced"
             ? { tab, advanced: await getAdvanced(currentTeam.id, w, { platform: readAdvPlatform(sp.platform), content: readAdvContent(sp.content), tz, revenueAllowed, currency: wantedCurrency }) }
             : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster, wantedCurrency, revenueAllowed) };

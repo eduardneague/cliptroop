@@ -52,6 +52,9 @@ export type AdvVideo = {
   subscribersGained: number | null;
   skipRate: number | null;
   reposts: number | null;
+  /** YouTube (1.19.0): thumbnail impressions and their click-through rate (%), over the days YouTube keeps. */
+  impressions: number | null;
+  ctr: number | null;
   /** Every other number this platform shares for it (premium_views, card_clicks, replays…). */
   metrics: Record<string, number>;
   revenue: { revenue: number | null; rpm: number | null; cpm: number | null; playbackCpm: number | null; adImpressions: number | null; monetizedPlaybacks: number | null } | null;
@@ -346,7 +349,8 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
       ],
     });
   } else {
-    const tv = (d: string) => delta(allRows, d, "total_views");
+    // The day's views worked out per video by the copy (1.19.0), else the change in the running total.
+    const tv = (d: string) => n(allRows.get(d)?.views) ?? delta(allRows, d, "total_views");
     const tl = (d: string) => delta(allRows, d, "total_likes");
     defs.push({
       id: "watching",
@@ -673,6 +677,8 @@ export function videoMapper(ctx: {
       subscribersGained: n(r.subscribers_gained),
       skipRate: n(r.skip_rate),
       reposts: n(r.reposts),
+      impressions: n(r.impressions),
+      ctr: n(r.ctr),
       metrics,
       revenue: mon
         ? { revenue: rev, rpm: rev !== null && viewsN ? (rev / viewsN) * 1000 : null, cpm: ctx.conv(n(mon.cpm), mon.currency), playbackCpm: ctx.conv(n(mon.playback_cpm), mon.currency), adImpressions: n(mon.ad_impressions), monetizedPlaybacks: n(mon.monetized_playbacks) }

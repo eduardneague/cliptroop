@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
 import { fetchYouTubeDay, fetchYouTubeVideoHistory, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { liveTeamPlatform } from "@/modules/analytics/lib/live";
+import { getRealtime, type Realtime } from "@/modules/analytics/lib/realtime";
 import { findVideos, getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production } from "@/modules/analytics/lib/queries";
 import { historyToFill } from "@/modules/analytics/lib/video";
 import { addDays, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
@@ -26,8 +29,14 @@ export async function syncAnalyticsNow(teamId: string): Promise<Result<{ summary
   const membership = await getMembership(supabase, teamId);
   const roles = membership?.roles ?? [];
   if (!roles.includes("master") && !roles.includes("publisher")) return { error: "Only masters and schedulers can sync." };
+  const started = Date.now();
   const results = await syncTeamAnalytics(teamId);
   revalidatePath("/analytics");
+  // Then every video's counts (1.19.0), after the answer, with the time this call has left
+  // (the 10-minute job goes on where it stops; the page refreshes itself when it's done).
+  const ok = results.filter((r) => r.ok).map((r) => r.platform);
+  const budget = 55_000 - (Date.now() - started);
+  if (ok.length && budget > 8_000) after(() => Promise.all(ok.map((p) => liveTeamPlatform(teamId, p, { full: true, budgetMs: budget }))).then(() => undefined));
   if (!results.length) return { error: "No connected accounts. Connect them in Team → Connected accounts." };
   const name = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
   const bad = results.filter((r) => !r.ok);
@@ -90,7 +99,7 @@ export async function loadDashAudience(teamId: string): Promise<Result<{ data: D
   const w = windowFor("28d", addDays(todayIn(tz), -1));
   // The connected platforms and whose numbers they are: looked up once for both.
   const shared = sharedLookups(teamId, await createClient());
-  const [audience, content] = await Promise.all([getAudience(teamId, w, shared), getContent(teamId, w, shared)]);
+  const [audience, content] = await Promise.all([getAudience(teamId, w, shared), getContent(teamId, w, shared, { limit: 60 })]);
   return { data: { audience, top: content.items.slice(0, 8) } };
 }
 
@@ -230,6 +239,18 @@ export async function searchVideos(teamId: string, q: string): Promise<Result<{ 
   } catch (e) {
     console.error("[video search]", e instanceof Error ? e.message : e);
     return { error: "Couldn't search right now." };
+  }
+}
+
+/** Analytics' realtime (1.19.0): the last 48 hours and 60 minutes, the videos getting views now. */
+export async function loadRealtime(teamId: string): Promise<Realtime | null> {
+  if (!UUID.test(teamId)) return null;
+  if (!(await teamTz(teamId))) return null;
+  try {
+    return await getRealtime(teamId);
+  } catch (e) {
+    console.error("[realtime]", e instanceof Error ? e.message : e);
+    return null;
   }
 }
 

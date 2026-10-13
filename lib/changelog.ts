@@ -23,6 +23,23 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.19.0",
+    date: "2026-10-13",
+    title: "Every video, within minutes",
+    changes: [
+      { kind: "new", text: "Analytics → Audience: Realtime. Views over the last 48 hours, hour by hour (point at an hour for each platform), the last 60 minutes, and the videos getting views right now. It refreshes itself while it's open, and it follows the platforms you pick above it." },
+      { kind: "new", text: "Impressions and CTR for YouTube: how many times each video's thumbnail was shown and how many of those became a view, in Content (two new columns), on every video's page and in the CSV exports. YouTube sends them a day or two late, and a video's first ones about two days after this update." },
+      { kind: "better", text: "Every video now counts, not just the newest: all your YouTube uploads, every TikTok, every Instagram post and every Facebook Reel. The newest and the ones getting views are read every 10 minutes, all the others every few hours, and their other numbers (watch time, retention, revenue…) a few at a time all day." },
+      { kind: "better", text: "Analytics → Content: \"Every video\" next to \"Published in the last 28 days\" lists all of them (100 at a time, then Show more)." },
+      { kind: "better", text: "A video's page says how many views it got in the last 48 hours and the last hour, how fresh its counts are, and shows its last 48 hours hour by hour." },
+      { kind: "better", text: "Each account's subscribers or followers now, and how many of its videos ClipTroop has, under Realtime." },
+      { kind: "better", text: "Dashboard: clicking a day in the Calendar widget opens the Calendar on that day, with its window already up." },
+      { kind: "better", text: "The app's alert emails (and reports) go to hello@cliptroop.com only. Developer accounts still get them as notifications, in the app and on their phones." },
+      { kind: "fixed", text: "TikTok's views per day could jump or sink when older videos came in or dropped out of the copy. Each day is now worked out video by video." },
+      { kind: "fixed", text: "A slow moment at YouTube, TikTok or Instagram while ClipTroop renewed its sign-in could mark the account \"needs reconnecting\". Only a real refusal does now; a hiccup is simply tried again." },
+    ],
+  },
+  {
     version: "1.18.1",
     date: "2026-10-13",
     title: "The Objectives overview is back",

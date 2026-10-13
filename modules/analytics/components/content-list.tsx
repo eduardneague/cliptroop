@@ -21,7 +21,9 @@ import type { SocialPlatform } from "@/lib/social/providers";
 
 type Kind = "all" | "short" | "long";
 type View = "table" | "grid";
-type SortKey = "published" | "views" | "score" | "likes" | "comments" | "shares";
+type SortKey = "published" | "views" | "score" | "likes" | "comments" | "shares" | "impressions" | "ctr";
+/** Rows shown at first (and added with each "Show more"): a few thousand videos stay quick. */
+const PAGE = 100;
 
 const NAME: Record<SocialPlatform, string> = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
 const VIEW_KEY = "vp-content-view";
@@ -66,6 +68,7 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
   const [found, setFound] = useState<{ q: string; items: ContentItem[] } | null>(null);
   const [searching, setSearching] = useState(false);
   const [active, setActive] = useState(0);
+  const [shown, setShown] = useState(PAGE);
   const box = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +117,21 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
     const filtered = base.filter((c) => (platform === "all" || c.platform === platform) && (kind === "all" || c.kind === kind));
     if (query && found?.q === query && sort.key === "views" && sort.dir === -1) return filtered; // best matches first
     const get = (c: ContentItem): number | string | null =>
-      sort.key === "published" ? c.publishedAt ?? null : sort.key === "score" ? c.score ?? null : sort.key === "views" ? c.views : sort.key === "likes" ? c.likes : sort.key === "comments" ? c.comments : c.shares;
+      sort.key === "published"
+        ? (c.publishedAt ?? null)
+        : sort.key === "score"
+          ? (c.score ?? null)
+          : sort.key === "views"
+            ? c.views
+            : sort.key === "likes"
+              ? c.likes
+              : sort.key === "comments"
+                ? c.comments
+                : sort.key === "impressions"
+                  ? (c.impressions ?? null)
+                  : sort.key === "ctr"
+                    ? (c.ctr ?? null)
+                    : c.shares;
     return [...filtered].sort((a, b) => {
       const x = get(a);
       const y = get(b);
@@ -125,7 +142,13 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
     });
   }, [items, found, query, platform, kind, sort]);
 
-  useEffect(() => setActive(0), [query, platform, kind, sort]);
+  useEffect(() => {
+    setActive(0);
+    setShown(PAGE);
+  }, [query, platform, kind, sort, items]);
+  // Impressions and CTR: only when some video has them (YouTube, from 1.19.0).
+  const reach = useMemo(() => list.some((c) => c.impressions !== null && c.impressions !== undefined), [list]);
+  const page = list.slice(0, Math.max(shown, active + 1));
 
   const open = (c: ContentItem | undefined) => {
     if (c && !c.noNumbers) router.push(videoHref(c));
@@ -243,8 +266,9 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
         {list.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{query ? (searching ? "Searching…" : "No video matches that.") : kind !== "all" ? `No ${kind === "short" ? "shorts" : "long videos"} here.` : empty}</p>
         ) : view === "table" ? (
-          <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
-            <table className="w-full min-w-[820px] text-[13px]">
+          // (relative: the hidden labels inside scroll with the table instead of widening the page.)
+          <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+            <table className={`w-full text-[13px] ${reach ? "min-w-[980px]" : "min-w-[820px]"}`}>
               <thead>
                 <tr className="bg-surface-2 text-[10.5px] text-ink-faint text-left">
                   <th className="px-3 py-2 font-bold uppercase tracking-wide">Video</th>
@@ -254,13 +278,15 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                   {head("likes", "Likes")}
                   {head("comments", "Comments")}
                   {head("shares", "Shares")}
+                  {reach && head("impressions", "Impressions", true, "How many times YouTube showed the thumbnail (over the days YouTube keeps)")}
+                  {reach && head("ctr", "CTR", true, "Impressions click-through rate: views from those impressions ÷ impressions")}
                   <th className="px-3 py-2" aria-label="Open" />
                 </tr>
               </thead>
               <tbody>
-                {list.map((c, i) => (
+                {page.map((c, i) => (
                   <tr key={`${c.platform}${c.id}`} id={`content-row-${i}`} data-row={i} aria-selected={query ? i === active : undefined} className={`border-t border-line/10 ${query && i === active ? "bg-amber/[0.07]" : "hover:bg-surface-2/40"}`}>
-                    <td className="px-3 py-2 max-w-[24rem]">
+                    <td className={`px-3 py-2 ${reach ? "max-w-[20rem]" : "max-w-[24rem]"}`}>
                       <span className="flex items-center gap-3 min-w-0">
                         <Thumb c={c} className="w-16 h-9" />
                         <span className="min-w-0">
@@ -293,8 +319,10 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.likes)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.comments)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.shares)}</td>
+                    {reach && <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.impressions)}</td>}
+                    {reach && <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{c.ctr === null || c.ctr === undefined ? "–" : `${c.ctr.toFixed(1)}%`}</td>}
                     <td className="px-3 py-2">
-                      <Actions c={c} />
+                      <Actions c={c} wide={reach} />
                     </td>
                   </tr>
                 ))}
@@ -303,7 +331,7 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
           </div>
         ) : (
           <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,210px),1fr))]">
-            {list.map((c, i) => (
+            {page.map((c, i) => (
               <li key={`${c.platform}${c.id}`} id={`content-row-${i}`} data-row={i} className={`group rounded-2xl border bg-surface overflow-hidden flex flex-col ${query && i === active ? "border-amber/50 ring-2 ring-amber/30" : "border-line/10 hover:border-line/25"}`}>
                 <Link href={c.noNumbers ? "#" : videoHref(c)} aria-disabled={c.noNumbers || undefined} onClick={(e) => c.noNumbers && e.preventDefault()} className="block relative aspect-video bg-surface-2 overflow-hidden">
                   {c.thumbnail ? (
@@ -337,7 +365,11 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                   <div className="mt-auto pt-2.5 flex items-end gap-3">
                     <div className="min-w-0">
                       <div className="font-display text-[19px] font-semibold tabular-nums leading-none">{compact(c.views)}</div>
-                      <div className="text-[10.5px] text-ink-faint mt-0.5">{c.noNumbers ? `no numbers from ${NAME[c.platform]} yet` : `views · ${compact(c.likes)} likes · ${compact(c.comments)} comments`}</div>
+                      <div className="text-[10.5px] text-ink-faint mt-0.5">
+                        {c.noNumbers
+                          ? `no numbers from ${NAME[c.platform]} yet`
+                          : `views · ${compact(c.likes)} likes · ${compact(c.comments)} comments${c.ctr !== null && c.ctr !== undefined ? ` · ${c.ctr.toFixed(1)}% CTR` : ""}`}
+                      </div>
                     </div>
                     <span className="flex-1" />
                     <Actions c={c} compact />
@@ -346,6 +378,19 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
               </li>
             ))}
           </ul>
+        )}
+        {list.length > page.length && (
+          <div className="flex items-center justify-center gap-3 pt-3">
+            <span className="text-[12px] text-ink-faint tabular-nums">
+              {page.length.toLocaleString("en-US")} of {list.length.toLocaleString("en-US")}
+            </span>
+            <button type="button" onClick={() => setShown((n) => n + PAGE * 2)} className="inline-flex items-center rounded-lg border border-line/15 px-3.5 h-9 text-[12.5px] font-semibold hover:border-line/30 hover:bg-surface-2">
+              Show {Math.min(PAGE * 2, list.length - page.length).toLocaleString("en-US")} more
+            </button>
+            <button type="button" onClick={() => setShown(list.length)} className="text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:underline">
+              Show all
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -365,18 +410,19 @@ function Thumb({ c, className }: { c: ContentItem; className: string }) {
 }
 
 /** Analytics (this video's page) and Open (on the platform). */
-function Actions({ c, compact: small = false }: { c: ContentItem; compact?: boolean }) {
+/** `wide`: a table with more columns (the label only on the widest screens). */
+function Actions({ c, compact: small = false, wide = false }: { c: ContentItem; compact?: boolean; wide?: boolean }) {
   return (
     <span className="flex items-center justify-end gap-1.5">
       {c.noNumbers ? (
         <span title={`No numbers from ${NAME[c.platform]} yet`} className={`inline-flex items-center gap-1.5 rounded-lg border border-line/10 h-8 text-[12px] font-semibold text-ink-faint ${small ? "w-8 justify-center" : "px-2.5"}`}>
           <AnalyticsIcon className="w-4 h-4" />
-          {!small && <span className="hidden lg:inline">Analytics</span>}
+          {!small && <span className={wide ? "hidden 2xl:inline" : "hidden lg:inline"}>Analytics</span>}
         </span>
       ) : (
         <Link href={videoHref(c)} title="This video's analytics" aria-label="This video's analytics" className={`inline-flex items-center gap-1.5 rounded-lg border border-line/15 h-8 text-[12px] font-semibold text-ink hover:border-amber/50 hover:text-amber ${small ? "w-8 justify-center" : "px-2.5"}`}>
           <AnalyticsIcon className="w-4 h-4" />
-          {!small && <span className="hidden lg:inline">Analytics</span>}
+          {!small && <span className={wide ? "hidden 2xl:inline" : "hidden lg:inline"}>Analytics</span>}
         </Link>
       )}
       {c.url && (

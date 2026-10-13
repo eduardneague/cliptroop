@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { APP_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { developers, isDeveloper } from "@/lib/errors";
+import { ALERT_FOOTER, alertsEmail, developers, isDeveloper } from "@/lib/errors";
 import { appUrl, emailConfigured, sendAlertEmail } from "@/lib/email";
 import { sendNotifications } from "@/lib/notify";
 
@@ -64,20 +64,17 @@ export async function sendTestAlert(): Promise<{ error?: string; emails?: number
     );
   }
   let emails = 0;
-  if (emailConfigured() && devs.emails.length) {
-    const sent = await Promise.all(
-      devs.emails.map((email) =>
-        sendAlertEmail({
-          to: [email],
-          subject: `${APP_NAME}: test alert`,
-          message,
-          linkText: "Open the developer page",
-          href: `${appUrl()}/developer?tab=problems#errors`,
-          footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
-        })
-      )
-    );
-    emails = sent.filter((r) => r.sent).length;
+  if (emailConfigured()) {
+    // One email, to the alerts address only (1.19.0).
+    const sent = await sendAlertEmail({
+      to: [alertsEmail()],
+      subject: `${APP_NAME}: test alert`,
+      message,
+      linkText: "Open the developer page",
+      href: `${appUrl()}/developer?tab=problems#errors`,
+      footer: ALERT_FOOTER,
+    });
+    emails = sent.sent ? 1 : 0;
   }
   return { emails, notified: devs.userIds.length };
 }

@@ -5,6 +5,7 @@ import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
 import { watchHealth } from "@/lib/health-watch";
 import { recordStatus } from "@/lib/status";
 import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
+import { runLiveJob } from "@/modules/analytics/lib/live";
 import { syncAllObjectives } from "@/modules/objectives/lib/sync";
 
 /**
@@ -19,6 +20,10 @@ import { syncAllObjectives } from "@/modules/objectives/lib/sync";
  *     morning analytics copy: {"job": "analytics", "team", "platform"} once
  *     per team and platform at 05:10 UTC and {"job": "analytics", "retry":
  *     true} at 05:40 and 06:40 (0082): lib/daily-jobs.ts.
+ *   - every 10 minutes (:05, :15…) with {"job": "live", "team", "platform"}
+ *     once per team and platform (0083): every video's counts within
+ *     minutes, Analytics' realtime, impressions and CTR
+ *     (modules/analytics/lib/live.ts).
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -42,6 +47,7 @@ async function handle(request: Request) {
   }
   // One team and platform at a time (0082), or the retries.
   if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob({ team: body.team, platform: body.platform, retry: body.retry }));
+  if (body?.job === "live") return NextResponse.json(await runLiveJob({ team: body.team, platform: body.platform }));
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);

@@ -12,6 +12,8 @@ import { scoreText, scoreTone } from "../../lib/scores";
 import { ChartCard, Legend, LineChart, StackedColumns } from "../charts";
 import { RetentionChart } from "../advanced/retention-chart";
 import { compactNum, money, niceDay, pctOf, seconds } from "../advanced/format";
+import { ago as agoFrom } from "../../lib/ago";
+import { hourName } from "../../lib/live-math";
 
 /*
  * One video's analytics (1.17.0): how it did next to the team's typical
@@ -192,6 +194,7 @@ function Hero({ data }: { data: VideoPageData }) {
             {data.ageDays !== null ? ` · ${ago(data.ageDays)}` : ""}
             {v.durationSec ? ` · ${seconds(v.durationSec)} long` : ""}
           </p>
+          {data.live && <LiveLine live={data.live} />}
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {v.url && (
               <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold hover:border-line/30">
@@ -253,6 +256,49 @@ function Verdict({ data }: { data: VideoPageData }) {
   );
 }
 
+/** Its counts within minutes (1.19.0): the last 48 hours and hour, and how fresh they are. */
+function LiveLine({ live }: { live: NonNullable<VideoPageData["live"]> }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const when = now ? agoFrom(live.at, now) : null;
+  if (live.views48 === null && !when) return null;
+  return (
+    <p className="mt-2 flex items-center gap-x-2 gap-y-1 flex-wrap text-[12.5px] text-ink-soft">
+      <span className="relative flex w-2 h-2" aria-hidden>
+        <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 animate-ping" />
+        <span className="relative inline-flex w-2 h-2 rounded-full bg-green" />
+      </span>
+      {live.views48 !== null && (
+        <span>
+          <b className="text-ink tabular-nums">+{live.views48.toLocaleString("en-US")}</b> in the last 48 hours
+        </span>
+      )}
+      {live.views60 !== null && live.views60 > 0 && (
+        <span>
+          · <b className="text-green tabular-nums">+{live.views60.toLocaleString("en-US")}</b> in the last hour
+        </span>
+      )}
+      {when && <span className="text-ink-faint">· counts from {when}</span>}
+    </p>
+  );
+}
+
+function LiveHours({ data }: { data: VideoPageData }) {
+  const l = data.live!;
+  const labels = l.hours.map((h) => new Date(h.at).toLocaleTimeString("en-US", { hour: "numeric" }));
+  const now = Date.now();
+  const tips = l.hours.map((h, i) => `${hourName(Date.parse(h.at), now)}${i === l.hours.length - 1 ? " (so far)" : ""}`);
+  return (
+    <ChartCard title="The last 48 hours" sub={`${data.video.platform === "facebook" ? "Plays" : "Views"} per hour, from its counts read every few minutes`}>
+      <StackedColumns ariaLabel="Views per hour over the last 48 hours" labels={labels} tips={tips} series={[{ key: "v", label: "Views", color: MINE, values: l.hours.map((h) => h.views) }]} height={160} format={(x) => compactNum(x)} />
+    </ChartCard>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Overview
 // ---------------------------------------------------------------------------
@@ -273,13 +319,14 @@ const COLS: Record<number, string> = {
   12: "sm:grid-cols-4 xl:grid-cols-6",
 };
 
-const OVERVIEW_KEYS = ["views", "watch_hours", "avg_view", "avg_pct", "hold", "skip", "likes", "comments", "shares", "saves", "subs", "engagement", "revenue", "rpm"];
+const OVERVIEW_KEYS = ["views", "impressions", "ctr", "watch_hours", "avg_view", "avg_pct", "hold", "skip", "likes", "comments", "shares", "saves", "subs", "engagement", "revenue", "rpm"];
 
 function Overview({ data }: { data: VideoPageData }) {
   const keys = OVERVIEW_KEYS.map((k) => data.keys.find((x) => x.key === k)).filter((k): k is VideoKey => !!k);
   return (
     <div className="space-y-5">
       <KeyGrid keys={keys} currency={data.currency} />
+      {data.live && data.live.hours.some((h) => h.views > 0) && <LiveHours data={data} />}
       <div className="grid gap-5 xl:grid-cols-2">
         <Growth data={data} />
         <PerDay data={data} />

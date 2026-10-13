@@ -21,6 +21,7 @@ import { countryName } from "./world-map";
 import { AudienceMapView, MAP_MODES, sourcesOf, type MapMode, type MapView } from "./audience-map";
 import { startNavProgress } from "@/components/ui/nav-progress";
 import { ContentList } from "./content-list";
+import { RealtimeCard } from "./realtime-card";
 
 // Only loaded when a day on the Views chart is clicked.
 const DayVideos = dynamic(() => import("./day-videos").then((m) => m.DayVideos), { ssr: false });
@@ -31,7 +32,7 @@ const ClaudeExport = dynamic(() => import("../export/claude-export").then((m) =>
 type Data =
   | { tab: "production"; production: Production }
   | { tab: "audience"; audience: Audience }
-  | { tab: "content"; content: { items: ContentItem[]; status: PlatformStatus[] } }
+  | { tab: "content"; content: { items: ContentItem[]; status: PlatformStatus[]; every?: boolean } }
   | { tab: "advanced"; advanced: AdvancedData }
   | { tab: "revenue"; revenue: Revenue };
 
@@ -149,10 +150,12 @@ export function AnalyticsView({
     } catch {}
   }, [advPlatform]);
   const [claudeOpen, setClaudeOpen] = useState(false);
-  const href = (p: { tab?: TabId; range?: RangeId; compare?: boolean; platform?: string; content?: AdvContent }) => {
+  const every = data.tab === "content" && !!data.content.every;
+  const href = (p: { tab?: TabId; range?: RangeId; compare?: boolean; platform?: string; content?: AdvContent; every?: boolean }) => {
     const tab = p.tab ?? data.tab;
     const q = new URLSearchParams({ tab, range: p.range ?? range });
     if (!(p.compare ?? compare)) q.set("compare", "0");
+    if (tab === "content" && (p.every ?? every)) q.set("every", "1");
     if (tab === "advanced") {
       const platform = p.platform ?? (data.tab === "advanced" ? data.advanced.platform : advPref);
       const content = p.content ?? (data.tab === "advanced" && !p.platform ? data.advanced.content : "all");
@@ -196,9 +199,9 @@ export function AnalyticsView({
         ...a.countries.map((c) => [countryName(c.code), c.views]),
       ]);
     } else if (data.tab === "content") {
-      csvDownload(`content_${stamp}.csv`, [
-        ["Platform", "Title", "Published", "Views", "Likes", "Comments", "Shares", "Link"],
-        ...data.content.items.map((c) => [PLATFORM[c.platform].name, c.title, c.publishedAt?.slice(0, 10) ?? null, c.views, c.likes, c.comments, c.shares, c.url]),
+      csvDownload(`content_${data.content.every ? "every-video" : stamp}.csv`, [
+        ["Platform", "Title", "Published", "Views", "Likes", "Comments", "Shares", "Impressions", "CTR (%)", "Link"],
+        ...data.content.items.map((c) => [PLATFORM[c.platform].name, c.title, c.publishedAt?.slice(0, 10) ?? null, c.views, c.likes, c.comments, c.shares, c.impressions ?? null, c.ctr ?? null, c.url]),
       ]);
     } else if (data.tab === "advanced") {
       const a = data.advanced;
@@ -206,13 +209,13 @@ export function AnalyticsView({
       const money = a.videos.some((v) => v.revenue);
       csvDownload(`advanced_${a.platform}_${stamp}.csv`, [
         [
-          "Platform", "Title", "Published", "Kind", "Length (s)", "Views", "Engaged views", "Watch hours", "Average view (s)", "Average % viewed", "Still watching after 3 s (%)", "Halfway (%)", "At the end (%)",
+          "Platform", "Title", "Published", "Kind", "Length (s)", "Views", "Impressions", "CTR (%)", "Engaged views", "Watch hours", "Average view (s)", "Average % viewed", "Still watching after 3 s (%)", "Halfway (%)", "At the end (%)",
           "Likes", "Comments", "Shares", "Saves", "Reach", "Subscribers gained", "Skipped (%)", "Reposts", ...keys,
           ...(money ? [`Revenue (${a.currency})`, `RPM (${a.currency})`, `CPM (${a.currency})`, "Ad impressions", "Monetized playbacks"] : []),
           "Ours", "Hook", "Link",
         ],
         ...a.videos.map((v) => [
-          a.platform, v.title, v.publishedAt?.slice(0, 16).replace("T", " ") ?? null, v.kind, v.durationSec, v.views, v.engagedViews, v.watchMinutes === null ? null : Math.round((v.watchMinutes / 60) * 10) / 10, v.avgViewSeconds, v.avgViewPct,
+          a.platform, v.title, v.publishedAt?.slice(0, 16).replace("T", " ") ?? null, v.kind, v.durationSec, v.views, v.impressions, v.ctr, v.engagedViews, v.watchMinutes === null ? null : Math.round((v.watchMinutes / 60) * 10) / 10, v.avgViewSeconds, v.avgViewPct,
           v.retention?.at3s === null || v.retention?.at3s === undefined ? null : Math.round(v.retention.at3s * 100),
           v.retention?.at50 === null || v.retention?.at50 === undefined ? null : Math.round(v.retention.at50 * 100),
           v.retention?.end === null || v.retention?.end === undefined ? null : Math.round(v.retention.end * 100),
@@ -284,7 +287,7 @@ export function AnalyticsView({
                 <span>Getting the latest numbers… this page updates by itself.</span>
               </span>
             ) : (
-              "Updates by itself every morning."
+              "Counts update every 10 minutes, daily totals every morning."
             )}
           </p>
         </div>
@@ -350,7 +353,9 @@ export function AnalyticsView({
       <div className={`transition-opacity duration-200 ${navigating ? "opacity-50" : ""}`}>
         {data.tab === "production" && <ProductionTab p={data.production} compare={compare} w={w} />}
         {data.tab === "audience" && <AudienceTab teamId={teamId} a={data.audience} compare={compare} picked={pickedIn(data.audience, picked)} setPicked={setPicked} />}
-        {data.tab === "content" && <ContentTab teamId={teamId} items={data.content.items} status={data.content.status} advancedHref={href({ tab: "advanced" })} />}
+        {data.tab === "content" && (
+          <ContentTab teamId={teamId} items={data.content.items} status={data.content.status} every={every} onEvery={(v) => go({ every: v })} rangeLabel={RANGES.find((r) => r.id === range)!.label} advancedHref={href({ tab: "advanced" })} />
+        )}
         {data.tab === "advanced" && (
           <AdvancedTab
             teamId={teamId}
@@ -554,9 +559,11 @@ function statusText(s: PlatformStatus) {
       ? "reconnect to allow stats"
       : s.lastError
         ? "last sync failed"
-        : s.lastOkAt
-          ? `synced ${new Date(s.lastOkAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-          : "waiting for the first sync";
+        : s.liveAt && !s.liveError && Date.now() - Date.parse(s.liveAt) < 3_600_000
+          ? "live"
+          : s.lastOkAt
+            ? `synced ${new Date(s.lastOkAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+            : "waiting for the first sync";
 }
 
 function StatusRow({ status }: { status: PlatformStatus[] }) {
@@ -738,6 +745,7 @@ function AudienceTab({ teamId, a, compare, picked, setPicked }: { teamId: string
     <div className="space-y-5">
       <PlatformFilter a={a} picked={picked} setPicked={setPicked} />
       <AccountNote status={a.status} className="-mt-3" />
+      <RealtimeCard teamId={teamId} only={picked} />
       {ttWaiting && (
         <p className="rounded-xl border border-line/15 bg-surface px-4 py-3 text-[13px] text-ink-soft flex items-start gap-3">
           <PlatformIcon platform="tiktok" className="w-5 h-5 rounded mt-0.5 flex-shrink-0" />
@@ -1035,7 +1043,23 @@ function ContentFilter({ items, status, platform, setPlatform }: { items: Conten
   );
 }
 
-function ContentTab({ teamId, items, status, advancedHref }: { teamId: string; items: ContentItem[]; status: PlatformStatus[]; advancedHref: string }) {
+function ContentTab({
+  teamId,
+  items,
+  status,
+  every,
+  onEvery,
+  rangeLabel,
+  advancedHref,
+}: {
+  teamId: string;
+  items: ContentItem[];
+  status: PlatformStatus[];
+  every: boolean;
+  onEvery: (v: boolean) => void;
+  rangeLabel: string;
+  advancedHref: string;
+}) {
   const [platform, setPlatform] = useState<"all" | P>("all");
   if (!status.some((s) => s.connected) && !items.length)
     return (
@@ -1047,6 +1071,22 @@ function ContentTab({ teamId, items, status, advancedHref }: { teamId: string; i
   const picked = platform === "all" ? null : status.find((s) => s.platform === platform) ?? null;
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div role="radiogroup" aria-label="Which videos" className="inline-flex rounded-lg border border-line/15 p-0.5 bg-surface">
+          {([false, true] as const).map((v) => (
+            <button
+              key={String(v)}
+              type="button"
+              role="radio"
+              aria-checked={every === v}
+              onClick={() => every !== v && onEvery(v)}
+              className={`px-3 h-8 rounded-md text-[12.5px] font-semibold transition-colors ${every === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+            >
+              {v ? "Every video" : `Published in the last ${rangeLabel}`}
+            </button>
+          ))}
+        </div>
+      </div>
       <ContentFilter items={items} status={status} platform={platform} setPlatform={setPlatform} />
       <AccountNote status={platform === "all" ? status : status.filter((s) => s.platform === platform)} />
       <ContentList
@@ -1057,12 +1097,14 @@ function ContentTab({ teamId, items, status, advancedHref }: { teamId: string; i
           picked && !picked.connected
             ? `${PLATFORM[picked.platform].name} isn't connected, and nothing was posted there in this range.`
             : picked && !picked.statsReady
-              ? `Nothing posted to ${PLATFORM[picked.platform].name} in this range. Its numbers need one more permission: reconnect it in Team → Connected accounts.`
-              : `Nothing published${picked ? ` on ${PLATFORM[picked.platform].name}` : ""} in this range.`
+              ? `Nothing posted to ${PLATFORM[picked.platform].name} ${every ? "yet" : "in this range"}. Its numbers need one more permission: reconnect it in Team → Connected accounts.`
+              : `Nothing published${picked ? ` on ${PLATFORM[picked.platform].name}` : ""} ${every ? "yet" : "in this range"}.`
         }
       />
       <p className="text-[12px] text-ink-faint">
-        Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts and Reels. Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their numbers. &ldquo;× typical&rdquo;: views next to the median of the same kind posted before it, on the same platform. Only the accounts connected now are listed.
+        Every video on each connected account, with its totals now: the newest and the ones getting views are read every 10 minutes, all the others every few hours. Impressions and CTR are
+        YouTube&rsquo;s (thumbnail impressions and click-through rate over the days YouTube keeps). Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their
+        numbers. &ldquo;× typical&rdquo;: views next to the median of the same kind posted before it, on the same platform. Only the accounts connected now are listed.
       </p>
       <p className="text-[12.5px] text-ink-soft">
         Every number for all the videos together (retention, where views came from, what works):{" "}

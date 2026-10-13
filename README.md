@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.18.1" src="https://img.shields.io/badge/version-1.18.1-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -103,7 +103,9 @@ and anything that goes wrong is explained, with a retry.
 ### See what worked
 
 Views, watch time, followers and revenue from every platform, where your
-audience is, and how much the team made, side by side. Copied every morning.
+audience is, and how much the team made, side by side. Every video's counts
+within minutes (the last 48 hours hour by hour, the last 60 minutes, what's
+getting views right now) and YouTube's impressions and click-through rate.
 Advanced has every number the platforms share (retention, traffic sources,
 search terms, who's watching), your best performing videos and What works,
 the patterns in your own videos. Every video has its own page: how it did
@@ -135,7 +137,7 @@ next to your typical one, day by day, and where its views came from.
 
 - **App**: Next.js 15 (App Router) and React 19, styled with Tailwind. One codebase for pages and server actions.
 - **Data**: Supabase, with Postgres (row-level security on every table), Auth, Storage and Realtime.
-- **Clockwork**: Supabase's own timer (pg_cron) runs the posting queue every minute, the status check every 10 minutes and two daily jobs.
+- **Clockwork**: Supabase's own timer (pg_cron) runs the posting queue every minute, the status check and every video's counts every 10 minutes, and two daily jobs.
 - **Hosting**: Vercel. `staging` deploys to staging.cliptroop.com, `main` to app.cliptroop.com.
 - **Posting**: The official YouTube, Instagram, Facebook and TikTok APIs, through each team's own accounts.
 - **Quality**: Every push runs type checks, lint, tests, a production build and every database migration from scratch.

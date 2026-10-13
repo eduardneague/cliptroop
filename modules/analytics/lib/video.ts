@@ -7,6 +7,7 @@ import { averageCurve, readCurve, resample, type RetentionPoint } from "./retent
 import { getVideoSplits, hooksFor, videoMapper, withScores, type AdvVideo, type VideoSplitRow } from "./advanced";
 import { cumulativeByAge, median, perDayFrom, rankOf, typicalCurve, versusTypical, type DayRow } from "./scores";
 import { addDays, dayList } from "./ranges";
+import { gainedBetween, perHour } from "./live-math";
 
 /*
  * One video's own analytics page (1.17.0): every number its platform shares,
@@ -45,6 +46,12 @@ export type VideoPageData = {
   canFill: boolean;
   retention: { mine: (number | null)[]; average: (number | null)[] | null; averageCount: number } | null;
   splits: { traffic: VideoSplitRow[]; searches: VideoSplitRow[]; asOf: string | null } | null;
+  /**
+   * Its counts within minutes (1.19.0): when they were last read, the views
+   * of the last 48 hours and 60 minutes, and per hour. Null before
+   * migration 0083 or before the 10-minute job has seen it.
+   */
+  live: { at: string | null; views48: number | null; views60: number | null; hours: { at: string; views: number }[] } | null;
   siblings: Sibling[];
   currency: string;
   /** Typical revenue per 1,000 views of the same kind (money people only). */
@@ -123,6 +130,8 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
   const subsPer1k = (v: AdvVideo) => (v.views && v.subscribersGained !== null ? (v.subscribersGained / v.views) * 1000 : null);
   const defs: { key: string; label: string; get: (v: AdvVideo) => number | null; format: VideoKey["format"]; good?: "up" | "down" }[] = [
     { key: "views", label: platform === "facebook" ? "Plays" : "Views", get: (v) => v.views, format: "compact" },
+    { key: "impressions", label: "Impressions", get: (v) => v.impressions, format: "compact" },
+    { key: "ctr", label: "Impressions CTR", get: (v) => v.ctr, format: "pct" },
     { key: "engaged_views", label: "Engaged views", get: (v) => v.engagedViews, format: "compact" },
     { key: "reach", label: "Reach", get: (v) => v.reach ?? v.metrics.reach ?? null, format: "compact" },
     { key: "watch_hours", label: "Watch time", get: watchH, format: "hours" },
@@ -176,7 +185,9 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
   const ageDays = postedDay ? Math.max(0, Math.round((Date.parse(`${o.today}T00:00:00Z`) - Date.parse(`${postedDay}T00:00:00Z`)) / 86_400_000)) : null;
 
   const byDay = (a: Row, b: Row) => String(a.day).localeCompare(String(b.day));
-  const mineRows = [...(byVideo.get(id) ?? [])].sort(byDay);
+  // (A day can have only its impressions and CTR, 1.19.0: those aren't days with views.)
+  const hasViews = (r: Row) => r.views !== null && r.views !== undefined;
+  const mineRows = [...(byVideo.get(id) ?? [])].filter(hasViews).sort(byDay);
   let daily: VideoPageData["daily"] = null;
   if (mineRows.length) {
     const src = mineRows.some((r) => r.source === "daily") ? "daily" : "total";
@@ -205,7 +216,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     const peerCurves = peers
       .map((p) => {
         const pd = p.day ?? (p.publishedAt ? p.publishedAt.slice(0, 10) : null);
-        return pd ? cumulativeByAge((byVideo.get(p.id) ?? []).map(asDay), pd, len - 1, lastDay) : [];
+        return pd ? cumulativeByAge((byVideo.get(p.id) ?? []).filter(hasViews).map(asDay), pd, len - 1, lastDay) : [];
       })
       .filter((c) => c.some((v) => v !== null));
     let typical = typicalCurve(peerCurves, len);
@@ -252,6 +263,8 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     }))
     .sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
 
+  const live = await liveFor(supabase, teamId, platform, id, (me.live_at as string | null | undefined) ?? null);
+
   const notes: string[] = [];
   if (platform !== "youtube") {
     const firstCopy = mineRows.find((r) => r.source === "total")?.day as string | undefined;
@@ -271,6 +284,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     canFill,
     retention,
     splits,
+    live,
     siblings,
     currency: display,
     typicalRpm,
@@ -281,6 +295,30 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
 }
 
 const NAME: Record<SocialPlatform, string> = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
+
+/** One video's live counts (analytics_live, 0083): the last 48 hours, the last 60 minutes, per hour. */
+async function liveFor(supabase: Awaited<ReturnType<typeof createClient>>, teamId: string, platform: SocialPlatform, id: string, at: string | null): Promise<VideoPageData["live"]> {
+  const HOUR = 3_600_000;
+  const now = Date.now();
+  const { data, error } = await supabase
+    .from("analytics_live")
+    .select("at, views")
+    .eq("team_id", teamId)
+    .eq("platform", platform)
+    .eq("external_id", id)
+    .gte("at", new Date(now - 60 * HOUR).toISOString())
+    .order("at")
+    .limit(1000);
+  if (error) return null;
+  const points = ((data ?? []) as Row[]).map((r) => ({ at: Date.parse(String(r.at)), views: n(r.views) }));
+  if (!points.length && !at) return null;
+  return {
+    at,
+    views48: points.length > 1 ? gainedBetween(points, now - 48 * HOUR) : null,
+    views60: points.length > 1 ? gainedBetween(points, now - HOUR) : null,
+    hours: perHour(points, now, 48).map((h) => ({ at: new Date(h.at).toISOString(), views: h.views })),
+  };
+}
 const niceDayText = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 /** The video and the ones that make its "typical", for filling in YouTube's day-by-day history. */
@@ -298,9 +336,12 @@ export async function historyToFill(teamId: string, id: string, today: string): 
   const end = addDays(today, -1);
   const before = rows.filter((r) => r.kind === me.kind && r.external_id !== id && r.published_at && (r.published_at as string) < (me.published_at as string)).slice(0, PEERS);
   const ids = [id, ...before.map((r) => r.external_id as string)];
-  const { data } = await supabase.from("analytics_content_days").select("external_id, day").eq("team_id", teamId).eq("platform", "youtube").eq("source", "daily").in("external_id", ids).order("day").limit(20_000);
+  // Days with views (a day with only impressions and CTR doesn't count).
+  const data = await all((a, b) =>
+    supabase.from("analytics_content_days").select("external_id, day").eq("team_id", teamId).eq("platform", "youtube").eq("source", "daily").not("views", "is", null).in("external_id", ids).order("day").order("external_id").range(a, b)
+  );
   const span = new Map<string, { first: string; last: string }>();
-  for (const r of (data ?? []) as Row[]) {
+  for (const r of data) {
     const k = r.external_id as string;
     const d = r.day as string;
     const s = span.get(k);

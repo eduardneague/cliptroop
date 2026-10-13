@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { developers, shouldAlert } from "@/lib/errors";
+import { alertsEmail, developers, shouldAlert } from "@/lib/errors";
 import { emailConfigured } from "@/lib/email";
 import { coreChecks, jobChecks, lastStatusCall, PARTS, partName, statusHistory, statusIncidents, VENDORS, vendorChecks, type Check, type Level } from "@/lib/status";
 import { BAR_COLOR, durationText, LEVEL } from "@/lib/status-levels";
@@ -214,8 +214,11 @@ export async function StatusTab() {
       <section className={`${card} px-4 sm:px-5 py-4 space-y-2 text-[13px]`} id="alerts">
         <h2 className={h2}>Alerts</h2>
         <p>
-          <span className="text-ink-soft">Who gets them:</span> <b>{devs.emails.length ? devs.emails.join(", ") : "nobody"}</b>{" "}
-          <span className="text-ink-faint">({sourceText(devs.source)})</span>
+          <span className="text-ink-soft">Emails go to:</span> <b className="break-all">{alertsEmail()}</b> <span className="text-ink-faint">(only there: ALERTS_EMAIL, else NEXT_PUBLIC_CONTACT_EMAIL)</span>
+        </p>
+        <p>
+          <span className="text-ink-soft">Notifications go to:</span> <b>{devs.emails.length ? devs.emails.join(", ") : "nobody"}</b>{" "}
+          <span className="text-ink-faint">({sourceText(devs.source)}; in the app and on their phones, never by email)</span>
         </p>
         <p>
           <span className="text-ink-soft">From this copy ({env}):</span> {alertsOn ? <b className="text-green">alerts are sent</b> : <b>errors are recorded, no alerts sent</b>}
@@ -225,7 +228,7 @@ export async function StatusTab() {
           <span className="text-ink-soft">Email:</span> {emailConfigured() ? <b className="text-green">set up</b> : <b className="text-gold">not set up (RESEND_API_KEY, EMAIL_FROM): alerts arrive as notifications only</b>}
         </p>
         <p className="text-[12.5px] text-ink-soft">
-          You get one email and one notification the first time an error happens, again at most once an hour while it keeps happening, and again if it comes back after you mark it fixed. Problems the status check finds (the timer, the morning copy) email once when they start, once a day while they last, and once when they&rsquo;re over. Team owners and everyone else never get these.
+          One email and one notification the first time an error happens, again at most once an hour while it keeps happening, and again if it comes back after you mark it fixed. Problems the status check finds (the timer, the morning copy) email once when they start, once a day while they last, and once when they&rsquo;re over. Team owners and everyone else never get these.
         </p>
       </section>
     </div>

@@ -227,12 +227,15 @@ export function LineChart({
 /** Stacked columns (e.g. shorts + long videos per week). Hover/focus a column for its numbers. */
 export function StackedColumns({
   labels,
+  tips,
   series,
   format = fmtInt,
   height = 220,
   ariaLabel,
 }: {
   labels: string[];
+  /** The tooltip's title for each column (default: its label), e.g. the day with the hour. */
+  tips?: string[];
   series: { key: string; label: string; color: string; values: number[] }[];
   format?: (n: number | null) => string;
   height?: number;
@@ -257,7 +260,7 @@ export function StackedColumns({
   return (
     <div ref={box} className="relative select-none">
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block">
+        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block overflow-visible">
           {ticks.map((t) => (
             <g key={t}>
               <line x1={left} x2={left + iw} y1={y(t)} y2={y(t)} stroke="rgb(var(--line) / 0.08)" strokeWidth={1} />
@@ -277,7 +280,7 @@ export function StackedColumns({
                 key={i}
                 tabIndex={0}
                 role="img"
-                aria-label={`${l}: ${series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
+                aria-label={`${tips?.[i] ?? l}: ${series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover((h) => (h === i ? null : h))}
                 onFocus={() => setHover(i)}
@@ -307,7 +310,7 @@ export function StackedColumns({
       )}
       {hover !== null && width > 0 && (
         <Tooltip x={left + slot * hover + slot / 2} y={top} width={width}>
-          <div className="text-[11px] font-semibold text-ink-faint mb-1">{labels[hover]}</div>
+          <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2 py-0.5">
               <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: s.color }} />

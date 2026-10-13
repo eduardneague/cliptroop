@@ -55,6 +55,17 @@ async function refreshRow(row: Row, reason: string): Promise<string> {
     await logSocial(row.team_id, row.platform, "refreshed", null, { reason });
     return t.accessToken;
   } catch (e) {
+    // A hiccup isn't a refusal (no answer, a timeout, the platform down or
+    // busy): the account stays connected and the next use tries again. Only
+    // the platform saying no needs a reconnect (with the numbers read every
+    // 10 minutes, 1.19.0, sign-ins are refreshed far more often).
+    const name = e instanceof Error ? e.name : "";
+    const transient = e instanceof ProviderError ? e.status === 429 || e.status >= 500 : e instanceof TypeError || name === "TimeoutError" || name === "AbortError";
+    if (transient) {
+      const why = (e instanceof Error ? e.message : String(e)).slice(0, 160);
+      console.warn(`[tokens] ${row.platform} refresh didn't go through (${reason}): ${why}`);
+      throw new ProviderError(`${PROVIDERS[row.platform].name} didn't answer the sign-in refresh (${why}). It will try again shortly.`);
+    }
     const message = e instanceof ProviderError ? e.message : "The platform didn't accept the refresh.";
     await admin.from("social_accounts").update({ status: "needs_reconnect", last_error: message }).eq("id", row.id);
     await logSocial(row.team_id, row.platform, "refresh_failed", null, { reason, message });

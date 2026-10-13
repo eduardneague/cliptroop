@@ -23,8 +23,8 @@ function gridFor(focus: string) {
   return { start: iso(start), end: iso(end) };
 }
 
-export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ d?: string; view?: string }> }) {
-  const { d, view } = await searchParams;
+export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ d?: string; view?: string; open?: string }> }) {
+  const { d, view, open } = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
@@ -172,6 +172,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       <CalendarView
         items={items}
         focus={focus}
+        // A day clicked in the dashboard's Calendar widget: open with its window up (1.19.0).
+        openDay={open === "1" && d && DATE.test(d) ? d : null}
         view={view === "week" || view === "agenda" || view === "month" ? view : null}
         teamId={currentTeam.id}
         canManage={canManage}

@@ -31,7 +31,7 @@ import type { RetentionPoint } from "./retention";
  * read-only. Never throws: problems are saved on analytics_syncs.
  */
 
-type Account = { id: string; team_id: string; platform: SocialPlatform; external_id: string | null; scopes: string[] | null; username?: string | null; display_name?: string | null };
+export type Account = { id: string; team_id: string; platform: SocialPlatform; external_id: string | null; scopes: string[] | null; username?: string | null; display_name?: string | null };
 export type SyncResult = { platform: SocialPlatform; ok: boolean; error?: string; rows: number; note?: string | null };
 
 // ---------------------------------------------------------------------------
@@ -265,10 +265,10 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
   return { rows, revenueNote, note: countryError ? `countries: ${countryError}` : null };
 }
 
-type YtVideo = { id: string; snippet?: { title?: string; publishedAt?: string; thumbnails?: Record<string, { url?: string }> }; statistics?: Record<string, string>; contentDetails?: { duration?: string } };
+export type YtVideo = { id: string; snippet?: { title?: string; publishedAt?: string; thumbnails?: Record<string, { url?: string }> }; statistics?: Record<string, string>; contentDetails?: { duration?: string } };
 
 /** Videos' titles, pictures and lifetime counts (Data API), at most 50 per call. */
-async function ytVideos(token: string, ids: string[]): Promise<YtVideo[]> {
+export async function ytVideos(token: string, ids: string[]): Promise<YtVideo[]> {
   const out: YtVideo[] = [];
   for (let i = 0; i < ids.length; i += 50) {
     const r = (await get(`${YT}/videos?${new URLSearchParams({ part: "snippet,statistics,contentDetails", id: ids.slice(i, i + 50).join(","), maxResults: "50" })}`, token)) as { items?: YtVideo[] };
@@ -277,7 +277,7 @@ async function ytVideos(token: string, ids: string[]): Promise<YtVideo[]> {
   return out;
 }
 
-function ytContentRow(acc: Account, v: YtVideo, links: Links) {
+export function ytContentRow(acc: Pick<Account, "team_id">, v: YtVideo, links: Links) {
   const link = links.byExternal.get(`youtube:${v.id}`) ?? links.byUrl(v.id);
   const secs = isoDuration(v.contentDetails?.duration);
   return {
@@ -304,7 +304,7 @@ function ytContentRow(acc: Account, v: YtVideo, links: Links) {
  * watch time, average view duration, average % viewed, subscribers gained.
  * Null when YouTube won't give them (they're optional).
  */
-async function ytVideoStats(token: string, ids: string[]): Promise<Map<string, Record<string, number | null>> | null> {
+export async function ytVideoStats(token: string, ids: string[]): Promise<Map<string, Record<string, number | null>> | null> {
   if (!ids.length) return new Map();
   for (const metrics of ["views,engagedViews,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained", "views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained"]) {
     try {
@@ -486,7 +486,7 @@ export async function fetchYouTubeDay(teamId: string, day: string): Promise<bool
 // Instagram (Instagram API with Instagram Login)
 // ---------------------------------------------------------------------------
 
-const IG = () => `https://graph.instagram.com/${process.env.INSTAGRAM_GRAPH_VERSION || "v23.0"}`;
+export const IG = () => `https://graph.instagram.com/${process.env.INSTAGRAM_GRAPH_VERSION || "v23.0"}`;
 const unix = (day: string, end = false) => Math.floor(Date.parse(`${day}T00:00:00Z`) / 1000) + (end ? 86_400 : 0);
 
 async function syncInstagram(admin: Admin, acc: Account, backfill: boolean, links: Links, adv: Advanced) {
@@ -664,8 +664,13 @@ async function syncTikTok(admin: Admin, acc: Account, links: Links) {
   let totalViews = 0;
   let totalLikes = 0;
   const recs: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
   let cursor: number | null = null;
-  for (let page = 0; page < 10; page++) {
+  // Every video (1.19.0; it was the newest 200), 20 per page, while there's time.
+  const until = Date.now() + 35_000;
+  let complete = false;
+  for (let page = 0; page < 250; page++) {
+    if (page > 0 && Date.now() > until) break;
     const r = (await get(
       "https://open.tiktokapis.com/v2/video/list/?fields=id,title,create_time,view_count,like_count,comment_count,share_count,cover_image_url,share_url,duration",
       token,
@@ -673,6 +678,8 @@ async function syncTikTok(admin: Admin, acc: Account, links: Links) {
     )) as { data?: { videos?: Record<string, unknown>[]; cursor?: number; has_more?: boolean } };
     for (const v of r.data?.videos ?? []) {
       const id = String(v.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
       totalViews += num(v.view_count) ?? 0;
       totalLikes += num(v.like_count) ?? 0;
       const link = links.byExternal.get(`tiktok:${id}`) ?? links.byUrl(id);
@@ -695,20 +702,82 @@ async function syncTikTok(admin: Admin, acc: Account, links: Links) {
         updated_at: new Date().toISOString(),
       });
     }
-    if (!r.data?.has_more || !r.data.cursor) break;
+    if (!r.data?.has_more || !r.data.cursor) {
+      complete = true;
+      break;
+    }
     cursor = r.data.cursor;
   }
   rows += await upsert(admin, "analytics_content", recs, "team_id,platform,external_id");
+  // What the videos got yesterday: yesterday's copy against the counts now.
+  const yesterday = await tiktokDayViews(admin, acc.team_id, daysAgo(1), recs);
   rows += await snapshotContent(admin, acc.team_id, "tiktok", recs);
   rows += await upsert(
     admin,
     "analytics_daily",
-    [{ team_id: acc.team_id, platform: "tiktok", day: today, content: "all", followers: num(u.follower_count), total_views: totalViews, total_likes: num(u.likes_count) ?? totalLikes, updated_at: new Date().toISOString() }],
+    [
+      {
+        team_id: acc.team_id,
+        platform: "tiktok",
+        day: today,
+        content: "all",
+        followers: num(u.follower_count),
+        // Lifetime views: only from a copy that saw every video (a partial sum would look like a drop).
+        ...(complete ? { total_views: totalViews } : {}),
+        total_likes: num(u.likes_count) ?? totalLikes,
+        updated_at: new Date().toISOString(),
+      },
+    ],
     "team_id,platform,day,content"
   );
+  if (yesterday !== null) rows += await upsert(admin, "analytics_daily", [{ team_id: acc.team_id, platform: "tiktok", day: daysAgo(1), content: "all", views: yesterday, updated_at: new Date().toISOString() }], "team_id,platform,day,content");
   // TikTok only gives running totals: daily numbers start once there are two copies.
   const videos = recs.length;
-  return { rows, note: `${videos} video${videos === 1 ? "" : "s"}${num(u.follower_count) !== null ? `, ${num(u.follower_count)} followers` : ""}${videos ? "" : " (TikTok returned no public videos)"}` };
+  return {
+    rows,
+    note: `${videos} video${videos === 1 ? "" : "s"}${complete ? "" : " (the rest on the next copy)"}${num(u.follower_count) !== null ? `, ${num(u.follower_count)} followers` : ""}${videos ? "" : " (TikTok returned no public videos)"}`,
+  };
+}
+
+/**
+ * TikTok shares running totals only (1.19.0): what its videos got on `day`
+ * is each video's count now minus its count in that day's copy, for the
+ * videos seen both times, plus every view of the ones posted after that
+ * copy. A video found for the first time adds nothing (its views aren't
+ * new), so reading more videos than before never looks like a jump. Null
+ * when that day has no copy.
+ */
+async function tiktokDayViews(admin: Admin, teamId: string, day: string, recs: Record<string, unknown>[]): Promise<number | null> {
+  const before = new Map<string, number>();
+  let copiedAt = 0;
+  for (let from = 0; from < 20_000; from += 1000) {
+    const { data, error } = await admin
+      .from("analytics_content_days")
+      .select("external_id, views, updated_at")
+      .eq("team_id", teamId)
+      .eq("platform", "tiktok")
+      .eq("day", day)
+      .eq("source", "total")
+      .order("external_id")
+      .range(from, from + 999);
+    if (error) return null;
+    for (const r of (data ?? []) as { external_id: string; views: unknown; updated_at: string | null }[]) {
+      const v = num(r.views);
+      if (v !== null) before.set(r.external_id, v);
+      copiedAt = Math.max(copiedAt, Date.parse(r.updated_at ?? "") || 0);
+    }
+    if ((data ?? []).length < 1000) break;
+  }
+  if (!before.size) return null;
+  let sum = 0;
+  for (const r of recs) {
+    const now = num(r.views);
+    if (now === null) continue;
+    const was = before.get(String(r.external_id));
+    if (was !== undefined) sum += Math.max(0, now - was);
+    else if (copiedAt && Date.parse(String(r.published_at ?? "")) > copiedAt) sum += now;
+  }
+  return sum;
 }
 
 // ---------------------------------------------------------------------------
@@ -990,9 +1059,9 @@ async function syncFacebook(admin: Admin, acc: Account, backfill: boolean, links
 // ---------------------------------------------------------------------------
 
 type Link = { short?: string; project?: string };
-type Links = { byExternal: Map<string, Link>; byUrl: (needle: string) => Link | null };
+export type Links = { byExternal: Map<string, Link>; byUrl: (needle: string) => Link | null };
 
-async function linksFor(admin: Admin, teamId: string): Promise<Links> {
+export async function linksFor(admin: Admin, teamId: string): Promise<Links> {
   const [{ data: posts }, { data: shortPosts }, { data: longs }, { data: longPosts }] = await Promise.all([
     admin.from("social_posts").select("short_id, platform, external_id, permalink").eq("team_id", teamId).eq("status", "published"),
     admin.from("short_video_posts").select("short_id, platform, post_url, short_videos!inner(team_id)").eq("short_videos.team_id", teamId),

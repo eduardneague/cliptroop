@@ -27,6 +27,9 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
   and raises when someone can read or write what they shouldn't; start with
   `objectives.test.sql`). Run it yourself with `npm run db:test` and a
   throwaway Postgres (`TEST_DB_URL`).
+- Not in CI: `scripts/e2e/run.sh` runs the live job and the TikTok morning
+  copy end to end (every migration, PostgREST like Supabase, fake platform
+  APIs; see `scripts/e2e/README.md`). Run it after changing either, or 0083.
 - Files in `supabase/migrations/` run in order on both Supabase projects.
   The **Database** GitHub Action applies them (push to `staging` → staging,
   push to `main` → production); see `scripts/db/README.md`. A migration
@@ -65,6 +68,7 @@ when set, Vercel's protection bypass:
 | `vplanner-status` | every 10 minutes | `{"status": true}` | the status page's hourly bars, alerts, the objectives' safety-net count |
 | `vplanner-cleanup` | 03:30 UTC | `{"job": "cleanup"}` | deletes posted shorts' video files after the team's choice, refreshes sign-ins |
 | `vplanner-analytics` | 05:10 UTC | `{"job": "analytics"}` | copies every team's numbers |
+| `vplanner-live` | every 10 minutes (:05, :15…) | `{"job": "live", "team", "platform"}` per account | every video's counts, realtime, impressions and CTR (0083) |
 
 Vercel Cron isn't used (it only runs on the production deployment). The
 daily jobs live in `lib/daily-jobs.ts`; `/api/cron/cleanup-media` and
@@ -216,7 +220,10 @@ the page is live, or React throws that part away (production error #418).
   last status call and why it failed.
 - **Developers** = `DEVELOPER_EMAILS`, else the owner of the first team
   (`developers()` / `isDeveloper()` in `lib/errors.ts`). Only they get
-  app-wide alerts.
+  app-wide alerts, as notifications. The emails (alerts, "back to normal",
+  test alerts, reports) go to ONE address, `alertsEmail()`: `ALERTS_EMAIL`,
+  else `NEXT_PUBLIC_CONTACT_EMAIL`, else hello@ the app's domain (1.19.0).
+  Never send app-wide emails to the developer accounts themselves.
 - **One team's problems** (a failed post, an account to reconnect) go on
   that team's Posting page, never app-wide.
 - A dropped connection isn't an error (`lib/network-noise.ts`).
@@ -467,6 +474,26 @@ says why a copy is late (out of time, failed, never started), and Developer
 → Status lists the runs. Status problems alert with a stable text
 (`Check.alert`): once when they start, at most once a day (record_app_error,
 source "job"), and once when they're over (`reportFixed()`).
+
+**Every video within minutes (0083).** `analytics_live_fanout()` calls the
+app once per team and platform every 10 minutes; `lib/live.ts` reads the hot
+videos each time and every video every few hours (a long list goes on from
+`analytics_syncs.live_cursor`), keeps their counts in `analytics_live` when
+they change (`snapshotsOf()` in `lib/live-math.ts`, pure and tested), and
+refreshes the other numbers of the videos with the oldest `details_at`.
+`analytics_live_hours()` / `analytics_live_gains()` (security invoker) sum
+the changes per hour and per video, spreading each change over the time
+between two looks; the Realtime card (`components/realtime-card.tsx`) and a
+video's page read them. Account totals go to `analytics_syncs.live_totals`,
+never to `analytics_daily`: a per-day row's numbers must stay the morning
+copy's, because day-to-day changes are what a day got (TikTok's views,
+followers). YouTube quota: list calls cost 1 unit per 50 videos and an
+upload 1,600 of the default 10,000 a day, so the live job stays around 600
+units a day per 1,000-video channel; don't add per-video Data API calls.
+`LIVE_MINUTES` (20, 30, 60) makes it read less often. Impressions and CTR
+come from the YouTube Reporting API (`lib/reach.ts`: one job per channel,
+new daily reports once an hour) and need that API turned on in the Google
+Cloud project.
 
 **Download for Claude.** `modules/analytics/export/`: the dialog
 (`claude-export.tsx`), `build-text.ts` and `build-pdf.ts`, all in the

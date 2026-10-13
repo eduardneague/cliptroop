@@ -278,6 +278,11 @@ export type PlatformStatus = {
   revenueNote: string | null;
   /** When this account replaced another one (the other's numbers were removed then); null: it's always been this one. */
   since?: string | null;
+  /** The 10-minute job (1.19.0): when it last read this account, and what went wrong then. */
+  liveAt?: string | null;
+  liveError?: string | null;
+  /** YouTube's impressions and CTR: what's missing, if anything. */
+  reachNote?: string | null;
 };
 /** One platform's numbers for the range (and the same stretch before it). */
 export type PlatformSeries = {
@@ -325,10 +330,15 @@ export const getPlatformStatus = cache(async (teamId: string): Promise<PlatformS
   const readSyncs = (cols: string) => supabase.from("analytics_syncs").select(cols).eq("team_id", teamId);
   const [{ data: accounts }, first] = await Promise.all([
     supabase.from("social_accounts").select("platform, username, display_name, status, scopes").eq("team_id", teamId),
-    readSyncs("platform, last_ok_at, last_error, revenue_note, account_since"),
+    readSyncs("platform, last_ok_at, last_error, revenue_note, account_since, live_at, live_error, reach_note"),
   ]);
-  // Before migration 0079 there's no account_since: read without it.
-  const syncs = ((first.error ? (await readSyncs("platform, last_ok_at, last_error, revenue_note")).data : first.data) ?? []) as unknown as Row[];
+  // Before migration 0083 there's no live_at, before 0079 no account_since: read without them.
+  let syncData = first.data as unknown;
+  if (first.error) {
+    const older = await readSyncs("platform, last_ok_at, last_error, revenue_note, account_since");
+    syncData = older.error ? (await readSyncs("platform, last_ok_at, last_error, revenue_note")).data : older.data;
+  }
+  const syncs = (syncData ?? []) as Row[];
   return PLATFORMS.map((p) => {
     const a = (accounts ?? []).find((x) => x.platform === p && x.status !== "revoked");
     const s = syncs.find((x) => x.platform === p);
@@ -342,6 +352,9 @@ export const getPlatformStatus = cache(async (teamId: string): Promise<PlatformS
       lastError: (s?.last_error as string | null) ?? null,
       revenueNote: (s?.revenue_note as string | null) ?? null,
       since: a ? ((s?.account_since as string | null) ?? null) : null,
+      liveAt: (s?.live_at as string | null) ?? null,
+      liveError: (s?.live_error as string | null) ?? null,
+      reachNote: p === "youtube" ? ((s?.reach_note as string | null) ?? null) : null,
     };
   });
 });
@@ -379,7 +392,8 @@ export async function getAudience(teamId: string, w: Window, shared: Shared = {}
     // (A deleted video can make the total drop: never count less than nothing.)
     return t !== null && next !== null ? Math.max(0, next - t) : null;
   };
-  const viewsOn = (p: SocialPlatform, day: string) => (p === "tiktok" ? delta(maps.tiktok, day, "total_views") : n(maps[p].get(day)?.views));
+  // TikTok: the day's views worked out per video by the copy (1.19.0), else the change in its running total.
+  const viewsOn = (p: SocialPlatform, day: string) => (p === "tiktok" ? (n(maps.tiktok.get(day)?.views) ?? delta(maps.tiktok, day, "total_views")) : n(maps[p].get(day)?.views));
   const engagementOn = (p: SocialPlatform, day: string) => {
     if (p === "tiktok") return delta(maps.tiktok, day, "total_likes");
     const r = maps[p].get(day);
@@ -526,9 +540,20 @@ export type ContentItem = {
   /** Views ÷ the typical views of the same platform and kind posted before it (lib/scores.ts). */
   score?: number | null;
   typical?: number | null;
+  /** YouTube (1.19.0): thumbnail impressions and click-through rate (%) over the days YouTube keeps. */
+  impressions?: number | null;
+  ctr?: number | null;
 };
 
 const CONTENT_COLS = "platform, external_id, kind, title, url, thumbnail_url, published_at, views, likes, comments, shares, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)";
+/** With impressions and CTR (migration 0083). */
+const CONTENT_COLS_REACH = `${CONTENT_COLS}, impressions, ctr`;
+/** The content columns this database has (before 0083 there are no impressions yet). Once per request. */
+const contentCols = cache(async (): Promise<string> => {
+  const supabase = await createClient();
+  const { error } = await supabase.from("analytics_content").select("impressions, ctr").limit(1);
+  return error ? CONTENT_COLS : CONTENT_COLS_REACH;
+});
 
 /** An analytics_content row as the Content tab lists it. */
 function contentItem(r: Row): ContentItem {
@@ -548,6 +573,8 @@ function contentItem(r: Row): ContentItem {
     comments: r.comments === null ? null : Number(r.comments),
     shares: r.shares === null ? null : Number(r.shares),
     ours: r.short_id ? { kind: "short", id: r.short_id as string, number: s?.entry_number ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: l?.entry_number ?? null } : null,
+    impressions: r.impressions === null || r.impressions === undefined ? null : Number(r.impressions),
+    ctr: r.ctr === null || r.ctr === undefined ? null : Number(r.ctr),
   };
 }
 
@@ -568,8 +595,9 @@ export async function findVideos(teamId: string, q: string): Promise<ContentItem
   const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const num = q.match(/^#?(\d{1,6})$/)?.[1];
   const none = Promise.resolve({ data: [] as Row[] });
+  const cols = await contentCols();
   const [byTitle, shortsT, longsT, shortsN, longsN, scores] = await Promise.all([
-    supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).ilike("title", like).order("views", { ascending: false, nullsFirst: false }).limit(60),
+    supabase.from("analytics_content").select(cols).eq("team_id", teamId).ilike("title", like).order("views", { ascending: false, nullsFirst: false }).limit(60),
     supabase.from("short_videos").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
     supabase.from("long_video_projects").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
     num ? supabase.from("short_videos").select("id").eq("team_id", teamId).eq("entry_number", Number(num)).limit(5) : none,
@@ -580,11 +608,11 @@ export async function findVideos(teamId: string, q: string): Promise<ContentItem
   const shortIds = [...new Set([...ids(shortsN), ...ids(shortsT)])].slice(0, 80);
   const longIds = [...new Set([...ids(longsN), ...ids(longsT)])].slice(0, 80);
   const [byShort, byLong] = await Promise.all([
-    shortIds.length ? supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).in("short_id", shortIds).limit(200) : none,
-    longIds.length ? supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).in("project_id", longIds).limit(200) : none,
+    shortIds.length ? supabase.from("analytics_content").select(cols).eq("team_id", teamId).in("short_id", shortIds).limit(200) : none,
+    longIds.length ? supabase.from("analytics_content").select(cols).eq("team_id", teamId).in("project_id", longIds).limit(200) : none,
   ]);
   const seen = new Set<string>();
-  const rows = visibleRows([...((byTitle.data ?? []) as Row[]), ...((byShort.data ?? []) as Row[]), ...((byLong.data ?? []) as Row[])], vis).filter((r) => {
+  const rows = visibleRows([...((byTitle.data ?? []) as unknown as Row[]), ...((byShort.data ?? []) as unknown as Row[]), ...((byLong.data ?? []) as unknown as Row[])], vis).filter((r) => {
     const k = `${r.platform}:${r.external_id}`;
     if (seen.has(k)) return false;
     seen.add(k);
@@ -610,24 +638,26 @@ export async function findVideos(teamId: string, q: string): Promise<ContentItem
 }
 
 /**
- * Videos and posts published in the range, with their latest numbers, plus
- * every short the team posted in the range that the platform's copy doesn't
- * have (TikTok without stats, a Reel posted today, one marked by hand…), so
- * everything published is listed, with "–" where there are no numbers.
+ * Videos and posts published in the range (or every one, `every`), with
+ * their latest numbers, plus every short the team posted in the range that
+ * the platform's copy doesn't have (TikTok without stats, a Reel posted
+ * today, one marked by hand…), so everything published is listed, with "–"
+ * where there are no numbers. `limit`: the most viewed ones only (the
+ * dashboard's widgets).
  */
-export async function getContent(teamId: string, w: Window, shared: Shared = {}): Promise<{ items: ContentItem[]; status: PlatformStatus[] }> {
+export async function getContent(teamId: string, w: Window, shared: Shared = {}, o: { every?: boolean; limit?: number } = {}): Promise<{ items: ContentItem[]; status: PlatformStatus[] }> {
   const supabase = await createClient();
-  const from = `${w.from}T00:00:00Z`;
+  const from = o.every ? "2005-01-01T00:00:00Z" : `${w.from}T00:00:00Z`;
   const to = `${w.to}T23:59:59Z`;
-  const [{ data: copied }, status, { data: posted }, { data: marked }, vis] = await Promise.all([
-    supabase
-      .from("analytics_content")
-      .select(CONTENT_COLS)
-      .eq("team_id", teamId)
-      .gte("published_at", `${w.from}T00:00:00Z`)
-      .lte("published_at", `${w.to}T23:59:59Z`)
-      .order("views", { ascending: false, nullsFirst: false })
-      .limit(200),
+  const cols = await contentCols();
+  const copiedRows = (a: number, b: number) => {
+    let q = supabase.from("analytics_content").select(cols).eq("team_id", teamId);
+    if (!o.every) q = q.gte("published_at", from).lte("published_at", to);
+    return q.order("views", { ascending: false, nullsFirst: false }).order("platform").order("external_id").range(a, b);
+  };
+  const [copied, status, { data: posted }, { data: marked }, vis] = await Promise.all([
+    // Every one (1,000 at a time), or the most viewed ones.
+    o.limit ? copiedRows(0, o.limit - 1).then((r) => (r.data ?? []) as unknown as Row[]) : all(copiedRows, 20_000),
     shared.status ?? getPlatformStatus(teamId),
     supabase
       .from("social_posts")
@@ -636,18 +666,18 @@ export async function getContent(teamId: string, w: Window, shared: Shared = {})
       .eq("status", "published")
       .gte("published_at", from)
       .lte("published_at", to)
-      .limit(300),
+      .limit(o.every ? 2000 : 300),
     supabase
       .from("short_video_posts")
       .select("platform, short_id, post_url, posted_at, short_videos!inner(team_id, entry_number, title)")
       .eq("short_videos.team_id", teamId)
       .gte("posted_at", from)
       .lte("posted_at", to)
-      .limit(400),
+      .limit(o.every ? 2000 : 400),
     shared.vis ?? numbersVisibility(supabase, teamId),
   ]);
   // Only the accounts connected now: videos of a disconnected or replaced account never show.
-  const data = visibleRows((copied ?? []) as Row[], vis);
+  const data = visibleRows(copied, vis);
   const scores = await scoresFor(supabase, teamId, vis);
   const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
   const items: ContentItem[] = data.map((r) => {
@@ -753,7 +783,7 @@ export async function getViewsDay(teamId: string, day: string): Promise<DayViews
       ? supabase.from("analytics_content_days").select("external_id, views, watch_minutes, likes, comments").eq("team_id", teamId).eq("platform", "youtube").eq("day", day).eq("source", "daily").order("views", { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as Row[], error: null }),
     totalsOnly.length
-      ? supabase.from("analytics_content_days").select("platform, external_id, day, views, likes, comments").eq("team_id", teamId).in("platform", totalsOnly).in("day", [day, next]).eq("source", "total").limit(4000)
+      ? all((a, b) => supabase.from("analytics_content_days").select("platform, external_id, day, views, likes, comments").eq("team_id", teamId).in("platform", totalsOnly).in("day", [day, next]).eq("source", "total").order("platform").order("external_id").order("day").range(a, b), 20_000).then((data) => ({ data, error: null }))
       : Promise.resolve({ data: [] as Row[], error: null }),
     // Since when each platform's per-video copies exist (for the note when a day is before it).
     Promise.all(
@@ -766,7 +796,7 @@ export async function getViewsDay(teamId: string, day: string): Promise<DayViews
   const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   const at = (p: string, d: string) => ((daily.data ?? []) as Row[]).find((r) => r.platform === p && r.day === d);
   const dayViews = (p: SocialPlatform) => {
-    if (p !== "tiktok") return n(at(p, day)?.views);
+    if (p !== "tiktok" || n(at(p, day)?.views) !== null) return n(at(p, day)?.views);
     const a = n(at(p, day)?.total_views);
     const b = n(at(p, next)?.total_views);
     return a !== null && b !== null ? Math.max(0, b - a) : null;

@@ -211,6 +211,17 @@ if (!process.env.MOCK_FB_NO_EARNINGS)
   for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
 // Analytics → Advanced (0081): every other number, the splits, retention curves, each video's money, more videos.
 const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, contentRows, revenue, shorts, LAST_DAY });
+// Every video within minutes (1.19.0, 0083): YouTube's impressions and CTR (MOCK_NO_REACH=1: the
+// Reporting API isn't on yet, so none), when each video's counts were last read, and the live counts.
+for (const c of contentRows) {
+  if (c.platform === "youtube" && !process.env.MOCK_NO_REACH && c.views) {
+    const ctr = Math.round((c.kind === "long" ? 4.5 + 4 * rnd() : 2.5 + 7 * rnd()) * 100) / 100;
+    c.impressions = Math.round(c.views / (ctr / 100) / (c.kind === "long" ? 2.2 : 6));
+    c.ctr = ctr;
+  }
+  c.live_at = new Date(Date.now() - (3 + Math.round(5 * rnd())) * 60e3).toISOString();
+}
+const LIVE = require("./live.cjs").liveFixtures({ TEAM, contentRows });
 // A video's own analytics page (1.17.0): the Advanced videos' views day by day since they were
 // posted, a fast start that fades (YouTube: each day's own number; the others: the running total
 // each morning, kept for the last 12 days, as the copies do since 1.15).
@@ -317,6 +328,11 @@ const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({
   // Whose numbers (0079). MOCK_SWITCHED=1: the Facebook Page was replaced 5 days ago.
   account_ref: pl === "facebook" ? "123456789" : "ext-" + pl,
   account_since: pl === "facebook" && process.env.MOCK_SWITCHED ? at(-5, 14) : null,
+  // The 10-minute job (0083): when it last read the account, its totals now, the reach reports.
+  live_at: process.env.MOCK_LIVE === "0" ? null : new Date(Date.now() - (pl === "youtube" ? 4 : 6) * 60e3).toISOString(),
+  live_error: null,
+  live_totals: { youtube: { followers: 412300, total_views: 98400000, videos: 1034 }, instagram: { followers: 61800, videos: 1210 }, tiktok: { followers: 152000, total_likes: 4100000, videos: 988 }, facebook: { followers: 23800 } }[pl],
+  reach_note: pl === "youtube" && process.env.MOCK_NO_REACH ? "Impressions and CTR need the YouTube Reporting API: turn it on in Google Cloud (APIs & Services → Library → YouTube Reporting API → Enable)." : null,
 }));
 // MOCK_FB_ANALYTICS_ONLY=1: a Facebook Page connected before posting (no pages_manage_posts).
 const STATS = {
@@ -411,6 +427,9 @@ module.exports = {
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // Realtime (0083): views per hour and per video from the live counts.
+    analytics_live_hours: (b) => LIVE.hours(b),
+    analytics_live_gains: (b) => LIVE.gains(b),
     // Advanced (0081): the per-day splits added up over a range.
     analytics_breakdown_sums: (b) => {
       const sums = new Map();
@@ -538,6 +557,7 @@ module.exports = {
     analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
     analytics_content_days: contentDays,
+    analytics_live: LIVE.rows,
     // The morning copy's runs (0082): today's, one that ran out of time two days ago, one failed.
     job_runs: (() => {
       const t = (hAgo, s = 0) => new Date(Date.now() - hAgo * 3600000 + s * 1000).toISOString();

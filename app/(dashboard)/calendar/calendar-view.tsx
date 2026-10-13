@@ -80,6 +80,7 @@ function postTime(it: CalItem, format: ReturnType<typeof useLocalFormat>) {
 export function CalendarView({
   items: initial,
   focus,
+  openDay = null,
   view: viewParam,
   teamId,
   canManage,
@@ -90,6 +91,8 @@ export function CalendarView({
   items: CalItem[];
   meetings?: CalMeeting[];
   focus: string;
+  /** A day whose window opens right away (`?open=1`: the dashboard's Calendar widget). */
+  openDay?: string | null;
   view: View | null;
   teamId: string;
   canManage: boolean;
@@ -156,7 +159,17 @@ export function CalendarView({
 
   // ---- quick view, day panel, moving ----------------------------------------
   const [quick, setQuick] = useState<CalItem | null>(null);
-  const [dayOpen, setDayOpen] = useState<string | null>(null);
+  const [dayOpen, setDayOpen] = useState<string | null>(openDay);
+  // Opened from the dashboard: the day's window once (the address forgets it, so a reload doesn't reopen it).
+  useEffect(() => {
+    if (!openDay) return;
+    setDayOpen(openDay);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("open");
+      window.history.replaceState(window.history.state, "", url);
+    } catch {}
+  }, [openDay]);
   const [pending, setPending] = useState<
     | { type: "move"; item: CalItem; to: string; raise: boolean; keepAuto: boolean }
     | { type: "reorder"; item: CalItem; target: CalItem; steps: number }
