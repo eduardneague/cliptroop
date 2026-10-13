@@ -6,11 +6,13 @@ import { Mascot } from "@/components/ui/mascot";
 import Link from "next/link";
 import { PlusIcon, SettingsIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
+import { LAYOUTS, LayoutSwitch, useStoredView } from "@/components/ui/table-bits";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { archiveProjection, deleteProjection, loadProjectionsBoard } from "@/app/(dashboard)/objectives/projection-actions";
 import type { ProjectionView, ProjectionsBoard } from "../lib/types";
 import { ProjectionCard } from "./projection-card";
+import { ProjectionTable } from "./projection-table";
 import { ProjectionDetail } from "./projection-detail";
 import { CompareDialog } from "./compare-dialog";
 import { ProjectionEditor, TEMPLATES, type EditorStart } from "./projection-editor";
@@ -19,8 +21,9 @@ import { fmtDay, ProjStatusPill } from "./parts";
 /*
  * Objectives → Projections: the team's long-term targets, each with its
  * value now, how far it's come, the pace and where it's heading, and a
- * Compare of the channel then and now. Masters set, change and archive them.
- * ?p=<id> opens one (where notifications lead).
+ * Compare of the channel then and now. A table first (1.18.0; one row each,
+ * columns that sort) or the cards with their charts. Masters set, change and
+ * archive them. ?p=<id> opens one (where notifications lead).
  */
 
 type Tab = "active" | "reached" | "ended" | "archived";
@@ -36,6 +39,7 @@ export function ProjectionsView({ initial, canEdit, openId, tabs }: { initial: P
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>("active");
+  const [layout, setLayout] = useStoredView("vp-projections-layout", LAYOUTS, "table");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ open: boolean; editing: ProjectionView | null; start: EditorStart | null }>({ open: false, editing: null, start: null });
@@ -258,16 +262,21 @@ export function ProjectionsView({ initial, canEdit, openId, tabs }: { initial: P
           onChange={setTab}
           options={(Object.keys(TAB_LABEL) as Tab[]).filter((t) => t === "active" || counts[t] > 0).map((t) => ({ value: t, label: TAB_LABEL[t], count: counts[t] }))}
         />
+        <LayoutSwitch value={layout} onChange={setLayout} className="ml-auto" />
       </div>
 
       {shown.length ? (
-        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,330px),1fr))]">
-          {shown.map((p, i) => (
-            <div key={p.id} className="flex animate-[fadein_.35s_ease_both]" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
-              <ProjectionCard p={p} currency={board.currency} onOpen={() => setDetailId(p.id)} onCompare={() => setCompareId(p.id)} />
-            </div>
-          ))}
-        </div>
+        layout === "table" ? (
+          <ProjectionTable list={shown} currency={board.currency} onOpen={setDetailId} onCompare={setCompareId} />
+        ) : (
+          <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,330px),1fr))]">
+            {shown.map((p, i) => (
+              <div key={p.id} className="flex animate-[fadein_.35s_ease_both]" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                <ProjectionCard p={p} currency={board.currency} onOpen={() => setDetailId(p.id)} onCompare={() => setCompareId(p.id)} />
+              </div>
+            ))}
+          </div>
+        )
       ) : (
         <p className="rounded-2xl border border-dashed border-line/20 px-6 py-10 text-center text-[13.5px] text-ink-soft">
           {tab === "active" ? (canEdit ? "Nothing running. Set the next one with New projection." : "Nothing running right now.") : `Nothing ${TAB_LABEL[tab].toLowerCase()}.`}

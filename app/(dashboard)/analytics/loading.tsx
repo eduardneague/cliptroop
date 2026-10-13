@@ -1,7 +1,11 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import VideoAnalyticsLoading from "./video/[platform]/[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 
 /** Analytics: title, tabs, the filter row, KPI tiles, one big chart, two cards. */
-export default function Loading() {
+function AnalyticsSkeleton() {
   return (
     <SkeletonPage width="max-w-[1400px]">
       <div className="mb-5" aria-hidden>
@@ -56,4 +60,16 @@ export default function Loading() {
       </div>
     </SkeletonPage>
   );
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from the dashboard straight to a video's analytics, that page's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/analytics\/video\//.test(path)) return <VideoAnalyticsLoading />;
+  return <AnalyticsSkeleton />;
 }

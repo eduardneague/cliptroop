@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast-provider";
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { PostedTick } from "@/components/ui/posted-tick";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
@@ -994,16 +995,8 @@ function Chip({
         </span>
       )}
       {lg && !it.done && <span className={`text-[12px] flex-shrink-0 hidden sm:inline ${overdue ? "font-bold" : "text-ink-soft"}`}>{overdue ? "Overdue" : it.stageLabel}</span>}
-      {it.done && (
-        // Posted: the same teal check as a finished step in the step bar.
-        <span
-          className={`${lg ? "w-5 h-5" : "w-4 h-4"} rounded-md flex items-center justify-center text-white flex-shrink-0`}
-          style={{ background: "rgb(var(--teal))" }}
-          aria-label="Posted"
-        >
-          <CheckIcon className={lg ? "w-3 h-3" : "w-2.5 h-2.5"} />
-        </span>
-      )}
+      {/* Posted: the same teal check as a finished step in the step bar (and every calendar). */}
+      {it.done && <PostedTick size={lg ? "md" : "sm"} />}
     </button>
   );
 }

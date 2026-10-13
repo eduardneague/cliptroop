@@ -1,8 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import ScriptLoading from "./script/loading";
+import ReviewLoading from "./review/loading";
 import { Skeleton, SkeletonBack, SkeletonLines, SkeletonPage, SkeletonPersonRow, SkeletonSteps } from "@/components/ui/skeleton";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 
 /** One short: title, its steps, the step's actions, then the two columns. */
-export default function Loading() {
+function ShortSkeleton() {
   return (
     <SkeletonPage width="max-w-[1200px]">
       <SkeletonBack label="Short videos" />
@@ -77,4 +82,17 @@ export default function Loading() {
 
 function Panel({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-line/10 bg-surface p-5">{children}</div>;
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from a task straight to a script, the script's, not the short's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/shorts\/[^/]+\/script(\/|$)/.test(path)) return <ScriptLoading />;
+  if (/^\/shorts\/[^/]+\/review(\/|$)/.test(path)) return <ReviewLoading />;
+  return <ShortSkeleton />;
 }

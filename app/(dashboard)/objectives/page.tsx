@@ -65,7 +65,7 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
   const user = await getCachedUser();
   const [membership, board, { data: profile }] = await Promise.all([
     getMembership(supabase, currentTeam.id),
-    getObjectivesBoard(supabase, currentTeam.id, { history: "full", items: true }),
+    getObjectivesBoard(supabase, currentTeam.id, { history: "full", items: true, streak: true }),
     supabase.from("profiles").select("dashboard_layout").eq("id", user?.id ?? "").maybeSingle(),
   ]);
   // The server's own count, after the page is sent (at most every 30 s): a
@@ -74,10 +74,12 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
     const teamId = currentTeam.id;
     after(() => syncObjectives(teamId, { throttle: 30 }).then(() => undefined, (e) => console.error("[objectives] page sync", e instanceof Error ? e.message : e)));
   }
-  const onDashboard = readLayout((profile as { dashboard_layout?: unknown } | null)?.dashboard_layout).widgets.some((w) => w.type === "objectives");
+  const widgets = readLayout((profile as { dashboard_layout?: unknown } | null)?.dashboard_layout).widgets;
+  const onDashboard = widgets.some((w) => w.type === "objectives");
+  const streakOnDashboard = widgets.some((w) => w.type === "streak");
   return (
     <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-[1500px] mx-auto">
-      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} tabs={<Tabs view="objectives" />} />
+      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} streakOnDashboard={streakOnDashboard} tabs={<Tabs view="objectives" />} />
     </div>
   );
 }

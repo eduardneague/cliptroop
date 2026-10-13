@@ -20,7 +20,8 @@ export type WidgetType =
   | "audienceMap"
   | "output"
   | "word"
-  | "objectives";
+  | "objectives"
+  | "streak";
 
 /**
  * One widget on the 12 column grid: x/y = column/row of its top-left
@@ -51,7 +52,9 @@ export const CATALOG: Record<WidgetType, Meta> = {
   clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } , stack: { min: 2, max: 3, phone: 2 } },
   word: { name: "Daily word", description: "Start your day with a five-letter word. Finishing it counts as a contribution.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 4, maxH: 6 }, stack: { min: 3, max: 4, phone: 4 } },
   // Objectives (1.14.0): loads its own numbers and stays live.
-  objectives: { name: "Objectives", description: "The team's goals as rings that fill up live as videos go out, with what's left and the days to go. Confetti when one is reached.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 12, maxH: 8 }, settings: { show: "all" }, stack: { min: 3, max: 6, phone: 4 }, isNew: true },
+  objectives: { name: "Objectives", description: "The team's goals as rings that fill up live as videos go out, with what's left and the days to go. Confetti when one is reached.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 12, maxH: 8 }, settings: { show: "all" }, stack: { min: 3, max: 6, phone: 4 } },
+  // Win streak (1.18.0): the team's goals reached in a row, live.
+  streak: { name: "Win streak", description: "How many days (or weeks) in a row the team reached a goal, the best run and the wins of the last 30 days. Confetti when it grows.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 }, stack: { min: 3, max: 4, phone: 3 }, isNew: true },
   posting: { name: "Posting today", description: "Today's posts per short, where each platform stands, with filters; and anything that failed.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } , stack: { min: 2, max: 4, phone: 3 } },
   todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
   upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 6 } },

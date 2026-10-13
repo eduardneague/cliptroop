@@ -23,6 +23,33 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.18.1",
+    date: "2026-10-13",
+    title: "The Objectives overview is back",
+    changes: [
+      { kind: "better", text: "Objectives: the overview is back to the rings and a row for today, this week, this month… with each goal filling up in its colour. The win streak has its own card beside it (under it on smaller screens), with the wins of the last 30 days." },
+      { kind: "better", text: "\"Days since the last win\" is gone, from the page and the Win streak widget. The widget shows the best run and the wins of the last 30 days instead." },
+      { kind: "better", text: "Posted videos get the same filled tick in every calendar: the dashboard's Calendar widget and the date pickers now match the Calendar page." },
+      { kind: "better", text: "Analytics: the note about a replaced account (\"YouTube shows … only\") shows for a week after the switch, and you can close it." },
+      { kind: "fixed", text: "Analytics showed YouTube handles with two @ (@@viverro)." },
+    ],
+  },
+  {
+    version: "1.18.0",
+    date: "2026-10-13",
+    title: "Win streak, Objectives as a table",
+    changes: [
+      { kind: "new", text: "Win streak: how many days in a row the team reached a goal (or weeks, when there's no daily goal: it counts in the shortest period your goals use), the best run, and \"0 days since the last win\". A day every goal was switched off for doesn't break it. On the Objectives page and as a new dashboard widget (Customize → Add a widget → Win streak)." },
+      { kind: "new", text: "After the first win of the day (or the week), the streak's own card follows the confetti, Duolingo style: the flame, the count going up by one, the latest days with today ticked, and \"New best!\" when it is." },
+      { kind: "better", text: "Objectives and Projections open as a table: one row each, with the progress, how it's going, the time left (or where a projection is heading) and more; click a column to sort, a row to open it. The cards are one click away (Table / Cards), and the page remembers your choice on this device. Phones get a compact list." },
+      { kind: "better", text: "A simpler top on the Objectives page: how many goals are reached now (each cadence's count, a click filters), the win streak, and the days since the last win with which goal it was." },
+      { kind: "better", text: "When ClipTroop posts a short by itself, the short's Activity shows Clip, the logo, instead of a \"V\"." },
+      { kind: "better", text: "The dashboard calendar: posted videos keep their title readable, with a tick at the end, instead of being crossed out." },
+      { kind: "fixed", text: "Opening a script from My tasks (or a notification) showed the Short videos list loading first, then the script. It now goes straight to the script's loading screen; the same for long videos, a video's analytics and a meeting." },
+      { kind: "fixed", text: "Instagram logos could show without their colours in some lists on computers." },
+    ],
+  },
+  {
     version: "1.17.0",
     date: "2026-10-13",
     title: "Every video's own analytics",

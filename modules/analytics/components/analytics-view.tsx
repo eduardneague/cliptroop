@@ -635,20 +635,44 @@ function PlatformFilter({ a, picked, setPicked }: { a: Audience; picked: P[]; se
 /**
  * After a platform's account was replaced (another channel, account or
  * Page): whose numbers these are. The old account's were removed then, so
- * nothing here ever mixes the two.
+ * nothing here ever mixes the two. Only for a week after the switch, and
+ * gone once closed (1.18.1: a note, not a fixture).
  */
+const NOTE_KEY = "vp-account-notes-closed";
 function AccountNote({ status, className = "" }: { status: PlatformStatus[]; className?: string }) {
-  const recent = status.filter((s) => s.connected && s.since && Date.parse(s.since) > Date.now() - 180 * 86_400_000);
+  const [closed, setClosed] = useState<string[] | null>(null);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(NOTE_KEY) || "[]");
+      setClosed(Array.isArray(v) ? v : []);
+    } catch {
+      setClosed([]);
+    }
+  }, []);
+  const keyOf = (s: PlatformStatus) => `${s.platform}:${s.since}`;
+  // Nothing until this device's closed notes are known (no flash of a closed one).
+  if (closed === null) return null;
+  const recent = status.filter((s) => s.connected && s.since && Date.parse(s.since) > Date.now() - 7 * 86_400_000 && !closed.includes(keyOf(s)));
   if (!recent.length) return null;
+  const close = (s: PlatformStatus) => {
+    const next = [...new Set([...closed, keyOf(s)])].slice(-20);
+    setClosed(next);
+    try {
+      localStorage.setItem(NOTE_KEY, JSON.stringify(next));
+    } catch {}
+  };
   return (
     <div className={`flex flex-col gap-1 text-[12px] text-ink-faint ${className}`}>
       {recent.map((s) => (
         <p key={s.platform} className="flex items-start gap-1.5">
           <PlatformIcon platform={s.platform} className="w-4 h-4 rounded mt-px flex-shrink-0" />
-          <span>
+          <span className="min-w-0">
             {PLATFORM[s.platform].name} shows {s.account ? <b className="font-semibold text-ink-soft">{s.account}</b> : "the connected account"} only, connected on {niceDay(s.since!.slice(0, 10))}. The
             previous account&rsquo;s numbers and posts were removed.
           </span>
+          <button type="button" onClick={() => close(s)} aria-label="Hide this note" title="Hide this note" className="ml-1 -mt-0.5 w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 text-ink-faint hover:text-ink hover:bg-surface-2">
+            <CloseIcon className="w-3 h-3" />
+          </button>
         </p>
       ))}
     </div>

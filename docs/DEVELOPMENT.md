@@ -123,6 +123,12 @@ the page is live, or React throws that part away (production error #418).
 - Every route has a `loading.tsx` built from `components/ui/skeleton.tsx`.
   Same-page navigations use `PendingNav` / `PendingLink` / `PendingSwap`
   (`components/ui/pending-nav.tsx`).
+- Coming in from another part of the app, Next shows the OUTERMOST new
+  `loading.tsx` first (a task → `/shorts/<id>/script` showed the shorts
+  list's). So the outer ones (`shorts/`, `shorts/[id]/`, `videos/`,
+  `videos/[id]/`, `analytics/`, `meetings/`) are client components that pick
+  the skeleton of the page further in from `usePathname()` (1.18.0). A new
+  nested page with its own `loading.tsx` gets a line in its parent's.
 - Images: upload through `compressImage()` with an `IMAGE_PRESETS` entry
   and `UPLOAD_CACHE_CONTROL`; render with `loading="lazy" decoding="async"`.
 - Code that only one tab, dialog or widget needs is loaded with
@@ -186,6 +192,19 @@ the page is live, or React throws that part away (production error #418).
 - A `<fieldset>` only shrinks below its content with `min-w-0` (browsers
   give it `min-width: min-content`): add it to any fieldset inside a grid or
   a phone-width dialog.
+- **A table with a Cards option** (1.18.0: Objectives, Projections):
+  `components/ui/table-bits.tsx`: `useStoredView(key, allowed, fallback)`
+  (kept on the device), `<LayoutSwitch>`, `<SortTh>` + `nextSort()` for
+  headings that sort. Phones get the same rows as a list (`md:hidden` list,
+  `hidden md:block` table); columns join in by breakpoint
+  (`hidden lg:table-cell`).
+- **Posted, on a calendar:** `<PostedTick>` (`components/ui/posted-tick.tsx`),
+  the filled teal tick, at the end of the title (never crossed out).
+- **SVG ids are per instance:** a gradient or clip path inside a component
+  used more than once gets `useId()` (InstagramIcon) or an `id` prop
+  (ClipLogo). With one shared id every copy uses the first one's, and when
+  that one sits in a hidden part of the page (a phone-only list on a
+  computer) browsers draw the rest without it.
 
 ## Status, errors and alerts (who sees what)
 
@@ -307,6 +326,23 @@ creation day are `before`, a finished period with no platform numbers is
 `nodata`, and streaks, bests and "reached N of M" come from `statsOf()` over
 the counted periods only (`firstCounted()`, `compute.ts`). The editor's
 preview (`whatIf`) still shows how the target would have gone.
+
+**Win streak (1.18.0, no migration).** `modules/objectives/lib/streak.ts`
+(pure, tested in tests/streak.test.ts): a win is any `objective_periods` row
+with `reached_at`, counted on the day it was reached but never after its
+period's last day (`winDay()`: late numbers count for their period). The
+streak counts in the shortest period the active goals use (`streakUnit()`:
+days with a daily goal, else weeks…), from the first goal of that length; a
+finished period without a win breaks it, the current one only adds once it
+has a win, and a period every goal of that length was switched off for
+(an `objective_targets` target of 0) neither breaks nor counts. Also the
+best run (`bestBefore` = before the current period: "New best!"), days since
+the last win (any win) and the strip (`slots`: this week's days, or the last
+7 weeks, 6 months…). `getWinStreak()` in `board.ts` loads it (the page's
+board with `streak: true`, `loadWinStreak()` for the dashboard's Win streak
+widget through `useLiveStreak()`). `ObjectiveCelebrations` shows the
+streak's card after a win's, once per period and device
+(`vp-streak-cheers`, keyed by team, unit and the period's start).
 
 **Whose numbers (0079).** Analytics only ever shows the accounts connected
 now. `analytics_syncs.account_ref` says whose numbers a platform's rows are

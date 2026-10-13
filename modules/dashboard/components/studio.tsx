@@ -47,6 +47,7 @@ const WeatherCitySearch = dynamic(() => import("./team-widgets").then((m) => m.W
 const WordWidget = dynamic(() => import("./word-widget").then((m) => m.WordWidget), { ssr: false, loading: WidgetSkeleton });
 const ObjectivesWidget = dynamic(() => import("./objectives-widget").then((m) => m.ObjectivesWidget), { ssr: false, loading: WidgetSkeleton });
 const ObjectivesWidgetSettingsForm = dynamic(() => import("./objectives-widget").then((m) => m.ObjectivesWidgetSettingsForm), { ssr: false, loading: WidgetSkeleton });
+const StreakWidget = dynamic(() => import("./streak-widget").then((m) => m.StreakWidget), { ssr: false, loading: WidgetSkeleton });
 const MeetingsWidget = dynamic(() => import("./meetings-widget").then((m) => m.MeetingsWidget), { ssr: false, loading: WidgetSkeleton });
 const AudienceMapWidget = dynamic(() => import("./analytics-widgets").then((m) => m.AudienceMapWidget), { ssr: false, loading: WidgetSkeleton });
 const FollowersWidget = dynamic(() => import("./analytics-widgets").then((m) => m.FollowersWidget), { ssr: false, loading: WidgetSkeleton });
@@ -74,6 +75,7 @@ const PRELOAD: Record<WidgetType, () => Promise<unknown>> = {
   output: () => import("./analytics-widgets"),
   word: () => import("./word-widget"),
   objectives: () => import("./objectives-widget"),
+  streak: () => import("./streak-widget"),
 };
 
 /** Starts downloading these widgets' code (each once; a failure shows in the widget's own box). */
@@ -681,6 +683,8 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <WordWidget />;
     case "objectives":
       return <ObjectivesWidget teamId={data.teamId} settings={w.settings} />;
+    case "streak":
+      return <StreakWidget teamId={data.teamId} />;
   }
 }
 const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives"];

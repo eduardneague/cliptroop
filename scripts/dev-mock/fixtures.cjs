@@ -43,6 +43,15 @@ const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
   { id: "w-word", type: "word", x: 6, y: 13, w: 2, h: 4 },
   { id: "w-objectives", type: "objectives", x: 8, y: 13, w: 4, h: 4 },
+  { id: "w-streak", type: "streak", x: 0, y: 17, w: 3, h: 3 },
+] };
+// MOCK_LAYOUT=streak: the Win streak widget at MOCK_STREAK_SIZE (columns x rows, default 3x3) beside the Objectives widget.
+const [SW, SH] = String(process.env.MOCK_STREAK_SIZE || "3x3").split("x").map(Number);
+const STREAK_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
+  { id: "w-streak", type: "streak", x: 0, y: 0, w: SW, h: SH },
+  { id: "w-objectives", type: "objectives", x: Math.min(SW, 8), y: 0, w: 4, h: 3, settings: { show: "all" } },
+  { id: "w-cal", type: "minicalendar", x: Math.min(SW + 4, 10), y: 0, w: 2, h: 4 },
+  { id: "w-tasks", type: "tasks", x: 0, y: Math.max(SH, 4), w: 4, h: 5 },
 ] };
 // MOCK_LAYOUT=objectives: the Objectives widget at MOCK_OBJ_SIZE (columns x rows, default 4x3) with a few others,
 // MOCK_OBJ_SHOW=week (or day, month…) shows one cadence, MOCK_OBJ_IDS=1,2 picks objectives by number.
@@ -53,7 +62,7 @@ const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -101,6 +110,8 @@ const shorts = SHORT_TITLES.map((title, i) => {
     short_video_events: [
       { id: 900 + i * 3, kind: "stage", from_stage: "script", to_stage: "editing", platform: null, note: null, created_at: at(-6 + i * 0.2), actor_id: U[1], actor: { username: "maria", full_name: "Maria Popescu", email: null, avatar_url: null } },
       { id: 901 + i * 3, kind: "created", from_stage: null, to_stage: "script", platform: null, note: null, created_at: at(-20 + i), actor_id: U[0], actor: { username: "edu", full_name: "Edu Marin", email: null, avatar_url: null } },
+      // Posted by the app itself (no person): the activity shows Clip, the logo (1.18.0).
+      ...(stage === "posted" ? [{ id: 902 + i * 3, kind: "posted", from_stage: null, to_stage: null, platform: "youtube", note: null, created_at: at(i - 3), actor_id: null, actor: null }] : []),
     ],
     short_videos: { entry_number: 231 + i, title, team_id: TEAM },
   };

@@ -162,7 +162,8 @@ function objectivesFixtures({ TEAM, U, people, members, base }) {
     { id: O(4), title: "Long videos", metric: "longs_posted", period: "month", target: 3, filters: {}, color: "orange", created_at: localIso(addDays(today, -40), 10) },
     { id: O(5), title: "YouTube views", metric: "views", period: "week", target: 100000, filters: { platforms: ["youtube"] }, color: "violet", created_at: localIso(addDays(today, -17), 10) },
     { id: O(6), title: "Shorts edited by Maria", metric: "shorts_edited", period: "week", target: 6, filters: { member: members[1].id }, color: "green" },
-    { id: O(7), title: "Two shorts a day", metric: "shorts_posted", period: "day", target: 2, filters: {}, color: "yellow" },
+    // MOCK_NO_DAILY=1: paused, so the win streak counts in weeks (1.18.0).
+    { id: O(7), title: "Two shorts a day", metric: "shorts_posted", period: "day", target: 2, filters: {}, color: "yellow", ...(process.env.MOCK_NO_DAILY ? { paused_at: localIso(addDays(today, -3), 9) } : {}) },
     { id: O(8), title: "New followers", metric: "followers", period: "week", target: 2500, filters: {}, color: "red", paused_at: localIso(addDays(today, -10), 12) },
   ].map((o, i) => ({ team_id: TEAM, position: i + 1, paused_at: null, created_by: U[0], created_at: made, updated_at: made, ...o }));
   const targets = [

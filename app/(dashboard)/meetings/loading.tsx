@@ -1,7 +1,11 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import MeetingLoading from "./[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 
 /** Meetings: title, the next meeting card, then the list. */
-export default function Loading() {
+function MeetingsSkeleton() {
   return (
     <SkeletonPage width="max-w-[1100px]">
       <div className="flex items-start justify-between gap-6 mb-7 flex-wrap" aria-hidden>
@@ -46,4 +50,16 @@ export default function Loading() {
       </div>
     </SkeletonPage>
   );
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from the dashboard straight to a meeting, the meeting's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/meetings\/[^/]+/.test(path)) return <MeetingLoading />;
+  return <MeetingsSkeleton />;
 }

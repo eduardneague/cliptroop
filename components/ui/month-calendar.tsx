@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getPlannedDays, type PlannedRange } from "@/app/(dashboard)/calendar/planned-days";
 import { ArrowLeftIcon, ChevronRightIcon } from "./icons";
+import { PostedTick } from "./posted-tick";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 
 /*
@@ -240,10 +241,12 @@ export function MonthCalendar({
               </li>
             ))}
             {[...peekPlan.longs.map((x) => ({ ...x, k: "long" as const })), ...peekPlan.shorts.map((x) => ({ ...x, k: "short" as const }))].slice(0, 7).map((x, i) => (
-              <li key={i} className={`flex items-center gap-2 text-[12.5px] ${x.done ? "text-ink-soft line-through" : "text-ink"}`}>
+              <li key={i} className="flex items-center gap-2 text-[12.5px] text-ink">
                 <span className={`w-2 h-2 rounded-[2px] flex-shrink-0 ${x.k === "long" ? "bg-long" : "bg-short"}`} />
                 <span className="font-mono text-ink-faint text-[11px]">#{x.n}</span>
-                <span className="truncate">{x.t}</span>
+                <span className="truncate flex-1 min-w-0">{x.t}</span>
+                {/* Posted: the filled tick at the end (the title stays readable), as on the Calendar page. */}
+                {x.done && <PostedTick />}
               </li>
             ))}
           </ul>

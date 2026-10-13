@@ -4,6 +4,7 @@
 import type { Platform, ShortType } from "@/modules/short-videos/lib/constants";
 import type { LocalNow, PeriodKind } from "./periods";
 import type { IconKind, MetricId, ObjectiveFilters } from "./metrics";
+import type { WinStreak } from "./streak";
 
 // ---------------------------------------------------------------------------
 // Source data (what lib/sources.ts loads; lib/hits.ts turns it into hits)
@@ -214,4 +215,6 @@ export type Board = {
   people: Record<string, PersonLite>;
   /** Is any platform connected for numbers (views, followers…)? */
   audienceReady: boolean;
+  /** The team's win streak (the page's board only; null without objectives). */
+  streak?: WinStreak | null;
 };

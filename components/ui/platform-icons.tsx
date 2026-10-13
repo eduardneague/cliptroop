@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 export function YouTubeIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
@@ -19,18 +21,25 @@ export function TikTokIcon({ className }: { className?: string }) {
   );
 }
 
+/*
+ * Its gradient gets its own id per icon (1.18.0): with one shared id, every
+ * Instagram logo used the first one's, and when that one sat in a hidden
+ * part of the page (a phone-only list on a computer) browsers drew the rest
+ * without colour.
+ */
 export function InstagramIcon({ className }: { className?: string }) {
+  const id = `ig-grad${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <svg viewBox="0 0 24 24" className={className}>
       <defs>
-        <linearGradient id="ig-grad" x1="0" y1="24" x2="24" y2="0">
+        <linearGradient id={id} x1="0" y1="24" x2="24" y2="0">
           <stop offset="0" stopColor="#FEDA75" />
           <stop offset="0.35" stopColor="#D62976" />
           <stop offset="0.7" stopColor="#962FBF" />
           <stop offset="1" stopColor="#4F5BD5" />
         </linearGradient>
       </defs>
-      <rect width="24" height="24" rx="6" fill="url(#ig-grad)" />
+      <rect width="24" height="24" rx="6" fill={`url(#${id})`} />
       <rect x="6.5" y="6.5" width="11" height="11" rx="3.2" fill="none" stroke="#fff" strokeWidth="1.4" />
       <circle cx="12" cy="12" r="3.1" fill="none" stroke="#fff" strokeWidth="1.4" />
       <circle cx="16.1" cy="7.9" r="0.9" fill="#fff" />

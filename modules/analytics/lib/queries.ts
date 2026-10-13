@@ -335,7 +335,8 @@ export const getPlatformStatus = cache(async (teamId: string): Promise<PlatformS
     return {
       platform: p,
       connected: !!a,
-      account: a ? ((a.username as string | null) ? `@${a.username}` : (a.display_name as string | null)) : null,
+      // (YouTube handles come with their own "@".)
+      account: a ? ((a.username as string | null) ? `@${String(a.username).replace(/^@+/, "")}` : (a.display_name as string | null)) : null,
       statsReady: !!a && hasStatsScopes(p, (a.scopes as string[] | null) ?? []),
       lastOkAt: (s?.last_ok_at as string | null) ?? null,
       lastError: (s?.last_error as string | null) ?? null,

@@ -1,3 +1,8 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import NewShortLoading from "./new/loading";
+import ShortLoading from "./[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 
@@ -6,7 +11,7 @@ const WIDE =
 const COLS = `grid grid-cols-[36px_minmax(0,1fr)_auto] ${WIDE}`;
 
 /** Shorts list: the title, the step filters and the table, rows shimmering. */
-export default function Loading() {
+function ListSkeleton() {
   return (
     <SkeletonPage width="max-w-[1500px]">
       <div className="flex items-start justify-between gap-6 mb-6 flex-wrap" aria-hidden>
@@ -62,4 +67,17 @@ export default function Loading() {
       </div>
     </SkeletonPage>
   );
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from a task straight to a script, the script's, not this list's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/shorts\/new(\/|$)/.test(path)) return <NewShortLoading />;
+  if (/^\/shorts\/[^/]+/.test(path)) return <ShortLoading />;
+  return <ListSkeleton />;
 }

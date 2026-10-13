@@ -65,7 +65,7 @@ async function refreshRow(row: Row, reason: string): Promise<string> {
       .eq("team_id", row.team_id)
       .eq("status", "active")
       .eq("member_roles.role", "master");
-    const who = row.username ? `@${row.username}` : row.display_name ?? PROVIDERS[row.platform].name;
+    const who = row.username ? `@${String(row.username).replace(/^@+/, "")}` : row.display_name ?? PROVIDERS[row.platform].name;
     await Promise.all(
       (masters ?? [])
         .map((m) => m.user_id as string | null)
