@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
  * keys for the numbers at a point.
  */
 
-export type CurveSeries = { key: string; label: string; color: string; values: (number | null)[] };
+export type CurveSeries = { key: string; label: string; color: string; values: (number | null)[]; dashed?: boolean };
 
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null);
@@ -98,7 +98,7 @@ export function RetentionChart({ series, height = 240, ariaLabel, duration }: { 
             </text>
           ))}
           {series.map((s) => (
-            <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+            <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeOpacity={s.dashed ? 0.75 : 1} strokeLinejoin="round" strokeLinecap="round" />
           ))}
           {hover !== null && (
             <g>
@@ -116,7 +116,7 @@ export function RetentionChart({ series, height = 240, ariaLabel, duration }: { 
           <div className="text-[11px] font-semibold text-ink-faint mb-1">{posLabel(hover)}</div>
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2 py-0.5">
-              <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
+              <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={s.dashed ? { backgroundImage: `linear-gradient(90deg, ${s.color} 60%, transparent 60%)`, backgroundSize: "5px 2px" } : { background: s.color }} />
               <span className="font-bold tabular-nums text-ink">{pct(s.values[hover] ?? null)}</span>
               <span className="text-ink-soft truncate">{s.label}</span>
             </div>

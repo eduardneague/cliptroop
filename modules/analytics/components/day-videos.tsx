@@ -83,8 +83,13 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
     const xs = (data?.videos ?? []).filter((v) => (platform === "all" || v.platform === platform) && (kind === "all" || v.kind === kind));
     return sort === "views" ? xs : [...xs].sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
   }, [data, platform, kind, sort]);
-  const kinds = useMemo(() => new Set((data?.videos ?? []).filter((v) => platform === "all" || v.platform === platform).map((v) => v.kind)), [data, platform]);
+  const kinds = useMemo(() => new Set([...(data?.videos ?? []), ...(data?.around ?? [])].filter((v) => platform === "all" || v.platform === platform).map((v) => v.kind)), [data, platform]);
   const top = list.length ? Math.max(...list.map((v) => v.views)) : 1;
+  const blind = useMemo(() => new Set((data?.around ?? []).map((v) => v.platform)), [data]);
+  const aroundList = useMemo(() => (data?.around ?? []).filter((v) => (platform === "all" || v.platform === platform) && (kind === "all" || v.kind === kind)), [data, platform, kind]);
+  const shownBlind = [...blind].filter((p) => platform === "all" || p === platform);
+  const blindCount = shownBlind.length;
+  const blindNames = shownBlind.map((p) => NAME[p as P]).join(" and ");
   const dayTotal = (p: P) => rows.find((r) => r.platform === p)?.views ?? null;
 
   if (at === null || !day) return null;
@@ -197,15 +202,7 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
                         <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        {v.url ? (
-                          <a href={v.url} target="_blank" rel="noopener noreferrer" className="flex items-start sm:items-center gap-1 text-[13px] font-semibold leading-snug hover:underline min-w-0">
-                            {/* Two lines on a phone, one on a computer. */}
-                            <span className="line-clamp-2 sm:line-clamp-none sm:truncate">{v.title || "Untitled"}</span>
-                            <ExternalIcon className="w-3 h-3 mt-0.5 sm:mt-0 text-ink-faint flex-shrink-0" />
-                          </a>
-                        ) : (
-                          <span className="block text-[13px] font-semibold leading-snug line-clamp-2 sm:line-clamp-none sm:truncate">{v.title || "Untitled"}</span>
-                        )}
+                        <VideoTitle v={v} />
                         <span className="flex items-center flex-wrap gap-x-1.5 text-[11.5px] text-ink-faint min-w-0">
                           <span className="whitespace-nowrap">{KIND_WORD[v.kind]}</span>
                           {v.publishedAt && <span className="whitespace-nowrap">· {fresh ? "posted that day" : `posted ${shortDay(v.publishedAt.slice(0, 10))}`}</span>}
@@ -228,8 +225,46 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
                   );
                 })}
               </ul>
-            ) : (
+            ) : aroundList.length ? null : (
               <p className="rounded-xl border border-dashed border-line/20 px-4 py-6 text-center text-[13px] text-ink-soft">No videos with this filter.</p>
+            )}
+
+            {/* A platform that can't say which videos got the day's views: what it had posted that week. */}
+            {aroundList.length > 0 && (
+              <div>
+                <p className="text-[12.5px] text-ink-soft mb-2">
+                  {blindNames} {blindCount === 1 ? "doesn't" : "don't"} say which videos got this day&rsquo;s views. Posted that week, with their views so far:
+                </p>
+                <ul className="rounded-xl border border-line/10 divide-y divide-line/10 overflow-hidden">
+                  {aroundList.map((v) => (
+                    <li key={`${v.platform}:${v.id}`} className="px-3 py-2.5 flex items-center gap-2.5 sm:gap-3 min-w-0">
+                      <span className="relative w-11 h-11 sm:w-[72px] sm:h-[40px] rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
+                        {v.thumbnail && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={v.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover" />
+                        )}
+                        <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <VideoTitle v={v} />
+                        <span className="flex items-center flex-wrap gap-x-1.5 text-[11.5px] text-ink-faint min-w-0">
+                          <span className="whitespace-nowrap">{KIND_WORD[v.kind]}</span>
+                          {v.publishedAt && <span className="whitespace-nowrap">· {v.publishedAt.slice(0, 10) === day ? "posted that day" : `posted ${shortDay(v.publishedAt.slice(0, 10))}`}</span>}
+                          {v.ours && (
+                            <Link href={v.ours.kind === "short" ? `/shorts/${v.ours.id}` : `/videos/${v.ours.id}`} className="font-mono font-semibold text-amber hover:underline">
+                              #{v.ours.number ?? "?"}
+                            </Link>
+                          )}
+                        </span>
+                      </span>
+                      <span className="text-right flex-shrink-0">
+                        <span className="block text-[14px] font-bold tabular-nums">{v.total === null ? "–" : fmtCompact(v.total)}</span>
+                        <span className="block text-[10.5px] text-ink-faint">views so far</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {/* What isn't explained by the listed videos, and why a platform has no list. */}
@@ -252,5 +287,22 @@ export function DayVideos({ teamId, days, index, platforms, onClose }: { teamId:
         )}
       </div>
     </Dialog>
+  );
+}
+
+/** The title opens the video's own analytics; the small arrow, the platform. */
+function VideoTitle({ v }: { v: { platform: string; id: string; title: string | null; url: string | null } }) {
+  return (
+    <span className="flex items-start sm:items-center gap-1.5 min-w-0">
+      <Link href={`/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=audience`} className="text-[13px] font-semibold leading-snug hover:underline min-w-0" title="Open its analytics">
+        {/* Two lines on a phone, one on a computer. */}
+        <span className="line-clamp-2 sm:line-clamp-none sm:truncate block">{v.title || "Untitled"}</span>
+      </Link>
+      {v.url && (
+        <a href={v.url} target="_blank" rel="noopener noreferrer" aria-label={`Open on ${NAME[v.platform as P] ?? "the platform"}`} className="text-ink-faint hover:text-ink flex-shrink-0 mt-0.5 sm:mt-0">
+          <ExternalIcon className="w-3 h-3" />
+        </a>
+      )}
+    </span>
   );
 }

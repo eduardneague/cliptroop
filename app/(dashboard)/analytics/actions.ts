@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
-import { fetchYouTubeDay, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
-import { getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production } from "@/modules/analytics/lib/queries";
+import { fetchYouTubeDay, fetchYouTubeVideoHistory, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { findVideos, getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production } from "@/modules/analytics/lib/queries";
+import { historyToFill } from "@/modules/analytics/lib/video";
 import { addDays, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
 import { getVideoSplits } from "@/modules/analytics/lib/advanced";
 import { gatherClaudeExport, type ClaudeExportData } from "@/modules/analytics/lib/claude-export";
@@ -189,6 +190,47 @@ export async function deleteRevenueEntry(teamId: string, id: string): Promise<Re
   if (error || !data?.length) return { error: "Only masters can remove income." };
   revalidatePath("/analytics");
   return {};
+}
+
+// A video's history asked from YouTube at most every 30 minutes (per server).
+const askedHistory = new Map<string, number>();
+
+/**
+ * A video's analytics page found its first days missing: YouTube sends any
+ * video's whole day-by-day history, so ask for it (and for the videos that
+ * make its "typical"), keep it, and let the page reload (anyone on the team).
+ */
+export async function fillVideoHistory(teamId: string, id: string): Promise<Result<{ filled: number }>> {
+  if (!UUID.test(teamId) || typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return { error: "Not found." };
+  const tz = await teamTz(teamId);
+  if (!tz) return { error: "Not on this team." };
+  const key = `${teamId}:${id}`;
+  if ((askedHistory.get(key) ?? 0) > Date.now() - 30 * 60_000) return { filled: 0 };
+  askedHistory.set(key, Date.now());
+  if (askedHistory.size > 3000) askedHistory.clear();
+  try {
+    const items = await historyToFill(teamId, id, todayIn(tz));
+    if (!items.length) return { filled: 0 };
+    const saved = await fetchYouTubeVideoHistory(teamId, items);
+    return { filled: Math.max(0, saved) };
+  } catch (e) {
+    console.error("[video history]", e instanceof Error ? e.message : e);
+    return { error: "YouTube didn't send the history this time." };
+  }
+}
+
+/** Any video ever copied, by title (the platform's or ClipTroop's) or #number: Analytics → Content's search. */
+export async function searchVideos(teamId: string, q: string): Promise<Result<{ items: ContentItem[] }>> {
+  if (!UUID.test(teamId) || typeof q !== "string") return { error: "Not found." };
+  const query = q.trim().slice(0, 100);
+  if (!query) return { items: [] };
+  if (!(await teamTz(teamId))) return { error: "Not on this team." };
+  try {
+    return { items: await findVideos(teamId, query) };
+  } catch (e) {
+    console.error("[video search]", e instanceof Error ? e.message : e);
+    return { error: "Couldn't search right now." };
+  }
 }
 
 /** One video's own traffic sources and search terms (Advanced → a video's details). */

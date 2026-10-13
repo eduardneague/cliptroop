@@ -133,7 +133,12 @@ export function GlobalSearch({
         else openPalette();
       } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !open && !isTypingTarget(e.target)) {
         e.preventDefault();
-        openPalette();
+        // A page with its own search box (Analytics → Content) gets "/" first; ⌘K still opens this.
+        const own = document.querySelector<HTMLInputElement>("input[data-page-search]");
+        if (own && own.offsetParent !== null) {
+          own.focus();
+          own.select();
+        } else openPalette();
       }
     }
     document.addEventListener("keydown", onKey);

@@ -9,6 +9,7 @@ import { SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
 import { addDays, bucketOf, bucketsFor, dayIn, daysBetween, dayList, type Bucket, type Window } from "./ranges";
 import { inAccountTime, numbersVisibility, visibleRows } from "./accounts";
+import { outlierScores } from "./scores";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 type Row = Record<string, unknown>;
@@ -521,7 +522,91 @@ export type ContentItem = {
   ours: { kind: "short" | "long"; id: string; number: number | null } | null;
   /** Posted by the team (from ClipTroop or marked by hand) but the platform hasn't shared it or its numbers. */
   noNumbers?: boolean;
+  /** Views ÷ the typical views of the same platform and kind posted before it (lib/scores.ts). */
+  score?: number | null;
+  typical?: number | null;
 };
+
+const CONTENT_COLS = "platform, external_id, kind, title, url, thumbnail_url, published_at, views, likes, comments, shares, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)";
+
+/** An analytics_content row as the Content tab lists it. */
+function contentItem(r: Row): ContentItem {
+  const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
+  const s = one(r.short_videos as { entry_number: number } | { entry_number: number }[] | null);
+  const l = one(r.long_video_projects as { entry_number: number } | { entry_number: number }[] | null);
+  return {
+    platform: r.platform as SocialPlatform,
+    id: r.external_id as string,
+    kind: r.kind as ContentItem["kind"],
+    title: (r.title as string | null) ?? null,
+    url: safeUrl(r.url),
+    thumbnail: safeUrl(r.thumbnail_url),
+    publishedAt: (r.published_at as string | null) ?? null,
+    views: r.views === null ? null : Number(r.views),
+    likes: r.likes === null ? null : Number(r.likes),
+    comments: r.comments === null ? null : Number(r.comments),
+    shares: r.shares === null ? null : Number(r.shares),
+    ours: r.short_id ? { kind: "short", id: r.short_id as string, number: s?.entry_number ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: l?.entry_number ?? null } : null,
+  };
+}
+
+/** Every video's "× typical", keyed "platform:id" (from all of the team's videos on the accounts connected now). */
+async function scoresFor(supabase: Supa, teamId: string, vis: Awaited<ReturnType<typeof numbersVisibility>>) {
+  const rows = visibleRows(await all((a, b) => supabase.from("analytics_content").select("platform, external_id, kind, published_at, views").eq("team_id", teamId).range(a, b), 6000), vis);
+  return outlierScores(rows.map((r) => ({ id: `${r.platform}:${r.external_id}`, platform: r.platform as string, kind: r.kind as string, publishedAt: (r.published_at as string | null) ?? null, views: r.views === null || r.views === undefined ? null : Number(r.views) })));
+}
+
+/**
+ * Any video ever copied, matching a search: its title on the platform, the
+ * ClipTroop short's or long video's title, or its #number. The best matches
+ * first (a title that starts with it, a #number), then the most viewed.
+ */
+export async function findVideos(teamId: string, q: string): Promise<ContentItem[]> {
+  const supabase = await createClient();
+  const vis = await numbersVisibility(supabase, teamId);
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const num = q.match(/^#?(\d{1,6})$/)?.[1];
+  const none = Promise.resolve({ data: [] as Row[] });
+  const [byTitle, shortsT, longsT, shortsN, longsN, scores] = await Promise.all([
+    supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).ilike("title", like).order("views", { ascending: false, nullsFirst: false }).limit(60),
+    supabase.from("short_videos").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
+    supabase.from("long_video_projects").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
+    num ? supabase.from("short_videos").select("id").eq("team_id", teamId).eq("entry_number", Number(num)).limit(5) : none,
+    num ? supabase.from("long_video_projects").select("id").eq("team_id", teamId).eq("entry_number", Number(num)).limit(5) : none,
+    scoresFor(supabase, teamId, vis),
+  ]);
+  const ids = (r: { data: unknown[] | null }) => ((r.data ?? []) as Row[]).map((x) => x.id as string);
+  const shortIds = [...new Set([...ids(shortsN), ...ids(shortsT)])].slice(0, 80);
+  const longIds = [...new Set([...ids(longsN), ...ids(longsT)])].slice(0, 80);
+  const [byShort, byLong] = await Promise.all([
+    shortIds.length ? supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).in("short_id", shortIds).limit(200) : none,
+    longIds.length ? supabase.from("analytics_content").select(CONTENT_COLS).eq("team_id", teamId).in("project_id", longIds).limit(200) : none,
+  ]);
+  const seen = new Set<string>();
+  const rows = visibleRows([...((byTitle.data ?? []) as Row[]), ...((byShort.data ?? []) as Row[]), ...((byLong.data ?? []) as Row[])], vis).filter((r) => {
+    const k = `${r.platform}:${r.external_id}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const needle = q.toLowerCase().replace(/^#/, "");
+  const numbered = new Set([...ids(shortsN), ...ids(longsN)]);
+  const rankOf = (i: ContentItem) => {
+    const t = (i.title ?? "").toLowerCase();
+    if (i.ours && numbered.has(i.ours.id)) return 0;
+    if (t === needle) return 1;
+    if (t.startsWith(needle)) return 2;
+    return 3;
+  };
+  return rows
+    .map((r) => {
+      const i = contentItem(r);
+      const s = scores.get(`${i.platform}:${i.id}`);
+      return { ...i, score: s?.score ?? null, typical: s?.typical ?? null };
+    })
+    .sort((a, b) => rankOf(a) - rankOf(b) || (b.views ?? -1) - (a.views ?? -1))
+    .slice(0, 50);
+}
 
 /**
  * Videos and posts published in the range, with their latest numbers, plus
@@ -536,7 +621,7 @@ export async function getContent(teamId: string, w: Window, shared: Shared = {})
   const [{ data: copied }, status, { data: posted }, { data: marked }, vis] = await Promise.all([
     supabase
       .from("analytics_content")
-      .select("platform, external_id, kind, title, url, thumbnail_url, published_at, views, likes, comments, shares, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)")
+      .select(CONTENT_COLS)
       .eq("team_id", teamId)
       .gte("published_at", `${w.from}T00:00:00Z`)
       .lte("published_at", `${w.to}T23:59:59Z`)
@@ -561,26 +646,14 @@ export async function getContent(teamId: string, w: Window, shared: Shared = {})
     shared.vis ?? numbersVisibility(supabase, teamId),
   ]);
   // Only the accounts connected now: videos of a disconnected or replaced account never show.
-  const data = visibleRows(copied ?? [], vis);
+  const data = visibleRows((copied ?? []) as Row[], vis);
+  const scores = await scoresFor(supabase, teamId, vis);
   const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
   const items: ContentItem[] = data.map((r) => {
-      const s = one(r.short_videos as { entry_number: number } | { entry_number: number }[] | null);
-      const l = one(r.long_video_projects as { entry_number: number } | { entry_number: number }[] | null);
-      return {
-        platform: r.platform as SocialPlatform,
-        id: r.external_id as string,
-        kind: r.kind as ContentItem["kind"],
-        title: (r.title as string | null) ?? null,
-        url: safeUrl(r.url),
-        thumbnail: safeUrl(r.thumbnail_url),
-        publishedAt: (r.published_at as string | null) ?? null,
-        views: r.views === null ? null : Number(r.views),
-        likes: r.likes === null ? null : Number(r.likes),
-        comments: r.comments === null ? null : Number(r.comments),
-        shares: r.shares === null ? null : Number(r.shares),
-        ours: r.short_id ? { kind: "short", id: r.short_id as string, number: s?.entry_number ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: l?.entry_number ?? null } : null,
-      };
-    });
+    const i = contentItem(r);
+    const s = scores.get(`${i.platform}:${i.id}`);
+    return { ...i, score: s?.score ?? null, typical: s?.typical ?? null };
+  });
 
   // Our own posts the platform's copy doesn't have yet (one row per short and platform).
   const have = new Set(items.filter((i) => i.ours?.kind === "short").map((i) => `${i.platform}:${i.ours!.id}`));
@@ -645,6 +718,12 @@ export type DayViews = {
   /** Each connected platform: its views that day (as on the chart) and how much of it the listed videos explain. */
   platforms: { platform: SocialPlatform; views: number | null; listed: number; count: number; note: string | null }[];
   videos: DayVideo[];
+  /**
+   * A platform that can't say which videos got that day's views (before its
+   * per-video copies started, or a copy missed): its videos posted in the
+   * week up to that day, with their views so far, for context (1.17.0).
+   */
+  around: (Omit<DayVideo, "views" | "watchMinutes" | "how"> & { total: number | null })[];
 };
 
 /** Only web links (a platform's link is shown as-is: never anything that runs). */
@@ -660,7 +739,7 @@ const isDay = (d: unknown): d is string => typeof d === "string" && /^\d{4}-\d{2
  */
 export async function getViewsDay(teamId: string, day: string): Promise<DayViews> {
   const supabase = await createClient();
-  const empty: DayViews = { day, platforms: [], videos: [] };
+  const empty: DayViews = { day, platforms: [], videos: [], around: [] };
   if (!isDay(day)) return empty;
   const next = addDays(day, 1);
   const vis = await numbersVisibility(supabase, teamId);
@@ -778,7 +857,39 @@ export async function getViewsDay(teamId: string, day: string): Promise<DayViews
     }
     return { platform: p, views: dayViews(p), listed: mine.reduce((t, v) => t + v.views, 0), count: mine.length, note };
   });
-  return { day, platforms, videos };
+
+  // Platforms with views but no per-video numbers that day: what they had posted that week.
+  const blind = platforms.filter((p) => p.platform !== "youtube" && !p.count && (p.views ?? 0) > 0).map((p) => p.platform);
+  const around: DayViews["around"] = [];
+  if (blind.length) {
+    const { data } = await supabase
+      .from("analytics_content")
+      .select("platform, external_id, kind, title, url, thumbnail_url, published_at, views, likes, comments, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)")
+      .eq("team_id", teamId)
+      .in("platform", blind)
+      .gte("published_at", `${addDays(day, -6)}T00:00:00Z`)
+      .lte("published_at", `${day}T23:59:59Z`)
+      .order("published_at", { ascending: false })
+      .limit(40);
+    for (const r of visibleRows((data ?? []) as Row[], vis)) {
+      const s = one(r.short_videos as { entry_number: number } | { entry_number: number }[] | null);
+      const l = one(r.long_video_projects as { entry_number: number } | { entry_number: number }[] | null);
+      around.push({
+        platform: r.platform as SocialPlatform,
+        id: r.external_id as string,
+        title: (r.title as string | null) ?? null,
+        url: safeUrl(r.url),
+        thumbnail: safeUrl(r.thumbnail_url),
+        kind: (r.kind as DayVideo["kind"]) ?? "short",
+        publishedAt: (r.published_at as string | null) ?? null,
+        likes: n(r.likes),
+        comments: n(r.comments),
+        total: n(r.views),
+        ours: r.short_id ? { kind: "short", id: r.short_id as string, number: s?.entry_number ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: l?.entry_number ?? null } : null,
+      });
+    }
+  }
+  return { day, platforms, videos, around };
 }
 
 const niceDayShort = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

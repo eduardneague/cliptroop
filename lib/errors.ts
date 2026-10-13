@@ -136,8 +136,12 @@ export async function reportError(input: { source: ErrorSource; message: string;
         who.emails.map((email) =>
           sendAlertEmail({
             to: [email],
-            subject: r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
-            message: `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
+            subject: input.source === "job" ? `${APP_NAME}: ${r.count > 1 ? "still " : ""}${message.slice(0, 90)}` : r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
+            message:
+              input.source === "job"
+                ? // A status problem: what's wrong now, and how often you'll hear about it (0082).
+                  `${message}${input.stack ? `\n\n${input.stack}` : ""}\n\nFound by the status check (every 10 minutes). You get one email a day while it lasts, and one when it's fixed.`
+                : `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
             linkText: "Open the developer page",
             href: `${appUrl()}/developer?tab=problems#errors`,
             footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
@@ -147,5 +151,40 @@ export async function reportError(input: { source: ErrorSource; message: string;
     }
   } catch (e) {
     console.error("[reportError]", e instanceof Error ? e.message : e);
+  }
+}
+
+/** A status problem is over (lib/health-watch.ts): the developers hear it once. */
+export async function reportFixed(message: string) {
+  try {
+    if (!shouldAlert()) return;
+    const who = await alertRecipients();
+    const text = String(message).replace(/\s+/g, " ").trim().slice(0, 300);
+    if (who.userIds.length) {
+      await sendNotifications(
+        who.userIds.map((recipient_id) => ({
+          recipient_id,
+          kind: "app_alert",
+          body: `Fixed: ${text.slice(0, 140)}`,
+          metadata: { snippet: `Fixed: ${text.slice(0, 120)}`, where: "status check", href: "/developer?tab=status" },
+        }))
+      );
+    }
+    if (emailConfigured() && who.emails.length) {
+      await Promise.all(
+        who.emails.map((email) =>
+          sendAlertEmail({
+            to: [email],
+            subject: `${APP_NAME}: back to normal: ${text.slice(0, 80)}`,
+            message: `${text}\n\nThe status check doesn't see this problem any more.`,
+            linkText: "Open the developer page",
+            href: `${appUrl()}/developer?tab=status`,
+            footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
+          })
+        )
+      );
+    }
+  } catch (e) {
+    console.error("[reportFixed]", e instanceof Error ? e.message : e);
   }
 }

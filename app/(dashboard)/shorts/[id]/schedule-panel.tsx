@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/select";
 import { DateChip } from "@/components/ui/date-picker";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Switch } from "@/modules/short-videos/components/short-type";
-import { ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } from "@/components/ui/icons";
+import { AnalyticsIcon, ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
 import { PostNowButton } from "@/modules/short-videos/components/post-now-button";
@@ -144,6 +144,7 @@ function Action({
   children,
   tone = "default",
   disabled,
+  internal = false,
 }: {
   onClick?: () => void;
   href?: string;
@@ -151,6 +152,8 @@ function Action({
   children: React.ReactNode;
   tone?: "default" | "primary" | "danger" | "link";
   disabled?: boolean;
+  /** A page of the app (opens here), not a platform's site. */
+  internal?: boolean;
 }) {
   const cls = `inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-semibold transition-colors disabled:opacity-50 ${
     tone === "primary"
@@ -161,6 +164,14 @@ function Action({
           ? "text-amber hover:bg-amber/10"
           : "text-ink-soft hover:text-ink hover:bg-surface-2"
   }`;
+  if (href && internal) {
+    return (
+      <Link href={href} className={cls}>
+        {icon}
+        {children}
+      </Link>
+    );
+  }
   if (href) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
@@ -231,6 +242,7 @@ function SchedulePanelLive({
   platforms,
   youtubeDescription,
   manualPosts,
+  analyticsIds = {},
   video,
   defaultTimes,
   accounts,
@@ -248,6 +260,8 @@ function SchedulePanelLive({
   /** The team's default YouTube description. */
   youtubeDescription: string;
   manualPosts: ManualPost[];
+  /** Each platform's video id where it has its own analytics page (posted shorts). */
+  analyticsIds?: Partial<Record<Platform, string>>;
   video: PostVideo | null;
   defaultTimes: Record<Platform, string>;
   accounts: AccountInfo[];
@@ -531,6 +545,11 @@ function SchedulePanelLive({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[12.5px] font-semibold text-green">✓ Marked as posted</span>
                     <span className="text-[12px] text-ink-soft"><Ago iso={byHand(p)!.postedAt} /></span>
+                    {analyticsIds[p] && (
+                      <Action href={`/analytics/video/${p}/${encodeURIComponent(analyticsIds[p]!)}?from=content`} icon={<AnalyticsIcon className="w-3.5 h-3.5" />} tone="link" internal>
+                        Analytics
+                      </Action>
+                    )}
                     {canManage && (
                       <Action onClick={() => void markByHand(p, false)} icon={<CloseIcon className="w-3.5 h-3.5" />}>
                         Undo
@@ -554,6 +573,11 @@ function SchedulePanelLive({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[12.5px] font-semibold text-green">✓ Marked as posted</span>
                     <span className="text-[12px] text-ink-soft"><Ago iso={byHand(p)!.postedAt} /></span>
+                    {analyticsIds[p] && (
+                      <Action href={`/analytics/video/${p}/${encodeURIComponent(analyticsIds[p]!)}?from=content`} icon={<AnalyticsIcon className="w-3.5 h-3.5" />} tone="link" internal>
+                        Analytics
+                      </Action>
+                    )}
                     {canManage && (
                       <Action onClick={() => void markByHand(p, false)} icon={<CloseIcon className="w-3.5 h-3.5" />}>
                         Undo
@@ -576,6 +600,7 @@ function SchedulePanelLive({
               ) : post && !showForm ? (
                 <StatusView
                   shortId={shortId}
+                  analyticsId={analyticsIds[p] ?? null}
                   shortRef={shortNumber ? `#${shortNumber}` : undefined}
                   postNow={canManage && canPostNow(post)}
                   post={post}
@@ -1072,6 +1097,7 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
 
 function StatusView({
   shortId,
+  analyticsId = null,
   shortRef,
   postNow: showPostNow,
   post,
@@ -1082,6 +1108,8 @@ function StatusView({
   onChanged,
 }: {
   shortId: string;
+  /** Its video id where it has its own analytics page (1.17.0). */
+  analyticsId?: string | null;
   shortRef?: string;
   /** Shows "Post now" (skip the scheduled time). */
   postNow: boolean;
@@ -1172,6 +1200,11 @@ function StatusView({
       </ol>
 
       <div className="flex flex-wrap items-center gap-1 -mx-1.5">
+        {post.status === "published" && analyticsId && (
+          <Action href={`/analytics/video/${post.platform}/${encodeURIComponent(analyticsId)}?from=content`} icon={<AnalyticsIcon className="w-3.5 h-3.5" />} tone="link" internal>
+            Analytics
+          </Action>
+        )}
         {post.platform === "youtube" && post.externalId && (
           <Action href={`https://studio.youtube.com/video/${post.externalId}/edit`} icon={<ExternalIcon className="w-3.5 h-3.5" />} tone="link">
             YouTube Studio

@@ -65,7 +65,7 @@ export const CATALOG: Record<WidgetType, Meta> = {
   output: { name: "This week", description: "Shorts and long videos out in the last 7 days, how many on time, and what's late.", w: 6, h: 2, limits: { minW: 2, minH: 2, maxW: 12, maxH: 4 } , stack: { min: 3, max: 3, phone: 3 } },
   views: { name: "Views", description: "Views on YouTube, Instagram and TikTok in the last 7 days, and the trend.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 3, max: 4, phone: 3 } },
   followers: { name: "Followers", description: "Subscribers and followers on each platform, and how they changed.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } , stack: { min: 4, max: 5, phone: 4 } },
-  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
+  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views. Click one for its analytics.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
   audienceMap: { name: "Audience map", description: "Where your audience is, last 28 days: a world map or a 3D globe of YouTube views, followers, or all platforms together.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 }, settings: { view: "map", mode: "all" } , stack: { span: 2, min: 5, max: 7, phone: (st) => (st?.view === "globe" ? 7 : 5) } },
 };
 

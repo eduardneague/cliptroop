@@ -1,7 +1,9 @@
 import "server-only";
 import { cleanupPostedMedia } from "@/lib/media-cleanup";
 import { refreshExpiring } from "@/lib/social/tokens";
-import { syncAllTeams } from "@/modules/analytics/lib/sync";
+import { syncAllTeams, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { pruneJobRuns } from "@/lib/job-runs";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { watchHealth } from "@/lib/health-watch";
 
 /*
@@ -21,13 +23,29 @@ export async function runCleanupJob() {
   }
   // Keep connected accounts signed in (Instagram lasts 60 days, TikTok a year).
   const tokens = await refreshExpiring().catch(() => ({ refreshed: 0, failed: -1 }));
+  await pruneJobRuns(createAdminClient());
   return { ok: !("error" in media), job: "cleanup" as const, media, tokens };
 }
 
-/** 05:10 UTC: copy every team's numbers, then check the every-minute timer is still running. */
-export async function runAnalyticsJob() {
+const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The morning analytics copy (0082). 05:10 UTC: the timer calls once per team
+ * and platform ({team, platform}), each with its own time limit; 05:40 and
+ * 06:40 ({retry: true}): whatever wasn't copied fine since 04:00 UTC, then
+ * the projections of teams without accounts and a check of the timer. No
+ * options (the hand-run address, an older timer): every team, as before.
+ */
+export async function runAnalyticsJob(o: { team?: unknown; platform?: unknown; retry?: unknown } = {}) {
+  if (typeof o.team === "string" && UUID.test(o.team) && PLATFORMS.includes(o.platform as (typeof PLATFORMS)[number])) {
+    const results = await syncTeamAnalytics(o.team, { only: o.platform as (typeof PLATFORMS)[number], log: true });
+    return { ok: true, job: "analytics" as const, team: o.team, platforms: results.map((x) => ({ platform: x.platform, ok: x.ok, rows: x.rows, error: x.error })) };
+  }
   const started = Date.now();
-  const result = await syncAllTeams(45_000);
+  const morning = new Date();
+  morning.setUTCHours(4, 0, 0, 0);
+  const result = await syncAllTeams(45_000, o.retry === true ? { skipOkSince: morning.getTime(), log: true } : { log: true });
   // Projections of teams the copy didn't reach (no connected account, or out of time): today's values too.
   const projections = await recordOtherProjections(new Set(result.results.map((r) => r.team)), Math.max(5_000, 52_000 - (Date.now() - started))).catch(() => 0);
   await watchHealth("daily");

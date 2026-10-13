@@ -20,6 +20,7 @@ import { BarList, ChartCard, fmtCompact, fmtInt, Legend, LineChart, StackedColum
 import { countryName } from "./world-map";
 import { AudienceMapView, MAP_MODES, sourcesOf, type MapMode, type MapView } from "./audience-map";
 import { startNavProgress } from "@/components/ui/nav-progress";
+import { ContentList } from "./content-list";
 
 // Only loaded when a day on the Views chart is clicked.
 const DayVideos = dynamic(() => import("./day-videos").then((m) => m.DayVideos), { ssr: false });
@@ -349,7 +350,7 @@ export function AnalyticsView({
       <div className={`transition-opacity duration-200 ${navigating ? "opacity-50" : ""}`}>
         {data.tab === "production" && <ProductionTab p={data.production} compare={compare} w={w} />}
         {data.tab === "audience" && <AudienceTab teamId={teamId} a={data.audience} compare={compare} picked={pickedIn(data.audience, picked)} setPicked={setPicked} />}
-        {data.tab === "content" && <ContentTab items={data.content.items} status={data.content.status} advancedHref={href({ tab: "advanced" })} />}
+        {data.tab === "content" && <ContentTab teamId={teamId} items={data.content.items} status={data.content.status} advancedHref={href({ tab: "advanced" })} />}
         {data.tab === "advanced" && (
           <AdvancedTab
             teamId={teamId}
@@ -1010,9 +1011,8 @@ function ContentFilter({ items, status, platform, setPlatform }: { items: Conten
   );
 }
 
-function ContentTab({ items, status, advancedHref }: { items: ContentItem[]; status: PlatformStatus[]; advancedHref: string }) {
+function ContentTab({ teamId, items, status, advancedHref }: { teamId: string; items: ContentItem[]; status: PlatformStatus[]; advancedHref: string }) {
   const [platform, setPlatform] = useState<"all" | P>("all");
-  const list = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
   if (!status.some((s) => s.connected) && !items.length)
     return (
       <>
@@ -1025,81 +1025,23 @@ function ContentTab({ items, status, advancedHref }: { items: ContentItem[]; sta
     <div className="space-y-4">
       <ContentFilter items={items} status={status} platform={platform} setPlatform={setPlatform} />
       <AccountNote status={platform === "all" ? status : status.filter((s) => s.platform === platform)} />
-      {list.length ? (
-        <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[13px]">
-            <thead>
-              <tr className="bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">
-                <th className="px-3 py-2 font-bold">Video</th>
-                <th className="px-3 py-2 font-bold">Published</th>
-                <th className="px-3 py-2 font-bold text-right">Views</th>
-                <th className="px-3 py-2 font-bold text-right">Likes</th>
-                <th className="px-3 py-2 font-bold text-right">Comments</th>
-                <th className="px-3 py-2 font-bold text-right">Shares</th>
-                <th className="px-3 py-2 font-bold">Ours</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => (
-                <tr key={`${c.platform}${c.id}`} className="border-t border-line/10 hover:bg-surface-2/40">
-                  <td className="px-3 py-2">
-                    <span className="flex items-center gap-3 min-w-0">
-                      <span className="relative w-16 h-9 rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
-                        {c.thumbnail && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover" />
-                        )}
-                        <PlatformIcon platform={c.platform} className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded" />
-                      </span>
-                      <span className="min-w-0">
-                        {c.url ? (
-                          <a href={c.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 font-semibold hover:underline">
-                            <span className="truncate max-w-[22rem]">{c.title || "Untitled"}</span>
-                            <ExternalIcon className="w-3 h-3 text-ink-faint flex-shrink-0" />
-                          </a>
-                        ) : (
-                          <span className="font-semibold truncate block max-w-[22rem]">{c.title || "Untitled"}</span>
-                        )}
-                        <span className="text-[11.5px] text-ink-faint">
-                          {c.kind === "short" ? "Short" : c.kind === "long" ? "Long video" : "Post"}
-                          {c.noNumbers ? ` · no numbers from ${PLATFORM[c.platform].name} yet` : ""}
-                        </span>
-                      </span>
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-ink-soft whitespace-nowrap">{c.publishedAt ? niceDay(c.publishedAt.slice(0, 10)) : "–"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtInt(c.views)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.likes)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.comments)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.shares)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    {c.ours ? (
-                      <Link href={c.ours.kind === "short" ? `/shorts/${c.ours.id}` : `/videos/${c.ours.id}`} className="font-mono text-[12px] font-semibold text-amber hover:underline">
-                        #{c.ours.number ?? "?"}
-                      </Link>
-                    ) : (
-                      <span className="text-ink-faint">–</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">
-          {picked && !picked.connected
+      <ContentList
+        teamId={teamId}
+        items={items}
+        platform={platform}
+        empty={
+          picked && !picked.connected
             ? `${PLATFORM[picked.platform].name} isn't connected, and nothing was posted there in this range.`
             : picked && !picked.statsReady
               ? `Nothing posted to ${PLATFORM[picked.platform].name} in this range. Its numbers need one more permission: reconnect it in Team → Connected accounts.`
-              : `Nothing published${picked ? ` on ${PLATFORM[picked.platform].name}` : ""} in this range.`}
-        </p>
-      )}
+              : `Nothing published${picked ? ` on ${PLATFORM[picked.platform].name}` : ""} in this range.`
+        }
+      />
       <p className="text-[12px] text-ink-faint">
-        Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts and Reels. Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their numbers. Only the accounts connected now are listed: posts on a disconnected or earlier account never are.
+        Numbers are each video&rsquo;s totals as of the last sync. YouTube: the latest 50 uploads · Instagram: the latest 25 posts · TikTok: public videos · Facebook: the latest 25 Page posts and Reels. Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their numbers. &ldquo;× typical&rdquo;: views next to the median of the same kind posted before it, on the same platform. Only the accounts connected now are listed.
       </p>
       <p className="text-[12.5px] text-ink-soft">
-        Every number about each video (watch time, retention, where its views came from, what works):{" "}
+        Every number for all the videos together (retention, where views came from, what works):{" "}
         <Link href={advancedHref} scroll={false} className="font-semibold text-amber hover:underline">
           Advanced →
         </Link>
@@ -1502,6 +1444,7 @@ function IncomeRow({ e, teamId, canEdit, money }: { e: Revenue["entries"][number
 function AccessCard({ r, teamId }: { r: Revenue; teamId: string }) {
   const toast = useToast();
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   return (
     <ChartCard title="Who can see revenue" sub="Masters always can. Turn it on for anyone else you trust with it.">
@@ -1522,11 +1465,21 @@ function AccessCard({ r, teamId }: { r: Revenue; teamId: string }) {
                   aria-label={`${p.name} can see revenue`}
                   disabled={busy === p.userId}
                   onClick={async () => {
+                    // Money is sensitive: giving or taking away access asks first (1.17.0).
+                    const ok = await confirm(
+                      on
+                        ? { title: `Stop ${p.name} seeing revenue?`, description: "Revenue disappears from their Analytics (the Revenue tab, money on Advanced, revenue projections). You can turn it back on any time.", confirmLabel: "Take it away", danger: true }
+                        : { title: `Let ${p.name} see revenue?`, description: "They'll see the channel's revenue, RPM and each video's money in Analytics, and revenue projections. They get a notification.", confirmLabel: "Let them see it" }
+                    );
+                    if (!ok) return;
                     setBusy(p.userId);
                     const res = await setRevenueAccess(teamId, p.userId, !on);
                     setBusy(null);
                     if (res.error !== undefined) toast.error(res.error);
-                    else router.refresh();
+                    else {
+                      toast.success(on ? `${p.name} no longer sees revenue` : `${p.name} can see revenue now`);
+                      router.refresh();
+                    }
                   }}
                   className={`w-10 h-6 rounded-lg relative transition-colors disabled:opacity-60 ${on ? "bg-amber" : "bg-line/20"}`}
                 >

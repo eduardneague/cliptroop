@@ -31,7 +31,7 @@ export function CheckRow({ c }: { c: Check & { url?: string } }) {
 export async function StatusTab() {
   const admin = createAdminClient();
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const [statusCall, core, jobs, vendors, history, incidents, devs, { data: failedRows }, { data: reconnectRows }] = await Promise.all([
+  const [statusCall, core, jobs, vendors, history, incidents, devs, { data: failedRows }, { data: reconnectRows }, { data: runRows }] = await Promise.all([
     lastStatusCall(),
     coreChecks(),
     jobChecks(),
@@ -41,10 +41,13 @@ export async function StatusTab() {
     developers(),
     admin.from("social_posts").select("id, team_id, platform, last_error, updated_at, short_id").eq("status", "failed").gte("updated_at", since).order("updated_at", { ascending: false }).limit(20),
     admin.from("social_accounts").select("id, team_id, platform, display_name, username, last_error").eq("status", "needs_reconnect").limit(20),
+    // The morning copy's runs (0082): before the migration, nothing.
+    admin.from("job_runs").select("id, team_id, platform, started_at, finished_at, ok, detail").eq("job", "analytics").gte("started_at", new Date(Date.now() - 3 * 86_400_000).toISOString()).order("started_at", { ascending: false }).limit(40),
   ]);
+  const runs = (runRows ?? []) as { id: number; team_id: string | null; platform: string | null; started_at: string; finished_at: string | null; ok: boolean | null; detail: string | null }[];
   const failed = (failedRows ?? []) as { id: string; team_id: string; platform: string; last_error: string | null; updated_at: string; short_id: string | null }[];
   const reconnect = (reconnectRows ?? []) as { id: string; team_id: string; platform: string; display_name: string | null; username: string | null; last_error: string | null }[];
-  const teamIds = [...new Set([...failed.map((r) => r.team_id), ...reconnect.map((r) => r.team_id)])];
+  const teamIds = [...new Set([...failed.map((r) => r.team_id), ...reconnect.map((r) => r.team_id), ...runs.map((r) => r.team_id).filter((x): x is string => !!x)])];
   const { data: teams } = teamIds.length ? await admin.from("teams").select("id, name").in("id", teamIds) : { data: [] as { id: string; name: string }[] };
   const teamName = new Map((teams ?? []).map((t) => [t.id as string, t.name as string]));
 
@@ -139,6 +142,39 @@ export async function StatusTab() {
         )}
       </section>
 
+      <section className={`${card} px-4 sm:px-5 py-4`} id="morning-copy">
+        <h2 className={h2}>Morning copy (3 days)</h2>
+        <p className="mt-1 text-[12.5px] text-ink-soft">
+          The analytics copy runs at 05:10 UTC once per team and platform, and again at 05:40 and 06:40 for whatever didn&rsquo;t finish. A run that never finished ran out of time.
+        </p>
+        {runs.length === 0 ? (
+          <p className="pt-3 text-[13.5px] text-ink-soft">No runs recorded yet (they&rsquo;re kept from migration 0082 on).</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-line/10">
+            {runs.map((r) => {
+              const unfinished = !r.finished_at && Date.now() - Date.parse(r.started_at) > 10 * 60_000;
+              const running = !r.finished_at && !unfinished;
+              return (
+                <li key={r.id} className="py-2.5 flex items-start gap-3">
+                  {r.platform ? <PlatformIcon platform={r.platform as "youtube"} className="mt-0.5 w-5 h-5 rounded-md flex-shrink-0" /> : <span className="mt-0.5 w-5 h-5 rounded-md bg-surface-2 flex-shrink-0" />}
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[13px] font-semibold">
+                      {r.team_id ? teamName.get(r.team_id) ?? "A team" : "Every team"} · {r.platform ? NAME[r.platform] ?? r.platform : "all platforms"}{" "}
+                      <span className={`font-semibold ${r.ok ? "text-green" : running ? "text-ink-soft" : "text-red"}`}>{r.ok ? "copied" : running ? "running" : unfinished ? "ran out of time" : "failed"}</span>
+                    </span>
+                    <span className="block text-[12px] text-ink-soft break-words">
+                      <LocalTime iso={r.started_at} />
+                      {r.finished_at ? ` · ${Math.max(1, Math.round((Date.parse(r.finished_at) - Date.parse(r.started_at)) / 1000))} s` : ""}
+                      {r.detail ? ` · ${r.detail}` : ""}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       <section className={`${card} px-4 sm:px-5 py-4`}>
         <h2 className={h2}>Teams that need a hand</h2>
         <p className="mt-1 text-[12.5px] text-ink-soft">One team&rsquo;s problems, not the app&rsquo;s. Each team already sees these on its own Posting page; they&rsquo;re here so you can help.</p>
@@ -189,8 +225,7 @@ export async function StatusTab() {
           <span className="text-ink-soft">Email:</span> {emailConfigured() ? <b className="text-green">set up</b> : <b className="text-gold">not set up (RESEND_API_KEY, EMAIL_FROM): alerts arrive as notifications only</b>}
         </p>
         <p className="text-[12.5px] text-ink-soft">
-          You get one email and one notification the first time an error happens, again at most once an hour while it keeps happening, and again if it comes back after you mark it fixed. Team owners and
-          everyone else never get these.
+          You get one email and one notification the first time an error happens, again at most once an hour while it keeps happening, and again if it comes back after you mark it fixed. Problems the status check finds (the timer, the morning copy) email once when they start, once a day while they last, and once when they&rsquo;re over. Team owners and everyone else never get these.
         </p>
       </section>
     </div>

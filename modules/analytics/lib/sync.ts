@@ -5,7 +5,8 @@ import { FB_GRAPH, hasStatsScopes, STATS_SCOPES, type SocialPlatform } from "@/l
 import { facebookEarnings } from "./fb-money";
 import { adoptAccount, sameAccount } from "./accounts";
 import { syncObjectives } from "@/modules/objectives/lib/sync";
-import { ApiError, dayRange, daysAgo, get, isoDuration, keepStoredMetrics, NEW_CONTENT_COLS, NEW_DAILY_COLS, num, rowsOf, upsert, upsertSome, YT, ytReport, type Admin } from "./sync-core";
+import { jobEnd, jobStart } from "@/lib/job-runs";
+import { ApiError, dayRange, daysAgo, get, isoDuration, keepStoredMetrics, NEW_CONTENT_COLS, NEW_DAILY_COLS, num, rowsOf, upsert, upsertSome, YT, ytFirst, ytReport, type Admin } from "./sync-core";
 import {
   facebookRetention,
   instagramWindows,
@@ -406,6 +407,62 @@ async function syncYouTubeVideoDays(admin: Admin, acc: Account, token: string, d
     if (missing.length) rows += await upsert(admin, "analytics_content", (await ytVideos(token, missing)).map((v) => ytContentRow(acc, v, links)), "team_id,platform,external_id");
   } catch {}
   return rows;
+}
+
+/**
+ * Videos' own day-by-day numbers on demand (a video's analytics page,
+ * 1.17.0): one report per video, day by day from `from` to `to`, into
+ * analytics_content_days (source "daily"). Days without views between the
+ * first and the last day YouTube answered for are saved as 0, so the page
+ * knows the history is whole. Returns the rows saved, or -1 when there's no
+ * YouTube account (of this team's numbers) to ask.
+ */
+export async function fetchYouTubeVideoHistory(teamId: string, items: { id: string; from: string; to: string }[], budgetMs = 9_000): Promise<number> {
+  if (!items.length) return 0;
+  const admin = createAdminClient();
+  const { data: acc } = await admin.from("social_accounts").select("id, team_id, platform, external_id, scopes, username, display_name").eq("team_id", teamId).eq("platform", "youtube").eq("status", "active").maybeSingle();
+  if (!acc || !hasStatsScopes("youtube", (acc.scopes as string[] | null) ?? [])) return -1;
+  const { data: s } = await admin.from("analytics_syncs").select("account_ref").eq("team_id", teamId).eq("platform", "youtube").maybeSingle();
+  if (s && !sameAccount((s as { account_ref?: string | null }).account_ref ?? null, { externalId: acc.external_id as string, name: ((acc.username as string | null) ?? (acc.display_name as string | null)) ?? null })) return -1;
+  const token = await getAccessToken(acc.id as string);
+  const deadline = Date.now() + budgetMs;
+  const now = new Date().toISOString();
+  let saved = 0;
+  for (let i = 0; i < items.length && Date.now() < deadline; i += 3) {
+    const batch = await Promise.all(
+      items.slice(i, i + 3).map(async (it) => {
+        const r = await ytFirst(token, { startDate: it.from, endDate: it.to, dimensions: "day", filters: `video==${it.id}`, sort: "day" }, ["views,estimatedMinutesWatched,likes,comments,shares", "views,estimatedMinutesWatched", "views"]);
+        return { it, r };
+      })
+    );
+    const recs: Record<string, unknown>[] = [];
+    for (const { it, r } of batch) {
+      if (!r?.rows.length) continue;
+      const has = new Set(r.metrics.split(","));
+      const got = new Map(r.rows.map((x) => [String(x.day), x]));
+      const days = [...got.keys()].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+      if (!days.length) continue;
+      for (const day of dayRange(days[0], days[days.length - 1])) {
+        const x = got.get(day);
+        const val = (metric: string, col: string) => (has.has(metric) ? (x ? num(x[metric]) ?? 0 : 0) : null) ?? (col === "views" ? 0 : null);
+        recs.push({
+          team_id: teamId,
+          platform: "youtube",
+          external_id: it.id,
+          day,
+          source: "daily",
+          views: val("views", "views"),
+          watch_minutes: val("estimatedMinutesWatched", "watch_minutes"),
+          likes: val("likes", "likes"),
+          comments: val("comments", "comments"),
+          shares: val("shares", "shares"),
+          updated_at: now,
+        });
+      }
+    }
+    if (recs.length) saved += await upsert(admin, "analytics_content_days", recs, "team_id,platform,external_id,day");
+  }
+  return saved;
 }
 
 /**
@@ -980,18 +1037,28 @@ async function snapshotContent(admin: Admin, teamId: string, platform: SocialPla
 // ---------------------------------------------------------------------------
 
 /** Copy one team's numbers from every connected platform that allows it. */
-export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
+/**
+ * Copies a team's numbers from its connected accounts. `only`: one platform
+ * (the morning timer calls once per team and platform, 0082); `skipOkSince`:
+ * leave out the platforms copied fine since then (the retry calls); `log`:
+ * record each platform's run in job_runs (the timer's calls).
+ */
+export async function syncTeamAnalytics(teamId: string, o: { only?: SocialPlatform; skipOkSince?: number; log?: boolean } = {}): Promise<SyncResult[]> {
   const admin = createAdminClient();
-  const { data: accounts } = await admin.from("social_accounts").select("id, team_id, platform, external_id, scopes, username, display_name").eq("team_id", teamId).eq("status", "active");
-  if (!accounts?.length) return [];
-  const { data: syncs } = await admin.from("analytics_syncs").select("platform, backfilled").eq("team_id", teamId);
+  const { data: all } = await admin.from("social_accounts").select("id, team_id, platform, external_id, scopes, username, display_name").eq("team_id", teamId).eq("status", "active");
+  const { data: syncs } = await admin.from("analytics_syncs").select("platform, backfilled, last_ok_at").eq("team_id", teamId);
+  const okAt = new Map(((syncs ?? []) as { platform: string; last_ok_at: string | null }[]).map((s) => [s.platform, Date.parse(s.last_ok_at ?? "") || 0]));
+  const accounts = ((all ?? []) as Account[]).filter((a) => (!o.only || a.platform === o.only) && (o.skipOkSince === undefined || (okAt.get(a.platform) ?? 0) < o.skipOkSince));
+  if (!accounts.length) return [];
   const done = new Set((syncs ?? []).filter((s) => s.backfilled).map((s) => s.platform as string));
   const links = await linksFor(admin, teamId);
   const out: SyncResult[] = [];
   // The Advanced page's extra numbers (0081) only while the whole copy stays
   // short (Sync now waits for it; the morning job has other teams to do).
   const adv: Advanced = { admin, teamId, deadline: Date.now() + 30_000 };
-  for (const a of accounts as Account[]) {
+  for (const a of accounts) {
+    const run = o.log ? await jobStart(admin, "analytics", teamId, a.platform) : null;
+    const before = out.length;
     // The numbers stored for this platform must be this account's: another
     // account's are deleted first, and this one's history is fetched again.
     let fresh = false;
@@ -1001,6 +1068,7 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
     if (!hasStatsScopes(a.platform, a.scopes ?? [])) {
       out.push({ platform: a.platform, ok: false, error: "Reconnect this account to allow stats.", rows: 0 });
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: new Date().toISOString(), last_error: "Reconnect this account to allow stats." }, { onConflict: "team_id,platform" });
+      if (run !== null) await jobEnd(admin, run, false, "Reconnect this account to allow stats.");
       continue;
     }
     const backfill = fresh || !done.has(a.platform);
@@ -1020,6 +1088,8 @@ export async function syncTeamAnalytics(teamId: string): Promise<SyncResult[]> {
       await admin.from("analytics_syncs").upsert({ team_id: teamId, platform: a.platform, last_run_at: new Date().toISOString(), last_error: message }, { onConflict: "team_id,platform" });
       out.push({ platform: a.platform, ok: false, error: message, rows: 0 });
     }
+    const r = out[before];
+    if (run !== null) await jobEnd(admin, run, !!r?.ok, r ? (r.ok ? `${r.rows} rows${r.note ? ` (${r.note})` : ""}` : r.error ?? "Failed") : "Skipped");
   }
   // New numbers can finish a views / followers objective (yesterday's numbers arrive this morning).
   if (out.some((r) => r.ok)) {
@@ -1085,7 +1155,8 @@ export async function claimAnalyticsCatchUp(teamId: string): Promise<boolean> {
 }
 
 /** The daily job: every team with a connected account (within a time budget). */
-export async function syncAllTeams(budgetMs = 50_000) {
+/** Every team (least recently copied first) until the time runs out. `skipOkSince`: leave out platforms copied fine since then. */
+export async function syncAllTeams(budgetMs = 50_000, o: { skipOkSince?: number; log?: boolean } = {}) {
   const admin = createAdminClient();
   const started = Date.now();
   const { data } = await admin.from("social_accounts").select("team_id").eq("status", "active");
@@ -1098,7 +1169,7 @@ export async function syncAllTeams(budgetMs = 50_000) {
   const results: { team: string; results: SyncResult[] }[] = [];
   for (const t of teams) {
     if (Date.now() - started > budgetMs) break;
-    results.push({ team: t, results: await syncTeamAnalytics(t) });
+    results.push({ team: t, results: await syncTeamAnalytics(t, { skipOkSince: o.skipOkSince, log: o.log }) });
   }
   return { teams: teams.length, synced: results.length, results };
 }

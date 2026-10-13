@@ -15,7 +15,8 @@ import type { BarView } from "./status-levels";
  */
 
 export type Level = "ok" | "warn" | "down" | "unknown";
-export type Check = { key: string; name: string; level: Level; detail: string; ms?: number; publicPart?: boolean };
+/** `alert`: what the developers' alert says (it stays the same while the problem lasts, so it's one alert, not a new one each day). */
+export type Check = { key: string; name: string; level: Level; detail: string; ms?: number; publicPart?: boolean; alert?: string };
 export type Vendor = { key: string; name: string; level: Level; detail: string; url: string };
 
 /** The parts everyone sees on /status, in order. "app" is recorded by the database (status_tick). */
@@ -102,16 +103,31 @@ export async function jobChecks(): Promise<Check[]> {
       publicPart: true,
       level: s.timer_scheduled === null ? "unknown" : !s.timer_scheduled ? "down" : timerAge === null || timerAge > 10 ? "down" : timer?.status === "failed" ? "warn" : "ok",
       detail: s.timer_scheduled === null ? "Can't see the timer from here." : !s.timer_scheduled ? "The timer isn't scheduled." : timer ? `Last ran ${ago(timer.at)}${timer.status === "failed" ? ` and failed${timer.message ? `: ${timer.message}` : ""}` : ""}.` : "It hasn't run yet.",
+      alert: !s.timer_scheduled ? "the timer isn't scheduled" : "the timer stopped running",
     });
     const last = s.analytics_last as string | null;
     const hours = last ? (Date.now() - Date.parse(last)) / 3_600_000 : null;
+    const accounts = s.analytics_accounts === undefined || s.analytics_accounts === null ? null : Number(s.analytics_accounts);
+    const job = (s.analytics_job ?? null) as { started: string | null; finished: string | null; unfinished: number; failed: number; problem: string | null } | null;
+    const late = last !== null && (hours ?? 0) > 30;
+    // Why it's late (0082's run log): out of time, failed, or never started.
+    const why = !late
+      ? null
+      : job && Number(job.unfinished) > 0
+        ? `The morning copy started but ran out of time (${job.unfinished} run${Number(job.unfinished) === 1 ? "" : "s"} never finished).`
+        : job && Number(job.failed) > 0
+          ? `The morning copy failed: ${job.problem ?? "see Developer → Problems"}.`
+          : job && (!job.started || Date.now() - Date.parse(job.started) > 30 * 3_600_000)
+            ? "The morning copy didn't start: the timer's call didn't reach the app."
+            : null;
     // App-wide: did the morning copy run? (One team's account failing is that team's problem.)
     out.push({
       key: "analytics",
       name: "Analytics updates",
       publicPart: true,
-      level: last === null ? "unknown" : (hours ?? 0) > 30 ? "warn" : "ok",
-      detail: last === null ? "No copy yet." : `Last copy ${ago(last)} (every morning).`,
+      level: accounts === 0 ? "ok" : last === null ? "unknown" : late ? "warn" : "ok",
+      detail: accounts === 0 ? "No accounts connected for numbers yet." : last === null ? "No copy yet." : `${why ? `${why} ` : ""}Last copy ${ago(last)} (every morning).`,
+      alert: "the morning copy is late",
     });
     const failing = Number(s.analytics_failing ?? 0);
     out.push({

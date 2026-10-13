@@ -51,10 +51,46 @@ function applyFilters(rows, params) {
       else if (op === "lte") r = x !== null && String(x) <= raw;
       else if (op === "gt") r = x !== null && String(x) > raw;
       else if (op === "lt") r = x !== null && String(x) < raw;
-      else r = true;
+      else if (op === "like" || op === "ilike") {
+        // PostgREST patterns: % or * any run, _ one character, \ escapes.
+        let re = "";
+        for (let i = 0; i < raw.length; i++) {
+          const ch = raw[i];
+          if (ch === "\\" && i + 1 < raw.length) re += raw[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          else if (ch === "%" || ch === "*") re += ".*";
+          else if (ch === "_") re += ".";
+          else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+        r = x !== null && x !== undefined && new RegExp(`^${re}$`, op === "ilike" ? "is" : "s").test(String(x));
+      } else r = true;
       return not ? !r : r;
     };
     out = out.filter(test);
+  }
+  // order=col.desc.nullslast,col2.asc (columns of the row itself; embedded ones are ignored).
+  const order = params.get("order");
+  if (order && out.length) {
+    const keys = order
+      .split(",")
+      .map((x) => x.split("."))
+      .filter(([c]) => c && Object.prototype.hasOwnProperty.call(out[0], c))
+      .map(([c, dir = "asc", nulls]) => ({ c, desc: dir === "desc", nullsFirst: nulls ? nulls === "nullsfirst" : dir === "desc" }));
+    if (keys.length)
+      out = [...out].sort((a, b) => {
+        for (const k of keys) {
+          const x = a[k.c];
+          const y = b[k.c];
+          const xn = x === null || x === undefined;
+          const yn = y === null || y === undefined;
+          if (xn || yn) {
+            if (xn && yn) continue;
+            return (xn ? -1 : 1) * (k.nullsFirst ? 1 : -1);
+          }
+          const cmp = typeof x === "number" && typeof y === "number" ? x - y : String(x) < String(y) ? -1 : String(x) > String(y) ? 1 : 0;
+          if (cmp) return k.desc ? -cmp : cmp;
+        }
+        return 0;
+      });
   }
   const offset = Number(params.get("offset") || 0);
   const limit = params.get("limit");
