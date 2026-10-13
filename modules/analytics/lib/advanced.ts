@@ -9,6 +9,7 @@ import { averageCurve, readCurve, resample, summarize, type RetentionPoint, type
 import { crossPlatform, findPatterns, type Finding, type PatternVideo, type Patterns } from "./patterns";
 import { breakdownHref, breakdownLabel, DIMENSIONS, METRIC_HELP } from "./advanced-labels";
 import { hookFromScript, pickScript } from "./hooks";
+import { outlierScores } from "./scores";
 
 /*
  * The Advanced tab (1.16.0): every number the platforms share, for one
@@ -59,6 +60,12 @@ export type AdvVideo = {
   curve: (number | null)[] | null;
   ours: { kind: "short" | "long"; id: string; number: number | null; type: string | null } | null;
   hook: string | null;
+  /** The day it was posted, in the team's time zone. */
+  day: string | null;
+  /** Views ÷ the typical views of the same kind posted before it (1.17.0, lib/scores.ts). */
+  score: number | null;
+  /** Those typical views. */
+  typical: number | null;
 };
 export type AdvancedData = {
   platform: SocialPlatform;
@@ -527,70 +534,11 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
   }
 
   // ---- Videos -------------------------------------------------------------------
-  const one = <T,>(x: T | T[] | null | undefined) => (Array.isArray(x) ? x[0] ?? null : x ?? null);
   const curveOf = new Map(curves.map((r) => [r.external_id as string, readCurve(r.points)]));
   const moneyOf = new Map(videoMoney.map((r) => [r.external_id as string, r]));
   const hooks = await hooksFor(supabase, contentRows);
-  const hourIn = (iso: string) => {
-    try {
-      const parts = new Intl.DateTimeFormat("en-US", { timeZone: o.tz, hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(new Date(iso));
-      const hour = Number(parts.find((p) => p.type === "hour")?.value);
-      const wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(parts.find((p) => p.type === "weekday")?.value ?? "");
-      return { hour: Number.isFinite(hour) ? hour % 24 : null, weekday: wd >= 0 ? wd : null };
-    } catch {
-      return { hour: null, weekday: null };
-    }
-  };
-  const toVideo = (r: Row): AdvVideo => {
-    const sv = one(r.short_videos as Row | Row[] | null);
-    const lv = one(r.long_video_projects as Row | Row[] | null);
-    const p = r.platform as SocialPlatform;
-    const curve = p === platform ? curveOf.get(r.external_id as string) ?? [] : [];
-    const dur = n(r.duration_seconds);
-    const m = (r.metrics as Row | null) ?? {};
-    const metrics: Record<string, number> = {};
-    for (const [k, v] of Object.entries(m)) {
-      if (n(v) !== null) metrics[k] = n(v)!;
-      else if (v && typeof v === "object" && !Array.isArray(v)) for (const [k2, v2] of Object.entries(v as Row)) if (n(v2) !== null) metrics[`${k}_${k2}`] = n(v2)!;
-    }
-    const mon = moneyOf.get(r.external_id as string);
-    const viewsN = n(r.views);
-    const rev = mon ? conv(n(mon.revenue), mon.currency) : null;
-    const when = r.published_at ? hourIn(r.published_at as string) : { hour: null, weekday: null };
-    return {
-      platform: p,
-      id: r.external_id as string,
-      kind: r.kind as AdvVideo["kind"],
-      title: (r.title as string | null) ?? null,
-      url: safeUrl(r.url),
-      thumbnail: safeUrl(r.thumbnail_url),
-      publishedAt: (r.published_at as string | null) ?? null,
-      ...when,
-      durationSec: dur,
-      views: viewsN,
-      likes: n(r.likes),
-      comments: n(r.comments),
-      shares: n(r.shares),
-      saves: n(r.saves),
-      reach: n(r.reach),
-      engagedViews: n(r.engaged_views),
-      watchMinutes: n(r.watch_minutes),
-      avgViewSeconds: n(r.avg_view_seconds),
-      avgViewPct: n(r.avg_view_pct),
-      subscribersGained: n(r.subscribers_gained),
-      skipRate: n(r.skip_rate),
-      reposts: n(r.reposts),
-      metrics,
-      revenue: mon
-        ? { revenue: rev, rpm: rev !== null && viewsN ? (rev / viewsN) * 1000 : null, cpm: conv(n(mon.cpm), mon.currency), playbackCpm: conv(n(mon.playback_cpm), mon.currency), adImpressions: n(mon.ad_impressions), monetizedPlaybacks: n(mon.monetized_playbacks) }
-        : null,
-      retention: curve.length >= 2 ? summarize(curve, dur) : null,
-      curve: curve.length >= 2 ? resample(curve, 51).map((v) => (v === null ? null : Math.round(v * 1000) / 1000)) : null,
-      ours: r.short_id ? { kind: "short", id: r.short_id as string, number: n(sv?.entry_number), type: (sv?.short_type as string | null) ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: n(lv?.entry_number), type: ((lv?.video_type as string[] | null) ?? []).join(" + ") || null } : null,
-      hook: hooks.get(`${r.short_id ? "s" : "l"}:${(r.short_id ?? r.project_id) as string}`) ?? null,
-    };
-  };
-  const everything = contentRows.map(toVideo);
+  const toVideo = videoMapper({ platform, tz: o.tz, curveOf, moneyOf, hooks, conv });
+  const everything = withScores(contentRows.map(toVideo));
   const videos = everything.filter((v) => v.platform === platform && (content === "all" || (content === "shorts" ? v.kind === "short" : v.kind === "long")));
 
   // Retention: the average curve of Shorts and of long videos.
@@ -654,6 +602,98 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     notes,
     hasData: groups.length > 0 || videos.length > 0,
   };
+}
+
+/** The day, hour and weekday a moment falls on in a time zone. */
+export function localParts(iso: string, tz: string): { day: string | null; hour: number | null; weekday: number | null } {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", hourCycle: "h23", weekday: "short" }).formatToParts(new Date(iso));
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const hour = Number(get("hour"));
+    const wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(get("weekday"));
+    const day = get("year") && get("month") && get("day") ? `${get("year")}-${get("month")}-${get("day")}` : null;
+    return { day, hour: Number.isFinite(hour) ? hour % 24 : null, weekday: wd >= 0 ? wd : null };
+  } catch {
+    return { day: null, hour: null, weekday: null };
+  }
+}
+
+/**
+ * analytics_content rows → videos (the Advanced page, a video's own page,
+ * the Claude export). `curveOf` / `moneyOf` are keyed by external id;
+ * retention curves only for `platform`.
+ */
+export function videoMapper(ctx: {
+  platform: SocialPlatform;
+  tz: string;
+  curveOf: Map<string, RetentionPoint[]>;
+  moneyOf: Map<string, Row>;
+  hooks: Map<string, string>;
+  conv: (amount: number | null, from: unknown) => number | null;
+}): (r: Row) => AdvVideo {
+  const one = <T,>(x: T | T[] | null | undefined) => (Array.isArray(x) ? x[0] ?? null : x ?? null);
+  return (r: Row): AdvVideo => {
+    const sv = one(r.short_videos as Row | Row[] | null);
+    const lv = one(r.long_video_projects as Row | Row[] | null);
+    const p = r.platform as SocialPlatform;
+    const curve = p === ctx.platform ? ctx.curveOf.get(r.external_id as string) ?? [] : [];
+    const dur = n(r.duration_seconds);
+    const m = (r.metrics as Row | null) ?? {};
+    const metrics: Record<string, number> = {};
+    for (const [k, v] of Object.entries(m)) {
+      if (n(v) !== null) metrics[k] = n(v)!;
+      else if (v && typeof v === "object" && !Array.isArray(v)) for (const [k2, v2] of Object.entries(v as Row)) if (n(v2) !== null) metrics[`${k}_${k2}`] = n(v2)!;
+    }
+    const mon = p === ctx.platform ? ctx.moneyOf.get(r.external_id as string) : undefined;
+    const viewsN = n(r.views);
+    const rev = mon ? ctx.conv(n(mon.revenue), mon.currency) : null;
+    const when = r.published_at ? localParts(r.published_at as string, ctx.tz) : { day: null, hour: null, weekday: null };
+    return {
+      platform: p,
+      id: r.external_id as string,
+      kind: r.kind as AdvVideo["kind"],
+      title: (r.title as string | null) ?? null,
+      url: safeUrl(r.url),
+      thumbnail: safeUrl(r.thumbnail_url),
+      publishedAt: (r.published_at as string | null) ?? null,
+      hour: when.hour,
+      weekday: when.weekday,
+      day: when.day,
+      durationSec: dur,
+      views: viewsN,
+      likes: n(r.likes),
+      comments: n(r.comments),
+      shares: n(r.shares),
+      saves: n(r.saves),
+      reach: n(r.reach),
+      engagedViews: n(r.engaged_views),
+      watchMinutes: n(r.watch_minutes),
+      avgViewSeconds: n(r.avg_view_seconds),
+      avgViewPct: n(r.avg_view_pct),
+      subscribersGained: n(r.subscribers_gained),
+      skipRate: n(r.skip_rate),
+      reposts: n(r.reposts),
+      metrics,
+      revenue: mon
+        ? { revenue: rev, rpm: rev !== null && viewsN ? (rev / viewsN) * 1000 : null, cpm: ctx.conv(n(mon.cpm), mon.currency), playbackCpm: ctx.conv(n(mon.playback_cpm), mon.currency), adImpressions: n(mon.ad_impressions), monetizedPlaybacks: n(mon.monetized_playbacks) }
+        : null,
+      retention: curve.length >= 2 ? summarize(curve, dur) : null,
+      curve: curve.length >= 2 ? resample(curve, 51).map((v) => (v === null ? null : Math.round(v * 1000) / 1000)) : null,
+      ours: r.short_id ? { kind: "short", id: r.short_id as string, number: n(sv?.entry_number), type: (sv?.short_type as string | null) ?? null } : r.project_id ? { kind: "long", id: r.project_id as string, number: n(lv?.entry_number), type: ((lv?.video_type as string[] | null) ?? []).join(" + ") || null } : null,
+      hook: ctx.hooks.get(`${r.short_id ? "s" : "l"}:${(r.short_id ?? r.project_id) as string}`) ?? null,
+      score: null,
+      typical: null,
+    };
+  };
+}
+
+/** Each video's "× typical" (against the same platform and kind). */
+export function withScores(videos: AdvVideo[]): AdvVideo[] {
+  const scores = outlierScores(videos.map((v) => ({ id: `${v.platform}:${v.id}`, platform: v.platform, kind: v.kind, publishedAt: v.publishedAt, views: v.views })));
+  return videos.map((v) => {
+    const s = scores.get(`${v.platform}:${v.id}`);
+    return s ? { ...v, score: s.score, typical: s.typical } : v;
+  });
 }
 
 const niceDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

@@ -244,7 +244,8 @@ export function TopVideosWidget({ teamId }: { teamId: string }) {
     <ol className="h-full overflow-hidden -mx-1 motion-stagger">
       {items.slice(0, count).map((v, i) => (
         <li key={`${v.platform}${v.id}`}>
-          <a href={v.url ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-surface-2/70" style={{ height: rowH }}>
+          {/* Each opens the video's own analytics (1.17.0). */}
+          <Link href={v.noNumbers ? "/analytics?tab=content" : `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=dashboard`} className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-surface-2/70" style={{ height: rowH }}>
             <span className="w-4 text-[11px] font-bold text-ink-faint tabular-nums text-center flex-shrink-0">{i + 1}</span>
             {thumbs && (
               <span className="relative w-[64px] h-[36px] rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
@@ -270,7 +271,7 @@ export function TopVideosWidget({ teamId }: { teamId: string }) {
               )}
             </span>
             <span className="text-[12px] font-bold tabular-nums flex-shrink-0">{fmtCompact(v.views)}</span>
-          </a>
+          </Link>
         </li>
       ))}
     </ol>

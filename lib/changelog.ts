@@ -23,6 +23,22 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.17.0",
+    date: "2026-10-13",
+    title: "Every video's own analytics",
+    changes: [
+      { kind: "new", text: "Every video has its own analytics page, on every platform: how it did next to your typical video of the same kind (\"× typical\": 3.4× is an outlier, 0.6× is under your usual), its views since it was posted next to your typical curve, views per day, retention next to your average, where its views came from and what people searched, and the same short on every platform. Advanced, on the same page: every number with your typical and its rank among your videos, revenue for the people who see it, and day by day." },
+      { kind: "new", text: "Analytics → Content: search every video you've ever posted, by title or #number. Press / to jump to the box, ↑ ↓ to pick, Enter to open its analytics. Shorts or long videos, click any column to sort (like YouTube Studio), a table or a grid, × typical for each video, and an Analytics button on every one." },
+      { kind: "new", text: "Advanced → Best performing: your top videos by views, × typical, engagement, % viewed, subscribers, watch time, shares or revenue, posted in the range or of all time." },
+      { kind: "better", text: "Every video opens its analytics: Advanced's video list, the Views per day window, the dashboard's Top videos widget, a posted short's Posting card and a long video's Posted step." },
+      { kind: "better", text: "Views on a day: when Instagram, TikTok or Facebook can't say which videos got that day's views (before ClipTroop started keeping them, or a missed copy), the window shows what they had posted that week, with their views so far, instead of \"No videos\"." },
+      { kind: "better", text: "Giving someone access to revenue, or taking it away, asks first." },
+      { kind: "better", text: "Alerts for the app's own checks (the timer, the morning copy) come once when something starts, once a day while it lasts and once when it's fixed, instead of every hour." },
+      { kind: "better", text: "Download for Claude says how each video did next to your typical one." },
+      { kind: "fixed", text: "The morning analytics copy could stop for days: one slow platform used up all its time and nothing was saved. Now each team and platform is copied on its own, whatever didn't finish is tried again at 05:40 and 06:40 UTC, and Developer → Status lists every run and why one failed." },
+    ],
+  },
+  {
     version: "1.16.0",
     date: "2026-10-11",
     title: "Advanced analytics, What works, Download for Claude",

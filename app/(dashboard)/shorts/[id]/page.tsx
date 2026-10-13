@@ -26,6 +26,8 @@ import { ReviewCard } from "./review-card";
 import { ChangesCard } from "./changes-card";
 import { SettingsButton } from "./settings-button";
 import { SchedulePanel } from "./schedule-panel";
+import { numbersVisibility } from "@/modules/analytics/lib/accounts";
+import { visibleRows } from "@/modules/analytics/lib/account-rules";
 import { StageTracker } from "./stage-tracker";
 import { ScriptCard } from "@/modules/scripts/components/script-card";
 import { getShortScript } from "@/modules/scripts/lib/queries";
@@ -100,6 +102,10 @@ export default async function ShortPage({
           .order("created_at", { ascending: true }),
         // The version that gets posted (shown in the Posting card's preview).
         supabase.from("short_videos").select("approved_version_id").eq("id", short.id).maybeSingle(),
+        // Where it has its own analytics page (1.17.0): its videos on the accounts connected now.
+        shown === "posted"
+          ? Promise.all([supabase.from("analytics_content").select("platform, external_id").eq("team_id", short.teamId).eq("short_id", short.id).limit(10), numbersVisibility(supabase, short.teamId)]).then(([r, vis]) => visibleRows((r.data ?? []) as { platform: string; external_id: string }[], vis))
+          : Promise.resolve([] as { platform: string; external_id: string }[]),
       ])
     : null;
   postingPromise?.catch(() => {});
@@ -124,13 +130,15 @@ export default async function ShortPage({
     postingPromise,
   ]);
   const latestVersion = versions.find((v) => !v.deleted) ?? null;
-  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }, { data: approved }] = postingRows ?? [
+  const [{ data: socialAccounts }, { data: socialPosts }, { data: postTimes }, { data: socialEvents }, { data: approved }, analyticsRows] = postingRows ?? [
     { data: null },
     { data: null },
     { data: null },
     { data: null },
     { data: null },
+    [],
   ];
+  const analyticsIds = Object.fromEntries(analyticsRows.map((r) => [r.platform, r.external_id])) as Partial<Record<PostingPlatform, string>>;
   const postVersion = (approved?.approved_version_id ? versions.find((v) => v.id === approved.approved_version_id) : null) ?? latestVersion;
 
 
@@ -286,6 +294,7 @@ export default async function ShortPage({
                 platforms={short.platforms.filter((x): x is PostingPlatform => (POSTING_ORDER as readonly string[]).includes(x))}
                 youtubeDescription={settings.youtubeDescription}
                 manualPosts={short.posts.map((x) => ({ platform: x.platform, url: x.url, postedAt: x.postedAt }))}
+                analyticsIds={analyticsIds}
                 video={
                   postVersion
                     ? { id: postVersion.id, number: postVersion.number, duration: postVersion.duration, width: postVersion.width, height: postVersion.height, deleted: postVersion.deleted }

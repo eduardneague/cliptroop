@@ -15,8 +15,10 @@ import { syncAllObjectives } from "@/modules/objectives/lib/sync";
  *     record it for the status page's hourly bars, alert the developers
  *     about anything app-wide that's down, and count every team's
  *     objectives (the safety net, 1.14.0). No posts run on that call.
- *   - once a day with {"job": "cleanup"} (03:30 UTC) and
- *     {"job": "analytics"} (05:10 UTC), 0070: lib/daily-jobs.ts.
+ *   - once a day with {"job": "cleanup"} (03:30 UTC), 0070, and the
+ *     morning analytics copy: {"job": "analytics", "team", "platform"} once
+ *     per team and platform at 05:10 UTC and {"job": "analytics", "retry":
+ *     true} at 05:40 and 06:40 (0082): lib/daily-jobs.ts.
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,12 +35,13 @@ async function handle(request: Request) {
   if (!authorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown } | null) : null;
+  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown } | null) : null;
   if (body?.job === "cleanup") {
     const r = await runCleanupJob();
     return NextResponse.json(r, { status: r.ok ? 200 : 500 });
   }
-  if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob());
+  // One team and platform at a time (0082), or the retries.
+  if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob({ team: body.team, platform: body.platform, retry: body.retry }));
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);

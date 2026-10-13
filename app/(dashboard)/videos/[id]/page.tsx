@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { numbersVisibility } from "@/modules/analytics/lib/accounts";
+import { visibleRows } from "@/modules/analytics/lib/account-rules";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership, canActOnStage } from "@/lib/permissions/membership";
@@ -127,6 +129,13 @@ export default async function ProjectDetailPage({
     // Package: the Studio's winner (or first variation) for the summary card.
     supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
   ]);
+  // Where this video has its own analytics page (1.17.0): its videos on the accounts connected now.
+  const analyticsIds =
+    tab === "publish" || tab === "done"
+      ? (Object.fromEntries(
+          visibleRows(((await supabase.from("analytics_content").select("platform, external_id").eq("team_id", teamId).eq("project_id", id).limit(10)).data ?? []) as { platform: string; external_id: string }[], await numbersVisibility(supabase, teamId)).map((r) => [r.platform, r.external_id])
+        ) as Record<string, string>)
+      : {};
   const packageCount = packageRows?.length ?? 0;
   const winners = (packageRows ?? []).filter((r) => r.is_winner);
   const winner = winners[0] ?? null;
@@ -529,6 +538,7 @@ export default async function ProjectDetailPage({
               )}
               {(tab === "publish" || tab === "done") && (
                 <PostPanel
+                  analyticsIds={analyticsIds}
                   projectId={id}
                   isCurrent={project.stage === "publish" || project.stage === "done"}
                   canAct={userIsMaster || myRoles.includes("publisher")}

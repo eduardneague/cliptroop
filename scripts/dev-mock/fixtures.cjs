@@ -200,6 +200,36 @@ if (!process.env.MOCK_FB_NO_EARNINGS)
   for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
 // Analytics → Advanced (0081): every other number, the splits, retention curves, each video's money, more videos.
 const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, contentRows, revenue, shorts, LAST_DAY });
+// A video's own analytics page (1.17.0): the Advanced videos' views day by day since they were
+// posted, a fast start that fades (YouTube: each day's own number; the others: the running total
+// each morning, kept for the last 12 days, as the copies do since 1.15).
+{
+  const dayOf = (iso) => iso.slice(0, 10);
+  const last = day(TODAY_N - 1);
+  const dnum = (d) => Math.round(Date.parse(`${d}T00:00:00Z`) / 86400000);
+  for (const c of contentRows) {
+    if (!/^(ytS|ytL|inR|tiR|faR)/.test(c.external_id) || !c.published_at) continue;
+    const start = dayOf(c.published_at);
+    const age = dnum(last) - dnum(start);
+    if (age < 0) continue;
+    const tau = c.kind === "long" ? 9 : 3.2;
+    const weights = Array.from({ length: age + 1 }, (_, a) => Math.exp(-a / tau) * (0.85 + 0.3 * rnd()) + 0.004);
+    const sum = weights.reduce((x, y) => x + y, 0);
+    let run = 0;
+    weights.forEach((w, a) => {
+      const v = Math.round((c.views * w) / sum);
+      run += v;
+      const d = new Date((dnum(start) + a) * 86400000).toISOString().slice(0, 10);
+      if (c.platform === "youtube") {
+        if (a <= 120) contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: d, source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+      } else if (dnum(last) - dnum(d) <= 12) {
+        // The morning copy of the next day saw the total up to the end of this one.
+        const next = new Date((dnum(d) + 1) * 86400000).toISOString().slice(0, 10);
+        contentDays.push({ team_id: TEAM, platform: c.platform, external_id: c.external_id, day: next, source: "total", views: run, likes: Math.round(run * 0.06), comments: Math.round(run * 0.003), shares: Math.round(run * 0.004), updated_at: at(TODAY_N, 8) });
+      }
+    });
+  }
+}
 const incomes = [
   { id: "eeeeeeee-0000-4000-8000-000000000001", team_id: TEAM, day: day(-5), source: "sponsorship", amount: 750, currency: "USD", note: "Brand X: street food short", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
   { id: "eeeeeeee-0000-4000-8000-000000000002", team_id: TEAM, day: day(-12), source: "brand_deal", amount: 1200, currency: "USD", note: "Bakery tour long video", short_id: null, project_id: null, short_videos: null, long_video_projects: null },
@@ -497,6 +527,16 @@ module.exports = {
     analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
     analytics_content_days: contentDays,
+    // The morning copy's runs (0082): today's, one that ran out of time two days ago, one failed.
+    job_runs: (() => {
+      const t = (hAgo, s = 0) => new Date(Date.now() - hAgo * 3600000 + s * 1000).toISOString();
+      return [
+        { id: 1, job: "analytics", team_id: TEAM, platform: "youtube", started_at: t(5), finished_at: t(5, 21), ok: true, detail: "1840 rows" },
+        { id: 2, job: "analytics", team_id: TEAM, platform: "instagram", started_at: t(5), finished_at: t(5, 9), ok: true, detail: "212 rows" },
+        { id: 3, job: "analytics", team_id: TEAM, platform: "facebook", started_at: t(5), finished_at: t(5, 4), ok: false, detail: "Error validating access token: Session has expired" },
+        { id: 4, job: "analytics", team_id: TEAM, platform: "youtube", started_at: t(53), finished_at: null, ok: null, detail: null },
+      ];
+    })(),
     analytics_syncs: syncs,
     analytics_revenue_daily: revenue,
     analytics_breakdowns: ADV.breakdowns,

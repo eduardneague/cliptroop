@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.16.0" src="https://img.shields.io/badge/version-1.16.0-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.17.0" src="https://img.shields.io/badge/version-1.17.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -105,8 +105,9 @@ and anything that goes wrong is explained, with a retry.
 Views, watch time, followers and revenue from every platform, where your
 audience is, and how much the team made, side by side. Copied every morning.
 Advanced has every number the platforms share (retention, traffic sources,
-search terms, who's watching, each video in detail) and What works, the
-patterns in your own videos.
+search terms, who's watching), your best performing videos and What works,
+the patterns in your own videos. Every video has its own page: how it did
+next to your typical one, day by day, and where its views came from.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/scene-measure-dark.png">

@@ -76,7 +76,7 @@ function videoBlock(v: AdvVideo, i: number, data: ClaudeExportData, a: AdvancedD
   out.push(`#### ${i}. "${md(v.title || "Untitled")}"`);
   out.push(`${meta.join(" · ")}`);
   const nums = [
-    v.views !== null ? `${int(v.views)} views` : null,
+    v.views !== null ? `${int(v.views)} views${v.score !== null && v.score !== undefined ? ` (${v.score >= 10 ? Math.round(v.score) : v.score.toFixed(1)}× the typical ${v.kind === "long" ? "long video" : "short"}: ${int(v.typical)})` : ""}` : null,
     v.engagedViews !== null ? `${int(v.engagedViews)} engaged views` : null,
     v.reach !== null ? `reach ${int(v.reach)}` : null,
     v.watchMinutes !== null ? `${fmt("hours", v.watchMinutes / 60, a.currency)} watched` : null,

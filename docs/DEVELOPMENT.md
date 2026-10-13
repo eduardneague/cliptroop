@@ -179,6 +179,10 @@ the page is live, or React throws that part away (production error #418).
   again). A popup with a form fills it with `useFillOnOpen(open, key, fill)`
   (`lib/hooks/use-fill-on-open.ts`): when it opens, never again while it
   stays open, so a live update can't wipe what someone is typing.
+- **"/" on a page with its own search box** (Analytics → Content): give the
+  input `data-page-search`; the app's search (`components/search/global-search.tsx`)
+  then focuses it instead of opening the palette (⌘K / Ctrl+K still opens
+  the palette everywhere).
 - A `<fieldset>` only shrinks below its content with `min-w-0` (browsers
   give it `min-width: min-content`): add it to any fieldset inside a grid or
   a phone-width dialog.
@@ -387,6 +391,46 @@ the other). Hooks come from the video's own script (`lib/hooks.ts`:
 staging, then review, then write). A new number = a column (migration), the
 sync line that fills it, a tile in `advanced.ts` and its label in
 `advanced-labels.ts`.
+
+**A video's own analytics (1.17.0).** `/analytics/video/<platform>/<id>`
+(`?tab=advanced`, `?from=content|advanced|audience|dashboard` for the back
+link): `getVideoAnalytics()` in `modules/analytics/lib/video.ts` (the person's
+own client and `numbersVisibility()`, like every reader). "× typical" (the
+outlier score, `lib/scores.ts`, pure and tested): views ÷ the median views of
+the same platform's videos of the same kind posted just before it (up to
+30; fewer than 5 before it → all the others). The same scores sit on
+`AdvVideo.score` (`withScores()`), the Content tab's items and Download for
+Claude. Growth: `cumulativeByAge()` turns analytics_content_days into views
+since posting (YouTube's per-day numbers, or the copies' running totals with
+straight lines between them), `typicalCurve()` takes the median of the 30
+before it at each age (kept from falling) and is only drawn where it
+overlaps 3+ days. YouTube can send any video's whole day-by-day history: the
+page calls `fillVideoHistory()` when its first days are missing (the video
+for its whole life, up to 9 of the ones before it for their first 60 days;
+at most every 30 minutes per video and server), `fetchYouTubeVideoHistory()`
+in `sync.ts` saves it (0 for quiet days between the first and last YouTube
+answered for). Every list of videos links here (`videoHref()` in
+`components/content-list.tsx`).
+
+**Analytics → Content (1.17.0).** `components/content-list.tsx`: the range's
+videos from `getContent()` plus `searchVideos()` → `findVideos()` (every video
+ever copied: the platform's title, the ClipTroop short's or long video's
+title, or `#number`; best matches first). Sorting and the Shorts / Long
+filter happen in the browser; the table / grid choice is kept on the device
+(`vp-content-view`).
+
+**The morning copy (0082).** The 05:10 UTC timer runs `analytics_morning()`:
+one `posting_call()` per team and platform with an active account, so each
+gets its own function time. `runAnalyticsJob({ team, platform })` copies just
+that one (`syncTeamAnalytics(team, { only, log })`); 05:40 and 06:40
+(`{retry: true}`) copy whatever wasn't copied fine since 04:00 UTC, then the
+projections of teams without accounts and the timer check. Every run writes
+`job_runs` (started, finished, ok, detail: `lib/job-runs.ts`); a run without a
+finish ran out of time. `status_checks()` reads it, so "Analytics updates"
+says why a copy is late (out of time, failed, never started), and Developer
+→ Status lists the runs. Status problems alert with a stable text
+(`Check.alert`): once when they start, at most once a day (record_app_error,
+source "job"), and once when they're over (`reportFixed()`).
 
 **Download for Claude.** `modules/analytics/export/`: the dialog
 (`claude-export.tsx`), `build-text.ts` and `build-pdf.ts`, all in the

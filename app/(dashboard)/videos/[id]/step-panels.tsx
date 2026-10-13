@@ -5,7 +5,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { CheckIcon, CopyIcon, ExternalIcon } from "@/components/ui/icons";
+import { AnalyticsIcon, CheckIcon, CopyIcon, ExternalIcon } from "@/components/ui/icons";
+import Link from "next/link";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { markEdited, markFilmed, reviewLong, saveLongDescription, setLongPlatforms, setLongPosted } from "./actions";
 
@@ -306,8 +307,11 @@ export function PostPanel({
   isMaster,
   platforms,
   posts,
+  analyticsIds = {},
 }: {
   projectId: string;
+  /** Each platform's video id where it has its own analytics page (1.17.0). */
+  analyticsIds?: Record<string, string>;
   /** The video is at Post or already Posted. */
   isCurrent: boolean;
   canAct: boolean;
@@ -391,6 +395,12 @@ export function PostPanel({
                       {post ? <>{`Posted ${post.postedBy ? `by ${post.postedBy}, ` : ""}`}<Ago iso={post.postedAt} /></> : "Not posted yet"}
                     </div>
                   </div>
+                  {post && analyticsIds[pid] && (
+                    <Link href={`/analytics/video/${pid}/${encodeURIComponent(analyticsIds[pid])}?from=content`} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-amber hover:bg-amber/10" title="This video's analytics">
+                      <AnalyticsIcon className="w-4 h-4" />
+                      <span className="hidden sm:inline">Analytics</span>
+                    </Link>
+                  )}
                   {post?.url && (
                     <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-amber hover:opacity-80" aria-label="Open the post">
                       <ExternalIcon className="w-4 h-4" />

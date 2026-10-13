@@ -15,6 +15,7 @@ import { FindingCard, PatternsBlock } from "./findings";
 import { RetentionChart } from "./retention-chart";
 import { Breakdown } from "./breakdowns";
 import { VideoTable } from "./videos";
+import { BestPerforming } from "./best";
 import { formatValue, niceDay, pctOf } from "./format";
 
 const NAME: Record<SocialPlatform, string> = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
@@ -50,6 +51,7 @@ export function AdvancedTab({
   const usable = data.platforms.find((x) => x.platform === p)?.usable ?? false;
   const sections = [
     { id: "glance", label: "At a glance", show: data.groups.length > 0 },
+    { id: "best", label: "Best performing", show: data.videos.length > 0 },
     { id: "works", label: "What works", show: true },
     { id: "daily", label: "Day by day", show: data.series.length > 0 },
     { id: "retention", label: "Retention", show: !!data.retention },
@@ -141,6 +143,12 @@ export function AdvancedTab({
           {data.groups.length > 0 && (
             <Section id="glance" title="At a glance" sub={`${niceDay(data.days[0])} – ${niceDay(data.days[data.days.length - 1], true)}${compare ? ", next to the same stretch before" : ""}`}>
               <MetricGroups groups={data.groups} compare={compare} currency={data.currency} />
+            </Section>
+          )}
+
+          {data.videos.length > 0 && (
+            <Section id="best" title="Best performing" sub={`Your top ${NAME[p]} videos by what matters. Click one for everything about it.`}>
+              <BestPerforming data={data} />
             </Section>
           )}
 
