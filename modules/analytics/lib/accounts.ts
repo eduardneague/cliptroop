@@ -17,7 +17,7 @@ export { inAccountTime, sameAccount, visibleRows, type NumbersVisibility } from 
 
 type Db = SupabaseClient<any, any, any>;
 
-/** Every table with a platform's copied numbers (0081 added the breakdowns, retention curves and each video's money). */
+/** Every table with a platform's copied numbers (0081 added the breakdowns, retention curves and each video's money; 0083 the live counts). */
 const NUMBER_TABLES = [
   "analytics_daily",
   "analytics_countries",
@@ -27,6 +27,7 @@ const NUMBER_TABLES = [
   "analytics_breakdowns",
   "analytics_retention",
   "analytics_content_revenue",
+  "analytics_live",
 ] as const;
 
 
@@ -84,6 +85,14 @@ export async function adoptAccount(
     },
     { onConflict: "team_id,platform" }
   );
+  // The live counts and the reach reports start over too (0083; before it, nothing to reset).
+  await admin
+    .from("analytics_syncs")
+    .update({ live_at: null, live_full_at: null, live_error: null, live_cursor: null, live_totals: null, reach_job: null, reach_after: null, reach_checked_at: null, reach_note: null })
+    .eq("team_id", teamId)
+    .eq("platform", platform);
+  // And YouTube's history goes back again from the new account's first copy (0085).
+  await admin.from("analytics_syncs").update({ history_from: null, history_done: false }).eq("team_id", teamId).eq("platform", platform);
   return { purged: true };
 }
 

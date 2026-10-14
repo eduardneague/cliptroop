@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 
-/** Objectives or Projections (?view=), in the shape the page arrives in: title and tabs, the overview, the toolbar, a grid of cards. */
+/** Objectives or Projections (?view=), in the shape the page arrives in: title and tabs, the overview, the toolbar, the table (1.18.0: the first view). */
 export default function Loading() {
   const projections = useSearchParams().get("view") === "projections";
   const tab = (on: boolean) => `flex-1 sm:flex-none inline-flex items-center justify-center rounded-md px-3.5 h-8 text-[13px] font-semibold ${on ? "bg-ink text-paper" : "text-ink-soft"}`;
@@ -37,19 +37,39 @@ export default function Loading() {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 mb-4" aria-hidden>
-          <div className="flex items-start gap-4 sm:gap-6">
-            <Skeleton className="w-[92px] h-[92px] sm:w-[140px] sm:h-[140px] rounded-[28px] flex-shrink-0" />
-            <div className="flex-1 min-w-0 divide-y divide-line/10">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="py-2 first:pt-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <Skeleton className="h-3.5 w-24" />
-                    <Skeleton className="h-3.5 w-12" />
-                  </div>
-                  <Skeleton className="h-2.5 w-full mt-2 rounded-[3px]" />
-                </div>
+        // Reached now · the win streak · days since the last win (1.18.0).
+        <div className="rounded-2xl border border-line/10 bg-surface mb-4 grid divide-y divide-line/10 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,0.8fr)] lg:divide-x" aria-hidden>
+          <div className="p-4 sm:p-5 flex items-center gap-4 sm:col-span-2 lg:col-span-1 sm:border-b sm:border-line/10 lg:border-b-0">
+            <Skeleton className="w-16 h-16 sm:w-[84px] sm:h-[84px] rounded-full flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-6 w-14" />
+              <div className="flex gap-1.5">
+                <Skeleton className="h-6 w-20 rounded-md" />
+                <Skeleton className="h-6 w-24 rounded-md" />
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-9 h-11 rounded-lg" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-6 w-28" />
+              </div>
+            </div>
+            <div className="mt-3 flex gap-1 justify-between max-w-[300px]">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="w-[22px] h-[22px] rounded-[5px]" />
               ))}
+            </div>
+            <Skeleton className="h-3 w-52 max-w-full mt-3" />
+          </div>
+          <div className="p-4 sm:p-5 flex sm:flex-col items-center sm:items-start gap-4 sm:gap-3 sm:border-l lg:border-l-0 border-line/10">
+            <Skeleton className="w-[136px] sm:w-[176px] h-[88px] rounded-lg flex-shrink-0" />
+            <div className="flex-1 space-y-1.5 w-full">
+              <Skeleton className="h-3 w-44 max-w-full" />
+              <Skeleton className="h-3.5 w-32" />
             </div>
           </div>
         </div>
@@ -57,25 +77,30 @@ export default function Loading() {
 
       <div className="flex items-center gap-2 mb-4" aria-hidden>
         <Skeleton className="h-9 w-64 max-w-[60%] rounded-lg" />
-        {!projections && <Skeleton className="h-9 w-72 max-w-[40%] rounded-lg" />}
+        {!projections && <Skeleton className="hidden sm:block h-9 w-72 max-w-[40%] rounded-lg" />}
+        <Skeleton className="ml-auto h-9 w-[76px] md:w-36 rounded-lg" />
       </div>
 
-      {!projections && <Skeleton className="h-5 w-40 mb-3" />}
-      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,310px),1fr))]" aria-hidden>
+      {/* The table (the first view; the cards when picked come right after). */}
+      <div className="rounded-2xl border border-line/10 bg-surface overflow-hidden" aria-hidden>
+        <div className="hidden md:flex items-center gap-4 px-3 h-9 bg-surface-2">
+          {["w-20", "w-16", "w-14", "w-16"].map((w, i) => (
+            <Skeleton key={i} className={`h-2.5 ${w} ${i === 0 ? "flex-1 max-w-[80px] mr-auto" : ""}`} />
+          ))}
+        </div>
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="rounded-2xl border border-line/10 bg-surface p-4">
-            <div className="flex items-start gap-2.5">
-              <Skeleton className="w-8 h-8 rounded-lg" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-4 w-36" />
-                <Skeleton className="h-3 w-52 max-w-full" />
-              </div>
-              <Skeleton className="h-5 w-16 rounded-md" />
+          <div key={i} className="flex items-center gap-3 px-3.5 md:px-3 py-3 border-t border-line/10 first:border-t-0 md:first:border-t">
+            <Skeleton className="w-6 h-6 rounded-md flex-shrink-0" />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <Skeleton className={`h-3.5 ${["w-40", "w-32", "w-44", "w-36", "w-28", "w-40"][i]} max-w-full`} />
+              <Skeleton className="h-2.5 w-56 max-w-full" />
             </div>
-            <Skeleton className="h-7 w-28 mt-4" />
-            <Skeleton className="h-2 w-full mt-3 rounded-[3px]" />
-            <Skeleton className="h-3 w-44 mt-2" />
-            <Skeleton className="h-10 w-full mt-4" />
+            <div className="hidden md:block w-[200px] space-y-1.5">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-1.5 w-full rounded-[3px]" />
+            </div>
+            <Skeleton className="h-[22px] w-16 rounded-md" />
+            <Skeleton className="hidden lg:block h-3 w-20 ml-6" />
           </div>
         ))}
       </div>

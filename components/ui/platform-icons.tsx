@@ -19,18 +19,17 @@ export function TikTokIcon({ className }: { className?: string }) {
   );
 }
 
+/*
+ * Its gradient (1.20.0): a CSS background on the icon itself, no SVG
+ * gradient. With one shared id, every Instagram logo used the first one's
+ * (a hidden one drew the rest without colour, 1.18.0); with an id per icon
+ * (useId), pages loaded in parts got other ids in the browser than on the
+ * server (a hydration mismatch). A background needs no id at all.
+ */
+const IG_BACKGROUND = "linear-gradient(45deg, #FEDA75 0%, #D62976 35%, #962FBF 70%, #4F5BD5 100%)";
 export function InstagramIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className}>
-      <defs>
-        <linearGradient id="ig-grad" x1="0" y1="24" x2="24" y2="0">
-          <stop offset="0" stopColor="#FEDA75" />
-          <stop offset="0.35" stopColor="#D62976" />
-          <stop offset="0.7" stopColor="#962FBF" />
-          <stop offset="1" stopColor="#4F5BD5" />
-        </linearGradient>
-      </defs>
-      <rect width="24" height="24" rx="6" fill="url(#ig-grad)" />
+    <svg viewBox="0 0 24 24" className={className} style={{ background: IG_BACKGROUND, borderRadius: "25%" }}>
       <rect x="6.5" y="6.5" width="11" height="11" rx="3.2" fill="none" stroke="#fff" strokeWidth="1.4" />
       <circle cx="12" cy="12" r="3.1" fill="none" stroke="#fff" strokeWidth="1.4" />
       <circle cx="16.1" cy="7.9" r="0.9" fill="#fff" />

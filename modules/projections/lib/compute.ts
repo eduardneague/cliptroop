@@ -106,7 +106,7 @@ export function valueAt(metric: string, rawScope: ProjScope, data: ProjData, tod
   };
   // Only YouTube splits shorts and long videos: with a split asked for, the others have nothing to add.
   const viewsOn = (p: string, d: string) =>
-    content !== "all" && p !== "youtube" ? null : p === "tiktok" ? delta(p, d, "total_views") : num(at(p, d, p === "youtube" ? content : "all")?.views);
+    content !== "all" && p !== "youtube" ? null : p === "tiktok" ? (num(at(p, d)?.views) ?? delta(p, d, "total_views")) : num(at(p, d, p === "youtube" ? content : "all")?.views);
   const field = (p: string, d: string, f: keyof PDaily, c = content) => (c !== "all" && p !== "youtube" ? null : num(at(p, d, p === "youtube" ? c : "all")?.[f]));
   const total = (f: (p: string, d: string) => number | null, plats = ps) => sum(plats.flatMap((p) => days.map((d) => f(p, d))));
   // Only days where both numbers exist (a rate never mixes a day's likes with another day's views).

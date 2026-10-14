@@ -274,10 +274,14 @@ export function HomeIcon(p: IconProps) {
 
 /** A long video: a solid landscape (16:9) card with a centered play triangle. */
 /** Long videos: a solid landscape (16:9) card, play triangle cut out and centred. */
+/** The long-video and Shorts shapes on a 24×24 grid (also drawn inside charts: Analytics' "posted" marks). */
+export const VIDEO_ICON_PATH = "M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z";
+export const SHORTS_ICON_PATH = "M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z";
+
 export function VideoIcon(p: IconProps) {
   return (
     <Svg {...p} fill="currentColor" strokeWidth={0}>
-      <path fillRule="evenodd" d="M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z" />
+      <path fillRule="evenodd" d={VIDEO_ICON_PATH} />
     </Svg>
   );
 }
@@ -426,7 +430,7 @@ export function UserIcon(p: IconProps) {
 export function ShortsIcon(p: IconProps) {
   return (
     <Svg {...p} fill="currentColor" strokeWidth={0}>
-      <path fillRule="evenodd" d="M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z" />
+      <path fillRule="evenodd" d={SHORTS_ICON_PATH} />
     </Svg>
   );
 }
@@ -925,6 +929,45 @@ export function TrendIcon(p: IconProps) {
     <Svg {...p}>
       <path d="M3 17l6-6 4 4 8-8" />
       <path d="M14 7h7v7" />
+    </Svg>
+  );
+}
+
+/** Likes (Analytics, 1.21.0): a thumb up. */
+export function ThumbUpIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M7.5 10.5v9h-3a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3Z" />
+      <path d="M7.5 10.5 11 3.75a2.1 2.1 0 0 1 3 1.9v3.35h4.4a2 2 0 0 1 2 2.3l-1.1 6.6a2 2 0 0 1-2 1.6H7.5" />
+    </Svg>
+  );
+}
+
+/** Comments (Analytics, 1.21.0): a speech bubble. */
+export function CommentIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M20.25 11.6c0 4-3.7 7.15-8.25 7.15a9.4 9.4 0 0 1-3.1-.52L4.5 19.75l1.2-3.4a6.6 6.6 0 0 1-1.95-4.75c0-3.95 3.7-7.1 8.25-7.1s8.25 3.15 8.25 7.1Z" />
+    </Svg>
+  );
+}
+
+/** Shares (Analytics, 1.21.0): an arrow leaving a box. */
+export function ShareIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3.75v11M7.75 8 12 3.75 16.25 8" />
+      <path d="M5.25 12.5v5.75a2 2 0 0 0 2 2h9.5a2 2 0 0 0 2-2V12.5" />
+    </Svg>
+  );
+}
+
+/** Money (Analytics, 1.21.0): a coin. */
+export function MoneyIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.75" />
+      <path d="M14.6 9.1c-.5-.8-1.5-1.35-2.6-1.35-1.55 0-2.75.85-2.75 2.05 0 2.85 5.6 1.45 5.6 4.3 0 1.25-1.25 2.15-2.85 2.15-1.2 0-2.25-.55-2.75-1.4M12 6v1.75M12 16.25V18" />
     </Svg>
   );
 }

@@ -43,6 +43,15 @@ const ALL_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-top", type: "topVideos", x: 0, y: 13, w: 6, h: 4 },
   { id: "w-word", type: "word", x: 6, y: 13, w: 2, h: 4 },
   { id: "w-objectives", type: "objectives", x: 8, y: 13, w: 4, h: 4 },
+  { id: "w-streak", type: "streak", x: 0, y: 17, w: 3, h: 3 },
+] };
+// MOCK_LAYOUT=streak: the Win streak widget at MOCK_STREAK_SIZE (columns x rows, default 3x3) beside the Objectives widget.
+const [SW, SH] = String(process.env.MOCK_STREAK_SIZE || "3x3").split("x").map(Number);
+const STREAK_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
+  { id: "w-streak", type: "streak", x: 0, y: 0, w: SW, h: SH },
+  { id: "w-objectives", type: "objectives", x: Math.min(SW, 8), y: 0, w: 4, h: 3, settings: { show: "all" } },
+  { id: "w-cal", type: "minicalendar", x: Math.min(SW + 4, 10), y: 0, w: 2, h: 4 },
+  { id: "w-tasks", type: "tasks", x: 0, y: Math.max(SH, 4), w: 4, h: 5 },
 ] };
 // MOCK_LAYOUT=objectives: the Objectives widget at MOCK_OBJ_SIZE (columns x rows, default 4x3) with a few others,
 // MOCK_OBJ_SHOW=week (or day, month…) shows one cadence, MOCK_OBJ_IDS=1,2 picks objectives by number.
@@ -53,7 +62,7 @@ const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -101,6 +110,8 @@ const shorts = SHORT_TITLES.map((title, i) => {
     short_video_events: [
       { id: 900 + i * 3, kind: "stage", from_stage: "script", to_stage: "editing", platform: null, note: null, created_at: at(-6 + i * 0.2), actor_id: U[1], actor: { username: "maria", full_name: "Maria Popescu", email: null, avatar_url: null } },
       { id: 901 + i * 3, kind: "created", from_stage: null, to_stage: "script", platform: null, note: null, created_at: at(-20 + i), actor_id: U[0], actor: { username: "edu", full_name: "Edu Marin", email: null, avatar_url: null } },
+      // Posted by the app itself (no person): the activity shows Clip, the logo (1.18.0).
+      ...(stage === "posted" ? [{ id: 902 + i * 3, kind: "posted", from_stage: null, to_stage: null, platform: "youtube", note: null, created_at: at(i - 3), actor_id: null, actor: null }] : []),
     ],
     short_videos: { entry_number: 231 + i, title, team_id: TEAM },
   };
@@ -160,6 +171,17 @@ for (let d = OBJ ? -90 : -60; d <= LAST_DAY; d++) {
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "all", views: yt, watch_minutes: Math.round(yt * 0.55), avg_view_seconds: 31, likes: Math.round(yt * 0.04), comments: Math.round(yt * 0.003), shares: Math.round(yt * 0.002), saves: null, reach: null, followers_gained: Math.round(120 + 60 * rnd()), followers_lost: Math.round(20 + 10 * rnd()), followers: d === 0 ? 182400 : null, total_views: d === 0 ? 48200000 : null, total_likes: null });
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "shorts", views: Math.round(yt * 0.72) });
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "long", views: Math.round(yt * 0.28) });
+  // Impressions and CTR per day (0083; MOCK_NO_REACH=1: none yet): Shorts click less than long videos.
+  if (!process.env.MOCK_NO_REACH) {
+    const [ytAll, ytS, ytL] = daily.slice(-3);
+    const iS = Math.round(yt * 0.72 * 4);
+    const iL = Math.round(yt * 0.28 * 12);
+    const cS = Math.round((2.6 + 0.6 * rnd()) * 100) / 100;
+    const cL = Math.round((5.2 + 1.1 * Math.sin(d / 6) + 0.8 * rnd()) * 100) / 100;
+    Object.assign(ytS, { impressions: iS, ctr: cS });
+    Object.assign(ytL, { impressions: iL, ctr: cL });
+    Object.assign(ytAll, { impressions: iS + iL, ctr: Math.round(((iS * cS + iL * cL) / (iS + iL)) * 100) / 100 });
+  }
   daily.push({ team_id: TEAM, platform: "instagram", day: dd, content: "all", views: ig, likes: Math.round(ig * 0.05), comments: Math.round(ig * 0.004), shares: Math.round(ig * 0.003), saves: Math.round(ig * 0.006), reach: Math.round(ig * 0.7), followers: 64000 + (d + 60) * 12, followers_gained: null, followers_lost: null, watch_minutes: null, total_views: null, total_likes: null });
   // MOCK_TT_FIRST=1: TikTok was just connected (one copy, today).
   if (!process.env.MOCK_TT_FIRST || d === 0) daily.push({ team_id: TEAM, platform: "tiktok", day: dd, content: "all", followers: 120000 + (d + 60) * 40, total_views: 9000000 + (d + 60) * 9500 + Math.round(4000 * rnd()), total_likes: 700000 + (d + 60) * 600, views: null });
@@ -180,7 +202,7 @@ const TODAY_N = OBJ ? LAST_DAY + 1 : 0;
 for (let d = 1; d <= 28; d++)
   for (const c of contentRows.filter((r) => r.platform === "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d))) {
     const v = Math.round((c.views / 30) * (0.35 + rnd()) * (c.kind === "long" ? 1.6 : 1));
-    contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: day(TODAY_N - d), source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+    contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: day(TODAY_N - d), source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), subscribers_gained: Math.round(v * (c.kind === "long" ? 0.004 : 0.0012)), avg_view_seconds: c.kind === "long" ? 240 + Math.round(rnd() * 80) : 21 + Math.round(rnd() * 6), impressions: Math.round(v * (c.kind === "long" ? 14 : 1.1)), ctr: c.kind === "long" ? Math.round((5 + rnd() * 3) * 10) / 10 : null, updated_at: at(TODAY_N, 8) });
   }
 for (let d = 0; d <= 6; d++)
   for (const c of contentRows.filter((r) => r.platform !== "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d)))
@@ -200,6 +222,17 @@ if (!process.env.MOCK_FB_NO_EARNINGS)
   for (let d = -120; d <= -1; d++) revenue.push({ team_id: TEAM, platform: "facebook", day: day(d), content: "all", revenue: Math.round((6 + 4 * Math.sin(d / 6) + 5 * rnd()) * 100) / 100, currency: "USD" });
 // Analytics → Advanced (0081): every other number, the splits, retention curves, each video's money, more videos.
 const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, contentRows, revenue, shorts, LAST_DAY });
+// Every video within minutes (1.19.0, 0083): YouTube's impressions and CTR (MOCK_NO_REACH=1: the
+// Reporting API isn't on yet, so none), when each video's counts were last read, and the live counts.
+for (const c of contentRows) {
+  if (c.platform === "youtube" && !process.env.MOCK_NO_REACH && c.views) {
+    const ctr = Math.round((c.kind === "long" ? 4.5 + 4 * rnd() : 2.5 + 7 * rnd()) * 100) / 100;
+    c.impressions = Math.round(c.views / (ctr / 100) / (c.kind === "long" ? 2.2 : 6));
+    c.ctr = ctr;
+  }
+  c.live_at = new Date(Date.now() - (3 + Math.round(5 * rnd())) * 60e3).toISOString();
+}
+const LIVE = require("./live.cjs").liveFixtures({ TEAM, contentRows });
 // A video's own analytics page (1.17.0): the Advanced videos' views day by day since they were
 // posted, a fast start that fades (YouTube: each day's own number; the others: the running total
 // each morning, kept for the last 12 days, as the copies do since 1.15).
@@ -221,7 +254,7 @@ const ADV = require("./advanced.cjs").advancedFixtures({ TEAM, day, at, daily, c
       run += v;
       const d = new Date((dnum(start) + a) * 86400000).toISOString().slice(0, 10);
       if (c.platform === "youtube") {
-        if (a <= 120) contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: d, source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+        if (a <= 120) contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: d, source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), subscribers_gained: Math.round(v * (c.kind === "long" ? 0.004 : 0.0012)), avg_view_seconds: c.kind === "long" ? 240 + Math.round(rnd() * 80) : 21 + Math.round(rnd() * 6), impressions: Math.round(v * (c.kind === "long" ? 14 : 1.1)), ctr: c.kind === "long" ? Math.round((5 + rnd() * 3) * 10) / 10 : null, updated_at: at(TODAY_N, 8) });
       } else if (dnum(last) - dnum(d) <= 12) {
         // The morning copy of the next day saw the total up to the end of this one.
         const next = new Date((dnum(d) + 1) * 86400000).toISOString().slice(0, 10);
@@ -306,6 +339,11 @@ const syncs = ["youtube", "instagram", "tiktok", "facebook"].map((pl) => ({
   // Whose numbers (0079). MOCK_SWITCHED=1: the Facebook Page was replaced 5 days ago.
   account_ref: pl === "facebook" ? "123456789" : "ext-" + pl,
   account_since: pl === "facebook" && process.env.MOCK_SWITCHED ? at(-5, 14) : null,
+  // The 10-minute job (0083): when it last read the account, its totals now, the reach reports.
+  live_at: process.env.MOCK_LIVE === "0" ? null : new Date(Date.now() - (pl === "youtube" ? 4 : 6) * 60e3).toISOString(),
+  live_error: null,
+  live_totals: { youtube: { followers: 412300, total_views: 98400000, videos: 1034 }, instagram: { followers: 61800, videos: 1210 }, tiktok: { followers: 152000, total_likes: 4100000, videos: 988 }, facebook: { followers: 23800 } }[pl],
+  reach_note: pl === "youtube" && process.env.MOCK_NO_REACH ? "Impressions and CTR need the YouTube Reporting API: turn it on in Google Cloud (APIs & Services → Library → YouTube Reporting API → Enable)." : null,
 }));
 // MOCK_FB_ANALYTICS_ONLY=1: a Facebook Page connected before posting (no pages_manage_posts).
 const STATS = {
@@ -400,6 +438,38 @@ module.exports = {
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
     can_view_revenue: true,
+    // Realtime (0083): views per hour and per video from the live counts.
+    analytics_live_hours: (b) => LIVE.hours(b),
+    analytics_live_gains: (b) => LIVE.gains(b),
+    analytics_live_buckets: (b) => LIVE.buckets(b),
+    // The search bar (no projects or people in the mock's search: its videos come from searchVideos).
+    global_search: () => ({ people: [], projects: [], shorts: [], teams: [], master_teams: [] }),
+    // The Overview's top content (0084): YouTube's own days, the others' running totals.
+    analytics_top_content: (b) => {
+      const [a, z] = [b.p_from, b.p_to].sort();
+      const next = new Date(Date.parse(`${z}T00:00:00Z`) + 86400e3).toISOString().slice(0, 10);
+      const want = (p) => !b.p_platforms || b.p_platforms.includes(p);
+      const out = new Map();
+      const totals = new Map();
+      for (const r of contentDays) {
+        if (r.team_id !== b.p_team || !want(r.platform)) continue;
+        const k = `${r.platform}|${r.external_id}`;
+        if (r.source === "daily" && r.day >= a && r.day <= z) out.set(k, (out.get(k) ?? 0) + (r.views ?? 0));
+        if (r.source === "total" && r.views !== null && r.day >= a && r.day <= next) totals.set(k, [...(totals.get(k) ?? []), r]);
+      }
+      for (const [k, list] of totals) {
+        list.sort((x, y) => x.day.localeCompare(y.day));
+        const [platform, id] = k.split("|");
+        const c = contentRows.find((x) => x.platform === platform && x.external_id === id);
+        const base = c?.published_at && c.published_at.slice(0, 10) >= a ? 0 : list[0].views;
+        out.set(k, Math.max(0, list[list.length - 1].views - base));
+      }
+      return [...out.entries()]
+        .filter(([, v]) => v > 0)
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, Math.min(100, Math.max(1, b.p_limit ?? 10)))
+        .map(([k, v]) => ({ platform: k.split("|")[0], external_id: k.split("|")[1], views: v, from_totals: !k.startsWith("youtube|") }));
+    },
     // Advanced (0081): the per-day splits added up over a range.
     analytics_breakdown_sums: (b) => {
       const sums = new Map();
@@ -527,6 +597,7 @@ module.exports = {
     analytics_countries: [...countriesRows, ...IGC, ...[["RO", 2400], ["MD", 310], ["IT", 260], ["ES", 190], ["DE", 150], ["GB", 120], ["FR", 90], ["US", 80]].map(([country, value]) => ({ team_id: TEAM, platform: "facebook", metric: "followers", day: day(0), country, value, watch_minutes: null }))],
     analytics_content: contentRows,
     analytics_content_days: contentDays,
+    analytics_live: LIVE.rows,
     // The morning copy's runs (0082): today's, one that ran out of time two days ago, one failed.
     job_runs: (() => {
       const t = (hAgo, s = 0) => new Date(Date.now() - hAgo * 3600000 + s * 1000).toISOString();

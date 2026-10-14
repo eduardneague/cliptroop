@@ -36,7 +36,15 @@ export type AccountProfile = {
   avatarUrl: string | null;
 };
 
-export class ProviderError extends Error {}
+/** A platform's refusal. `status`: its HTTP status (0 when it didn't come from one). */
+export class ProviderError extends Error {
+  constructor(
+    message: string,
+    public status = 0
+  ) {
+    super(message);
+  }
+}
 
 /*
  * Analytics ("stats") permissions, asked for on top of posting. Which
@@ -135,7 +143,7 @@ async function call(url: string, init: RequestInit & { form?: Record<string, str
       (body.error_description as string) ||
       ((body.error as { message?: string })?.message ?? (typeof body.error === "string" ? body.error : "")) ||
       `HTTP ${res.status}`;
-    throw new ProviderError(msg);
+    throw new ProviderError(msg, res.status);
   }
   return body;
 }

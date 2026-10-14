@@ -140,8 +140,10 @@ export default async function SetupPage() {
     { name: "FACEBOOK_APP_ID", what: "Meta app ID (App settings → Basic).", set: env("FACEBOOK_APP_ID"), need: "optional" },
     { name: "FACEBOOK_APP_SECRET", what: "Meta app secret.", set: env("FACEBOOK_APP_SECRET"), need: "optional" },
     { name: "SOCIAL_STATS_PLATFORMS", what: "Which platforms also ask for stats (youtube,instagram,tiktok).", set: env("SOCIAL_STATS_PLATFORMS"), need: "optional" },
+    { name: "LIVE_MINUTES", what: "How often every video's counts are read: empty = every 10 minutes; 20, 30 or 60 for a lighter load (Vercel Hobby's monthly CPU).", set: env("LIVE_MINUTES"), need: "optional" },
     { name: "NEXT_PUBLIC_MAX_VIDEO_MB", what: "Largest upload in MB (50 on the free Supabase plan, 2048 on Pro).", set: env("NEXT_PUBLIC_MAX_VIDEO_MB"), need: "optional" },
-    { name: "DEVELOPER_EMAILS", what: "Developer accounts (comma list of the emails they sign in with): open /developer and /setup, and are the only ones who get app-wide alerts. Empty = ALERT_EMAILS (old name); with neither, production has NO developer (staging falls back to the owner of the first team).", set: env("DEVELOPER_EMAILS") || env("ALERT_EMAILS"), need: "yes" },
+    { name: "DEVELOPER_EMAILS", what: "Developer accounts (comma list of the emails they sign in with): open /developer and /setup, and are the only ones who get app-wide alerts as notifications (never by email: see ALERTS_EMAIL). Empty = ALERT_EMAILS (old name); with neither, production has NO developer (staging falls back to the owner of the first team).", set: env("DEVELOPER_EMAILS") || env("ALERT_EMAILS"), need: "yes" },
+    { name: "ALERTS_EMAIL", what: "The one address every alert, report and test email goes to. Empty = NEXT_PUBLIC_CONTACT_EMAIL, else hello@cliptroop.com.", set: env("ALERTS_EMAIL"), need: "optional" },
     { name: "GIPHY_API_KEY", what: "GIFs in comments.", set: env("GIPHY_API_KEY"), need: "optional" },
     { name: "SUPABASE_PLAN", what: "pro once this Supabase project is on the Pro plan: the developer's Usage page then measures against Pro's 8 GB database and 100 GB of files (else Free's 500 MB and 1 GB).", set: env("SUPABASE_PLAN"), need: "optional" },
   ];

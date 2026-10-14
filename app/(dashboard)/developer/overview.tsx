@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { developers, shouldAlert } from "@/lib/errors";
+import { alertsEmail, developers, shouldAlert } from "@/lib/errors";
 import { emailConfigured } from "@/lib/email";
 import { coreChecks, jobChecks, partName, statusIncidents, vendorChecks } from "@/lib/status";
 import { LEVEL } from "@/lib/status-levels";
@@ -214,7 +214,11 @@ export async function OverviewTab() {
       <Widget title="Alerts" href={T("status", "#alerts")} link="Alert settings" className="sm:col-span-2">
         <ul className="space-y-1.5 text-[13px]">
           <li>
-            <span className="text-ink-soft">Go to </span>
+            <span className="text-ink-soft">Emails: </span>
+            <b className="break-all">{alertsEmail()}</b>
+          </li>
+          <li>
+            <span className="text-ink-soft">Notifications: </span>
             <b className="break-all">{devs.emails.length ? devs.emails.join(", ") : "nobody"}</b>
           </li>
           <li>
@@ -223,7 +227,7 @@ export async function OverviewTab() {
             <span className="text-ink-soft"> · Email: </span>
             {emailConfigured() ? <b className="text-green">set up</b> : <b className="text-gold">not set up</b>}
           </li>
-          <li className="text-[12px] text-ink-faint">Developer accounts: DEVELOPER_EMAILS, matched against the email each person signs in with.</li>
+          <li className="text-[12px] text-ink-faint">Developer accounts (notifications): DEVELOPER_EMAILS, matched against the email each person signs in with. Emails go only to ALERTS_EMAIL.</li>
         </ul>
       </Widget>
     </div>

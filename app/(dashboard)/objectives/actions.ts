@@ -8,11 +8,12 @@ import { isMaster } from "@/lib/permissions/roles";
 import { addWidget, readLayout } from "@/modules/dashboard/layout";
 import { cleanFilters, draftProblem, isMetricId, isObjectiveColor, nextColor, type MetricId, type ObjectiveFilters } from "@/modules/objectives/lib/metrics";
 import { isPeriodKind, isPeriodStart, localNow, periodStart, type PeriodKind } from "@/modules/objectives/lib/periods";
-import { getObjectivesBoard, historyCount, loadOverrides, loadPeople, needsOf, teamTimezone, viewFor, kindOf, type ObjectiveRow } from "@/modules/objectives/lib/board";
+import { getObjectivesBoard, getWinStreak, historyCount, loadOverrides, loadPeople, needsOf, teamTimezone, viewFor, kindOf, type ObjectiveRow } from "@/modules/objectives/lib/board";
 import { loadSources } from "@/modules/objectives/lib/sources";
 import { queueObjectivesSync, syncObjectives } from "@/modules/objectives/lib/sync";
 import { recentPeriods } from "@/modules/objectives/lib/periods";
 import type { Board, ObjectiveView } from "@/modules/objectives/lib/types";
+import type { WinStreak } from "@/modules/objectives/lib/streak";
 import { listTeamPeople, type TeamPerson } from "@/modules/short-videos/lib/queries";
 
 /*
@@ -255,12 +256,27 @@ export async function loadObjectivesBoard(teamId: string, mode: "widget" | "page
   const { supabase, user, member, master } = await who(teamId);
   if (!user) return { error: "Your session expired. Sign in again." };
   if (!member) return { error: "You're not on this team." };
-  const board = await getObjectivesBoard(supabase, teamId, { history: mode === "page" ? "full" : "short", items: mode === "page" });
+  const board = await getObjectivesBoard(supabase, teamId, { history: mode === "page" ? "full" : "short", items: mode === "page", streak: mode === "page" });
   if (board.ready && board.objectives.some((o) => !o.paused)) {
     after(() => syncObjectives(teamId, { throttle: 30 }).then(() => undefined, (e) => console.error("[objectives] load sync", e instanceof Error ? e.message : e)));
   }
   // canEdit: masters get "New objective" right on the dashboard widget.
   return { board: { ...board, canEdit: master } };
+}
+
+/**
+ * The team's win streak (1.18.0): the Win streak widget and the streak card
+ * after a celebration (anyone on the team). Like the board, the server's own
+ * count runs after it (at most every 30 s).
+ */
+export async function loadWinStreak(teamId: string): Promise<R<{ streak: WinStreak | null }>> {
+  if (!UUID.test(teamId)) return { error: "Team not found." };
+  const { supabase, user, member } = await who(teamId);
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!member) return { error: "You're not on this team." };
+  const streak = await getWinStreak(supabase, teamId).catch(() => null);
+  if (streak) after(() => syncObjectives(teamId, { throttle: 30 }).then(() => undefined, (e) => console.error("[objectives] streak sync", e instanceof Error ? e.message : e)));
+  return { streak };
 }
 
 /** The team's people, for the objective editor opened from the dashboard widget (masters). */
@@ -272,8 +288,9 @@ export async function objectiveEditorPeople(teamId: string): Promise<R<{ people:
   return { people: await listTeamPeople(teamId) };
 }
 
-/** "Put it on my dashboard": adds the Objectives widget to your own layout. */
-export async function addObjectivesWidget(): Promise<R<{ added: boolean }>> {
+/** "Put it on my dashboard": adds the Objectives (or the Win streak) widget to your own layout. */
+export async function addObjectivesWidget(type: "objectives" | "streak" = "objectives"): Promise<R<{ added: boolean }>> {
+  if (type !== "objectives" && type !== "streak") return { error: "That widget doesn't exist." };
   const supabase = await createClient();
   const {
     data: { user },
@@ -281,8 +298,8 @@ export async function addObjectivesWidget(): Promise<R<{ added: boolean }>> {
   if (!user) return { error: "Your session expired. Sign in again." };
   const { data } = await supabase.from("profiles").select("dashboard_layout").eq("id", user.id).maybeSingle();
   const layout = readLayout((data as { dashboard_layout?: unknown } | null)?.dashboard_layout);
-  if (layout.widgets.some((w) => w.type === "objectives")) return { added: false };
-  const next = addWidget(layout, "objectives").layout;
+  if (layout.widgets.some((w) => w.type === type)) return { added: false };
+  const next = addWidget(layout, type).layout;
   const { error } = await supabase.from("profiles").update({ dashboard_layout: next }).eq("id", user.id);
   if (error) return { error: "Couldn't change your dashboard. Try again." };
   revalidatePath("/dashboard");

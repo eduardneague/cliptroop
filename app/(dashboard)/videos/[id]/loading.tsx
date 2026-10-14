@@ -1,8 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import ScriptLoading from "./script/loading";
+import StudioLoading from "./studio/loading";
 import { Skeleton, SkeletonBack, SkeletonLines, SkeletonPage, SkeletonPersonRow, SkeletonSteps } from "@/components/ui/skeleton";
 import { STAGE_LABELS, STAGE_ORDER } from "@/modules/long-videos/lib/stages";
 
 /** One long video: title, the steps bar, the step's work on the left, notes on the right. */
-export default function Loading() {
+function VideoSkeleton() {
   return (
     <SkeletonPage width="max-w-[1400px]">
       <SkeletonBack label="Long videos" />
@@ -68,4 +73,17 @@ export default function Loading() {
       </div>
     </SkeletonPage>
   );
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from a task straight to a script, the script's, not the video's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/videos\/[^/]+\/script(\/|$)/.test(path)) return <ScriptLoading />;
+  if (/^\/videos\/[^/]+\/studio(\/|$)/.test(path)) return <StudioLoading />;
+  return <VideoSkeleton />;
 }

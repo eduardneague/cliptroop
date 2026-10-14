@@ -1,4 +1,4 @@
-import { APP_NAME } from "@/lib/brand";
+import { APP_DOMAIN, APP_NAME } from "@/lib/brand";
 import "server-only";
 import { cache } from "react";
 import { fingerprint } from "./error-kinds";
@@ -12,8 +12,10 @@ import { sendNotifications } from "./notify";
  * timed job (the status check, lib/health-watch.ts) — is counted in
  * app_errors (migration 0063), one row per kind of error. The first time,
  * when it comes back after being marked fixed, and at most once an hour
- * while it keeps happening, the DEVELOPERS get an email and a notification.
- * Details: /developer (developer accounts only).
+ * while it keeps happening, the DEVELOPERS get a notification (in the app
+ * and on their phones) and ONE email goes to the alerts address
+ * (alertsEmail(): ALERTS_EMAIL, else hello@…, 1.19.0); developer accounts
+ * never get these by email. Details: /developer (developer accounts only).
  *
  * Developers: DEVELOPER_EMAILS (comma-separated; ALERT_EMAILS, its old
  * name, still works), matched against the email people SIGN IN with. If
@@ -64,8 +66,24 @@ export const developers = cache(async (): Promise<Developers> => {
   return { emails: owner?.email ? [owner.email as string] : [], userIds: [id], source: "first team owner" };
 });
 
-/** Who gets the app-wide alerts: the developers, nobody else. */
+/** Who gets the app-wide alerts' notifications: the developers, nobody else. */
 export const alertRecipients = developers;
+
+/**
+ * Where every app-wide email goes (alerts, "back to normal", test alerts,
+ * reports; 1.19.0): ONE address. ALERTS_EMAIL, else the contact address
+ * (NEXT_PUBLIC_CONTACT_EMAIL), else hello@ the app's domain. The developer
+ * accounts' own addresses never get these emails (their notifications stay).
+ */
+export function alertsEmail(): string {
+  for (const v of [process.env.ALERTS_EMAIL, process.env.NEXT_PUBLIC_CONTACT_EMAIL]) {
+    const e = (v ?? "").trim().toLowerCase();
+    if (/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(e)) return e;
+  }
+  return `hello@${APP_DOMAIN}`;
+}
+/** The line at the bottom of those emails. */
+export const ALERT_FOOTER = `Sent to ${APP_NAME}'s alerts address (ALERTS_EMAIL). Developer accounts see it as a notification in the app; nobody else gets it.`;
 
 /**
  * Is this signed-in person a developer (opens /developer and /setup, gets the alerts)?
@@ -131,23 +149,19 @@ export async function reportError(input: { source: ErrorSource; message: string;
         }))
       );
     }
-    if (emailConfigured() && who.emails.length) {
-      await Promise.all(
-        who.emails.map((email) =>
-          sendAlertEmail({
-            to: [email],
-            subject: input.source === "job" ? `${APP_NAME}: ${r.count > 1 ? "still " : ""}${message.slice(0, 90)}` : r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
-            message:
-              input.source === "job"
-                ? // A status problem: what's wrong now, and how often you'll hear about it (0082).
-                  `${message}${input.stack ? `\n\n${input.stack}` : ""}\n\nFound by the status check (every 10 minutes). You get one email a day while it lasts, and one when it's fixed.`
-                : `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
-            linkText: "Open the developer page",
-            href: `${appUrl()}/developer?tab=problems#errors`,
-            footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
-          })
-        )
-      );
+    if (emailConfigured()) {
+      await sendAlertEmail({
+        to: [alertsEmail()],
+        subject: input.source === "job" ? `${APP_NAME}: ${r.count > 1 ? "still " : ""}${message.slice(0, 90)}` : r.count > 1 ? `${APP_NAME}: still happening (${r.count}×): ${message.slice(0, 80)}` : `${APP_NAME} error: ${message.slice(0, 90)}`,
+        message:
+          input.source === "job"
+            ? // A status problem: what's wrong now, and how often you'll hear about it (0082).
+              `${message}${input.stack ? `\n\n${input.stack}` : ""}\n\nFound by the status check (every 10 minutes). You get one email a day while it lasts, and one when it's fixed.`
+            : `${message}\n\nWhere: ${where}. ${r.count > 1 ? `It has happened ${r.count} times.` : "First time."} You get at most one email an hour about it.`,
+        linkText: "Open the developer page",
+        href: `${appUrl()}/developer?tab=problems#errors`,
+        footer: ALERT_FOOTER,
+      });
     }
   } catch (e) {
     console.error("[reportError]", e instanceof Error ? e.message : e);
@@ -170,19 +184,15 @@ export async function reportFixed(message: string) {
         }))
       );
     }
-    if (emailConfigured() && who.emails.length) {
-      await Promise.all(
-        who.emails.map((email) =>
-          sendAlertEmail({
-            to: [email],
-            subject: `${APP_NAME}: back to normal: ${text.slice(0, 80)}`,
-            message: `${text}\n\nThe status check doesn't see this problem any more.`,
-            linkText: "Open the developer page",
-            href: `${appUrl()}/developer?tab=status`,
-            footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets it.`,
-          })
-        )
-      );
+    if (emailConfigured()) {
+      await sendAlertEmail({
+        to: [alertsEmail()],
+        subject: `${APP_NAME}: back to normal: ${text.slice(0, 80)}`,
+        message: `${text}\n\nThe status check doesn't see this problem any more.`,
+        linkText: "Open the developer page",
+        href: `${appUrl()}/developer?tab=status`,
+        footer: ALERT_FOOTER,
+      });
     }
   } catch (e) {
     console.error("[reportFixed]", e instanceof Error ? e.message : e);

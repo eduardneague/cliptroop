@@ -177,5 +177,6 @@ export function ClockWidget({ settings }: { settings?: Record<string, unknown> }
 
 /** The dashboard Calendar: THE calendar (same as every date picker), filling the widget. A day opens it in the big calendar. */
 export function MiniCalendarWidget() {
-  return <MonthCalendar fit hrefFor={(d) => `/calendar?d=${d}`} />;
+  // A day opens the Calendar on its month with that day's window up (1.19.0).
+  return <MonthCalendar fit hrefFor={(d) => `/calendar?d=${d}&open=1`} />;
 }

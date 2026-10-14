@@ -35,7 +35,24 @@ function save(name: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
-export function ClaudeExport({ teamId, teamName, range, platform, revenueAllowed, onClose }: { teamId: string; teamName: string; range: RangeId; platform: P | null; revenueAllowed: boolean; onClose: () => void }) {
+export function ClaudeExport({
+  teamId,
+  teamName,
+  range,
+  span,
+  platform,
+  revenueAllowed,
+  onClose,
+}: {
+  teamId: string;
+  teamName: string;
+  range: RangeId;
+  /** Lifetime and custom ranges: their days. */
+  span?: { from: string; to: string } | null;
+  platform: P | null;
+  revenueAllowed: boolean;
+  onClose: () => void;
+}) {
   const toast = useToast();
   const [o, setO] = useState<Saved>(DEFAULTS);
   useEffect(() => {
@@ -59,7 +76,7 @@ export function ClaudeExport({ teamId, teamName, range, platform, revenueAllowed
   async function run() {
     if (!o.platforms.length) return toast.error("Pick at least one platform.");
     setBusy({ step: "Gathering the numbers…" });
-    const res = await loadClaudeExport(teamId, { platforms: o.platforms, range, which: o.which, top: o.top, scripts: o.scripts, revenue: o.revenue && revenueAllowed });
+    const res = await loadClaudeExport(teamId, { platforms: o.platforms, range, which: o.which, top: o.top, scripts: o.scripts, revenue: o.revenue && revenueAllowed, from: span?.from, to: span?.to });
     if (res.error !== undefined) {
       setBusy(null);
       return toast.error(res.error);

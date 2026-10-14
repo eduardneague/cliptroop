@@ -1,8 +1,13 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import NewVideoLoading from "./new/loading";
+import VideoLoading from "./[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 import { STAGE_LABELS, STAGE_ORDER } from "@/modules/long-videos/lib/stages";
 
 /** Long videos: title, step filters, then the cards (the default view). */
-export default function Loading() {
+function ListSkeleton() {
   return (
     <SkeletonPage width="max-w-[1720px]">
       <div className="flex items-start justify-between gap-6 mb-7 flex-wrap" aria-hidden>
@@ -48,4 +53,17 @@ export default function Loading() {
       </div>
     </SkeletonPage>
   );
+}
+
+/*
+ * This skeleton shows first on the way in from another part of the app
+ * (Next shows the outermost new loading screen while the page is fetched),
+ * so on the way to a page further in it shows that page's skeleton instead:
+ * from a task straight to a script, the script's, not this list's (1.18.0).
+ */
+export default function Loading() {
+  const path = usePathname() ?? "";
+  if (/^\/videos\/new(\/|$)/.test(path)) return <NewVideoLoading />;
+  if (/^\/videos\/[^/]+/.test(path)) return <VideoLoading />;
+  return <ListSkeleton />;
 }

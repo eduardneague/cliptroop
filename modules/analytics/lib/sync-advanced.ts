@@ -115,7 +115,7 @@ export async function youtubeDailySplits(a: Advanced, token: string, start: stri
 }
 
 /** Titles for the videos and playlists that sent views (YouTube only gives ids). */
-async function ytTitles(token: string, kind: "videos" | "playlists", ids: string[]) {
+export async function ytTitles(token: string, kind: "videos" | "playlists", ids: string[]) {
   const out = new Map<string, string>();
   for (let i = 0; i < ids.length; i += 50) {
     try {
@@ -129,16 +129,32 @@ async function ytTitles(token: string, kind: "videos" | "playlists", ids: string
 /**
  * Window snapshots for the account: age & gender, sharing services, search
  * terms, outside sites, videos and playlists that sent views, traffic by
- * Shorts / long videos. Once a day (they move slowly).
+ * Shorts / long videos, and (1.21.0) views by country. Once a day (they move
+ * slowly). The last 7, 28, 90 and 365 days, then the channel's whole life
+ * (span 0, 1.21.0): Lifetime's splits, and countries for ranges older than
+ * the per-day countries kept.
  */
 export async function youtubeWindows(a: Advanced, token: string, end: string) {
   const at = await windowsFetchedAt(a, "youtube");
   if (at === null || Date.now() - at < WINDOW_REFRESH_MS) return 0;
   let rows = 0;
-  for (const span of WINDOW_SPANS) {
+  for (const span of [...WINDOW_SPANS, 0]) {
     if (!timeLeft(a)) break;
-    const base = { startDate: minusDays(end, span - 1), endDate: end };
+    const base = { startDate: span ? minusDays(end, span - 1) : "2005-04-23", endDate: end };
     const jobs: Promise<number>[] = [
+      (async () => {
+        const r = await ytFirst(token, { ...base, dimensions: "country", sort: "-views" }, ["views,estimatedMinutesWatched", "views"]);
+        return r
+          ? saveWindow(
+              a,
+              "youtube",
+              "country",
+              span,
+              end,
+              r.rows.filter((x) => /^[A-Z]{2}$/.test(String(x.country)) && x.country !== "ZZ").map((x) => ({ key: String(x.country), views: num(x.views), watch_minutes: num(x.estimatedMinutesWatched) }))
+            )
+          : 0;
+      })(),
       (async () => {
         const r = await ytFirst(token, { ...base, dimensions: "ageGroup,gender", sort: "gender,ageGroup" }, ["viewerPercentage"]);
         return r ? saveWindow(a, "youtube", "age_gender", span, end, r.rows.map((x) => ({ key: `${x.ageGroup}|${x.gender}`, value: num(x.viewerPercentage) }))) : 0;
@@ -166,6 +182,59 @@ export async function youtubeWindows(a: Advanced, token: string, end: string) {
     try {
       rows += (await Promise.all(jobs.map((j) => j.catch(() => 0)))).reduce((t, n) => t + n, 0);
     } catch {}
+  }
+  return rows;
+}
+
+/**
+ * One video's splits since it was posted (1.21.0, its analytics page's
+ * Reach and Audience tabs, like YouTube Studio's): [our dimension,
+ * YouTube's, metric lists, a filter on top of the video, sort, how many].
+ */
+const VIDEO_SPLITS: { dimension: string; yt: string; lists: string[]; filter?: string; sort?: string; max?: string }[] = [
+  { dimension: "traffic_source", yt: "insightTrafficSourceType", lists: ["views,estimatedMinutesWatched"], sort: "-views" },
+  { dimension: "search_term", yt: "insightTrafficSourceDetail", lists: ["views,estimatedMinutesWatched"], filter: "insightTrafficSourceType==YT_SEARCH", sort: "-views", max: "25" },
+  { dimension: "external_site", yt: "insightTrafficSourceDetail", lists: ["views,estimatedMinutesWatched"], filter: "insightTrafficSourceType==EXT_URL", sort: "-views", max: "25" },
+  { dimension: "suggested_by", yt: "insightTrafficSourceDetail", lists: ["views,estimatedMinutesWatched"], filter: "insightTrafficSourceType==RELATED_VIDEO", sort: "-views", max: "25" },
+  { dimension: "playlist", yt: "insightTrafficSourceDetail", lists: ["views,estimatedMinutesWatched"], filter: "insightTrafficSourceType==PLAYLIST", sort: "-views", max: "25" },
+  { dimension: "subscribed", yt: "subscribedStatus", lists: ["views,estimatedMinutesWatched,averageViewPercentage", "views,estimatedMinutesWatched"] },
+  { dimension: "device", yt: "deviceType", lists: ["views,estimatedMinutesWatched"], sort: "-views" },
+  { dimension: "os", yt: "operatingSystem", lists: ["views,estimatedMinutesWatched"], sort: "-views" },
+  { dimension: "playback_location", yt: "insightPlaybackLocationType", lists: ["views,estimatedMinutesWatched"], sort: "-views" },
+  { dimension: "country", yt: "country", lists: ["views,estimatedMinutesWatched"], sort: "-views" },
+  { dimension: "age_gender", yt: "ageGroup,gender", lists: ["viewerPercentage"], sort: "gender,ageGroup" },
+  { dimension: "sharing", yt: "sharingService", lists: ["shares"], sort: "-shares" },
+];
+
+/** Fetches and keeps one video's splits (span 0, the video's id), each replacing the last; a split YouTube refuses keeps what it had. */
+export async function youtubeVideoSplits(a: Advanced, token: string, id: string, start: string, end: string): Promise<number> {
+  const results = await Promise.all(
+    VIDEO_SPLITS.map(async (d) => {
+      const r = await ytFirst(token, { startDate: start, endDate: end, dimensions: d.yt, filters: `video==${id}${d.filter ? `;${d.filter}` : ""}`, ...(d.sort ? { sort: d.sort } : {}), ...(d.max ? { maxResults: d.max } : {}) }, d.lists);
+      return { d, list: r?.rows ?? null };
+    })
+  );
+  let rows = 0;
+  for (const { d, list } of results) {
+    if (!list) continue;
+    let recs: { key: string; views?: number | null; watch_minutes?: number | null; value?: number | null }[];
+    if (d.dimension === "age_gender") recs = list.map((x) => ({ key: `${x.ageGroup}|${x.gender}`, value: num(x.viewerPercentage) }));
+    else if (d.dimension === "sharing") recs = list.map((x) => ({ key: String(x.sharingService ?? ""), value: num(x.shares) }));
+    else if (d.dimension === "country") recs = list.filter((x) => /^[A-Z]{2}$/.test(String(x.country)) && x.country !== "ZZ").map((x) => ({ key: String(x.country), views: num(x.views), watch_minutes: num(x.estimatedMinutesWatched) }));
+    else {
+      const field = d.yt;
+      recs = list.map((x) => ({ key: String(x[field] ?? ""), views: num(x.views), watch_minutes: num(x.estimatedMinutesWatched), value: d.dimension === "subscribed" ? num(x.averageViewPercentage) : null })).filter((x) => x.key);
+      // Videos and playlists come as ids: "id|title · channel".
+      if (d.dimension === "suggested_by" || d.dimension === "playlist") {
+        const names = await ytTitles(token, d.dimension === "playlist" ? "playlists" : "videos", recs.map((x) => x.key));
+        recs = recs.map((x) => ({ ...x, key: `${x.key}|${(names.get(x.key) ?? "").slice(0, 250)}` }));
+      }
+    }
+    try {
+      rows += await saveWindow(a, "youtube", d.dimension, 0, end, recs, id);
+    } catch {
+      return rows; // Before migration 0081: nowhere to keep them.
+    }
   }
   return rows;
 }

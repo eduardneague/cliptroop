@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon, SHORTS_ICON_PATH, VIDEO_ICON_PATH } from "@/components/ui/icons";
 
 /*
  * Small SVG charts for Analytics (no chart library). Rules followed:
@@ -51,6 +52,31 @@ function useWidth<T extends HTMLElement>() {
 
 export type Series = { key: string; label: string; color: string; values: (number | null)[] };
 
+/** What was posted at a point on a chart: drawn as the sidebar's icon for its kind, in the team's colour (Team → Colors). */
+export type MarkKind = "short" | "long" | "post";
+export type Mark = { title: string; kind: MarkKind };
+export const MARK_COLOR: Record<MarkKind, string> = { short: "rgb(var(--short))", long: "rgb(var(--long))", post: "rgb(var(--ink-faint))" };
+const MARK_ORDER: MarkKind[] = ["short", "long", "post"];
+
+/** A kind's icon at (cx, top), `size` px: the Shorts and long-video shapes of the sidebar; a post is a small card. */
+function MarkGlyph({ kind, cx, top, size }: { kind: MarkKind; cx: number; top: number; size: number }) {
+  if (kind === "post") return <rect x={cx - size * 0.36} y={top + size * 0.14} width={size * 0.72} height={size * 0.72} rx={size * 0.18} fill={MARK_COLOR.post} />;
+  return (
+    <g transform={`translate(${(cx - size / 2).toFixed(1)},${top.toFixed(1)}) scale(${(size / 24).toFixed(3)})`}>
+      <path d={kind === "short" ? SHORTS_ICON_PATH : VIDEO_ICON_PATH} fill={MARK_COLOR[kind]} fillRule="evenodd" />
+    </g>
+  );
+}
+
+/** The same icon as a small inline picture (tooltips, legends). */
+export function MarkIcon({ kind, className = "w-3.5 h-3.5" }: { kind: MarkKind; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`${className} flex-shrink-0`} aria-hidden>
+      {kind === "post" ? <rect x="5" y="5" width="14" height="14" rx="3.5" fill={MARK_COLOR.post} /> : <path d={kind === "short" ? SHORTS_ICON_PATH : VIDEO_ICON_PATH} fill={MARK_COLOR[kind]} fillRule="evenodd" />}
+    </svg>
+  );
+}
+
 /** Legend: a short line (lines) or a swatch (bars) + the name, in text colour. */
 export function Legend({ items, shape = "line" }: { items: { key: string; label: string; color: string; dashed?: boolean }[]; shape?: "line" | "rect" }) {
   if (items.length < 2) return null;
@@ -76,6 +102,14 @@ export function Legend({ items, shape = "line" }: { items: { key: string; label:
   );
 }
 
+/** "+12%" / "−8%" next to a value and the one before (no colour when there's nothing to compare). */
+function Change({ now, prev }: { now: number | null; prev: number | null }) {
+  if (now === null || prev === null || prev === 0) return null;
+  const pct = ((now - prev) / Math.abs(prev)) * 100;
+  if (Math.abs(pct) < 0.5) return <span className="ml-auto text-[10.5px] font-semibold text-ink-faint">same</span>;
+  return <span className={`ml-auto text-[10.5px] font-bold tabular-nums ${pct > 0 ? "text-green" : "text-red"}`}>{`${pct > 0 ? "+" : "−"}${Math.abs(pct) >= 10 ? Math.round(Math.abs(pct)) : Math.abs(pct).toFixed(1)}%`}</span>;
+}
+
 function Tooltip({ x, y, width, children }: { x: number; y: number; width: number; children: React.ReactNode }) {
   // Keeps inside the chart: flips to the left of the pointer near the right edge.
   const left = x > width - 190 ? Math.max(0, x - 180) : x + 12;
@@ -99,6 +133,10 @@ export function LineChart({
   ariaLabel,
   onPick,
   pickHint = "Click for this day's videos",
+  tips,
+  area = false,
+  marks,
+  markLabel = "Posted",
 }: {
   labels: string[];
   series: Series[];
@@ -109,16 +147,25 @@ export function LineChart({
   /** Click (or Enter on) a point: its index (e.g. to open that day's videos). */
   onPick?: (index: number) => void;
   pickHint?: string;
+  /** The tooltip's title for each point (default: its label), e.g. the whole date. */
+  tips?: string[];
+  /** A soft fill under a single line. */
+  area?: boolean;
+  /** Icons under the line where something happened (videos posted, by kind), listed in the tooltip. */
+  marks?: { i: number; items: Mark[] }[];
+  markLabel?: string;
 }) {
   const [box, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const gradId = useId().replace(/:/g, "");
   const n = labels.length;
   const all = [...series.flatMap((s) => s.values), ...(previous?.values ?? [])].filter((v): v is number => v !== null);
   const { max, ticks } = niceScale(Math.max(0, ...all));
   const left = Math.max(32, String(format(max)).length * 7 + 10);
   const right = 14;
   const top = 10;
-  const bottom = 26;
+  const markAt = useMemo(() => new Map((marks ?? []).filter((m) => m.items.length).map((m) => [m.i, m.items])), [marks]);
+  const bottom = 26 + (markAt.size ? 19 : 0);
   const iw = Math.max(10, width - left - right);
   const ih = height - top - bottom;
   const x = (i: number) => left + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
@@ -182,6 +229,57 @@ export function LineChart({
               </text>
             ) : null
           )}
+          {area && series.length === 1 && (
+            <>
+              <defs>
+                <linearGradient id={`fill${gradId}`} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={series[0].color} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={series[0].color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              {/* One closed shape per unbroken stretch of the line. */}
+              {(() => {
+                const runs: number[][] = [];
+                series[0].values.forEach((v, i) => {
+                  if (v === null) return;
+                  const last = runs[runs.length - 1];
+                  if (last && last[last.length - 1] === i - 1) last.push(i);
+                  else runs.push([i]);
+                });
+                return runs
+                  .filter((r) => r.length > 1)
+                  .map((r) => (
+                    <path
+                      key={r[0]}
+                      d={`M${x(r[0]).toFixed(1)},${(top + ih).toFixed(1)}${r.map((i) => `L${x(i).toFixed(1)},${y(series[0].values[i]!).toFixed(1)}`).join("")}L${x(r[r.length - 1]).toFixed(1)},${(top + ih).toFixed(1)}Z`}
+                      fill={`url(#fill${gradId})`}
+                    />
+                  ));
+              })()}
+            </>
+          )}
+          {(() => {
+            // One icon per kind posted there (Shorts, long videos, posts), side by side; smaller when the points are close.
+            const gap = n > 1 ? iw / (n - 1) : iw;
+            const size = Math.max(8, Math.min(15, gap - 2));
+            return [...markAt.entries()].map(([i, items]) => {
+              const kinds = MARK_ORDER.filter((k) => items.some((m) => m.kind === k)).slice(0, gap >= 26 ? 3 : 2);
+              const step = kinds.length > 1 ? Math.min(size * 0.85, gap / kinds.length) : 0;
+              const count = items.length;
+              return (
+                <g key={`m${i}`} aria-hidden>
+                  {kinds.map((k, j) => (
+                    <MarkGlyph key={k} kind={k} cx={x(i) + (j - (kinds.length - 1) / 2) * step} top={top + ih + 4} size={size} />
+                  ))}
+                  {count > 1 && gap >= 34 && (
+                    <text x={x(i) + (kinds.length * step) / 2 + size / 2 + 1} y={top + ih + 4 + size * 0.78} className="fill-ink-faint text-[9.5px] font-semibold tabular-nums">
+                      {count}
+                    </text>
+                  )}
+                </g>
+              );
+            });
+          })()}
           {previous && <path d={path(previous.values)} fill="none" stroke="rgb(var(--ink-faint) / 0.7)" strokeWidth={1.5} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />}
           {series.map((s) => (
             <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
@@ -202,7 +300,7 @@ export function LineChart({
       )}
       {hover !== null && width > 0 && (
         <Tooltip x={x(hover)} y={top} width={width}>
-          <div className="text-[11px] font-semibold text-ink-faint mb-1">{labels[hover]}</div>
+          <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2 py-0.5">
               <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
@@ -215,6 +313,24 @@ export function LineChart({
               <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0 bg-ink-faint/60" />
               <span className="font-bold tabular-nums text-ink">{format(previous.values[hover] ?? null)}</span>
               <span className="text-ink-soft truncate">{previous.label}</span>
+              {series.length === 1 && <Change now={series[0].values[hover]} prev={previous.values[hover] ?? null} />}
+            </div>
+          )}
+          {markAt.get(hover) && (
+            <div className="mt-1 pt-1 border-t border-line/10">
+              <div className="text-[10.5px] font-semibold text-ink-faint">
+                {markLabel}: {markAt.get(hover)!.length}
+              </div>
+              {markAt
+                .get(hover)!
+                .slice(0, 3)
+                .map((m, k) => (
+                  <div key={k} className="flex items-center gap-1.5 text-[11px] text-ink-soft">
+                    <MarkIcon kind={m.kind} className="w-3 h-3" />
+                    <span className="truncate">{m.title}</span>
+                  </div>
+                ))}
+              {markAt.get(hover)!.length > 3 && <div className="text-[10.5px] text-ink-faint">and {markAt.get(hover)!.length - 3} more</div>}
             </div>
           )}
           {onPick && <div className="mt-1 pt-1 border-t border-line/10 text-[10.5px] text-ink-faint">{pickHint}</div>}
@@ -224,19 +340,29 @@ export function LineChart({
   );
 }
 
-/** Stacked columns (e.g. shorts + long videos per week). Hover/focus a column for its numbers. */
+/** Stacked columns (e.g. shorts + long videos per week). Hover/focus a column for its numbers; `onPick`: click (or Enter on) one. */
 export function StackedColumns({
   labels,
+  tips,
   series,
   format = fmtInt,
   height = 220,
   ariaLabel,
+  showTotal = true,
+  onPick,
+  pickHint = "Click for its videos",
 }: {
   labels: string[];
+  /** The tooltip's title for each column (default: its label), e.g. the day with the hour. */
+  tips?: string[];
+  /** The tooltip's "Total" line (off for shares, which always make 100%). */
+  showTotal?: boolean;
   series: { key: string; label: string; color: string; values: number[] }[];
   format?: (n: number | null) => string;
   height?: number;
   ariaLabel: string;
+  onPick?: (index: number) => void;
+  pickHint?: string;
 }) {
   const [box, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -257,7 +383,7 @@ export function StackedColumns({
   return (
     <div ref={box} className="relative select-none">
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block">
+        <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block overflow-visible">
           {ticks.map((t) => (
             <g key={t}>
               <line x1={left} x2={left + iw} y1={y(t)} y2={y(t)} stroke="rgb(var(--line) / 0.08)" strokeWidth={1} />
@@ -269,20 +395,36 @@ export function StackedColumns({
           {labels.map((l, i) => {
             const cx = left + slot * i + slot / 2;
             let base = top + ih;
-            const segs = series
+            let segs = series
               .map((s) => ({ s, v: s.values[i] ?? 0 }))
               .filter((x) => x.v > 0);
+            // Too short to show its parts apart: one bar in the biggest part's colour (no stripes).
+            if (segs.length > 1 && (totals[i] / max) * ih < segs.length * 5) {
+              const big = segs.reduce((m, x) => (x.v > m.v ? x : m));
+              segs = [{ s: big.s, v: totals[i] }];
+            }
             return (
               <g
                 key={i}
                 tabIndex={0}
                 role="img"
-                aria-label={`${l}: ${series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
+                aria-label={`${tips?.[i] ?? l}: ${series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover((h) => (h === i ? null : h))}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover(null)}
-                className="outline-none"
+                onClick={onPick ? () => onPick(i) : undefined}
+                onKeyDown={
+                  onPick
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onPick(i);
+                        }
+                      }
+                    : undefined
+                }
+                className={`outline-none ${onPick ? "cursor-pointer" : ""}`}
               >
                 <rect x={cx - slot / 2} y={top} width={slot} height={ih} fill={hover === i ? "rgb(var(--line) / 0.04)" : "transparent"} />
                 {segs.map(({ s, v }, k) => {
@@ -307,7 +449,7 @@ export function StackedColumns({
       )}
       {hover !== null && width > 0 && (
         <Tooltip x={left + slot * hover + slot / 2} y={top} width={width}>
-          <div className="text-[11px] font-semibold text-ink-faint mb-1">{labels[hover]}</div>
+          <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2 py-0.5">
               <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: s.color }} />
@@ -315,7 +457,8 @@ export function StackedColumns({
               <span className="text-ink-soft">{s.label}</span>
             </div>
           ))}
-          {series.length > 1 && <div className="mt-1 pt-1 border-t border-line/10 text-ink-soft">Total <b className="text-ink tabular-nums">{format(totals[hover])}</b></div>}
+          {showTotal && series.length > 1 && <div className="mt-1 pt-1 border-t border-line/10 text-ink-soft">Total <b className="text-ink tabular-nums">{format(totals[hover])}</b></div>}
+          {onPick && <div className="mt-1 pt-1 border-t border-line/10 text-[10.5px] text-ink-faint">{pickHint}</div>}
         </Tooltip>
       )}
     </div>
@@ -444,5 +587,42 @@ export function ChartCard({ title, sub, right, children, className = "" }: { tit
       </div>
       {children}
     </section>
+  );
+}
+
+/** The cards in one row; when they don't all fit, the row scrolls and arrows at its ends say there's more. */
+export function CardStrip({ children, label = "Number on the chart" }: { children: React.ReactNode; label?: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [ends, setEnds] = useState({ left: false, right: false });
+  const look = useCallback(() => {
+    const el = box.current;
+    if (!el) return;
+    setEnds({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  }, []);
+  useEffect(() => {
+    look();
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(look);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [look]);
+  const nudge = (d: number) => box.current?.scrollBy({ left: d * Math.max(160, (box.current?.clientWidth ?? 400) * 0.6), behavior: "smooth" });
+  return (
+    <div className="relative border-b border-line/10">
+      <div ref={box} role="tablist" aria-label={label} onScroll={look} className="flex overflow-x-auto no-scrollbar">
+        {children}
+      </div>
+      {ends.left && (
+        <button type="button" onClick={() => nudge(-1)} aria-label="The cards before" className="absolute left-0 inset-y-0 w-9 flex items-center justify-start pl-1 bg-gradient-to-r from-surface via-surface/90 to-transparent text-ink-soft hover:text-ink">
+          <ChevronLeftIcon className="w-4 h-4" />
+        </button>
+      )}
+      {ends.right && (
+        <button type="button" onClick={() => nudge(1)} aria-label="More cards" className="absolute right-0 inset-y-0 w-9 flex items-center justify-end pr-1 bg-gradient-to-l from-surface via-surface/90 to-transparent text-ink-soft hover:text-ink">
+          <ChevronRightIcon className="w-4 h-4" />
+        </button>
+      )}
+    </div>
   );
 }

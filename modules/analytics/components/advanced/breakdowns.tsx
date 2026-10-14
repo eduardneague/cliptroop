@@ -9,8 +9,9 @@ import { change, compactNum, countryName } from "./format";
 const ACCENT = "rgb(var(--amber))";
 
 function Card({ b, children, right }: { b: AdvBreakdown; children: React.ReactNode; right?: React.ReactNode }) {
+  // Full height in a grid row (1.21.0: the splits sit in an even grid, not ragged columns).
   return (
-    <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0">
+    <section className="h-full rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0">
       <div className="flex items-start gap-x-3 gap-y-2 mb-3 flex-wrap">
         <div className="flex-1 basis-44 min-w-0">
           <h3 className="text-[14.5px] font-semibold">{b.title}</h3>
@@ -44,7 +45,7 @@ function Name({ b, r }: { b: AdvBreakdown; r: AdvRow }) {
  * Shares of views (traffic sources, devices…): each row's bar is its share
  * of the total, with views, the share, the change from before and watch time.
  */
-export function ShareList({ b, compare, limit = 8 }: { b: AdvBreakdown; compare: boolean; limit?: number }) {
+export function ShareList({ b, compare, limit = 6 }: { b: AdvBreakdown; compare: boolean; limit?: number }) {
   const [more, setMore] = useState(false);
   const total = b.rows.reduce((t, r) => t + (r.views ?? 0), 0);
   const rows = more ? b.rows : b.rows.slice(0, limit);
@@ -86,7 +87,7 @@ export function ShareList({ b, compare, limit = 8 }: { b: AdvBreakdown; compare:
 }
 
 /** A ranked list (search terms, outside sites, suggesting videos, playlists, cities…). */
-export function RankList({ b, limit = 10 }: { b: AdvBreakdown; limit?: number }) {
+export function RankList({ b, limit = 7 }: { b: AdvBreakdown; limit?: number }) {
   const [more, setMore] = useState(false);
   const rows = more ? b.rows : b.rows.slice(0, limit);
   const measure = (r: AdvRow) => (b.measure === "views" ? r.views : r.value);
@@ -175,6 +176,20 @@ export function AgeGender({ b }: { b: AdvBreakdown }) {
   );
 }
 
+/**
+ * About how tall a breakdown's card is (in rows), so a grid can put cards of
+ * a height side by side: tall ones first, short ones together (1.21.0).
+ */
+export function cardRows(b: AdvBreakdown): number {
+  if (b.id === "age_gender") return new Set(b.rows.map((r) => r.key.split("|")[0])).size + 1.5;
+  const rank = ["search_term", "external_site", "suggested_by", "playlist", "follower_city", "engaged_city", "engaged_country", "country", "sharing"].includes(b.id);
+  const limit = rank ? 7 : 6;
+  const shown = Math.min(b.rows.length, limit) * (rank ? 1 : b.id === "subscribed" ? 1.6 : 1.25);
+  return shown + (b.rows.length > limit ? 1 : 0);
+}
+/** Breakdowns in grid order: tallest first (a stable sort keeps their own order among equals). */
+export const byCardHeight = (list: AdvBreakdown[]) => list.map((b, i) => ({ b, i, h: Math.round(cardRows(b)) })).sort((x, y) => y.h - x.h || x.i - y.i).map((x) => x.b);
+
 /** Any breakdown, drawn the way that fits it. */
 export function Breakdown({ b, compare }: { b: AdvBreakdown; compare: boolean }) {
   if (b.id === "age_gender") return <AgeGender b={b} />;
@@ -184,12 +199,13 @@ export function Breakdown({ b, compare }: { b: AdvBreakdown; compare: boolean })
 }
 
 /** Counts that are parts of a whole (Instagram's splits, follower ages…). */
-function ValueShares({ b }: { b: AdvBreakdown }) {
+function ValueShares({ b, limit = 6 }: { b: AdvBreakdown; limit?: number }) {
+  const [more, setMore] = useState(false);
   const total = b.rows.reduce((t, r) => t + (r.value ?? 0), 0);
   return (
     <Card b={b}>
       <ul className="space-y-2.5">
-        {b.rows.slice(0, 10).map((r) => {
+        {(more ? b.rows : b.rows.slice(0, limit)).map((r) => {
           const share = total ? (r.value ?? 0) / total : 0;
           return (
             <li key={r.key} className="min-w-0">
@@ -207,6 +223,11 @@ function ValueShares({ b }: { b: AdvBreakdown }) {
           );
         })}
       </ul>
+      {b.rows.length > limit && (
+        <button type="button" onClick={() => setMore((m) => !m)} className="mt-3 text-[12px] font-semibold text-ink-soft hover:text-ink">
+          {more ? "Show fewer" : `Show all ${b.rows.length}`}
+        </button>
+      )}
     </Card>
   );
 }

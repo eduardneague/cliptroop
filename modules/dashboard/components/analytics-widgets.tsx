@@ -86,7 +86,7 @@ function audienceGate(r: Loaded<DashAudience>) {
   if (r.state === "error") return <Note text={r.error} />;
   const a = r.data.audience;
   if (!a.status.some((s) => s.connected && s.statsReady)) return <Note text="Connect YouTube, Instagram or TikTok (and allow stats) to see your numbers here." href="/team?tab=accounts#connected-accounts" link="Connected accounts" />;
-  if (!a.hasData) return <Note text="Numbers arrive with the first sync." href="/analytics?tab=audience" link="Analytics" />;
+  if (!a.hasData) return <Note text="Numbers arrive with the first sync." href="/analytics?tab=overview" link="Analytics" />;
   return null;
 }
 
@@ -145,7 +145,7 @@ export function ViewsWidget({ teamId }: { teamId: string }) {
   const active = PLATFORMS.filter((p) => anyNum(a.views[p]));
   const sparkH = Math.max(0, Math.min(90, box.h - 92));
   return (
-    <Link href="/analytics?tab=audience" className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
+    <Link href="/analytics?tab=overview" className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-display text-[28px] leading-none font-semibold tabular-nums">{fmtCompact(last7)}</span>
         <Delta now={last7} prev={prev7} />

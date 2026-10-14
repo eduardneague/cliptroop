@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { APP_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { developers } from "@/lib/errors";
+import { alertsEmail, developers } from "@/lib/errors";
 import { appUrl, emailConfigured, sendAlertEmail } from "@/lib/email";
 import { actorMeta, sendNotifications } from "@/lib/notify";
 import { deviceLabel } from "@/lib/push/send";
@@ -101,23 +101,20 @@ async function tellDevelopers(r: { userId: string; email: string | null; kind: F
         }))
       );
     }
-    if (emailConfigured() && devs.emails.length) {
+    if (emailConfigured()) {
       const where = [team && `Team: ${team}`, `Device: ${r.context.device}`, r.context.page && `Page: ${r.context.page}`, r.context.version && `Version ${r.context.version} (${r.context.copy})`]
         .filter(Boolean)
         .join(" · ");
       const prefix = r.context.copy === "staging" ? "[staging] " : "";
-      await Promise.all(
-        devs.emails.map((to) =>
-          sendAlertEmail({
-            to: [to],
-            subject: `${prefix}${APP_NAME}: ${FEEDBACK_KIND_LABEL[r.kind].toLowerCase()} from ${actor.name}`,
-            message: `${r.message}\n\nFrom ${actor.name}${r.email ? ` (${r.email})` : ""}. ${where}.${r.files ? ` ${r.files} attachment${r.files === 1 ? "" : "s"}: open the developer page to see ${r.files === 1 ? "it" : "them"}.` : ""}`,
-            linkText: "Open the developer page",
-            href: `${appUrl()}/developer?tab=problems#reports`,
-            footer: `You get this because you're ${APP_NAME}'s developer (DEVELOPER_EMAILS). Nobody else gets reports.`,
-          })
-        )
-      );
+      // One email, to the alerts address only (1.19.0): developer accounts get the notification.
+      await sendAlertEmail({
+        to: [alertsEmail()],
+        subject: `${prefix}${APP_NAME}: ${FEEDBACK_KIND_LABEL[r.kind].toLowerCase()} from ${actor.name}`,
+        message: `${r.message}\n\nFrom ${actor.name}${r.email ? ` (${r.email})` : ""}. ${where}.${r.files ? ` ${r.files} attachment${r.files === 1 ? "" : "s"}: open the developer page to see ${r.files === 1 ? "it" : "them"}.` : ""}`,
+        linkText: "Open the developer page",
+        href: `${appUrl()}/developer?tab=problems#reports`,
+        footer: `Sent to ${APP_NAME}'s alerts address (ALERTS_EMAIL). Developer accounts see reports as a notification in the app.`,
+      });
     }
   } catch (e) {
     console.error("[feedback] telling the developers failed:", e instanceof Error ? e.message : e);

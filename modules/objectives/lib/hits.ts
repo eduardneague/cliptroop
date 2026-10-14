@@ -83,7 +83,8 @@ export function dailyValue(metric: MetricId, platform: Platform, day: string, f:
   switch (metric) {
     case "views":
       if (f.content) return platform === "youtube" ? num(at("youtube", day, f.content)?.views) : null;
-      return platform === "tiktok" ? delta("total_views", true) : num(at(platform, day)?.views);
+      // TikTok: the day's views worked out per video by the copy (1.19.0), else the change in its running total.
+      return platform === "tiktok" ? (num(at(platform, day)?.views) ?? delta("total_views", true)) : num(at(platform, day)?.views);
     case "likes":
       if (platform === "tiktok") return delta("total_likes", true);
       if (platform === "facebook") return null;

@@ -258,6 +258,7 @@ export const DIMENSIONS: Record<string, { title: string; measure: "views" | "val
   product: { title: "YouTube apps", measure: "views" },
   age_gender: { title: "Age and gender", measure: "value", valueLabel: "of viewers", percent: true },
   sharing: { title: "Where people shared", measure: "value", valueLabel: "shares" },
+  country: { title: "Countries", measure: "views" },
   viewer_type: { title: "Followers vs everyone else", measure: "value", valueLabel: "views" },
   content_type: { title: "Views by kind of post", measure: "value", valueLabel: "views" },
   interactions_by_type: { title: "Interactions by kind of post", measure: "value", valueLabel: "interactions" },

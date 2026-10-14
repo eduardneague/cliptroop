@@ -1,4 +1,5 @@
 import { APP_NAME } from "@/lib/brand";
+import { ClipLogo } from "@/components/ui/clip-logo";
 import { relativeTime } from "@/lib/relative-time";
 import { PLATFORM_META, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import type { ShortEvent } from "@/modules/short-videos/lib/queries";
@@ -48,12 +49,9 @@ export function ActivityCard({ events }: { events: ShortEvent[] }) {
               {e.actor ? (
                 <PersonAvatar name={e.actor.name} avatarUrl={e.actor.avatarUrl} color={e.actor.color} className="w-6 h-6 text-[9px] ring-2 ring-surface" />
               ) : (
-                // No person: VPlanner did it automatically (e.g. posting).
-                <span
-                  className="w-6 h-6 rounded-md bg-amber text-white ring-2 ring-surface flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
-                  aria-hidden
-                >
-                  V
+                // No person: the app did it by itself (posting): Clip, the logo.
+                <span className="w-6 h-6 rounded-md bg-surface ring-2 ring-surface flex-shrink-0 flex items-center justify-center" aria-hidden>
+                  <ClipLogo size={24} id="clip-logo-activity" />
                 </span>
               )}
               <div className="min-w-0 text-[12.5px] leading-snug pt-0.5">

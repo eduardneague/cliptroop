@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast-provider";
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ExternalIcon } from "@/components/ui/icons";
+import { PostedTick } from "@/components/ui/posted-tick";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
@@ -79,6 +80,7 @@ function postTime(it: CalItem, format: ReturnType<typeof useLocalFormat>) {
 export function CalendarView({
   items: initial,
   focus,
+  openDay = null,
   view: viewParam,
   teamId,
   canManage,
@@ -89,6 +91,8 @@ export function CalendarView({
   items: CalItem[];
   meetings?: CalMeeting[];
   focus: string;
+  /** A day whose window opens right away (`?open=1`: the dashboard's Calendar widget). */
+  openDay?: string | null;
   view: View | null;
   teamId: string;
   canManage: boolean;
@@ -155,7 +159,17 @@ export function CalendarView({
 
   // ---- quick view, day panel, moving ----------------------------------------
   const [quick, setQuick] = useState<CalItem | null>(null);
-  const [dayOpen, setDayOpen] = useState<string | null>(null);
+  const [dayOpen, setDayOpen] = useState<string | null>(openDay);
+  // Opened from the dashboard: the day's window once (the address forgets it, so a reload doesn't reopen it).
+  useEffect(() => {
+    if (!openDay) return;
+    setDayOpen(openDay);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("open");
+      window.history.replaceState(window.history.state, "", url);
+    } catch {}
+  }, [openDay]);
   const [pending, setPending] = useState<
     | { type: "move"; item: CalItem; to: string; raise: boolean; keepAuto: boolean }
     | { type: "reorder"; item: CalItem; target: CalItem; steps: number }
@@ -994,16 +1008,8 @@ function Chip({
         </span>
       )}
       {lg && !it.done && <span className={`text-[12px] flex-shrink-0 hidden sm:inline ${overdue ? "font-bold" : "text-ink-soft"}`}>{overdue ? "Overdue" : it.stageLabel}</span>}
-      {it.done && (
-        // Posted: the same teal check as a finished step in the step bar.
-        <span
-          className={`${lg ? "w-5 h-5" : "w-4 h-4"} rounded-md flex items-center justify-center text-white flex-shrink-0`}
-          style={{ background: "rgb(var(--teal))" }}
-          aria-label="Posted"
-        >
-          <CheckIcon className={lg ? "w-3 h-3" : "w-2.5 h-2.5"} />
-        </span>
-      )}
+      {/* Posted: the same teal check as a finished step in the step bar (and every calendar). */}
+      {it.done && <PostedTick size={lg ? "md" : "sm"} />}
     </button>
   );
 }

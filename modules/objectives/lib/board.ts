@@ -7,6 +7,7 @@ import { HISTORY, dayInZone, isPeriodKind, localNow, periodEnd, periodLabel, per
 import { hitsFor } from "./hits";
 import { contributorsOf, firstCounted, paceFor, periodResult, statsOf, type PeriodResult } from "./compute";
 import { loadSources, type Db } from "./sources";
+import { winDay, winStreak, type StreakObjective, type StreakOff, type WinStreak } from "./streak";
 import type { Board, CurrentView, Hit, ItemView, ObjectiveView, PeriodView, PersonLite, Sources, Status, WinView, WinnerView } from "./types";
 
 /*
@@ -251,6 +252,34 @@ async function loadWins(db: Db, teamId: string, rows: ObjectiveRow[], today: str
   return out;
 }
 
+/**
+ * The team's win streak (1.18.0), from every win the server recorded
+ * (objective_periods, 0078): each counts on the day it was reached, kept
+ * inside its period. Periods switched off (a target of 0) don't break it.
+ * Null when the team has no objectives (or before 0078).
+ */
+export async function getWinStreak(
+  db: Db,
+  teamId: string,
+  ctx: { tz?: string; rows?: ObjectiveRow[]; overrides?: Map<string, Map<string, number>>; at?: number } = {}
+): Promise<WinStreak | null> {
+  const [tz, rowsRes, overrides, wonRes] = await Promise.all([
+    ctx.tz ? Promise.resolve(ctx.tz) : teamTimezone(db, teamId),
+    ctx.rows ? Promise.resolve({ data: ctx.rows, error: null }) : db.from("objectives").select(OBJECTIVE_COLS).eq("team_id", teamId).limit(100),
+    ctx.overrides ? Promise.resolve(ctx.overrides) : loadOverrides(db, teamId),
+    db.from("objective_periods").select("objective_id, period_start, period_end, reached_at").eq("team_id", teamId).not("reached_at", "is", null).order("reached_at", { ascending: false }).limit(5000),
+  ]);
+  const rows = ((rowsRes.data ?? []) as ObjectiveRow[]).filter((r) => r && r.id);
+  if (rowsRes.error || !rows.length) return null;
+  const objectives: StreakObjective[] = rows.map((r) => ({ id: r.id, period: r.period, createdDay: r.created_at ? dayInZone(r.created_at, tz) : localNow(tz, ctx.at).day, paused: !!r.paused_at }));
+  const wins = ((wonRes.data ?? []) as { objective_id: string; period_start: string; period_end: string; reached_at: string | null }[])
+    .filter((w) => w.reached_at)
+    .map((w) => ({ objectiveId: w.objective_id, day: winDay(dayInZone(w.reached_at as string, tz), w.period_start, w.period_end) }));
+  const off: StreakOff[] = [];
+  for (const [objectiveId, m] of overrides) for (const [start, target] of m) if (target === 0) off.push({ objectiveId, start });
+  return winStreak({ today: localNow(tz, ctx.at).day, objectives, wins, off });
+}
+
 /** Is any account connected with stats allowed (for views, followers…)? */
 async function audienceReady(db: Db, teamId: string): Promise<boolean> {
   const { data } = await db.from("social_accounts").select("platform, status, scopes").eq("team_id", teamId);
@@ -260,9 +289,10 @@ async function audienceReady(db: Db, teamId: string): Promise<boolean> {
 /**
  * The whole board. `history`: "full" (the page), "short" (the widget's
  * sparkline), "none" (just now). `items`: the current period's videos.
- * `ready` is false before migration 0078 (the screens say so).
+ * `streak`: the team's win streak too (the page). `ready` is false before
+ * migration 0078 (the screens say so).
  */
-export async function getObjectivesBoard(db: Db, teamId: string, opts: { history?: History; items?: boolean; at?: number } = {}): Promise<Board & { ready: boolean }> {
+export async function getObjectivesBoard(db: Db, teamId: string, opts: { history?: History; items?: boolean; at?: number; streak?: boolean } = {}): Promise<Board & { ready: boolean }> {
   const history = opts.history ?? "full";
   const [tz, rowsRes, overrides, people, audience] = await Promise.all([
     teamTimezone(db, teamId),
@@ -275,7 +305,11 @@ export async function getObjectivesBoard(db: Db, teamId: string, opts: { history
   const rows = ((rowsRes.data ?? []) as ObjectiveRow[]).filter((r) => r && r.id);
   const now = localNow(tz, opts.at);
   const from = rows.length ? rows.map((r) => recentPeriods(kindOf(r.period), now.day, historyCount(kindOf(r.period), history))[0]).sort()[0] : now.day;
-  const [src, wins] = await Promise.all([rows.length ? loadSources(db, teamId, needsOf(rows), from, now.day, tz) : Promise.resolve(null), rows.length ? loadWins(db, teamId, rows, now.day) : Promise.resolve([])]);
+  const [src, wins, streak] = await Promise.all([
+    rows.length ? loadSources(db, teamId, needsOf(rows), from, now.day, tz) : Promise.resolve(null),
+    rows.length ? loadWins(db, teamId, rows, now.day) : Promise.resolve([]),
+    opts.streak && rows.length ? getWinStreak(db, teamId, { tz, rows, overrides, at: opts.at }).catch(() => null) : Promise.resolve(null),
+  ]);
   return {
     ready,
     teamId,
@@ -287,6 +321,7 @@ export async function getObjectivesBoard(db: Db, teamId: string, opts: { history
     wins,
     people,
     audienceReady: audience,
+    ...(opts.streak ? { streak } : {}),
   };
 }
 

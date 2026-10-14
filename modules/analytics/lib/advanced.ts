@@ -10,6 +10,7 @@ import { crossPlatform, findPatterns, type Finding, type PatternVideo, type Patt
 import { breakdownHref, breakdownLabel, DIMENSIONS, METRIC_HELP } from "./advanced-labels";
 import { hookFromScript, pickScript } from "./hooks";
 import { outlierScores } from "./scores";
+import { pickSpan, spanFor, windowWords, youtubeCountries } from "./windows";
 
 /*
  * The Advanced tab (1.16.0): every number the platforms share, for one
@@ -52,6 +53,9 @@ export type AdvVideo = {
   subscribersGained: number | null;
   skipRate: number | null;
   reposts: number | null;
+  /** YouTube (1.19.0): thumbnail impressions and their click-through rate (%), over the days YouTube keeps. */
+  impressions: number | null;
+  ctr: number | null;
   /** Every other number this platform shares for it (premium_views, card_clicks, replays…). */
   metrics: Record<string, number>;
   revenue: { revenue: number | null; rpm: number | null; cpm: number | null; playbackCpm: number | null; adImpressions: number | null; monetizedPlaybacks: number | null } | null;
@@ -129,13 +133,6 @@ function weighted(days: string[], value: (d: string) => number | null, weight: (
 }
 const ratio = (a: number | null, b: number | null, times = 1) => (a === null || b === null || !b ? null : (a / b) * times);
 
-/** The window snapshot that matches the range (YouTube: 7 / 28 / 90 / 365; Instagram: up to 28). */
-function spanFor(platform: SocialPlatform, days: number) {
-  if (platform === "instagram") return days <= 7 ? 7 : 28;
-  return days <= 7 ? 7 : days <= 28 ? 28 : days <= 90 ? 90 : 365;
-}
-const spanWords = (span: number) => (span === 365 ? "the last 12 months" : `the last ${span} days`);
-
 export async function getAdvanced(teamId: string, w: Window, o: { platform: SocialPlatform | null; content: Content; tz: string; revenueAllowed: boolean; currency: string | null }): Promise<AdvancedData> {
   const supabase = await createClient();
   const [status, vis] = await Promise.all([getPlatformStatus(teamId), numbersVisibility(supabase, teamId)]);
@@ -165,7 +162,6 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
   };
   if (!vis.platforms.has(platform)) return empty;
 
-  const span = spanFor(platform, w.days);
   const money = o.revenueAllowed && (platform === "youtube" || platform === "facebook");
   const [dailyAll, sums, prevSums, windows, contentAll, curves, revenueRows, videoMoney, countries, fx] = await Promise.all([
     all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).eq("platform", platform).gte("day", addDays(w.prevFrom, -1)).lte("day", addDays(w.to, 1)).order("day").range(a, b)),
@@ -186,7 +182,7 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     money ? all((a, b) => supabase.from("analytics_revenue_daily").select("*").eq("team_id", teamId).eq("platform", platform).gte("day", w.prevFrom).lte("day", w.to).range(a, b)) : Promise.resolve([] as Row[]),
     money ? all((a, b) => supabase.from("analytics_content_revenue").select("*").eq("team_id", teamId).eq("platform", platform).range(a, b), 2000) : Promise.resolve([] as Row[]),
     platform === "youtube"
-      ? all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b))
+      ? all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes, day").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b))
       : supabase
           .from("analytics_countries")
           .select("country, value, day")
@@ -346,7 +342,8 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
       ],
     });
   } else {
-    const tv = (d: string) => delta(allRows, d, "total_views");
+    // The day's views worked out per video by the copy (1.19.0), else the change in the running total.
+    const tv = (d: string) => n(allRows.get(d)?.views) ?? delta(allRows, d, "total_views");
     const tl = (d: string) => delta(allRows, d, "total_likes");
     defs.push({
       id: "watching",
@@ -428,110 +425,7 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     .filter((x) => x.values.some((v) => v !== null));
 
   // ---- Breakdowns -----------------------------------------------------------
-  const notes: string[] = [];
-  const sumRows = ((sums.data ?? []) as Row[]).filter((r) => n(r.views) !== null || n(r.value) !== null);
-  const prevSumRows = (prevSums.data ?? []) as Row[];
-  const breakdowns: AdvBreakdown[] = [];
-  const make = (id: string, sub: string, rows: Omit<AdvRow, "label" | "href">[]): AdvBreakdown | null => {
-    const meta = DIMENSIONS[id];
-    if (!meta || !rows.length) return null;
-    const sorted = rows
-      .map((r) => ({ ...r, label: id === "engaged_country" ? countryName(r.key) : breakdownLabel(id, r.key), href: breakdownHref(id, r.key) }))
-      .sort((a, b) =>
-        // Ages read best youngest first; everything else biggest first.
-        id.endsWith("_age")
-          ? parseInt(a.key.match(/\d+/)?.[0] ?? "0", 10) - parseInt(b.key.match(/\d+/)?.[0] ?? "0", 10)
-          : meta.measure === "views"
-            ? (b.views ?? 0) - (a.views ?? 0)
-            : (b.value ?? 0) - (a.value ?? 0)
-      );
-    return { id, title: meta.title, sub, measure: meta.measure, percent: !!meta.percent, valueLabel: meta.valueLabel ?? null, rows: sorted };
-  };
-  const perDay = (dim: string) => {
-    const prev = new Map(prevSumRows.filter((r) => r.dimension === dim).map((r) => [r.key as string, r]));
-    return sumRows
-      .filter((r) => r.dimension === dim)
-      .map((r) => ({ key: r.key as string, views: n(r.views), watchMinutes: n(r.watch_minutes), value: n(r.value), prevViews: n(prev.get(r.key as string)?.views), prevValue: n(prev.get(r.key as string)?.value) }));
-  };
-  // A window: the one that matches the range, else the nearest one there is.
-  const windowOf = (dim: string, wanted = span) => {
-    const rows = windows.filter((r) => r.dimension === dim);
-    const spans = [...new Set(rows.map((r) => Number(r.span)))];
-    if (!spans.length) return null;
-    const pick = spans.includes(wanted) ? wanted : spans.sort((a, b) => Math.abs(a - wanted) - Math.abs(b - wanted))[0];
-    const list = rows.filter((r) => Number(r.span) === pick);
-    const day = list.map((r) => r.day as string).sort().pop() ?? null;
-    return { span: pick, day, rows: list.filter((r) => r.day === day).map((r) => ({ key: r.key as string, views: n(r.views), watchMinutes: n(r.watch_minutes), value: n(r.value), prevViews: null, prevValue: null })) };
-  };
-  const windowSub = (x: { span: number; day: string | null }) => (x.span === 0 ? "As the platform has it now" : `${spanWords(x.span)[0].toUpperCase()}${spanWords(x.span).slice(1)}${x.day ? `, to ${niceDay(x.day)}` : ""}`);
-  const push = (b: AdvBreakdown | null) => {
-    if (b) breakdowns.push(b);
-  };
-
-  if (platform === "youtube") {
-    if (content === "all") push(make("traffic_source", "Views in this range", perDay("traffic_source")));
-    else {
-      // Shorts or long videos only: the window that splits sources by kind.
-      const tw = windowOf("traffic_by_type");
-      if (tw) {
-        const want = content === "shorts" ? ["SHORTS"] : ["VIDEO_ON_DEMAND", "LIVE_STREAM"];
-        const merged = new Map<string, Omit<AdvRow, "label" | "href">>();
-        for (const r of tw.rows) {
-          const [type, src] = r.key.split("|");
-          if (!want.includes(type)) continue;
-          const cur = merged.get(src) ?? { key: src, views: 0, watchMinutes: 0, value: null, prevViews: null, prevValue: null };
-          cur.views = (cur.views ?? 0) + (r.views ?? 0);
-          cur.watchMinutes = (cur.watchMinutes ?? 0) + (r.watchMinutes ?? 0);
-          merged.set(src, cur);
-        }
-        push(make("traffic_source", windowSub(tw), [...merged.values()]));
-      }
-    }
-    for (const dim of ["search_term", "external_site", "suggested_by", "playlist"]) {
-      const x = windowOf(dim);
-      if (x) push(make(dim, windowSub(x), x.rows));
-    }
-    for (const dim of ["subscribed", "device", "os", "playback_location", "product"]) push(make(dim, "Views in this range", perDay(dim)));
-    for (const dim of ["age_gender", "sharing"]) {
-      const x = windowOf(dim);
-      if (x) push(make(dim, windowSub(x), x.rows));
-    }
-  } else if (platform === "instagram") {
-    for (const dim of ["viewer_type", "content_type", "interactions_by_type", "follows"]) {
-      const x = windowOf(dim);
-      if (x) push(make(dim, windowSub(x), x.rows));
-    }
-    for (const dim of ["follower_age", "follower_gender", "follower_city", "engaged_age", "engaged_gender", "engaged_country", "engaged_city"]) {
-      const x = windowOf(dim, 0);
-      if (x) push(make(dim, windowSub(x), x.rows));
-    }
-    if (w.days > 28 && breakdowns.length) notes.push("Instagram shares its splits for the last 28 days at most.");
-  }
-  // Countries (YouTube: views in the range; the others: followers, latest copy).
-  if (platform === "youtube") {
-    const by = new Map<string, { views: number; watch: number | null }>();
-    for (const c of countries as Row[]) {
-      const cur = by.get(c.country as string) ?? { views: 0, watch: null };
-      cur.views += n(c.value) ?? 0;
-      if (n(c.watch_minutes) !== null) cur.watch = (cur.watch ?? 0) + n(c.watch_minutes)!;
-      by.set(c.country as string, cur);
-    }
-    if (by.size)
-      breakdowns.push({
-        id: "country",
-        title: "Countries",
-        sub: "Views in this range",
-        measure: "views",
-        percent: false,
-        valueLabel: null,
-        rows: [...by.entries()].map(([code, v]) => ({ key: code, label: countryName(code), views: v.views, watchMinutes: v.watch, value: null, prevViews: null, prevValue: null, href: null })).sort((a, b) => (b.views ?? 0) - (a.views ?? 0)),
-      });
-  } else {
-    const list = countries as Row[];
-    const day = list[0]?.day;
-    const rows = list.filter((r) => r.day === day).map((r) => ({ key: r.country as string, label: countryName(r.country as string), views: null, watchMinutes: null, value: n(r.value), prevViews: null, prevValue: null, href: null }));
-    if (rows.length) breakdowns.push({ id: "country", title: "Followers by country", sub: "As the platform has it now", measure: "value", percent: false, valueLabel: "followers", rows: rows.sort((a, b) => (b.value ?? 0) - (a.value ?? 0)) });
-  }
+  const { breakdowns, notes } = buildBreakdowns(platform, content, w, { sums: (sums.data ?? []) as Row[], prevSums: (prevSums.data ?? []) as Row[], windows, countries: countries as Row[] });
 
   // ---- Videos -------------------------------------------------------------------
   const curveOf = new Map(curves.map((r) => [r.external_id as string, readCurve(r.points)]));
@@ -581,6 +475,7 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     hook: v.hook,
     hour: v.hour,
     weekday: v.weekday,
+    thumbnail: v.thumbnail,
   });
   const pv = everything.map(asPattern);
   const patterns = {
@@ -602,6 +497,162 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     notes,
     hasData: groups.length > 0 || videos.length > 0,
   };
+}
+
+
+/**
+ * How the account's numbers split (traffic sources, devices, ages, countries…)
+ * for one platform: the Advanced page and the Audience tab (1.20.0).
+ * `sums` / `prevSums`: analytics_breakdown_sums for the range and the stretch
+ * before; `windows`: the 7 / 28 / 90 / 365-day and lifetime snapshots;
+ * `countries`: YouTube's views by country in the range, else the latest
+ * followers by country.
+ */
+export function buildBreakdowns(
+  platform: SocialPlatform,
+  content: Content,
+  w: Window,
+  src: { sums: Row[]; prevSums: Row[]; windows: Row[]; countries: Row[] }
+): { breakdowns: AdvBreakdown[]; notes: string[] } {
+  const notes: string[] = [];
+  const sumRows = src.sums.filter((r) => n(r.views) !== null || n(r.value) !== null);
+  const prevSumRows = src.prevSums;
+  const windows = src.windows;
+  const countries = src.countries;
+  const span = spanFor(platform, w);
+  const breakdowns: AdvBreakdown[] = [];
+  const make = (id: string, sub: string, rows: Omit<AdvRow, "label" | "href">[]): AdvBreakdown | null => {
+    const meta = DIMENSIONS[id];
+    if (!meta || !rows.length) return null;
+    const sorted = rows
+      .map((r) => ({ ...r, label: id === "engaged_country" ? countryName(r.key) : breakdownLabel(id, r.key), href: breakdownHref(id, r.key) }))
+      .sort((a, b) =>
+        // Ages read best youngest first; everything else biggest first.
+        id.endsWith("_age")
+          ? parseInt(a.key.match(/\d+/)?.[0] ?? "0", 10) - parseInt(b.key.match(/\d+/)?.[0] ?? "0", 10)
+          : meta.measure === "views"
+            ? (b.views ?? 0) - (a.views ?? 0)
+            : (b.value ?? 0) - (a.value ?? 0)
+      );
+    return { id, title: meta.title, sub, measure: meta.measure, percent: !!meta.percent, valueLabel: meta.valueLabel ?? null, rows: sorted };
+  };
+  const perDay = (dim: string) => {
+    const prev = new Map(prevSumRows.filter((r) => r.dimension === dim).map((r) => [r.key as string, r]));
+    return sumRows
+      .filter((r) => r.dimension === dim)
+      .map((r) => ({ key: r.key as string, views: n(r.views), watchMinutes: n(r.watch_minutes), value: n(r.value), prevViews: n(prev.get(r.key as string)?.views), prevValue: n(prev.get(r.key as string)?.value) }));
+  };
+  // A window: the one that matches the range, else the nearest one there is.
+  const windowOf = (dim: string, wanted = span) => {
+    const rows = windows.filter((r) => r.dimension === dim);
+    const pick = pickSpan([...new Set(rows.map((r) => Number(r.span)))], wanted);
+    if (pick === null) return null;
+    const list = rows.filter((r) => Number(r.span) === pick);
+    const day = list.map((r) => r.day as string).sort().pop() ?? null;
+    return { span: pick, day, rows: list.filter((r) => r.day === day).map((r) => ({ key: r.key as string, views: n(r.views), watchMinutes: n(r.watch_minutes), value: n(r.value), prevViews: null, prevValue: null })) };
+  };
+  const windowSub = (x: { span: number; day: string | null }) => windowWords(platform, x.span, x.day);
+  const push = (b: AdvBreakdown | null) => {
+    if (b) breakdowns.push(b);
+  };
+
+  if (platform === "youtube") {
+    if (content === "all") push(make("traffic_source", "Views in this range", perDay("traffic_source")));
+    else {
+      // Shorts or long videos only: the window that splits sources by kind.
+      const tw = windowOf("traffic_by_type");
+      if (tw) {
+        const want = content === "shorts" ? ["SHORTS"] : ["VIDEO_ON_DEMAND", "LIVE_STREAM"];
+        const merged = new Map<string, Omit<AdvRow, "label" | "href">>();
+        for (const r of tw.rows) {
+          const [type, src] = r.key.split("|");
+          if (!want.includes(type)) continue;
+          const cur = merged.get(src) ?? { key: src, views: 0, watchMinutes: 0, value: null, prevViews: null, prevValue: null };
+          cur.views = (cur.views ?? 0) + (r.views ?? 0);
+          cur.watchMinutes = (cur.watchMinutes ?? 0) + (r.watchMinutes ?? 0);
+          merged.set(src, cur);
+        }
+        push(make("traffic_source", windowSub(tw), [...merged.values()]));
+      }
+    }
+    for (const dim of ["search_term", "external_site", "suggested_by", "playlist"]) {
+      const x = windowOf(dim);
+      if (x) push(make(dim, windowSub(x), x.rows));
+    }
+    for (const dim of ["subscribed", "device", "os", "playback_location", "product"]) push(make(dim, "Views in this range", perDay(dim)));
+    for (const dim of ["age_gender", "sharing"]) {
+      const x = windowOf(dim);
+      if (x) push(make(dim, windowSub(x), x.rows));
+    }
+  } else if (platform === "instagram") {
+    for (const dim of ["viewer_type", "content_type", "interactions_by_type", "follows"]) {
+      const x = windowOf(dim);
+      if (x) push(make(dim, windowSub(x), x.rows));
+    }
+    for (const dim of ["follower_age", "follower_gender", "follower_city", "engaged_age", "engaged_gender", "engaged_country", "engaged_city"]) {
+      const x = windowOf(dim, 0);
+      if (x) push(make(dim, windowSub(x), x.rows));
+    }
+    if (w.days > 28 && breakdowns.length) notes.push("Instagram shares its splits for the last 28 days at most.");
+  }
+  // Countries (YouTube: views in the range; the others: followers, latest copy).
+  if (platform === "youtube") {
+    const yt = youtubeCountries(countries as Row[], windows, w);
+    if (yt.rows.length)
+      breakdowns.push({
+        id: "country",
+        title: "Countries",
+        sub: yt.sub,
+        measure: "views",
+        percent: false,
+        valueLabel: null,
+        rows: yt.rows.map((c) => ({ key: c.country, label: countryName(c.country), views: c.views, watchMinutes: c.watch, value: null, prevViews: null, prevValue: null, href: null })),
+      });
+  } else {
+    const list = countries as Row[];
+    const day = list[0]?.day;
+    const rows = list.filter((r) => r.day === day).map((r) => ({ key: r.country as string, label: countryName(r.country as string), views: null, watchMinutes: null, value: n(r.value), prevViews: null, prevValue: null, href: null }));
+    if (rows.length) breakdowns.push({ id: "country", title: "Followers by country", sub: "As the platform has it now", measure: "value", percent: false, valueLabel: "followers", rows: rows.sort((a, b) => (b.value ?? 0) - (a.value ?? 0)) });
+  }
+  return { breakdowns, notes };
+}
+
+/** The reads `buildBreakdowns` needs, for one platform. */
+export async function readBreakdowns(supabase: Supa, teamId: string, platform: SocialPlatform, w: Window): Promise<{ sums: Row[]; prevSums: Row[]; windows: Row[]; countries: Row[] }> {
+  const [sums, prevSums, windows, countries] = await Promise.all([
+    supabase.rpc("analytics_breakdown_sums", { p_team: teamId, p_platform: platform, p_from: w.from, p_to: w.to }),
+    supabase.rpc("analytics_breakdown_sums", { p_team: teamId, p_platform: platform, p_from: w.prevFrom, p_to: w.prevTo }),
+    all((a, b) => supabase.from("analytics_breakdowns").select("dimension, key, day, span, views, watch_minutes, value").eq("team_id", teamId).eq("platform", platform).eq("external_id", "").neq("span", 1).range(a, b), 6000),
+    platform === "youtube"
+      ? all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes, day").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b))
+      : supabase
+          .from("analytics_countries")
+          .select("country, value, day")
+          .eq("team_id", teamId)
+          .eq("platform", platform)
+          .eq("metric", "followers")
+          .order("day", { ascending: false })
+          .limit(400)
+          .then((r) => ((r.data ?? []) as Row[])),
+  ]);
+  return { sums: (sums.error ? [] : sums.data ?? []) as Row[], prevSums: (prevSums.error ? [] : prevSums.data ?? []) as Row[], windows, countries };
+}
+
+/** The Audience tab's splits (who watches, on what), for each platform that shares them. */
+export const AUDIENCE_DIMS = ["age_gender", "subscribed", "device", "os", "playback_location", "product", "viewer_type", "follows", "follower_age", "follower_gender", "follower_city", "engaged_age", "engaged_gender", "engaged_country", "engaged_city"];
+export async function getAudienceBreakdowns(teamId: string, w: Window): Promise<Partial<Record<SocialPlatform, AdvBreakdown[]>>> {
+  const supabase = await createClient();
+  const vis = await numbersVisibility(supabase, teamId);
+  const out: Partial<Record<SocialPlatform, AdvBreakdown[]>> = {};
+  await Promise.all(
+    (["youtube", "instagram"] as const)
+      .filter((p) => vis.platforms.has(p))
+      .map(async (p) => {
+        const list = buildBreakdowns(p, "all", w, await readBreakdowns(supabase, teamId, p, w)).breakdowns.filter((b) => AUDIENCE_DIMS.includes(b.id));
+        if (list.length) out[p] = list.sort((a, b) => AUDIENCE_DIMS.indexOf(a.id) - AUDIENCE_DIMS.indexOf(b.id));
+      })
+  );
+  return out;
 }
 
 /** The day, hour and weekday a moment falls on in a time zone. */
@@ -673,6 +724,8 @@ export function videoMapper(ctx: {
       subscribersGained: n(r.subscribers_gained),
       skipRate: n(r.skip_rate),
       reposts: n(r.reposts),
+      impressions: n(r.impressions),
+      ctr: n(r.ctr),
       metrics,
       revenue: mon
         ? { revenue: rev, rpm: rev !== null && viewsN ? (rev / viewsN) * 1000 : null, cpm: ctx.conv(n(mon.cpm), mon.currency), playbackCpm: ctx.conv(n(mon.playback_cpm), mon.currency), adImpressions: n(mon.ad_impressions), monetizedPlaybacks: n(mon.monetized_playbacks) }
@@ -742,6 +795,42 @@ export async function hooksFor(supabase: Supa, rows: Row[], full = false): Promi
     if (h) out.set(`l:${r.project_id}`, h.slice(0, full ? 4000 : 300));
   }
   return out;
+}
+
+/**
+ * A video's own splits since it was posted (1.21.0: its page's Reach and
+ * Audience tabs), drawn like the account's; `fetchedAt`: when YouTube last
+ * sent the full set (the page asks again after half a day).
+ */
+export async function getVideoBreakdowns(teamId: string, platform: SocialPlatform, id: string): Promise<{ list: AdvBreakdown[]; asOf: string | null; fetchedAt: string | null }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("analytics_breakdowns").select("dimension, key, views, watch_minutes, value, day, updated_at").eq("team_id", teamId).eq("platform", platform).eq("external_id", id).eq("span", 0).limit(1000);
+  if (error) return { list: [], asOf: null, fetchedAt: null };
+  const rows = (data ?? []) as Row[];
+  const dims = [...new Set(rows.map((r) => r.dimension as string))];
+  const list: AdvBreakdown[] = [];
+  for (const dim of dims) {
+    const meta = DIMENSIONS[dim];
+    if (!meta) continue;
+    const mine = rows.filter((r) => r.dimension === dim);
+    const sorted = mine
+      .map((r) => ({
+        key: r.key as string,
+        label: dim === "country" ? countryName(r.key as string) : breakdownLabel(dim, r.key as string),
+        href: breakdownHref(dim, r.key as string),
+        views: n(r.views),
+        watchMinutes: n(r.watch_minutes),
+        value: n(r.value),
+        prevViews: null,
+        prevValue: null,
+      }))
+      .sort((a, b) => (dim === "age_gender" ? 0 : meta.measure === "views" ? (b.views ?? 0) - (a.views ?? 0) : (b.value ?? 0) - (a.value ?? 0)));
+    if (sorted.length) list.push({ id: dim, title: meta.title, sub: "Since it was posted", measure: meta.measure, percent: !!meta.percent, valueLabel: meta.valueLabel ?? null, rows: sorted });
+  }
+  // Only the page's own fetch sends devices: when it ran (the morning copy keeps sources and searches up to date for a few).
+  const fetchedAt = rows.filter((r) => r.dimension === "device").map((r) => r.updated_at as string).sort().pop() ?? null;
+  const asOf = rows.map((r) => r.day as string).sort().pop() ?? null;
+  return { list, asOf, fetchedAt };
 }
 
 /** One video's own splits, for its details: traffic sources and search terms since it was published. */

@@ -1,27 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AnalyticsIcon, CloseIcon, ExternalIcon, GridIcon, ListIcon, SearchIcon } from "@/components/ui/icons";
-import { Segmented } from "@/components/ui/segmented";
+import { AnalyticsIcon, ExternalIcon, GridIcon, ListIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { searchVideos } from "@/app/(dashboard)/analytics/actions";
 import type { ContentItem } from "../lib/queries";
 import { scoreText, scoreTone } from "../lib/scores";
 import type { SocialPlatform } from "@/lib/social/providers";
 
 /*
- * Analytics → Content's list (1.17.0): search every video ever copied (by
- * title or #number; "/" jumps to the box, ↑ ↓ pick, Enter opens the
- * video's analytics), Shorts or long videos, columns that sort when you
- * click them (like YouTube Studio), a table or a grid, and an Analytics
- * button on every video.
+ * Analytics → Content's list (1.17.0): columns that sort when you click
+ * them (like YouTube Studio), a table or a grid, and an Analytics button on
+ * every video. Finding one video: the app's search (1.20.0: it lists videos
+ * with their numbers, so there's no second search box here).
  */
 
-type Kind = "all" | "short" | "long";
+export type ContentKind = "all" | "short" | "long" | "post";
 type View = "table" | "grid";
-type SortKey = "published" | "views" | "score" | "likes" | "comments" | "shares";
+type SortKey = "published" | "views" | "score" | "likes" | "comments" | "shares" | "impressions" | "ctr";
+/** Rows shown at first (and added with each "Show more"): a few thousand videos stay quick. */
+const PAGE = 100;
 
 const NAME: Record<SocialPlatform, string> = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
 const VIEW_KEY = "vp-content-view";
@@ -38,13 +36,6 @@ function compact(n: number | null | undefined) {
 const niceDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 export const videoHref = (c: { platform: string; id: string }, from = "content") => `/analytics/video/${c.platform}/${encodeURIComponent(c.id)}?from=${from}`;
 
-/** Does a video match the words typed (title or #number)? */
-function matches(c: ContentItem, q: string) {
-  const n = q.match(/^#?(\d{1,6})$/)?.[1];
-  if (n && c.ours?.number === Number(n)) return true;
-  return (c.title ?? "").toLowerCase().includes(q.toLowerCase());
-}
-
 const toneClass = { high: "text-green bg-green/12 ring-1 ring-green/25", up: "text-green bg-green/10", usual: "text-ink-soft bg-surface-2", down: "text-coral bg-coral/10", none: "text-ink-faint" } as const;
 
 export function ScoreBadge({ score, className = "" }: { score: number | null | undefined; className?: string }) {
@@ -57,17 +48,10 @@ export function ScoreBadge({ score, className = "" }: { score: number | null | u
   );
 }
 
-export function ContentList({ teamId, items, platform, empty }: { teamId: string; items: ContentItem[]; platform: "all" | SocialPlatform; empty: string }) {
-  const router = useRouter();
-  const [q, setQ] = useState("");
-  const [kind, setKind] = useState<Kind>("all");
+export function ContentList({ items, platform, kind, empty, left }: { items: ContentItem[]; platform: "all" | SocialPlatform; kind: ContentKind; empty: string; left?: React.ReactNode }) {
   const [view, setView] = useState<View>("table");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "views", dir: -1 });
-  const [found, setFound] = useState<{ q: string; items: ContentItem[] } | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [active, setActive] = useState(0);
-  const box = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(PAGE);
 
   // The view you last picked (this device).
   useEffect(() => {
@@ -84,37 +68,24 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
     } catch {}
   };
 
-  // Every video ever copied, not just this range's: asked a moment after typing stops.
-  const query = q.trim();
-  useEffect(() => {
-    if (!query) {
-      setFound(null);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    let live = true;
-    const t = setTimeout(() => {
-      searchVideos(teamId, query)
-        .then((r) => {
-          if (!live) return;
-          setFound({ q: query, items: r.error !== undefined ? [] : r.items });
-        })
-        .finally(() => live && setSearching(false));
-    }, 220);
-    return () => {
-      live = false;
-      clearTimeout(t);
-    };
-  }, [query, teamId]);
-
   const list = useMemo(() => {
-    // While the search runs: this range's matches straight away.
-    const base = query ? (found && found.q === query ? found.items : items.filter((c) => matches(c, query))) : items;
-    const filtered = base.filter((c) => (platform === "all" || c.platform === platform) && (kind === "all" || c.kind === kind));
-    if (query && found?.q === query && sort.key === "views" && sort.dir === -1) return filtered; // best matches first
+    const filtered = items.filter((c) => (platform === "all" || c.platform === platform) && (kind === "all" || c.kind === kind));
     const get = (c: ContentItem): number | string | null =>
-      sort.key === "published" ? c.publishedAt ?? null : sort.key === "score" ? c.score ?? null : sort.key === "views" ? c.views : sort.key === "likes" ? c.likes : sort.key === "comments" ? c.comments : c.shares;
+      sort.key === "published"
+        ? (c.publishedAt ?? null)
+        : sort.key === "score"
+          ? (c.score ?? null)
+          : sort.key === "views"
+            ? c.views
+            : sort.key === "likes"
+              ? c.likes
+              : sort.key === "comments"
+                ? c.comments
+                : sort.key === "impressions"
+                  ? (c.impressions ?? null)
+                  : sort.key === "ctr"
+                    ? (c.ctr ?? null)
+                    : c.shares;
     return [...filtered].sort((a, b) => {
       const x = get(a);
       const y = get(b);
@@ -123,39 +94,14 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
       if (y === null) return -1;
       return sort.dir * (x < y ? -1 : x > y ? 1 : 0);
     });
-  }, [items, found, query, platform, kind, sort]);
+  }, [items, platform, kind, sort]);
 
-  useEffect(() => setActive(0), [query, platform, kind, sort]);
-
-  const open = (c: ContentItem | undefined) => {
-    if (c && !c.noNumbers) router.push(videoHref(c));
-  };
-  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((a) => Math.min(list.length - 1, a + 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((a) => Math.max(0, a - 1));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      open(list[active]);
-    } else if (e.key === "Escape" && q) {
-      e.preventDefault();
-      setQ("");
-    }
-  };
-  // Keep the picked one in view.
   useEffect(() => {
-    if (!query) return;
-    listRef.current?.querySelector<HTMLElement>(`[data-row="${active}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [active, query]);
-
-  const counts = useMemo(() => {
-    const base = query ? (found?.q === query ? found.items : items.filter((c) => matches(c, query))) : items;
-    const inPlatform = base.filter((c) => platform === "all" || c.platform === platform);
-    return { all: inPlatform.length, short: inPlatform.filter((c) => c.kind === "short").length, long: inPlatform.filter((c) => c.kind === "long").length };
-  }, [items, found, query, platform]);
+    setShown(PAGE);
+  }, [platform, kind, sort, items]);
+  // Impressions and CTR: only when some video has them (YouTube, from 1.19.0).
+  const reach = useMemo(() => list.some((c) => c.impressions !== null && c.impressions !== undefined), [list]);
+  const page = list.slice(0, shown);
 
   const head = (key: SortKey, label: string, right = true, title?: string) => {
     const on = sort.key === key;
@@ -172,41 +118,7 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <label className="flex items-center gap-2 h-9 rounded-lg border border-line/15 bg-surface px-2.5 w-full sm:w-80 focus-within:ring-2 focus-within:ring-amber/40">
-          <SearchIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
-          <input
-            ref={box}
-            // "/" anywhere on the page lands here (the app's search hands it over: components/search/global-search.tsx).
-            data-page-search
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={onSearchKey}
-            placeholder="Search every video, or #number"
-            aria-label="Search videos"
-            role="combobox"
-            aria-expanded={!!query}
-            aria-controls="content-results"
-            aria-activedescendant={query && list[active] ? `content-row-${active}` : undefined}
-            className="flex-1 min-w-0 bg-transparent outline-none text-[13px]"
-          />
-          {q ? (
-            <button type="button" onClick={() => setQ("")} aria-label="Clear the search" className="w-6 h-6 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
-              <CloseIcon className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <kbd className="hidden sm:inline-flex items-center rounded-md border border-line/20 px-1.5 h-5 text-[10.5px] font-mono text-ink-faint">/</kbd>
-          )}
-        </label>
-        <Segmented<Kind>
-          value={kind}
-          onChange={setKind}
-          ariaLabel="Which videos"
-          options={[
-            { value: "all", label: "All", count: counts.all },
-            { value: "short", label: "Shorts", count: counts.short },
-            { value: "long", label: "Long", count: counts.long },
-          ]}
-        />
+        {left}
         <span className="flex-1" />
         <div className="inline-flex items-center rounded-lg border border-line/15 bg-surface p-0.5" role="radiogroup" aria-label="Show as">
           {(["table", "grid"] as View[]).map((v) => (
@@ -226,25 +138,13 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
         </div>
       </div>
 
-      {query && (
-        <p className="text-[12.5px] text-ink-soft" aria-live="polite">
-          {searching && !(found?.q === query) ? (
-            "Searching every video…"
-          ) : (
-            <>
-              {list.length} {list.length === 1 ? "video matches" : "videos match"} &ldquo;{query}&rdquo; (all time)
-              {list.length > 0 && <span className="hidden sm:inline text-ink-faint"> · ↑ ↓ to pick, Enter opens its analytics</span>}
-            </>
-          )}
-        </p>
-      )}
-
-      <div ref={listRef} id="content-results">
+      <div id="content-results">
         {list.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{query ? (searching ? "Searching…" : "No video matches that.") : kind !== "all" ? `No ${kind === "short" ? "shorts" : "long videos"} here.` : empty}</p>
+          <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{kind !== "all" ? `No ${kind === "short" ? "shorts" : kind === "long" ? "long videos" : "posts"} here.` : empty}</p>
         ) : view === "table" ? (
-          <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
-            <table className="w-full min-w-[820px] text-[13px]">
+          // (relative: the hidden labels inside scroll with the table instead of widening the page.)
+          <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+            <table className={`w-full text-[13px] ${reach ? "min-w-[980px]" : "min-w-[820px]"}`}>
               <thead>
                 <tr className="bg-surface-2 text-[10.5px] text-ink-faint text-left">
                   <th className="px-3 py-2 font-bold uppercase tracking-wide">Video</th>
@@ -254,13 +154,15 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                   {head("likes", "Likes")}
                   {head("comments", "Comments")}
                   {head("shares", "Shares")}
+                  {reach && head("impressions", "Impressions", true, "How many times YouTube showed the thumbnail (over the days YouTube keeps)")}
+                  {reach && head("ctr", "CTR", true, "Impressions click-through rate: views from those impressions ÷ impressions")}
                   <th className="px-3 py-2" aria-label="Open" />
                 </tr>
               </thead>
               <tbody>
-                {list.map((c, i) => (
-                  <tr key={`${c.platform}${c.id}`} id={`content-row-${i}`} data-row={i} aria-selected={query ? i === active : undefined} className={`border-t border-line/10 ${query && i === active ? "bg-amber/[0.07]" : "hover:bg-surface-2/40"}`}>
-                    <td className="px-3 py-2 max-w-[24rem]">
+                {page.map((c) => (
+                  <tr key={`${c.platform}${c.id}`} className="border-t border-line/10 hover:bg-surface-2/40">
+                    <td className={`px-3 py-2 ${reach ? "max-w-[20rem]" : "max-w-[24rem]"}`}>
                       <span className="flex items-center gap-3 min-w-0">
                         <Thumb c={c} className="w-16 h-9" />
                         <span className="min-w-0">
@@ -293,8 +195,10 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.likes)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.comments)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.shares)}</td>
+                    {reach && <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{fmtInt(c.impressions)}</td>}
+                    {reach && <td className="px-3 py-2 text-right tabular-nums text-ink-soft">{c.ctr === null || c.ctr === undefined ? "–" : `${c.ctr.toFixed(1)}%`}</td>}
                     <td className="px-3 py-2">
-                      <Actions c={c} />
+                      <Actions c={c} wide={reach} />
                     </td>
                   </tr>
                 ))}
@@ -303,8 +207,8 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
           </div>
         ) : (
           <ul className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,210px),1fr))]">
-            {list.map((c, i) => (
-              <li key={`${c.platform}${c.id}`} id={`content-row-${i}`} data-row={i} className={`group rounded-2xl border bg-surface overflow-hidden flex flex-col ${query && i === active ? "border-amber/50 ring-2 ring-amber/30" : "border-line/10 hover:border-line/25"}`}>
+            {page.map((c) => (
+              <li key={`${c.platform}${c.id}`} className="group rounded-2xl border border-line/10 hover:border-line/25 bg-surface overflow-hidden flex flex-col">
                 <Link href={c.noNumbers ? "#" : videoHref(c)} aria-disabled={c.noNumbers || undefined} onClick={(e) => c.noNumbers && e.preventDefault()} className="block relative aspect-video bg-surface-2 overflow-hidden">
                   {c.thumbnail ? (
                     <>
@@ -337,7 +241,11 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
                   <div className="mt-auto pt-2.5 flex items-end gap-3">
                     <div className="min-w-0">
                       <div className="font-display text-[19px] font-semibold tabular-nums leading-none">{compact(c.views)}</div>
-                      <div className="text-[10.5px] text-ink-faint mt-0.5">{c.noNumbers ? `no numbers from ${NAME[c.platform]} yet` : `views · ${compact(c.likes)} likes · ${compact(c.comments)} comments`}</div>
+                      <div className="text-[10.5px] text-ink-faint mt-0.5">
+                        {c.noNumbers
+                          ? `no numbers from ${NAME[c.platform]} yet`
+                          : `views · ${compact(c.likes)} likes · ${compact(c.comments)} comments${c.ctr !== null && c.ctr !== undefined ? ` · ${c.ctr.toFixed(1)}% CTR` : ""}`}
+                      </div>
                     </div>
                     <span className="flex-1" />
                     <Actions c={c} compact />
@@ -346,6 +254,19 @@ export function ContentList({ teamId, items, platform, empty }: { teamId: string
               </li>
             ))}
           </ul>
+        )}
+        {list.length > page.length && (
+          <div className="flex items-center justify-center gap-3 pt-3">
+            <span className="text-[12px] text-ink-faint tabular-nums">
+              {page.length.toLocaleString("en-US")} of {list.length.toLocaleString("en-US")}
+            </span>
+            <button type="button" onClick={() => setShown((n) => n + PAGE * 2)} className="inline-flex items-center rounded-lg border border-line/15 px-3.5 h-9 text-[12.5px] font-semibold hover:border-line/30 hover:bg-surface-2">
+              Show {Math.min(PAGE * 2, list.length - page.length).toLocaleString("en-US")} more
+            </button>
+            <button type="button" onClick={() => setShown(list.length)} className="text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:underline">
+              Show all
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -365,18 +286,19 @@ function Thumb({ c, className }: { c: ContentItem; className: string }) {
 }
 
 /** Analytics (this video's page) and Open (on the platform). */
-function Actions({ c, compact: small = false }: { c: ContentItem; compact?: boolean }) {
+/** `wide`: a table with more columns (the label only on the widest screens). */
+function Actions({ c, compact: small = false, wide = false }: { c: ContentItem; compact?: boolean; wide?: boolean }) {
   return (
     <span className="flex items-center justify-end gap-1.5">
       {c.noNumbers ? (
         <span title={`No numbers from ${NAME[c.platform]} yet`} className={`inline-flex items-center gap-1.5 rounded-lg border border-line/10 h-8 text-[12px] font-semibold text-ink-faint ${small ? "w-8 justify-center" : "px-2.5"}`}>
           <AnalyticsIcon className="w-4 h-4" />
-          {!small && <span className="hidden lg:inline">Analytics</span>}
+          {!small && <span className={wide ? "hidden 2xl:inline" : "hidden lg:inline"}>Analytics</span>}
         </span>
       ) : (
         <Link href={videoHref(c)} title="This video's analytics" aria-label="This video's analytics" className={`inline-flex items-center gap-1.5 rounded-lg border border-line/15 h-8 text-[12px] font-semibold text-ink hover:border-amber/50 hover:text-amber ${small ? "w-8 justify-center" : "px-2.5"}`}>
           <AnalyticsIcon className="w-4 h-4" />
-          {!small && <span className="hidden lg:inline">Analytics</span>}
+          {!small && <span className={wide ? "hidden 2xl:inline" : "hidden lg:inline"}>Analytics</span>}
         </Link>
       )}
       {c.url && (

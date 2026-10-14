@@ -34,7 +34,30 @@ export type PatternVideo = {
   /** Posting time in the team's time zone: hour 0–23, weekday 0 = Monday. */
   hour?: number | null;
   weekday?: number | null;
+  /** Its picture (the Examples, 1.21.0). */
+  thumbnail?: string | null;
 };
+
+/** A video behind a finding, as its Examples show it (1.21.0). */
+export type ExampleVideo = {
+  platform: Platform;
+  id: string;
+  title: string | null;
+  thumbnail: string | null;
+  views: number | null;
+  publishedAt: string | null;
+  durationSec: number | null;
+  hour: number | null;
+  weekday: number | null;
+  avgViewPct: number | null;
+  hold3s: number | null;
+  skipRate: number | null;
+  hook: string | null;
+  /** Subscribers per 1,000 views (YouTube). */
+  subsPer1k: number | null;
+};
+/** One side of a finding: the videos that fit it, or the rest; `median`: their middle views. */
+export type FindingSide = { label: string; n: number; median: number | null; videos: ExampleVideo[] };
 
 export type Finding = {
   id: string;
@@ -49,7 +72,60 @@ export type Finding = {
   groups: { label: string; n: number; median: number }[];
   /** A few of the videos behind it (best first). */
   examples: { id: string; title: string | null; views: number | null }[];
+  /**
+   * The videos that fit it next to the rest (1.21.0, its Examples): up to
+   * five typical ones on each side (the closest to that side's middle
+   * views, so the pairs say what the medians say), newest first.
+   */
+  sides?: { fit: FindingSide; rest: FindingSide };
 };
+
+/** How many examples each side of a finding keeps. */
+export const EXAMPLES = 5;
+
+const exampleOf = (v: PatternVideo): ExampleVideo => ({
+  platform: v.platform,
+  id: v.id,
+  title: v.title,
+  thumbnail: v.thumbnail ?? null,
+  views: v.views,
+  publishedAt: v.publishedAt,
+  durationSec: v.durationSec,
+  hour: v.hour ?? null,
+  weekday: v.weekday ?? null,
+  avgViewPct: v.avgViewPct ?? null,
+  hold3s: v.hold3s ?? null,
+  skipRate: v.skipRate ?? null,
+  hook: v.hook ? hookOpening(v.hook).slice(0, 200) : null,
+  subsPer1k: v.subscribersGained !== null && v.subscribersGained !== undefined && v.views ? Math.round((v.subscribersGained / v.views) * 10000) / 10 : null,
+});
+
+/**
+ * Up to `n` of a group's typical videos: the closest to its median views
+ * (the middle, not its best: the examples should say what the numbers say),
+ * newest first.
+ */
+export function typicalOf(members: PatternVideo[], n = EXAMPLES): PatternVideo[] {
+  const m = median(members.map((v) => v.views ?? NaN).filter((x) => Number.isFinite(x)));
+  if (m === null) return [];
+  const dist = (v: PatternVideo) => Math.abs(Math.log(((v.views ?? 0) + 1) / (m + 1)));
+  return [...members]
+    .filter((v) => v.views !== null && v.views !== undefined)
+    .sort((a, b) => dist(a) - dist(b) || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+    .slice(0, n)
+    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+}
+
+/** Both sides of a finding, for its Examples. */
+export function sidesOf(fit: { label: string; members: PatternVideo[] }, rest: { label: string; members: PatternVideo[] }): NonNullable<Finding["sides"]> {
+  const side = (x: { label: string; members: PatternVideo[] }): FindingSide => ({
+    label: x.label,
+    n: x.members.length,
+    median: median(x.members.map((v) => v.views ?? NaN).filter((y) => Number.isFinite(y))),
+    videos: typicalOf(x.members).map(exampleOf),
+  });
+  return { fit: side(fit), rest: side(rest) };
+}
 
 export type Patterns = {
   platform: Platform;
@@ -285,6 +361,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
     // "vs 12K for titles without a question", "vs 9K for the rest".
     const other = sp.binary ? sp.phrase(groups.find((x) => x !== best)!.g.label, noun).replace(/ get$/, "") : null;
     const others = other ? `${other[0].toLowerCase()}${other.slice(1)}` : "the rest";
+    const fitLabel = sp.phrase(best.g.label, noun).replace(/ get$/, "");
     findings.push({
       id: `${o.platform}-${o.kind}-${sp.id}`,
       tone: "good",
@@ -294,6 +371,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
       ratio: Math.round(ratio * 100) / 100,
       groups: groups.map((x) => ({ label: x.g.label, n: x.n, median: x.median! })),
       examples: [...best.members].sort((a, b) => views(b) - views(a)).slice(0, 3).map((v) => ({ id: v.id, title: v.title, views: v.views })),
+      sides: sidesOf({ label: `${fitLabel[0].toUpperCase()}${fitLabel.slice(1)}`, members: best.members }, { label: other ? `${other[0].toUpperCase()}${other.slice(1)}` : `Other ${noun.toLowerCase()}`, members: restMembers }),
     });
   }
 
@@ -320,6 +398,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
             { label: `the ${n} before`, n, median: before },
           ],
           examples: byDate.slice(0, 3).map((v) => ({ id: v.id, title: v.title, views: v.views })),
+          sides: sidesOf({ label: `Your latest ${n}`, members: byDate.slice(0, n) }, { label: `The ${n} before`, members: byDate.slice(n, 2 * n) }),
         });
     }
   }
@@ -341,6 +420,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
         ratio: null,
         groups: [],
         examples: top.map((v) => ({ id: v.id, title: v.title, views: v.views })),
+        sides: sidesOf({ label: "The most subscribers per 1,000 views", members: sorted.slice(0, Math.max(3, Math.min(EXAMPLES, Math.floor(sorted.length / 4)))) }, { label: `Your other ${noun.toLowerCase()}`, members: sorted.slice(Math.max(3, Math.min(EXAMPLES, Math.floor(sorted.length / 4)))) }),
       });
   }
 
