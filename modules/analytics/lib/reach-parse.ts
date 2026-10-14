@@ -83,7 +83,8 @@ export function parseReachCsv(text: string): ReachRow[] {
     day: r.day,
     video: r.video,
     impressions: r.impressions,
-    ctr: r.known && r.impressions > 0 ? Math.round((r.clicks / r.impressions) * 10000) / 100 : r.known ? 0 : null,
+    // No impressions: no click-through rate (1.22.0: it was 0%, a dip to nothing on the chart).
+    ctr: r.known && r.impressions > 0 ? Math.round((r.clicks / r.impressions) * 10000) / 100 : null,
   }));
 }
 
@@ -101,4 +102,18 @@ export function sumReach(rows: { impressions: number | null; ctr: number | null 
     }
   }
   return { impressions, ctr: weighted > 0 ? Math.round((clicks / weighted) * 10000) / 100 : null };
+}
+
+/**
+ * Where the next run starts (1.22.0): after the last report saved, unless
+ * the next one, not saved yet, was made at the same moment. YouTube lists
+ * the reports made strictly after a moment, so that one would have been
+ * skipped for good: then the moment before both (the saved one is just
+ * saved again next time; saving is the same either way).
+ */
+export function cursorAfter(saved: { createTime: string }[], next: { createTime: string } | null, before: string | null): string | null {
+  if (!saved.length) return before;
+  const last = saved[saved.length - 1].createTime;
+  if (!next || next.createTime !== last) return last;
+  return [...saved].reverse().find((r) => r.createTime !== last)?.createTime ?? before;
 }

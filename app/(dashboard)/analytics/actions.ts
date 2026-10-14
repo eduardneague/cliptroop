@@ -7,11 +7,11 @@ import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
 import { fetchYouTubeDay, fetchYouTubeRevenueVideos, fetchYouTubeVideoDetails, fetchYouTubeVideoHistory, fetchYouTubeVideoRevenueDays, syncTeamAnalytics, type RevenueVideoRow } from "@/modules/analytics/lib/sync";
-import { convert, getFxRates, isCurrencyCode } from "@/lib/fx";
+import { isCurrencyCode } from "@/lib/fx";
 import { liveTeamPlatform } from "@/modules/analytics/lib/live";
-import { getRealtime, type Realtime } from "@/modules/analytics/lib/realtime";
 import { canViewRevenue, findVideos, getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production, type RevenueVideos } from "@/modules/analytics/lib/queries";
 import { historyToFill } from "@/modules/analytics/lib/video";
+import { isKind, type VideoKind } from "@/modules/analytics/lib/kinds";
 import { addDays, daysBetween, readCustom, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
 import { getVideoSplits } from "@/modules/analytics/lib/advanced";
 import { gatherClaudeExport, type ClaudeExportData } from "@/modules/analytics/lib/claude-export";
@@ -240,13 +240,15 @@ export async function loadRevenueVideos(teamId: string, from: string, to: string
   if (!user) return { error: "Your session expired. Sign in again." };
   if (!(await canViewRevenue(supabase, teamId))) return { error: "Only the people who see revenue can open this." };
   const stored = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
-  const [wanted, fx] = await Promise.all([personCurrency(supabase, user.id), getFxRates()]);
-  const currency = wanted && (wanted === stored || (fx?.rates[wanted] && fx?.rates[stored])) ? wanted : stored;
-  const key = `${teamId}:${from}:${to}`;
+  // Asked from YouTube in this person's currency (1.22.0): YouTube converts each day at that day's rate,
+  // as YouTube Studio does (converting its dollars here at today's rate made 3.53 € read as 3.40 €).
+  const wanted = await personCurrency(supabase, user.id);
+  const currency = isCurrencyCode(wanted) ? wanted : stored;
+  const key = `${teamId}:${from}:${to}:${currency}`;
   let hit = revenueVideosAsked.get(key);
   if (!hit || hit.at < Date.now() - 10 * 60_000) {
     try {
-      hit = { at: Date.now(), rows: await fetchYouTubeRevenueVideos(teamId, from, to, stored) };
+      hit = { at: Date.now(), rows: await fetchYouTubeRevenueVideos(teamId, from, to, currency) };
     } catch (e) {
       console.error("[revenue videos]", e instanceof Error ? e.message : e);
       return { error: "YouTube didn't send the revenue per video this time. Try again in a moment." };
@@ -261,13 +263,12 @@ export async function loadRevenueVideos(teamId: string, from: string, to: string
     : { data: [] };
   const byId = new Map(((known ?? []) as Record<string, unknown>[]).map((r) => [r.external_id as string, r]));
   const one = <T,>(x: T | T[] | null | undefined) => (Array.isArray(x) ? (x[0] ?? null) : (x ?? null));
-  const conv = (n: number) => (currency === stored ? n : (convert(n, stored, currency, fx) ?? n));
   const videos = hit.rows.map((r) => {
     const c = byId.get(r.id);
     const s = one(c?.short_videos as { entry_number: number } | { entry_number: number }[] | null | undefined);
     const l = one(c?.long_video_projects as { entry_number: number } | { entry_number: number }[] | null | undefined);
-    const revenue = conv(r.revenue);
-    const kind: "short" | "long" = c?.kind === "short" || c?.kind === "long" ? (c.kind as "short" | "long") : r.durationSec !== null && r.durationSec <= 180 ? "short" : "long";
+    const revenue = r.revenue;
+    const kind: VideoKind = isKind(c?.kind) ? c.kind : r.durationSec !== null && r.durationSec <= 180 ? "short" : "long";
     return {
       platform: "youtube" as const,
       id: r.id,
@@ -328,13 +329,14 @@ export async function loadVideoRevenueDays(teamId: string, id: string): Promise<
   const posted = typeof c?.published_at === "string" ? (c.published_at as string).slice(0, 10) : addDays(to, -89);
   const from = posted < addDays(to, -1094) ? addDays(to, -1094) : posted > to ? to : posted;
   const stored = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
-  const [wanted, fx] = await Promise.all([personCurrency(supabase, user.id), getFxRates()]);
-  const currency = wanted && (wanted === stored || (fx?.rates[wanted] && fx?.rates[stored])) ? wanted : stored;
-  const key = `${teamId}:${id}:${from}:${to}`;
+  // In this person's currency, converted by YouTube day by day like YouTube Studio's (1.22.0).
+  const wanted = await personCurrency(supabase, user.id);
+  const currency = isCurrencyCode(wanted) ? wanted : stored;
+  const key = `${teamId}:${id}:${from}:${to}:${currency}`;
   let hit = videoRevenueAsked.get(key);
   if (!hit || hit.at < Date.now() - 10 * 60_000) {
     try {
-      hit = { at: Date.now(), rows: await fetchYouTubeVideoRevenueDays(teamId, id, from, to, stored) };
+      hit = { at: Date.now(), rows: await fetchYouTubeVideoRevenueDays(teamId, id, from, to, currency) };
     } catch (e) {
       console.error("[video revenue]", e instanceof Error ? e.message : e);
       return { error: "YouTube didn't send this video's revenue per day this time. Try again in a moment." };
@@ -343,8 +345,7 @@ export async function loadVideoRevenueDays(teamId: string, id: string): Promise<
     if (videoRevenueAsked.size > 500) videoRevenueAsked.clear();
   }
   if (!hit.rows) return { data: { currency, days: [], note: "Connect YouTube with revenue allowed (Team → Connected accounts) to see this video's revenue per day." } };
-  const conv = (x: number | null) => (x === null ? null : currency === stored ? x : (convert(x, stored, currency, fx) ?? x));
-  return { data: { currency, days: hit.rows.map((r) => ({ ...r, revenue: conv(r.revenue) ?? 0, adRevenue: conv(r.adRevenue), cpm: conv(r.cpm), playbackCpm: conv(r.playbackCpm) })), note: null } };
+  return { data: { currency, days: hit.rows, note: null } };
 }
 
 // A video's history asked from YouTube at most every 30 minutes (per server).
@@ -385,18 +386,6 @@ export async function searchVideos(teamId: string, q: string): Promise<Result<{ 
   } catch (e) {
     console.error("[video search]", e instanceof Error ? e.message : e);
     return { error: "Couldn't search right now." };
-  }
-}
-
-/** Analytics' realtime (1.19.0): the last 48 hours and 60 minutes, the videos getting views now. */
-export async function loadRealtime(teamId: string, full = false): Promise<Realtime | null> {
-  if (!UUID.test(teamId)) return null;
-  if (!(await teamTz(teamId))) return null;
-  try {
-    return await getRealtime(teamId, { full: full === true });
-  } catch (e) {
-    console.error("[realtime]", e instanceof Error ? e.message : e);
-    return null;
   }
 }
 

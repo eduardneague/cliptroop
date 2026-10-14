@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, SHORTS_ICON_PATH, VIDEO_ICON_PATH } from "@/components/ui/icons";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
+import { ChevronLeftIcon, ChevronRightIcon, LIVE_ICON_PATH, SHORTS_ICON_PATH, VIDEO_ICON_PATH } from "@/components/ui/icons";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import type { SocialPlatform } from "@/lib/social/providers";
+import { KIND_LABEL, KIND_PLURAL, type VideoKind } from "../lib/kinds";
 
 /*
  * Small SVG charts for Analytics (no chart library). Rules followed:
@@ -50,30 +55,217 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const;
 }
 
-export type Series = { key: string; label: string; color: string; values: (number | null)[] };
+export type Series = {
+  key: string;
+  label: string;
+  color: string;
+  values: (number | null)[];
+  /** Points worked out rather than counted (1.22.0): drawn dashed, and said in the tooltip. */
+  est?: boolean[];
+};
 
-/** What was posted at a point on a chart: drawn as the sidebar's icon for its kind, in the team's colour (Team → Colors). */
-export type MarkKind = "short" | "long" | "post";
-export type Mark = { title: string; kind: MarkKind };
-export const MARK_COLOR: Record<MarkKind, string> = { short: "rgb(var(--short))", long: "rgb(var(--long))", post: "rgb(var(--ink-faint))" };
-const MARK_ORDER: MarkKind[] = ["short", "long", "post"];
+/**
+ * What was posted at a point on a chart (videos, by kind). 1.22.0: one icon
+ * per point under the chart (the kind's icon for one video, the count for
+ * more), and pointing at it lists them, like YouTube Studio.
+ */
+export type MarkKind = VideoKind;
+export type Mark = {
+  title: string;
+  kind: MarkKind;
+  /** For the list: which video, where it opens, its picture and when it was posted. */
+  id?: string;
+  platform?: SocialPlatform;
+  thumbnail?: string | null;
+  at?: string | null;
+  href?: string;
+};
+export const MARK_COLOR: Record<MarkKind, string> = { short: "rgb(var(--short))", long: "rgb(var(--long))", live: "rgb(var(--chart-live))", post: "rgb(var(--ink-faint))" };
+const MARK_ORDER: MarkKind[] = ["short", "long", "live", "post"];
+const MARK_PATH: Record<Exclude<MarkKind, "post">, string> = { short: SHORTS_ICON_PATH, long: VIDEO_ICON_PATH, live: LIVE_ICON_PATH };
 
-/** A kind's icon at (cx, top), `size` px: the Shorts and long-video shapes of the sidebar; a post is a small card. */
-function MarkGlyph({ kind, cx, top, size }: { kind: MarkKind; cx: number; top: number; size: number }) {
-  if (kind === "post") return <rect x={cx - size * 0.36} y={top + size * 0.14} width={size * 0.72} height={size * 0.72} rx={size * 0.18} fill={MARK_COLOR.post} />;
-  return (
-    <g transform={`translate(${(cx - size / 2).toFixed(1)},${top.toFixed(1)}) scale(${(size / 24).toFixed(3)})`}>
-      <path d={kind === "short" ? SHORTS_ICON_PATH : VIDEO_ICON_PATH} fill={MARK_COLOR[kind]} fillRule="evenodd" />
-    </g>
-  );
-}
-
-/** The same icon as a small inline picture (tooltips, legends). */
+/** The sidebar's icon for a kind as a small inline picture (tooltips, legends, lists). */
 export function MarkIcon({ kind, className = "w-3.5 h-3.5" }: { kind: MarkKind; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={`${className} flex-shrink-0`} aria-hidden>
-      {kind === "post" ? <rect x="5" y="5" width="14" height="14" rx="3.5" fill={MARK_COLOR.post} /> : <path d={kind === "short" ? SHORTS_ICON_PATH : VIDEO_ICON_PATH} fill={MARK_COLOR[kind]} fillRule="evenodd" />}
+      {kind === "post" ? <rect x="5" y="5" width="14" height="14" rx="3.5" fill={MARK_COLOR.post} /> : <path d={MARK_PATH[kind]} fill={MARK_COLOR[kind]} fillRule="evenodd" />}
     </svg>
+  );
+}
+
+/** "13 Shorts, 1 long video and 1 live stream". */
+export function kindCounts(items: { kind: MarkKind }[]): string {
+  const parts = MARK_ORDER.map((k) => {
+    const c = items.filter((x) => x.kind === k).length;
+    if (!c) return null;
+    const one = KIND_LABEL[k].toLowerCase();
+    return `${c} ${c === 1 ? (k === "short" ? "Short" : one) : k === "short" ? "Shorts" : KIND_PLURAL[k]}`;
+  }).filter((x): x is string => !!x);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : (parts[0] ?? "");
+}
+
+const markTime = (at: string | null | undefined, withDay: boolean) => {
+  if (!at) return "";
+  const d = new Date(at);
+  if (!Number.isFinite(d.getTime())) return "";
+  return d.toLocaleString("en-US", withDay ? { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" } : { hour: "numeric", minute: "2-digit" });
+};
+
+/**
+ * The icon under a point of the chart where videos were posted: one video
+ * shows its kind's icon, more show how many. Pointing at it (or focusing it,
+ * or tapping it) opens the list: how many of each kind, each one with its
+ * picture, when it went up, and a link to its analytics.
+ */
+function PostedMark({ items, left, top, size, when, withDay }: { items: Mark[]; left: number; top: number; size: number; when: string; withDay: boolean }) {
+  const [open, setOpen] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const shut = useRef<number | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; up: boolean } | null>(null);
+  const kinds = MARK_ORDER.filter((k) => items.some((m) => m.kind === k));
+  const main = kinds.length ? kinds.reduce((a, b) => (items.filter((m) => m.kind === b).length > items.filter((m) => m.kind === a).length ? b : a)) : "post";
+  const cancel = () => {
+    if (shut.current) window.clearTimeout(shut.current);
+    shut.current = null;
+  };
+  const show = () => {
+    cancel();
+    setOpen(true);
+  };
+  const hide = (ms = 160) => {
+    cancel();
+    shut.current = window.setTimeout(() => setOpen(false), ms);
+  };
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = btn.current?.getBoundingClientRect();
+      if (!r) return;
+      const w = 320;
+      const up = r.top > 360 || r.top > window.innerHeight - r.bottom;
+      setPos({ left: Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8), top: up ? r.top - 8 : r.bottom + 8, up });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btn.current?.focus();
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!btn.current?.contains(t) && !pop.current?.contains(t)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  useEffect(() => () => cancel(), []);
+  const label = `${items.length} video${items.length === 1 ? "" : "s"} posted ${when}`;
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onPointerEnter={(e) => e.pointerType === "mouse" && show()}
+        onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
+        onFocus={show}
+        onBlur={(e) => {
+          if (!pop.current?.contains(e.relatedTarget as Node | null)) hide(80);
+        }}
+        onClick={() => (open ? setOpen(false) : show())}
+        className="absolute z-[2] flex items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-amber transition-transform hover:scale-110"
+        style={{ left: left - size / 2, top, width: size, height: size }}
+      >
+        {items.length === 1 ? (
+          <MarkIcon kind={items[0].kind} className="w-full h-full" />
+        ) : (
+          <span
+            className="w-full h-full rounded-[4px] flex items-center justify-center text-[9.5px] font-bold tabular-nums leading-none text-white"
+            style={{ background: MARK_COLOR[main] }}
+          >
+            {items.length > 9 ? "9+" : items.length}
+          </span>
+        )}
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={pop}
+            role="dialog"
+            aria-label={label}
+            onPointerEnter={(e) => e.pointerType === "mouse" && cancel()}
+            onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
+            className="fixed z-[140] w-[320px] max-w-[calc(100vw-16px)] rounded-xl border border-line/15 bg-surface shadow-2xl animate-[fadein_.12s_ease]"
+            style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
+          >
+            <div className="px-3.5 pt-3 pb-2 border-b border-line/10">
+              <p className="text-[13px] font-semibold">
+                {items.length} video{items.length === 1 ? "" : "s"} posted
+              </p>
+              <p className="text-[11.5px] text-ink-faint mt-0.5">
+                {when}
+                {kinds.length ? ` · ${kindCounts(items)}` : ""}
+              </p>
+            </div>
+            <ul className="max-h-[300px] overflow-y-auto py-1">
+              {items.slice(0, 40).map((m, k) => {
+                const tall = m.kind === "short" || m.kind === "post";
+                const inner = (
+                  <>
+                    <span className={`relative rounded-md overflow-hidden bg-surface-2 flex-shrink-0 ${tall ? "w-7 h-10" : "w-14 h-8"}`}>
+                      {m.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <MarkIcon kind={m.kind} className="w-4 h-4" />
+                        </span>
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px] font-semibold leading-snug line-clamp-2">{m.title || "Untitled"}</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-faint min-w-0">
+                        <MarkIcon kind={m.kind} className="w-3 h-3" />
+                        {m.platform && <PlatformIcon platform={m.platform} className="w-3 h-3 rounded-[3px]" />}
+                        <span className="truncate">
+                          {KIND_LABEL[m.kind]}
+                          {m.at ? ` · ${markTime(m.at, withDay)}` : ""}
+                        </span>
+                      </span>
+                    </span>
+                  </>
+                );
+                return (
+                  <li key={m.id ?? k}>
+                    {m.href ? (
+                      <Link href={m.href} className="flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-surface-2 focus-visible:bg-surface-2 outline-none">
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div className="flex items-center gap-2.5 px-3.5 py-1.5">{inner}</div>
+                    )}
+                  </li>
+                );
+              })}
+              {items.length > 40 && <li className="px-3.5 py-1.5 text-[11.5px] text-ink-faint">and {items.length - 40} more</li>}
+            </ul>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -137,6 +329,8 @@ export function LineChart({
   area = false,
   marks,
   markLabel = "Posted",
+  markDays = true,
+  gaps = "bridge",
 }: {
   labels: string[];
   series: Series[];
@@ -151,9 +345,17 @@ export function LineChart({
   tips?: string[];
   /** A soft fill under a single line. */
   area?: boolean;
-  /** Icons under the line where something happened (videos posted, by kind), listed in the tooltip. */
+  /** Icons under the line where videos were posted: one per point, listing them when pointed at. */
   marks?: { i: number; items: Mark[] }[];
   markLabel?: string;
+  /** The marks' times with their day (days, weeks…) or just the time (hours). */
+  markDays?: boolean;
+  /**
+   * Points without a number between two with one (1.22.0): "bridge" joins
+   * them with a faint dashed line, so a stretch with missing days still reads
+   * as one line instead of loose pieces; "break" leaves the gap.
+   */
+  gaps?: "bridge" | "break";
 }) {
   const [box, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -165,7 +367,7 @@ export function LineChart({
   const right = 14;
   const top = 10;
   const markAt = useMemo(() => new Map((marks ?? []).filter((m) => m.items.length).map((m) => [m.i, m.items])), [marks]);
-  const bottom = 26 + (markAt.size ? 19 : 0);
+  const bottom = 26 + (markAt.size ? 22 : 0);
   const iw = Math.max(10, width - left - right);
   const ih = height - top - bottom;
   const x = (i: number) => left + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
@@ -180,6 +382,37 @@ export function LineChart({
       }
       d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
       pen = true;
+    });
+    return d;
+  };
+  // A line whose points are partly worked out: solid between counted points, dashed where either end is estimated.
+  const parts = (vals: (number | null)[], est?: boolean[]) => {
+    if (!est?.some(Boolean)) return { solid: path(vals), dashed: "" };
+    let solid = "";
+    let dashed = "";
+    let last: number | null = null;
+    vals.forEach((v, i) => {
+      if (v === null) {
+        last = null;
+        return;
+      }
+      if (last !== null) {
+        const seg = `M${x(last).toFixed(1)},${y(vals[last]!).toFixed(1)}L${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+        if (est[last] || est[i]) dashed += seg;
+        else solid += seg;
+      }
+      last = i;
+    });
+    return { solid, dashed };
+  };
+  // Across the gaps: from the last point before one to the first after it.
+  const bridges = (vals: (number | null)[]) => {
+    let d = "";
+    let last: number | null = null;
+    vals.forEach((v, i) => {
+      if (v === null) return;
+      if (last !== null && i - last > 1) d += `M${x(last).toFixed(1)},${y(vals[last]!).toFixed(1)}L${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+      last = i;
     });
     return d;
   };
@@ -258,32 +491,21 @@ export function LineChart({
               })()}
             </>
           )}
-          {(() => {
-            // One icon per kind posted there (Shorts, long videos, posts), side by side; smaller when the points are close.
-            const gap = n > 1 ? iw / (n - 1) : iw;
-            const size = Math.max(8, Math.min(15, gap - 2));
-            return [...markAt.entries()].map(([i, items]) => {
-              const kinds = MARK_ORDER.filter((k) => items.some((m) => m.kind === k)).slice(0, gap >= 26 ? 3 : 2);
-              const step = kinds.length > 1 ? Math.min(size * 0.85, gap / kinds.length) : 0;
-              const count = items.length;
-              return (
-                <g key={`m${i}`} aria-hidden>
-                  {kinds.map((k, j) => (
-                    <MarkGlyph key={k} kind={k} cx={x(i) + (j - (kinds.length - 1) / 2) * step} top={top + ih + 4} size={size} />
-                  ))}
-                  {count > 1 && gap >= 34 && (
-                    <text x={x(i) + (kinds.length * step) / 2 + size / 2 + 1} y={top + ih + 4 + size * 0.78} className="fill-ink-faint text-[9.5px] font-semibold tabular-nums">
-                      {count}
-                    </text>
-                  )}
-                </g>
-              );
-            });
-          })()}
           {previous && <path d={path(previous.values)} fill="none" stroke="rgb(var(--ink-faint) / 0.7)" strokeWidth={1.5} strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="round" />}
-          {series.map((s) => (
-            <path key={s.key} d={path(s.values)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-          ))}
+          {gaps === "bridge" &&
+            series.map((s) => {
+              const d = bridges(s.values);
+              return d ? <path key={`b${s.key}`} d={d} fill="none" stroke={s.color} strokeOpacity={0.45} strokeWidth={1.5} strokeDasharray="3 4" strokeLinecap="round" /> : null;
+            })}
+          {series.map((s) => {
+            const d = parts(s.values, s.est);
+            return (
+              <g key={s.key}>
+                <path d={d.solid} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                {d.dashed && <path d={d.dashed} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray="2 4" strokeLinecap="round" />}
+              </g>
+            );
+          })}
           {/* A lone point (one day of data) still shows. */}
           {series.map((s) =>
             s.values.map((v, i) => (v !== null && (s.values[i - 1] ?? null) === null && (s.values[i + 1] ?? null) === null ? <circle key={`${s.key}${i}`} cx={x(i)} cy={y(v)} r={3} fill={s.color} /> : null))
@@ -298,6 +520,26 @@ export function LineChart({
           )}
         </svg>
       )}
+      {/* The videos posted, one icon per point (1.22.0), each opening its list; points too close together share one (a phone's 28 days). */}
+      {width > 0 &&
+        (() => {
+          const gap = n > 1 ? iw / (n - 1) : iw;
+          const size = Math.max(12, Math.min(16, gap - 2));
+          const groups: { at: number[]; items: Mark[] }[] = [];
+          for (const [i, items] of [...markAt.entries()].sort((a, b) => a[0] - b[0])) {
+            const g = groups[groups.length - 1];
+            if (g && x(i) - x(g.at[0]) < size + 3) {
+              g.at.push(i);
+              g.items.push(...items);
+            } else groups.push({ at: [i], items: [...items] });
+          }
+          const name = (i: number) => tips?.[i] ?? labels[i] ?? "";
+          return groups.map((g) => {
+            const a = g.at[0];
+            const z = g.at[g.at.length - 1];
+            return <PostedMark key={`m${a}`} items={g.items} left={(x(a) + x(z)) / 2} top={top + ih + 4} size={size} when={a === z ? name(a) : `${name(a)} – ${name(z)}`} withDay={markDays || a !== z} />;
+          });
+        })()}
       {hover !== null && width > 0 && (
         <Tooltip x={x(hover)} y={top} width={width}>
           <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
@@ -306,6 +548,7 @@ export function LineChart({
               <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
               <span className="font-bold tabular-nums text-ink">{format(s.values[hover])}</span>
               <span className="text-ink-soft truncate">{s.label}</span>
+              {s.est?.[hover] && <span className="ml-auto text-[10px] font-semibold text-ink-faint">estimated</span>}
             </div>
           ))}
           {previous && (
@@ -317,20 +560,9 @@ export function LineChart({
             </div>
           )}
           {markAt.get(hover) && (
-            <div className="mt-1 pt-1 border-t border-line/10">
-              <div className="text-[10.5px] font-semibold text-ink-faint">
-                {markLabel}: {markAt.get(hover)!.length}
-              </div>
-              {markAt
-                .get(hover)!
-                .slice(0, 3)
-                .map((m, k) => (
-                  <div key={k} className="flex items-center gap-1.5 text-[11px] text-ink-soft">
-                    <MarkIcon kind={m.kind} className="w-3 h-3" />
-                    <span className="truncate">{m.title}</span>
-                  </div>
-                ))}
-              {markAt.get(hover)!.length > 3 && <div className="text-[10.5px] text-ink-faint">and {markAt.get(hover)!.length - 3} more</div>}
+            <div className="mt-1 pt-1 border-t border-line/10 flex items-center gap-1.5 text-[10.5px] font-semibold text-ink-faint">
+              <MarkIcon kind={markAt.get(hover)![0].kind} className="w-3 h-3" />
+              {markLabel}: {kindCounts(markAt.get(hover)!)}
             </div>
           )}
           {onPick && <div className="mt-1 pt-1 border-t border-line/10 text-[10.5px] text-ink-faint">{pickHint}</div>}

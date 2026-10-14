@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { PLATFORMS, type SocialPlatform } from "@/lib/social/providers";
 import { numbersVisibility, visibleRows } from "./accounts";
 import { safeUrl } from "./queries";
+import { liveHours, type Coverage } from "./live-hours";
+import type { VideoKind } from "./kinds";
 
 /*
  * Analytics' realtime (1.19.0): what the videos got over the last 48 hours,
@@ -17,7 +19,7 @@ export type RealtimeVideo = {
   title: string | null;
   thumbnail: string | null;
   url: string | null;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   publishedAt: string | null;
   /** Views in the last 48 hours / the last 60 minutes. */
   views48: number;
@@ -30,6 +32,8 @@ export type RealtimePlatform = {
   liveAt: string | null;
   error: string | null;
   followers: number | null;
+  /** YouTube shares subscriber counts rounded to 3 digits (22,136 comes as 22,100), for every app, even the channel's owner. */
+  followersRounded: boolean;
   totalViews: number | null;
   /** Videos on the account (as the platform counts them) and the ones ClipTroop has. */
   videos: number | null;
@@ -39,8 +43,14 @@ export type Realtime = {
   /** False before migration 0083 (nothing to show yet). */
   ready: boolean;
   updatedAt: string | null;
-  /** The last 48 hours, oldest first (the last one is the hour going on now). */
-  hours: { at: string; views: number; per: Partial<Record<SocialPlatform, number>> }[];
+  /**
+   * The last 48 hours, oldest first (the last one is the hour going on now).
+   * `est`: the part of each platform's views worked out from the account's
+   * totals (1.22.0: the hours before every video was being counted).
+   */
+  hours: { at: string; views: number; per: Partial<Record<SocialPlatform, number>>; est: Partial<Record<SocialPlatform, number>> }[];
+  /** Since when each platform's videos are all counted, and how many hours were worked out instead. */
+  coverage: Partial<Record<SocialPlatform, Coverage>>;
   /** The last 60 minutes in 10-minute slots ending now, oldest first (the Realtime tab only; migration 0084). */
   minutes: { at: string; views: number; per: Partial<Record<SocialPlatform, number>> }[];
   /** Views in the last 48 hours / 60 minutes, per platform. */
@@ -64,44 +74,40 @@ export type Realtime = {
 
 type Row = Record<string, unknown>;
 const n = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-const HOUR = 3_600_000;
 
 /** `full`: the Realtime tab (the last 60 minutes in 10-minute slots, the top 25 videos); else the cards' top 8. */
 export async function getRealtime(teamId: string, o: { full?: boolean } = {}): Promise<Realtime> {
   const supabase = await createClient();
-  const empty: Realtime = { ready: false, updatedAt: null, hours: [], minutes: [], last48: {}, last60: {}, active48: {}, active60: {}, reactions48: {}, reactions60: {}, since: null, platforms: [], top: [], top60: [], reachNote: null };
-  const [vis, syncs, hoursRes, g60, g48, first, slotsRes] = await Promise.all([
-    numbersVisibility(supabase, teamId),
+  const empty: Realtime = { ready: false, updatedAt: null, hours: [], coverage: {}, minutes: [], last48: {}, last60: {}, active48: {}, active60: {}, reactions48: {}, reactions60: {}, since: null, platforms: [], top: [], top60: [], reachNote: null };
+  const vis = await numbersVisibility(supabase, teamId);
+  const shown = PLATFORMS.filter((p) => vis.platforms.has(p));
+  const on = (p: unknown): p is SocialPlatform => shown.includes(p as SocialPlatform);
+  const [syncs, lh, g60, g48, slotsRes] = await Promise.all([
     supabase.from("analytics_syncs").select("platform, live_at, live_error, live_totals, reach_note").eq("team_id", teamId),
-    supabase.rpc("analytics_live_hours", { p_team: teamId, p_hours: 48 }),
+    // The 48 hours, with the ones before every video was counted worked out (1.22.0).
+    liveHours(supabase, teamId, shown, 48),
     supabase.rpc("analytics_live_gains", { p_team: teamId, p_minutes: 60 }),
     supabase.rpc("analytics_live_gains", { p_team: teamId, p_minutes: 2880 }),
-    supabase.from("analytics_live").select("at").eq("team_id", teamId).order("at", { ascending: true }).limit(1),
     o.full ? supabase.rpc("analytics_live_buckets", { p_team: teamId, p_minutes: 60, p_step: 10 }) : Promise.resolve({ data: null, error: null }),
   ]);
   // Before migration 0083: nothing yet.
-  if (syncs.error || hoursRes.error) return empty;
-  const shown = PLATFORMS.filter((p) => vis.platforms.has(p));
-  const on = (p: unknown): p is SocialPlatform => shown.includes(p as SocialPlatform);
+  if (syncs.error || !lh.ready) return empty;
 
   // 48 hourly slots ending with the hour going on now.
-  const nowHour = Math.floor(Date.now() / HOUR) * HOUR;
-  const slots = Array.from({ length: 48 }, (_, i) => nowHour - (47 - i) * HOUR);
-  const index = new Map(slots.map((t, i) => [t, i]));
-  const hours: Realtime["hours"] = slots.map((t) => ({ at: new Date(t).toISOString(), views: 0, per: {} }));
+  const hours: Realtime["hours"] = lh.slots.map((t) => ({ at: new Date(t).toISOString(), views: 0, per: {}, est: {} }));
   const reactions48: Realtime["reactions48"] = {};
-  for (const r of (hoursRes.data ?? []) as Row[]) {
-    if (!on(r.platform)) continue;
-    const i = index.get(Math.floor(Date.parse(String(r.hour)) / HOUR) * HOUR);
-    if (i !== undefined) {
-      const x = (reactions48[r.platform] ??= { likes: 0, comments: 0 });
-      x.likes += n(r.likes) ?? 0;
-      x.comments += n(r.comments) ?? 0;
-    }
-    const v = n(r.views) ?? 0;
-    if (i === undefined || v <= 0) continue;
-    hours[i].views += v;
-    hours[i].per[r.platform] = (hours[i].per[r.platform] ?? 0) + v;
+  const last48: Realtime["last48"] = {};
+  for (const p of shown) {
+    const x = lh.per[p];
+    if (!x) continue;
+    reactions48[p] = { likes: x.likes.reduce((a, b) => a + b, 0), comments: x.comments.reduce((a, b) => a + b, 0) };
+    x.views.forEach((v, i) => {
+      if (v <= 0) return;
+      hours[i].views += v;
+      hours[i].per[p] = v;
+      if (x.estimated[i]) hours[i].est[p] = Math.max(0, v - x.counted[i]);
+    });
+    last48[p] = x.views.reduce((a, b) => a + b, 0);
   }
   // The last 60 minutes: 6 slots of 10 minutes ending now (before 0084: none).
   const STEP = 600_000;
@@ -193,6 +199,7 @@ export async function getRealtime(teamId: string, o: { full?: boolean } = {}): P
       liveAt: (s?.live_at as string | null) ?? null,
       error: (s?.live_error as string | null) ?? null,
       followers: n(t?.followers),
+      followersRounded: p === "youtube",
       totalViews: n(t?.total_views),
       videos: n(t?.videos),
       counted: counts[i].count ?? 0,
@@ -204,14 +211,16 @@ export async function getRealtime(teamId: string, o: { full?: boolean } = {}): P
     ready: true,
     updatedAt,
     hours,
+    coverage: lh.coverage,
     minutes,
-    last48: perPlatform(last48Rows),
+    // The hours added up (the counted ones and the ones worked out), as on the chart.
+    last48,
     last60: perPlatform(last60Rows),
     active48: countPerPlatform(last48Rows),
     active60: countPerPlatform(last60Rows),
     reactions48,
     reactions60,
-    since: ((first.data?.[0] as Row | undefined)?.at as string | undefined) ?? null,
+    since: lh.first,
     platforms,
     top,
     top60,

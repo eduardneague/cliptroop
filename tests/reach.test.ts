@@ -1,6 +1,6 @@
 // YouTube's reach reports (1.19.0): impressions and click-through rate per
 // video and day, from the Reporting API's CSV (lib/reach-parse.ts).
-import { parseReachCsv, sumReach } from "../modules/analytics/lib/reach-parse";
+import { cursorAfter, parseReachCsv, sumReach } from "../modules/analytics/lib/reach-parse";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -46,6 +46,8 @@ ok(e.length === 1 && e[0].ctr === null && e[0].impressions === 50, "no CTR: impr
 ok(parseReachCsv("").length === 0 && parseReachCsv(HEAD).length === 0, "nothing in, nothing out");
 ok(parseReachCsv("date,video_id\n20261012,abc").length === 0, "without impressions: nothing");
 ok(parseReachCsv(`﻿${HEAD}\n20261012,UCx,abc123,5,0`)[0]?.ctr === 0, "a byte-order mark and a zero CTR");
+// 1.22.0: no impressions, no click-through rate (not 0%).
+ok(parseReachCsv(`${HEAD}\n20261012,UCx,abc123,0,0`)[0]?.ctr === null, "no impressions: no CTR");
 
 // A day's totals: impressions add up, the CTR is weighted by impressions.
 const t = sumReach([
@@ -57,6 +59,14 @@ const t = sumReach([
 ok(t.impressions === 4500, `4,500 impressions (got ${t.impressions})`);
 ok(t.ctr === 8, `CTR from the rows that have one (got ${t.ctr})`);
 ok(sumReach([]).ctr === null && sumReach([{ impressions: 10, ctr: null }]).ctr === null, "no CTR known: null");
+
+// 1.22.0: the next run never skips a report made at the same moment as the last one saved.
+const R = (t: string) => ({ createTime: t });
+ok(cursorAfter([R("2026-10-01T08:00:00Z"), R("2026-10-01T09:00:00Z")], R("2026-10-01T10:00:00Z"), null) === "2026-10-01T09:00:00Z", "after the last one saved");
+ok(cursorAfter([R("2026-10-01T08:00:00Z"), R("2026-10-01T09:00:00Z")], R("2026-10-01T09:00:00Z"), null) === "2026-10-01T08:00:00Z", "the next one at the same moment: the moment before");
+ok(cursorAfter([R("2026-10-01T09:00:00Z")], R("2026-10-01T09:00:00Z"), "2026-09-30T00:00:00Z") === "2026-09-30T00:00:00Z", "only that moment saved: where it started");
+ok(cursorAfter([], R("2026-10-01T09:00:00Z"), "2026-09-30T00:00:00Z") === "2026-09-30T00:00:00Z", "nothing saved: unchanged");
+ok(cursorAfter([R("2026-10-01T09:00:00Z")], null, null) === "2026-10-01T09:00:00Z", "the last one there");
 
 if (fails) {
   console.log(`${fails} failed`);

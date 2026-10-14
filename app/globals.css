@@ -40,6 +40,7 @@
   --chart-fb: 31 111 224;
   --chart-short: 234 88 12;
   --chart-long: 11 143 203;
+  --chart-live: 124 77 214; /* live streams (1.22.0): apart from orange and blue */
   /* Objectives (1.14.0): eight colours checked as a set for colour-blind
      separation (adjacent pairs) and contrast, here on white and on the dark
      surface below. Rings and bars always carry a name or number beside them. */
@@ -97,6 +98,7 @@
   --chart-fb: 61 133 238;
   --chart-short: 224 106 30;
   --chart-long: 30 152 210;
+  --chart-live: 160 132 240;
   /* Objectives: the same eight, stepped for the dark surface. */
   --obj-blue: 57 135 229;
   --obj-orange: 217 89 38;
@@ -590,6 +592,10 @@ html[data-motion="off"] button:active { scale: none; }
 @container (min-width: 450px) { .stat-grid[data-n="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @container (min-width: 570px) { .stat-grid[data-n="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @container (min-width: 680px) { .stat-grid[data-n="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+/* 1.22.0: up to 8 (a video's header: watch time, % viewed, average view, likes, comments, shares, subscribers, revenue). */
+@container (min-width: 450px) { .stat-grid[data-n="7"], .stat-grid[data-n="8"] { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 800px) { .stat-grid[data-n="7"] { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+@container (min-width: 910px) { .stat-grid[data-n="8"] { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 
 /* Lists that scroll inside a widget: a thin scrollbar in its own lane (it
    never covers a date, a badge or an avatar), faint until you point at it. */

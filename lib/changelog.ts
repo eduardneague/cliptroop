@@ -23,6 +23,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.22.0",
+    date: "2026-10-15",
+    title: "Analytics you can trust",
+    changes: [
+      { kind: "new", text: "Click any point on any Overview chart for its videos: any number (views, watch time, subscribers, likes, impressions, revenue…), any range, days, weeks or months, and each of the last 48 hours. Every video with what it got there and its share, by platform and kind, sorted the way you like; ← → go to the point before or after." },
+      { kind: "new", text: "Live streams are their own kind everywhere: the Overview (Shorts, long videos and live streams), a Live streams tab in Content, Advanced, Insights and every video's page. They no longer count as long videos." },
+      { kind: "new", text: "A video's page opens with its exact views and what the ones before it usually got by the same day, like YouTube Studio (\"That's similar to the 23,900–39,700 you usually get\"), a bigger picture, and every main number in one row: watch time, average % viewed, average view, likes, comments, shares, subscribers and revenue." },
+      { kind: "new", text: "Best time to post: the best slots so far as a podium (the day, the hours, how far above your usual and from how many videos), ringed and numbered on the map." },
+      { kind: "better", text: "Realtime matches YouTube Studio: the hours before every video was being counted are worked out from the channel's total views (shown fainter), so the last 48 hours add up. Each hour reads as a stretch of time, like 5 PM – 6 PM." },
+      { kind: "better", text: "Lifetime goes back to your channel's first day: YouTube's earlier days are copied again, a year at a time, and the Overview says how far it got, with the channel's all-time views in the meantime." },
+      { kind: "better", text: "The videos posted show as one icon under each point of the chart. Point at it (or tap it) for the list: how many Shorts, long videos and live streams, each with its picture and time, and a link to its analytics." },
+      { kind: "better", text: "The last 48 hours have every card: views, likes, comments, shares and engagement hour by hour, and watch time, subscribers, impressions, click-through and revenue for the last two days copied (YouTube only shares those per day)." },
+      { kind: "better", text: "Revenue is asked from YouTube in your currency, so YouTube converts it day by day like YouTube Studio does (3.53 € instead of 3.40 €)." },
+      { kind: "better", text: "A video's subscribers are gained minus lost, like YouTube Studio's, and its numbers are asked again once they're an hour old." },
+      { kind: "better", text: "The search bar finds a video by every word of its title, in any order: \"what your phone says about you 14\" finds \"What Your Phone Says About You #14\", posted from ClipTroop or not." },
+      { kind: "better", text: "YouTube's subscriber count shows the way YouTube shares it with apps (rounded, like 153K), with a note: only YouTube Studio has the exact number." },
+      { kind: "fixed", text: "Impressions click-through rate on a video's page: it starts when YouTube's reach reports do, missing days are bridged, and a day without impressions no longer reads as 0%." },
+      { kind: "fixed", text: "Charts no longer fall apart when some days have no numbers, and the icons under them don't pile up on phones." },
+      { kind: "fixed", text: "Analytics asked the server far too often: an open tab refreshed realtime for every platform every 10 minutes, even in the background, and a missed morning copy started again on every visit. It now asks only while the page is on screen, at most once a minute, and a missed copy starts once." },
+      { kind: "fixed", text: "The calendar's dots show up together with the calendar, not a moment after it." },
+      { kind: "fixed", text: "A video's page asked YouTube for its history on every visit when YouTube had nothing for its first days." },
+      { kind: "fixed", text: "The \"Could not find the function analytics_top_content\" error no longer shows while the latest database update hasn't run." },
+    ],
+  },
+  {
     version: "1.21.0",
     date: "2026-10-14",
     title: "Analytics, finished",

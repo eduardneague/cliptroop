@@ -15,6 +15,7 @@ import type { AdvancedData, AdvBreakdown, Content as AdvContent } from "../lib/a
 import type { Overview } from "../lib/overview";
 import type { Insights, InsightsPreview } from "../lib/insights";
 import { countryName } from "./world-map";
+import { KIND_LABEL } from "../lib/kinds";
 import { RangeBar } from "./range-bar";
 import { PLATFORM, type P, csvDownload, pickedIn, niceDay } from "./tabs/shared";
 import { OverviewTab, overviewCsv } from "./tabs/overview-tab";
@@ -214,7 +215,7 @@ export function AnalyticsView({
         ["Platform", "Kind", "Title", "Published", "Views", "× typical", "Likes", "Comments", "Shares", "Impressions", "CTR (%)", "Link"],
         ...data.content.items.map((c) => [
           PLATFORM[c.platform].name,
-          c.kind === "short" ? "Short" : c.kind === "long" ? "Long video" : "Post",
+          KIND_LABEL[c.kind],
           c.title,
           c.publishedAt?.slice(0, 10) ?? null,
           c.views,

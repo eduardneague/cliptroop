@@ -7,6 +7,7 @@ import { ChevronLeftIcon, ChevronRightIcon, ExternalIcon } from "@/components/ui
 import { loadRevenueVideos } from "@/app/(dashboard)/analytics/actions";
 import type { RevenueVideos } from "../lib/queries";
 import { fmtCompact, MarkIcon } from "./charts";
+import { KIND_LABEL } from "../lib/kinds";
 
 /*
  * A day (or week, or month) of Revenue's chart, opened by clicking it
@@ -151,7 +152,7 @@ export function RevenueVideosDialog({
                     </span>
                     <span className="flex items-center flex-wrap gap-x-1.5 text-[11.5px] text-ink-faint min-w-0">
                       <MarkIcon kind={v.kind} className="w-3 h-3" />
-                      <span>{v.kind === "short" ? "Short" : "Long video"}</span>
+                      <span>{KIND_LABEL[v.kind]}</span>
                       {v.views !== null && <span className="whitespace-nowrap">· {fmtCompact(v.views)} views</span>}
                       {v.rpm !== null && <span className="whitespace-nowrap">· {money(v.rpm)} per 1,000</span>}
                       {v.ours && (

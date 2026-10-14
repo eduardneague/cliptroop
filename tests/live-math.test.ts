@@ -1,7 +1,7 @@
 // One video's live counts (1.19.0): views gained in a stretch of time, a
 // change spread over the time between two looks (lib/live-math.ts), the
 // same way the database sums them (migration 0083).
-import { gainedBetween, hourName, liveDue, perHour, perSlot, snapshotsOf, type LivePoint, type SeenCounts } from "../modules/analytics/lib/live-math";
+import { gainedBetween, hourName, hourRange, liveDue, perHour, perSlot, snapshotsOf, type LivePoint, type SeenCounts } from "../modules/analytics/lib/live-math";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -79,6 +79,21 @@ const base = new Date(2026, 9, 13, 15, 20).getTime();
 ok(hourName(new Date(2026, 9, 13, 15).getTime(), base) === "Today, 3 PM", `today (got ${hourName(new Date(2026, 9, 13, 15).getTime(), base)})`);
 ok(hourName(new Date(2026, 9, 12, 23).getTime(), base) === "Yesterday, 11 PM", "yesterday");
 ok(/^[A-Z][a-z]{2}, 9 AM$/.test(hourName(new Date(2026, 9, 11, 9).getTime(), base)), "before that: the weekday");
+
+// 1.22.0: hours as stretches of time ("5 PM – 6 PM").
+ok(hourRange(new Date(2026, 9, 13, 17).getTime(), base) === "Today, 5 PM – 6 PM", `a stretch (got ${hourRange(new Date(2026, 9, 13, 17).getTime(), base)})`);
+ok(hourRange(new Date(2026, 9, 12, 23).getTime(), base) === "Yesterday, 11 PM – 12 AM", `across midnight (got ${hourRange(new Date(2026, 9, 12, 23).getTime(), base)})`);
+ok(hourRange(new Date(2026, 9, 13, 11).getTime(), base) === "Today, 11 AM – 12 PM", `across noon (got ${hourRange(new Date(2026, 9, 13, 11).getTime(), base)})`);
+ok(hourRange(new Date(2026, 9, 13, 0).getTime(), base) === "Today, 12 AM – 1 AM", `after midnight (got ${hourRange(new Date(2026, 9, 13, 0).getTime(), base)})`);
+
+// 1.22.0: a new video counts from 0 at the moment it was posted.
+const fresh8 = snapshotsOf([{ id: "brandNew", counts: { views: 500, likes: 20, comments: 3 }, publishedAt: "2026-10-13T11:50:00Z" }, { id: "oldOne", counts: { views: 9000, likes: 1, comments: 0 }, publishedAt: "2026-09-01T10:00:00Z" }], new Map(), ["views", "likes", "comments"], NOW);
+const zero = fresh8.before.find((x) => x.id === "brandNew");
+ok(!!zero && zero.at === "2026-10-13T11:50:00.000Z" && zero.views === 0 && zero.likes === 0, `a zero when it was posted (got ${JSON.stringify(zero)})`);
+ok(!fresh8.before.some((x) => x.id === "oldOne"), "not for a video posted more than 8 days ago (its first views are long gone)");
+ok(fresh8.fresh.length === 2, "both counted from now");
+const seenBefore = snapshotsOf([{ id: "up", counts: { views: 130, likes: 5, comments: 1 }, publishedAt: "2026-10-13T11:00:00Z" }], seen, ["views", "likes", "comments"], NOW);
+ok(!seenBefore.before.some((x) => x.views === 0), "a video seen before keeps its last count (no zero)");
 
 // 1.21.0: a video's last 60 minutes in 10-minute slots, ending now.
 const slots = perSlot([{ at: now - 50 * 60_000, views: 1000 }, { at: now - 10 * 60_000, views: 1240 }], now, 6, 600_000);

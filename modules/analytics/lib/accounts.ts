@@ -28,6 +28,8 @@ const NUMBER_TABLES = [
   "analytics_retention",
   "analytics_content_revenue",
   "analytics_live",
+  // 1.22.0 (0086): each account's totals over time.
+  "analytics_live_totals",
 ] as const;
 
 
@@ -93,6 +95,8 @@ export async function adoptAccount(
     .eq("platform", platform);
   // And YouTube's history goes back again from the new account's first copy (0085).
   await admin.from("analytics_syncs").update({ history_from: null, history_done: false }).eq("team_id", teamId).eq("platform", platform);
+  // Realtime counts every video again from the new account's first full pass; its money is asked again (0086).
+  await admin.from("analytics_syncs").update({ live_since: null, money_currency: null }).eq("team_id", teamId).eq("platform", platform);
   return { purged: true };
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MonthCalendar, type DayInfo } from "./month-calendar";
+import { MonthCalendar, warmPlannedDays, type DayInfo } from "./month-calendar";
 import { CalendarIcon, CloseIcon } from "./icons";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 
@@ -88,6 +88,9 @@ export function DatePicker({
         type="button"
         disabled={disabled}
         onClick={() => (open ? close() : openPicker())}
+        // Its dots get ready while the pointer is on the way (1.22.0: they used to arrive after it opened).
+        onPointerEnter={() => warmPlannedDays(value)}
+        onFocus={() => warmPlannedDays(value)}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
             e.preventDefault();

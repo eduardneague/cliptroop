@@ -13,7 +13,7 @@ import { cookies } from "next/headers";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { isCurrencyCode } from "@/lib/fx";
 import { after } from "next/server";
-import { claimAnalyticsCatchUp, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { catchUpAnalytics, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 
 export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
@@ -36,12 +36,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
     supabase.from("teams").select("timezone, created_at").eq("id", teamId).maybeSingle(),
     canViewRevenue(supabase, teamId),
     tab === "revenue" || tab === "advanced" || tab === "overview" ? revenueCurrency(supabase) : Promise.resolve(null),
-    // Copied every morning on its own; if that was missed, start it now.
-    claimAnalyticsCatchUp(teamId),
+    // Copied every morning on its own; if that was missed, start it now (from the database since 1.22.0).
+    catchUpAnalytics(teamId),
     // Lifetime starts on the first day with numbers.
     supabase.from("analytics_daily").select("day").eq("team_id", teamId).order("day", { ascending: true }).limit(1),
   ]);
-  if (catchingUp && membership) {
+  // (No timer to call: a local copy, or before migration 0086. The page copies them itself.)
+  if (catchingUp === "inline" && membership) {
     after(async () => {
       try {
         await syncTeamAnalytics(teamId);
@@ -110,7 +111,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       range={range}
       compare={compare}
       canSync={canSync}
-      catchingUp={catchingUp && !!membership}
+      catchingUp={catchingUp !== "none" && !!membership}
       revenueAllowed={revenueAllowed}
       latest={latest}
       earliest={earliest}

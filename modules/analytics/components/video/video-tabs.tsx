@@ -192,7 +192,16 @@ export function ReachTab({ data, fetching }: { data: VideoPageData; fetching: bo
           {hasImp ? (
             <>
               <DayBars title="Impressions" days={d.days} values={d.impressions} format={(n) => compactNum(n)} empty="No impressions per day yet." />
-              <DayLine title="Impressions click-through rate" sub="Per day" days={d.days} values={d.ctr} format={(n) => (n === null ? "–" : `${n.toFixed(1)}%`)} empty="No click-through rate per day yet." />
+              <DayLine
+                title="Impressions click-through rate"
+                sub="YouTube's reach reports"
+                days={d.days}
+                values={d.ctr}
+                weights={d.impressions}
+                weightWord="impressions"
+                format={(n) => (n === null ? "–" : `${n.toFixed(n < 10 ? 1 : 0)}%`)}
+                empty="No click-through rate per day yet."
+              />
             </>
           ) : (
             <DayBars title={v.platform === "facebook" ? "Plays" : "Views"} days={d.days} values={d.views} format={(n) => compactNum(n)} empty="No views per day yet." />
@@ -277,7 +286,7 @@ export function EngagementTab({ data }: { data: VideoPageData }) {
       {d && d.source === "daily" && (
         <div className="grid gap-5 lg:grid-cols-2">
           <DayBars title="Watch time (hours)" days={d.days} values={d.watchMinutes.map((x) => (x === null ? null : x / 60))} format={(n) => (n === null ? "–" : n < 10 ? n.toFixed(1) : compactNum(n))} empty="No watch time per day yet." />
-          <DayLine title="Average view duration" sub="Per day" days={d.days} values={d.avgView} format={(n) => seconds(n)} empty="Its average view per day comes with its details from YouTube." />
+          <DayLine title="Average view duration" sub="Per day" days={d.days} values={d.avgView} weights={d.views} weightWord="views" format={(n) => seconds(n)} empty="Its average view per day comes with its details from YouTube." />
           {d.likes.some((x) => x !== null) && <DayBars title="Likes" days={d.days} values={d.likes} format={(n) => compactNum(n)} color="rgb(var(--green))" empty="No likes per day yet." />}
           {d.comments.some((x) => x !== null) && <DayBars title="Comments" days={d.days} values={d.comments} format={(n) => compactNum(n)} color="rgb(var(--blue))" empty="No comments per day yet." />}
         </div>
@@ -307,7 +316,7 @@ export function AudienceTab({ data, fetching }: { data: VideoPageData; fetching:
         <StatTile label="Net subscribers" value={gained === null ? null : gained - (lost ?? 0)} compare={false} format={(n) => (n === null ? "–" : `${n > 0 ? "+" : ""}${compactNum(n)}`)} />
         <StatTile label="Views from subscribers" value={subViews !== null && allViews ? (subViews / allViews) * 100 : null} compare={false} format={(n) => (n === null ? "–" : `${Math.round(n)}%`)} hint="the rest: people not subscribed" />
       </div>
-      {d && d.subs.some((x) => x !== null) && <DayBars title="Subscribers gained" days={d.days} values={d.subs} format={(n) => compactNum(n)} color="rgb(var(--green))" empty="No subscribers per day yet." />}
+      {d && d.subs.some((x) => x !== null) && <DayBars title="Subscribers" sub="Per day, gained minus lost" days={d.days} values={d.subs} format={(n) => compactNum(n)} color="rgb(var(--green))" empty="No subscribers per day yet." />}
       {list.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {byCardHeight(list).map((b) => (

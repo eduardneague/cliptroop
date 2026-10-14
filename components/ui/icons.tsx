@@ -277,11 +277,21 @@ export function HomeIcon(p: IconProps) {
 /** The long-video and Shorts shapes on a 24×24 grid (also drawn inside charts: Analytics' "posted" marks). */
 export const VIDEO_ICON_PATH = "M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z";
 export const SHORTS_ICON_PATH = "M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z";
+/** Live streams (1.22.0): the landscape card with a round "on air" dot cut out. */
+export const LIVE_ICON_PATH = "M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM12 9.1A2.9 2.9 0 1 0 12 14.9A2.9 2.9 0 1 0 12 9.1Z";
 
 export function VideoIcon(p: IconProps) {
   return (
     <Svg {...p} fill="currentColor" strokeWidth={0}>
       <path fillRule="evenodd" d={VIDEO_ICON_PATH} />
+    </Svg>
+  );
+}
+
+export function LiveIcon(p: IconProps) {
+  return (
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d={LIVE_ICON_PATH} />
     </Svg>
   );
 }

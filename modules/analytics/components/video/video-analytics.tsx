@@ -11,9 +11,10 @@ import { scoreText, scoreTone } from "../../lib/scores";
 import { ChartCard } from "../charts";
 import { Breakdown } from "../advanced/breakdowns";
 import { compactNum, money, niceDay, seconds } from "../advanced/format";
-import { ago as agoFrom } from "../../lib/ago";
 import { fmt, NAME, toneClass, versus } from "./video-parts";
 import { AudienceTab, EngagementTab, OverviewTab, ReachTab, RevenueTab, TAB_NAME, tabsFor, useVideoRevenue, type VideoTab } from "./video-tabs";
+import { KIND_LABEL, isWide } from "../../lib/kinds";
+import { fmtInt } from "../charts";
 
 /*
  * One video's analytics (1.17.0; tabs like YouTube Studio's in 1.21.0):
@@ -22,11 +23,15 @@ import { AudienceTab, EngagementTab, OverviewTab, ReachTab, RevenueTab, TAB_NAME
  * Everything next to the team's typical video of the same kind.
  */
 
-const KIND = { short: "Short", long: "Long video", post: "Post" } as const;
+const KIND = KIND_LABEL;
 const TYPE_NAME: Record<string, string> = { filler: "Everyday short", sponsorship: "Sponsored short", big: "Big short" };
 
-/** YouTube's splits are asked again after this long (the page asks; at most every 10 minutes per server). */
-const DETAILS_STALE_MS = 12 * 3_600_000;
+/**
+ * YouTube's numbers for it are asked again after this long (the page asks;
+ * at most every 10 minutes per server). 1.22.0: an hour (was half a day), so
+ * its subscribers and revenue are as far along as YouTube Studio's.
+ */
+const DETAILS_STALE_MS = 3_600_000;
 
 export function VideoAnalytics({
   teamId,
@@ -169,9 +174,13 @@ export function VideoAnalytics({
 
 function Thumb({ data }: { data: VideoPageData }) {
   const v = data.video;
-  const tall = v.kind !== "long";
+  const tall = !isWide(v.kind);
   return (
-    <span className={`relative block rounded-xl overflow-hidden bg-surface-2 flex-shrink-0 self-start ${tall ? "w-[104px] h-[185px] sm:w-[128px] sm:h-[228px]" : "w-full sm:w-[240px] lg:w-[300px] aspect-video"}`}>
+    <span
+      className={`relative block rounded-xl overflow-hidden bg-surface-2 flex-shrink-0 self-start ${
+        tall ? "w-[120px] h-[213px] sm:w-[150px] sm:h-[267px] xl:w-[168px] xl:h-[299px]" : "w-full sm:w-[320px] lg:w-[380px] xl:w-[420px] aspect-video"
+      }`}
+    >
       {v.thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={v.thumbnail} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
@@ -185,7 +194,7 @@ function Thumb({ data }: { data: VideoPageData }) {
 /** Money in big type: a currency written as its code ("RON 922.61") gets the code small, so it fits with the other numbers. */
 function MoneyValue({ n, currency }: { n: number | null; currency: string }) {
   const text = money(n, currency);
-  const m = /^([A-Z]{3})[\s ]*(.+)$/.exec(text);
+  const m = /^([A-Z]{3})[\s ]*(.+)$/.exec(text);
   if (!m) return <>{text}</>;
   return (
     <>
@@ -197,34 +206,122 @@ function MoneyValue({ n, currency }: { n: number | null; currency: string }) {
 
 const ago = (days: number | null) => (days === null ? "" : days === 0 ? "today" : days === 1 ? "yesterday" : days < 60 ? `${days} days ago` : days < 730 ? `${Math.round(days / 30)} months ago` : `${Math.round(days / 365)} years ago`);
 
+/** To 3 digits, written in full ("23,900"), like YouTube's ranges. */
+const round3 = (n: number) => {
+  const a = Math.abs(n);
+  if (a < 1000) return Math.round(n).toLocaleString("en-US");
+  const step = Math.pow(10, Math.floor(Math.log10(a)) - 2);
+  return (Math.round(n / step) * step).toLocaleString("en-US");
+};
+
 /**
- * The top of the page: the video, its main numbers with their icons (views,
- * watch time, likes, comments, shares, revenue), its counts right now in
- * big type, and how it does next to the usual.
+ * "This Short got 39,228 views. That's similar to the 23,900–39,700 you
+ * usually get by day 12." (1.22.0, like YouTube Studio's.)
+ */
+function usualWords(data: VideoPageData): { lead: string; rest: string; tone: "up" | "same" | "down" } | null {
+  const v = data.video;
+  const u = data.usual;
+  if (v.views === null) return null;
+  const noun = v.platform === "facebook" ? "plays" : "views";
+  const thing = v.kind === "short" ? (v.platform === "youtube" ? "Short" : v.platform === "tiktok" ? "video" : "Reel") : v.kind === "long" ? "video" : v.kind === "live" ? "live stream" : "post";
+  const lead = `This ${thing} got ${fmtInt(v.views)} ${noun}.`;
+  if (!u || u.high <= 0) return { lead, rest: "", tone: "same" };
+  const tone = v.views > u.high ? "up" : v.views < u.low ? "down" : "same";
+  const word = tone === "up" ? "more than" : tone === "down" ? "fewer than" : "similar to";
+  return { lead, rest: ` That's ${word} the ${round3(u.low)}–${round3(u.high)} you usually get${u.day ? ` by day ${u.day}` : ""}.`, tone };
+}
+
+/**
+ * The top of the page (1.22.0: a bigger picture, the exact views with what
+ * the ones before it usually got, every main number in one row; the "right
+ * now" box went: the realtime card below has it): the video, its views, its
+ * numbers with their icons (watch time, average % viewed, likes, comments,
+ * shares, subscribers, revenue), and how it does next to the usual.
  */
 function Hero({ data, revenueAllowed }: { data: VideoPageData; revenueAllowed: boolean }) {
   const v = data.video;
   const tone = scoreTone(v.score);
   const viewsKey = data.keys.find((k) => k.key === "views");
-  const tall = v.kind !== "long";
+  const tall = !isWide(v.kind);
   const key = (k: string) => data.keys.find((x) => x.key === k) ?? null;
-  const stats: { k: string; icon: React.ReactNode; label: string; value: React.ReactNode }[] = [
-    { k: "views", icon: <EyeIcon className="w-4 h-4" />, label: v.platform === "facebook" ? "Plays" : "Views", value: compactNum(v.views) },
-    ...(v.watchMinutes !== null ? [{ k: "watch", icon: <ClockIcon className="w-4 h-4" />, label: "Watch time", value: `${v.watchMinutes / 60 < 10 ? (v.watchMinutes / 60).toFixed(1) : compactNum(v.watchMinutes / 60)} h` }] : []),
-    { k: "likes", icon: <ThumbUpIcon className="w-4 h-4" />, label: v.platform === "facebook" ? "Reactions" : "Likes", value: compactNum(v.likes) },
-    { k: "comments", icon: <CommentIcon className="w-4 h-4" />, label: "Comments", value: compactNum(v.comments) },
-    ...(v.shares !== null ? [{ k: "shares", icon: <ShareIcon className="w-4 h-4" />, label: "Shares", value: compactNum(v.shares) }] : []),
+  // Subscribers like YouTube Studio's: gained minus lost.
+  const lost = typeof v.metrics.subscribers_lost === "number" ? v.metrics.subscribers_lost : null;
+  const subs = v.platform === "youtube" ? (v.subscribersGained === null ? null : v.subscribersGained - (lost ?? 0)) : (v.subscribersGained ?? v.metrics.followers_gained ?? null);
+  const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmtInt(Math.abs(n))}`;
+  const stats: { k: string; icon: React.ReactNode; label: string; value: React.ReactNode; title?: string }[] = [
+    ...(v.watchMinutes !== null ? [{ k: "watch", icon: <ClockIcon className="w-4 h-4" />, label: "Watch time", value: `${v.watchMinutes / 60 < 10 ? (v.watchMinutes / 60).toFixed(1) : compactNum(v.watchMinutes / 60)} h`, title: `${fmtInt(v.watchMinutes / 60)} hours` }] : []),
+    ...(v.avgViewPct !== null ? [{ k: "pct", icon: <PercentIcon />, label: "Average % viewed", value: `${v.avgViewPct.toFixed(1)}%` }] : []),
+    ...(v.avgViewSeconds !== null ? [{ k: "avg", icon: <StopwatchIcon />, label: v.platform === "youtube" ? "Average view" : "Average watch", value: seconds(v.avgViewSeconds) }] : []),
+    { k: "likes", icon: <ThumbUpIcon className="w-4 h-4" />, label: v.platform === "facebook" ? "Reactions" : "Likes", value: compactNum(v.likes), title: v.likes !== null ? fmtInt(v.likes) : undefined },
+    { k: "comments", icon: <CommentIcon className="w-4 h-4" />, label: "Comments", value: compactNum(v.comments), title: v.comments !== null ? fmtInt(v.comments) : undefined },
+    ...(v.shares !== null ? [{ k: "shares", icon: <ShareIcon className="w-4 h-4" />, label: "Shares", value: compactNum(v.shares), title: fmtInt(v.shares) }] : []),
+    ...(subs !== null ? [{ k: "subs", icon: <PersonPlusIcon />, label: v.platform === "youtube" ? "Subscribers" : "Followers", value: signed(subs), title: v.platform === "youtube" ? `${fmtInt(v.subscribersGained)} gained${lost !== null ? `, ${fmtInt(lost)} lost` : ""}` : undefined }] : []),
     ...(revenueAllowed && key("revenue") ? [{ k: "revenue", icon: <MoneyIcon className="w-4 h-4" />, label: v.platform === "youtube" ? "Revenue" : "Earnings", value: <MoneyValue n={key("revenue")!.value} currency={data.currency} /> }] : []),
   ];
-  // Beside the video only when the title keeps room for itself (long videos'
-  // wider picture from 1400px, shorts from 1180px); else under it.
-  const beside = tall ? "hidden lg:block" : "hidden xl:block";
-  const under = tall ? "lg:hidden" : "xl:hidden";
-  // Its counts right now, when there are any.
-  const live = !!data.live && (data.live.views48 !== null || data.live.views60 !== null);
+  const usual = usualWords(data);
+  const numbers = (
+    <>
+      {/* Its views, exactly, next to what the ones before it usually got. */}
+      <div className="mt-4 rounded-xl bg-surface-2/60 px-4 py-3">
+        <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+          <span className="inline-flex items-baseline gap-2">
+            <EyeIcon className="w-[18px] h-[18px] text-ink-soft self-center" />
+            <span className="font-display text-[32px] sm:text-[38px] leading-none font-semibold tabular-nums">{fmtInt(v.views)}</span>
+            <span className="text-[14px] font-semibold text-ink-soft">{v.platform === "facebook" ? "plays" : "views"}</span>
+          </span>
+          {v.score !== null && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2 h-7 text-[12.5px] font-bold tabular-nums ${tone === "high" || tone === "up" ? "text-green bg-green/10" : tone === "down" ? "text-coral bg-coral/10" : "text-ink-soft bg-surface"}`}
+              title={`Your typical ${data.peerWord.replace(/s$/, "")}: ${fmtInt(v.typical)} ${v.platform === "facebook" ? "plays" : "views"} (the median of the ones before it)`}
+            >
+              {scoreText(v.score)} <span className="font-semibold">your usual</span>
+            </span>
+          )}
+          {viewsKey?.rank && viewsKey.rank.of > 1 && (
+            <span className="text-[12px] text-ink-soft inline-flex items-center gap-1.5">
+              <TrophyIcon className="w-3.5 h-3.5 text-gold" />#{viewsKey.rank.rank} of {viewsKey.rank.of} {data.peerWord}
+            </span>
+          )}
+        </div>
+        {usual && (
+          <p className="mt-1.5 text-[13px] text-ink-soft leading-snug">
+            {usual.lead}
+            {usual.rest && <b className={`font-semibold ${usual.tone === "up" ? "text-green" : usual.tone === "down" ? "text-coral" : "text-ink"}`}>{usual.rest}</b>}
+          </p>
+        )}
+      </div>
+      {/* Its main numbers: in one row when they fit, else in even rows (globals.css, .stat-grid). */}
+      <div className="stat-cq mt-3.5">
+        <dl className="stat-grid" data-n={stats.length} aria-label="Its numbers so far">
+          {stats.map((x) => (
+            <div key={x.k} className="min-w-0" title={x.title}>
+              <dt className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-faint whitespace-nowrap">
+                <span className="text-ink-soft">{x.icon}</span>
+                {x.label}
+              </dt>
+              <dd className="font-display text-[21px] sm:text-[23px] leading-tight font-semibold tabular-nums whitespace-nowrap">{x.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <div className="mt-3.5 flex items-center gap-2 flex-wrap">
+        {v.url && (
+          <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold hover:border-line/30">
+            Open on {NAME[v.platform]}
+            <ExternalIcon className="w-3.5 h-3.5" />
+          </a>
+        )}
+        {v.ours && (
+          <Link href={v.ours.kind === "short" ? `/shorts/${v.ours.id}` : `/videos/${v.ours.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold text-amber hover:border-line/30">
+            #{v.ours.number ?? "?"} in ClipTroop
+          </Link>
+        )}
+      </div>
+    </>
+  );
   return (
     <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
-      <div className={`flex gap-4 sm:gap-5 ${tall ? "flex-row" : "flex-col sm:flex-row"}`}>
+      <div className={`flex gap-4 sm:gap-6 ${tall ? "flex-row" : "flex-col sm:flex-row"}`}>
         <Thumb data={data} />
         <div className="min-w-0 flex-1 flex flex-col">
           <div className="flex items-center gap-2 text-[12px] font-semibold text-ink-soft flex-wrap">
@@ -241,113 +338,44 @@ function Hero({ data, revenueAllowed }: { data: VideoPageData; revenueAllowed: b
               </>
             )}
           </div>
-          <h1 className="mt-1.5 font-display text-[21px] sm:text-[27px] leading-[1.15] font-semibold break-words">{v.title || "Untitled"}</h1>
+          <h1 className="mt-1.5 font-display text-[21px] sm:text-[28px] leading-[1.15] font-semibold break-words">{v.title || "Untitled"}</h1>
           <p className="mt-1.5 text-[13px] text-ink-soft">
             {v.publishedAt ? `Posted ${niceDay(v.publishedAt, true)}` : "Posting date unknown"}
             {data.ageDays !== null ? ` · ${ago(data.ageDays)}` : ""}
             {v.durationSec ? ` · ${seconds(v.durationSec)} long` : ""}
           </p>
-          {/* Its main numbers, at a glance: in one row when they fit, else in even rows (globals.css, .stat-grid). */}
-          <div className="stat-cq mt-3">
-            <dl className="stat-grid" data-n={stats.length} aria-label="Its numbers so far">
-              {stats.map((x) => (
-                <div key={x.k} className="min-w-0">
-                  <dt className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-faint whitespace-nowrap">
-                    <span className="text-ink-soft">{x.icon}</span>
-                    {x.label}
-                  </dt>
-                  <dd className="font-display text-[22px] sm:text-[24px] leading-tight font-semibold tabular-nums whitespace-nowrap">{x.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            {v.url && (
-              <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold hover:border-line/30">
-                Open on {NAME[v.platform]}
-                <ExternalIcon className="w-3.5 h-3.5" />
-              </a>
-            )}
-            {v.ours && (
-              <Link href={v.ours.kind === "short" ? `/shorts/${v.ours.id}` : `/videos/${v.ours.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold text-amber hover:border-line/30">
-                #{v.ours.number ?? "?"} in ClipTroop
-              </Link>
-            )}
-            {viewsKey?.rank && viewsKey.rank.of > 1 && (
-              <span className="text-[12px] text-ink-soft inline-flex items-center gap-1.5">
-                <TrophyIcon className="w-3.5 h-3.5 text-gold" />#{viewsKey.rank.rank} of {viewsKey.rank.of} {data.peerWord} by {v.platform === "facebook" ? "plays" : "views"}
-              </span>
-            )}
-          </div>
-        </div>
-        {/* Right now, then next to the usual. */}
-        <div className={`w-[240px] flex-shrink-0 self-start space-y-3 ${beside}`}>
-          {live && <LiveBig data={data} />}
-          <div className={`rounded-xl p-4 ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
-            <Verdict data={data} />
-          </div>
+          {/* A Short's picture is tall: on a phone its numbers go under both. */}
+          <div className={tall ? "hidden sm:block" : ""}>{numbers}</div>
         </div>
       </div>
-      <div className={`${under} mt-4 grid gap-3 ${live ? "sm:grid-cols-2" : ""}`}>
-        {live && <LiveBig data={data} />}
-        <div className={`rounded-xl p-4 ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
-          <Verdict data={data} />
-        </div>
-      </div>
+      {tall && <div className="sm:hidden">{numbers}</div>}
     </section>
   );
 }
 
-/** Its counts right now, big: the last 48 hours and the last hour. */
-function LiveBig({ data }: { data: VideoPageData }) {
-  const l = data.live!;
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  if (l.views48 === null && l.views60 === null) return null;
+function PercentIcon() {
   return (
-    <div className="rounded-xl border border-green/25 bg-green/[0.06] p-4" role="status">
-      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-        <span className="relative flex w-2 h-2" aria-hidden>
-          <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 motion-safe:animate-ping" />
-          <span className="relative inline-flex w-2 h-2 rounded-full bg-green" />
-        </span>
-        Right now
-      </div>
-      <div className="mt-1.5 font-display text-[34px] leading-none font-semibold tabular-nums text-green">+{(l.views48 ?? 0).toLocaleString("en-US")}</div>
-      <div className="text-[12px] text-ink-soft mt-1">{data.video.platform === "facebook" ? "plays" : "views"} in the last 48 hours</div>
-      {l.views60 !== null && l.views60 > 0 && (
-        <div className="mt-2 text-[13px] text-ink-soft">
-          <b className="font-display text-[22px] text-green tabular-nums">+{l.views60.toLocaleString("en-US")}</b> in the last hour
-        </div>
-      )}
-      {now && l.at && <div className="mt-1.5 text-[11px] text-ink-faint">counts from {agoFrom(l.at, now)}</div>}
-    </div>
+    <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+      <path d="M12.5 3.5l-9 9" />
+      <circle cx="4.5" cy="4.5" r="1.8" />
+      <circle cx="11.5" cy="11.5" r="1.8" />
+    </svg>
   );
 }
-
-function Verdict({ data }: { data: VideoPageData }) {
-  const v = data.video;
-  const tone = scoreTone(v.score);
-  if (v.score === null)
-    return (
-      <div>
-        <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Next to your usual</div>
-        <p className="mt-1 text-[13px] text-ink-soft">{v.views === null ? "No views from the platform yet." : `Not enough ${data.peerWord} yet to say what's typical.`}</p>
-      </div>
-    );
-  const word = tone === "high" ? "An outlier" : tone === "up" ? "Above your usual" : tone === "down" ? "Under your usual" : "About your usual";
+function StopwatchIcon() {
   return (
-    <div>
-      <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">{word}</div>
-      <div className={`mt-1 font-display text-[38px] leading-none font-semibold tabular-nums ${tone === "high" || tone === "up" ? "text-green" : tone === "down" ? "text-coral" : ""}`}>{scoreText(v.score)}</div>
-      <p className="mt-1.5 text-[12px] text-ink-soft leading-snug">
-        your typical {data.peerWord.replace(/s$/, "")}: {compactNum(v.typical)} {v.platform === "facebook" ? "plays" : "views"} (the median of the ones before it)
-      </p>
-    </div>
+    <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="8" cy="9" r="5.25" />
+      <path d="M8 9V6.5M6.5 1.75h3M12.4 4.1l.9-.9" />
+    </svg>
+  );
+}
+function PersonPlusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="6.5" cy="5.5" r="2.75" />
+      <path d="M1.75 13.75c.6-2.4 2.5-3.75 4.75-3.75s4.15 1.35 4.75 3.75M12.75 4.75v4M10.75 6.75h4" />
+    </svg>
   );
 }
 

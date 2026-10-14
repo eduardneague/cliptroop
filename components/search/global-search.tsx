@@ -26,6 +26,7 @@ import {
 import { useGlobalSearch } from "./use-global-search";
 import { useVideoSearch } from "./use-video-search";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import { KIND_LABEL } from "@/modules/analytics/lib/kinds";
 import { clearRecents, pushRecent, readRecents } from "./recents";
 import { Highlight } from "./highlight";
 import { InvitePanel } from "./invite-panel";
@@ -367,7 +368,7 @@ export function GlobalSearch({
     videos.items.slice(0, 5).forEach((v) => {
       const href = `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=search`;
       const platformName = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" }[v.platform];
-      const kind = v.kind === "short" ? "Short" : v.kind === "long" ? "Long video" : "Post";
+      const kind = KIND_LABEL[v.kind] ?? "Video";
       list.push({
         key: `video-${v.platform}-${v.id}`,
         section: "Video analytics",

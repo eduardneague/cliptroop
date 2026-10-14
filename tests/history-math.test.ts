@@ -35,6 +35,23 @@ ok(!r.rows.some((x) => x.day === "2025-01-26"), "nothing before the first day wi
 ok(!r.rows.some((x) => x.day === "2025-01-25"), "zeros before it aren't kept");
 ok(r.rows.every((x, i, a) => i === 0 || String(a[i - 1].day) <= String(x.day)), "in day order");
 
+// 1.22.0: the kinds YouTube split the stretch into get a zero on every day
+// one of them is missing (a day of long videos had no live streams), so an
+// old row that mixed live streams into long videos doesn't stay.
+const k = historyRows(
+  [row("2025-02-01", 50), row("2025-02-01", 30, "shorts"), row("2025-02-01", 20, "live"), row("2025-02-02", 40), row("2025-02-02", 40, "long")],
+  "2025-02-01",
+  "2025-02-03",
+  base
+);
+const kv = (day: string, content: string) => k.rows.find((x) => x.day === day && x.content === content);
+ok(kv("2025-02-01", "long")?.views === 0, "a kind missing on a split day is a zero");
+ok(kv("2025-02-02", "shorts")?.views === 0 && kv("2025-02-02", "live")?.views === 0, "every kind of the stretch, every day");
+ok(kv("2025-02-03", "all")?.views === 0 && kv("2025-02-03", "live")?.views === 0 && kv("2025-02-03", "long")?.views === 0, "a day left out: zeros for each kind too");
+ok(kv("2025-02-01", "shorts")?.views === 30 && kv("2025-02-02", "long")?.views === 40, "the real numbers stay");
+const unsplit = historyRows([row("2025-03-01", 9), row("2025-03-02", 4)], "2025-03-01", "2025-03-02", base);
+ok(unsplit.rows.every((x) => x.content === "all"), "no split in the stretch: no kinds made up");
+
 // Nothing in it: nothing to save (the channel had no views yet).
 const none = historyRows([row("2024-05-01", 0)], "2024-01-01", "2024-12-31", base);
 ok(none.first === null && none.rows.length === 0, "a stretch without views saves nothing");

@@ -10,15 +10,17 @@ import type { ContentItem, PlatformStatus } from "../../lib/queries";
 
 /*
  * Analytics → Content (1.20.0): like YouTube Studio's, a tab per kind
- * (everything, long videos, Shorts, posts) with its totals, then every
- * video with its numbers. One video by name: the app's search (top bar, or
- * "/") lists videos with their numbers too.
+ * (everything, long videos, Shorts, live streams, posts) with its totals,
+ * then every video with its numbers. One video by name: the app's search
+ * (top bar, or "/") lists videos with their numbers too. 1.22.0: live
+ * streams have their own tab (they used to be long videos).
  */
 
 const KINDS: { id: ContentKind; label: string }[] = [
   { id: "all", label: "All" },
   { id: "long", label: "Long videos" },
   { id: "short", label: "Shorts" },
+  { id: "live", label: "Live streams" },
   { id: "post", label: "Posts" },
 ];
 
@@ -95,8 +97,9 @@ export function ContentTab({
     const impressions = add((i) => i.impressions);
     const shortViews = add((i) => (i.kind === "short" ? i.views : null));
     const longViews = add((i) => (i.kind === "long" ? i.views : null));
+    const liveViews = add((i) => (i.kind === "live" ? i.views : null));
     const clicks = add((i) => (i.impressions && i.ctr !== null && i.ctr !== undefined ? (i.impressions * i.ctr) / 100 : null));
-    return { views: add((i) => i.views), shortViews, longViews, likes: add((i) => i.likes), comments: add((i) => i.comments), shares: add((i) => i.shares), impressions, ctr: impressions && clicks !== null ? (clicks / impressions) * 100 : null };
+    return { views: add((i) => i.views), shortViews, longViews, liveViews, likes: add((i) => i.likes), comments: add((i) => i.comments), shares: add((i) => i.shares), impressions, ctr: impressions && clicks !== null ? (clicks / impressions) * 100 : null };
   }, [listed]);
   if (!status.some((s) => s.connected) && !items.length)
     return (
@@ -136,8 +139,10 @@ export function ContentTab({
             [
               "Views",
               fmtCompact(sums.views),
-              // Shorts and long videos apart when the list has both.
-              sums.shortViews !== null && sums.longViews !== null ? `shorts ${fmtCompact(sums.shortViews)} · long ${fmtCompact(sums.longViews)}` : "their totals now",
+              // Shorts, long videos and live streams apart when the list has more than one.
+              [sums.shortViews, sums.longViews, sums.liveViews].filter((x) => x !== null).length > 1
+                ? [sums.shortViews !== null ? `shorts ${fmtCompact(sums.shortViews)}` : null, sums.longViews !== null ? `long ${fmtCompact(sums.longViews)}` : null, sums.liveViews !== null ? `live ${fmtCompact(sums.liveViews)}` : null].filter(Boolean).join(" · ")
+                : "their totals now",
             ],
             ["Likes", fmtCompact(sums.likes), null],
             ["Comments", fmtCompact(sums.comments), null],

@@ -1,7 +1,7 @@
 import "server-only";
 import { APP_NAME } from "@/lib/brand";
 import { ApiError, upsert, type Admin } from "./sync-core";
-import { parseReachCsv, sumReach, type ReachRow } from "./reach-parse";
+import { cursorAfter, parseReachCsv, sumReach, type ReachRow } from "./reach-parse";
 
 /*
  * Impressions and click-through rate (1.19.0). YouTube's Analytics API
@@ -85,13 +85,18 @@ export async function syncReach(admin: Admin, teamId: string, token: string, sta
   let rows = 0;
   try {
     job = await ensureJob(token, job);
-    const todo = (await newReports(token, job, after)).slice(0, PER_RUN);
-    for (const rep of todo) {
-      if (Date.now() > deadline) break;
-      const text = await (await call(rep.downloadUrl, token)).text();
-      rows += await saveReach(admin, teamId, parseReachCsv(text));
-      after = rep.createTime;
-      reports++;
+    const list = await newReports(token, job, after);
+    const saved: Report[] = [];
+    try {
+      for (const rep of list.slice(0, PER_RUN)) {
+        if (Date.now() > deadline) break;
+        const text = await (await call(rep.downloadUrl, token)).text();
+        rows += await saveReach(admin, teamId, parseReachCsv(text));
+        saved.push(rep);
+        reports++;
+      }
+    } finally {
+      after = cursorAfter(saved, list[saved.length] ?? null, after);
     }
     if (reports) await admin.rpc("analytics_reach_totals", { p_team: teamId });
     return { job, after, note: null, reports, rows };
@@ -102,7 +107,7 @@ export async function syncReach(admin: Admin, teamId: string, token: string, sta
   }
 }
 
-/** One report's rows: per video and day, then the day's totals (all, Shorts, long videos). */
+/** One report's rows: per video and day, then the day's totals (all, Shorts, long videos, live streams). */
 async function saveReach(admin: Admin, teamId: string, list: ReachRow[]): Promise<number> {
   if (!list.length) return 0;
   const now = new Date().toISOString();
@@ -122,7 +127,7 @@ async function saveReach(admin: Admin, teamId: string, list: ReachRow[]): Promis
   const groups = new Map<string, ReachRow[]>();
   for (const r of list) {
     const k = kind.get(r.video);
-    const content = k === "short" ? "shorts" : k === "long" ? "long" : null;
+    const content = k === "short" ? "shorts" : k === "long" ? "long" : k === "live" ? "live" : null;
     for (const key of [`${r.day}|all`, ...(content ? [`${r.day}|${content}`] : [])]) groups.set(key, [...(groups.get(key) ?? []), r]);
   }
   const daily = [...groups.entries()].map(([key, rs]) => {
