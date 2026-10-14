@@ -9,26 +9,27 @@ import type { SocialPlatform } from "@/lib/social/providers";
 import type { Realtime } from "../lib/realtime";
 import { ago } from "../lib/ago";
 import { hourName } from "../lib/live-math";
-import { fmtCompact, fmtInt, Legend, StackedColumns } from "./charts";
+import { fmtCompact, fmtInt, StackedColumns } from "./charts";
 
 /*
- * Analytics → Audience's Realtime card (1.19.0): views over the last 48
- * hours, hour by hour, and in the last 60 minutes, the videos getting views
- * right now, and each account's totals now. From the counts the 10-minute
- * job keeps; it refreshes itself whenever the job has read new counts
- * (realtime on analytics_syncs), and every 2 minutes while it's open.
+ * Realtime (1.19.0; its own tab and the Overview's card in 1.20.0): views
+ * over the last 48 hours hour by hour, the last 60 minutes, the videos
+ * getting views right now, each account's totals now. From the counts the
+ * 10-minute job keeps; `useRealtime` refreshes whenever the job has read new
+ * counts (realtime on analytics_syncs), every 2 minutes while the page is
+ * open, and on coming back to it.
  */
 
-const PLATFORM: Record<SocialPlatform, { name: string; color: string; people: string }> = {
+export const RT_PLATFORM: Record<SocialPlatform, { name: string; color: string; people: string }> = {
   youtube: { name: "YouTube", color: "rgb(var(--chart-yt))", people: "subscribers" },
   instagram: { name: "Instagram", color: "rgb(var(--chart-ig))", people: "followers" },
   tiktok: { name: "TikTok", color: "rgb(var(--chart-tt))", people: "followers" },
   facebook: { name: "Facebook", color: "rgb(var(--chart-fb))", people: "followers" },
 };
-const ORDER: SocialPlatform[] = ["youtube", "tiktok", "instagram", "facebook"];
+export const RT_ORDER: SocialPlatform[] = ["youtube", "tiktok", "instagram", "facebook"];
 
-/** `only`: the platforms picked on the Audience tab (none: every connected one). */
-export function RealtimeCard({ teamId, only }: { teamId: string; only?: SocialPlatform[] }) {
+/** The realtime numbers, kept fresh. `full`: the Realtime tab's (10-minute slots, the top 25). */
+export function useRealtime(teamId: string, full = false) {
   const [data, setData] = useState<Realtime | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -39,7 +40,7 @@ export function RealtimeCard({ teamId, only }: { teamId: string; only?: SocialPl
     if (busy.current) return;
     busy.current = true;
     try {
-      const r = await loadRealtime(teamId);
+      const r = await loadRealtime(teamId, full);
       if (r) {
         setData(r);
         setFailed(false);
@@ -50,7 +51,7 @@ export function RealtimeCard({ teamId, only }: { teamId: string; only?: SocialPl
       busy.current = false;
       setNow(Date.now());
     }
-  }, [teamId]);
+  }, [teamId, full]);
 
   useEffect(() => {
     void load();
@@ -61,7 +62,7 @@ export function RealtimeCard({ teamId, only }: { teamId: string; only?: SocialPl
     // New counts: the job writes live_at on analytics_syncs when it's done with a platform.
     const supabase = createClient();
     const channel = supabase
-      .channel(`realtime-card:${teamId}:${Math.random().toString(36).slice(2, 8)}`)
+      .channel(`realtime:${teamId}:${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "analytics_syncs", filter: `team_id=eq.${teamId}` }, () => soon())
       .subscribe();
     const every = setInterval(() => {
@@ -81,167 +82,175 @@ export function RealtimeCard({ teamId, only }: { teamId: string; only?: SocialPl
     };
   }, [teamId, load]);
 
-  if (!data) {
-    if (failed)
-      return (
-        <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
-          <Header updated={null} />
-          <p className="text-[13px] text-ink-soft mt-2">Couldn&rsquo;t load the realtime numbers just now. They&rsquo;ll be back on their own.</p>
-        </section>
-      );
-    return <RealtimeSkeleton />;
-  }
-  if (!data.ready)
-    return (
-      <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
-        <Header updated={null} />
-        <p className="text-[13px] text-ink-soft mt-2">Every video&rsquo;s numbers, refreshed every 10 minutes, start right after the latest database update (0083) has run.</p>
-      </section>
-    );
+  return { data, failed, now };
+}
 
-  const platforms = ORDER.filter((p) => data.platforms.some((x) => x.platform === p) && (!only?.length || only.includes(p)));
-  const withViews = platforms.filter((p) => data.hours.some((h) => (h.per[p] ?? 0) > 0));
-  const total = (m: Partial<Record<SocialPlatform, number>>) => platforms.reduce((t, p) => t + (m[p] ?? 0), 0);
-  const last48 = total(data.last48);
-  const last60 = total(data.last60);
-  const top = data.top.filter((v) => platforms.includes(v.platform));
-  const labels = data.hours.map((h) => new Date(h.at).toLocaleTimeString("en-US", { hour: "numeric" }));
-  const tips = data.hours.map((h, i) => `${hourName(Date.parse(h.at), now)}${i === data.hours.length - 1 ? " (so far)" : ""}`);
-  const series = (withViews.length ? withViews : platforms.slice(0, 1)).map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color, values: data.hours.map((h) => Math.round(h.per[p] ?? 0)) }));
-  const young = data.since && now - Date.parse(data.since) < 48 * 3_600_000;
-  const empty = !last48 && !top.length;
-  // No counts kept yet: the 10-minute job hasn't read anything (just after the update).
-  const waiting = !data.since;
-  const errors = data.platforms.filter((p) => p.error && platforms.includes(p.platform));
-
+export function LiveDot({ className = "w-2.5 h-2.5" }: { className?: string }) {
   return (
-    <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0" aria-label="Realtime">
-      <Header updated={ago(data.updatedAt, now)} />
-      <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)]">
-        <div className="min-w-0">
-          <div className="flex items-end gap-x-8 gap-y-3 flex-wrap mb-3">
-            <Big label="Views · last 48 hours" value={waiting ? null : last48} />
-            <Big label="Views · last 60 minutes" value={waiting ? null : last60} live />
-            {platforms.length > 1 && withViews.length > 1 && (
-              <div className="ml-auto">
-                <Legend shape="rect" items={withViews.map((p) => ({ key: p, label: PLATFORM[p].name, color: PLATFORM[p].color }))} />
-              </div>
-            )}
-          </div>
-          {empty ? (
-            <p className="rounded-xl border border-dashed border-line/20 px-4 py-8 text-center text-[13px] text-ink-soft">
-              {waiting
-                ? "Counting starts within 10 minutes: every video is read, then the views show up here from the next read on."
-                : young
-                  ? "The first counts are in: views show up here from the next read (every 10 minutes)."
-                  : "No views in the last 48 hours."}
-            </p>
-          ) : (
-            <StackedColumns ariaLabel="Views per hour over the last 48 hours" labels={labels} tips={tips} series={series} height={180} />
-          )}
-          {young && !empty && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
-        </div>
-        <div className="min-w-0">
-          <h3 className="text-[11px] font-bold uppercase tracking-wide text-ink-faint mb-2">Getting views now</h3>
-          {top.length ? (
-            <ol className="space-y-1">
-              {top.slice(0, 6).map((v, i) => (
-                <li key={`${v.platform}:${v.id}`}>
-                  <Link href={`/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=audience`} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 -mx-1.5 hover:bg-surface-2 transition-colors">
-                    <span className="w-4 text-[11px] font-bold text-ink-faint tabular-nums text-right flex-shrink-0">{i + 1}</span>
-                    <span className="relative w-14 h-8 rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
-                      {v.thumbnail && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-                      )}
-                      <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-semibold truncate">{v.title || "Untitled"}</span>
-                      <span className="block text-[11px] text-ink-faint tabular-nums">
-                        {v.views60 > 0 ? (
-                          <>
-                            <span className="text-green font-semibold">+{fmtInt(v.views60)}</span> in the last hour
-                          </>
-                        ) : (
-                          "quiet in the last hour"
-                        )}
-                      </span>
-                    </span>
-                    <span className="text-right flex-shrink-0">
-                      <span className="block text-[13px] font-bold tabular-nums">{fmtCompact(v.views48)}</span>
-                      <span className="block text-[10.5px] text-ink-faint">48 h</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="text-[12.5px] text-ink-faint">No video got views in the last 48 hours yet.</p>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 pt-3 border-t border-line/10 flex items-center gap-x-5 gap-y-2 flex-wrap text-[12px]">
-        {data.platforms
-          .filter((p) => platforms.includes(p.platform))
-          .sort((a, b) => ORDER.indexOf(a.platform) - ORDER.indexOf(b.platform))
-          .map((p) => (
-            <span key={p.platform} className="inline-flex items-center gap-1.5 text-ink-soft" title={p.liveAt ? `Read ${new Date(p.liveAt).toLocaleString("en-US")}` : undefined}>
-              <PlatformIcon platform={p.platform} className="w-4 h-4 rounded" />
-              {p.followers !== null && (
-                <>
-                  <b className="text-ink tabular-nums">{fmtCompact(p.followers)}</b> {PLATFORM[p.platform].people}
-                  <span aria-hidden className="text-ink-faint">·</span>
-                </>
-              )}
-              <span className="tabular-nums">
-                {p.videos !== null && p.videos > p.counted ? `${fmtInt(p.counted)} of ${fmtInt(p.videos)} videos counted` : `${fmtInt(p.counted)} videos`}
-              </span>
-            </span>
-          ))}
-      </div>
-      {(errors.length > 0 || (data.reachNote && platforms.includes("youtube"))) && (
-        <div className="mt-2 space-y-1">
-          {errors.map((p) => (
-            <p key={p.platform} className="text-[12px] text-red flex items-start gap-1.5">
-              <PlatformIcon platform={p.platform} className="w-4 h-4 rounded mt-px flex-shrink-0" />
-              <span className="min-w-0">
-                {PLATFORM[p.platform].name}&rsquo;s last read didn&rsquo;t go through: {p.error}
-              </span>
-            </p>
-          ))}
-          {data.reachNote && platforms.includes("youtube") && (
-            <p className="text-[12px] text-ink-soft flex items-start gap-1.5">
-              <PlatformIcon platform="youtube" className="w-4 h-4 rounded mt-px flex-shrink-0" />
-              <span className="min-w-0">{data.reachNote}</span>
-            </p>
-          )}
-        </div>
-      )}
-    </section>
+    <span className={`relative flex flex-shrink-0 ${className}`} aria-hidden>
+      <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 motion-safe:animate-ping" />
+      <span className="relative inline-flex w-full h-full rounded-full bg-green" />
+    </span>
   );
 }
 
-function Header({ updated }: { updated: string | null }) {
+export function RealtimeHeader({ updated, children }: { updated: string | null; children?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="relative flex w-2.5 h-2.5" aria-hidden>
-        <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 animate-ping" />
-        <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-green" />
-      </span>
+      <LiveDot />
       <h2 className="text-[14.5px] font-semibold">Realtime</h2>
       <span className="text-[12px] text-ink-faint">{updated ? `Updated ${updated} · every video, every 10 minutes` : "Every video, every 10 minutes"}</span>
+      {children}
     </div>
   );
 }
 
-function Big({ label, value, live = false }: { label: string; value: number | null; live?: boolean }) {
+export function Big({ label, value, live = false, size = "lg" }: { label: string; value: number | null; live?: boolean; size?: "lg" | "md" }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">{label}</div>
-      <div className={`font-display text-[30px] leading-none font-semibold tabular-nums mt-1 ${live && value !== null ? "text-green" : ""}`}>{fmtInt(value)}</div>
+      <div className={`font-display ${size === "lg" ? "text-[30px]" : "text-[24px]"} leading-none font-semibold tabular-nums mt-1 ${live && value !== null ? "text-green" : ""}`}>{fmtInt(value)}</div>
     </div>
+  );
+}
+
+/** What the realtime numbers say before there are any (or when they couldn't load). */
+export function realtimeState(data: Realtime | null, failed: boolean): "loading" | "failed" | "waiting-update" | "ok" {
+  if (!data) return failed ? "failed" : "loading";
+  return data.ready ? "ok" : "waiting-update";
+}
+
+/**
+ * The Overview's realtime card (bigger in 1.21.0, like YouTube Studio's):
+ * each account's subscribers or followers now, the views of the last 48
+ * hours and the last 60 minutes, the hours as bars, and the videos getting
+ * views now. `rt`: useRealtime's result (the Overview shows the card in one
+ * of two places, phone or computer, from the same numbers).
+ */
+export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRealtime>; href: string; only?: SocialPlatform | null }) {
+  const { data, failed, now } = rt;
+  const state = realtimeState(data, failed);
+  if (state === "loading") return <MiniSkeleton />;
+  const shell = (body: React.ReactNode) => (
+    <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0 flex flex-col" aria-label="Realtime">
+      <div className="flex items-center gap-2 min-w-0">
+        <LiveDot />
+        <h2 className="text-[15px] font-semibold">Realtime</h2>
+        <span className="text-[12px] text-ink-faint truncate">{data?.updatedAt ? `updated ${ago(data.updatedAt, now)}` : "updating live"}</span>
+      </div>
+      {body}
+      <Link href={href} scroll={false} className="mt-4 self-start inline-flex items-center gap-1 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold hover:border-line/30 hover:bg-surface-2">
+        See more
+        <span aria-hidden>→</span>
+      </Link>
+    </section>
+  );
+  if (state === "failed") return shell(<p className="text-[13px] text-ink-soft mt-2">Couldn&rsquo;t load the realtime numbers just now. They&rsquo;ll be back on their own.</p>);
+  if (state === "waiting-update" || !data) return shell(<p className="text-[13px] text-ink-soft mt-2">Every video&rsquo;s numbers, refreshed every 10 minutes, start right after the latest database update has run.</p>);
+  const platforms = RT_ORDER.filter((p) => data.platforms.some((x) => x.platform === p) && (!only || only === p));
+  const sum = (m: Partial<Record<SocialPlatform, number>>) => platforms.reduce((t, p) => t + (m[p] ?? 0), 0);
+  const values = data.hours.map((h) => Math.round(platforms.reduce((t, p) => t + (h.per[p] ?? 0), 0)));
+  const top = data.top.filter((v) => platforms.includes(v.platform)).slice(0, 5);
+  const waiting = !data.since;
+  const people = data.platforms.filter((p) => platforms.includes(p.platform) && p.followers !== null).sort((a, b) => RT_ORDER.indexOf(a.platform) - RT_ORDER.indexOf(b.platform));
+  const last60 = sum(data.last60);
+  return shell(
+    <>
+      {people.length > 0 && (
+        <ul className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(people.length, 2)}, minmax(0, 1fr))` }}>
+          {people.map((p) => (
+            <li key={p.platform} className="rounded-xl bg-surface-2/60 px-3 py-2 min-w-0" title={p.liveAt ? `Read ${ago(p.liveAt, now)}` : undefined}>
+              <span className="flex items-center gap-1.5 text-[11.5px] text-ink-soft min-w-0">
+                <PlatformIcon platform={p.platform} className="w-4 h-4 rounded-[4px]" />
+                <span className="truncate">{RT_PLATFORM[p.platform].people[0].toUpperCase() + RT_PLATFORM[p.platform].people.slice(1)}</span>
+              </span>
+              <span className="block font-display text-[21px] font-semibold leading-tight tabular-nums mt-0.5">{fmtInt(p.followers)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Views · 48 hours</div>
+          <div className="font-display text-[30px] sm:text-[34px] leading-none font-semibold tabular-nums mt-1.5">{waiting ? "–" : fmtInt(sum(data.last48))}</div>
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Last 60 minutes</div>
+          <div className={`font-display text-[30px] sm:text-[34px] leading-none font-semibold tabular-nums mt-1.5 ${!waiting && last60 > 0 ? "text-green" : ""}`}>{waiting ? "–" : `${last60 > 0 ? "+" : ""}${fmtInt(last60)}`}</div>
+        </div>
+      </div>
+      {values.some((v) => v > 0) ? (
+        <div className="mt-3">
+          <StackedColumns
+            ariaLabel="Views per hour over the last 48 hours"
+            labels={data.hours.map((h, i) => (i === 0 ? "48 h ago" : i === data.hours.length - 1 ? "Now" : ""))}
+            tips={data.hours.map((h, i) => `${hourName(Date.parse(h.at), now)}${i === data.hours.length - 1 ? " (so far)" : ""}`)}
+            series={[{ key: "views", label: "Views", color: platforms.length === 1 ? RT_PLATFORM[platforms[0]].color : "rgb(var(--amber))", values }]}
+            height={128}
+          />
+        </div>
+      ) : (
+        <p className="mt-3 text-[12.5px] text-ink-faint">{waiting ? "Counting starts within 10 minutes." : "No views in the last 48 hours yet."}</p>
+      )}
+      {top.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-line/10">
+          <div className="flex items-center text-[10.5px] font-bold uppercase tracking-wide text-ink-faint mb-1.5">
+            <span className="flex-1">Top content</span>
+            <span>48 hours</span>
+          </div>
+          <ol className="space-y-0.5">
+            {top.map((v) => (
+              <li key={`${v.platform}:${v.id}`}>
+                <Link href={`/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=overview`} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-surface-2 transition-colors">
+                  <Thumb src={v.thumbnail} platform={v.platform} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12.5px] font-semibold truncate">{v.title || "Untitled"}</span>
+                    {v.views60 > 0 && <span className="block text-[11px] text-green font-semibold tabular-nums">+{fmtInt(v.views60)} last hour</span>}
+                  </span>
+                  <span className="text-[13px] font-bold tabular-nums flex-shrink-0">{fmtCompact(v.views48)}</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function Thumb({ src, platform, className = "w-12 h-7" }: { src: string | null; platform: SocialPlatform; className?: string }) {
+  return (
+    <span className={`relative rounded-md overflow-hidden bg-surface-2 flex-shrink-0 ${className}`}>
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+      )}
+      <PlatformIcon platform={platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
+    </span>
+  );
+}
+
+function MiniSkeleton() {
+  return (
+    <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5" aria-hidden>
+      <div className="skeleton h-4 w-40 rounded" />
+      <div className="mt-4 flex gap-6">
+        <div className="space-y-2">
+          <div className="skeleton h-3 w-24 rounded" />
+          <div className="skeleton h-6 w-20 rounded" />
+        </div>
+        <div className="space-y-2">
+          <div className="skeleton h-3 w-24 rounded" />
+          <div className="skeleton h-6 w-14 rounded" />
+        </div>
+      </div>
+      <div className="skeleton h-[96px] w-full rounded-xl mt-3" />
+      <div className="mt-3 space-y-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton h-7 w-full rounded-md" />
+        ))}
+      </div>
+    </section>
   );
 }
 

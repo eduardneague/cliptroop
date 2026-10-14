@@ -6,19 +6,25 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
-import { fetchYouTubeDay, fetchYouTubeVideoHistory, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { fetchYouTubeDay, fetchYouTubeRevenueVideos, fetchYouTubeVideoDetails, fetchYouTubeVideoHistory, fetchYouTubeVideoRevenueDays, syncTeamAnalytics, type RevenueVideoRow } from "@/modules/analytics/lib/sync";
+import { convert, getFxRates, isCurrencyCode } from "@/lib/fx";
 import { liveTeamPlatform } from "@/modules/analytics/lib/live";
 import { getRealtime, type Realtime } from "@/modules/analytics/lib/realtime";
-import { findVideos, getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production } from "@/modules/analytics/lib/queries";
+import { canViewRevenue, findVideos, getAudience, getContent, getProduction, getViewsDay, sharedLookups, type Audience, type ContentItem, type DayViews, type Production, type RevenueVideos } from "@/modules/analytics/lib/queries";
 import { historyToFill } from "@/modules/analytics/lib/video";
-import { addDays, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
+import { addDays, daysBetween, readCustom, readRange, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
 import { getVideoSplits } from "@/modules/analytics/lib/advanced";
 import { gatherClaudeExport, type ClaudeExportData } from "@/modules/analytics/lib/claude-export";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Result<T = object> = ({ error?: undefined } & T) | { error: string };
 
-/** Copy the numbers from the platforms now (masters and schedulers). */
+/**
+ * Copy the numbers from the platforms now (masters and schedulers). Since
+ * 1.21.0 in the background (0085: one call per platform, each with its own
+ * time, then its live counts): copying every platform inside this request
+ * could take longer than a request may last. The page refreshes itself.
+ */
 export async function syncAnalyticsNow(teamId: string): Promise<Result<{ summary: string }>> {
   if (!UUID.test(teamId)) return { error: "Team not found." };
   const supabase = await createClient();
@@ -29,19 +35,24 @@ export async function syncAnalyticsNow(teamId: string): Promise<Result<{ summary
   const membership = await getMembership(supabase, teamId);
   const roles = membership?.roles ?? [];
   if (!roles.includes("master") && !roles.includes("publisher")) return { error: "Only masters and schedulers can sync." };
-  const started = Date.now();
-  const results = await syncTeamAnalytics(teamId);
-  revalidatePath("/analytics");
-  // Then every video's counts (1.19.0), after the answer, with the time this call has left
-  // (the 10-minute job goes on where it stops; the page refreshes itself when it's done).
-  const ok = results.filter((r) => r.ok).map((r) => r.platform);
-  const budget = 55_000 - (Date.now() - started);
-  if (ok.length && budget > 8_000) after(() => Promise.all(ok.map((p) => liveTeamPlatform(teamId, p, { full: true, budgetMs: budget }))).then(() => undefined));
-  if (!results.length) return { error: "No connected accounts. Connect them in Team → Connected accounts." };
-  const name = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
-  const bad = results.filter((r) => !r.ok);
-  if (bad.length === results.length) return { error: bad.map((r) => `${name[r.platform]}: ${r.error}`).join(" · ") };
-  return { summary: results.map((r) => `${name[r.platform]} ${r.ok ? `updated${r.note ? ` (${r.note})` : ""}` : `failed (${r.error})`}`).join(" · ") };
+  const { data, error } = await supabase.rpc("analytics_sync_now", { p_team: teamId });
+  if (!error && typeof data === "number") {
+    if (data === -1) return { summary: "Already getting the latest numbers: this page updates by itself." };
+    if (data > 0) return { summary: `Getting the latest numbers from ${data === 1 ? "1 platform" : `${data} platforms`}: this page updates by itself.` };
+  }
+  // Before 0085, or no timer (a local copy): every platform at once, after answering.
+  const { data: accounts } = await supabase.from("social_accounts").select("platform").eq("team_id", teamId).eq("status", "active");
+  const platforms = [...new Set(((accounts ?? []) as { platform: string }[]).map((a) => a.platform))].filter((p): p is "youtube" | "instagram" | "tiktok" | "facebook" => ["youtube", "instagram", "tiktok", "facebook"].includes(p));
+  if (!platforms.length) return { error: "No connected accounts. Connect them in Team → Connected accounts." };
+  after(async () => {
+    await Promise.allSettled(
+      platforms.map(async (p) => {
+        const [r] = await syncTeamAnalytics(teamId, { only: p });
+        if (r?.ok) await liveTeamPlatform(teamId, p, { full: true, budgetMs: 15_000 });
+      })
+    );
+  });
+  return { summary: "Getting the latest numbers: this page updates by itself." };
 }
 
 /** Let someone see revenue, or take it away (masters only; the database checks). */
@@ -201,6 +212,141 @@ export async function deleteRevenueEntry(teamId: string, id: string): Promise<Re
   return {};
 }
 
+// The videos behind a stretch of revenue, kept 10 minutes (per server): stepping back and forth is instant.
+const revenueVideosAsked = new Map<string, { at: number; rows: RevenueVideoRow[] | null }>();
+
+/** The currency this person picked for revenue: their account first (migration 0062), then this device. */
+async function personCurrency(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data, error } = await supabase.from("profiles").select("currency").eq("id", userId).maybeSingle();
+  if (!error && isCurrencyCode(data?.currency)) return data.currency as string;
+  const c = (await cookies()).get("vp_currency")?.value;
+  return isCurrencyCode(c) ? c : null;
+}
+
+/**
+ * Which videos made YouTube's money on a day (or a week, a month) of
+ * Revenue's chart (1.21.0): asked from YouTube, the top 25 by estimated
+ * revenue, in this person's currency. Only the people who see revenue.
+ */
+export async function loadRevenueVideos(teamId: string, from: string, to: string): Promise<Result<{ data: RevenueVideos }>> {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!UUID.test(teamId) || !day.test(from) || !day.test(to) || from > to) return { error: "Pick a day on the chart." };
+  if (daysBetween(from, to) > 400) return { error: "Pick a shorter stretch." };
+  if (!(await teamTz(teamId))) return { error: "Not on this team." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!(await canViewRevenue(supabase, teamId))) return { error: "Only the people who see revenue can open this." };
+  const stored = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
+  const [wanted, fx] = await Promise.all([personCurrency(supabase, user.id), getFxRates()]);
+  const currency = wanted && (wanted === stored || (fx?.rates[wanted] && fx?.rates[stored])) ? wanted : stored;
+  const key = `${teamId}:${from}:${to}`;
+  let hit = revenueVideosAsked.get(key);
+  if (!hit || hit.at < Date.now() - 10 * 60_000) {
+    try {
+      hit = { at: Date.now(), rows: await fetchYouTubeRevenueVideos(teamId, from, to, stored) };
+    } catch (e) {
+      console.error("[revenue videos]", e instanceof Error ? e.message : e);
+      return { error: "YouTube didn't send the revenue per video this time. Try again in a moment." };
+    }
+    revenueVideosAsked.set(key, hit);
+    if (revenueVideosAsked.size > 500) revenueVideosAsked.clear();
+  }
+  if (!hit.rows) return { data: { from, to, currency, videos: [], note: "Connect YouTube with revenue allowed (Team → Connected accounts) to see which videos made the money." } };
+  const ids = hit.rows.map((r) => r.id);
+  const { data: known } = ids.length
+    ? await supabase.from("analytics_content").select("external_id, kind, short_id, project_id, short_videos(entry_number), long_video_projects(entry_number)").eq("team_id", teamId).eq("platform", "youtube").in("external_id", ids)
+    : { data: [] };
+  const byId = new Map(((known ?? []) as Record<string, unknown>[]).map((r) => [r.external_id as string, r]));
+  const one = <T,>(x: T | T[] | null | undefined) => (Array.isArray(x) ? (x[0] ?? null) : (x ?? null));
+  const conv = (n: number) => (currency === stored ? n : (convert(n, stored, currency, fx) ?? n));
+  const videos = hit.rows.map((r) => {
+    const c = byId.get(r.id);
+    const s = one(c?.short_videos as { entry_number: number } | { entry_number: number }[] | null | undefined);
+    const l = one(c?.long_video_projects as { entry_number: number } | { entry_number: number }[] | null | undefined);
+    const revenue = conv(r.revenue);
+    const kind: "short" | "long" = c?.kind === "short" || c?.kind === "long" ? (c.kind as "short" | "long") : r.durationSec !== null && r.durationSec <= 180 ? "short" : "long";
+    return {
+      platform: "youtube" as const,
+      id: r.id,
+      title: r.title,
+      thumbnail: r.thumbnail && /^https?:\/\//i.test(r.thumbnail) ? r.thumbnail : null,
+      url: `https://www.youtube.com/watch?v=${r.id}`,
+      kind,
+      publishedAt: r.publishedAt,
+      revenue,
+      views: r.views,
+      rpm: r.views ? (revenue / r.views) * 1000 : null,
+      ours: c?.short_id ? { kind: "short" as const, id: c.short_id as string, number: s?.entry_number ?? null } : c?.project_id ? { kind: "long" as const, id: c.project_id as string, number: l?.entry_number ?? null } : null,
+    };
+  });
+  return { data: { from, to, currency, videos, note: null } };
+}
+
+// A video's own story asked from YouTube at most every 10 minutes (per server).
+const askedDetails = new Map<string, number>();
+
+/**
+ * A video's analytics page found its splits missing or half a day old
+ * (1.21.0): ask YouTube for everything about it (where its views came
+ * from, who watched, on what, its numbers per day with subscribers), keep
+ * it, and let the page reload. Anyone on the team.
+ */
+export async function loadVideoDetails(teamId: string, id: string): Promise<Result<{ saved: number }>> {
+  if (!UUID.test(teamId) || typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return { error: "Not found." };
+  if (!(await teamTz(teamId))) return { error: "Not on this team." };
+  const key = `${teamId}:${id}`;
+  if ((askedDetails.get(key) ?? 0) > Date.now() - 10 * 60_000) return { saved: 0 };
+  askedDetails.set(key, Date.now());
+  if (askedDetails.size > 3000) askedDetails.clear();
+  try {
+    return { saved: Math.max(0, await fetchYouTubeVideoDetails(teamId, id)) };
+  } catch (e) {
+    console.error("[video details]", e instanceof Error ? e.message : e);
+    return { error: "YouTube didn't send this video's details this time." };
+  }
+}
+
+export type VideoRevenueDays = { currency: string; days: { day: string; revenue: number; adRevenue: number | null; cpm: number | null; playbackCpm: number | null; monetizedPlaybacks: number | null }[]; note: string | null };
+const videoRevenueAsked = new Map<string, { at: number; rows: Awaited<ReturnType<typeof fetchYouTubeVideoRevenueDays>> }>();
+
+/** One YouTube video's money per day since it was posted (its page's Revenue tab, 1.21.0): the people who see revenue only. */
+export async function loadVideoRevenueDays(teamId: string, id: string): Promise<Result<{ data: VideoRevenueDays }>> {
+  if (!UUID.test(teamId) || typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return { error: "Not found." };
+  const tz = await teamTz(teamId);
+  if (!tz) return { error: "Not on this team." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!(await canViewRevenue(supabase, teamId))) return { error: "Only the people who see revenue can open this." };
+  const { data: c } = await supabase.from("analytics_content").select("published_at").eq("team_id", teamId).eq("platform", "youtube").eq("external_id", id).maybeSingle();
+  const to = addDays(todayIn(tz), -1);
+  const posted = typeof c?.published_at === "string" ? (c.published_at as string).slice(0, 10) : addDays(to, -89);
+  const from = posted < addDays(to, -1094) ? addDays(to, -1094) : posted > to ? to : posted;
+  const stored = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
+  const [wanted, fx] = await Promise.all([personCurrency(supabase, user.id), getFxRates()]);
+  const currency = wanted && (wanted === stored || (fx?.rates[wanted] && fx?.rates[stored])) ? wanted : stored;
+  const key = `${teamId}:${id}:${from}:${to}`;
+  let hit = videoRevenueAsked.get(key);
+  if (!hit || hit.at < Date.now() - 10 * 60_000) {
+    try {
+      hit = { at: Date.now(), rows: await fetchYouTubeVideoRevenueDays(teamId, id, from, to, stored) };
+    } catch (e) {
+      console.error("[video revenue]", e instanceof Error ? e.message : e);
+      return { error: "YouTube didn't send this video's revenue per day this time. Try again in a moment." };
+    }
+    videoRevenueAsked.set(key, hit);
+    if (videoRevenueAsked.size > 500) videoRevenueAsked.clear();
+  }
+  if (!hit.rows) return { data: { currency, days: [], note: "Connect YouTube with revenue allowed (Team → Connected accounts) to see this video's revenue per day." } };
+  const conv = (x: number | null) => (x === null ? null : currency === stored ? x : (convert(x, stored, currency, fx) ?? x));
+  return { data: { currency, days: hit.rows.map((r) => ({ ...r, revenue: conv(r.revenue) ?? 0, adRevenue: conv(r.adRevenue), cpm: conv(r.cpm), playbackCpm: conv(r.playbackCpm) })), note: null } };
+}
+
 // A video's history asked from YouTube at most every 30 minutes (per server).
 const askedHistory = new Map<string, number>();
 
@@ -243,11 +389,11 @@ export async function searchVideos(teamId: string, q: string): Promise<Result<{ 
 }
 
 /** Analytics' realtime (1.19.0): the last 48 hours and 60 minutes, the videos getting views now. */
-export async function loadRealtime(teamId: string): Promise<Realtime | null> {
+export async function loadRealtime(teamId: string, full = false): Promise<Realtime | null> {
   if (!UUID.test(teamId)) return null;
   if (!(await teamTz(teamId))) return null;
   try {
-    return await getRealtime(teamId);
+    return await getRealtime(teamId, { full: full === true });
   } catch (e) {
     console.error("[realtime]", e instanceof Error ? e.message : e);
     return null;
@@ -273,7 +419,7 @@ export async function loadVideoSplits(teamId: string, platform: string, id: stri
  */
 export async function loadClaudeExport(
   teamId: string,
-  input: { platforms: string[]; range: string; which: string; top?: number; scripts?: boolean; revenue?: boolean }
+  input: { platforms: string[]; range: string; which: string; top?: number; scripts?: boolean; revenue?: boolean; from?: string; to?: string }
 ): Promise<Result<{ data: ClaudeExportData }>> {
   const tz = await teamTz(teamId);
   if (!tz) return { error: "You're not on this team." };
@@ -283,19 +429,29 @@ export async function loadClaudeExport(
   const { data: team } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
   // Platform numbers arrive a day late: the range ends yesterday.
   const yesterday = addDays(todayIn(tz), -1);
+  // Custom: the two days picked (else 28 days); Lifetime: from its first day.
+  let range = readRange(input.range);
+  let end = yesterday;
+  let start: string | null = null;
+  if (range === "custom") {
+    const c = readCustom(input.from, input.to, yesterday);
+    if (c) [start, end] = [c.from, c.to];
+    else range = "28d";
+  } else if (range === "lifetime" && readCustom(input.from, yesterday, yesterday)) start = input.from!;
   try {
     const data = await gatherClaudeExport(
       teamId,
       { name: (team?.name as string | undefined) ?? "Team", tz },
       {
         platforms,
-        range: readRange(input.range),
+        range,
+        start,
         which: input.which === "top" || input.which === "range" ? input.which : "all",
         top: Math.max(5, Math.min(200, Math.round(Number(input.top) || 50))),
         scripts: input.scripts !== false,
         revenue: input.revenue === true,
       },
-      yesterday
+      end
     );
     if (!data.platforms.length) return { error: "None of these platforms has numbers yet." };
     return { data };

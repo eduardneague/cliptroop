@@ -223,6 +223,16 @@ async function main() {
   const hours = JSON.parse(execSync(`curl -s -X POST http://127.0.0.1:54399/rest/v1/rpc/analytics_live_hours -H "Content-Type: application/json" -H "Authorization: Bearer ${jwt({ role: "authenticated", sub: USER })}" -d '{"p_team":"${TEAM}","p_hours":48}'`, { encoding: "utf8" }));
   const hsum = hours.reduce((t: number, h: { views: number }) => t + h.views, 0);
   ok(hsum >= 5598 && hsum <= 5602, `hours add up to 50 × 100 + 5 × 120 (got ${hsum})`);
+  // 0084 (1.20.0): the same counts in 10-minute slots, through PostgREST as the teammate.
+  const rpc = (fn: string, body: unknown, who = USER) =>
+    JSON.parse(execSync(`curl -s -X POST http://127.0.0.1:54399/rest/v1/rpc/${fn} -H "Content-Type: application/json" -H "Authorization: Bearer ${jwt({ role: "authenticated", sub: who })}" -d '${JSON.stringify(body)}'`, { encoding: "utf8" }));
+  const slots = rpc("analytics_live_buckets", { p_team: TEAM, p_minutes: 60, p_step: 10 });
+  const s60 = gains.reduce((t: number, g: { views: number }) => t + g.views, 0);
+  const ssum = Array.isArray(slots) ? slots.reduce((t: number, x: { views: number }) => t + x.views, 0) : -1;
+  // (Rounded per slot / per video: a few views apart at most.)
+  ok(Array.isArray(slots) && slots.length > 0 && Math.abs(ssum - s60) <= slots.length + gains.length, `the last 60 minutes in 10-minute slots add up to the hour's gains (${ssum} vs ${s60})`);
+  ok(Array.isArray(slots) && slots.length <= 6 && slots.every((x: { at: string }) => Date.parse(x.at) >= Date.now() - 61 * 60_000), "at most 6 slots, all in the last hour");
+  ok(rpc("analytics_live_buckets", { p_team: TEAM, p_minutes: 60, p_step: 10 }, OTHER).length === 0, "someone else's team: no slots");
 
   console.log("\n— YouTube, the reach reports arrive (an hour later)");
   reportsReady = true;
@@ -234,6 +244,16 @@ async function main() {
   ok(Number(one(`select count(*) from analytics_daily where team_id = '${TEAM}' and impressions is not null`)) >= 2, "per day for the channel");
   ok(one(`select reach_after from analytics_syncs where team_id = '${TEAM}' and platform = 'youtube'`).startsWith("2026-10-13 08:00"), "the next call asks for reports after the last one");
   ok(one(`select count(*) from analytics_content_days where team_id = '${TEAM}' and views is not null`) === "0", "impressions-only days have no views");
+
+  console.log("\n— The Overview's top content (0084), through PostgREST");
+  sql(`insert into analytics_content_days (team_id, platform, external_id, day, source, views) values
+    ('${TEAM}', 'youtube', 'yt0001', current_date - 3, 'daily', 500), ('${TEAM}', 'youtube', 'yt0001', current_date - 2, 'daily', 250),
+    ('${TEAM}', 'youtube', 'yt0002', current_date - 2, 'daily', 90)
+    on conflict (team_id, platform, external_id, day) do update set views = excluded.views, source = excluded.source`);
+  const top = rpc("analytics_top_content", { p_team: TEAM, p_from: new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10), p_to: new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10), p_limit: 5, p_platforms: ["youtube", "instagram"] });
+  ok(Array.isArray(top) && top[0]?.external_id === "yt0001" && top[0]?.views === 750 && top[1]?.external_id === "yt0002", `the most views in the range first, platforms as a JSON array (got ${JSON.stringify(top).slice(0, 160)})`);
+  ok(rpc("analytics_top_content", { p_team: TEAM, p_from: "2026-01-01", p_to: "2026-12-31", p_platforms: ["tiktok"] }).every((r: { platform: string }) => r.platform === "tiktok"), "only the platforms asked");
+  ok(rpc("analytics_top_content", { p_team: TEAM, p_from: "2026-01-01", p_to: "2026-12-31" }, OTHER).length === 0, "someone else's team: nothing");
 
   console.log("\n— TikTok: a full pass that runs out of time, then goes on");
   ttPageDelay = 900;

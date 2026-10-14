@@ -91,6 +91,8 @@ export async function adoptAccount(
     .update({ live_at: null, live_full_at: null, live_error: null, live_cursor: null, live_totals: null, reach_job: null, reach_after: null, reach_checked_at: null, reach_note: null })
     .eq("team_id", teamId)
     .eq("platform", platform);
+  // And YouTube's history goes back again from the new account's first copy (0085).
+  await admin.from("analytics_syncs").update({ history_from: null, history_done: false }).eq("team_id", teamId).eq("platform", platform);
   return { purged: true };
 }
 

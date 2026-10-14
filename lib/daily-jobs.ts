@@ -37,9 +37,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * the projections of teams without accounts and a check of the timer. No
  * options (the hand-run address, an older timer): every team, as before.
  */
-export async function runAnalyticsJob(o: { team?: unknown; platform?: unknown; retry?: unknown } = {}) {
+export async function runAnalyticsJob(o: { team?: unknown; platform?: unknown; retry?: unknown; live?: unknown } = {}) {
   if (typeof o.team === "string" && UUID.test(o.team) && PLATFORMS.includes(o.platform as (typeof PLATFORMS)[number])) {
-    const results = await syncTeamAnalytics(o.team, { only: o.platform as (typeof PLATFORMS)[number], log: true });
+    const started = Date.now();
+    const platform = o.platform as (typeof PLATFORMS)[number];
+    const results = await syncTeamAnalytics(o.team, { only: platform, log: true });
+    // Sync now (0085): then every video's counts, with the time this call has left.
+    const left = 52_000 - (Date.now() - started);
+    if (o.live === true && results[0]?.ok && left > 8_000) {
+      const { liveTeamPlatform } = await import("@/modules/analytics/lib/live");
+      await liveTeamPlatform(o.team, platform, { full: true, budgetMs: left }).catch(() => undefined);
+    }
     return { ok: true, job: "analytics" as const, team: o.team, platforms: results.map((x) => ({ platform: x.platform, ok: x.ok, rows: x.rows, error: x.error })) };
   }
   const started = Date.now();

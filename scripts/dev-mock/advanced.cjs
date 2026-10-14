@@ -190,8 +190,13 @@ module.exports.advancedFixtures = function advancedFixtures({ TEAM, day, at, dai
   const SITES = ["google.com", "facebook.com", "reddit.com/r/romania", "instagram.com", "tiktok.com", "whatsapp.com", "wikipedia.org", "duckduckgo.com"];
   const SUGG = [["xA1bC2dE3fG", "Romanian Street Food Tour · Food Ranger"], ["hJ4kL5mN6oP", "I Tried Every Bakery in Paris · Joel Hansen"], ["qR7sT8uV9wX", "Cheapest Food in Eastern Europe · Best Ever Food"], ["yZ0aB1cD2eF", "Bucharest on $20 · Kara and Nate"], ["gH3iJ4kL5mN", "Tiny Homes of Europe · Living Big"]];
   const PLAYLISTS = [["PLvA1", "Street food (all episodes)"], ["PLvA2", "Cheap eats"], ["PLvA3", "Tiny homes"]];
-  for (const span of [7, 28, 90, 365]) {
-    const k = span / 28;
+  // The last 7 / 28 / 90 / 365 days, and (1.21.0) the channel's whole life (span 0).
+  for (const span of [7, 28, 90, 365, 0]) {
+    const k = (span || 620) / 28;
+    // Views by country (1.21.0): for ranges the per-day countries don't cover.
+    [["RO", 0.62], ["MD", 0.09], ["IT", 0.06], ["ES", 0.05], ["DE", 0.04], ["GB", 0.035], ["US", 0.03], ["FR", 0.025], ["AT", 0.015], ["BE", 0.01]].forEach(([key, sh]) =>
+      B({ platform: "youtube", dimension: "country", key, day: end, span, views: Math.round(380000 * k * sh * (0.9 + rnd() * 0.2)), watch_minutes: Math.round(380000 * k * sh * 0.5) })
+    );
     SEARCH.forEach((t, i) => B({ platform: "youtube", dimension: "search_term", key: t, day: end, span, views: Math.round((2600 / (i + 1)) * k * (0.8 + rnd() * 0.4)), watch_minutes: Math.round((900 / (i + 1)) * k) }));
     SITES.forEach((t, i) => B({ platform: "youtube", dimension: "external_site", key: t, day: end, span, views: Math.round((1400 / (i + 1)) * k), watch_minutes: Math.round((500 / (i + 1)) * k) }));
     SUGG.forEach(([id, name], i) => B({ platform: "youtube", dimension: "suggested_by", key: `${id}|${name}`, day: end, span, views: Math.round((3100 / (i + 1)) * k), watch_minutes: Math.round((2600 / (i + 1)) * k) }));
@@ -232,6 +237,21 @@ module.exports.advancedFixtures = function advancedFixtures({ TEAM, day, at, dai
       breakdowns.push({ team_id: TEAM, platform: "youtube", external_id: v.external_id, dimension: "traffic_source", key, day: end, span: 0, views: Math.round(v.views * s), watch_minutes: Math.round(v.views * s * 0.5), value: null, updated_at: at(0, 8) })
     );
     SEARCH.slice(0, 5).forEach((t, i) => breakdowns.push({ team_id: TEAM, platform: "youtube", external_id: v.external_id, dimension: "search_term", key: t, day: end, span: 0, views: Math.round((v.views * 0.06) / (i + 1)), watch_minutes: null, value: null, updated_at: at(0, 8) }));
+    // 1.21.0: everything its page's Reach and Audience tabs show (what its page asks YouTube for).
+    const V = (dimension, key, views, value = null) => breakdowns.push({ team_id: TEAM, platform: "youtube", external_id: v.external_id, dimension, key, day: end, span: 0, views, watch_minutes: views === null ? null : Math.round(views * (short ? 0.4 : 3.2)), value, updated_at: at(0, 8) });
+    SITES.slice(0, 5).forEach((t, i) => V("external_site", t, Math.round((v.views * 0.02) / (i + 1))));
+    SUGG.slice(0, short ? 2 : 5).forEach(([id, name], i) => V("suggested_by", `${id}|${name}`, Math.round((v.views * (short ? 0.01 : 0.12)) / (i + 1))));
+    if (!short) PLAYLISTS.forEach(([id, name], i) => V("playlist", `${id}|${name}`, Math.round((v.views * 0.03) / (i + 1))));
+    [["UNSUBSCRIBED", 0.82, 47], ["SUBSCRIBED", 0.18, 63]].forEach(([key, sh, pct]) => V("subscribed", key, Math.round(v.views * sh), pct));
+    [["MOBILE", 0.84], ["TV", short ? 0.03 : 0.12], ["DESKTOP", 0.08], ["TABLET", 0.05]].forEach(([key, sh]) => V("device", key, Math.round(v.views * sh)));
+    [["ANDROID", 0.58], ["IOS", 0.31], ["WINDOWS", 0.06], ["MACINTOSH", 0.03], ["TIZEN", 0.02]].forEach(([key, sh]) => V("os", key, Math.round(v.views * sh)));
+    (short ? [["SHORTS", 0.9], ["BROWSE", 0.04], ["CHANNEL", 0.03], ["SEARCH", 0.03]] : [["WATCH", 0.55], ["BROWSE", 0.3], ["SEARCH", 0.08], ["CHANNEL", 0.05], ["EMBEDDED", 0.02]]).forEach(([key, sh]) => V("playback_location", key, Math.round(v.views * sh)));
+    [["RO", 0.64], ["MD", 0.1], ["IT", 0.06], ["ES", 0.05], ["DE", 0.04], ["GB", 0.03], ["US", 0.03]].forEach(([key, sh]) => V("country", key, Math.round(v.views * sh)));
+    [["age18-24", 14, 9], ["age25-34", 21, 14], ["age35-44", 12, 8], ["age45-54", 7, 5], ["age55-64", 3, 3], ["age65-", 2, 1], ["age13-17", 2, 1]].forEach(([age, m, f]) => {
+      V("age_gender", `${age}|male`, null, m);
+      V("age_gender", `${age}|female`, null, f);
+    });
+    [["WHATS_APP", 0.45], ["COPY_PASTE", 0.2], ["FACEBOOK_MESSENGER", 0.12], ["INSTAGRAM", 0.1], ["OTHER", 0.13]].forEach(([key, sh]) => V("sharing", key, null, Math.round((v.shares || 40) * sh)));
   }
 
   // ---- Hooks in the scripts of the first 16 shorts -------------------------------------------------

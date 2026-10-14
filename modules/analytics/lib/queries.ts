@@ -10,6 +10,7 @@ import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
 import { addDays, bucketOf, bucketsFor, dayIn, daysBetween, dayList, type Bucket, type Window } from "./ranges";
 import { inAccountTime, numbersVisibility, visibleRows } from "./accounts";
 import { outlierScores } from "./scores";
+import { youtubeCountries } from "./windows";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 type Row = Record<string, unknown>;
@@ -19,7 +20,7 @@ type Row = Record<string, unknown>;
  * Every row (Supabase returns 1,000 at a time). The first page comes alone;
  * if it's full, the next pages are fetched 4 at a time instead of one by one.
  */
-async function all<T = Row>(make: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>, cap = 20_000): Promise<T[]> {
+export async function all<T = Row>(make: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>, cap = 20_000): Promise<T[]> {
   const first = await make(0, 999);
   if (first.error || !first.data) return [];
   const out: T[] = [...(first.data as T[])];
@@ -312,12 +313,18 @@ export type Audience = {
   /** Everything per platform, so the page can filter and combine them. */
   perPlatform: Record<SocialPlatform, PlatformSeries>;
   followersNow: Partial<Record<SocialPlatform, number>>;
+  /** Followers at the end of each day of the range (the next morning's count), per platform that has counts (1.20.0). */
+  followersDaily?: Partial<Record<SocialPlatform, (number | null)[]>>;
+  /** Followers gained and lost each day, where the platform says (YouTube, Facebook…). */
+  followersFlow?: Partial<Record<SocialPlatform, { gained: (number | null)[]; lost: (number | null)[] }>>;
   /** TikTok only shares running totals: lifetime numbers from the latest copy, and how many copies exist. */
   tiktok: { totalViews: number | null; totalLikes: number | null; snapshots: number } | null;
   byPlatform: { platform: SocialPlatform; views: number; prev: number }[];
   youtubeSplit: { shorts: number; long: number } | null;
   countries: { code: string; views: number; watchMinutes: number | null }[];
   countriesSince: string | null;
+  /** When the countries are YouTube's window snapshot rather than the range's own days (1.21.0): what it covers. */
+  countriesWindow: string | null;
   igFollowerCountries: { code: string; value: number }[];
   /** Followers by country, latest copy, for each platform that shares it (TikTok doesn't, to apps like ours). */
   followerCountries: Record<"instagram" | "facebook" | "tiktok", { code: string; value: number }[]>;
@@ -367,10 +374,12 @@ export function sharedLookups(teamId: string, supabase: Supa): Required<Shared> 
 
 export async function getAudience(teamId: string, w: Window, shared: Shared = {}): Promise<Audience> {
   const supabase = await createClient();
-  const [allRows, ytCountries, igCountries, status, vis] = await Promise.all([
+  const [allRows, ytCountries, countryWindows, igCountries, status, vis] = await Promise.all([
     // One day past the range: snapshots (followers, TikTok totals) are saved on the day of the sync.
-    all((a, b) => supabase.from("analytics_daily").select("*").eq("team_id", teamId).gte("day", addDays(w.prevFrom, -1)).lte("day", addDays(w.to, 1)).order("day").range(a, b)),
+    dailyCols().then((cols) => all((a, b) => supabase.from("analytics_daily").select(cols).eq("team_id", teamId).gte("day", addDays(w.prevFrom, -1)).lte("day", addDays(w.to, 1)).order("day").range(a, b), 80_000)),
     all((a, b) => supabase.from("analytics_countries").select("country, value, watch_minutes, day").eq("team_id", teamId).eq("platform", "youtube").eq("metric", "views").gte("day", w.from).lte("day", w.to).range(a, b)),
+    // YouTube's views by country over 7 / 28 / 90 / 365 days and its whole life (1.21.0): for ranges the days' own don't cover.
+    all((a, b) => supabase.from("analytics_breakdowns").select("dimension, key, day, span, views, watch_minutes").eq("team_id", teamId).eq("platform", "youtube").eq("external_id", "").eq("dimension", "country").neq("span", 1).range(a, b), 4000),
     // Followers by country: the latest copy of each platform that shares it.
     supabase.from("analytics_countries").select("platform, country, value, day").eq("team_id", teamId).in("platform", ["instagram", "facebook", "tiktok"]).eq("metric", "followers").order("day", { ascending: false }).limit(1500),
     shared.status ?? getPlatformStatus(teamId),
@@ -475,15 +484,10 @@ export async function getAudience(teamId: string, w: Window, shared: Shared = {}
     return sv === null && lv === null ? null : { shorts: sv ?? 0, long: lv ?? 0 };
   })();
 
-  const byCountry = new Map<string, { views: number; watch: number | null }>();
+  // The days' own countries when they cover the range, else YouTube's window nearest to it.
+  const yt = vis.platforms.has("youtube") ? youtubeCountries(countries, countryWindows, w) : { rows: [], sub: "", span: null };
   let since: string | null = null;
-  for (const c of countries) {
-    const cur = byCountry.get(c.country as string) ?? { views: 0, watch: null };
-    cur.views += Number(c.value) || 0;
-    if (c.watch_minutes !== null) cur.watch = (cur.watch ?? 0) + Number(c.watch_minutes);
-    byCountry.set(c.country as string, cur);
-    if (!since || (c.day as string) < since) since = c.day as string;
-  }
+  for (const c of countries) if (!since || (c.day as string) < since) since = c.day as string;
   const followerCountries = Object.fromEntries(
     (["instagram", "facebook", "tiktok"] as const).map((p) => {
       const mine = vis.platforms.has(p) ? (igCountries.data ?? []).filter((r) => r.platform === p) : [];
@@ -491,6 +495,15 @@ export async function getAudience(teamId: string, w: Window, shared: Shared = {}
       return [p, mine.filter((r) => r.day === latest).map((r) => ({ code: r.country as string, value: Number(r.value) || 0 })).filter((r) => r.value > 0).sort((a, b) => b.value - a.value)];
     })
   ) as Audience["followerCountries"];
+  const followersDaily: NonNullable<Audience["followersDaily"]> = {};
+  const followersFlow: NonNullable<Audience["followersFlow"]> = {};
+  for (const p of PLATFORMS) {
+    const counts = days.map((d) => n(maps[p].get(addDays(d, 1))?.followers));
+    if (counts.some((v) => v !== null)) followersDaily[p] = counts;
+    const gained = days.map((d) => n(maps[p].get(d)?.followers_gained));
+    const lost = days.map((d) => n(maps[p].get(d)?.followers_lost));
+    if (gained.some((v) => v !== null) || lost.some((v) => v !== null)) followersFlow[p] = { gained, lost };
+  }
   const ttSnapshots = [...maps.tiktok.values()].filter((r) => r.total_views !== null && r.total_views !== undefined).length;
 
   return {
@@ -509,11 +522,14 @@ export async function getAudience(teamId: string, w: Window, shared: Shared = {}
     },
     perPlatform,
     followersNow,
+    followersDaily,
+    followersFlow,
     tiktok: ttSnapshots ? { totalViews: latest(maps.tiktok, "total_views") ?? null, totalLikes: latest(maps.tiktok, "total_likes") ?? null, snapshots: ttSnapshots } : null,
     byPlatform: PLATFORMS.map((p) => ({ platform: p, views: sumNullable(perPlatform[p].views) ?? 0, prev: sumNullable(perPlatform[p].prevViews) ?? 0 })),
     youtubeSplit: split,
-    countries: [...byCountry.entries()].map(([code, v]) => ({ code, views: v.views, watchMinutes: v.watch })).sort((a, b) => b.views - a.views),
-    countriesSince: since && since > w.from ? since : null,
+    countries: yt.rows.map((c) => ({ code: c.country, views: c.views, watchMinutes: c.watch })),
+    countriesSince: yt.span === null && since && since > w.from ? since : null,
+    countriesWindow: yt.span === null ? null : yt.sub,
     igFollowerCountries: followerCountries.instagram,
     followerCountries,
     status,
@@ -549,14 +565,22 @@ const CONTENT_COLS = "platform, external_id, kind, title, url, thumbnail_url, pu
 /** With impressions and CTR (migration 0083). */
 const CONTENT_COLS_REACH = `${CONTENT_COLS}, impressions, ctr`;
 /** The content columns this database has (before 0083 there are no impressions yet). Once per request. */
-const contentCols = cache(async (): Promise<string> => {
+export const contentCols = cache(async (): Promise<string> => {
   const supabase = await createClient();
   const { error } = await supabase.from("analytics_content").select("impressions, ctr").limit(1);
   return error ? CONTENT_COLS : CONTENT_COLS_REACH;
 });
 
+/**
+ * analytics_daily's columns the charts read (1.21.0): not `select *`, whose
+ * `metrics` (up to 8 KB a row, migration 0081) made a long range slow to
+ * load. With impressions and CTR once migration 0083 has run.
+ */
+const DAILY_COLS = "platform, content, day, views, watch_minutes, avg_view_seconds, likes, comments, shares, engagements, reach, followers, followers_gained, followers_lost, total_views, total_likes";
+export const dailyCols = cache(async (): Promise<string> => ((await contentCols()) === CONTENT_COLS_REACH ? `${DAILY_COLS}, impressions, ctr` : DAILY_COLS));
+
 /** An analytics_content row as the Content tab lists it. */
-function contentItem(r: Row): ContentItem {
+export function contentItem(r: Row): ContentItem {
   const one = <T,>(x: T | T[] | null) => (Array.isArray(x) ? x[0] ?? null : x);
   const s = one(r.short_videos as { entry_number: number } | { entry_number: number }[] | null);
   const l = one(r.long_video_projects as { entry_number: number } | { entry_number: number }[] | null);
@@ -992,6 +1016,23 @@ export type Revenue = {
   facebookNote: string | null;
   hasData: boolean;
 };
+
+/** One video's part of a stretch of revenue (1.21.0: a day, week or month clicked on Revenue's chart). */
+export type RevenueVideo = {
+  platform: "youtube";
+  id: string;
+  title: string | null;
+  thumbnail: string | null;
+  url: string;
+  kind: "short" | "long";
+  publishedAt: string | null;
+  revenue: number;
+  views: number | null;
+  /** Revenue per 1,000 of its views in that stretch. */
+  rpm: number | null;
+  ours: { kind: "short" | "long"; id: string; number: number | null } | null;
+};
+export type RevenueVideos = { from: string; to: string; currency: string; videos: RevenueVideo[]; note: string | null };
 
 export async function canViewRevenue(supabase: Supa, teamId: string) {
   const { data, error } = await supabase.rpc("can_view_revenue", { p_team: teamId });

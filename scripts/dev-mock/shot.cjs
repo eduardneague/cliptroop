@@ -7,7 +7,7 @@ const OUT = process.env.OUT || ".";
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: +W, height: +H }, locale: "en-US", timezoneId: "Europe/Bucharest" });
   await ctx.addCookies([{ name: cookie.name, value: cookie.value, domain: "localhost", path: "/" }, { name: "vp_team", value: "11111111-1111-4111-8111-111111111111", domain: "localhost", path: "/" }]);
-  if (dark) await ctx.addInitScript(() => { try { localStorage.setItem("theme", "dark"); } catch {} });
+  if (dark) await ctx.addInitScript(() => { try { localStorage.setItem("vp-theme", "dark"); } catch {} });
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push("pageerror: " + e.message));

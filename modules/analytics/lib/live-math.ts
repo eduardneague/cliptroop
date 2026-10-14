@@ -82,6 +82,20 @@ export function perHour(points: LivePoint[], now: number, hours = 48): { at: num
   });
 }
 
+/**
+ * Views per slot of `stepMs` over the last `count` slots, the last one
+ * ending at `now` (1.21.0: a video's last 60 minutes in 10-minute slots),
+ * oldest first; each slot starts at `at`.
+ */
+export function perSlot(points: LivePoint[], now: number, count = 6, stepMs = 600_000): { at: number; views: number }[] {
+  const list = steps(points);
+  const start = now - count * stepMs;
+  return Array.from({ length: count }, (_, i) => {
+    const at = start + i * stepMs;
+    return { at, views: Math.round(list.reduce((t, s) => t + share(s, at, at + stepMs), 0)) };
+  });
+}
+
 /** An hour's name for a tooltip: "Today, 3 PM", "Yesterday, 11 PM", "Mon, 9 AM" (the viewer's time). */
 export function hourName(at: number, now: number): string {
   const d = new Date(at);

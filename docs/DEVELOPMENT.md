@@ -189,10 +189,16 @@ the page is live, or React throws that part away (production error #418).
   again). A popup with a form fills it with `useFillOnOpen(open, key, fill)`
   (`lib/hooks/use-fill-on-open.ts`): when it opens, never again while it
   stays open, so a live update can't wipe what someone is typing.
-- **"/" on a page with its own search box** (Analytics → Content): give the
-  input `data-page-search`; the app's search (`components/search/global-search.tsx`)
-  then focuses it instead of opening the palette (⌘K / Ctrl+K still opens
-  the palette everywhere).
+- **"/" and ⌘K / Ctrl+K open the app's search** everywhere
+  (`components/search/global-search.tsx`). Pages don't get their own search
+  box (1.20.0: Analytics → Content's is gone): the palette finds videos with
+  their numbers too (`use-video-search.ts` → `searchVideos()`).
+- **`next/dynamic` and `useId`**: a component loaded with `dynamic()` and
+  rendered on the server can get other `useId()` values in the browser (a
+  hydration mismatch). Don't put SVG ids from `useId` inside one (1.20.0:
+  the Instagram logo's gradient is a CSS background; Analytics → Advanced
+  is imported normally); the Mascot's clip paths still warn on the
+  Projections empty state.
 - A `<fieldset>` only shrinks below its content with `min-w-0` (browsers
   give it `min-width: min-content`): add it to any fieldset inside a grid or
   a phone-width dialog.
@@ -364,6 +370,13 @@ so a disconnected account's numbers leave without being deleted and come
 back if the same account is connected again. Add any new analytics table to
 `NUMBER_TABLES` and filter its readers the same way.
 `analytics_claim_legacy()` (service role only) cleaned the rows mixed before.
+Don't filter the platforms' own rows (`analytics_content` and anything keyed
+by a platform's video id) with `inAccountTime()`: another account's rows are
+deleted when it's replaced, so every stored video is the connected
+account's, including the ones posted years before it was connected (doing it
+emptied Top content and Insights for channels connected lately, fixed in
+1.21.0). `inAccountTime()` is for the app's own posts (`short_video_posts`),
+which stay when an account changes.
 
 **Views on a day (0079).** `analytics_content_days` keeps each video's views
 per day: YouTube's real per-day numbers (`source = 'daily'`, one report per
@@ -402,11 +415,20 @@ cleanly when it runs out; the next run carries on. They write:
   day (YouTube's traffic sources, devices, operating systems, playback
   locations, subscribed or not, YouTube product); `span` 7 / 28 / 90 / 365
   is a window ending on `day` (age × gender, sharing services, traffic by
-  content type, search terms, outside sites, suggesting videos, playlists;
-  Instagram's 7 / 28-day splits and follower / engaged-audience
-  demographics), replaced whole each time and fetched again after 20
-  hours; `span = 0` is everything up to `day`, used with `external_id` for
-  one video's traffic sources and search terms since it was published.
+  content type, search terms, outside sites, suggesting videos, playlists,
+  and since 1.21.0 countries; Instagram's 7 / 28-day splits and follower /
+  engaged-audience demographics), replaced whole each time and fetched
+  again after 20 hours; `span = 0` is everything up to `day`: with
+  `external_id = ''` YouTube's whole channel life (1.21.0, the same
+  dimensions, for Lifetime and ranges longer than a year), with a video's id
+  that video's splits since it was published (1.21.0: every dimension in
+  `VIDEO_SPLITS`, `sync-advanced.ts`, asked when its page opens). Which
+  window a range shows: `lib/windows.ts` (pure and tested): `spanFor()`
+  (Lifetime or more than a year → 0), `pickSpan()` (the one asked for, else
+  the nearest by ratio; the whole life counts as two years), `windowWords()`
+  (what the card says it covers) and `youtubeCountries()` (the map: the
+  days' own countries when they cover 90% of the range, else the nearest
+  window).
   `analytics_breakdown_sums()` (security invoker) adds the per-day rows over
   a range, weighting `value` by views.
 - `analytics_retention`: each video's curve, up to 101 points `[where 0…1,
@@ -455,12 +477,101 @@ in `sync.ts` saves it (0 for quiet days between the first and last YouTube
 answered for). Every list of videos links here (`videoHref()` in
 `components/content-list.tsx`).
 
-**Analytics → Content (1.17.0).** `components/content-list.tsx`: the range's
-videos from `getContent()` plus `searchVideos()` → `findVideos()` (every video
-ever copied: the platform's title, the ClipTroop short's or long video's
-title, or `#number`; best matches first). Sorting and the Shorts / Long
-filter happen in the browser; the table / grid choice is kept on the device
-(`vp-content-view`).
+**A video's tabs (1.21.0).** Like YouTube Studio's: Overview, Reach,
+Engagement, Audience, Revenue, Advanced (`?tab=`;
+`components/video/video-tabs.tsx`, the pieces in `video-parts.tsx`).
+`tabsFor()` keeps what the platform shares: no Reach for TikTok, Audience
+for YouTube only, Revenue for the people who see revenue. The header shows
+views, watch time, likes, comments and revenue, in even rows at any width
+(`.stat-cq` / `.stat-grid[data-n]` in `globals.css`: a container query, all
+in one row when they fit); the verdict and realtime sit beside the video
+only from xl (long videos) or lg (shorts), else under it. The Overview's
+cards switch its chart (`TabbedChart`), with realtime beside it and "See
+more" to Advanced. A YouTube video's splits (span 0 with its id) and its numbers per
+day (with `subscribers_gained` and `avg_view_seconds`, 0085) are asked from
+YouTube when the page opens and they're missing or more than 12 hours old
+(`loadVideoDetails()` → `fetchYouTubeVideoDetails()`, at most every 10
+minutes per video and server); the page refreshes when they land. Its money
+per day (`loadVideoRevenueDays()`) is asked live, like the videos behind a
+stretch of Revenue's chart (`loadRevenueVideos()`), and kept 10 minutes in
+the server's memory, never stored: it would need its own revenue-only table
+(RLS), for something opened now and then. `getVideoAnalytics()` reads the
+per-day columns the database has (`contentDayCols()`), so the page works
+before 0085.
+
+**Analytics → Content (1.17.0, 1.20.0).** `components/tabs/content-tab.tsx`
++ `components/content-list.tsx`: the range's videos from `getContent()`
+(Lifetime: `every`, all of them; the old `?every=1` opens Lifetime), a tab
+per kind (All, Long videos, Shorts, Posts) with totals worked out in the
+browser (views split into Shorts and long, CTR weighted by impressions).
+Sorting happens in the browser; the table / grid choice is kept on the
+device (`vp-content-view`). Finding one video: the app's search
+(`searchVideos()` → `findVideos()`: the platform's title, the ClipTroop
+short's or long video's title, or `#number`).
+
+**The Analytics page (1.20.0, 1.21.0).** `app/(dashboard)/analytics/page.tsx` reads
+`?tab=` (`readTab`: overview by default), `?range=` (`readRange(v, tab)`: 48h
+only on the Overview; `lifetime` starts on the team's first `analytics_daily`
+day, which for YouTube is the channel's first day with views once its
+history is in (below), Production's on the team's first day; `custom` needs
+`?from=&to=`, checked by `readCustom`, else 28 days) and loads only the
+open tab's data; `components/analytics-view.tsx` is the shell (tabs,
+`range-bar.tsx`, compare, CSV) and `components/tabs/*` the tabs. The tab or
+range clicked shows at once with a spinner while the server renders
+(`pending`); Compare is switched in the browser (`history.replaceState`,
+the stretch before is already loaded). Pure parts, all tested:
+`lib/ranges.ts`, `lib/trend-math.ts` (each platform's day from the copy,
+buckets, running totals, weighted rates), `lib/insights-math.ts` (alerts,
+best time to post, tips).
+
+Speed (1.21.0): read the columns a page uses, never `select *` on the
+analytics tables (`metrics` is up to 8 KB a row): `dailyCols()`
+(`queries.ts`, with impressions and CTR once 0083 has run), `contentCols()`,
+`INSIGHT_COLS`, `contentDayCols()` (`video.ts`). The mock (`scripts/dev-mock`)
+ignores select lists, so check a new column against the migrations. Grids
+of cards of different heights (Audience, Advanced) go through
+`byCardHeight()` (`advanced/breakdowns.tsx`) so rows end evenly; long rows
+of cards scroll sideways in `CardStrip` (`charts.tsx`).
+- Overview: `lib/overview.ts` `getOverview(team, w, {hourly})`: every number
+  per platform and per day, now and the stretch before, YouTube's Shorts /
+  long split, revenue in the person's currency, the videos posted each day
+  (the chart's marks: the sidebar's Shorts and long-video icons in the
+  team's colours, `MarkIcon` in `charts.tsx`), the newest 6 with "×
+  typical", YouTube's all-time views; 48 hours =
+  `analytics_live_hours(team, 96)` (compared only once the 96 hours were
+  all counted); `top` is a promise the page streams
+  (`analytics_top_content`, 0084, else the most viewed posted in the range;
+  Lifetime: the most viewed ever, from `analytics_content.views`), like the
+  hints (`getInsightsPreview`), both read with React's `use()` under
+  Suspense. Changes next to "before" show only when the stretch before has
+  numbers on 80%+ of the days this one has (`fairBefore`). Two columns on
+  wide screens (1.21.0): the chart and lists, then realtime
+  (`RealtimePanel`), the latest videos and hints beside; on phones realtime
+  sits right under the chart (rendered twice, `lg:hidden` / `hidden
+  lg:block`, from one `useRealtime()`).
+- Realtime: `getRealtime(team, {full})` (+ `analytics_live_buckets`, 0084:
+  6 slots of 10 minutes ending now, the same sum as
+  `analytics_live_gains(60)`), `useRealtime()` in
+  `components/realtime-card.tsx` keeps it fresh. 1.21.0: a 48 hours / 60
+  minutes switch (`active48` / `active60`, `top60`, `reactions60` in
+  `lib/realtime.ts`; `perSlot()` in `live-math.ts`), the accounts on top.
+- Revenue: click a day (a week, a month) of the chart for the videos that
+  made YouTube's money then (`RevenueVideosDialog`,
+  `components/revenue-videos.tsx` → `loadRevenueVideos()` →
+  `fetchYouTubeRevenueVideos()`: YouTube's top 25 by estimated revenue,
+  asked live; skipped when that stretch's YouTube revenue is 0).
+- Audience: `getAudience()` (+ `followersDaily` / `followersFlow`) and
+  `getAudienceBreakdowns()` (`advanced.ts`: `buildBreakdowns()` /
+  `readBreakdowns()`, shared with Advanced).
+- Insights: `lib/insights.ts` `getInsights(team, tz)`: every video (3,000
+  newest), `findPatterns()` per platform and kind, `outlierScores()`, the
+  last 8 weeks of daily rows for the alerts. Each finding carries `sides`
+  (1.21.0: up to 5 typical videos that fit it and 5 of the rest, the ones
+  nearest each side's median, `typicalOf()` / `sidesOf()` in
+  `patterns.ts`), shown by its Examples button
+  (`advanced/findings.tsx`); the preview drops them.
+- Advanced: `?view=` (`components/advanced/views.ts`), switched in the
+  browser with `history.replaceState` (the data is already there).
 
 **The morning copy (0082).** The 05:10 UTC timer runs `analytics_morning()`:
 one `posting_call()` per team and platform with an active account, so each
@@ -483,8 +594,8 @@ they change (`snapshotsOf()` in `lib/live-math.ts`, pure and tested), and
 refreshes the other numbers of the videos with the oldest `details_at`.
 `analytics_live_hours()` / `analytics_live_gains()` (security invoker) sum
 the changes per hour and per video, spreading each change over the time
-between two looks; the Realtime card (`components/realtime-card.tsx`) and a
-video's page read them. Account totals go to `analytics_syncs.live_totals`,
+between two looks; Realtime (`components/tabs/realtime-tab.tsx`), the
+Overview's 48 hours and a video's page read them. Account totals go to `analytics_syncs.live_totals`,
 never to `analytics_daily`: a per-day row's numbers must stay the morning
 copy's, because day-to-day changes are what a day got (TikTok's views,
 followers). YouTube quota: list calls cost 1 unit per 50 videos and an
@@ -494,6 +605,34 @@ units a day per 1,000-video channel; don't add per-video Data API calls.
 come from the YouTube Reporting API (`lib/reach.ts`: one job per channel,
 new daily reports once an hour) and need that API turned on in the Google
 Cloud project.
+
+**YouTube's whole history (0085, 1.21.0).** The first copy fetches 90 days;
+every copy after it (the morning's, Sync now) goes further back while it
+has time (`youtubeHistory()` in `sync.ts`, up to 8 s past the extras'
+deadline, before the slower extras): a year per report, newest first, down
+to the channel's `snippet.publishedAt`: the per-day totals, Shorts vs long,
+the per-day splits and the money. `analytics_syncs.history_from` is how far
+it got, `history_done` that it reached the start; `adoptAccount()` starts it
+over when another channel is connected. `lib/history-math.ts` (pure and
+tested): `historyChunk()` (the next year back, never before the channel's
+first day) and `historyRows()` (rows from the first day with views, the
+quiet days after it as 0). So Lifetime starts when the channel did, a copy
+or two after connecting, and the window snapshots' span 0 (above) covers
+the splits of the whole life. Only YouTube sends a channel's old days; the
+other platforms' days start where their first copy reached.
+
+**Sync now (0085).** `syncAnalyticsNow()` (masters and schedulers) calls
+`analytics_sync_now(team)` (security definer: checks the role; at most once
+every 90 seconds per team, `analytics_syncs.sync_requested_at`, else -1),
+which sends one `posting_call({job: 'analytics', team, platform, live:
+true})` per platform with an active account and answers at once;
+`runAnalyticsJob()` copies that platform, then its live counts with the time
+left (if more than 8 of its 52 s). Copying every platform inside the
+request took longer than a request may last: the crash in 1.20.0. Before
+0085, or without the timer's secrets (a local copy), it copies them in
+`after()`. `claimAnalyticsCatchUp()` (the first visitor starts a copy when
+the last one is 30 hours old) looks at most every 5 minutes per team and
+server.
 
 **Download for Claude.** `modules/analytics/export/`: the dialog
 (`claude-export.tsx`), `build-text.ts` and `build-pdf.ts`, all in the

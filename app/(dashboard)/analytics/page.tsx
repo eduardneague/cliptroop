@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
-import { readAdvContent, readAdvPlatform, readRange, readTab, todayIn, windowFor } from "@/modules/analytics/lib/ranges";
-import { canViewRevenue, getAudience, getContent, getProduction, getRevenue } from "@/modules/analytics/lib/queries";
-import { getAdvanced } from "@/modules/analytics/lib/advanced";
-import { AnalyticsView } from "@/modules/analytics/components/analytics-view";
+import { addDays, readAdvContent, readAdvPlatform, readCustom, readRange, readTab, todayIn, windowFor, type RangeId } from "@/modules/analytics/lib/ranges";
+import { canViewRevenue, getAudience, getContent, getPlatformStatus, getProduction, getRevenue } from "@/modules/analytics/lib/queries";
+import { getAdvanced, getAudienceBreakdowns } from "@/modules/analytics/lib/advanced";
+import { getOverview } from "@/modules/analytics/lib/overview";
+import { getInsights, getInsightsPreview } from "@/modules/analytics/lib/insights";
+import { AnalyticsView, type AnalyticsData } from "@/modules/analytics/components/analytics-view";
+import { readAdvView } from "@/modules/analytics/components/advanced/views";
 import { cookies } from "next/headers";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { isCurrencyCode } from "@/lib/fx";
@@ -16,24 +19,29 @@ export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
 export const maxDuration = 60;
 
-export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; range?: string; compare?: string; platform?: string; content?: string; every?: string }> }) {
+type Search = { tab?: string; range?: string; from?: string; to?: string; compare?: string; platform?: string; content?: string; every?: string; view?: string };
+
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
+  const teamId = currentTeam.id;
   const tab = readTab(sp.tab);
-  const range = readRange(sp.range);
+  // (Before 1.20.0, Content had its own "Every video": that's Lifetime now.)
+  let range: RangeId = tab === "content" && sp.every === "1" && !sp.range ? "lifetime" : readRange(sp.range, tab);
   const compare = sp.compare !== "0";
-  const [membership, { data: team }, revenueAllowed, wantedCurrency, catchingUp] = await Promise.all([
-    getMembership(supabase, currentTeam.id),
-    supabase.from("teams").select("timezone").eq("id", currentTeam.id).maybeSingle(),
-    canViewRevenue(supabase, currentTeam.id),
-    tab === "revenue" || tab === "advanced" ? revenueCurrency(supabase) : Promise.resolve(null),
+  const [membership, { data: team }, revenueAllowed, wantedCurrency, catchingUp, first] = await Promise.all([
+    getMembership(supabase, teamId),
+    supabase.from("teams").select("timezone, created_at").eq("id", teamId).maybeSingle(),
+    canViewRevenue(supabase, teamId),
+    tab === "revenue" || tab === "advanced" || tab === "overview" ? revenueCurrency(supabase) : Promise.resolve(null),
     // Copied every morning on its own; if that was missed, start it now.
-    claimAnalyticsCatchUp(currentTeam.id),
+    claimAnalyticsCatchUp(teamId),
+    // Lifetime starts on the first day with numbers.
+    supabase.from("analytics_daily").select("day").eq("team_id", teamId).order("day", { ascending: true }).limit(1),
   ]);
   if (catchingUp && membership) {
-    const teamId = currentTeam.id;
     after(async () => {
       try {
         await syncTeamAnalytics(teamId);
@@ -46,24 +54,57 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const roles = membership?.roles ?? [];
   const isMaster = roles.includes("master");
   const canSync = isMaster || roles.includes("publisher");
-  // Platform numbers arrive a day or two late: their range ends yesterday.
+  // Platform numbers arrive a day or two late: their ranges end yesterday (Production's today).
   const today = todayIn(tz);
-  const w = windowFor(range, tab === "production" ? today : new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10));
+  const latest = tab === "production" ? today : addDays(today, -1);
+  const teamStart = typeof team?.created_at === "string" ? (team.created_at as string).slice(0, 10) : null;
+  const firstDay = ((first.data ?? [])[0] as { day?: string } | undefined)?.day ?? null;
+  const earliest = (tab === "production" ? teamStart : firstDay ?? teamStart) ?? null;
+  const custom = range === "custom" ? readCustom(sp.from, sp.to, latest) : null;
+  if (range === "custom" && !custom) range = "28d";
+  const w = custom ? windowFor("custom", custom.to, custom.from) : windowFor(range, latest, range === "lifetime" ? earliest : null);
 
-  const data =
-    tab === "production"
-      ? { tab, production: await getProduction(currentTeam.id, w, tz) }
-      : tab === "audience"
-        ? { tab, audience: await getAudience(currentTeam.id, w) }
-        : tab === "content"
-          ? { tab, content: { ...(await getContent(currentTeam.id, w, {}, { every: sp.every === "1" })), every: sp.every === "1" } }
-          : tab === "advanced"
-            ? { tab, advanced: await getAdvanced(currentTeam.id, w, { platform: readAdvPlatform(sp.platform), content: readAdvContent(sp.content), tz, revenueAllowed, currency: wantedCurrency }) }
-            : { tab, revenue: await getRevenue(currentTeam.id, w, isMaster, wantedCurrency, revenueAllowed) };
+  let data: AnalyticsData;
+  switch (tab) {
+    case "overview":
+      data = {
+        tab,
+        overview: await getOverview(teamId, w, { hourly: range === "48h", tz, revenueAllowed, currency: wantedCurrency }),
+        // Streamed after the page (the hints read every video).
+        insights: getInsightsPreview(teamId, tz).catch(() => ({ alerts: [], findings: [] })),
+      };
+      break;
+    case "production":
+      data = { tab, production: await getProduction(teamId, w, tz) };
+      break;
+    case "audience": {
+      const [audience, breakdowns] = await Promise.all([getAudience(teamId, w), getAudienceBreakdowns(teamId, w).catch(() => ({}))]);
+      data = { tab, audience, breakdowns };
+      break;
+    }
+    case "content":
+      data = { tab, content: { ...(await getContent(teamId, w, {}, { every: range === "lifetime" })), every: range === "lifetime" } };
+      break;
+    case "realtime":
+      data = { tab, status: await getPlatformStatus(teamId) };
+      break;
+    case "insights":
+      data = { tab, insights: await getInsights(teamId, tz) };
+      break;
+    case "advanced":
+      data = {
+        tab,
+        advanced: await getAdvanced(teamId, w, { platform: readAdvPlatform(sp.platform), content: readAdvContent(sp.content), tz, revenueAllowed, currency: wantedCurrency }),
+        view: readAdvView(sp.view),
+      };
+      break;
+    default:
+      data = { tab: "revenue", revenue: await getRevenue(teamId, w, isMaster, wantedCurrency, revenueAllowed) };
+  }
 
   return (
     <AnalyticsView
-      teamId={currentTeam.id}
+      teamId={teamId}
       teamName={currentTeam.name}
       window={w}
       range={range}
@@ -71,7 +112,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       canSync={canSync}
       catchingUp={catchingUp && !!membership}
       revenueAllowed={revenueAllowed}
-      data={data as Parameters<typeof AnalyticsView>[0]["data"]}
+      latest={latest}
+      earliest={earliest}
+      data={data}
     />
   );
 }

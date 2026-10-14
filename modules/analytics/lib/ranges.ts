@@ -1,17 +1,45 @@
 /** Date ranges for Analytics (shared by the page and the server). */
 
+/**
+ * The ranges (1.20.0). 48 hours only where there are counts within minutes
+ * (the Overview: hour by hour from the live job); lifetime runs from the
+ * first day with numbers; custom from / to are picked (`?from=&to=`).
+ */
 export const RANGES = [
+  { id: "48h", label: "48 hours", days: 2 },
   { id: "7d", label: "7 days", days: 7 },
   { id: "28d", label: "28 days", days: 28 },
   { id: "90d", label: "90 days", days: 90 },
-  { id: "12m", label: "12 months", days: 365 },
+  { id: "12m", label: "365 days", days: 365 },
+  { id: "lifetime", label: "Lifetime", days: 0 },
+  { id: "custom", label: "Custom", days: 0 },
 ] as const;
 export type RangeId = (typeof RANGES)[number]["id"];
-export const TABS = ["production", "audience", "content", "advanced", "revenue"] as const;
+export const TABS = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production"] as const;
 export type TabId = (typeof TABS)[number];
 
-export const readRange = (v: unknown): RangeId => (RANGES.some((r) => r.id === v) ? (v as RangeId) : "28d");
-export const readTab = (v: unknown): TabId => (TABS.includes(v as TabId) ? (v as TabId) : "production");
+/** The ranges each tab offers (Realtime has its own 48 hours; 48 hours is the Overview's). */
+export function rangesFor(tab: TabId): RangeId[] {
+  if (tab === "realtime") return [];
+  return RANGES.map((r) => r.id).filter((id) => id !== "48h" || tab === "overview");
+}
+export const rangeLabel = (id: RangeId) => RANGES.find((r) => r.id === id)!.label;
+
+export const readRange = (v: unknown, tab?: TabId): RangeId => {
+  const id = RANGES.some((r) => r.id === v) ? (v as RangeId) : "28d";
+  return tab && !rangesFor(tab).includes(id) && tab !== "realtime" ? (id === "48h" ? "7d" : "28d") : id;
+};
+export const readTab = (v: unknown): TabId => (TABS.includes(v as TabId) ? (v as TabId) : "overview");
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const validDay = (d: unknown): d is string => typeof d === "string" && ISO.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+/** Custom dates from the address: both real days, from ≤ to ≤ `latest`, at most 10 years. Null otherwise. */
+export function readCustom(from: unknown, to: unknown, latest: string): { from: string; to: string } | null {
+  if (!validDay(from) || !validDay(to)) return null;
+  const end = to > latest ? latest : to;
+  if (from > end || daysBetween(from, end) > 3660) return null;
+  return { from, to: end };
+}
 /** Advanced: which platform (none = the first with numbers) and which videos. */
 export const ADV_PLATFORMS = ["youtube", "instagram", "facebook", "tiktok"] as const;
 export type AdvPlatform = (typeof ADV_PLATFORMS)[number];
@@ -38,13 +66,19 @@ export function todayIn(tz: string, at = new Date()) {
 /** The day a moment falls on, in a time zone. */
 export const dayIn = (iso: string, tz: string) => todayIn(tz, new Date(iso));
 
-export type Window = { from: string; to: string; prevFrom: string; prevTo: string; days: number };
+/** `lifetime`: the Lifetime range (from the first day with numbers): splits then use the platforms' whole-life snapshots. */
+export type Window = { from: string; to: string; prevFrom: string; prevTo: string; days: number; lifetime?: boolean };
 
-/** The range ending on `to` (inclusive), and the same length just before it. */
-export function windowFor(range: RangeId, to: string): Window {
-  const days = RANGES.find((r) => r.id === range)!.days;
+/**
+ * The range ending on `to` (inclusive), and the same length just before it.
+ * Lifetime and custom start on `start` (the first day with numbers / the
+ * picked day); without one, lifetime is the last 365 days and custom 28.
+ */
+export function windowFor(range: RangeId, to: string, start?: string | null): Window {
+  const fixed = RANGES.find((r) => r.id === range)!.days;
+  const days = fixed || (start && start <= to ? daysBetween(start, to) + 1 : range === "lifetime" ? 365 : 28);
   const from = addDays(to, -(days - 1));
-  return { from, to, prevFrom: addDays(from, -days), prevTo: addDays(from, -1), days };
+  return { from, to, prevFrom: addDays(from, -days), prevTo: addDays(from, -1), days, ...(range === "lifetime" ? { lifetime: true } : {}) };
 }
 
 /** Buckets for charts: days up to a month, weeks (from Monday) up to ~4 months, then months. */

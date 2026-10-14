@@ -11,7 +11,7 @@ module.exports.liveFixtures = function liveFixtures({ TEAM, contentRows }) {
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const now = Date.now();
   const rows = [];
-  if (process.env.MOCK_LIVE === "0") return { rows, hours: () => [], gains: () => [] };
+  if (process.env.MOCK_LIVE === "0") return { rows, hours: () => [], gains: () => [], buckets: () => [] };
   const start = now - (process.env.MOCK_LIVE_FRESH ? 3 : 56) * HOUR;
   // The busiest videos: read every 10 minutes; the others every 3 hours.
   const hot = contentRows.filter((c) => c.views).slice(0, 9);
@@ -76,6 +76,27 @@ module.exports.liveFixtures = function liveFixtures({ TEAM, contentRows }) {
         }
       }
       return [...sums.values()].map((x) => ({ ...x, views: Math.round(x.views), likes: Math.round(x.likes), comments: Math.round(x.comments) })).sort((x, y) => x.hour.localeCompare(y.hour));
+    },
+    // 0084: views per `p_step`-minute slot over the last `p_minutes` (the slots end now).
+    buckets: (b) => {
+      const step = Math.min(60, Math.max(1, b.p_step ?? 10)) * 60e3;
+      const count = Math.min(Math.ceil(Math.max(1, b.p_minutes ?? 60) / (step / 60e3)), Math.floor(2880 / (step / 60e3)));
+      const first = Date.now() - count * step;
+      const sums = new Map();
+      for (const s of steps(b.p_team)) {
+        if (s.b <= first) continue;
+        for (let t = first + Math.floor((Math.max(s.a, first) - first) / step) * step; t < s.b; t += step) {
+          const f = part(s, Math.max(t, first), t + step);
+          if (f <= 0) continue;
+          const k = `${t}|${s.platform}`;
+          const cur = sums.get(k) ?? { at: new Date(t).toISOString(), platform: s.platform, views: 0, likes: 0, comments: 0 };
+          cur.views += s.dv * f;
+          cur.likes += s.dl * f;
+          cur.comments += s.dc * f;
+          sums.set(k, cur);
+        }
+      }
+      return [...sums.values()].map((x) => ({ ...x, views: Math.round(x.views), likes: Math.round(x.likes), comments: Math.round(x.comments) })).sort((x, y) => x.at.localeCompare(y.at));
     },
     gains: (b) => {
       const since = Date.now() - Math.min(11520, Math.max(1, b.p_minutes ?? 2880)) * 60e3;

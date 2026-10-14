@@ -78,6 +78,6 @@ echo "✓ PostgREST on :3001, proxy on :54399"
 
 # 3. The runs (the app's server-only modules load with the react-server condition).
 cd "$ROOT"
-for t in live tiktok-morning; do
+for t in live tiktok-morning youtube-history; do
   NODE_OPTIONS=--conditions=react-server npx tsx --tsconfig tsconfig.json "scripts/e2e/$t.e2e.ts"
 done

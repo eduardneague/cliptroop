@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Select } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
@@ -11,57 +11,69 @@ import { TIKTOK_MORE } from "../../lib/advanced-labels";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { ChartCard, Legend, LineChart } from "../charts";
 import { MetricGroups } from "./metric-groups";
-import { FindingCard, PatternsBlock } from "./findings";
 import { RetentionChart } from "./retention-chart";
-import { Breakdown } from "./breakdowns";
+import { Breakdown, byCardHeight } from "./breakdowns";
 import { VideoTable } from "./videos";
 import { BestPerforming } from "./best";
 import { formatValue, niceDay, pctOf } from "./format";
+import { ADV_VIEWS, ADV_VIEW_LABEL, type AdvView } from "./views";
+import { SparkleIcon } from "./sparkle";
+
+export { SparkleIcon };
 
 const NAME: Record<SocialPlatform, string> = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
 const SHORT_COLOR = "rgb(var(--chart-short))";
 const LONG_COLOR = "rgb(var(--chart-long))";
 
-/** Sparkles: "a deeper read" (generic, no brand mark). */
-export function SparkleIcon({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M11 2.5c.4 3.9 2.6 6.1 6.5 6.5-3.9.4-6.1 2.6-6.5 6.5-.4-3.9-2.6-6.1-6.5-6.5 3.9-.4 6.1-2.6 6.5-6.5Z" />
-      <path d="M18.5 13.5c.2 2 1.3 3.1 3.3 3.3-2 .2-3.1 1.3-3.3 3.3-.2-2-1.3-3.1-3.3-3.3 2-.2 3.1-1.3 3.3-3.3Z" opacity=".7" />
-    </svg>
-  );
-}
 
 export function AdvancedTab({
   teamId,
   data,
   compare,
+  view: initialView,
+  viewHref,
   onPlatform,
   onContent,
   onDownload,
+  insightsHref,
 }: {
   teamId: string;
   data: AdvancedData;
   compare: boolean;
+  /** Which of Advanced's own tabs (`?view=`). */
+  view: AdvView;
+  viewHref: (v: AdvView) => string;
   onPlatform: (p: SocialPlatform) => void;
   onContent: (c: Content) => void;
   onDownload: () => void;
+  /** "What works" lives in Insights (1.20.0). */
+  insightsHref: string;
 }) {
   const p = data.platform;
   const usable = data.platforms.find((x) => x.platform === p)?.usable ?? false;
-  const sections = [
-    { id: "glance", label: "At a glance", show: data.groups.length > 0 },
-    { id: "best", label: "Best performing", show: data.videos.length > 0 },
-    { id: "works", label: "What works", show: true },
-    { id: "daily", label: "Day by day", show: data.series.length > 0 },
-    { id: "retention", label: "Retention", show: !!data.retention },
-    { id: "traffic", label: "Traffic", show: data.breakdowns.some((b) => TRAFFIC.includes(b.id)) },
-    { id: "audience", label: "Audience", show: data.breakdowns.some((b) => !TRAFFIC.includes(b.id)) },
-    { id: "videos", label: "Videos", show: true },
-  ].filter((s) => s.show);
+  const has: Record<AdvView, boolean> = {
+    summary: data.groups.length > 0,
+    trends: data.series.length > 0,
+    best: data.videos.length > 0,
+    retention: !!data.retention,
+    traffic: data.breakdowns.some((b) => TRAFFIC.includes(b.id)),
+    audience: data.breakdowns.some((b) => !TRAFFIC.includes(b.id)),
+    videos: true,
+  };
+  const views = ADV_VIEWS.filter((v) => has[v]);
+  // The tabs switch here (everything is loaded); the address keeps the one shown.
+  const [view, setViewState] = useState<AdvView>(initialView);
+  useEffect(() => setViewState(initialView), [initialView]);
+  const shown: AdvView = views.includes(view) ? view : (views[0] ?? "videos");
+  const setView = (v: AdvView) => {
+    setViewState(v);
+    try {
+      window.history.replaceState(window.history.state, "", viewHref(v));
+    } catch {}
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Which platform, which videos, and the export. */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap" role="radiogroup" aria-label="Platform">
@@ -123,59 +135,68 @@ export function AdvancedTab({
         </p>
       ) : (
         <>
-          {sections.length > 2 && (
-            <nav aria-label="On this page" className="-mt-2 flex items-center gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">
-              {sections.map((s) => (
-                <a key={s.id} href={`#adv-${s.id}`} className="rounded-md px-2.5 h-7 inline-flex items-center text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 whitespace-nowrap">
-                  {s.label}
-                </a>
-              ))}
-            </nav>
-          )}
+          <nav aria-label="Advanced" className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-1 px-1 border-b border-line/10">
+            {views.map((v) => (
+              <a
+                key={v}
+                href={viewHref(v)}
+                aria-current={shown === v ? "page" : undefined}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                  e.preventDefault();
+                  setView(v);
+                }}
+                className={`relative px-2.5 h-9 inline-flex items-center text-[13px] font-semibold whitespace-nowrap transition-colors ${shown === v ? "text-ink" : "text-ink-soft hover:text-ink"}`}
+              >
+                {ADV_VIEW_LABEL[v]}
+                <span aria-hidden className={`absolute left-1.5 right-1.5 -bottom-px h-[2px] rounded-[2px] bg-ink transition-opacity ${shown === v ? "opacity-100" : "opacity-0"}`} />
+              </a>
+            ))}
+          </nav>
           {data.notes.length > 0 && (
-            <ul className="-mt-3 space-y-0.5 text-[12px] text-ink-faint">
+            <ul className="-mt-2 space-y-0.5 text-[12px] text-ink-faint">
               {data.notes.map((n) => (
                 <li key={n}>{n}</li>
               ))}
             </ul>
           )}
 
-          {data.groups.length > 0 && (
+          {shown === "summary" && (
             <Section id="glance" title="At a glance" sub={`${niceDay(data.days[0])} – ${niceDay(data.days[data.days.length - 1], true)}${compare ? ", next to the same stretch before" : ""}`}>
               <MetricGroups groups={data.groups} compare={compare} currency={data.currency} />
+              <p className="mt-4 text-[12.5px] text-ink-soft">
+                Patterns in these videos (length, posting time, titles, hooks) and what changed lately are in{" "}
+                <Link href={insightsHref} className="font-semibold text-amber hover:underline">
+                  Insights →
+                </Link>
+              </p>
             </Section>
           )}
 
-          {data.videos.length > 0 && (
-            <Section id="best" title="Best performing" sub={`Your top ${NAME[p]} videos by what matters. Click one for everything about it.`}>
-              <BestPerforming data={data} />
-            </Section>
-          )}
-
-          <Section id="works" title="What works" sub={`Patterns in your own ${NAME[p]} videos: no guessing, just your numbers side by side. Strongest first.`}>
-            <WhatWorks data={data} onDownload={onDownload} />
-          </Section>
-
-          {data.series.length > 0 && (
+          {shown === "trends" && (
             <Section id="daily" title="Day by day" sub="Any number, every day of the range">
               <DailyChart data={data} compare={compare} />
             </Section>
           )}
 
-          {data.retention && (
+          {shown === "best" && (
+            <Section id="best" title="Best performing" sub={`Your top ${NAME[p]} videos by what matters. Click one for everything about it.`}>
+              <BestPerforming data={data} />
+            </Section>
+          )}
+
+          {shown === "retention" && (
             <Section id="retention" title="Retention" sub="Where viewers stop watching: the share still watching at each point of a video, averaged over your videos">
               <RetentionBlock data={data} />
             </Section>
           )}
 
-          {data.breakdowns.some((b) => TRAFFIC.includes(b.id)) && (
+          {shown === "traffic" && (
             <Section id="traffic" title="Traffic" sub="How people find the videos">
-              {/* Columns that fill top to bottom, so tall and short cards pack without gaps. */}
-              <div className="columns-1 lg:columns-2 gap-4">
-                {data.breakdowns
-                  .filter((b) => TRAFFIC.includes(b.id))
-                  .map((b) => (
-                    <div key={b.id} className="break-inside-avoid mb-4">
+              {/* An even grid (1.21.0): every card in a row as tall as the row; lists start short. */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                {byCardHeight(data.breakdowns.filter((b) => TRAFFIC.includes(b.id))).map((b) => (
+                    <div key={b.id} className="min-w-0">
                       <Breakdown b={b} compare={compare} />
                     </div>
                   ))}
@@ -183,13 +204,11 @@ export function AdvancedTab({
             </Section>
           )}
 
-          {data.breakdowns.some((b) => !TRAFFIC.includes(b.id)) && (
+          {shown === "audience" && (
             <Section id="audience" title="Audience" sub="Who watches, on what, and where">
-              <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
-                {data.breakdowns
-                  .filter((b) => !TRAFFIC.includes(b.id))
-                  .map((b) => (
-                    <div key={b.id} className="break-inside-avoid mb-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {byCardHeight(data.breakdowns.filter((b) => !TRAFFIC.includes(b.id))).map((b) => (
+                    <div key={b.id} className="min-w-0">
                       <Breakdown b={b} compare={compare} />
                     </div>
                   ))}
@@ -197,10 +216,12 @@ export function AdvancedTab({
             </Section>
           )}
 
-          <Section id="videos" title="Videos" sub={`Every ${NAME[p]} video ClipTroop has numbers for, with everything ${NAME[p]} shares about it`}>
-            <VideoTable teamId={teamId} platform={p} videos={data.videos} currency={data.currency} withMoney={data.revenueAllowed && data.videos.some((v) => v.revenue)} />
-            {p === "tiktok" && <p className="mt-3 text-[12px] text-ink-faint max-w-3xl">{TIKTOK_MORE}</p>}
-          </Section>
+          {shown === "videos" && (
+            <Section id="videos" title="Videos" sub={`Every ${NAME[p]} video ClipTroop has numbers for, with everything ${NAME[p]} shares about it`}>
+              <VideoTable teamId={teamId} platform={p} videos={data.videos} currency={data.currency} withMoney={data.revenueAllowed && data.videos.some((v) => v.revenue)} />
+              {p === "tiktok" && <p className="mt-3 text-[12px] text-ink-faint max-w-3xl">{TIKTOK_MORE}</p>}
+            </Section>
+          )}
         </>
       )}
     </div>
@@ -218,36 +239,6 @@ function Section({ id, title, sub, children }: { id: string; title: string; sub?
       </div>
       {children}
     </section>
-  );
-}
-
-function WhatWorks({ data, onDownload }: { data: AdvancedData; onDownload: () => void }) {
-  const p = data.patterns;
-  const shortLabel = data.platform === "youtube" ? "Shorts" : data.platform === "tiktok" ? "Videos" : "Reels";
-  return (
-    <div className="space-y-4">
-      <div className={`grid gap-5 ${p.long && p.long.considered > 0 ? "xl:grid-cols-2" : ""}`}>
-        {p.short && <PatternsBlock p={p.short} label={shortLabel} />}
-        {p.long && p.long.considered > 0 && <PatternsBlock p={p.long} label="Long videos" />}
-      </div>
-      {p.cross && (
-        <ul>
-          <FindingCard f={p.cross} />
-        </ul>
-      )}
-      <div className="rounded-2xl border border-amber/30 bg-amber/[0.07] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold">Want a deeper read?</p>
-          <p className="text-[12.5px] text-ink-soft mt-0.5">
-            Download everything ClipTroop knows about these videos (numbers, retention, hooks, thumbnails) as one file, then drop it into a chat with Claude and ask what to do next. Free with any Claude plan.
-          </p>
-        </div>
-        <button type="button" onClick={onDownload} className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] hover:brightness-110 flex-shrink-0">
-          <SparkleIcon />
-          Download for Claude
-        </button>
-      </div>
-    </div>
   );
 }
 

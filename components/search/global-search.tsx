@@ -24,6 +24,8 @@ import {
   VideoIcon,
 } from "@/components/ui/icons";
 import { useGlobalSearch } from "./use-global-search";
+import { useVideoSearch } from "./use-video-search";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { clearRecents, pushRecent, readRecents } from "./recents";
 import { Highlight } from "./highlight";
 import { InvitePanel } from "./invite-panel";
@@ -48,6 +50,16 @@ type Item = {
 };
 
 type QuickAction = { key: string; label: string; keywords: string; href: string; icon: React.ReactNode };
+
+/** 12,345 → "12K". */
+function compactViews(n: number | null | undefined) {
+  if (n === null || n === undefined) return "–";
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${(n / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
+  if (a >= 1e4) return `${Math.round(n / 1e3)}K`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return String(Math.round(n));
+}
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -98,6 +110,8 @@ export function GlobalSearch({
   const { data, loading, error, term, patchPerson } = useGlobalSearch(searchText, open);
   // "#12" / "12" look up entry numbers, so even one digit counts.
   const hasQuery = term.length >= 2 || /^#?\d+$/.test(term);
+  // Videos with their numbers (the current team's accounts).
+  const videos = useVideoSearch(term, open && hasQuery, currentTeamId);
 
   useEffect(() => {
     const platform =
@@ -133,12 +147,7 @@ export function GlobalSearch({
         else openPalette();
       } else if (e.key === "/" && !e.metaKey && !e.ctrlKey && !open && !isTypingTarget(e.target)) {
         e.preventDefault();
-        // A page with its own search box (Analytics → Content) gets "/" first; ⌘K still opens this.
-        const own = document.querySelector<HTMLInputElement>("input[data-page-search]");
-        if (own && own.offsetParent !== null) {
-          own.focus();
-          own.select();
-        } else openPalette();
+        openPalette();
       }
     }
     document.addEventListener("keydown", onKey);
@@ -355,6 +364,51 @@ export function GlobalSearch({
       });
     });
 
+    videos.items.slice(0, 5).forEach((v) => {
+      const href = `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=search`;
+      const platformName = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" }[v.platform];
+      const kind = v.kind === "short" ? "Short" : v.kind === "long" ? "Long video" : "Post";
+      list.push({
+        key: `video-${v.platform}-${v.id}`,
+        section: "Video analytics",
+        label: `${v.title || "Untitled"}, ${kind} on ${platformName}, ${v.views ?? 0} views`,
+        visual: (
+          <span className="relative w-12 h-8 rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
+            {v.thumbnail && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+            )}
+            <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
+          </span>
+        ),
+        title: (
+          <>
+            {v.ours?.number ? <span className="font-mono text-[11.5px] font-semibold text-ink-faint mr-1.5">#{v.ours.number}</span> : null}
+            <Highlight text={v.title || "Untitled"} query={term} />
+          </>
+        ),
+        subtitle: (
+          <span className="truncate">
+            {kind} on {platformName}
+            {v.publishedAt ? ` · ${new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}
+          </span>
+        ),
+        trailing: (
+          <span className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-[12px] font-bold tabular-nums text-ink">{compactViews(v.views)}</span>
+            <span className="hidden sm:inline text-[11px] text-ink-faint">views</span>
+            {v.score !== null && v.score !== undefined && (
+              <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${v.score >= 1.4 ? "text-green bg-green/10" : v.score <= 0.7 ? "text-coral bg-coral/10" : "text-ink-soft bg-surface-2"}`}>
+                {v.score >= 10 ? Math.round(v.score) : v.score.toFixed(1)}×
+              </span>
+            )}
+          </span>
+        ),
+        href,
+        run: () => go(href),
+      });
+    });
+
     data.people.forEach((person) => {
       const name = displayName(person.username, person.full_name, person.email_name);
       const href = profileHref({ username: person.username, userId: person.id }) ?? "/dashboard";
@@ -442,7 +496,7 @@ export function GlobalSearch({
     });
 
     return list;
-  }, [hasQuery, recents, quickActions, teams, currentTeamId, term, data, canInviteAnyone, go, close, router, userId]);
+  }, [hasQuery, recents, quickActions, teams, currentTeamId, term, data, videos.items, canInviteAnyone, go, close, router, userId]);
 
   // New results → start from the top.
   useEffect(() => setHighlighted(0), [term, open]);
@@ -508,7 +562,7 @@ export function GlobalSearch({
   });
 
   const nothingFound =
-    hasQuery && !loading && !error && items.length === 0;
+    hasQuery && !loading && !videos.loading && !error && items.length === 0;
 
   return (
     <>
@@ -641,7 +695,7 @@ export function GlobalSearch({
                       inputRef.current?.focus();
                     }}
                   />
-                ) : error ? (
+                ) : error && !items.length ? (
                   <p className="px-5 py-12 text-center text-[13px] text-ink-faint">
                     Search isn&rsquo;t available right now. Check your connection and try again.
                   </p>
@@ -649,7 +703,7 @@ export function GlobalSearch({
                   <div className="px-5 py-12 text-center">
                     <p className="text-[14px] font-semibold mb-1">No matches for &ldquo;{query.trim()}&rdquo;</p>
                     <p className="text-[12.5px] text-ink-faint">
-                      Try a project title, a person&rsquo;s name or @username, or a team name.
+                      Try a video&rsquo;s title or #number, a person&rsquo;s name or @username, or a team name.
                     </p>
                   </div>
                 ) : (

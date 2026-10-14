@@ -14,12 +14,17 @@ import type { SocialPlatform } from "@/lib/social/providers";
 
 /*
  * /analytics/video/<platform>/<id>: one video's own analytics (1.17.0).
- * ?tab=advanced: every number its platform shares about it. ?from=content:
- * the back link goes to the Content tab.
+ * ?tab=reach | engagement | audience | revenue | advanced (1.21.0, like
+ * YouTube Studio's tabs). ?from=content: the back link goes to the Content
+ * tab.
  */
 export const metadata: Metadata = { title: "Video analytics" };
 
 const PLATFORMS: SocialPlatform[] = ["youtube", "instagram", "facebook", "tiktok"];
+
+// Where the video was opened from (the back link): Analytics' tabs, the dashboard, the app's search.
+const FROM = ["content", "audience", "dashboard", "overview", "realtime", "insights", "search", "advanced"] as const;
+type From = (typeof FROM)[number];
 
 export default async function VideoAnalyticsPage({ params, searchParams }: { params: Promise<{ platform: string; id: string }>; searchParams: Promise<{ tab?: string; from?: string }> }) {
   const [{ platform, id: rawId }, sp] = await Promise.all([params, searchParams]);
@@ -38,7 +43,9 @@ export default async function VideoAnalyticsPage({ params, searchParams }: { par
   const tz = (team?.timezone as string | null) || "Europe/Bucharest";
   const data = await getVideoAnalytics(currentTeam.id, platform as SocialPlatform, id, { tz, revenueAllowed, currency, today: todayIn(tz) });
   if (!data) notFound();
-  return <VideoAnalytics teamId={currentTeam.id} data={data} tab={sp.tab === "advanced" ? "advanced" : "overview"} from={sp.from === "content" || sp.from === "audience" || sp.from === "dashboard" ? sp.from : "advanced"} />;
+  const TABS = ["overview", "reach", "engagement", "audience", "revenue", "advanced"] as const;
+  const tab = TABS.find((t) => t === sp.tab) ?? "overview";
+  return <VideoAnalytics teamId={currentTeam.id} data={data} tab={tab} from={FROM.includes(sp.from as From) ? (sp.from as From) : "advanced"} revenueAllowed={revenueAllowed} />;
 }
 
 /** The currency this person picked for revenue (their account, then this device). */

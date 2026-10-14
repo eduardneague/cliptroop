@@ -40,13 +40,13 @@ async function handle(request: Request) {
   if (!authorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown } | null) : null;
+  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown; live?: unknown } | null) : null;
   if (body?.job === "cleanup") {
     const r = await runCleanupJob();
     return NextResponse.json(r, { status: r.ok ? 200 : 500 });
   }
   // One team and platform at a time (0082), or the retries.
-  if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob({ team: body.team, platform: body.platform, retry: body.retry }));
+  if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob({ team: body.team, platform: body.platform, retry: body.retry, live: body.live }));
   if (body?.job === "live") return NextResponse.json(await runLiveJob({ team: body.team, platform: body.platform }));
   if (body?.status === true) {
     const s = await recordStatus();

@@ -1,74 +1,55 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, ExternalIcon, TrophyIcon } from "@/components/ui/icons";
-import { Segmented } from "@/components/ui/segmented";
+import { ArrowLeftIcon, ClockIcon, CommentIcon, ExternalIcon, EyeIcon, MoneyIcon, ShareIcon, ThumbUpIcon, TrophyIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { fillVideoHistory } from "@/app/(dashboard)/analytics/actions";
-import type { VideoKey, VideoPageData } from "../../lib/video";
+import { fillVideoHistory, loadVideoDetails } from "@/app/(dashboard)/analytics/actions";
+import type { VideoPageData } from "../../lib/video";
 import { scoreText, scoreTone } from "../../lib/scores";
-import { ChartCard, Legend, LineChart, StackedColumns } from "../charts";
-import { RetentionChart } from "../advanced/retention-chart";
-import { compactNum, money, niceDay, pctOf, seconds } from "../advanced/format";
+import { ChartCard } from "../charts";
+import { Breakdown } from "../advanced/breakdowns";
+import { compactNum, money, niceDay, seconds } from "../advanced/format";
 import { ago as agoFrom } from "../../lib/ago";
-import { hourName } from "../../lib/live-math";
+import { fmt, NAME, toneClass, versus } from "./video-parts";
+import { AudienceTab, EngagementTab, OverviewTab, ReachTab, RevenueTab, TAB_NAME, tabsFor, useVideoRevenue, type VideoTab } from "./video-tabs";
 
 /*
- * One video's analytics (1.17.0): how it did next to the team's typical
- * video of the same kind, its views since it was posted, retention, where
- * the views came from, the same short elsewhere. Advanced: every number.
+ * One video's analytics (1.17.0; tabs like YouTube Studio's in 1.21.0):
+ * its numbers at a glance with its counts right now, then Overview, Reach,
+ * Engagement, Audience, Revenue and Advanced (every number, every day).
+ * Everything next to the team's typical video of the same kind.
  */
 
-const NAME = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" } as const;
 const KIND = { short: "Short", long: "Long video", post: "Post" } as const;
 const TYPE_NAME: Record<string, string> = { filler: "Everyday short", sponsorship: "Sponsored short", big: "Big short" };
-const MINE = "rgb(var(--amber))";
 
-type Tab = "overview" | "advanced";
+/** YouTube's splits are asked again after this long (the page asks; at most every 10 minutes per server). */
+const DETAILS_STALE_MS = 12 * 3_600_000;
 
-function fmt(k: Pick<VideoKey, "format">, v: number | null, currency: string) {
-  if (v === null || !Number.isFinite(v)) return "–";
-  switch (k.format) {
-    case "compact":
-      return compactNum(v);
-    case "pct":
-      return `${v < 10 ? v.toFixed(1) : Math.round(v)}%`;
-    case "seconds":
-      return seconds(v);
-    case "hours":
-      return `${v < 10 ? v.toFixed(1) : compactNum(v)} h`;
-    case "money":
-      return money(v, currency, true);
-    case "decimal":
-      return v.toFixed(v < 10 ? 2 : 1);
-  }
-}
-
-/** Next to typical: "2.1×" (counts), "+6 pts" (percentages); good or not. */
-function versus(k: VideoKey): { text: string; tone: "good" | "bad" | "same" } | null {
-  if (k.value === null || k.typical === null) return null;
-  const goodUp = k.good !== "down";
-  if (k.format === "pct") {
-    const d = k.value - k.typical;
-    if (Math.abs(d) < 0.5) return { text: "about typical", tone: "same" };
-    return { text: `${d > 0 ? "+" : "−"}${Math.abs(d) < 10 ? Math.abs(d).toFixed(1) : Math.round(Math.abs(d))} pts`, tone: d > 0 === goodUp ? "good" : "bad" };
-  }
-  if (k.typical === 0) return k.value > 0 ? { text: "above typical", tone: goodUp ? "good" : "bad" } : null;
-  const r = k.value / k.typical;
-  if (r > 0.9 && r < 1.1) return { text: "about typical", tone: "same" };
-  return { text: r >= 1 ? `${scoreText(r)} typical` : `${Math.round((1 - r) * 100)}% under`, tone: r > 1 === goodUp ? "good" : "bad" };
-}
-
-const toneClass = { good: "text-green bg-green/10", bad: "text-coral bg-coral/10", same: "text-ink-soft bg-surface-2" } as const;
-const ago = (days: number | null) => (days === null ? "" : days === 0 ? "today" : days === 1 ? "yesterday" : days < 60 ? `${days} days ago` : days < 730 ? `${Math.round(days / 30)} months ago` : `${Math.round(days / 365)} years ago`);
-
-export function VideoAnalytics({ teamId, data, tab: initialTab, from }: { teamId: string; data: VideoPageData; tab: Tab; from: "content" | "advanced" | "audience" | "dashboard" }) {
+export function VideoAnalytics({
+  teamId,
+  data,
+  tab: initialTab,
+  from,
+  revenueAllowed,
+}: {
+  teamId: string;
+  data: VideoPageData;
+  tab: VideoTab;
+  from: "content" | "advanced" | "audience" | "dashboard" | "overview" | "realtime" | "insights" | "search";
+  revenueAllowed: boolean;
+}) {
   const v = data.video;
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const tabs = tabsFor(data, revenueAllowed);
+  const [tab, setTab] = useState<VideoTab>(tabs.includes(initialTab) ? initialTab : "overview");
   const [fill, setFill] = useState<"idle" | "working" | "failed">(data.canFill ? "working" : "idle");
+  const stale = v.platform === "youtube" && (!data.breakdowns?.fetchedAt || Date.parse(data.breakdowns.fetchedAt) < Date.parse(data.today) - DETAILS_STALE_MS);
+  const [details, setDetails] = useState<"idle" | "working" | "failed">(stale ? "working" : "idle");
+  const revenue = useVideoRevenue(teamId, v.id);
+  const loadRevenue = revenue.load;
 
   // YouTube sends a video's whole day-by-day history on request: fetched once when the start is missing.
   useEffect(() => {
@@ -88,24 +69,48 @@ export function VideoAnalytics({ teamId, data, tab: initialTab, from }: { teamId
     };
   }, [teamId, v.id, data.canFill, router]);
 
-  const change = (t: Tab) => {
+  // Everything else about it (where its views came from, who watched, its subscribers per day): asked when missing or half a day old.
+  useEffect(() => {
+    if (!stale) return;
+    let live = true;
+    setDetails("working");
+    loadVideoDetails(teamId, v.id)
+      .then((r) => {
+        if (!live) return;
+        if (r.error !== undefined) return setDetails("failed");
+        setDetails("idle");
+        if (r.saved > 0) router.refresh();
+      })
+      .catch(() => live && setDetails("failed"));
+    return () => {
+      live = false;
+    };
+    // (Once per opening: the refresh brings fresh numbers, not another ask.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, v.id]);
+
+  // The Revenue tab asks for its money per day as it opens.
+  useEffect(() => {
+    if (tab === "revenue" && v.platform === "youtube") loadRevenue();
+  }, [tab, v.platform, loadRevenue]);
+
+  const change = (t: VideoTab) => {
     setTab(t);
     try {
       const url = new URL(window.location.href);
-      if (t === "advanced") url.searchParams.set("tab", "advanced");
-      else url.searchParams.delete("tab");
+      if (t === "overview") url.searchParams.delete("tab");
+      else url.searchParams.set("tab", t);
       window.history.replaceState(window.history.state, "", url);
     } catch {}
   };
 
+  const TAB_BACK: Partial<Record<typeof from, string>> = { content: "Content", audience: "Audience", overview: "Overview", realtime: "Realtime", insights: "Insights", search: "Overview" };
   const back =
-    from === "content"
-      ? { href: "/analytics?tab=content", label: "Analytics · Content" }
-      : from === "audience"
-        ? { href: "/analytics?tab=audience", label: "Analytics · Audience" }
-        : from === "dashboard"
-          ? { href: "/dashboard", label: "Dashboard" }
-          : { href: `/analytics?tab=advanced&platform=${v.platform}`, label: "Analytics · Advanced" };
+    from === "dashboard"
+      ? { href: "/dashboard", label: "Dashboard" }
+      : from === "advanced"
+        ? { href: `/analytics?tab=advanced&platform=${v.platform}`, label: "Analytics · Advanced" }
+        : { href: `/analytics?tab=${from === "search" ? "overview" : from}`, label: `Analytics · ${TAB_BACK[from] ?? "Overview"}` };
 
   return (
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1400px] mx-auto space-y-5 sm:space-y-6">
@@ -116,27 +121,40 @@ export function VideoAnalytics({ teamId, data, tab: initialTab, from }: { teamId
         </Link>
       </nav>
 
-      <Hero data={data} />
+      <Hero data={data} revenueAllowed={revenueAllowed} />
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <Segmented<Tab>
-          value={tab}
-          onChange={change}
-          ariaLabel="View"
-          options={[
-            { value: "overview", label: "Overview" },
-            { value: "advanced", label: "Advanced" },
-          ]}
-        />
-        {fill === "working" && (
-          <span className="inline-flex items-center gap-2 text-[12px] text-ink-soft" role="status">
+      <div>
+        <nav className="flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0" aria-label="This video's analytics">
+          {tabs.map((id) => {
+            const on = id === tab;
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-current={on ? "page" : undefined}
+                onClick={() => change(id)}
+                className={`relative px-2.5 sm:px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-soft hover:text-ink"}`}
+              >
+                {TAB_NAME[id]}
+                <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+              </button>
+            );
+          })}
+        </nav>
+        {(fill === "working" || details === "working") && (
+          <p className="mt-2 inline-flex items-center gap-2 text-[12px] text-ink-soft" role="status">
             <span className="w-3.5 h-3.5 rounded-full border-2 border-amber/30 border-t-amber animate-spin" aria-hidden />
-            Getting its full day-by-day history from YouTube…
-          </span>
+            {fill === "working" ? "Getting its full day-by-day history from YouTube…" : "Getting the latest details from YouTube…"}
+          </p>
         )}
       </div>
 
-      {tab === "overview" ? <Overview data={data} /> : <Advanced data={data} />}
+      {tab === "overview" && <OverviewTab data={data} revenueAllowed={revenueAllowed} revenue={revenue} onSeeMore={() => change("advanced")} />}
+      {tab === "reach" && <ReachTab data={data} fetching={details === "working"} />}
+      {tab === "engagement" && <EngagementTab data={data} />}
+      {tab === "audience" && <AudienceTab data={data} fetching={details === "working"} />}
+      {tab === "revenue" && <RevenueTab data={data} revenue={revenue} />}
+      {tab === "advanced" && <Advanced data={data} />}
 
       {data.notes.length > 0 && (
         <ul className="space-y-0.5 text-[12px] text-ink-faint">
@@ -153,7 +171,7 @@ function Thumb({ data }: { data: VideoPageData }) {
   const v = data.video;
   const tall = v.kind !== "long";
   return (
-    <span className={`relative block rounded-xl overflow-hidden bg-surface-2 flex-shrink-0 ${tall ? "w-[112px] h-[199px] sm:w-[132px] sm:h-[235px]" : "w-full sm:w-[300px] aspect-video"}`}>
+    <span className={`relative block rounded-xl overflow-hidden bg-surface-2 flex-shrink-0 self-start ${tall ? "w-[104px] h-[185px] sm:w-[128px] sm:h-[228px]" : "w-full sm:w-[240px] lg:w-[300px] aspect-video"}`}>
       {v.thumbnail ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={v.thumbnail} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
@@ -164,11 +182,46 @@ function Thumb({ data }: { data: VideoPageData }) {
   );
 }
 
-function Hero({ data }: { data: VideoPageData }) {
+/** Money in big type: a currency written as its code ("RON 922.61") gets the code small, so it fits with the other numbers. */
+function MoneyValue({ n, currency }: { n: number | null; currency: string }) {
+  const text = money(n, currency);
+  const m = /^([A-Z]{3})[\s ]*(.+)$/.exec(text);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      <span className="text-[0.55em] font-bold tracking-wide text-ink-soft mr-1">{m[1]}</span>
+      {m[2]}
+    </>
+  );
+}
+
+const ago = (days: number | null) => (days === null ? "" : days === 0 ? "today" : days === 1 ? "yesterday" : days < 60 ? `${days} days ago` : days < 730 ? `${Math.round(days / 30)} months ago` : `${Math.round(days / 365)} years ago`);
+
+/**
+ * The top of the page: the video, its main numbers with their icons (views,
+ * watch time, likes, comments, shares, revenue), its counts right now in
+ * big type, and how it does next to the usual.
+ */
+function Hero({ data, revenueAllowed }: { data: VideoPageData; revenueAllowed: boolean }) {
   const v = data.video;
   const tone = scoreTone(v.score);
   const viewsKey = data.keys.find((k) => k.key === "views");
   const tall = v.kind !== "long";
+  const key = (k: string) => data.keys.find((x) => x.key === k) ?? null;
+  const stats: { k: string; icon: React.ReactNode; label: string; value: React.ReactNode }[] = [
+    { k: "views", icon: <EyeIcon className="w-4 h-4" />, label: v.platform === "facebook" ? "Plays" : "Views", value: compactNum(v.views) },
+    ...(v.watchMinutes !== null ? [{ k: "watch", icon: <ClockIcon className="w-4 h-4" />, label: "Watch time", value: `${v.watchMinutes / 60 < 10 ? (v.watchMinutes / 60).toFixed(1) : compactNum(v.watchMinutes / 60)} h` }] : []),
+    { k: "likes", icon: <ThumbUpIcon className="w-4 h-4" />, label: v.platform === "facebook" ? "Reactions" : "Likes", value: compactNum(v.likes) },
+    { k: "comments", icon: <CommentIcon className="w-4 h-4" />, label: "Comments", value: compactNum(v.comments) },
+    ...(v.shares !== null ? [{ k: "shares", icon: <ShareIcon className="w-4 h-4" />, label: "Shares", value: compactNum(v.shares) }] : []),
+    ...(revenueAllowed && key("revenue") ? [{ k: "revenue", icon: <MoneyIcon className="w-4 h-4" />, label: v.platform === "youtube" ? "Revenue" : "Earnings", value: <MoneyValue n={key("revenue")!.value} currency={data.currency} /> }] : []),
+  ];
+  // Beside the video only when the title keeps room for itself (long videos'
+  // wider picture from 1400px, shorts from 1180px); else under it.
+  const beside = tall ? "hidden lg:block" : "hidden xl:block";
+  const under = tall ? "lg:hidden" : "xl:hidden";
+  // Its counts right now, when there are any.
+  const live = !!data.live && (data.live.views48 !== null || data.live.views60 !== null);
   return (
     <section className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
       <div className={`flex gap-4 sm:gap-5 ${tall ? "flex-row" : "flex-col sm:flex-row"}`}>
@@ -188,13 +241,26 @@ function Hero({ data }: { data: VideoPageData }) {
               </>
             )}
           </div>
-          <h1 className="mt-1.5 font-display text-[22px] sm:text-[28px] leading-[1.15] font-semibold break-words">{v.title || "Untitled"}</h1>
+          <h1 className="mt-1.5 font-display text-[21px] sm:text-[27px] leading-[1.15] font-semibold break-words">{v.title || "Untitled"}</h1>
           <p className="mt-1.5 text-[13px] text-ink-soft">
             {v.publishedAt ? `Posted ${niceDay(v.publishedAt, true)}` : "Posting date unknown"}
             {data.ageDays !== null ? ` · ${ago(data.ageDays)}` : ""}
             {v.durationSec ? ` · ${seconds(v.durationSec)} long` : ""}
           </p>
-          {data.live && <LiveLine live={data.live} />}
+          {/* Its main numbers, at a glance: in one row when they fit, else in even rows (globals.css, .stat-grid). */}
+          <div className="stat-cq mt-3">
+            <dl className="stat-grid" data-n={stats.length} aria-label="Its numbers so far">
+              {stats.map((x) => (
+                <div key={x.k} className="min-w-0">
+                  <dt className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-faint whitespace-nowrap">
+                    <span className="text-ink-soft">{x.icon}</span>
+                    {x.label}
+                  </dt>
+                  <dd className="font-display text-[22px] sm:text-[24px] leading-tight font-semibold tabular-nums whitespace-nowrap">{x.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             {v.url && (
               <a href={v.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold hover:border-line/30">
@@ -207,30 +273,59 @@ function Hero({ data }: { data: VideoPageData }) {
                 #{v.ours.number ?? "?"} in ClipTroop
               </Link>
             )}
+            {viewsKey?.rank && viewsKey.rank.of > 1 && (
+              <span className="text-[12px] text-ink-soft inline-flex items-center gap-1.5">
+                <TrophyIcon className="w-3.5 h-3.5 text-gold" />#{viewsKey.rank.rank} of {viewsKey.rank.of} {data.peerWord} by {v.platform === "facebook" ? "plays" : "views"}
+              </span>
+            )}
           </div>
-          {v.hook && (
-            <blockquote className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft max-w-2xl">
-              <span className="block text-[10.5px] font-bold uppercase tracking-wide text-ink-faint mb-0.5">Hook, from the script</span>
-              {v.hook}
-            </blockquote>
-          )}
         </div>
-        {/* The verdict: next to the team's usual. */}
-        <div className={`sm:w-[230px] flex-shrink-0 self-start rounded-xl p-4 ${tall ? "hidden md:block" : ""} ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
+        {/* Right now, then next to the usual. */}
+        <div className={`w-[240px] flex-shrink-0 self-start space-y-3 ${beside}`}>
+          {live && <LiveBig data={data} />}
+          <div className={`rounded-xl p-4 ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
+            <Verdict data={data} />
+          </div>
+        </div>
+      </div>
+      <div className={`${under} mt-4 grid gap-3 ${live ? "sm:grid-cols-2" : ""}`}>
+        {live && <LiveBig data={data} />}
+        <div className={`rounded-xl p-4 ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
           <Verdict data={data} />
         </div>
       </div>
-      {tall && (
-        <div className={`md:hidden mt-4 rounded-xl p-4 ${tone === "high" || tone === "up" ? "bg-green/10" : tone === "down" ? "bg-coral/10" : "bg-surface-2"}`}>
-          <Verdict data={data} />
+    </section>
+  );
+}
+
+/** Its counts right now, big: the last 48 hours and the last hour. */
+function LiveBig({ data }: { data: VideoPageData }) {
+  const l = data.live!;
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  if (l.views48 === null && l.views60 === null) return null;
+  return (
+    <div className="rounded-xl border border-green/25 bg-green/[0.06] p-4" role="status">
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+        <span className="relative flex w-2 h-2" aria-hidden>
+          <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 motion-safe:animate-ping" />
+          <span className="relative inline-flex w-2 h-2 rounded-full bg-green" />
+        </span>
+        Right now
+      </div>
+      <div className="mt-1.5 font-display text-[34px] leading-none font-semibold tabular-nums text-green">+{(l.views48 ?? 0).toLocaleString("en-US")}</div>
+      <div className="text-[12px] text-ink-soft mt-1">{data.video.platform === "facebook" ? "plays" : "views"} in the last 48 hours</div>
+      {l.views60 !== null && l.views60 > 0 && (
+        <div className="mt-2 text-[13px] text-ink-soft">
+          <b className="font-display text-[22px] text-green tabular-nums">+{l.views60.toLocaleString("en-US")}</b> in the last hour
         </div>
       )}
-      {viewsKey?.rank && viewsKey.rank.of > 1 && (
-        <p className="mt-3 text-[12px] text-ink-soft inline-flex items-center gap-1.5">
-          <TrophyIcon className="w-3.5 h-3.5 text-gold" />#{viewsKey.rank.rank} of {viewsKey.rank.of} {data.peerWord} on {NAME[v.platform]} by {v.platform === "facebook" ? "plays" : "views"}
-        </p>
-      )}
-    </section>
+      {now && l.at && <div className="mt-1.5 text-[11px] text-ink-faint">counts from {agoFrom(l.at, now)}</div>}
+    </div>
   );
 }
 
@@ -248,288 +343,11 @@ function Verdict({ data }: { data: VideoPageData }) {
   return (
     <div>
       <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">{word}</div>
-      <div className={`mt-1 font-display text-[40px] leading-none font-semibold tabular-nums ${tone === "high" || tone === "up" ? "text-green" : tone === "down" ? "text-coral" : ""}`}>{scoreText(v.score)}</div>
+      <div className={`mt-1 font-display text-[38px] leading-none font-semibold tabular-nums ${tone === "high" || tone === "up" ? "text-green" : tone === "down" ? "text-coral" : ""}`}>{scoreText(v.score)}</div>
       <p className="mt-1.5 text-[12px] text-ink-soft leading-snug">
         your typical {data.peerWord.replace(/s$/, "")}: {compactNum(v.typical)} {v.platform === "facebook" ? "plays" : "views"} (the median of the ones before it)
       </p>
     </div>
-  );
-}
-
-/** Its counts within minutes (1.19.0): the last 48 hours and hour, and how fresh they are. */
-function LiveLine({ live }: { live: NonNullable<VideoPageData["live"]> }) {
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  const when = now ? agoFrom(live.at, now) : null;
-  if (live.views48 === null && !when) return null;
-  return (
-    <p className="mt-2 flex items-center gap-x-2 gap-y-1 flex-wrap text-[12.5px] text-ink-soft">
-      <span className="relative flex w-2 h-2" aria-hidden>
-        <span className="absolute inline-flex h-full w-full rounded-full bg-green opacity-60 animate-ping" />
-        <span className="relative inline-flex w-2 h-2 rounded-full bg-green" />
-      </span>
-      {live.views48 !== null && (
-        <span>
-          <b className="text-ink tabular-nums">+{live.views48.toLocaleString("en-US")}</b> in the last 48 hours
-        </span>
-      )}
-      {live.views60 !== null && live.views60 > 0 && (
-        <span>
-          · <b className="text-green tabular-nums">+{live.views60.toLocaleString("en-US")}</b> in the last hour
-        </span>
-      )}
-      {when && <span className="text-ink-faint">· counts from {when}</span>}
-    </p>
-  );
-}
-
-function LiveHours({ data }: { data: VideoPageData }) {
-  const l = data.live!;
-  const labels = l.hours.map((h) => new Date(h.at).toLocaleTimeString("en-US", { hour: "numeric" }));
-  const now = Date.now();
-  const tips = l.hours.map((h, i) => `${hourName(Date.parse(h.at), now)}${i === l.hours.length - 1 ? " (so far)" : ""}`);
-  return (
-    <ChartCard title="The last 48 hours" sub={`${data.video.platform === "facebook" ? "Plays" : "Views"} per hour, from its counts read every few minutes`}>
-      <StackedColumns ariaLabel="Views per hour over the last 48 hours" labels={labels} tips={tips} series={[{ key: "v", label: "Views", color: MINE, values: l.hours.map((h) => h.views) }]} height={160} format={(x) => compactNum(x)} />
-    </ChartCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Overview
-// ---------------------------------------------------------------------------
-
-/** Columns by how many numbers there are: full rows where possible. */
-const COLS: Record<number, string> = {
-  1: "sm:grid-cols-2",
-  2: "sm:grid-cols-2",
-  3: "sm:grid-cols-3",
-  4: "sm:grid-cols-4",
-  5: "sm:grid-cols-3 lg:grid-cols-5",
-  6: "sm:grid-cols-3 xl:grid-cols-6",
-  7: "sm:grid-cols-4",
-  8: "sm:grid-cols-4",
-  9: "sm:grid-cols-3 lg:grid-cols-5",
-  10: "sm:grid-cols-3 lg:grid-cols-5",
-  11: "sm:grid-cols-4 xl:grid-cols-6",
-  12: "sm:grid-cols-4 xl:grid-cols-6",
-};
-
-const OVERVIEW_KEYS = ["views", "impressions", "ctr", "watch_hours", "avg_view", "avg_pct", "hold", "skip", "likes", "comments", "shares", "saves", "subs", "engagement", "revenue", "rpm"];
-
-function Overview({ data }: { data: VideoPageData }) {
-  const keys = OVERVIEW_KEYS.map((k) => data.keys.find((x) => x.key === k)).filter((k): k is VideoKey => !!k);
-  return (
-    <div className="space-y-5">
-      <KeyGrid keys={keys} currency={data.currency} />
-      {data.live && data.live.hours.some((h) => h.views > 0) && <LiveHours data={data} />}
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Growth data={data} />
-        <PerDay data={data} />
-      </div>
-      {data.retention && <Retention data={data} />}
-      {data.splits && (data.splits.traffic.length > 0 || data.splits.searches.length > 0) && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <SplitCard title="Where its views came from" sub="Since it was posted" rows={data.splits.traffic} limit={8} />
-          <SplitCard title="What people searched to find it" sub="YouTube search terms, since it was posted" rows={data.splits.searches} limit={8} />
-        </div>
-      )}
-      {data.siblings.length > 0 && <Siblings data={data} />}
-    </div>
-  );
-}
-
-function KeyGrid({ keys, currency }: { keys: VideoKey[]; currency: string }) {
-  return (
-    <section className="rounded-2xl border border-line/10 bg-surface overflow-hidden" aria-label="Key numbers">
-      <div className={`grid -mr-px -mb-px grid-cols-2 ${COLS[keys.length] ?? "sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"}`}>
-        {keys.map((k) => {
-          const vs = versus(k);
-          return (
-            <div key={k.key} className="border-r border-b border-line/10 px-3.5 sm:px-5 py-3 min-w-0">
-              <div className="text-[12px] text-ink-soft truncate">{k.label}</div>
-              <div className="mt-0.5 font-display text-[21px] sm:text-[23px] leading-tight font-semibold tabular-nums truncate">{fmt(k, k.value, currency)}</div>
-              <div className="mt-1 min-h-[18px] flex items-center gap-1.5 flex-wrap">
-                {vs && <span className={`inline-flex items-center rounded-md px-1.5 h-[18px] text-[11px] font-bold tabular-nums ${toneClass[vs.tone]}`}>{vs.text}</span>}
-                {k.typical !== null && <span className="text-[11px] text-ink-faint tabular-nums truncate">typical {fmt(k, k.typical, currency)}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function Growth({ data }: { data: VideoPageData }) {
-  const g = data.growth;
-  const v = data.video;
-  const word = data.peerWord.replace(/s$/, "");
-  const labels = useMemo(() => (g ? g.mine.map((_, i) => `Day ${i + 1}`) : []), [g]);
-  if (!g)
-    return (
-      <ChartCard title="Views since it was posted" sub={`Day by day, next to your typical ${word}`}>
-        <p className="py-14 px-4 text-center text-[13px] text-ink-faint">
-          {v.platform === "youtube" ? "YouTube hasn't sent its day-by-day views yet." : `Its day-by-day views start with the morning copies after it was posted (${NAME[v.platform]} only shares totals).`}
-        </p>
-      </ChartCard>
-    );
-  const vs = g.versus;
-  return (
-    <ChartCard
-      title="Views since it was posted"
-      sub={g.typicalFrom >= 3 ? `Dashed: your typical ${word} at the same age (${g.typicalFrom} before it)` : `Not enough earlier ${data.peerWord} with day-by-day numbers for a typical line yet`}
-      right={<Legend items={[{ key: "m", label: "This video", color: MINE }, ...(g.typicalFrom >= 3 ? [{ key: "t", label: `Typical ${word}`, color: "rgb(var(--ink-faint))", dashed: true }] : [])]} />}
-    >
-      <LineChart ariaLabel="Views since it was posted" labels={labels} series={[{ key: "mine", label: "This video", color: MINE, values: g.mine }]} previous={g.typicalFrom >= 3 ? { label: `Typical ${word}`, values: g.typical } : null} />
-      {vs && (
-        <p className={`mt-3 text-[13px] font-semibold ${vs.ahead ? "text-green" : "text-coral"}`}>
-          {vs.ahead ? "Ahead of" : "Behind"} your typical {word} since day {vs.since + 1}
-          {Number.isFinite(vs.ratio) ? ` (${scoreText(vs.ratio)} by day ${Math.min(g.mine.length, g.typical.length)})` : ""}.
-        </p>
-      )}
-      {data.milestones.length > 0 && (
-        <dl className="mt-3 pt-3 border-t border-line/10 grid grid-cols-3 sm:grid-cols-6 gap-x-3 gap-y-2">
-          {data.milestones.map((m) => (
-            <div key={m.day} className="min-w-0">
-              <dt className="text-[11px] text-ink-faint">By day {m.day}</dt>
-              <dd className="text-[15px] font-semibold tabular-nums">{compactNum(m.views)}</dd>
-              {m.typical !== null && <dd className="text-[10.5px] text-ink-faint tabular-nums">typical {compactNum(m.typical)}</dd>}
-            </div>
-          ))}
-        </dl>
-      )}
-    </ChartCard>
-  );
-}
-
-function PerDay({ data }: { data: VideoPageData }) {
-  const d = data.daily;
-  const labels = useMemo(() => (d ? d.days.map((x) => niceDay(x)) : []), [d]);
-  if (!d)
-    return (
-      <ChartCard title="Views per day" sub="Each day's own views">
-        <p className="py-14 px-4 text-center text-[13px] text-ink-faint">No day-by-day views yet.</p>
-      </ChartCard>
-    );
-  const last = d.views.length > 90 ? 90 : d.views.length;
-  const start = d.views.length - last;
-  return (
-    <ChartCard title="Views per day" sub={d.views.length > 90 ? "The last 90 days with numbers" : d.source === "daily" ? "Each day's own views (YouTube's numbers)" : "The change between one morning's copy and the next"}>
-      <StackedColumns ariaLabel="Views per day" labels={labels.slice(start)} series={[{ key: "v", label: "Views", color: MINE, values: d.views.slice(start).map((x) => x ?? 0) }]} format={(x) => compactNum(x)} />
-    </ChartCard>
-  );
-}
-
-function Retention({ data }: { data: VideoPageData }) {
-  const r = data.retention!;
-  const v = data.video;
-  const s = v.retention;
-  // The average in a quiet grey, dashed: this video is the one in colour.
-  const series = [{ key: "v", label: "This video", color: MINE, values: r.mine }, ...(r.average ? [{ key: "a", label: `Your average ${data.peerWord.replace(/s$/, "")} (${r.averageCount})`, color: "rgb(var(--ink-faint))", values: r.average, dashed: true }] : [])];
-  return (
-    <ChartCard title="Retention" sub="The share of viewers still watching at each moment · 100% = everyone who started" right={<Legend items={series.map((x) => ({ key: x.key, label: x.label, color: x.color, dashed: "dashed" in x ? x.dashed : false }))} />}>
-      <RetentionChart series={series} ariaLabel="Retention of this video" duration={v.durationSec} />
-      {s && (
-        <dl className="mt-4 pt-4 border-t border-line/10 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-3">
-          {[
-            v.kind === "long" ? ["After 30 s", pctOf(s.at30s)] : ["After 3 s", pctOf(s.at3s)],
-            ["Halfway", pctOf(s.at50)],
-            ["At the end", pctOf(s.end)],
-            ["Steepest drop", s.biggestDrop ? `${Math.round(s.biggestDrop.at * 100)}% in` : "–"],
-            ["Vs similar videos", s.relative === null ? "–" : `${Math.round(s.relative * 100)} / 100`],
-          ].map(([k, val]) => (
-            <div key={k}>
-              <dt className="text-[11.5px] text-ink-faint">{k}</dt>
-              <dd className="text-[17px] font-semibold tabular-nums">{val}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </ChartCard>
-  );
-}
-
-function SplitCard({ title, sub, rows, limit }: { title: string; sub: string; rows: { key: string; label: string; views: number | null; watchMinutes: number | null }[]; limit?: number }) {
-  const [more, setMore] = useState(false);
-  const total = rows.reduce((t, r) => t + (r.views ?? 0), 0);
-  const shown = more || !limit ? rows : rows.slice(0, limit);
-  return (
-    <ChartCard title={title} sub={sub}>
-      {rows.length ? (
-        <>
-          <ul className="space-y-2.5">
-            {shown.map((r) => {
-              const share = total ? (r.views ?? 0) / total : 0;
-              return (
-                <li key={r.key} className="min-w-0">
-                  <div className="flex items-baseline gap-2 text-[13px] min-w-0">
-                    <span className="flex-1 min-w-0 truncate" title={r.label}>
-                      {r.label}
-                    </span>
-                    <span className="font-semibold tabular-nums">{compactNum(r.views)}</span>
-                    <span className="w-10 text-right text-[12px] text-ink-faint tabular-nums">{Math.round(share * 100)}%</span>
-                  </div>
-                  <span className="mt-1 block h-1.5 rounded-[3px] bg-line/[0.07] overflow-hidden" aria-hidden>
-                    <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(share > 0 ? 1.5 : 0, share * 100)}%`, background: MINE }} />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          {limit && rows.length > limit && (
-            <button type="button" onClick={() => setMore((m) => !m)} className="mt-3 text-[12px] font-semibold text-ink-soft hover:text-ink">
-              {more ? "Show fewer" : `Show all ${rows.length}`}
-            </button>
-          )}
-        </>
-      ) : (
-        <p className="py-6 text-center text-[12.5px] text-ink-faint">Not copied yet: a few videos get these each morning.</p>
-      )}
-    </ChartCard>
-  );
-}
-
-function Siblings({ data }: { data: VideoPageData }) {
-  const v = data.video;
-  const all = [{ platform: v.platform, views: v.views }, ...data.siblings.map((s) => ({ platform: s.platform, views: s.views }))];
-  const total = all.reduce((t, x) => t + (x.views ?? 0), 0);
-  return (
-    <ChartCard title="The same short everywhere" sub={`${compactNum(total)} views across ${all.length} platforms`}>
-      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[{ ...v, here: true }, ...data.siblings.map((s) => ({ ...s, here: false }))].map((s) => {
-          const share = total ? (s.views ?? 0) / total : 0;
-          const inner = (
-            <>
-              <span className="flex items-center gap-2 min-w-0">
-                <PlatformIcon platform={s.platform} className="w-6 h-6 rounded-md flex-shrink-0" />
-                <span className="text-[13px] font-semibold">{NAME[s.platform]}</span>
-                {s.here && <span className="ml-auto text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">This one</span>}
-              </span>
-              <span className="mt-2 block font-display text-[22px] font-semibold tabular-nums">{compactNum(s.views)}</span>
-              <span className="block text-[11.5px] text-ink-faint">
-                {Math.round(share * 100)}% of its views · {compactNum(s.likes)} likes · {compactNum(s.comments)} comments
-              </span>
-            </>
-          );
-          return (
-            <li key={`${s.platform}:${s.id}`}>
-              {s.here ? (
-                <div className="h-full rounded-xl border border-amber/40 bg-amber/[0.06] p-3.5">{inner}</div>
-              ) : (
-                <Link href={`/analytics/video/${s.platform}/${encodeURIComponent(s.id)}`} className="block h-full rounded-xl border border-line/10 p-3.5 hover:border-line/30 hover:bg-surface-2/40">
-                  {inner}
-                </Link>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </ChartCard>
   );
 }
 
@@ -568,7 +386,22 @@ function Advanced({ data }: { data: VideoPageData }) {
     .map(([k, val]) => [k.startsWith("reactions_") ? `Reactions: ${k.slice(10)}` : EXTRA[k] ?? null, k === "total_watch_seconds" ? seconds(val) : compactNum(val)] as const)
     .filter((x): x is readonly [string, string] => !!x[0]);
   const d = data.daily;
-  const dayRows = d ? d.days.map((day, i) => ({ day, views: d.views[i], watch: d.watchMinutes[i] })).reverse() : [];
+  const dayRows = d
+    ? d.days.map((day, i) => ({ day, views: d.views[i], watch: d.watchMinutes[i], avg: d.avgView[i], likes: d.likes[i], comments: d.comments[i], subs: d.subs[i], impressions: d.impressions[i], ctr: d.ctr[i] })).reverse()
+    : [];
+  // The columns there are numbers for.
+  const has = (f: keyof (typeof dayRows)[number]) => dayRows.some((r) => r[f] !== null && r[f] !== undefined);
+  const cols: { f: keyof (typeof dayRows)[number]; label: string; show: (r: (typeof dayRows)[number]) => string }[] = [
+    { f: "watch", label: "Watch time", show: (r) => (r.watch === null ? "–" : `${compactNum(r.watch / 60)} h`) },
+    { f: "avg", label: "Average view", show: (r) => seconds(r.avg) },
+    { f: "subs", label: "Subscribers", show: (r) => (r.subs === null ? "–" : `${r.subs > 0 ? "+" : ""}${compactNum(r.subs)}`) },
+    { f: "likes", label: "Likes", show: (r) => compactNum(r.likes) },
+    { f: "comments", label: "Comments", show: (r) => compactNum(r.comments) },
+    { f: "impressions", label: "Impressions", show: (r) => compactNum(r.impressions) },
+    { f: "ctr", label: "CTR", show: (r) => (r.ctr === null ? "–" : `${r.ctr.toFixed(1)}%`) },
+  ];
+  const dayCols = d?.source === "daily" ? cols.filter((c) => has(c.f)) : [];
+  const splits = (data.breakdowns?.list ?? []).filter((b) => ["traffic_source", "search_term"].includes(b.id));
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-line/10 bg-surface overflow-x-auto" aria-label="Every number">
@@ -636,22 +469,29 @@ function Advanced({ data }: { data: VideoPageData }) {
         </div>
       )}
 
-      {data.splits && (data.splits.traffic.length > 0 || data.splits.searches.length > 0) && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <SplitCard title="Traffic sources" sub={data.splits.asOf ? `Since it was posted, to ${niceDay(data.splits.asOf, true)}` : "Since it was posted"} rows={data.splits.traffic} />
-          <SplitCard title="Search terms" sub="Every YouTube search that led to it (the top 25)" rows={data.splits.searches} />
+      {splits.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {splits.map((b) => (
+            <div key={b.id} className="min-w-0">
+              <Breakdown b={{ ...b, sub: data.breakdowns?.asOf ? `Since it was posted, to ${niceDay(data.breakdowns.asOf, true)}` : b.sub }} compare={false} />
+            </div>
+          ))}
         </div>
       )}
 
       {dayRows.length > 0 && (
         <ChartCard title="Day by day" sub={d?.source === "daily" ? "YouTube's own numbers for each day" : "The change between one morning's copy and the next"}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-[12.5px]">
+            <table className={`w-full text-[12.5px] ${dayCols.length > 3 ? "min-w-[720px]" : "min-w-[420px]"}`}>
               <thead>
                 <tr className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">
                   <th className="py-1.5 pr-3">Day</th>
                   <th className="py-1.5 px-3 text-right">Views</th>
-                  {d?.source === "daily" && <th className="py-1.5 pl-3 text-right">Watch time</th>}
+                  {dayCols.map((c) => (
+                    <th key={c.f} className="py-1.5 px-3 text-right whitespace-nowrap">
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -659,7 +499,11 @@ function Advanced({ data }: { data: VideoPageData }) {
                   <tr key={r.day} className="border-t border-line/10">
                     <td className="py-1.5 pr-3 text-ink-soft whitespace-nowrap">{niceDay(r.day, true)}</td>
                     <td className="py-1.5 px-3 text-right tabular-nums font-semibold">{r.views === null ? "–" : Math.round(r.views).toLocaleString("en-US")}</td>
-                    {d?.source === "daily" && <td className="py-1.5 pl-3 text-right tabular-nums text-ink-soft">{r.watch === null ? "–" : `${compactNum(r.watch / 60)} h`}</td>}
+                    {dayCols.map((c) => (
+                      <td key={c.f} className="py-1.5 px-3 text-right tabular-nums text-ink-soft">
+                        {c.show(r)}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

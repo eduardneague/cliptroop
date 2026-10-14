@@ -1,7 +1,7 @@
 // One video's live counts (1.19.0): views gained in a stretch of time, a
 // change spread over the time between two looks (lib/live-math.ts), the
 // same way the database sums them (migration 0083).
-import { gainedBetween, hourName, liveDue, perHour, snapshotsOf, type LivePoint, type SeenCounts } from "../modules/analytics/lib/live-math";
+import { gainedBetween, hourName, liveDue, perHour, perSlot, snapshotsOf, type LivePoint, type SeenCounts } from "../modules/analytics/lib/live-math";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -79,6 +79,12 @@ const base = new Date(2026, 9, 13, 15, 20).getTime();
 ok(hourName(new Date(2026, 9, 13, 15).getTime(), base) === "Today, 3 PM", `today (got ${hourName(new Date(2026, 9, 13, 15).getTime(), base)})`);
 ok(hourName(new Date(2026, 9, 12, 23).getTime(), base) === "Yesterday, 11 PM", "yesterday");
 ok(/^[A-Z][a-z]{2}, 9 AM$/.test(hourName(new Date(2026, 9, 11, 9).getTime(), base)), "before that: the weekday");
+
+// 1.21.0: a video's last 60 minutes in 10-minute slots, ending now.
+const slots = perSlot([{ at: now - 50 * 60_000, views: 1000 }, { at: now - 10 * 60_000, views: 1240 }], now, 6, 600_000);
+ok(slots.length === 6 && slots[5].at === now - 600_000, "six slots ending now");
+ok(slots.reduce((t, x) => t + x.views, 0) === 240, `they add up to the views gained (got ${slots.reduce((t, x) => t + x.views, 0)})`);
+ok(slots[0].views === 0 && slots[1].views === 60 && slots[5].views === 0, `spread over the 40 minutes between the looks (got ${slots.map((x) => x.views).join()})`);
 
 if (fails) {
   console.log(`${fails} failed`);

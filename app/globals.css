@@ -578,6 +578,19 @@ html[data-motion="off"] button:active { scale: none; }
   .dash-item { grid-column: span 1; grid-row: span var(--mhp, var(--mh, 3)); }
 }
 
+/* A video's numbers in its header (1.21.0): all in one row when they fit,
+   else rows of the same length (3 + 3, 3 + 2, 2 + 2), else pairs, so no
+   number is left alone on a row. `data-n`: how many numbers there are;
+   the widths keep about 100px per number. */
+.stat-cq { container-type: inline-size; }
+.stat-grid { display: grid; gap: 10px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (min-width: 288px) {
+  .stat-grid[data-n="3"], .stat-grid[data-n="5"], .stat-grid[data-n="6"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (min-width: 450px) { .stat-grid[data-n="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 570px) { .stat-grid[data-n="5"] { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@container (min-width: 680px) { .stat-grid[data-n="6"] { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
 /* Lists that scroll inside a widget: a thin scrollbar in its own lane (it
    never covers a date, a badge or an avatar), faint until you point at it. */
 .widget-scroll {

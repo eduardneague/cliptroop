@@ -10,6 +10,7 @@ import { ApiError, dayRange, daysAgo, get, isoDuration, keepStoredMetrics, NEW_C
 import {
   facebookRetention,
   instagramWindows,
+  youtubeVideoSplits,
   youtubeDailyExtras,
   youtubeDailyMoney,
   youtubeDailySplits,
@@ -21,6 +22,8 @@ import {
   type Advanced,
 } from "./sync-advanced";
 import type { RetentionPoint } from "./retention";
+import { historyChunk, historyRows } from "./history-math";
+import { addDays } from "./ranges";
 
 /*
  * Copies the platforms' numbers into our analytics tables (migration 0058).
@@ -38,27 +41,48 @@ export type SyncResult = { platform: SocialPlatform; ok: boolean; error?: string
 // YouTube
 // ---------------------------------------------------------------------------
 
-async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links: Links, adv: Advanced): Promise<{ rows: number; revenueNote: string | null; note: string | null }> {
-  const token = await getAccessToken(acc.id);
-  const start = backfill ? daysAgo(90) : daysAgo(6);
-  const end = daysAgo(0);
-  let rows = 0;
-  const daily = new Map<string, Record<string, unknown>>();
-  const put = (day: string, content: string, v: Record<string, unknown>) => {
-    const k = `${day}|${content}`;
-    daily.set(k, { ...(daily.get(k) ?? { team_id: acc.team_id, platform: "youtube", day, content }), ...v, updated_at: new Date().toISOString() });
-  };
+type DayRows = Map<string, Record<string, unknown>>;
 
-  // Totals per day.
-  const totals = rowsOf(
-    await ytReport(token, {
+/** Lays numbers over one (day, content) row of a copy. */
+function putDay(daily: DayRows, acc: Pick<Account, "team_id">, day: string, content: string, v: Record<string, unknown>) {
+  const k = `${day}|${content}`;
+  daily.set(k, { ...(daily.get(k) ?? { team_id: acc.team_id, platform: "youtube", day, content }), ...v, updated_at: new Date().toISOString() });
+}
+
+/**
+ * YouTube's numbers per day from `start` to `end`, one analytics_daily row
+ * per day and content: the totals (they must come), then, each optional,
+ * more per day, Shorts vs long videos and their averages, and the channel's
+ * other numbers per day. The reports are asked side by side. Used by the
+ * daily copy and by the history (youtubeHistory).
+ */
+async function youtubeDays(token: string, acc: Pick<Account, "team_id">, start: string, end: string): Promise<DayRows> {
+  const daily: DayRows = new Map();
+  const put = (day: string, content: string, v: Record<string, unknown>) => putDay(daily, acc, day, content, v);
+  const kindOf = (t: unknown) => (t === "SHORTS" ? "shorts" : t === "VIDEO_ON_DEMAND" || t === "LIVE_STREAM" ? "long" : null);
+  const [totals, extra, split, averages, extras] = await Promise.all([
+    // Totals per day.
+    ytReport(token, {
       startDate: start,
       endDate: end,
       metrics: "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,subscribersGained,subscribersLost",
       dimensions: "day",
       sort: "day",
-    })
-  );
+    }).then(rowsOf),
+    // More per day (migration 0079): engaged views, average % viewed,
+    // dislikes, playlist adds. A channel or an API version without one of
+    // them still gets the rest (the shorter list).
+    ytFirst(token, { startDate: start, endDate: end, dimensions: "day", sort: "day" }, ["engagedViews,averageViewPercentage,dislikes,videosAddedToPlaylists", "averageViewPercentage,dislikes"]),
+    // Shorts vs long videos (creatorContentType).
+    ytReport(token, { startDate: start, endDate: end, metrics: "views,estimatedMinutesWatched,likes,comments,shares", dimensions: "day,creatorContentType", sort: "day" })
+      .then(rowsOf)
+      .catch(() => null),
+    // Advanced (0081): Shorts vs long videos beyond views (average view
+    // duration and % viewed, engaged views, subscribers gained and lost)…
+    youtubeTypeAverages(token, start, end).catch(() => null),
+    // …and the channel's other numbers per day (Premium views, playlist removals, cards) into `metrics`.
+    youtubeDailyExtras(token, start, end).catch(() => null),
+  ]);
   for (const r of totals)
     put(String(r.day), "all", {
       views: num(r.views),
@@ -70,41 +94,16 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
       followers_gained: num(r.subscribersGained),
       followers_lost: num(r.subscribersLost),
     });
-
-  // More per day (migration 0079): engaged views, average % viewed, dislikes,
-  // playlist adds. Optional: a channel or an API version without one of
-  // them still gets the rest (the shorter list), and the totals above never
-  // depend on it.
-  for (const metrics of ["engagedViews,averageViewPercentage,dislikes,videosAddedToPlaylists", "averageViewPercentage,dislikes"]) {
-    try {
-      const extra = rowsOf(await ytReport(token, { startDate: start, endDate: end, metrics, dimensions: "day", sort: "day" }));
-      for (const r of extra)
-        put(String(r.day), "all", {
-          ...(metrics.includes("engagedViews") ? { engaged_views: num(r.engagedViews), playlist_adds: num(r.videosAddedToPlaylists) } : {}),
-          avg_view_pct: num(r.averageViewPercentage),
-          dislikes: num(r.dislikes),
-        });
-      break;
-    } catch {
-      /* try the shorter list, then go without */
-    }
-  }
-
-  // Shorts vs long videos (creatorContentType). Optional: skipped if YouTube refuses it.
-  try {
-    const split = rowsOf(
-      await ytReport(token, {
-        startDate: start,
-        endDate: end,
-        metrics: "views,estimatedMinutesWatched,likes,comments,shares",
-        dimensions: "day,creatorContentType",
-        sort: "day",
-      })
-    );
+  for (const r of extra?.rows ?? [])
+    put(String(r.day), "all", {
+      ...(extra!.metrics.includes("engagedViews") ? { engaged_views: num(r.engagedViews), playlist_adds: num(r.videosAddedToPlaylists) } : {}),
+      avg_view_pct: num(r.averageViewPercentage),
+      dislikes: num(r.dislikes),
+    });
+  if (split) {
     const sum = new Map<string, Record<string, number>>();
     for (const r of split) {
-      const type = String(r.creatorContentType ?? "");
-      const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" || type === "LIVE_STREAM" ? "long" : null;
+      const content = kindOf(r.creatorContentType);
       if (!content) continue;
       const k = `${r.day}|${content}`;
       const s = sum.get(k) ?? { views: 0, watch_minutes: 0, likes: 0, comments: 0, shares: 0 };
@@ -119,21 +118,128 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
       const [day, content] = k.split("|");
       put(day, content, v);
     }
-  } catch {}
+  }
+  for (const [k, v] of averages ?? []) {
+    const [day, content] = k.split("|");
+    put(day, content, v);
+  }
+  for (const [day, m] of extras ?? []) put(day, "all", { metrics: m });
+  return daily;
+}
 
-  // Advanced (0081). Shorts vs long videos beyond views: average view
-  // duration and % viewed, engaged views, subscribers gained and lost. And
-  // the channel's other numbers per day (Premium views, playlist removals,
-  // cards) into `metrics`.
+/**
+ * YouTube's money per day from `start` to `end` (the monetary permission
+ * and a monetized channel): by stream, CPM & co., Shorts vs long videos,
+ * into analytics_revenue_daily. Throws when YouTube refuses the revenue
+ * itself (the copy keeps that as the revenue note).
+ */
+async function youtubeRevenueDays(admin: Admin, acc: Account, token: string, start: string, end: string, currency: string): Promise<number> {
+  const base = { startDate: start, endDate: end, dimensions: "day", sort: "day", currency };
+  // Revenue by stream (ads, YouTube Premium; the rest is memberships, Supers, Shopping…).
+  let rev: Record<string, unknown>[];
+  let detailed = true;
   try {
-    for (const [k, v] of await youtubeTypeAverages(token, start, end)) {
-      const [day, content] = k.split("|");
-      put(day, content, v);
-    }
-  } catch {}
+    rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue,estimatedAdRevenue,estimatedRedPartnerRevenue,grossRevenue" }));
+  } catch {
+    detailed = false;
+    rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue" }));
+  }
+  const [money, split] = await Promise.all([
+    // CPM, playback-based CPM, ad impressions, monetized playbacks (0081; optional).
+    youtubeDailyMoney(token, start, end, currency).catch(() => new Map<string, Record<string, number | null>>()),
+    // Shorts vs long videos.
+    ytReport(token, { ...base, dimensions: "day,creatorContentType", metrics: "estimatedRevenue" })
+      .then(rowsOf)
+      .catch(() => [] as Record<string, unknown>[]),
+  ]);
+  const now = new Date().toISOString();
+  const recs: Record<string, unknown>[] = rev.map((r) => ({
+    team_id: acc.team_id,
+    platform: "youtube",
+    day: String(r.day),
+    content: "all",
+    revenue: num(r.estimatedRevenue) ?? 0,
+    currency,
+    updated_at: now,
+    ...(detailed ? { ad_revenue: num(r.estimatedAdRevenue), premium_revenue: num(r.estimatedRedPartnerRevenue), gross_revenue: num(r.grossRevenue) } : {}),
+    ...(money.get(String(r.day)) ?? {}),
+  }));
+  const byKey = new Map<string, number>();
+  for (const r of split) {
+    const type = String(r.creatorContentType ?? "");
+    const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" || type === "LIVE_STREAM" ? "long" : null;
+    if (!content) continue;
+    const k = `${r.day}|${content}`;
+    byKey.set(k, (byKey.get(k) ?? 0) + (num(r.estimatedRevenue) ?? 0));
+  }
+  for (const [k, v] of byKey) {
+    const [day, content] = k.split("|");
+    recs.push({ team_id: acc.team_id, platform: "youtube", day, content, revenue: v, currency, updated_at: now });
+  }
+  if (!recs.length) return 0;
   try {
-    for (const [day, m] of await youtubeDailyExtras(token, start, end)) put(day, "all", { metrics: m });
-  } catch {}
+    // Before migration 0081 there's no CPM & co., before 0061 no streams: then without them.
+    return await upsertSome(admin, "analytics_revenue_daily", recs, "team_id,platform,day,content", ["cpm", "playback_cpm", "ad_impressions", "monetized_playbacks"]);
+  } catch (e) {
+    if (!/ad_revenue|premium_revenue|gross_revenue|column/i.test(e instanceof Error ? e.message : "")) throw e;
+    return upsert(admin, "analytics_revenue_daily", recs.map(({ team_id, platform, day, content, revenue, currency, updated_at }) => ({ team_id, platform, day, content, revenue, currency, updated_at })), "team_id,platform,day,content");
+  }
+}
+
+/**
+ * YouTube's older numbers (1.21.0). The first copy fetches 90 days, so
+ * Lifetime used to start 90 days before the channel was connected. Each
+ * copy now goes further back while it has time, a year per report, newest
+ * first, until the channel's first day: the per-day totals, Shorts vs long
+ * videos, how views split (traffic sources, devices…) and the money. Where
+ * it got to is kept on analytics_syncs (history_from, history_done; 0085),
+ * so a long history takes a few copies. Days before the first views aren't
+ * saved (lib/history-math.ts).
+ */
+async function youtubeHistory(admin: Admin, acc: Account, token: string, o: { monetary: boolean; currency: string; deadline: number; adv: Advanced }): Promise<number> {
+  if (Date.now() > o.deadline) return 0;
+  const { data: s, error } = await admin.from("analytics_syncs").select("history_from, history_done").eq("team_id", acc.team_id).eq("platform", "youtube").maybeSingle();
+  if (error) return 0; // Before migration 0085: nowhere to keep how far it got.
+  const state = (s ?? null) as { history_from: string | null; history_done: boolean | null } | null;
+  if (state?.history_done) return 0;
+  let to = state?.history_from ? addDays(state.history_from, -1) : null;
+  if (!to) {
+    // Where the stored days start (the first copy's 90 days).
+    const { data: first } = await admin.from("analytics_daily").select("day").eq("team_id", acc.team_id).eq("platform", "youtube").eq("content", "all").order("day", { ascending: true }).limit(1);
+    const day = ((first ?? [])[0] as { day?: string } | undefined)?.day;
+    if (!day) return 0; // Nothing copied yet: the regular copy comes first.
+    to = addDays(day, -1);
+  }
+  // The channel's first day.
+  const ch = (await get(`${YT}/channels?part=snippet&mine=true`, token)) as { items?: { snippet?: { publishedAt?: string } }[] };
+  const born = String(ch.items?.[0]?.snippet?.publishedAt ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(born)) return 0;
+  const mark = (patch: Record<string, unknown>) => admin.from("analytics_syncs").update(patch).eq("team_id", acc.team_id).eq("platform", "youtube");
+  let rows = 0;
+  for (let chunk = historyChunk(to, born); chunk && Date.now() < o.deadline; chunk = historyChunk(addDays(chunk.from, -1), born)) {
+    const { from } = chunk;
+    const [daily, splits, money] = await Promise.all([
+      youtubeDays(token, acc, from, chunk.to),
+      // How views split per day (traffic sources, devices…), for the Audience tab and Advanced.
+      youtubeDailySplits(o.adv, token, from, chunk.to).catch(() => 0),
+      o.monetary ? youtubeRevenueDays(admin, acc, token, from, chunk.to, o.currency).catch(() => 0) : Promise.resolve(0),
+    ]);
+    const kept = historyRows([...daily.values()], from, chunk.to, { team_id: acc.team_id, platform: "youtube", updated_at: new Date().toISOString() });
+    if (kept.rows.length) rows += await upsertSome(admin, "analytics_daily", await keepStoredMetrics(admin, "analytics_daily", acc.team_id, "youtube", kept.rows), "team_id,platform,day,content", NEW_DAILY_COLS);
+    rows += splits + money;
+    await mark({ history_from: from });
+    if (from <= born) await mark({ history_done: true });
+  }
+  return rows;
+}
+
+async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links: Links, adv: Advanced): Promise<{ rows: number; revenueNote: string | null; note: string | null }> {
+  const token = await getAccessToken(acc.id);
+  const start = backfill ? daysAgo(90) : daysAgo(6);
+  const end = daysAgo(0);
+  let rows = 0;
+  const daily = await youtubeDays(token, acc, start, end);
+  const put = (day: string, content: string, v: Record<string, unknown>) => putDay(daily, acc, day, content, v);
 
   // Channel totals right now (subscribers, all-time views) on today's row.
   let videos: { id: string; publishedAt: string | null }[] = [];
@@ -200,55 +306,7 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
   const currency = (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase();
   if (monetary) {
     try {
-      const base = { startDate: start, endDate: end, dimensions: "day", sort: "day", currency };
-      // Revenue by stream (ads, YouTube Premium; the rest is memberships, Supers, Shopping…).
-      let rev: Record<string, unknown>[];
-      let detailed = true;
-      try {
-        rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue,estimatedAdRevenue,estimatedRedPartnerRevenue,grossRevenue" }));
-      } catch {
-        detailed = false;
-        rev = rowsOf(await ytReport(token, { ...base, metrics: "estimatedRevenue" }));
-      }
-      // CPM, playback-based CPM, ad impressions, monetized playbacks (0081; optional).
-      const money = await youtubeDailyMoney(token, start, end, currency).catch(() => new Map<string, Record<string, number | null>>());
-      const now = new Date().toISOString();
-      const recs: Record<string, unknown>[] = rev.map((r) => ({
-        team_id: acc.team_id,
-        platform: "youtube",
-        day: String(r.day),
-        content: "all",
-        revenue: num(r.estimatedRevenue) ?? 0,
-        currency,
-        updated_at: now,
-        ...(detailed ? { ad_revenue: num(r.estimatedAdRevenue), premium_revenue: num(r.estimatedRedPartnerRevenue), gross_revenue: num(r.grossRevenue) } : {}),
-        ...(money.get(String(r.day)) ?? {}),
-      }));
-      // Shorts vs long videos.
-      try {
-        const split = rowsOf(await ytReport(token, { ...base, dimensions: "day,creatorContentType", metrics: "estimatedRevenue" }));
-        const byKey = new Map<string, number>();
-        for (const r of split) {
-          const type = String(r.creatorContentType ?? "");
-          const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" || type === "LIVE_STREAM" ? "long" : null;
-          if (!content) continue;
-          const k = `${r.day}|${content}`;
-          byKey.set(k, (byKey.get(k) ?? 0) + (num(r.estimatedRevenue) ?? 0));
-        }
-        for (const [k, v] of byKey) {
-          const [day, content] = k.split("|");
-          recs.push({ team_id: acc.team_id, platform: "youtube", day, content, revenue: v, currency, updated_at: now });
-        }
-      } catch {}
-      if (recs.length) {
-        try {
-          // Before migration 0081 there's no CPM & co., before 0061 no streams: then without them.
-          rows += await upsertSome(admin, "analytics_revenue_daily", recs, "team_id,platform,day,content", ["cpm", "playback_cpm", "ad_impressions", "monetized_playbacks"]);
-        } catch (e) {
-          if (!/ad_revenue|premium_revenue|gross_revenue|column/i.test(e instanceof Error ? e.message : "")) throw e;
-          rows += await upsert(admin, "analytics_revenue_daily", recs.map(({ team_id, platform, day, content, revenue, currency, updated_at }) => ({ team_id, platform, day, content, revenue, currency, updated_at })), "team_id,platform,day,content");
-        }
-      }
+      rows += await youtubeRevenueDays(admin, acc, token, start, end, currency);
     } catch (e) {
       revenueNote = e instanceof Error ? `Revenue: ${e.message}` : "Revenue isn't available for this channel.";
     }
@@ -259,11 +317,21 @@ async function syncYouTube(admin: Admin, acc: Account, backfill: boolean, links:
   // traffic, each video's money.
   const left = () => Date.now() < adv.deadline;
   if (left()) rows += await youtubeDailySplits(adv, token, start, daysAgo(1)).catch(() => 0);
+  // The channel's older years (1.21.0) come before the slower extras, until
+  // they're all in: Lifetime starts when the channel did. A little past the
+  // shared deadline, so it gets somewhere on a busy morning too.
+  rows += await youtubeHistory(admin, acc, token, { monetary, currency, deadline: adv.deadline + HISTORY_EXTRA_MS, adv }).catch((e) => {
+    console.error("[analytics history]", e instanceof Error ? e.message : e);
+    return 0;
+  });
   if (left()) rows += await youtubeWindows(adv, token, daysAgo(1)).catch(() => 0);
   if (left()) rows += await youtubeVideoDetails(adv, token, videos, backfill ? 10 : 6).catch(() => 0);
   if (left() && monetary && videos.length) rows += await youtubeVideoRevenue(adv, token, videos.map((v) => v.id), currency).catch(() => 0);
   return { rows, revenueNote, note: countryError ? `countries: ${countryError}` : null };
 }
+
+/** How far past the copy's shared deadline YouTube's history may start one more year's reports. */
+const HISTORY_EXTRA_MS = 8_000;
 
 export type YtVideo = { id: string; snippet?: { title?: string; publishedAt?: string; thumbnails?: Record<string, { url?: string }> }; statistics?: Record<string, string>; contentDetails?: { duration?: string } };
 
@@ -480,6 +548,110 @@ export async function fetchYouTubeDay(teamId: string, day: string): Promise<bool
   const token = await getAccessToken(acc.id as string);
   await syncYouTubeVideoDays(admin, acc as Account, token, [day], await linksFor(admin, teamId));
   return true;
+}
+
+/** The connected YouTube account whose numbers these are, with a token (null: none, no stats permission, or another account's numbers). */
+async function youtubeFor(teamId: string, needMoney = false): Promise<{ acc: Account; token: string } | null> {
+  const admin = createAdminClient();
+  const { data: acc } = await admin.from("social_accounts").select("id, team_id, platform, external_id, scopes, username, display_name").eq("team_id", teamId).eq("platform", "youtube").eq("status", "active").maybeSingle();
+  if (!acc || !hasStatsScopes("youtube", (acc.scopes as string[] | null) ?? [])) return null;
+  if (needMoney && !((acc.scopes as string[] | null) ?? []).includes(STATS_SCOPES.youtube[1])) return null;
+  const { data: s } = await admin.from("analytics_syncs").select("account_ref").eq("team_id", teamId).eq("platform", "youtube").maybeSingle();
+  if (s && !sameAccount((s as { account_ref?: string | null }).account_ref ?? null, { externalId: acc.external_id as string, name: ((acc.username as string | null) ?? (acc.display_name as string | null)) ?? null })) return null;
+  return { acc: acc as Account, token: await getAccessToken(acc.id as string) };
+}
+
+/**
+ * One video's own story from YouTube, for its analytics page (1.21.0): its
+ * splits since it was posted (where its views came from, who watched, on
+ * what, where it was shared; analytics_breakdowns, span 0) and its numbers
+ * per day with subscribers and the average view (analytics_content_days).
+ * Returns the rows saved, or -1 when there's no YouTube account to ask.
+ */
+export async function fetchYouTubeVideoDetails(teamId: string, id: string): Promise<number> {
+  const yt = await youtubeFor(teamId);
+  if (!yt) return -1;
+  const admin = createAdminClient();
+  const { data: c } = await admin.from("analytics_content").select("published_at").eq("team_id", teamId).eq("platform", "youtube").eq("external_id", id).maybeSingle();
+  const end = daysAgo(0);
+  const posted = typeof c?.published_at === "string" ? (c.published_at as string).slice(0, 10) : daysAgo(365);
+  const start = posted > end ? end : posted;
+  // Day by day: up to 3 years (the page's charts).
+  const dayStart = start < daysAgo(1095) ? daysAgo(1095) : start;
+  const adv: Advanced = { admin, teamId, deadline: Date.now() + 20_000 };
+  const [splits, days] = await Promise.all([youtubeVideoSplits(adv, yt.token, id, start, end).catch(() => 0), youtubeVideoDays(admin, teamId, yt.token, id, dayStart, daysAgo(1)).catch(() => 0)]);
+  return splits + days;
+}
+
+/** One video's numbers per day, with subscribers and the average view (days without views between the first and the last are 0). */
+async function youtubeVideoDays(admin: Admin, teamId: string, token: string, id: string, from: string, to: string): Promise<number> {
+  if (from > to) return 0;
+  const r = await ytFirst(token, { startDate: from, endDate: to, dimensions: "day", filters: `video==${id}`, sort: "day" }, [
+    "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares,subscribersGained",
+    "views,estimatedMinutesWatched,averageViewDuration,likes,comments,shares",
+    "views,estimatedMinutesWatched",
+  ]);
+  if (!r?.rows.length) return 0;
+  const has = new Set(r.metrics.split(","));
+  const got = new Map(r.rows.map((x) => [String(x.day), x]));
+  const days = [...got.keys()].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  if (!days.length) return 0;
+  const now = new Date().toISOString();
+  const recs = dayRange(days[0], days[days.length - 1]).map((day) => {
+    const x = got.get(day);
+    const val = (metric: string) => (has.has(metric) ? (x ? (num(x[metric]) ?? 0) : 0) : undefined);
+    const rec: Record<string, unknown> = { team_id: teamId, platform: "youtube", external_id: id, day, source: "daily", views: val("views") ?? 0, watch_minutes: val("estimatedMinutesWatched") ?? null, updated_at: now };
+    for (const [metric, col] of [["likes", "likes"], ["comments", "comments"], ["shares", "shares"], ["subscribersGained", "subscribers_gained"]] as const) {
+      const v = val(metric);
+      if (v !== undefined) rec[col] = v;
+    }
+    // The average view only on days with views (a 0 would read as "nobody watched any of it").
+    if (has.has("averageViewDuration")) rec.avg_view_seconds = x && (num(x.views) ?? 0) > 0 ? num(x.averageViewDuration) : null;
+    return rec;
+  });
+  // Before migration 0085 there's no subscribers or average view per day: then without them.
+  return upsertSome(admin, "analytics_content_days", recs, "team_id,platform,external_id,day", ["subscribers_gained", "avg_view_seconds"]);
+}
+
+/** One video's money per day from `from` to `to` (1.21.0, its page's Revenue tab): asked from YouTube each time. Null: no account with the money permission. */
+export async function fetchYouTubeVideoRevenueDays(teamId: string, id: string, from: string, to: string, currency: string): Promise<{ day: string; revenue: number; adRevenue: number | null; cpm: number | null; playbackCpm: number | null; monetizedPlaybacks: number | null }[] | null> {
+  const yt = await youtubeFor(teamId, true);
+  if (!yt) return null;
+  const r = await ytFirst(yt.token, { startDate: from, endDate: to, dimensions: "day", filters: `video==${id}`, sort: "day", currency }, [
+    "estimatedRevenue,estimatedAdRevenue,cpm,playbackBasedCpm,monetizedPlaybacks",
+    "estimatedRevenue,estimatedAdRevenue",
+    "estimatedRevenue",
+  ]);
+  if (!r) throw new ApiError("YouTube didn't send this video's revenue per day this time.");
+  return r.rows.map((x) => ({ day: String(x.day), revenue: num(x.estimatedRevenue) ?? 0, adRevenue: num(x.estimatedAdRevenue), cpm: num(x.cpm), playbackCpm: num(x.playbackBasedCpm), monetizedPlaybacks: num(x.monetizedPlaybacks) }));
+}
+
+export type RevenueVideoRow = { id: string; revenue: number; views: number | null; title: string | null; thumbnail: string | null; publishedAt: string | null; durationSec: number | null };
+
+/**
+ * The videos that made YouTube's money from `from` to `to` (1.21.0: a day,
+ * week or month clicked on Revenue's chart): estimated revenue per video,
+ * biggest first (YouTube's top 25), with their views then, titles and
+ * pictures. Asked from YouTube each time: money isn't kept per video and
+ * day. Null when there's no YouTube account with the money permission.
+ */
+export async function fetchYouTubeRevenueVideos(teamId: string, from: string, to: string, currency: string): Promise<RevenueVideoRow[] | null> {
+  const yt = await youtubeFor(teamId, true);
+  if (!yt) return null;
+  const r = await ytFirst(yt.token, { startDate: from, endDate: to, dimensions: "video", sort: "-estimatedRevenue", maxResults: "25", currency }, ["estimatedRevenue,views", "estimatedRevenue"]);
+  if (!r) throw new ApiError("YouTube didn't send the revenue per video this time.");
+  const rows = r.rows.map((x) => ({ id: String(x.video ?? ""), revenue: num(x.estimatedRevenue) ?? 0, views: num(x.views) })).filter((x) => x.id && x.revenue > 0);
+  const info = new Map((await ytVideos(yt.token, rows.map((x) => x.id)).catch(() => [] as YtVideo[])).map((v) => [v.id, v]));
+  return rows.map((x) => {
+    const v = info.get(x.id);
+    return {
+      ...x,
+      title: v?.snippet?.title ?? null,
+      thumbnail: v?.snippet?.thumbnails?.medium?.url ?? v?.snippet?.thumbnails?.default?.url ?? null,
+      publishedAt: v?.snippet?.publishedAt ?? null,
+      durationSec: isoDuration(v?.contentDetails?.duration),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1187,12 +1359,17 @@ export async function syncTeamAnalytics(teamId: string, o: { only?: SocialPlatfo
  */
 const CATCH_UP_AFTER_HOURS = 30;
 const recentCatchUps = new Map<string, number>();
+// Looked at lately and not overdue (per server): Analytics' pages don't ask again for 5 minutes (1.21.0).
+const recentChecks = new Map<string, number>();
 
 /** Is this team's copy overdue? If so, claims it (so only one visitor starts one) and says yes. */
 export async function claimAnalyticsCatchUp(teamId: string): Promise<boolean> {
   try {
     const now = Date.now();
     if ((recentCatchUps.get(teamId) ?? 0) > now - 10 * 60_000) return false;
+    if ((recentChecks.get(teamId) ?? 0) > now - 5 * 60_000) return false;
+    recentChecks.set(teamId, now);
+    if (recentChecks.size > 5000) recentChecks.clear();
     const admin = createAdminClient();
     const [{ data: accounts }, { data: syncs }] = await Promise.all([
       admin.from("social_accounts").select("platform, scopes").eq("team_id", teamId).eq("status", "active"),

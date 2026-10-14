@@ -171,6 +171,17 @@ for (let d = OBJ ? -90 : -60; d <= LAST_DAY; d++) {
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "all", views: yt, watch_minutes: Math.round(yt * 0.55), avg_view_seconds: 31, likes: Math.round(yt * 0.04), comments: Math.round(yt * 0.003), shares: Math.round(yt * 0.002), saves: null, reach: null, followers_gained: Math.round(120 + 60 * rnd()), followers_lost: Math.round(20 + 10 * rnd()), followers: d === 0 ? 182400 : null, total_views: d === 0 ? 48200000 : null, total_likes: null });
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "shorts", views: Math.round(yt * 0.72) });
   daily.push({ team_id: TEAM, platform: "youtube", day: dd, content: "long", views: Math.round(yt * 0.28) });
+  // Impressions and CTR per day (0083; MOCK_NO_REACH=1: none yet): Shorts click less than long videos.
+  if (!process.env.MOCK_NO_REACH) {
+    const [ytAll, ytS, ytL] = daily.slice(-3);
+    const iS = Math.round(yt * 0.72 * 4);
+    const iL = Math.round(yt * 0.28 * 12);
+    const cS = Math.round((2.6 + 0.6 * rnd()) * 100) / 100;
+    const cL = Math.round((5.2 + 1.1 * Math.sin(d / 6) + 0.8 * rnd()) * 100) / 100;
+    Object.assign(ytS, { impressions: iS, ctr: cS });
+    Object.assign(ytL, { impressions: iL, ctr: cL });
+    Object.assign(ytAll, { impressions: iS + iL, ctr: Math.round(((iS * cS + iL * cL) / (iS + iL)) * 100) / 100 });
+  }
   daily.push({ team_id: TEAM, platform: "instagram", day: dd, content: "all", views: ig, likes: Math.round(ig * 0.05), comments: Math.round(ig * 0.004), shares: Math.round(ig * 0.003), saves: Math.round(ig * 0.006), reach: Math.round(ig * 0.7), followers: 64000 + (d + 60) * 12, followers_gained: null, followers_lost: null, watch_minutes: null, total_views: null, total_likes: null });
   // MOCK_TT_FIRST=1: TikTok was just connected (one copy, today).
   if (!process.env.MOCK_TT_FIRST || d === 0) daily.push({ team_id: TEAM, platform: "tiktok", day: dd, content: "all", followers: 120000 + (d + 60) * 40, total_views: 9000000 + (d + 60) * 9500 + Math.round(4000 * rnd()), total_likes: 700000 + (d + 60) * 600, views: null });
@@ -191,7 +202,7 @@ const TODAY_N = OBJ ? LAST_DAY + 1 : 0;
 for (let d = 1; d <= 28; d++)
   for (const c of contentRows.filter((r) => r.platform === "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d))) {
     const v = Math.round((c.views / 30) * (0.35 + rnd()) * (c.kind === "long" ? 1.6 : 1));
-    contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: day(TODAY_N - d), source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+    contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: day(TODAY_N - d), source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), subscribers_gained: Math.round(v * (c.kind === "long" ? 0.004 : 0.0012)), avg_view_seconds: c.kind === "long" ? 240 + Math.round(rnd() * 80) : 21 + Math.round(rnd() * 6), impressions: Math.round(v * (c.kind === "long" ? 14 : 1.1)), ctr: c.kind === "long" ? Math.round((5 + rnd() * 3) * 10) / 10 : null, updated_at: at(TODAY_N, 8) });
   }
 for (let d = 0; d <= 6; d++)
   for (const c of contentRows.filter((r) => r.platform !== "youtube" && r.published_at.slice(0, 10) <= day(TODAY_N - d)))
@@ -243,7 +254,7 @@ const LIVE = require("./live.cjs").liveFixtures({ TEAM, contentRows });
       run += v;
       const d = new Date((dnum(start) + a) * 86400000).toISOString().slice(0, 10);
       if (c.platform === "youtube") {
-        if (a <= 120) contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: d, source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), updated_at: at(TODAY_N, 8) });
+        if (a <= 120) contentDays.push({ team_id: TEAM, platform: "youtube", external_id: c.external_id, day: d, source: "daily", views: v, watch_minutes: Math.round(v * (c.kind === "long" ? 4.1 : 0.35)), likes: Math.round(v * 0.04), comments: Math.round(v * 0.004), shares: Math.round(v * 0.003), subscribers_gained: Math.round(v * (c.kind === "long" ? 0.004 : 0.0012)), avg_view_seconds: c.kind === "long" ? 240 + Math.round(rnd() * 80) : 21 + Math.round(rnd() * 6), impressions: Math.round(v * (c.kind === "long" ? 14 : 1.1)), ctr: c.kind === "long" ? Math.round((5 + rnd() * 3) * 10) / 10 : null, updated_at: at(TODAY_N, 8) });
       } else if (dnum(last) - dnum(d) <= 12) {
         // The morning copy of the next day saw the total up to the end of this one.
         const next = new Date((dnum(d) + 1) * 86400000).toISOString().slice(0, 10);
@@ -430,6 +441,35 @@ module.exports = {
     // Realtime (0083): views per hour and per video from the live counts.
     analytics_live_hours: (b) => LIVE.hours(b),
     analytics_live_gains: (b) => LIVE.gains(b),
+    analytics_live_buckets: (b) => LIVE.buckets(b),
+    // The search bar (no projects or people in the mock's search: its videos come from searchVideos).
+    global_search: () => ({ people: [], projects: [], shorts: [], teams: [], master_teams: [] }),
+    // The Overview's top content (0084): YouTube's own days, the others' running totals.
+    analytics_top_content: (b) => {
+      const [a, z] = [b.p_from, b.p_to].sort();
+      const next = new Date(Date.parse(`${z}T00:00:00Z`) + 86400e3).toISOString().slice(0, 10);
+      const want = (p) => !b.p_platforms || b.p_platforms.includes(p);
+      const out = new Map();
+      const totals = new Map();
+      for (const r of contentDays) {
+        if (r.team_id !== b.p_team || !want(r.platform)) continue;
+        const k = `${r.platform}|${r.external_id}`;
+        if (r.source === "daily" && r.day >= a && r.day <= z) out.set(k, (out.get(k) ?? 0) + (r.views ?? 0));
+        if (r.source === "total" && r.views !== null && r.day >= a && r.day <= next) totals.set(k, [...(totals.get(k) ?? []), r]);
+      }
+      for (const [k, list] of totals) {
+        list.sort((x, y) => x.day.localeCompare(y.day));
+        const [platform, id] = k.split("|");
+        const c = contentRows.find((x) => x.platform === platform && x.external_id === id);
+        const base = c?.published_at && c.published_at.slice(0, 10) >= a ? 0 : list[0].views;
+        out.set(k, Math.max(0, list[list.length - 1].views - base));
+      }
+      return [...out.entries()]
+        .filter(([, v]) => v > 0)
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, Math.min(100, Math.max(1, b.p_limit ?? 10)))
+        .map(([k, v]) => ({ platform: k.split("|")[0], external_id: k.split("|")[1], views: v, from_totals: !k.startsWith("youtube|") }));
+    },
     // Advanced (0081): the per-day splits added up over a range.
     analytics_breakdown_sums: (b) => {
       const sums = new Map();

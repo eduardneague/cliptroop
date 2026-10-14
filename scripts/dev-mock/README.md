@@ -40,8 +40,14 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_LIVE_FRESH=1 realtime started 3 hours ago, MOCK_NO_REACH=1 no impressions / CTR yet (the YouTube
 #    Reporting API isn't on: Analytics says so)
 #    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
-#    every 10 minutes for the busiest videos), and Analytics → Advanced's sample numbers (advanced.cjs: splits, retention curves, each video's
-#    money, more videos per platform with patterns to find, hooks in their scripts); with MOCK_FILES=1 the
+#    every 10 minutes for the busiest videos; 0084's 10-minute slots and top content work out the
+#    same way as the database), YouTube's impressions and CTR per day (Shorts and long videos apart),
+#    the app search's `global_search` (empty: its videos come from searchVideos), and Analytics → Advanced's sample numbers (advanced.cjs: splits, retention curves, each video's
+#    money, more videos per platform with patterns to find, hooks in their scripts; 1.21.0: the channel's
+#    whole-life windows (span 0) and views by country for every window, and the 12 newest YouTube videos'
+#    own splits for their pages' Reach and Audience tabs; YouTube's per-video days carry subscribers, the
+#    average view and impressions). Calls to YouTube itself (a video's details, Revenue's videos of a day)
+#    fail in the mock: the pages show their error or waiting states; with MOCK_FILES=1 the
 #    versions have a frames_path (the mock has no image for it: stub `**/storage/v1/object/**/video-frames/**`
 #    and `**/api/analytics/thumb**` with page.route in Playwright to test Download for Claude's PDF).
 node scripts/dev-mock/server.cjs
@@ -51,6 +57,7 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY=du
 SUPABASE_SERVICE_ROLE_KEY=dummy FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD npx next dev -p 3456
 
 # 3. a signed-in screenshot (Playwright): path, file name, width, height, dark, full|view
+#    (with MOCK_OBJECTIVES=1 the analytics numbers run up to the real "now": better for Analytics shots)
 node scripts/dev-mock/shot.cjs /shorts shorts 1440 900 "" full
 
 # 4. open every page signed in: status code, time, browser errors, error screens

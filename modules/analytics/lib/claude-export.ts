@@ -23,6 +23,8 @@ export type ClaudeExportOptions = {
   top: number;
   scripts: boolean;
   revenue: boolean;
+  /** Lifetime and custom ranges: their first day (1.20.0). */
+  start?: string | null;
 };
 
 export type ClaudeExportData = {
@@ -46,7 +48,7 @@ const MAX_PER_PLATFORM = 200;
 
 export async function gatherClaudeExport(teamId: string, team: { name: string; tz: string }, o: ClaudeExportOptions, today: string): Promise<ClaudeExportData> {
   const supabase = await createClient();
-  const w = windowFor(o.range, today);
+  const w = windowFor(o.range, today, o.start);
   const [allowed, status] = await Promise.all([o.revenue ? canViewRevenue(supabase, teamId) : Promise.resolve(false), getPlatformStatus(teamId)]);
   const list: AdvancedData[] = [];
   for (const platform of o.platforms) {

@@ -1,6 +1,6 @@
 // "What works" (1.16.0): patterns found in a team's own videos, only with
 // enough videos and a clear difference, worded with the numbers behind them.
-import { crossPlatform, findPatterns, hookOpening, median, textFeatures, topVsRest, type PatternVideo } from "../modules/analytics/lib/patterns";
+import { crossPlatform, findPatterns, hookOpening, median, sidesOf, textFeatures, topVsRest, typicalOf, type PatternVideo } from "../modules/analytics/lib/patterns";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -113,6 +113,22 @@ const cp = crossPlatform(cross, NOW);
 ok(!!cp && cp.title === "The same shorts get 4.0× more views on YouTube than on TikTok", `cross-platform (got "${cp?.title}")`);
 ok(!!cp && cp.detail.startsWith("Median views of the shorts posted on more than one platform: YouTube 40K (4) · Instagram 20K (4) · TikTok 10K (4)"), `cross-platform detail (got "${cp?.detail}")`);
 ok(crossPlatform(cross.slice(0, 6), NOW) === null, "fewer than 3 shorts on two platforms: nothing");
+
+// 1.21.0: each finding's Examples: typical videos from both sides (the closest to each side's middle), newest first.
+ok(!!len?.sides && len.sides.fit.label === "Shorts under 20 seconds" && len.sides.rest.label === "Other shorts", `the sides are named (got "${len?.sides?.fit.label}" / "${len?.sides?.rest.label}")`);
+ok(!!len?.sides && len.sides.fit.videos.length === 5 && len.sides.rest.videos.length === 5, "five examples a side");
+ok(!!len?.sides && len.sides.fit.median === 43_000 && len.sides.rest.median === 11_500, `each side's middle (got ${len?.sides?.fit.median} / ${len?.sides?.rest.median})`);
+ok(!!len?.sides && len.sides.fit.videos.every((v) => v.durationSec === 15) && len.sides.rest.videos.every((v) => v.durationSec === 50), "each side's videos are its own");
+ok(!!len?.sides && len.sides.fit.videos.every((v, i, a) => i === 0 || (a[i - 1].publishedAt ?? "") >= (v.publishedAt ?? "")), "newest first");
+ok(!!q?.sides && q.sides.rest.label === "Titles without a question", `a binary split's other side (got "${q?.sides?.rest.label}")`);
+ok(!!mom?.sides && /^Your latest \d+$/.test(mom.sides.fit.label), `momentum: the latest next to the ones before (got "${mom?.sides?.fit.label}")`);
+// Typical, not the best: the ones nearest the middle.
+const spread = [1_000, 9_000, 10_000, 11_000, 12_000, 13_000, 90_000].map((views, i) => vid({ views, publishedAt: ago(10 + i) }));
+const typ = typicalOf(spread, 3).map((v) => v.views).sort((a, b) => (a ?? 0) - (b ?? 0));
+ok(typ.join() === "10000,11000,12000", `the middle three, not the extremes (got ${typ.join()})`);
+ok(typicalOf([], 5).length === 0 && typicalOf([vid({ views: null })], 5).length === 0, "no views: no examples");
+const sd = sidesOf({ label: "A", members: spread.slice(0, 3) }, { label: "B", members: [vid({ views: 5, subscribersGained: 1, hook: "Why? Because.", thumbnail: "https://x/y.jpg" })] });
+ok(sd.rest.videos[0].hook === "Why?" && sd.rest.videos[0].thumbnail === "https://x/y.jpg" && sd.rest.videos[0].subsPer1k === 200, "an example carries its hook's opening, picture and subscribers per 1,000");
 
 if (fails) {
   console.log(`${fails} failed`);

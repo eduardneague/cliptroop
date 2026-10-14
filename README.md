@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.19.0" src="https://img.shields.io/badge/version-1.19.0-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.21.0" src="https://img.shields.io/badge/version-1.21.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -102,14 +102,21 @@ and anything that goes wrong is explained, with a retry.
 
 ### See what worked
 
-Views, watch time, followers and revenue from every platform, where your
-audience is, and how much the team made, side by side. Every video's counts
-within minutes (the last 48 hours hour by hour, the last 60 minutes, what's
-getting views right now) and YouTube's impressions and click-through rate.
-Advanced has every number the platforms share (retention, traffic sources,
-search terms, who's watching), your best performing videos and What works,
-the patterns in your own videos. Every video has its own page: how it did
-next to your typical one, day by day, and where its views came from.
+Analytics in tabs, like YouTube Studio. The Overview puts the numbers that
+matter (views, watch time, followers, engagement, impressions, CTR, revenue)
+on cards that switch one powerful chart: every platform together or side by
+side, YouTube's Shorts next to its long videos, from the last 48 hours hour
+by hour to your channel's whole history since its first day, with the videos
+posted on each day marked. Beside it, what's happening right now. Realtime
+shows every video's counts within minutes (the last 48 hours or the last
+hour), Audience who's watching and where, Content every video with its
+numbers, Revenue which videos made each day's money, and Insights every hint
+in one place, each with examples from your own videos: what changed lately,
+what works and the best time to post. Advanced has every number the
+platforms share in its own tabs, and every video has its own page with
+YouTube Studio's tabs (Overview, Reach, Engagement, Audience, Revenue): how
+it did next to your typical one, where its views came from, who watched,
+and its views right now.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/readme/scene-measure-dark.png">
@@ -128,7 +135,7 @@ next to your typical one, day by day, and where its views came from.
 - **Download for Claude**: Your numbers, hooks, thumbnails and opening frames in a text file and a PDF to drop into a chat with Claude (the free plan works) and ask what works.
 - **Your dashboard**: Widgets you arrange, from today's tasks and the calendar to what's posting, the numbers and the team's goals.
 - **Thumbnail studio**: Thumbnail ideas side by side, so the team can pick the winner.
-- **Search**: Any video, script or person, from anywhere.
+- **Search**: Any video (with its numbers), script or person, from anywhere.
 - **Status**: A public page that shows whether everything is running, hour by hour.
 
 <br>
