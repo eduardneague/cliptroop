@@ -1021,3 +1021,13 @@ export function WidthIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A page break (1.23.1): the end of one page, a dashed line, the top of the next. */
+export function PageBreakIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M6 3v5.5h12V3M6 21v-5.5h12V21" />
+      <path d="M3 12h2.5M9 12h2.5M15 12h2.5M21 12h-.5" />
+    </Svg>
+  );
+}

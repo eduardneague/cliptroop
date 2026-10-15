@@ -404,8 +404,9 @@ export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks
                 </div>
                 {list.map((d) => (
                   <Link key={d.id} href={d.href} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2/70">
-                    <span className="w-[26px] h-[26px] rounded-[6px] bg-green/12 text-green flex items-center justify-center flex-shrink-0">
-                      <CheckIcon className="w-3 h-3" />
+                    {/* (1.23.1) The calendar's posted tick: filled, in the green of a finished step. */}
+                    <span className="w-[26px] h-[26px] rounded-[6px] text-white flex items-center justify-center flex-shrink-0" style={{ background: "rgb(var(--teal))" }} aria-label="Done">
+                      <CheckIcon className="w-3.5 h-3.5" />
                     </span>
                     <span className="min-w-0 flex-1 leading-tight">
                       <span className="block text-[13px] font-semibold truncate">{d.action}</span>
@@ -429,7 +430,7 @@ export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks
 function Empty({ text }: { text: string }) {
   return (
     <div className="h-full min-h-[80px] flex flex-col items-center justify-center gap-1.5 text-center">
-      <span className="w-7 h-7 rounded-lg bg-green/12 text-green flex items-center justify-center">
+      <span className="w-7 h-7 rounded-lg text-white flex items-center justify-center" style={{ background: "rgb(var(--teal))" }}>
         <CheckIcon className="w-3.5 h-3.5" />
       </span>
       <p className="text-[12.5px] text-ink-soft">{text}</p>

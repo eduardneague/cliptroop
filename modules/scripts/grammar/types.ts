@@ -63,6 +63,12 @@ export type Suggestion = Finding & {
   original: string;
   /** Stays the same while the words around it do: what "Dismiss" remembers. */
   sig: string;
+  /**
+   * 1.23.1: a spelling suggestion on what looks like a name or a brand (a
+   * capital inside a sentence, all capitals, a capital in the middle, a
+   * digit): Accept all leaves it to you (or the dictionary).
+   */
+  name?: boolean;
 };
 
 export type Formality = "informal" | "neutral" | "formal";

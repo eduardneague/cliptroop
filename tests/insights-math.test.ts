@@ -37,17 +37,22 @@ ok(momentumAlerts([{ platform: "youtube", views: [...Array(7).fill(null), ...Arr
 const vids: InsightVideo[] = [
   vid({ daysAgo: 2, score: 4.2, views: 9000, title: "Taking off" }),
   vid({ daysAgo: 30, score: 5, views: 20000, title: "Old hit" }),
-  ...[4, 6, 8, 10, 12].map((d) => vid({ platform: "tiktok", daysAgo: d, score: 0.5 })),
+  ...[10, 12, 14, 16, 18].map((d) => vid({ platform: "tiktok", daysAgo: d, score: 0.5 })),
 ];
 const b = breakoutAlerts(vids, now);
 ok(b.length === 1 && /Taking off/.test(b[0].title) && b[0].video?.platform === "youtube", "a new video at 4.2× is taking off (an old hit isn't news)");
 const s = slumpAlerts(vids, now);
 ok(s.length === 1 && s[0].platform === "tiktok" && s[0].tone === "bad", "the last 5 TikToks all under the usual");
-ok(slumpAlerts([...vids, vid({ platform: "tiktok", daysAgo: 3.5, score: 1.1 })], now).length === 0, "one at the usual breaks the run");
+ok(slumpAlerts([...vids, vid({ platform: "tiktok", daysAgo: 10.5, score: 1.1 })], now).length === 0, "one at the usual breaks the run");
+// 1.23.1: young videos are measured against older ones' whole lives: not a slump.
+ok(slumpAlerts([4, 5, 6, 7, 8].map((d) => vid({ platform: "instagram", daysAgo: d, score: 0.5 })), now).length === 0, "videos under 10 days old don't make a slump");
 const regular = [20, 22, 24, 26, 28, 30, 32].map((d) => vid({ kind: "long", daysAgo: d }));
 const g = gapAlerts(regular, now);
 ok(g.length === 1 && /20 days/.test(g[0].title) && /every 2 days/.test(g[0].detail), `a 20-day break when the usual is 2 (got ${g[0]?.title} / ${g[0]?.detail})`);
 ok(gapAlerts([2, 4, 6, 8, 10, 12].map((d) => vid({ daysAgo: d })), now).length === 0, "posting as usual: no alert");
+// 1.23.1: a kind stopped long ago (148 days after one every 2 days) isn't a nudge.
+ok(gapAlerts([148, 150, 152, 154, 156, 158, 160].map((d) => vid({ kind: "live", daysAgo: d })), now).length === 0, "a kind left behind long ago: no alert");
+ok(/Your last 7 came out about every 2 days/.test(g[0]?.detail ?? ""), `the detail says what it's based on (got ${g[0]?.detail})`);
 
 // CTR, followers.
 ok(ctrAlert(4.1, 5.6, 50_000)?.tone === "bad", "CTR down 1.5 points");

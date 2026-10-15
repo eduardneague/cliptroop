@@ -44,6 +44,7 @@ import {
   UnderlineIcon,
   UndoIcon,
   MoreIcon,
+  PageBreakIcon,
   WidthIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
@@ -51,9 +52,9 @@ import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMar
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
 import { HeadingKeys } from "../lib/heading-keys";
-import { PageBreaks, pagesKey, usePages } from "./use-pages";
+import { caretNear, PagePlaces, pagesKey, usePages } from "./use-pages";
+import { PageBreak } from "../lib/page-break";
 import { LinkCard, LinkWindow, openInTab } from "./link-ui";
-import { PagesGrid } from "./pages-grid";
 import { fixHeadings, smallHeadingsToH3 } from "../lib/headings";
 import { useGrammar, type Grammar } from "../grammar/use-grammar";
 import { GrammarLayer, GrammarToolbarButton } from "../grammar/grammar-ui";
@@ -106,6 +107,10 @@ const PAPER_KEY = "vp:script-paper";
 const VIEW_KEY = "vp:script-view";
 const WIDTH_KEY = "vp:script-width";
 const GRID_KEY = "vp:script-grid";
+/** "Ctrl+" (or "⌘" on a Mac) in the shortcuts shown. */
+const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
+/** The app's own bar at the top of every page (h-14). */
+const APP_BAR = 56;
 /** A4 is 1 : √2. Page height follows the paper's width. */
 const A4_RATIO = 1123 / 794;
 /** An A4 page's width on screen, and the space between two pages. */
@@ -233,6 +238,8 @@ export function ScriptEditor({
 
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  /** The paper's whole width in its own pixels (set below, read by the listeners). */
+  const frameRef = useRef<() => number>(() => 600);
   const [uploading, setUploading] = useState(0);
 
   const versionRef = useRef(initialVersion);
@@ -371,7 +378,9 @@ export function ScriptEditor({
       CommentHighlights(() => commentStateRef.current),
       Placeholder.configure({ placeholder: canEdit ? "Start writing the script…" : "No script written yet." }),
       HeadingKeys,
-      PageBreaks,
+      // Ctrl+Enter: a new page (1.23.1); Pages and Grid move each block onto its page.
+      PageBreak,
+      PagePlaces,
       // Writing suggestions (1.23.0): only where you can write.
       ...(canEdit ? [GrammarMarks] : []),
     ],
@@ -523,8 +532,10 @@ export function ScriptEditor({
     commentStateRef.current = { comments, active: activeCommentId, pending };
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(commentKey, true));
   }, [comments, activeCommentId, editor, drafting, sel, draftKind, posting]);
-  // The commenters' photos next to the lines they commented on (1.23.0).
-  const [faces, setFaces] = useState<{ top: number; list: CommentMark[] }[]>([]);
+  // The commenters' photos next to the lines they commented on (1.23.0), in
+  // the right margin of the page the line is on (1.23.1: Grid's pages too).
+  const [faces, setFaces] = useState<{ top: number; left: number | null; list: CommentMark[] }[]>([]);
+  const pageGeo = useRef({ paged, pageW: PAGE_W, gap: PAGE_GAP });
   useEffect(() => {
     if (!editor) return;
     let raf = 0;
@@ -535,35 +546,44 @@ export function ScriptEditor({
         if (!paperEl || editor.isDestroyed) return;
         const box = paperEl.getBoundingClientRect();
         const z = scaleRef.current || 1;
-        const rows: { top: number; list: CommentMark[] }[] = [];
+        const g = pageGeo.current;
+        const rows: { top: number; left: number | null; list: CommentMark[] }[] = [];
         for (const c of comments) {
           if (c.resolved) continue;
           const el = paperEl.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(c.id)}"]`);
           if (!el) continue;
           const r = el.getBoundingClientRect();
-          // Centred on the line the comment starts on; one row per line.
+          // Centred on the line the comment starts on; one row per line (per page).
           const top = (r.top - box.top) / z + (r.height / z - 24) / 2;
-          const row = rows.find((x) => Math.abs(x.top - top) < 16);
+          const col = g.paged ? Math.max(0, Math.floor((r.left - box.left) / z / (g.pageW + g.gap))) : 0;
+          const left = g.paged ? col * (g.pageW + g.gap) + g.pageW - 40 : null;
+          const row = rows.find((x) => x.left === left && Math.abs(x.top - top) < 16);
           if (row) row.list.push(c);
-          else rows.push({ top, list: [c] });
+          else rows.push({ top, left, list: [c] });
         }
         setFaces(rows);
       });
     };
     measure();
     editor.on("update", measure);
+    // (The pages moved the text: the photos follow.)
+    const onTx = ({ transaction }: { transaction: Transaction }) => {
+      if (transaction.getMeta(pagesKey)) measure();
+    };
+    editor.on("transaction", onTx);
     const ro = new ResizeObserver(measure);
     if (contentRef.current) ro.observe(contentRef.current);
     window.addEventListener("resize", measure);
     return () => {
       cancelAnimationFrame(raf);
       editor.off("update", measure);
+      editor.off("transaction", onTx);
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
   }, [editor, comments, shown, switching]);
-  const openFace = (id: string, top: number) => {
-    const w = paperRef.current?.clientWidth ?? 600;
+  const openFace = (id: string, top: number, left: number | null) => {
+    const w = left !== null ? left + 40 : (paperRef.current?.clientWidth ?? 600);
     if (renderCommentPopover) setPop({ id, top: top + 32, left: Math.max(8, w - 312) });
     else onCommentClick?.(id);
   };
@@ -596,7 +616,7 @@ export function ScriptEditor({
       const end = editor.view.coordsAtPos(to);
       if (!box) return;
       const z = scaleRef.current;
-      setSel({ quote, occurrence: occurrenceAt(editor.state.doc, quote, from), top: (end.bottom - box.top) / z + 6, left: Math.min((end.left - box.left) / z, box.width / z - 140) });
+      setSel({ quote, occurrence: occurrenceAt(editor.state.doc, quote, from), top: (end.bottom - box.top) / z + 6, left: Math.min((end.left - box.left) / z, frameRef.current() - 140) });
     };
     editor.on("selectionUpdate", update);
     return () => {
@@ -748,8 +768,10 @@ export function ScriptEditor({
     };
   }, []);
 
-  // Pages and Grid: real A4 pages, each with its own top and bottom margin (1.23.0).
-  // Wide and Full make the page bigger (a zoom), Normal keeps it A4 size.
+  // Pages and Grid: real A4 pages, each with its own top and bottom margin
+  // (1.23.0; 1.23.1: each block moved onto its page, and Grid is the editor
+  // itself, 2 or 3 pages to a row). Wide and Full make the pages bigger (a
+  // zoom); Grid shrinks them to fit.
   const [avail, setAvail] = useState(0);
   useEffect(() => {
     const el = colRef.current;
@@ -759,14 +781,31 @@ export function ScriptEditor({
     setAvail(el.clientWidth);
     return () => ro.disconnect();
   }, []);
-  const zoom = view === "pages" && avail > PAGE_W ? (width === "wide" ? Math.min(1.25, avail / PAGE_W) : width === "full" ? Math.min(2, avail / PAGE_W) : 1) : 1;
+  const gridW = gridCols * PAGE_W + (gridCols - 1) * PAGE_GAP;
+  const zoom =
+    view === "grid"
+      ? avail > 0
+        ? Math.min(1, avail / gridW)
+        : 1
+      : view === "pages" && avail > PAGE_W
+        ? width === "wide"
+          ? Math.min(1.25, avail / PAGE_W)
+          : width === "full"
+            ? Math.min(2, avail / PAGE_W)
+            : 1
+        : 1;
   scaleRef.current = zoom;
-  const pages = usePages(editor, { on: paged, paper: paperRef, content: contentRef, ratio: A4_RATIO, gap: PAGE_GAP, scale: scaleRef });
-  const totalH = pages.pages * (pages.pageH + PAGE_GAP) - PAGE_GAP;
+  const pages = usePages(editor, { on: paged, cols: view === "grid" ? gridCols : 1, paper: paperRef, ratio: A4_RATIO, gap: PAGE_GAP, zoom });
+  const totalH = pages.height;
+  const totalW = pages.width;
+  pageGeo.current = { paged, pageW: pages.pageW, gap: PAGE_GAP };
   const remeasure = pages.remeasure;
   useEffect(() => {
     remeasure();
   }, [zoom, width, remeasure]);
+  /** How wide everything on the paper is, in the paper's own pixels (Grid: every page in a row). */
+  const frameW = () => (paged ? totalW : (paperRef.current?.clientWidth ?? 600));
+  frameRef.current = frameW;
 
   const remember = (key: string, v: string) => {
     try {
@@ -789,36 +828,6 @@ export function ScriptEditor({
     setGridCols(n);
     remember(GRID_KEY, String(n));
   }
-  /** From the grid: that page, in the Pages view. */
-  function openPage(k: number) {
-    chooseView("pages");
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => paperRef.current?.querySelector<HTMLElement>(`[data-sheet="${k}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }))
-    );
-  }
-
-  // The grid shows a copy of the pages (the editor itself stays, out of sight, to measure them).
-  const [snapshot, setSnapshot] = useState("");
-  useEffect(() => {
-    if (view !== "grid" || !editor) return;
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const take = () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        const el = contentRef.current;
-        if (el) setSnapshot(el.innerHTML.replace(/contenteditable="true"/g, 'contenteditable="false"'));
-      }, 160);
-    };
-    const onTx = ({ transaction }: { transaction: Transaction }) => {
-      if (transaction.docChanged || transaction.getMeta(pagesKey)) take();
-    };
-    take();
-    editor.on("transaction", onTx);
-    return () => {
-      clearTimeout(t);
-      editor.off("transaction", onTx);
-    };
-  }, [view, editor, pages.pages, pages.pageH]);
 
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
@@ -845,6 +854,41 @@ export function ScriptEditor({
     },
   });
 
+  // The header's size (1.23.1): it stays on screen as you scroll, so the link
+  // window, the documents list and a page scrolled to sit under it.
+  const headRef = useRef<HTMLDivElement>(null);
+  const toolRef = useRef<HTMLDivElement>(null);
+  const [head, setHead] = useState({ h: 0, tool: 0, phone: false });
+  const hasTools = canEdit && !!editor;
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const mq = window.matchMedia("(min-width: 640px)");
+    const measure = () => {
+      const h = el.offsetHeight;
+      const tool = toolRef.current?.offsetHeight ?? 0;
+      const phone = !mq.matches;
+      setHead((x) => (x.h === h && x.tool === tool && x.phone === phone ? x : { h, tool, phone }));
+      document.documentElement.style.setProperty("--script-head-bottom", `${APP_BAR + (phone ? tool : h)}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (toolRef.current) ro.observe(toolRef.current);
+    mq.addEventListener("change", measure);
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener("change", measure);
+      document.documentElement.style.removeProperty("--script-head-bottom");
+    };
+  }, [hasTools]);
+  // Phones: only the formatting bar stays (the rest slides up under the app's bar, which is drawn above it).
+  const headStyle: React.CSSProperties = head.phone
+    ? hasTools
+      ? { top: APP_BAR - Math.max(0, head.h - head.tool), zIndex: 15 }
+      : { position: "static" }
+    : { top: APP_BAR, zIndex: 15 };
+
   const statusText: Record<Status, string> = {
     saved: "Saved",
     unsaved: "Unsaved changes",
@@ -855,8 +899,13 @@ export function ScriptEditor({
 
   return (
     <div className="script-print-root min-h-[calc(100dvh-3.5rem)] flex flex-col">
+      {/* The header stays while you scroll (1.23.1): the top bar, the steps
+          (Script → Review, Ready for review) and the formatting bar, as one
+          solid block under the app's own bar. Phones keep just the
+          formatting bar (it slides up under the app's bar, see headStyle). */}
+      <div ref={headRef} className="no-print sticky bg-paper" style={headStyle}>
       {/* Top bar */}
-      <div className="no-print flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b border-line/10 bg-paper/90 backdrop-blur sm:sticky sm:top-14 z-20">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b border-line/10">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink flex-shrink-0">
           <ArrowLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{backLabel}</span>
@@ -960,6 +1009,20 @@ export function ScriptEditor({
         </span>
       </div>
       {subBar}
+      {/* Toolbar */}
+      {canEdit && editor && (
+        <div ref={toolRef}>
+          <Toolbar
+            editor={editor}
+            onImage={() => fileRef.current?.click()}
+            uploading={uploading}
+            grammar={grammar}
+            grammarOpen={grammarOpen}
+            onGrammar={() => (grammarOpen ? dock.close("grammar") : dock.open("grammar"))}
+          />
+        </div>
+      )}
+      </div>
 
       {status === "conflict" && (
         <div className="no-print mx-auto mt-4 w-full max-w-3xl px-4">
@@ -979,17 +1042,6 @@ export function ScriptEditor({
         </div>
       )}
 
-      {/* Toolbar */}
-      {canEdit && editor && (
-        <Toolbar
-          editor={editor}
-          onImage={() => fileRef.current?.click()}
-          uploading={uploading}
-          grammar={grammar}
-          grammarOpen={grammarOpen}
-          onGrammar={() => (grammarOpen ? dock.close("grammar") : dock.open("grammar"))}
-        />
-      )}
       <input
         ref={fileRef}
         type="file"
@@ -1012,35 +1064,26 @@ export function ScriptEditor({
       >
         <div ref={colRef} className="min-w-0">
         {sideBySide && <div className="hidden lg:flex h-8 mb-2 items-center text-[12px] font-bold uppercase tracking-wide text-ink-soft">{docName ?? "Script"}</div>}
-        {view === "grid" && (
-          <PagesGrid
-            html={snapshot}
-            pages={pages.pages}
-            pageW={pages.pageW}
-            pageH={pages.pageH}
-            padTop={pages.padTop}
-            padX={pages.padX}
-            gap={PAGE_GAP}
-            cols={gridCols}
-            paper={paper}
-            onOpen={openPage}
-          />
-        )}
-        {/* Grid: the editor stays, out of sight, to lay the pages out. */}
+        {/* Pages and Grid: the frame takes the pages' whole size (Grid: every page in a row), zoomed to fit. */}
         <div
-          aria-hidden={view === "grid" || undefined}
-          // Laid out at A4 width but taking no room (and adding no scrolling).
-          className={view === "grid" ? "grid-hidden-editor absolute left-[-10000px] top-0 w-[794px] h-0 overflow-hidden invisible pointer-events-none" : undefined}
+          className={paged ? `mx-auto ${view === "grid" ? "overflow-clip" : ""}` : undefined}
+          style={paged && (zoom !== 1 || view === "grid") ? { width: totalW * zoom, height: totalH * zoom } : undefined}
         >
-        <div className={zoom !== 1 ? "mx-auto" : undefined} style={zoom !== 1 ? { width: PAGE_W * zoom, height: totalH * zoom } : undefined}>
         <div
           ref={paperRef}
           data-paper={paper}
           data-view={shown}
           style={{
-            // Pages: the sheets are drawn behind; the paper itself is just the frame.
-            ...(paged ? { minHeight: totalH, background: "transparent" } : {}),
+            // Pages: the sheets are drawn behind; the paper's own box is the first page.
+            ...(paged ? { height: totalH, background: "transparent" } : {}),
+            ...(view === "grid" ? { width: PAGE_W } : {}),
             ...(zoom !== 1 ? { width: PAGE_W, transform: `scale(${zoom})`, transformOrigin: "0 0" } : {}),
+          }}
+          onMouseDown={(e) => {
+            // Empty paper (a margin, between blocks, below the last one): the caret goes to the closest text on that page.
+            const t = e.target as HTMLElement;
+            if (!paged || !editor || e.button !== 0 || (t !== e.currentTarget && !t.dataset.sheet)) return;
+            if (caretNear(editor.view, e.clientX, e.clientY)) e.preventDefault();
           }}
           onClick={(e) => {
             // A word with a writing suggestion opens that suggestion, not the comment under it.
@@ -1053,26 +1096,27 @@ export function ScriptEditor({
             const r = el!.getBoundingClientRect();
             if (box && renderCommentPopover) {
               const z = scaleRef.current;
-              setPop({ id, top: (r.bottom - box.top) / z + 6, left: Math.max(8, Math.min((r.left - box.left) / z, box.width / z - 300)) });
+              setPop({ id, top: (r.bottom - box.top) / z + 6, left: Math.max(8, Math.min((r.left - box.left) / z, frameW() - 300)) });
             } else onCommentClick?.(id);
           }}
-          className={`script-paper script-print relative isolate transition-colors mx-auto w-full ${
+          // (Zoomed or in a grid, the frame around it centres it: it sits at the frame's left, scaled from there.)
+          className={`script-paper script-print relative isolate transition-colors ${paged && (zoom !== 1 || view === "grid") ? "" : "mx-auto"} ${view === "grid" ? "" : "w-full"} ${
             paged
-              ? "max-w-[794px] px-6 sm:px-[72px] py-10 sm:py-[72px]"
+              ? `${view === "grid" ? "" : "max-w-[794px]"} px-6 sm:px-[72px] py-10 sm:py-[72px]`
               : `${STRIP_W[width]} rounded-2xl px-5 sm:px-14 py-8 sm:py-14 border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]`
           }`}
         >
-          {/* Pages: each A4 sheet, drawn behind the text (the text breaks between them, see use-pages). */}
+          {/* Pages: each A4 sheet behind the text (each block is moved onto its own, see use-pages). */}
           {paged &&
-            Array.from({ length: pages.pages }, (_, k) => (
+            pages.sheets.map((sh, k) => (
               <div
                 key={k}
                 data-sheet={k}
                 aria-hidden
-                className="no-print pointer-events-none absolute inset-x-0 -z-10 rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] scroll-mt-32"
-                style={{ top: k * (pages.pageH + PAGE_GAP), height: pages.pageH, background: "rgb(var(--sp-bg))" }}
+                className="no-print absolute -z-10 rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] cursor-text [scroll-margin-top:calc(var(--script-head-bottom,7rem)+1rem)]"
+                style={{ left: sh.x, top: sh.y, width: pages.pageW, height: sh.height, background: "rgb(var(--sp-bg))" }}
               >
-                {pages.pages > 1 && <span className="absolute bottom-4 right-5 sm:bottom-7 sm:right-9 text-[10.5px] font-semibold script-soft tabular-nums">{k + 1}</span>}
+                {pages.pages > 1 && <span className="absolute bottom-4 right-5 sm:bottom-7 sm:right-9 text-[10.5px] font-semibold script-soft tabular-nums pointer-events-none">{k + 1}</span>}
               </div>
             ))}
           <h1 className="print-only text-[22px] font-bold mb-6">
@@ -1120,14 +1164,14 @@ export function ScriptEditor({
           {faces.length > 0 && !switching && (
             <div className="no-print hidden sm:block">
               {faces.map((row) => (
-                <div key={row.list[0].id} className="absolute right-2 lg:right-3 z-20 flex -space-x-2" style={{ top: row.top }}>
+                <div key={row.list[0].id} className={`absolute z-20 flex -space-x-2 ${row.left === null ? "right-2 lg:right-3" : ""}`} style={{ top: row.top, ...(row.left !== null ? { left: row.left - Math.max(0, Math.min(row.list.length, 3) - 1) * 16 } : {}) }}>
                   {row.list.slice(0, 3).map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        openFace(c.id, row.top);
+                        openFace(c.id, row.top, row.left);
                       }}
                       title={`${c.author?.name ?? "Someone"}: ${c.kind === "edit_idea" ? "editing idea" : "comment"}`}
                       aria-label={`${c.kind === "edit_idea" ? "Editing idea" : "Comment"} by ${c.author?.name ?? "someone"}`}
@@ -1176,7 +1220,7 @@ export function ScriptEditor({
             </div>
           )}
           {sel && onAddComment && draft !== null && !isPhone && (
-            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, (paperRef.current?.clientWidth ?? 600) - 308)) }}>
+            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 308)) }}>
               <CommentComposer
                 kind={draftKind}
                 quote={sel.quote}
@@ -1194,7 +1238,6 @@ export function ScriptEditor({
               />
             </div>
           )}
-        </div>
         </div>
         </div>
         <p className="no-print mx-auto max-w-3xl mt-3 px-1 text-[11.5px] text-ink-soft md:hidden">
@@ -1234,7 +1277,7 @@ export function ScriptEditor({
         open={grammarOpen}
         onOpen={() => dock.open("grammar")}
         onClose={() => dock.close("grammar")}
-        fab={(!panel || panel === "grammar") && view !== "grid"}
+        fab={!panel || panel === "grammar"}
       />
       {linkCard && editor && (
         <LinkCard
@@ -1404,7 +1447,7 @@ function Toolbar({
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="no-print sticky top-14 sm:top-28 z-10 border-b border-line/10 bg-paper/95 backdrop-blur"
+      className="no-print border-b border-line/10 bg-paper"
     >
       <div className="mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
         <div className="w-28 sm:w-36 flex-shrink-0 mr-1">
@@ -1418,11 +1461,12 @@ function Toolbar({
               else c().setHeading({ level: Number(v.slice(1)) as 1 | 2 | 3 }).run();
             }}
             options={[
-              { value: "p", label: "Text · Ctrl+Alt+0" },
-              { value: "h1", label: "Heading 1 · Ctrl+Alt+1" },
-              { value: "h2", label: "Heading 2 · Ctrl+Alt+2" },
-              { value: "h3", label: "Heading 3 · Ctrl+Alt+3" },
+              { value: "p", label: `Text · ${MOD}0` },
+              { value: "h1", label: `Heading 1 · ${MOD}1` },
+              { value: "h2", label: `Heading 2 · ${MOD}2` },
+              { value: "h3", label: `Heading 3 · ${MOD}3` },
             ]}
+            renderValue={(o) => <span className="truncate">{o ? o.label.split(" · ")[0] : "Text"}</span>}
             ariaLabel="Text style"
             menuMinWidth={170}
           />
@@ -1473,6 +1517,9 @@ function Toolbar({
             <ImageIcon className="w-4 h-4" />
           )}
         </B>
+        <B label="Page break: the rest starts a new page" shortcut={`${MOD}Enter`} onClick={() => c().setPageBreak().run()}>
+          <PageBreakIcon className="w-4 h-4" />
+        </B>
         <Sep />
         <B label="Undo" shortcut="Ctrl+Z" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
           <UndoIcon className="w-4 h-4" />
@@ -1522,6 +1569,9 @@ function Toolbar({
               </B>
               <B label="Add image" onClick={() => { setMore(false); onImage(); }}>
                 <ImageIcon className="w-4 h-4" />
+              </B>
+              <B label="Page break" onClick={() => { setMore(false); c().setPageBreak().run(); }}>
+                <PageBreakIcon className="w-4 h-4" />
               </B>
               <B label="Align left" on={s!.left} onClick={() => c().setTextAlign("left").run()}>
                 <AlignLeftIcon className="w-4 h-4" />

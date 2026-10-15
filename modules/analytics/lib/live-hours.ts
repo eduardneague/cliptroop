@@ -1,7 +1,7 @@
 import "server-only";
 import type { createClient } from "@/lib/supabase/server";
 import type { SocialPlatform } from "@/lib/social/providers";
-import { estimateHours, fillHours, type TotalPoint } from "./realtime-math";
+import { estimateHours, fillHours, usableRatio, type TotalPoint } from "./realtime-math";
 
 /*
  * The hours of realtime (1.22.0), for Realtime and the Overview's 48 hours:
@@ -24,6 +24,8 @@ export type PlatformHours = {
   views: number[];
   counted: number[];
   estimated: boolean[];
+  /** 1.23.1: counted hours lifted to the platform's own count (their extra is that, not an estimate from the totals). */
+  lifted: boolean[];
   likes: number[];
   comments: number[];
   shares: number[];
@@ -34,6 +36,13 @@ export type Coverage = {
   /** How many of the hours were worked out from the account's totals, and how many fell short with nothing to work them out from. */
   estimated: number;
   partial: number;
+  /**
+   * 1.23.1: the platform's own count ÷ the public counts, when realtime is
+   * lifted by it (null: it isn't), and the days it was measured on.
+   */
+  ratio: number | null;
+  ratioFrom: string | null;
+  ratioTo: string | null;
 };
 export type LiveHours = {
   /** Each hour's start (ms), oldest first; the last is the hour going on now. */
@@ -53,10 +62,12 @@ export async function liveHours(supabase: Supa, teamId: string, shown: SocialPla
   const fromDay = new Date(slots[0] - 2 * 86_400_000).toISOString().slice(0, 10);
   const [series, syncs, totals, daily, first] = await Promise.all([
     supabase.rpc("analytics_live_series", { p_team: teamId, p_hours: count }).then((r) => (r.error ? supabase.rpc("analytics_live_hours", { p_team: teamId, p_hours: count }) : r)),
+    // (Before 0088 there's no live_ratio, before 0086 no live_since: without them.)
     supabase
       .from("analytics_syncs")
-      .select("platform, live_since, live_totals")
+      .select("platform, live_since, live_totals, live_ratio")
       .eq("team_id", teamId)
+      .then((r) => (r.error ? supabase.from("analytics_syncs").select("platform, live_since, live_totals").eq("team_id", teamId) : r))
       .then((r) => (r.error ? supabase.from("analytics_syncs").select("platform, live_totals").eq("team_id", teamId) : r)),
     supabase.from("analytics_live_totals").select("platform, at, total_views").eq("team_id", teamId).gte("at", fromIso).not("total_views", "is", null).order("at").limit(5000),
     supabase.from("analytics_daily").select("platform, day, views, total_views, updated_at").eq("team_id", teamId).eq("content", "all").gte("day", fromDay).limit(200),
@@ -71,7 +82,7 @@ export async function liveHours(supabase: Supa, teamId: string, shown: SocialPla
     if (!shown.includes(p)) continue;
     const i = index.get(Math.floor(Date.parse(String(r.hour)) / HOUR) * HOUR);
     if (i === undefined) continue;
-    const x = (out.per[p] ??= { views: blank(), counted: blank(), estimated: slots.map(() => false), likes: blank(), comments: blank(), shares: blank() });
+    const x = (out.per[p] ??= { views: blank(), counted: blank(), estimated: slots.map(() => false), lifted: slots.map(() => false), likes: blank(), comments: blank(), shares: blank() });
     x.counted[i] += Math.max(0, n(r.views) ?? 0);
     x.likes[i] += Math.max(0, n(r.likes) ?? 0);
     x.comments[i] += Math.max(0, n(r.comments) ?? 0);
@@ -81,7 +92,7 @@ export async function liveHours(supabase: Supa, teamId: string, shown: SocialPla
   const totalRows = (totals.error ? [] : (totals.data ?? [])) as Row[];
   const dayRows = (daily.error ? [] : (daily.data ?? [])) as Row[];
   for (const p of shown) {
-    const x = (out.per[p] ??= { views: blank(), counted: blank(), estimated: slots.map(() => false), likes: blank(), comments: blank(), shares: blank() });
+    const x = (out.per[p] ??= { views: blank(), counted: blank(), estimated: slots.map(() => false), lifted: slots.map(() => false), likes: blank(), comments: blank(), shares: blank() });
     const s = syncRows.find((r) => r.platform === p);
     // Since when every video is counted (0086); before it, from the first count on.
     const sinceIso = s && "live_since" in s ? ((s.live_since as string | null) ?? null) : out.first;
@@ -94,10 +105,22 @@ export async function liveHours(supabase: Supa, teamId: string, shown: SocialPla
     const days = new Map<string, number>();
     for (const r of dayRows) if (r.platform === p && n(r.views) !== null) days.set(String(r.day), n(r.views)!);
     const est = estimateHours(points.filter((q) => Number.isFinite(q.at) && Number.isFinite(q.total)), days, slots, DAY_TZ[p]);
-    const f = fillHours(x.counted, slots, since, est.values);
+    // The public counts lifted to the platform's own count (1.23.1), when they come in clearly under it.
+    const lr = (s && "live_ratio" in s ? (s.live_ratio as Row | null) : null) ?? null;
+    const ratio = usableRatio(lr);
+    const f = fillHours(x.counted, slots, since, est.values, { from: est.from, scale: ratio ?? 1 });
     x.views = f.views;
     x.estimated = f.estimated;
-    out.coverage[p] = { since: sinceIso, estimated: f.estimated.filter(Boolean).length, partial: f.partial.filter((v, i) => v && x.counted[i] > 0).length };
+    x.lifted = f.scaled.map((v, i) => v && !(since === null || slots[i] + HOUR <= since));
+    out.coverage[p] = {
+      since: sinceIso,
+      // (Worked out from the totals: the estimated hours the ratio alone didn't make.)
+      estimated: f.estimated.filter((v, i) => v && (since === null || slots[i] + HOUR <= since)).length,
+      partial: f.partial.filter((v, i) => v && x.counted[i] > 0).length,
+      ratio: ratio !== null && f.scaled.some(Boolean) ? ratio : null,
+      ratioFrom: ratio !== null && typeof lr?.from === "string" ? lr.from : null,
+      ratioTo: ratio !== null && typeof lr?.to === "string" ? lr.to : null,
+    };
   }
   return out;
 }

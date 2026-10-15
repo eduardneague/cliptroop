@@ -15,6 +15,7 @@ import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/u
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
+import { PageBreak } from "../lib/page-break";
 import { HeadingKeys } from "../lib/heading-keys";
 import { fixHeadings, smallHeadingsToH3 } from "../lib/headings";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
@@ -456,7 +457,7 @@ function DocRail({
   const add = (kind: "script" | "research") => setAdding(kind);
 
   return (
-    <nav className="lg:sticky lg:top-[10.5rem] lg:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
+    <nav className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] lg:overflow-y-auto px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
       <div className="flex lg:flex-col gap-3 lg:gap-5 p-1">
         {groups.map((g) => (
           <div key={g.kind} className="flex lg:flex-col gap-1 flex-shrink-0">
@@ -794,7 +795,7 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
     {
       immediatelyRender: false,
       editable: canEdit,
-      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }), Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, HeadingKeys],
+      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }), Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, HeadingKeys, PageBreak],
       content: fixHeadings(side.content),
       editorProps: { attributes: { class: "script-doc outline-none" }, transformPastedHTML: smallHeadingsToH3 },
       onUpdate: ({ editor: e }) => {
@@ -918,7 +919,17 @@ export function CommentsChat({
   const meAs = me ? people.find((p) => p.userId === me.userId) ?? null : null;
   // Which quotes can no longer be found (the text was rewritten). Null until the text is read.
   const [missing, setMissing] = useState<Set<string> | null>(null);
-  const ed = useEditor({ immediatelyRender: false, editable: false, extensions: [StarterKit, ScriptImage, TaskList, TaskItem], content: docContent }, [docContent]);
+  // Every node and mark a script can have (1.23.1: highlights, nested checklists and page
+  // breaks too): one this copy didn't know made it empty, and every comment looked rewritten.
+  const ed = useEditor(
+    {
+      immediatelyRender: false,
+      editable: false,
+      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }), Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
+      content: docContent,
+    },
+    [docContent]
+  );
   useEffect(() => {
     if (!ed) return;
     setMissing(new Set(comments.filter((c) => !findQuote(ed.state.doc, c.quote, c.occurrence)).map((c) => c.id)));

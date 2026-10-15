@@ -395,9 +395,50 @@ export type YtVideo = {
   contentDetails?: { duration?: string };
   /** Only on live streams (and premieres): when it went live and ended. */
   liveStreamingDetails?: { actualStartTime?: string; actualEndTime?: string; scheduledStartTime?: string };
+  /** Public, unlisted or private (1.23.1: only a public video's place on the Live tab says anything). */
+  status?: { privacyStatus?: string };
 };
-/** The Data API parts every video read asks for (the same 1 unit of quota with or without the live details). */
-export const YT_VIDEO_PARTS = "snippet,statistics,contentDetails,liveStreamingDetails";
+/** The Data API parts every video read asks for (the same 1 unit of quota whatever the parts). */
+export const YT_VIDEO_PARTS = "snippet,statistics,contentDetails,liveStreamingDetails,status";
+
+/**
+ * The channel's Live tab (1.23.1): the ids of its live streams as YouTube
+ * lists them on the channel, newest first (the uploads list's live part,
+ * "UULV" + the channel's id, 1 unit of quota per 50). A premiere isn't on it:
+ * on the channel it's a video. `complete`: the whole list was read (only
+ * then does a video's absence mean it isn't a stream). Null when YouTube
+ * won't say.
+ */
+export async function ytLiveTab(token: string, channelId: string, o: { max?: number; until?: number } = {}): Promise<{ ids: Set<string>; complete: boolean } | null> {
+  if (!/^UC[\w-]{10,}$/.test(channelId)) return null;
+  const tail = channelId.slice(2);
+  const ids = new Set<string>();
+  const max = o.max ?? 1000;
+  let page: string | undefined;
+  try {
+    for (let i = 0; i * 50 < max; i++) {
+      if (i > 0 && Date.now() > (o.until ?? Infinity)) return { ids, complete: false };
+      const r = (await get(`${YT}/playlistItems?${new URLSearchParams({ part: "contentDetails", playlistId: `UULV${tail}`, maxResults: "50", ...(page ? { pageToken: page } : {}) })}`, token)) as {
+        items?: { contentDetails?: { videoId?: string } }[];
+        nextPageToken?: string;
+      };
+      for (const it of r.items ?? []) if (it.contentDetails?.videoId) ids.add(it.contentDetails.videoId);
+      if (!r.nextPageToken) return { ids, complete: true };
+      page = r.nextPageToken;
+    }
+    return { ids, complete: false };
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 404)) return null;
+    // No such list: a channel that never streamed has none. That only says
+    // something when the videos part exists (the names still work).
+    try {
+      await get(`${YT}/playlistItems?${new URLSearchParams({ part: "id", playlistId: `UULF${tail}`, maxResults: "1" })}`, token);
+      return { ids, complete: true };
+    } catch {
+      return null;
+    }
+  }
+}
 
 /** Videos' titles, pictures and lifetime counts (Data API), at most 50 per call. */
 export async function ytVideos(token: string, ids: string[]): Promise<YtVideo[]> {
@@ -412,8 +453,9 @@ export async function ytVideos(token: string, ids: string[]): Promise<YtVideo[]>
 /**
  * What kind a YouTube video is, from the Data API alone (1.22.0): ours when
  * it's linked; a live stream (or its recording) when it went live; else a
- * Short up to 3 minutes. YouTube's own word (creatorContentType, kept as
- * content_type) overrides it in the database once it's known (0086).
+ * Short up to 3 minutes. YouTube's own word overrides it in the database
+ * once it's known: the channel's Live tab (live_tab, 0088: a premiere went
+ * "live" too, but it's a video), else creatorContentType (content_type, 0086).
  */
 export function ytKind(v: YtVideo, link: Link | null): "short" | "long" | "live" {
   if (link?.short) return "short";

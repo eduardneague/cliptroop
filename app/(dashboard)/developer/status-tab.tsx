@@ -44,10 +44,13 @@ export async function StatusTab() {
     // The morning copy's runs (0082): before the migration, nothing.
     admin.from("job_runs").select("id, team_id, platform, started_at, finished_at, ok, detail").eq("job", "analytics").gte("started_at", new Date(Date.now() - 3 * 86_400_000).toISOString()).order("started_at", { ascending: false }).limit(40),
   ]);
+  // Realtime next to each platform's own count (0088: before it, nothing).
+  const { data: ratioRows } = await admin.from("analytics_syncs").select("team_id, platform, live_since, live_ratio").not("live_ratio", "is", null).limit(40);
+  const ratios = ((ratioRows ?? []) as { team_id: string; platform: string; live_since: string | null; live_ratio: { ratio?: number | null; from?: string; to?: string; counted?: number; own?: number; at?: string; why?: string } | null }[]).filter((r) => r.live_ratio);
   const runs = (runRows ?? []) as { id: number; team_id: string | null; platform: string | null; started_at: string; finished_at: string | null; ok: boolean | null; detail: string | null }[];
   const failed = (failedRows ?? []) as { id: string; team_id: string; platform: string; last_error: string | null; updated_at: string; short_id: string | null }[];
   const reconnect = (reconnectRows ?? []) as { id: string; team_id: string; platform: string; display_name: string | null; username: string | null; last_error: string | null }[];
-  const teamIds = [...new Set([...failed.map((r) => r.team_id), ...reconnect.map((r) => r.team_id), ...runs.map((r) => r.team_id).filter((x): x is string => !!x)])];
+  const teamIds = [...new Set([...failed.map((r) => r.team_id), ...reconnect.map((r) => r.team_id), ...runs.map((r) => r.team_id).filter((x): x is string => !!x), ...ratios.map((r) => r.team_id)])];
   const { data: teams } = teamIds.length ? await admin.from("teams").select("id, name").in("id", teamIds) : { data: [] as { id: string; name: string }[] };
   const teamName = new Map((teams ?? []).map((t) => [t.id as string, t.name as string]));
 
@@ -174,6 +177,38 @@ export async function StatusTab() {
           </ul>
         )}
       </section>
+
+      {ratios.length > 0 && (
+        <section className={`${card} px-4 sm:px-5 py-4`} id="realtime-count">
+          <h2 className={h2}>Realtime next to the platforms&rsquo; own count</h2>
+          <p className="mt-1 text-[12.5px] text-ink-soft">
+            The public counts the 10-minute job reads, added up per day, next to each platform&rsquo;s own views those days. Realtime&rsquo;s 48 hours are lifted by the difference when it&rsquo;s 3% or more (up to 4×). A big gap that keeps growing means videos aren&rsquo;t all being read.
+          </p>
+          <ul className="mt-2 divide-y divide-line/10">
+            {ratios.map((r) => {
+              const x = r.live_ratio!;
+              return (
+                <li key={`${r.team_id}-${r.platform}`} className="py-2.5 flex items-start gap-3">
+                  <PlatformIcon platform={r.platform as "youtube"} className="mt-0.5 w-5 h-5 rounded-md flex-shrink-0" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[13px] font-semibold">
+                      {teamName.get(r.team_id) ?? "A team"} · {NAME[r.platform] ?? r.platform}{" "}
+                      <span className={`font-semibold ${x.ratio && x.ratio >= 1.5 ? "text-gold" : "text-ink-soft"}`}>{x.ratio ? `${x.ratio}×` : "not worked out"}</span>
+                    </span>
+                    <span className="block text-[12px] text-ink-soft break-words">
+                      {x.ratio
+                        ? `${(x.own ?? 0).toLocaleString("en-US")} by its own count, ${(x.counted ?? 0).toLocaleString("en-US")} counted, ${x.from} to ${x.to}`
+                        : x.why ?? "Not enough to compare yet."}
+                      {x.at ? " · " : ""}
+                      {x.at && <LocalTime iso={x.at} />}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section className={`${card} px-4 sm:px-5 py-4`}>
         <h2 className={h2}>Teams that need a hand</h2>

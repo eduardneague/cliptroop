@@ -72,6 +72,46 @@ export function estimatedSince(data: Realtime, platforms: SocialPlatform[]): str
 /** "Tue 3:40 PM": when counting every video started. */
 export const sinceWords = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
+/** "Oct 8–11", "Sep 30 – Oct 3" (days as YYYY-MM-DD). */
+function dayStretch(from: string, to: string) {
+  const f = new Date(`${from}T12:00:00Z`);
+  const t = new Date(`${to}T12:00:00Z`);
+  const m = (d: Date) => d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  if (from === to) return `${m(f)} ${f.getUTCDate()}`;
+  return m(f) === m(t) ? `${m(f)} ${f.getUTCDate()}–${t.getUTCDate()}` : `${m(f)} ${f.getUTCDate()} – ${m(t)} ${t.getUTCDate()}`;
+}
+
+/**
+ * What the fainter part of the hours is (1.23.1): what the platform counted
+ * on top of the public counts (realtime is lifted to its own count), and the
+ * hours worked out from the account's total views (before every video was
+ * counted). Null when nothing is fainter.
+ */
+/** Under the 48 hours' total: "matched to YouTube's own count", or "some hours estimated". */
+export function liftedWords(data: Realtime, platforms: SocialPlatform[]): string {
+  const lifted = platforms.filter((p) => data.coverage[p]?.ratio);
+  if (!lifted.length) return "some hours estimated";
+  return lifted.length === 1 ? `matched to ${RT_PLATFORM[lifted[0]].name}'s own count` : "matched to each platform's own count";
+}
+
+export function fainterNote(data: Realtime, platforms: SocialPlatform[]): string | null {
+  const parts: string[] = [];
+  const lifted = platforms.filter((p) => data.coverage[p]?.ratio);
+  if (lifted.length) {
+    const c = data.coverage[lifted[0]]!;
+    const name = lifted.length === 1 ? RT_PLATFORM[lifted[0]].name : "each platform";
+    const x = `${(c.ratio ?? 1).toFixed(2).replace(/0$/, "")}×`;
+    parts.push(
+      lifted.length === 1
+        ? `what ${name} counted on top of the public counts (its own numbers were ${x} them${c.ratioFrom && c.ratioTo ? ` on ${dayStretch(c.ratioFrom, c.ratioTo)}` : ""})`
+        : `what each platform counted on top of the public counts (from its own daily numbers)`
+    );
+  }
+  const since = estimatedSince(data, platforms);
+  if (since !== null) parts.push(`estimated from the account's total views${since ? `, before every video was counted (from ${sinceWords(since)})` : ", until every video is counted"}`);
+  return parts.length ? `Fainter: ${parts.join("; ")}.` : null;
+}
+
 /**
  * The realtime numbers, kept fresh. `full`: the Realtime tab's (10-minute
  * slots, the top 25). 1.22.0: read from a route (a server action made every
@@ -225,7 +265,7 @@ export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRea
   const est = data.hours.map((h) => Math.round(platforms.reduce((t, p) => t + (h.est?.[p] ?? 0), 0)));
   const anyEst = est.some((v) => v > 0);
   const color = platforms.length === 1 ? RT_PLATFORM[platforms[0]].color : "rgb(var(--amber))";
-  const since = anyEst ? estimatedSince(data, platforms) : null;
+  const note = anyEst ? fainterNote(data, platforms) : null;
   const top = data.top.filter((v) => platforms.includes(v.platform)).slice(0, 5);
   const waiting = !data.since;
   const people = data.platforms.filter((p) => platforms.includes(p.platform) && p.followers !== null).sort((a, b) => RT_ORDER.indexOf(a.platform) - RT_ORDER.indexOf(b.platform));
@@ -251,7 +291,7 @@ export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRea
         <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Views · 48 hours</div>
           <div className="font-display text-[30px] sm:text-[34px] leading-none font-semibold tabular-nums mt-1.5">{waiting ? "–" : fmtInt(sum(data.last48))}</div>
-          {anyEst && <div className="text-[11px] text-ink-faint mt-1">some hours estimated</div>}
+          {anyEst && <div className="text-[11px] text-ink-faint mt-1">{liftedWords(data, platforms)}</div>}
         </div>
         <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">Last 60 minutes</div>
@@ -268,17 +308,13 @@ export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRea
               anyEst
                 ? [
                     { key: "views", label: "Counted", color, values: values.map((v, i) => Math.max(0, v - est[i])) },
-                    { key: "est", label: "Estimated", color: soft(color), values: est },
+                    { key: "est", label: platforms.some((p) => data.coverage[p]?.ratio) ? "Their own count on top" : "Estimated", color: soft(color), values: est },
                   ]
                 : [{ key: "views", label: "Views", color, values }]
             }
             height={128}
           />
-          {since !== null && (
-            <p className="mt-1.5 text-[11px] text-ink-faint leading-snug">
-              Fainter: estimated from the channel&rsquo;s total views{since ? `, before every video was counted (from ${sinceWords(since)})` : ", until every video is counted"}.
-            </p>
-          )}
+          {note && <p className="mt-1.5 text-[11px] text-ink-faint leading-snug">{note}</p>}
         </div>
       ) : (
         <p className="mt-3 text-[12.5px] text-ink-faint">{waiting ? "Counting starts within 10 minutes." : "No views in the last 48 hours yet."}</p>

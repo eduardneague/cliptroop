@@ -4,7 +4,8 @@ import { getAccessToken } from "@/lib/social/tokens";
 import { FB_GRAPH, hasStatsScopes, isSocialPlatform, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
 import { sameAccount } from "./accounts";
 import { ApiError, get, inBatches, NEW_CONTENT_COLS, num, upsert, upsertSome, YT, type Admin } from "./sync-core";
-import { IG, linksFor, refreshYouTubeVideoNumbers, teamMoneyCurrency, youtubeHistory, ytContentRow, YT_VIDEO_PARTS, type Account, type Links, type YtVideo } from "./sync";
+import { IG, linksFor, refreshYouTubeVideoNumbers, teamMoneyCurrency, youtubeHistory, ytContentRow, ytLiveTab, YT_VIDEO_PARTS, type Account, type Links, type YtVideo } from "./sync";
+import { countRatio, dayAt, ratioDays } from "./realtime-math";
 import { youtubeVideoDetails } from "./sync-advanced";
 import { syncReach } from "./reach";
 import { liveDue, snapshotsOf, type CountKey, type Counts, type SeenCounts, type Snapshot } from "./live-math";
@@ -111,6 +112,11 @@ export async function liveTeamPlatform(teamId: string, platform: SocialPlatform,
       if (r.complete && liveSince === null) patch.live_since = now;
     }
     if (r.reachState) Object.assign(patch, r.reachState);
+    // The platform's own count next to the public counts (1.23.1): every 6 hours, when there's time.
+    if (liveSince && Date.now() < deadline - 6_000) {
+      const ratio = await ratioDue(admin, teamId, platform, liveSince).catch(() => null);
+      if (ratio) patch.live_ratio = ratio;
+    }
     const totals = Object.fromEntries(Object.entries(ctx.totals).filter(([, v]) => v !== null && v !== undefined));
     if (Object.keys(totals).length) {
       patch.live_totals = { ...totals, at: now };
@@ -322,6 +328,8 @@ async function liveYouTube(ctx: Ctx): Promise<PlatformResult> {
   const vids = ids.length ? await ytVideosQuick(token, [...new Set(ids)]) : [];
   const rows = vids.map((v) => ytContentRow(ctx.acc, v, ctx.links));
   const changed = await saveLive(ctx, "youtube", rows, ["views", "likes", "comments"]);
+  // Live streams or premieres (1.23.1): the channel's Live tab says which.
+  if (left(ctx, 18_000)) await settleLiveTab(ctx, token, vids).catch(() => 0);
 
   // The other numbers (YouTube Analytics: a day or two behind anyway), the
   // oldest first; live streams YouTube hasn't named yet go first (1.22.0: a
@@ -364,6 +372,75 @@ async function liveYouTube(ctx: Ctx): Promise<PlatformResult> {
     reachState = { reach_job: r.job, reach_after: r.after, reach_checked_at: ctx.now, reach_note: r.note };
   }
   return { videos: rows.length, changed, details, complete, cursor, reachState };
+}
+
+/**
+ * A video that went "live" is a live stream only if it's on the channel's
+ * Live tab (1.23.1): a premiere goes live too, and it's a video. Asked once
+ * for each such video that ended a while ago (the tab lists a stream once
+ * it's over) and isn't known yet, public ones only (the tab lists those).
+ * The database sets the kind from it (0088).
+ */
+async function settleLiveTab(ctx: Ctx, token: string, vids: YtVideo[]): Promise<number> {
+  const ended = vids.filter((v) => {
+    const end = Date.parse(v.liveStreamingDetails?.actualEndTime ?? "");
+    return Number.isFinite(end) && Date.now() - end > 45 * 60_000 && v.status?.privacyStatus === "public";
+  });
+  if (!ended.length) return 0;
+  const { data, error } = await ctx.admin
+    .from("analytics_content")
+    .select("external_id")
+    .eq("team_id", ctx.acc.team_id)
+    .eq("platform", "youtube")
+    .is("live_tab", null)
+    .in("external_id", ended.slice(0, 200).map((v) => v.id));
+  if (error) return 0; // (Before migration 0088.)
+  const open = ((data ?? []) as { external_id: string }[]).map((r) => r.external_id);
+  if (!open.length) return 0;
+  const tab = await ytLiveTab(token, ctx.acc.external_id ?? "", { until: ctx.deadline - 16_000 });
+  if (!tab) return 0;
+  // On the list: a stream. Not on it: a video, but only once the whole list was read.
+  const rows = open.filter((id) => tab.ids.has(id) || tab.complete).map((id) => ({ team_id: ctx.acc.team_id, platform: "youtube", external_id: id, live_tab: tab.ids.has(id) }));
+  return rows.length ? upsert(ctx.admin, "analytics_content", rows, "team_id,platform,external_id") : 0;
+}
+
+/** The days each platform counts in (YouTube's and Facebook's end at midnight Pacific). */
+const DAY_TZ: Record<SocialPlatform, string> = { youtube: "America/Los_Angeles", facebook: "America/Los_Angeles", instagram: "UTC", tiktok: "UTC" };
+
+/**
+ * The platform's own views per day next to the public counts the job read
+ * on the same days (1.23.1), worked out again every 6 hours: what realtime
+ * scales its hours by (lib/live-hours.ts). Null when it isn't time yet.
+ */
+async function ratioDue(admin: Admin, teamId: string, platform: SocialPlatform, liveSince: string): Promise<Record<string, unknown> | null> {
+  const { data: st, error: stErr } = await admin.from("analytics_syncs").select("live_ratio").eq("team_id", teamId).eq("platform", platform).maybeSingle();
+  if (stErr) return null; // (Before migration 0088.)
+  const was = (st as { live_ratio?: { at?: string } | null } | null)?.live_ratio ?? null;
+  if (was?.at && Date.now() - Date.parse(was.at) < 6 * HOUR) return null;
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const tz = DAY_TZ[platform];
+  const days = ratioDays(Date.parse(liveSince), now, tz);
+  if (days.length < 2) return { ratio: null, at, why: "Not enough complete days counted yet." };
+  const [series, daily] = await Promise.all([
+    admin.rpc("analytics_live_series", { p_team: teamId, p_hours: 192 }),
+    admin.from("analytics_daily").select("day, views").eq("team_id", teamId).eq("platform", platform).eq("content", "all").in("day", days),
+  ]);
+  if (series.error || daily.error) return null;
+  const counted = new Map<string, number>();
+  for (const r of (series.data ?? []) as { hour: string; platform: string; views: number | string | null }[]) {
+    if (r.platform !== platform) continue;
+    // (Pacific days start on the hour: each hour is in one day.)
+    const d = dayAt(Date.parse(r.hour) + HOUR / 2, tz);
+    counted.set(d, (counted.get(d) ?? 0) + Math.max(0, num(r.views) ?? 0));
+  }
+  const own = new Map<string, number>();
+  for (const r of (daily.data ?? []) as { day: string; views: number | string | null }[]) {
+    const v = num(r.views);
+    if (v !== null) own.set(String(r.day).slice(0, 10), v);
+  }
+  const r = countRatio(counted, own, days);
+  return r ? { ...r, at } : { ratio: null, at, why: "Not enough views on complete days to compare." };
 }
 
 // ---------------------------------------------------------------------------

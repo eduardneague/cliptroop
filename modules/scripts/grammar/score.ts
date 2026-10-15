@@ -20,3 +20,35 @@ export function countByCategory(list: Pick<Suggestion, "category">[]): Record<Gr
   for (const s of list) out[s.category]++;
   return out;
 }
+
+/**
+ * The score's colour (1.23.1), from red to the app's own green: red, orange,
+ * yellow, light green, green, and at 95 or more the green of a finished step
+ * (the calendar's posted tick).
+ */
+export function scoreColor(score: number): string {
+  if (score >= 95) return "rgb(var(--teal))";
+  if (score >= 85) return "var(--score-green)";
+  if (score >= 75) return "var(--score-lime)";
+  if (score >= 65) return "var(--score-yellow)";
+  if (score >= 50) return "var(--score-orange)";
+  return "var(--score-red)";
+}
+
+/** The number's colour on a badge filled with scoreColor (dark on the light ones). */
+export function scoreInk(score: number): string {
+  return score < 50 || score >= 85 ? "#fff" : "#1d1a14";
+}
+
+/**
+ * Does a misspelt word look like a name or a brand? (1.23.1: Accept all
+ * leaves those.) A capital where a sentence doesn't start, all capitals
+ * (MSRP), a capital inside (ClipTroop), a digit (PS5).
+ */
+export function looksLikeName(word: string, before: string): boolean {
+  if (/\d/.test(word) || /\p{Ll}\p{Lu}/u.test(word)) return true;
+  if (word.length > 1 && word === word.toUpperCase() && /\p{Lu}/u.test(word)) return true;
+  if (!/^\p{Lu}/u.test(word)) return false;
+  // At the start of a sentence a capital says nothing.
+  return !/(^|[.!?…:]["”’)]*\s+|^\s*[-•*]\s+|\n\s*)$/.test(before);
+}

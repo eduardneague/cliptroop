@@ -41,6 +41,18 @@
   --chart-short: 234 88 12;
   --chart-long: 11 143 203;
   --chart-live: 124 77 214; /* live streams (1.22.0): apart from orange and blue */
+  /* The writing score's colours (1.23.1), low to high; at the top, the app's own green (--teal). */
+  --score-red: #d63c44;
+  --score-orange: #ec7a1c;
+  --score-yellow: #e2b10f;
+  --score-lime: #8cc23f;
+  --score-green: #2fa652;
+  /* A chart's "N videos posted" chip (1.23.1): a fill and its number that read on each other. */
+  --mark-short: 234 88 12;
+  --mark-long: 2 132 199;
+  --mark-live: 124 77 214;
+  --mark-post: 112 105 98;
+  --on-mark: 255 255 255;
   /* Objectives (1.14.0): eight colours checked as a set for colour-blind
      separation (adjacent pairs) and contrast, here on white and on the dark
      surface below. Rings and bars always carry a name or number beside them. */
@@ -99,6 +111,17 @@
   --chart-short: 224 106 30;
   --chart-long: 30 152 210;
   --chart-live: 160 132 240;
+  --score-red: #ee5c63;
+  --score-orange: #f38f3d;
+  --score-yellow: #f1c84b;
+  --score-lime: #a3d45c;
+  --score-green: #43bd66;
+  /* Light fills on the dark surface: a dark number on them (white couldn't be read). */
+  --mark-short: 251 146 60;
+  --mark-long: 56 189 248;
+  --mark-live: 172 148 245;
+  --mark-post: 168 160 150;
+  --on-mark: 26 18 8;
   /* Objectives: the same eight, stepped for the dark surface. */
   --obj-blue: 57 135 229;
   --obj-orange: 217 89 38;
@@ -328,14 +351,28 @@ body {
   pointer-events: none;
 }
 .script-doc .ProseMirror-selectednode { outline: none; }
-/* Pages (1.23.0): the gap where a page ends and the next begins. The text
-   after it starts at the next page's top margin (its own top margin goes). */
-.pm-page-gap { display: block; width: 100%; margin: 0 !important; padding: 0; pointer-events: none; user-select: none; }
-.pm-page-gap + * { margin-top: 0 !important; }
-/* The grid's small copies: just the writing, no underlines or tags. */
-.pm-grid-page .gr-mark, .pm-grid-page .gr-wide { background-image: none !important; background-color: transparent !important; text-decoration: none !important; }
-.pm-grid-page .script-pending-tag, .pm-grid-page [data-node-view-wrapper] button { display: none !important; }
-.pm-grid-page .script-doc { min-height: 0; }
+/* Pages and Grid (1.23.1): the text is laid out as one column and each block
+   is moved onto its page (use-pages.ts); the editor is what they're measured in. */
+.script-paper[data-view="pages"] .script-doc,
+.script-paper[data-view="grid"] .script-doc { position: relative; min-height: 0; }
+/* A page break (Ctrl+Enter): a thin dashed line in the long page; on pages it
+   takes no room (the next page is the break), and shows when it's selected. */
+.pm-page-break {
+  position: relative; height: 22px; margin: 0.6em 0; user-select: none; cursor: default;
+  background: linear-gradient(to right, rgb(var(--sp-line) / 0.22) 50%, transparent 0) center / 8px 1px repeat-x;
+}
+.pm-page-break::after {
+  content: "Page break"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 0 8px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+  color: rgb(var(--sp-soft)); background: rgb(var(--sp-bg));
+}
+.pm-page-break.ProseMirror-selectednode { outline: 2px solid rgb(var(--amber) / 0.6); outline-offset: 2px; border-radius: 4px; }
+.script-paper[data-view="pages"] .pm-page-break,
+.script-paper[data-view="grid"] .pm-page-break { height: 0; margin: 0 !important; background: none; overflow: visible; }
+.script-paper[data-view="pages"] .pm-page-break::after,
+.script-paper[data-view="grid"] .pm-page-break::after { display: none; }
+.script-paper[data-view="pages"] .pm-page-break.ProseMirror-selectednode::after,
+.script-paper[data-view="grid"] .pm-page-break.ProseMirror-selectednode::after { display: block; top: 12px; }
 .print-only { display: none; }
 
 /* PDF export = the browser's print, showing only the paper. */
@@ -349,9 +386,11 @@ body {
     --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
   }
   .script-print .print-only { display: block; }
-  /* Pages (1.23.0): print at the real size, without the on-screen pages. */
-  .script-print { transform: none !important; min-height: 0 !important; background: rgb(var(--sp-bg)) !important; }
-  .grid-hidden-editor { position: static !important; height: auto !important; overflow: visible !important; width: auto !important; }
+  /* Pages and Grid: print at the real size, in the browser's own pages (the moves undone). */
+  .script-print { transform: none !important; min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
+  .script-print .script-doc > *, .script-print .script-doc li { transform: none !important; }
+  .pm-page-break { break-after: page; height: 0 !important; margin: 0 !important; background: none !important; }
+  .pm-page-break::after { display: none !important; }
   .no-print { display: none !important; }
   .script-image [contenteditable="false"] { display: none !important; }
   .script-doc { min-height: 0; font-size: 12pt; }

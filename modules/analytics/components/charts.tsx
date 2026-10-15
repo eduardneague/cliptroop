@@ -192,8 +192,9 @@ function PostedMark({ items, left, top, size, when, withDay }: { items: Mark[]; 
           <MarkIcon kind={items[0].kind} className="w-full h-full" />
         ) : (
           <span
-            className="w-full h-full rounded-[4px] flex items-center justify-center text-[9.5px] font-bold tabular-nums leading-none text-white"
-            style={{ background: MARK_COLOR[main] }}
+            className="w-full h-full rounded-[4px] flex items-center justify-center text-[9.5px] font-bold tabular-nums leading-none"
+            // (1.23.1: its own fill and number colours, readable in both themes.)
+            style={{ background: `rgb(var(--mark-${main}))`, color: "rgb(var(--on-mark))" }}
           >
             {items.length > 9 ? "9+" : items.length}
           </span>

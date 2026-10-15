@@ -110,6 +110,12 @@ const headline = (values: Num[], weights: Num[] | null, rate: boolean) => (rate 
  * A fair comparison: the stretch before has numbers on most of the days this one has
  * (not when copying started part-way through it, which would read as a jump).
  */
+/** The 48 hours lifted to a platform's own count (1.23.1): "YouTube", "each platform", or null. */
+function liftedTo(o: Overview, ps: P[]): string | null {
+  const lifted = ps.filter((p) => o.coverage?.[p]?.ratio);
+  return !lifted.length ? null : lifted.length === 1 ? PLATFORM[lifted[0]].name : "each platform";
+}
+
 const fairBefore = (now: Num[], prev: Num[]) => {
   const n = now.filter((x) => x !== null).length;
   return n > 0 && prev.filter((x) => x !== null).length >= 0.8 * n;
@@ -234,6 +240,7 @@ export function OverviewTab({
             </span>
           )}
           {estimated && <span className="text-ink-faint">· some hours estimated from the channel&rsquo;s total views</span>}
+          {o.hourly && liftedTo(o, ps) && <span className="text-ink-faint">· matched to {liftedTo(o, ps)}&rsquo;s own count</span>}
         </p>
         {copying && (
           <p className="mt-2 inline-flex items-start gap-2 rounded-lg bg-surface-2/70 px-3 py-2 text-[12.5px] text-ink-soft max-w-2xl">

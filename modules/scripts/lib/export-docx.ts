@@ -164,6 +164,10 @@ async function blocks(
       case "horizontalRule":
         out.push(new Paragraph({ border: { bottom: { style: "single", size: 6, color: "CCCCCC", space: 4 } }, children: [] }));
         break;
+      case "pageBreak":
+        // Ctrl+Enter (1.23.1): Word starts a new page here too.
+        out.push(new Paragraph({ children: [new D.PageBreak()] }));
+        break;
       case "image": {
         const src = n.attrs?.src as string | undefined;
         const img = src ? await imageData(src) : null;

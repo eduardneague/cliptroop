@@ -6,6 +6,7 @@ import type { Editor } from "@tiptap/react";
 import { Select } from "@/components/ui/select";
 import { ArrowLeftIcon, BookIcon, CheckIcon, CloseIcon, SpellCheckIcon, TargetIcon, TrashIcon } from "@/components/ui/icons";
 import type { Grammar } from "./use-grammar";
+import { scoreColor, scoreInk } from "./score";
 import { CATEGORIES, CATEGORY_COLOR, CATEGORY_HINT, CATEGORY_LABEL, FORMALITY, LANGUAGES, type GrammarCategory, type Suggestion } from "./types";
 
 /*
@@ -218,28 +219,34 @@ function HoverCard({
   );
 }
 
-/** The overall score as a ring (like Grammarly's). */
+/**
+ * The overall score as a ring (like Grammarly's), coloured from red to the
+ * app's own green as it climbs (1.23.1, scoreColor).
+ */
 export function ScoreRing({ score, size = 44 }: { score: number; size?: number }) {
-  const r = size / 2 - 4;
+  const stroke = size >= 40 ? 4 : 3;
+  const r = size / 2 - stroke;
   const c = 2 * Math.PI * r;
-  const color = score >= 90 ? "var(--gr-engagement)" : score >= 70 ? "rgb(var(--amber))" : "var(--gr-correctness)";
+  const color = scoreColor(score);
   return (
-    <span className="relative inline-flex items-center justify-center flex-shrink-0" style={{ width: size, height: size }} title="Overall score: fixing suggestions raises it">
+    <span className="relative inline-flex items-center justify-center flex-shrink-0" style={{ width: size, height: size }} title={`Overall score ${score}: fixing suggestions raises it`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--line) / .14)" strokeWidth="4" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--line) / .14)" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
           stroke={color}
-          strokeWidth="4"
+          strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${(c * score) / 100} ${c}`}
-          className="transition-[stroke-dasharray] duration-500"
+          className="transition-[stroke-dasharray,stroke] duration-500"
         />
       </svg>
-      <span className="absolute text-[14px] font-bold tabular-nums">{score}</span>
+      <span className="absolute font-bold tabular-nums leading-none" style={{ fontSize: Math.max(9.5, Math.round(size * 0.32)) }}>
+        {score}
+      </span>
       <span className="sr-only">Overall score {score} out of 100</span>
     </span>
   );
@@ -253,8 +260,12 @@ const STATUS: Record<string, string> = {
   off: "Suggestions are off.",
 };
 
-/** Will "Accept all" take this one? Clear fixes only; spelling waits for a person (names!). */
-const takesAll = (s: Suggestion) => !s.wide && !s.word && s.replacements.length > 0;
+/**
+ * Will "Accept all" take this one? (1.23.1: every suggestion with a fix,
+ * spelling too, its best fix.) Only what has no fix (a long sentence to
+ * split) and what looks like a name or a brand wait for you.
+ */
+const takesAll = (s: Suggestion) => !s.wide && !s.name && s.replacements.length > 0;
 
 function Goals({ g, onBack }: { g: Grammar; onBack: () => void }) {
   const [word, setWord] = useState("");
@@ -369,6 +380,14 @@ function Goals({ g, onBack }: { g: Grammar; onBack: () => void }) {
   );
 }
 
+/** "Wukong looks like a name." / "Wukong, MSRP and 2 more look like names." */
+function namesWords(words: string[]) {
+  if (words.length === 1) return `“${words[0]}” looks like a name.`;
+  const shown = words.slice(0, 2).map((w) => `“${w}”`);
+  const more = words.length - shown.length;
+  return `${more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(" and ")} look like names.`;
+}
+
 /** The assistant panel on the right (a sheet on phones). */
 function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
   const [filter, setFilter] = useState<GrammarCategory | null>(null);
@@ -393,6 +412,9 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
     return visible.sort((a, b) => a.from - b.from || Number(!!a.wide) - Number(!!b.wide));
   }, [g.items, filter]);
   const all = list.filter(takesAll);
+  // What Accept all leaves: names (one click puts them in the dictionary) and the rest.
+  const names = list.filter((s) => s.name && s.word);
+  const rest = list.length - all.length - names.length;
 
   const next = useCallback(
     (id: string) => {
@@ -488,21 +510,43 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
               )}
             </div>
             <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5">
-              {all.length >= 2 && (
-                <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 mb-2">
-                  <p className="flex-1 min-w-0 text-[12px] text-ink-soft leading-snug">
-                    {all.length} with a clear fix. Spelling waits for you to check.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      g.acceptAll(all.map((s) => s.id));
-                      setOpen(null);
-                    }}
-                    className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] flex-shrink-0"
-                  >
-                    Accept all {all.length}
-                  </button>
+              {(all.length > 0 || names.length > 0) && (
+                <div className="rounded-xl bg-surface-2 px-3 py-2 mb-2 space-y-2">
+                  {all.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 min-w-0 text-[12px] text-ink-soft leading-snug">
+                        {all.length === list.length
+                          ? `${all.length === 1 ? "It has" : `All ${all.length} have`} a fix: take ${all.length === 1 ? "it" : "them"} in one go.`
+                          : `${all.length} ${all.length === 1 ? "has" : "have"} a fix. ${names.length + rest} ${names.length + rest === 1 ? "is" : "are"} left for you.`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          g.acceptAll(all.map((s) => s.id));
+                          setOpen(null);
+                        }}
+                        className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] flex-shrink-0"
+                      >
+                        Accept all {all.length}
+                      </button>
+                    </div>
+                  )}
+                  {names.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <p className="flex-1 min-w-0 text-[12px] text-ink-soft leading-snug" title={[...new Set(names.map((s) => s.word))].join(", ")}>
+                        {namesWords([...new Set(names.map((s) => s.word!))])}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void g.addWords(names.map((s) => s.word!))}
+                        title="Add them to the team's dictionary: they won't be marked again"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 flex-shrink-0"
+                      >
+                        <BookIcon className="w-3.5 h-3.5" />
+                        Add to dictionary
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {!list.length && (
@@ -584,11 +628,8 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
   );
 }
 
-/** The badge's colour: the most important kind there is. */
-function topColor(g: Grammar) {
-  for (const c of CATEGORIES) if (g.counts[c]) return CATEGORY_COLOR[c];
-  return "var(--gr-engagement)";
-}
+/** The count's badge (1.23.1): the score's colour, red to green as the script gets better. */
+const badge = (g: Grammar) => ({ background: scoreColor(g.score), color: scoreInk(g.score) });
 
 /** The round button in the corner, with how many suggestions there are. */
 function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
@@ -605,8 +646,8 @@ function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
       {g.status === "checking" && <span aria-hidden className="absolute inset-[-3px] rounded-full border-2 border-transparent border-t-amber animate-spin" />}
       {g.live && (
         <span
-          className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-bold text-white tabular-nums ring-2 ring-[rgb(var(--paper))]"
-          style={{ background: topColor(g) }}
+          className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums ring-2 ring-[rgb(var(--paper))]"
+          style={badge(g)}
         >
           {n ? (n > 99 ? "99+" : n) : <CheckIcon className="w-3 h-3" />}
         </span>
@@ -615,26 +656,42 @@ function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
   );
 }
 
-/** In the formatting bar: the count, and the panel. */
+/**
+ * In the formatting bar: the count and the panel, and next to them the
+ * score in its ring (1.23.1), so how the script is doing shows as you write.
+ */
 export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: boolean; onToggle: () => void }) {
   const n = g.counts.all;
   return (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onToggle}
-      aria-pressed={open}
-      title="Writing suggestions"
-      className={`h-9 pl-2 pr-2.5 rounded-lg flex items-center gap-1.5 flex-shrink-0 transition-colors ${open ? "bg-ink text-paper" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
-    >
-      <SpellCheckIcon className="w-4 h-4" />
-      <span className="hidden xl:inline text-[12.5px] font-semibold">Suggestions</span>
-      {g.live && n > 0 && (
-        <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold text-white flex items-center justify-center tabular-nums" style={{ background: topColor(g) }}>
-          {n > 99 ? "99+" : n}
-        </span>
+    <span className="inline-flex items-center gap-1 flex-shrink-0">
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onToggle}
+        aria-pressed={open}
+        title="Writing suggestions"
+        className={`h-9 pl-2 pr-2.5 rounded-lg flex items-center gap-1.5 transition-colors ${open ? "bg-ink text-paper" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
+      >
+        <SpellCheckIcon className="w-4 h-4" />
+        <span className="hidden xl:inline text-[12.5px] font-semibold">Suggestions</span>
+        {g.live && n > 0 && (
+          <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold flex items-center justify-center tabular-nums" style={badge(g)}>
+            {n > 99 ? "99+" : n}
+          </span>
+        )}
+      </button>
+      {g.live && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggle}
+          aria-label={`Overall score ${g.score} out of 100`}
+          className="rounded-full p-0.5 hover:bg-surface-2 transition-colors"
+        >
+          <ScoreRing score={g.score} size={30} />
+        </button>
       )}
-    </button>
+    </span>
   );
 }
 

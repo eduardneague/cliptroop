@@ -10,7 +10,7 @@ import { ago } from "../../lib/ago";
 import { hourRange } from "../../lib/live-math";
 import { KIND_LABEL } from "../../lib/kinds";
 import { ChartCard, fmtCompact, fmtInt, Legend, StackedColumns } from "../charts";
-import { Big, estimatedSince, fmt3, RealtimeHeader, RealtimeSkeleton, realtimeState, RT_ORDER, RT_PLATFORM, sinceWords, soft, Thumb, useRealtime } from "../realtime-card";
+import { Big, fainterNote, fmt3, liftedWords, RealtimeHeader, RealtimeSkeleton, realtimeState, RT_ORDER, RT_PLATFORM, soft, Thumb, useRealtime } from "../realtime-card";
 import { StatusRow, SetupCard } from "./shared";
 
 /*
@@ -81,10 +81,10 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
     const anyEst = est.some((v) => v > 0);
     return [
       { key: p, label: anyEst ? `${RT_PLATFORM[p].name} counted` : RT_PLATFORM[p].name, color: RT_PLATFORM[p].color, values: anyEst ? all.map((v, i) => Math.max(0, v - est[i])) : all },
-      ...(anyEst ? [{ key: `${p}-est`, label: `${RT_PLATFORM[p].name} estimated`, color: soft(RT_PLATFORM[p].color), values: est }] : []),
+      ...(anyEst ? [{ key: `${p}-est`, label: data.coverage[p]?.ratio ? `${RT_PLATFORM[p].name}'s own count on top` : `${RT_PLATFORM[p].name} estimated`, color: soft(RT_PLATFORM[p].color), values: est }] : []),
     ];
   });
-  const since = hourly ? estimatedSince(data, platforms) : null;
+  const note = hourly ? fainterNote(data, platforms) : null;
   const top = (hourly ? data.top : data.top60.length ? data.top60 : [...data.top].filter((v) => v.views60 > 0).sort((a, b) => b.views60 - a.views60)).filter((v) => platforms.includes(v.platform));
   const waiting = !data.since;
   const young = data.since && now - Date.parse(data.since) < 48 * 3_600_000;
@@ -172,7 +172,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Tile>
           <Big label={`Views · ${words}`} value={waiting ? null : views} live={!hourly} />
-          {since !== null && <p className="text-[11px] text-ink-faint mt-1.5">some hours estimated</p>}
+          {note && <p className="text-[11px] text-ink-faint mt-1.5">{liftedWords(data, platforms)}</p>}
         </Tile>
         <Tile>
           <Big label={`Likes · ${words}`} value={waiting ? null : likes} />
@@ -213,12 +213,8 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
         ) : (
           <p className="py-16 text-center text-[13px] text-ink-faint">{data.minutes.length ? "No views in the last hour yet." : "The 10-minute slots start once the latest database update has run."}</p>
         )}
-        {hourly && since !== null && (
-          <p className="text-[11.5px] text-ink-faint mt-1">
-            Fainter: estimated from each account&rsquo;s total views{since ? `, before every video was counted (every one is from ${sinceWords(since)} on)` : ", until every video is counted"}.
-          </p>
-        )}
-        {hourly && since === null && young && views > 0 && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
+        {hourly && note && <p className="text-[11.5px] text-ink-faint mt-1">{note}</p>}
+        {hourly && !note && young && views > 0 && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
       </ChartCard>
 
       <ChartCard title="Getting views now" sub={hourly ? "The videos with the most views in the last 48 hours, and their last 60 minutes" : "The videos with the most views in the last 60 minutes"}>

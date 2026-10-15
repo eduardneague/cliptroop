@@ -243,7 +243,8 @@ async function hourly(
     const v = x.views.map((val, i) => (x.estimated[i] || counted(i) ? val : null));
     if (anyNum(v)) {
       views.per[p] = halves(v);
-      views.est![p] = x.estimated.slice(48);
+      // (Lifted to the platform's own count, 1.23.1: drawn as counted, said in the note.)
+      views.est![p] = x.estimated.map((e, i) => e && !x.lifted?.[i]).slice(48);
     }
     const l = x.likes.map((val, i) => (counted(i) ? val : null));
     const c = x.comments.map((val, i) => (counted(i) ? val : null));

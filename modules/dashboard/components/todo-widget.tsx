@@ -303,9 +303,10 @@ function Check({ done, popped, color, onToggle }: { done: boolean; popped: boole
       aria-checked={done}
       aria-label={done ? "Mark as not done" : "Mark as done"}
       className={`todo-check mt-px w-4 h-4 rounded-[5px] border-[1.5px] flex items-center justify-center flex-shrink-0 transition-colors duration-200 ${
-        done ? "bg-green border-green text-white" : "border-line/45 hover:border-green hover:bg-green/10"
+        done ? "border-transparent text-white" : "border-line/45 hover:border-[rgb(var(--teal))] hover:bg-[rgb(var(--teal)/0.1)]"
       } ${popped ? "just-checked" : ""}`}
-      style={!done && color ? { borderColor: color } : undefined}
+      // Done (1.23.1): the calendar's posted tick, filled in the green of a finished step.
+      style={done ? { background: "rgb(var(--teal))" } : color ? { borderColor: color } : undefined}
     >
       <span className="burst" aria-hidden />
       {popped &&

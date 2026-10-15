@@ -130,6 +130,22 @@ ok(typicalOf([], 5).length === 0 && typicalOf([vid({ views: null })], 5).length 
 const sd = sidesOf({ label: "A", members: spread.slice(0, 3) }, { label: "B", members: [vid({ views: 5, subscribersGained: 1, hook: "Why? Because.", thumbnail: "https://x/y.jpg" })] });
 ok(sd.rest.videos[0].hook === "Why?" && sd.rest.videos[0].thumbnail === "https://x/y.jpg" && sd.rest.videos[0].subsPer1k === 200, "an example carries its hook's opening, picture and subscribers per 1,000");
 
+// 1.23.1: one side older, the other newer: that's the channel changing, not the split.
+const drift = [
+  ...Array.from({ length: 10 }, (_, i) => vid({ title: `Top ${i + 3} picks`, publishedAt: ago(300 + i * 10), views: 1000 })),
+  ...Array.from({ length: 10 }, (_, i) => vid({ title: "Plain words only", publishedAt: ago(10 + i * 5), views: 100 })),
+];
+const pd = findPatterns(drift, { platform: "youtube", kind: "short", now: NOW });
+ok(!pd.findings.some((f) => f.id.endsWith("title_number")), `numbers in titles only back then: not a finding (got ${pd.findings.map((f) => f.id).join()})`);
+// The same split, mixed in time: it is.
+const mixedTimes = Array.from({ length: 20 }, (_, i) => vid({ title: i % 2 ? `Top ${i} picks` : "Plain words only", publishedAt: ago(10 + i * 15), views: i % 2 ? 1000 : 100 }));
+const pm = findPatterns(mixedTimes, { platform: "youtube", kind: "short", now: NOW });
+ok(pm.findings.some((f) => f.id.endsWith("title_number")), "mixed in time: a finding");
+// Only the last 18 months count.
+const longAgo = [...Array.from({ length: 8 }, () => vid({ publishedAt: ago(900) })), ...Array.from({ length: 8 }, () => vid({ publishedAt: ago(20) }))];
+const pl = findPatterns(longAgo, { platform: "youtube", kind: "short", now: NOW });
+ok(pl.considered === 8 && pl.tooNew === 0, `videos from years ago are left out, not counted as too new (got ${pl.considered} / ${pl.tooNew})`);
+
 if (fails) {
   console.log(`${fails} failed`);
   process.exit(1);

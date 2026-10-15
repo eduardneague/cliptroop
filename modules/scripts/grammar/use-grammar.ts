@@ -13,7 +13,7 @@ import { fromLanguageTool } from "./languagetool";
 import { mergeFindings, removalEdit, styleFindings } from "./style";
 import { checkText, grammarVia, waitFor, type Via } from "./client";
 import { grammarKey, textOf, type GrammarMeta } from "./plugin";
-import { countByCategory, writingScore } from "./score";
+import { countByCategory, looksLikeName, writingScore } from "./score";
 import { CATEGORIES, DEFAULT_SETTINGS, FORMALITY, LANGUAGES, type Finding, type GrammarSettings, type Suggestion } from "./types";
 
 /**
@@ -67,10 +67,10 @@ const asFinding = (s: Suggestion, offset: number, length: number): Finding => ({
   ...(s.wide ? { wide: true } : {}),
 });
 
-/** Make one change in a transaction (false: its words aren't there any more). */
-function applyOne(tr: Transaction, s: Suggestion, replacement: string): boolean {
+/** Make one change in a transaction: where the change starts (null: its words aren't there any more). */
+function applyOne(tr: Transaction, s: Suggestion, replacement: string): number | null {
   const doc = tr.doc;
-  if (s.to > doc.content.size || textOf(doc, s.from, s.to) !== s.original) return false;
+  if (s.to > doc.content.size || textOf(doc, s.from, s.to) !== s.original) return null;
   let from = s.from;
   let to = s.to;
   let insert = replacement;
@@ -88,7 +88,7 @@ function applyOne(tr: Transaction, s: Suggestion, replacement: string): boolean 
   }
   if (insert) tr.insertText(insert, from, to);
   else tr.delete(from, to);
-  return true;
+  return from;
 }
 
 function useDictionary(teamId: string, enabled: boolean, me: { userId: string; master: boolean } | null) {
@@ -114,19 +114,20 @@ function useDictionary(teamId: string, enabled: boolean, me: { userId: string; m
   const set = useMemo(() => new Set(words.map((w) => w.word.toLowerCase())), [words]);
 
   const add = useCallback(
-    async (word: string) => {
+    async (word: string, o: { quiet?: boolean } = {}): Promise<boolean> => {
       const w = word.trim();
-      if (!w || set.has(w.toLowerCase())) return;
+      if (!w || set.has(w.toLowerCase())) return false;
       const temp = `new-${hash(w)}`;
       setWords((list) => [...list, { id: temp, word: w, mine: true }].sort((a, b) => a.word.localeCompare(b.word)));
       const r = await addDictionaryWord(teamId, w);
       if (r.error !== undefined) {
         setWords((list) => list.filter((x) => x.id !== temp));
         toast.error(r.error);
-      } else {
-        setWords((list) => list.map((x) => (x.id === temp ? { ...x, id: r.id } : x)));
-        toast.success(`“${w}” is in the team's dictionary.`);
+        return false;
       }
+      setWords((list) => list.map((x) => (x.id === temp ? { ...x, id: r.id } : x)));
+      if (!o.quiet) toast.success(`“${w}” is in the team's dictionary.`);
+      return true;
     },
     [teamId, set, toast]
   );
@@ -250,7 +251,8 @@ export function useGrammar(editor: Editor | null, opts: { enabled: boolean; scri
         if (!at) continue;
         const n = seen.get(sig) ?? 0;
         seen.set(sig, n + 1);
-        out.push({ ...asFinding(f as Suggestion, f.offset, f.length), id: n ? `${hash(sig)}-${n}` : hash(sig), from: at.from, to: at.to, original: textOf(doc, at.from, at.to), sig });
+        const name = !!f.word && looksLikeName(f.word, b.text.slice(0, f.offset));
+        out.push({ ...asFinding(f as Suggestion, f.offset, f.length), id: n ? `${hash(sig)}-${n}` : hash(sig), from: at.from, to: at.to, original: textOf(doc, at.from, at.to), sig, ...(name ? { name } : {}) });
       }
     }
     trim(styleFound.current);
@@ -381,7 +383,7 @@ export function useGrammar(editor: Editor | null, opts: { enabled: boolean; scri
       const s = grammarKey.getState(ed.state)?.items.find((x) => x.id === id);
       if (!s) return false;
       const tr = ed.state.tr;
-      if (!applyOne(tr, s, replacement)) {
+      if (applyOne(tr, s, replacement) === null) {
         refresh();
         return false;
       }
@@ -392,20 +394,46 @@ export function useGrammar(editor: Editor | null, opts: { enabled: boolean; scri
     [refresh]
   );
 
-  /** Every suggestion in the list with one clear fix, in one step (one Undo takes it back). */
+  /**
+   * Every suggestion given that has a fix, its first (best) one, in one step
+   * (one Undo takes them all back). From the end of the script back, so
+   * each fix leaves the places of the ones before it alone; two on the same
+   * words: the first one made wins (the other's words aren't there any more).
+   */
   const acceptAll = useCallback((ids: string[]): number => {
     const ed = ref.current.editor;
     if (!ed || ed.isDestroyed) return 0;
     const want = new Set(ids);
-    const list = (grammarKey.getState(ed.state)?.items ?? []).filter((s) => want.has(s.id) && !s.wide && s.replacements.length > 0).sort((a, b) => b.from - a.from);
+    const list = (grammarKey.getState(ed.state)?.items ?? []).filter((s) => want.has(s.id) && s.replacements.length > 0).sort((a, b) => b.from - a.from || a.to - b.to);
     const tr = ed.state.tr;
     const done: string[] = [];
-    for (const s of list) if (applyOne(tr, s, s.replacements[0])) done.push(s.id);
+    let floor = Infinity;
+    for (const s of list) {
+      // (Overlapping one already fixed: skip it.)
+      if (s.to > floor) continue;
+      const at = applyOne(tr, s, s.replacements[0]);
+      if (at !== null) {
+        done.push(s.id);
+        floor = Math.min(s.from, at);
+      }
+    }
     if (!done.length) return 0;
     ed.view.dispatch(tr.setMeta(grammarKey, { drop: done }));
     sounds.check();
     return done.length;
   }, []);
+
+  /** Several words into the team's dictionary at once (the names Accept all leaves). */
+  const toast = useToast();
+  const addWords = useCallback(
+    async (words: string[]) => {
+      const list = [...new Set(words.map((x) => x.trim()).filter(Boolean))];
+      let n = 0;
+      for (const w of list) if (await dict.add(w, { quiet: true })) n++;
+      if (n) toast.success(n === 1 ? `“${list[0]}” is in the team's dictionary.` : `${n} words are in the team's dictionary.`);
+    },
+    [dict, toast]
+  );
 
   const dismiss = useCallback(
     (id: string) => {
@@ -458,6 +486,7 @@ export function useGrammar(editor: Editor | null, opts: { enabled: boolean; scri
     score,
     accept,
     acceptAll,
+    addWords,
     dismiss,
     pick,
     recheck,

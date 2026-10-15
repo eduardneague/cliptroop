@@ -274,7 +274,7 @@ export function LinkWindow({ href, onClose }: { href: string; onClose: () => voi
   return createPortal(
     <section
       aria-label={`${p?.title ?? hostOf(href)}, opened here`}
-      className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col animate-[modalin_.18s_var(--ease-out)] inset-0 lg:inset-auto lg:top-[7.25rem] lg:bottom-4 lg:right-4 lg:rounded-2xl overflow-hidden ${
+      className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col animate-[modalin_.18s_var(--ease-out)] inset-0 lg:inset-auto lg:top-[calc(var(--script-head-bottom,7.25rem)+0.5rem)] lg:bottom-4 lg:right-4 lg:rounded-2xl overflow-hidden ${
         big ? "lg:left-4" : "lg:w-[min(46vw,760px)]"
       }`}
     >

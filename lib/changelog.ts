@@ -23,6 +23,27 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.23.1",
+    date: "2026-10-15",
+    title: "Pages you can write on",
+    changes: [
+      { kind: "new", text: "Grid is the script itself: write, select and fix on any page, 2 or 3 pages in a row, like Word's multiple pages. Pages appear as the text grows." },
+      { kind: "new", text: "Ctrl + Enter starts a new page, like Word (there's a button for it too). At the end of the script it makes a new blank page with the cursor on it; Backspace at the start of the next page takes it out. Word exports and printing start a new page there too." },
+      { kind: "new", text: "The writing score sits in its ring next to Suggestions, and goes from red through orange, yellow and light green to green, then our own green at 95 and up." },
+      { kind: "better", text: "Pages no longer jump: typing at the bottom of a page moves just that paragraph to the next page, and nothing above it moves. A paragraph that doesn't fit goes to the next page whole." },
+      { kind: "better", text: "The header stays while you scroll: the top bar, Script → Review with Ready for review, and the formatting bar, with no gap between them." },
+      { kind: "better", text: "Headings are Ctrl + 1, 2 and 3 (⌘ on a Mac), and Ctrl + 0 is text again. Ctrl + Alt still works." },
+      { kind: "better", text: "Accept all fixes every suggestion that has a fix, spelling too. Only long sentences and words that look like names or brands are left, and one click puts those names in the team's dictionary." },
+      { kind: "better", text: "Realtime matches YouTube Studio's count: the public numbers we read every 10 minutes come in under YouTube's own, so the 48 hours are lifted by the gap YouTube's daily numbers show (the extra part is drawn fainter)." },
+      { kind: "better", text: "Insights: no more nudges to post a kind you stopped months ago, “your last 5 are under your usual” only for videos 10 days old or more, and What works only compares recent videos posted around the same time." },
+      { kind: "better", text: "Finished tasks and to-dos get the calendar's filled green tick." },
+      { kind: "fixed", text: "Premieres count as long videos, not live streams: a video is a live stream when it's on your channel's Live tab, so Insights like “Live streams under an hour” are about real streams." },
+      { kind: "fixed", text: "The number on a chart's “videos posted” chip reads in dark mode (it was white on light orange)." },
+      { kind: "fixed", text: "Wide and Full pages sit in the middle again instead of running off to the right." },
+      { kind: "fixed", text: "The comments list knows every comment's words again in scripts with highlights or nested checklists (they used to all show as rewritten)." },
+    ],
+  },
+  {
     version: "1.23.0",
     date: "2026-10-15",
     title: "Write like a pro",

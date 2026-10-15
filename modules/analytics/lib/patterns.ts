@@ -150,6 +150,33 @@ const DAY = 86_400_000;
 export const MIN_AGE_DAYS = 7;
 const MIN_GROUP = 3;
 const MIN_VIDEOS = 6;
+/**
+ * 1.23.1: only the channel as it is lately (the latest 200 settled videos of
+ * a kind, from the last 18 months): a channel's views grow and its habits
+ * change, so what worked three years ago says little now.
+ */
+const RECENT_MAX = 200;
+const RECENT_DAYS = 548;
+
+/** The middle posting time of some videos (ms), null without dates. */
+function middleTime(list: PatternVideo[]): number | null {
+  return median(list.map((v) => (v.publishedAt ? Date.parse(v.publishedAt) : NaN)).filter((t) => Number.isFinite(t)));
+}
+
+/**
+ * Were the two sides posted at about the same time? (1.23.1) When one side
+ * is mostly older videos and the other newer ones, the difference in views
+ * is the channel changing over time (it grew, or a habit changed), not the
+ * thing being compared: such a finding isn't said.
+ */
+export function sameTime(a: PatternVideo[], b: PatternVideo[], all: PatternVideo[]): boolean {
+  const ta = middleTime(a);
+  const tb = middleTime(b);
+  if (ta === null || tb === null) return true;
+  const times = all.map((v) => (v.publishedAt ? Date.parse(v.publishedAt) : NaN)).filter((t) => Number.isFinite(t));
+  const span = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  return Math.abs(ta - tb) <= Math.max(60 * DAY, span * 0.3);
+}
 
 export function median(xs: number[]): number | null {
   const v = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -349,8 +376,13 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
   const now = o.now ?? Date.now();
   const minAge = (o.minAgeDays ?? MIN_AGE_DAYS) * DAY;
   const mine = all.filter((v) => v.platform === o.platform && v.kind === o.kind && v.views !== null && v.views !== undefined);
-  const settled = mine.filter((v) => v.publishedAt && now - Date.parse(v.publishedAt) >= minAge);
-  const base: Patterns = { platform: o.platform, kind: o.kind, considered: settled.length, tooNew: mine.length - settled.length, findings: [], topVsRest: null, needed: MIN_VIDEOS };
+  const settledAll = mine
+    .filter((v) => v.publishedAt && now - Date.parse(v.publishedAt) >= minAge)
+    .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!));
+  // The channel as it is lately (1.23.1).
+  const newest = settledAll.length ? Date.parse(settledAll[0].publishedAt!) : now;
+  const settled = settledAll.filter((v) => newest - Date.parse(v.publishedAt!) <= RECENT_DAYS * DAY).slice(0, RECENT_MAX);
+  const base: Patterns = { platform: o.platform, kind: o.kind, considered: settled.length, tooNew: mine.length - settledAll.length, findings: [], topVsRest: null, needed: MIN_VIDEOS };
   if (settled.length < MIN_VIDEOS) return base;
   const noun = NOUN[o.platform][o.kind];
   const views = (v: PatternVideo) => v.views as number;
@@ -368,6 +400,8 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
     const restMembers = groups.filter((x) => x !== best).flatMap((x) => x.members);
     const rest = median(restMembers.map(views));
     if (rest === null || restMembers.length < MIN_GROUP) continue;
+    // (Older videos on one side, newer on the other: that's time, not the split.)
+    if (!sameTime(best.members, restMembers, settled)) continue;
     const ratio = rest > 0 ? best.median! / rest : best.median! > 0 ? Infinity : 1;
     if (!(ratio >= 1.25) || !Number.isFinite(ratio)) continue;
     // "vs 12K for titles without a question", "vs 9K for the rest".
@@ -388,7 +422,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
   }
 
   // Momentum: the latest ten next to the ten before.
-  const byDate = [...settled, ...mine.filter((v) => !settled.includes(v) && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY)]
+  const byDate = [...settled, ...mine.filter((v) => !settledAll.includes(v) && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY)]
     .filter((v) => v.publishedAt)
     .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!));
   const n = Math.min(10, Math.floor(byDate.length / 2));

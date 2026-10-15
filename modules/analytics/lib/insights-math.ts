@@ -147,12 +147,16 @@ export function breakoutAlerts(videos: InsightVideo[], now: number): Alert[] {
     });
 }
 
-/** The latest 5 settled videos of a kind all under 0.7× the usual. */
+/**
+ * The latest 5 settled videos of a kind all under 0.7× the usual. 1.23.1:
+ * settled means 10 days old (was 3): "the usual" is older videos' views,
+ * so a few days old always looked behind (Reels keep growing for weeks).
+ */
 export function slumpAlerts(videos: InsightVideo[], now: number): Alert[] {
   const out: Alert[] = [];
   for (const [platform, kind] of groupsOf(videos)) {
     const recent = videos
-      .filter((v) => v.platform === platform && v.kind === kind && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY && v.score !== null)
+      .filter((v) => v.platform === platform && v.kind === kind && v.publishedAt && now - Date.parse(v.publishedAt) >= 10 * DAY && v.score !== null)
       .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!))
       .slice(0, 5);
     if (recent.length < 5 || !recent.every((v) => (v.score as number) < 0.7)) continue;
@@ -187,14 +191,17 @@ export function gapAlerts(videos: InsightVideo[], now: number): Alert[] {
     const since = (now - dates[0]) / DAY;
     // Only for a team that posted regularly (at least every 3 weeks), and a clear break.
     if (usual > 21 || since < Math.max(3, usual * 2)) continue;
-    const every = usual < 1.5 ? "every day or so" : `every ${Math.round(usual)} days`;
+    // 1.23.1: a kind left behind long ago (148 days without a live stream after
+    // one every 2 days) was stopped on purpose: not a nudge to post the next one.
+    if (since > Math.max(45, usual * 8)) continue;
+    const every = usual < 1.5 ? "every day or so" : `about every ${Math.round(usual)} days`;
     out.push({
       id: `gap-${platform}-${kind}`,
       tone: "info",
       platform,
       kind,
       title: `No new ${nounOf(platform, kind, false)} on ${NAME[platform]} for ${Math.floor(since)} days`,
-      detail: `You usually post one ${every} (the last 10).`,
+      detail: `Your last ${dates.length} came out ${every}.`,
       tip: TIPS.gap,
       weight: 1 + Math.min(3, since / Math.max(1, usual) / 2),
     });
