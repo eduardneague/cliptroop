@@ -62,12 +62,23 @@ export function occurrenceAt(doc: PMNode, quote: string, from: number): number {
   return seen;
 }
 
-export type CommentMark = { id: string; quote: string; occurrence: number; resolved: boolean; color?: string };
+export type CommentMark = {
+  id: string;
+  quote: string;
+  occurrence: number;
+  resolved: boolean;
+  color?: string;
+  kind?: "comment" | "edit_idea";
+  /** Who wrote it: their photo sits next to the line (1.23.0). */
+  author?: { id: string; name: string; avatarUrl: string | null; color: string } | null;
+};
 export const commentKey = new PluginKey("script-comments");
 
 /** Draws open comments as highlights (decorations only: the text is untouched). */
 /** The comment being written right now: its text gets a "writing…" placeholder. */
-export type PendingMark = { quote: string; occurrence: number; kind: "comment" | "edit_idea" } | null;
+export type PendingMark = { quote: string; occurrence: number; kind: "comment" | "edit_idea"; label?: string } | null;
+/** A comment on its way to the server (shown at once, with a "Posting…" tag). */
+export type PostingComment = { quote: string; occurrence: number; kind: "comment" | "edit_idea"; body: string; sketchUrl: string | null; id?: string };
 
 export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null; pending?: PendingMark }) {
   return Extension.create({
@@ -92,11 +103,11 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
                         const tag = document.createElement("span");
                         tag.className = "script-pending-tag no-print";
                         tag.style.setProperty("--comment-color", color);
-                        tag.textContent = pending.kind === "edit_idea" ? "Writing an idea…" : "Writing a comment…";
+                        tag.textContent = pending.label ?? (pending.kind === "edit_idea" ? "Writing an idea…" : "Writing a comment…");
                         tag.contentEditable = "false";
                         return tag;
                       },
-                      { side: 1, key: `pending-${pending.kind}`, ignoreSelection: true }
+                      { side: 1, key: `pending-${pending.kind}-${pending.label ?? ""}`, ignoreSelection: true }
                     )
                   );
                 }

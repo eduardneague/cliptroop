@@ -84,6 +84,8 @@ export default async function ShortScriptPage({
   job(short.reviewer?.memberId, "Reviewer");
   job(short.scheduler?.memberId, "Scheduler");
 
+  const meUser = people.find((p) => p.memberId === membership?.teamMemberId)?.userId ?? null;
+
   return (
     <ScriptWorkspace
       owner={{ short: id }}
@@ -98,6 +100,8 @@ export default async function ShortScriptPage({
       comments={comments}
       roleColors={roleColors}
       people={mentionPeople(people, jobs)}
+      // Who's looking: their own comments and dictionary words (masters: all of them).
+      me={meUser ? { userId: meUser, master: isMaster(roles) } : null}
       title={short.title}
       number={short.number}
       backHref={`/shorts/${id}`}

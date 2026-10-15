@@ -23,6 +23,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.23.0",
+    date: "2026-10-15",
+    title: "Write like a pro",
+    changes: [
+      { kind: "new", text: "Writing suggestions in scripts, the way Grammarly does them. Words get a coloured line: red for spelling and grammar, blue for clarity, green for livelier words, purple for tone. Point at one (or tap it) for the fix, why, Dismiss and Add to dictionary." },
+      { kind: "new", text: "The Suggestions panel: an overall score out of 100, how many of each kind, every suggestion in the order of the script (click one to see it in the text), Accept all for the clear fixes, and Goals: formality (Informal, Neutral, Formal), the language, and which kinds to show. Open it from the round button in the corner or from the formatting bar." },
+      { kind: "new", text: "The team's dictionary: names, the channel's own words and slang you use on purpose stop being flagged for everyone on the team. Add words from a suggestion or in Goals." },
+      { kind: "new", text: "Links you can use: point at a link (or click it) to see where it goes, with its title, a line about it and its picture. Open it right next to the script in a window on the side (YouTube, TikTok, Instagram, X, Vimeo, Spotify, Google Docs and Drive play in their own players), in a new tab, copy it, or change it. Ctrl or ⌘ + click opens it in a new tab." },
+      { kind: "new", text: "Real pages: in the Pages view every page has the same top and bottom margin, like Word. When a page is full, the text goes on at the top of the next one, a heading never stays alone at the bottom, and each page has its number." },
+      { kind: "new", text: "Grid: the pages side by side, 2 or 3 in a row, like Word's multiple pages. Click a page to open it." },
+      { kind: "new", text: "Page width: Normal, Wide or Full. One long page gets longer lines; in Pages the page itself gets bigger. Side by side follows it." },
+      { kind: "new", text: "The photo of whoever commented sits next to the line they commented on, ringed in the comment's colour. Click it to open the comment." },
+      { kind: "better", text: "Comments and editing ideas post at once: the box closes, the words say Posting…, and the comments list shows yours loading until it's saved. If it can't be saved, everything you wrote comes back." },
+      { kind: "better", text: "Delete sits next to Resolve on a comment you open from the text (for its author and the master)." },
+      { kind: "better", text: "Loading a script: the paper and its lines are the paper you picked (light or dark, one long page or A4), no more dark bars on white paper." },
+      { kind: "fixed", text: "Headings keep their level. Picking Heading 2 or 3 always gives that heading (picking the one it already is no longer turns it back into text), Ctrl + Alt + 1 to 3 do the same, and pasted smaller headings become Heading 3 instead of plain text." },
+      { kind: "fixed", text: "Write the script opens the script straight away: from a task, a notification (\"you're a scripter on #12\") or a long video moving into Script or Research, the script's own loading screen shows from the first moment." },
+    ],
+  },
+  {
     version: "1.22.0",
     date: "2026-10-15",
     title: "Analytics you can trust",

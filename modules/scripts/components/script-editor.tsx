@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEditor, EditorContent, useEditorState, type Editor } from "@tiptap/react";
+import type { Transaction } from "@tiptap/pm/state";
 import { PaperLines } from "./script-skeleton";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
@@ -43,9 +44,20 @@ import {
   UnderlineIcon,
   UndoIcon,
   MoreIcon,
+  WidthIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark, type PendingMark } from "../lib/anchors";
+import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
+import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
+import { GrammarMarks } from "../grammar/plugin";
+import { HeadingKeys } from "../lib/heading-keys";
+import { PageBreaks, pagesKey, usePages } from "./use-pages";
+import { LinkCard, LinkWindow, openInTab } from "./link-ui";
+import { PagesGrid } from "./pages-grid";
+import { fixHeadings, smallHeadingsToH3 } from "../lib/headings";
+import { useGrammar, type Grammar } from "../grammar/use-grammar";
+import { GrammarLayer, GrammarToolbarButton } from "../grammar/grammar-ui";
+import { dock, useDock } from "../lib/dock";
 import { CommentComposer, KIND_COLOR } from "./comment-composer";
 import type { MentionPerson } from "../lib/mention-people";
 import type { Scene } from "../sketch/engine";
@@ -92,8 +104,18 @@ const HIGHLIGHTS = [
 type Status = "saved" | "unsaved" | "saving" | "error" | "conflict";
 const PAPER_KEY = "vp:script-paper";
 const VIEW_KEY = "vp:script-view";
+const WIDTH_KEY = "vp:script-width";
+const GRID_KEY = "vp:script-grid";
 /** A4 is 1 : √2. Page height follows the paper's width. */
 const A4_RATIO = 1123 / 794;
+/** An A4 page's width on screen, and the space between two pages. */
+const PAGE_W = 794;
+const PAGE_GAP = 24;
+type View = "strip" | "pages" | "grid";
+type Width = "normal" | "wide" | "full";
+/** How wide the long page gets (1.23.0): Normal, Wide or the whole width. */
+const STRIP_W: Record<Width, string> = { normal: "max-w-3xl", wide: "max-w-[1080px]", full: "max-w-none" };
+const WIDTH_LABEL: Record<Width, string> = { normal: "Normal", wide: "Wide", full: "Full width" };
 
 type Json = { type: string; content?: Json[] };
 
@@ -145,6 +167,9 @@ export function ScriptEditor({
   people = [],
   roleColors = {},
   switching = false,
+  me = null,
+  posting = null,
+  onPosting,
 }: {
   scriptId: string;
   teamId: string;
@@ -185,20 +210,29 @@ export function ScriptEditor({
   roleColors?: Record<string, string>;
   /** Another document is on its way: the page shows shimmering lines meanwhile. */
   switching?: boolean;
+  /** Who's writing (the team's dictionary: which words they may remove). */
+  me?: { userId: string; master: boolean } | null;
+  /** A comment being sent: the text shows "Posting…" on its words until it's saved. */
+  posting?: PostingComment | null;
+  onPosting?: (p: PostingComment | null) => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [status, setStatus] = useState<Status>("saved");
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
-  const [view, setView] = useState<"strip" | "pages">("strip");
+  const [view, setView] = useState<View>("strip");
+  const [width, setWidth] = useState<Width>("normal");
+  const [gridCols, setGridCols] = useState<2 | 3>(2);
   const shown = view;
+  /** Pages and Grid: real A4 pages. */
+  const paged = view !== "strip";
   const scaleRef = useRef(1);
   const areaRef = useRef<HTMLDivElement>(null);
+  const colRef = useRef<HTMLDivElement>(null);
 
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [pageLayout, setPageLayout] = useState({ pageH: 1123, pages: 1 });
   const [uploading, setUploading] = useState(0);
 
   const versionRef = useRef(initialVersion);
@@ -217,8 +251,11 @@ export function ScriptEditor({
       const v = localStorage.getItem(PAPER_KEY);
       if (v === "light" || v === "dark") setPaper(v);
       const w = localStorage.getItem(VIEW_KEY);
-      if (w === "strip" || w === "pages") setView(w);
-      else if (w === "spread") setView("pages");
+      if (w === "strip" || w === "pages" || w === "grid") setView(w);
+      else if (w === "spread") setView("grid");
+      const wd = localStorage.getItem(WIDTH_KEY);
+      if (wd === "normal" || wd === "wide" || wd === "full") setWidth(wd);
+      if (localStorage.getItem(GRID_KEY) === "3") setGridCols(3);
     } catch {
       /* private mode: stay light */
     }
@@ -320,7 +357,8 @@ export function ScriptEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        link: { openOnClick: !canEdit, autolink: true, defaultProtocol: "https" },
+        // Clicking a link shows where it goes (and Ctrl + click opens it): see the link card.
+        link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
         codeBlock: false,
         code: false,
       }),
@@ -332,10 +370,15 @@ export function ScriptEditor({
       CharacterCount,
       CommentHighlights(() => commentStateRef.current),
       Placeholder.configure({ placeholder: canEdit ? "Start writing the script…" : "No script written yet." }),
+      HeadingKeys,
+      PageBreaks,
+      // Writing suggestions (1.23.0): only where you can write.
+      ...(canEdit ? [GrammarMarks] : []),
     ],
-    content: isEmptyDoc(initialContent) ? EMPTY_DOC : initialContent,
+    content: isEmptyDoc(initialContent) ? EMPTY_DOC : fixHeadings(initialContent),
     editorProps: {
       attributes: { class: "script-doc outline-none", spellcheck: "true" },
+      transformPastedHTML: smallHeadingsToH3,
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
         if (!canEdit || files.length === 0) return false;
@@ -373,6 +416,80 @@ export function ScriptEditor({
   });
   editorRef.current = editor;
 
+  // ---- writing suggestions (Grammarly style) ------------------------------------
+  const grammar = useGrammar(canEdit ? editor : null, { enabled: canEdit, scriptId, teamId, me });
+  const panel = useDock();
+  const grammarOpen = panel === "grammar";
+  // The browser's own spell check steps aside while ours is on (no double red lines).
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) editor.view.dom.setAttribute("spellcheck", grammar.live ? "false" : "true");
+  }, [grammar.live, editor]);
+  // Leaving the script closes the panel (the next page starts fresh).
+  useEffect(() => () => dock.close("grammar"), []);
+
+  // ---- links: where they go when you point at them, and the page next to the script (1.23.0) ----
+  const [linkCard, setLinkCard] = useState<{ href: string; el: HTMLAnchorElement; pinned: boolean } | null>(null);
+  const [linkHref, setLinkHref] = useState<string | null>(null);
+  const linkOpen = !!linkHref && panel === "link";
+  const linkCardRef = useRef(linkCard);
+  linkCardRef.current = linkCard;
+  const linkTimers = useRef<{ show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom as HTMLElement;
+    const t = linkTimers.current;
+    const anchorOf = (target: EventTarget | null) => (target instanceof Element ? target.closest<HTMLAnchorElement>("a[href]") : null);
+    const over = (e: MouseEvent) => {
+      const a = anchorOf(e.target);
+      if (!a) return;
+      clearTimeout(t.hide);
+      if (linkCardRef.current?.pinned) return;
+      clearTimeout(t.show);
+      t.show = setTimeout(() => setLinkCard({ href: a.getAttribute("href") ?? "", el: a, pinned: false }), 380);
+    };
+    const out = (e: MouseEvent) => {
+      if (!anchorOf(e.target)) return;
+      clearTimeout(t.show);
+      if (linkCardRef.current?.pinned) return;
+      t.hide = setTimeout(() => setLinkCard((c) => (c && !c.pinned ? null : c)), 260);
+    };
+    const click = (e: MouseEvent) => {
+      const a = anchorOf(e.target);
+      if (!a) return;
+      const href = a.getAttribute("href") ?? "";
+      // Never away from the script by accident: Ctrl or ⌘ + click opens a new tab, a click shows the link.
+      e.preventDefault();
+      clearTimeout(t.show);
+      if (e.metaKey || e.ctrlKey) return openInTab(href);
+      setLinkCard({ href, el: a, pinned: true });
+    };
+    dom.addEventListener("mouseover", over);
+    dom.addEventListener("mouseout", out);
+    dom.addEventListener("click", click);
+    return () => {
+      dom.removeEventListener("mouseover", over);
+      dom.removeEventListener("mouseout", out);
+      dom.removeEventListener("click", click);
+      clearTimeout(t.show);
+      clearTimeout(t.hide);
+    };
+  }, [editor]);
+  // Another panel opened: the link's window closes.
+  useEffect(() => {
+    if (panel !== "link" && linkHref) setLinkHref(null);
+  }, [panel, linkHref]);
+  useEffect(() => () => dock.close("link"), []);
+  const closeLinkCard = useCallback(() => setLinkCard(null), []);
+  /** The link's own words in the document (to change or remove it). */
+  const linkAt = (el: HTMLElement) => {
+    if (!editor) return null;
+    try {
+      return editor.view.posAtDOM(el, 0);
+    } catch {
+      return null;
+    }
+  };
+
   // Selecting text shows a floating "Comment" button (even when view-only).
   const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -397,9 +514,60 @@ export function ScriptEditor({
   // Comments changed (or another one is active, or one is being written): redraw the highlights.
   const drafting = draft !== null;
   useEffect(() => {
-    commentStateRef.current = { comments, active: activeCommentId, pending: drafting && sel ? { quote: sel.quote, occurrence: sel.occurrence, kind: draftKind } : null };
+    const pending: PendingMark =
+      drafting && sel
+        ? { quote: sel.quote, occurrence: sel.occurrence, kind: draftKind }
+        : posting
+          ? { quote: posting.quote, occurrence: posting.occurrence, kind: posting.kind, label: "Posting…" }
+          : null;
+    commentStateRef.current = { comments, active: activeCommentId, pending };
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(commentKey, true));
-  }, [comments, activeCommentId, editor, drafting, sel, draftKind]);
+  }, [comments, activeCommentId, editor, drafting, sel, draftKind, posting]);
+  // The commenters' photos next to the lines they commented on (1.23.0).
+  const [faces, setFaces] = useState<{ top: number; list: CommentMark[] }[]>([]);
+  useEffect(() => {
+    if (!editor) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const paperEl = paperRef.current;
+        if (!paperEl || editor.isDestroyed) return;
+        const box = paperEl.getBoundingClientRect();
+        const z = scaleRef.current || 1;
+        const rows: { top: number; list: CommentMark[] }[] = [];
+        for (const c of comments) {
+          if (c.resolved) continue;
+          const el = paperEl.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(c.id)}"]`);
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          // Centred on the line the comment starts on; one row per line.
+          const top = (r.top - box.top) / z + (r.height / z - 24) / 2;
+          const row = rows.find((x) => Math.abs(x.top - top) < 16);
+          if (row) row.list.push(c);
+          else rows.push({ top, list: [c] });
+        }
+        setFaces(rows);
+      });
+    };
+    measure();
+    editor.on("update", measure);
+    const ro = new ResizeObserver(measure);
+    if (contentRef.current) ro.observe(contentRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      editor.off("update", measure);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [editor, comments, shown, switching]);
+  const openFace = (id: string, top: number) => {
+    const w = paperRef.current?.clientWidth ?? 600;
+    if (renderCommentPopover) setPop({ id, top: top + 32, left: Math.max(8, w - 312) });
+    else onCommentClick?.(id);
+  };
+
   // Jump to the comment picked in the list.
   useEffect(() => {
     if (!editor || !activeCommentId) return;
@@ -462,36 +630,53 @@ export function ScriptEditor({
   }
   async function submitDraft() {
     if (!sel || draft === null || !onAddComment || sending) return;
+    const was = { sel, text: draft, kind: draftKind, sketch };
+    const body = draft;
     setSending(true);
+    // It shows at once: the composer closes, the words say "Posting…" and the
+    // comments list shows it loading. If it fails, everything comes back.
+    onPosting?.({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, body: body.trim() || (sketch ? "Sketch" : ""), sketchUrl: sketch?.url ?? null });
+    setDraft(null);
+    setSel(null);
+    const restore = () => {
+      setSel(was.sel);
+      setDraftKind(was.kind);
+      setDraft(was.text);
+      onPosting?.(null);
+    };
     let sk: { path: string; w: number; h: number } | null = null;
-    if (sketch) {
+    if (was.sketch) {
       // The drawing goes up first (PNG + its editable version), then the idea.
       // The server hands out signed upload links after checking you're on
       // this document's team, so storage policies can't get in the way.
       const target = await prepareSketchUpload(scriptId);
       if (target.error !== undefined) {
         setSending(false);
+        restore();
         toast.error(target.error);
         return;
       }
       const bucket = createClient().storage.from("script-sketches");
       const [up] = await Promise.all([
-        bucket.uploadToSignedUrl(target.png.path, target.png.token, sketch.blob, { contentType: "image/png", cacheControl: UPLOAD_CACHE_CONTROL }),
+        bucket.uploadToSignedUrl(target.png.path, target.png.token, was.sketch.blob, { contentType: "image/png", cacheControl: UPLOAD_CACHE_CONTROL }),
         target.json.token
-          ? bucket.uploadToSignedUrl(target.json.path, target.json.token, new Blob([JSON.stringify(sketch.scene)], { type: "application/json" }), { contentType: "application/json" })
+          ? bucket.uploadToSignedUrl(target.json.path, target.json.token, new Blob([JSON.stringify(was.sketch.scene)], { type: "application/json" }), { contentType: "application/json" })
           : null,
       ]);
       if (up.error) {
         setSending(false);
+        restore();
         toast.error(`Couldn't upload the drawing (${up.error.message}). Try again.`);
         return;
       }
-      sk = { path: target.png.path, w: sketch.w, h: sketch.h };
+      sk = { path: target.png.path, w: was.sketch.w, h: was.sketch.h };
     }
-    const err = await onAddComment(sel.quote, sel.occurrence, draft, draftKind, sk);
+    const err = await onAddComment(was.sel.quote, was.sel.occurrence, body, was.kind, sk);
     setSending(false);
-    if (err) toast.error(err);
-    else {
+    if (err) {
+      restore();
+      toast.error(err);
+    } else {
       sounds.send();
       clearDraft();
     }
@@ -563,35 +748,77 @@ export function ScriptEditor({
     };
   }, []);
 
-  // Pages view: work out how many A4 sheets the script fills.
+  // Pages and Grid: real A4 pages, each with its own top and bottom margin (1.23.0).
+  // Wide and Full make the page bigger (a zoom), Normal keeps it A4 size.
+  const [avail, setAvail] = useState(0);
   useEffect(() => {
-    if (shown !== "pages") return;
-    const paperEl = paperRef.current;
-    const contentEl = contentRef.current;
-    if (!paperEl || !contentEl) return;
-    const measure = () => {
-      const width = paperEl.getBoundingClientRect().width;
-      const pageH = Math.round(width * A4_RATIO);
-      const styles = getComputedStyle(paperEl);
-      const padding = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
-      const needed = contentEl.getBoundingClientRect().height + padding;
-      setPageLayout({ pageH, pages: Math.max(1, Math.ceil(needed / pageH)) });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(paperEl);
-    ro.observe(contentEl);
+    const el = colRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
+    ro.observe(el);
+    setAvail(el.clientWidth);
     return () => ro.disconnect();
-  }, [shown]);
+  }, []);
+  const zoom = view === "pages" && avail > PAGE_W ? (width === "wide" ? Math.min(1.25, avail / PAGE_W) : width === "full" ? Math.min(2, avail / PAGE_W) : 1) : 1;
+  scaleRef.current = zoom;
+  const pages = usePages(editor, { on: paged, paper: paperRef, content: contentRef, ratio: A4_RATIO, gap: PAGE_GAP, scale: scaleRef });
+  const totalH = pages.pages * (pages.pageH + PAGE_GAP) - PAGE_GAP;
+  const remeasure = pages.remeasure;
+  useEffect(() => {
+    remeasure();
+  }, [zoom, width, remeasure]);
 
-  function chooseView(v: "strip" | "pages") {
-    setView(v);
+  const remember = (key: string, v: string) => {
     try {
-      localStorage.setItem(VIEW_KEY, v);
+      localStorage.setItem(key, v);
     } catch {
       /* ignore */
     }
+  };
+  function chooseView(v: View) {
+    setView(v);
+    remember(VIEW_KEY, v);
   }
+  function chooseWidth(v: Width) {
+    setWidth(v);
+    remember(WIDTH_KEY, v);
+    // The side-by-side page follows.
+    window.dispatchEvent(new CustomEvent("vp-width", { detail: v }));
+  }
+  function chooseGrid(n: 2 | 3) {
+    setGridCols(n);
+    remember(GRID_KEY, String(n));
+  }
+  /** From the grid: that page, in the Pages view. */
+  function openPage(k: number) {
+    chooseView("pages");
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => paperRef.current?.querySelector<HTMLElement>(`[data-sheet="${k}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }))
+    );
+  }
+
+  // The grid shows a copy of the pages (the editor itself stays, out of sight, to measure them).
+  const [snapshot, setSnapshot] = useState("");
+  useEffect(() => {
+    if (view !== "grid" || !editor) return;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const take = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const el = contentRef.current;
+        if (el) setSnapshot(el.innerHTML.replace(/contenteditable="true"/g, 'contenteditable="false"'));
+      }, 160);
+    };
+    const onTx = ({ transaction }: { transaction: Transaction }) => {
+      if (transaction.docChanged || transaction.getMeta(pagesKey)) take();
+    };
+    take();
+    editor.on("transaction", onTx);
+    return () => {
+      clearTimeout(t);
+      editor.off("transaction", onTx);
+    };
+  }, [view, editor, pages.pages, pages.pageH]);
 
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
@@ -642,20 +869,21 @@ export function ScriptEditor({
         {mobileDocs && <div className="lg:hidden flex-shrink-0">{mobileDocs}</div>}
         <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
           {words} words · about {spokenLength(words)}
-          {shown === "pages" ? ` · ${pageLayout.pages} page${pageLayout.pages === 1 ? "" : "s"}` : ""}
+          {paged ? ` · ${pages.pages} page${pages.pages === 1 ? "" : "s"}` : ""}
         </span>
         <div role="radiogroup" aria-label="View" className="hidden sm:flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
           {([
-            ["strip", "Strip"],
-            ["pages", "Pages"],
-          ] as const).map(([v, label]) => (
+            ["strip", "Strip", "One long page"],
+            ["pages", "Pages", "A4 pages, one under another"],
+            ["grid", "Grid", "The pages side by side, like Word"],
+          ] as const).map(([v, label, hint]) => (
             <button
               key={v}
               type="button"
               role="radio"
               aria-checked={view === v}
               onClick={() => chooseView(v)}
-              title={v === "pages" ? "Pages one under another" : "One long page"}
+              title={hint}
               className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${
                 view === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"
               }`}
@@ -664,6 +892,25 @@ export function ScriptEditor({
             </button>
           ))}
         </div>
+        {view === "grid" ? (
+          <div role="radiogroup" aria-label="Pages in a row" className="hidden sm:flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
+            {([2, 3] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={gridCols === n}
+                onClick={() => chooseGrid(n)}
+                title={`${n} pages in a row`}
+                className={`px-2 h-7 rounded-md text-[12px] font-semibold tabular-nums transition-colors ${gridCols === n ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <WidthMenu value={width} onChange={chooseWidth} pages={view === "pages"} />
+        )}
         {canEdit ? (
           <span
             className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${
@@ -733,7 +980,16 @@ export function ScriptEditor({
       )}
 
       {/* Toolbar */}
-      {canEdit && editor && <Toolbar editor={editor} onImage={() => fileRef.current?.click()} uploading={uploading} />}
+      {canEdit && editor && (
+        <Toolbar
+          editor={editor}
+          onImage={() => fileRef.current?.click()}
+          uploading={uploading}
+          grammar={grammar}
+          grammarOpen={grammarOpen}
+          onGrammar={() => (grammarOpen ? dock.close("grammar") : dock.open("grammar"))}
+        />
+      )}
       <input
         ref={fileRef}
         type="file"
@@ -750,18 +1006,45 @@ export function ScriptEditor({
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       {leftRail && <div className="no-print hidden lg:block lg:w-60 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
       {/* Paper */}
-      <div ref={areaRef} className={`flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10 ${sideBySide ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start" : ""}`}>
-        <div className="min-w-0">
+      <div
+        ref={areaRef}
+        className={`relative flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10 ${sideBySide ? "lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start" : ""} ${linkOpen ? "lg:pr-[calc(min(46vw,760px)+2rem)]" : ""}`}
+      >
+        <div ref={colRef} className="min-w-0">
         {sideBySide && <div className="hidden lg:flex h-8 mb-2 items-center text-[12px] font-bold uppercase tracking-wide text-ink-soft">{docName ?? "Script"}</div>}
-
+        {view === "grid" && (
+          <PagesGrid
+            html={snapshot}
+            pages={pages.pages}
+            pageW={pages.pageW}
+            pageH={pages.pageH}
+            padTop={pages.padTop}
+            padX={pages.padX}
+            gap={PAGE_GAP}
+            cols={gridCols}
+            paper={paper}
+            onOpen={openPage}
+          />
+        )}
+        {/* Grid: the editor stays, out of sight, to lay the pages out. */}
+        <div
+          aria-hidden={view === "grid" || undefined}
+          // Laid out at A4 width but taking no room (and adding no scrolling).
+          className={view === "grid" ? "grid-hidden-editor absolute left-[-10000px] top-0 w-[794px] h-0 overflow-hidden invisible pointer-events-none" : undefined}
+        >
+        <div className={zoom !== 1 ? "mx-auto" : undefined} style={zoom !== 1 ? { width: PAGE_W * zoom, height: totalH * zoom } : undefined}>
         <div
           ref={paperRef}
           data-paper={paper}
           data-view={shown}
-          style={
-            shown === "pages" ? { minHeight: pageLayout.pages * pageLayout.pageH } : undefined
-          }
+          style={{
+            // Pages: the sheets are drawn behind; the paper itself is just the frame.
+            ...(paged ? { minHeight: totalH, background: "transparent" } : {}),
+            ...(zoom !== 1 ? { width: PAGE_W, transform: `scale(${zoom})`, transformOrigin: "0 0" } : {}),
+          }}
           onClick={(e) => {
+            // A word with a writing suggestion opens that suggestion, not the comment under it.
+            if ((e.target as HTMLElement).closest("[data-gr], [data-gr-wide]")) return setPop(null);
             const el = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]");
             const id = el?.dataset.commentId;
             if (!id) return setPop(null);
@@ -773,21 +1056,23 @@ export function ScriptEditor({
               setPop({ id, top: (r.bottom - box.top) / z + 6, left: Math.max(8, Math.min((r.left - box.left) / z, box.width / z - 300)) });
             } else onCommentClick?.(id);
           }}
-          className={`script-paper script-print relative isolate transition-colors mx-auto w-full border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] ${
-            shown === "pages" ? "max-w-[794px] rounded-md px-6 sm:px-[72px] py-10 sm:py-[72px]" : "max-w-3xl rounded-2xl px-5 sm:px-14 py-8 sm:py-14"
+          className={`script-paper script-print relative isolate transition-colors mx-auto w-full ${
+            paged
+              ? "max-w-[794px] px-6 sm:px-[72px] py-10 sm:py-[72px]"
+              : `${STRIP_W[width]} rounded-2xl px-5 sm:px-14 py-8 sm:py-14 border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]`
           }`}
         >
-          {/* Pages view: where each A4 sheet ends. Drawn behind the text. */}
-          {shown === "pages" &&
-            Array.from({ length: pageLayout.pages - 1 }, (_, i) => (
+          {/* Pages: each A4 sheet, drawn behind the text (the text breaks between them, see use-pages). */}
+          {paged &&
+            Array.from({ length: pages.pages }, (_, k) => (
               <div
-                key={i}
+                key={k}
+                data-sheet={k}
                 aria-hidden
-                className="no-print pointer-events-none absolute left-0 right-0 -z-10 flex items-center"
-                style={{ top: (i + 1) * pageLayout.pageH - 12, height: 24 }}
+                className="no-print pointer-events-none absolute inset-x-0 -z-10 rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] scroll-mt-32"
+                style={{ top: k * (pages.pageH + PAGE_GAP), height: pages.pageH, background: "rgb(var(--sp-bg))" }}
               >
-                <div className="w-full h-3 bg-paper shadow-[inset_0_4px_6px_-4px_rgb(0_0_0/0.25),inset_0_-4px_6px_-4px_rgb(0_0_0/0.25)]" />
-                <span className="absolute right-3 -bottom-4 text-[10.5px] font-semibold script-soft">Page {i + 2}</span>
+                {pages.pages > 1 && <span className="absolute bottom-4 right-5 sm:bottom-7 sm:right-9 text-[10.5px] font-semibold script-soft tabular-nums">{k + 1}</span>}
               </div>
             ))}
           <h1 className="print-only text-[22px] font-bold mb-6">
@@ -821,7 +1106,7 @@ export function ScriptEditor({
                   onChange={async (id) => {
                     if (!id) return;
                     const content = await onCopyFrom(id);
-                    if (content && editor) editor.commands.setContent(content, { emitUpdate: true });
+                    if (content && editor) editor.commands.setContent(fixHeadings(content), { emitUpdate: true });
                   }}
                 />
               )}
@@ -832,6 +1117,35 @@ export function ScriptEditor({
           <div ref={contentRef} className={switching ? "hidden" : undefined}>
             <EditorContent editor={editor} />
           </div>
+          {faces.length > 0 && !switching && (
+            <div className="no-print hidden sm:block">
+              {faces.map((row) => (
+                <div key={row.list[0].id} className="absolute right-2 lg:right-3 z-20 flex -space-x-2" style={{ top: row.top }}>
+                  {row.list.slice(0, 3).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openFace(c.id, row.top);
+                      }}
+                      title={`${c.author?.name ?? "Someone"}: ${c.kind === "edit_idea" ? "editing idea" : "comment"}`}
+                      aria-label={`${c.kind === "edit_idea" ? "Editing idea" : "Comment"} by ${c.author?.name ?? "someone"}`}
+                      className="relative rounded-full transition-transform hover:z-10 hover:scale-110"
+                      style={{ boxShadow: `0 0 0 2px rgb(var(--sp-bg)), 0 0 0 3.5px ${KIND_COLOR[c.kind ?? "comment"]}` }}
+                    >
+                      <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-6 h-6 text-[9.5px]" />
+                    </button>
+                  ))}
+                  {row.list.length > 3 && (
+                    <span className="relative w-6 h-6 rounded-full bg-surface-2 text-ink text-[10px] font-bold flex items-center justify-center" style={{ boxShadow: "0 0 0 2px rgb(var(--sp-bg))" }}>
+                      +{row.list.length - 3}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {pop && renderCommentPopover && (
             <div className="no-print absolute z-30 w-[300px]" style={{ top: pop.top, left: pop.left }}>
               {renderCommentPopover(pop.id, () => setPop(null))}
@@ -881,6 +1195,8 @@ export function ScriptEditor({
             </div>
           )}
         </div>
+        </div>
+        </div>
         <p className="no-print mx-auto max-w-3xl mt-3 px-1 text-[11.5px] text-ink-soft md:hidden">
           {words} words · about {spokenLength(words)}
         </p>
@@ -912,6 +1228,55 @@ export function ScriptEditor({
           </div>,
           document.body
         )}
+      <GrammarLayer
+        editor={editor}
+        g={grammar}
+        open={grammarOpen}
+        onOpen={() => dock.open("grammar")}
+        onClose={() => dock.close("grammar")}
+        fab={(!panel || panel === "grammar") && view !== "grid"}
+      />
+      {linkCard && editor && (
+        <LinkCard
+          href={linkCard.href}
+          anchor={linkCard.el}
+          pinned={linkCard.pinned}
+          canEdit={canEdit}
+          onEnter={() => clearTimeout(linkTimers.current.hide)}
+          onLeave={() => {
+            if (linkCard.pinned) return;
+            linkTimers.current.hide = setTimeout(() => setLinkCard((c) => (c && !c.pinned ? null : c)), 260);
+          }}
+          onClose={closeLinkCard}
+          onOpenHere={() => {
+            setLinkCard(null);
+            setLinkHref(linkCard.href);
+            dock.open("link");
+          }}
+          onChange={(href) => {
+            const pos = linkAt(linkCard.el);
+            setLinkCard(null);
+            if (pos === null) return;
+            editor.chain().focus().setTextSelection(pos).extendMarkRange("link").setLink({ href }).run();
+          }}
+          onRemove={() => {
+            const pos = linkAt(linkCard.el);
+            setLinkCard(null);
+            if (pos === null) return;
+            editor.chain().focus().setTextSelection(pos).extendMarkRange("link").unsetLink().run();
+          }}
+          onCopied={() => toast.success("Link copied.")}
+        />
+      )}
+      {linkOpen && (
+        <LinkWindow
+          href={linkHref!}
+          onClose={() => {
+            setLinkHref(null);
+            dock.close("link");
+          }}
+        />
+      )}
       {studio && (
         <SketchStudio
           initial={sketch?.scene ?? null}
@@ -957,7 +1322,21 @@ export function ScriptEditor({
 
 // ---------------------------------------------------------------------------
 
-function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () => void; uploading: number }) {
+function Toolbar({
+  editor,
+  onImage,
+  uploading,
+  grammar,
+  grammarOpen,
+  onGrammar,
+}: {
+  editor: Editor;
+  onImage: () => void;
+  uploading: number;
+  grammar: Grammar;
+  grammarOpen: boolean;
+  onGrammar: () => void;
+}) {
   const [more, setMore] = useState(false);
   const moreBtn = useRef<HTMLButtonElement>(null);
   const s = useEditorState({
@@ -1032,8 +1411,11 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
           <Select
             value={s!.block}
             onChange={(v) => {
+              // Always the level picked: picking the one it already is leaves it alone
+              // (it used to switch the heading back to text).
+              if (!v || v === s!.block) return;
               if (v === "p") c().setParagraph().run();
-              else c().toggleHeading({ level: Number(v?.slice(1)) as 1 | 2 | 3 }).run();
+              else c().setHeading({ level: Number(v.slice(1)) as 1 | 2 | 3 }).run();
             }}
             options={[
               { value: "p", label: "Text · Ctrl+Alt+0" },
@@ -1098,6 +1480,8 @@ function Toolbar({ editor, onImage, uploading }: { editor: Editor; onImage: () =
         <B label="Redo" shortcut="Ctrl+Shift+Z" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
           <RedoIcon className="w-4 h-4" />
         </B>
+        <span className="flex-1 min-w-2" />
+        <GrammarToolbarButton g={grammar} open={grammarOpen} onToggle={onGrammar} />
         </span>
         {/* Phones: everything else in one sheet (no sideways scrolling). */}
         <span className="flex-1 sm:hidden" />
@@ -1377,6 +1761,56 @@ function ExportMenu({ onDocx, onPdf }: { onDocx: () => void; onPdf: () => void }
   );
 }
 
+/** Page width (1.23.0): Normal, Wide or Full. In Pages, the page itself gets bigger. */
+function WidthMenu({ value, onChange, pages }: { value: Width; onChange: (w: Width) => void; pages: boolean }) {
+  const { open, setOpen, btn, box } = usePopover(232);
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  useMenuKeyboard(open, box, btn, close);
+  const HINT: Record<Width, string> = pages
+    ? { normal: "A4 size", wide: "The page a little bigger", full: "The page as wide as there's room" }
+    : { normal: "Lines that are easy to read", wide: "Longer lines", full: "The whole width" };
+  return (
+    <div className="relative hidden md:block flex-shrink-0">
+      <button
+        ref={btn}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        title="Page width"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/30"
+      >
+        <WidthIcon className="w-4 h-4" />
+        <span className="hidden xl:inline">{WIDTH_LABEL[value]}</span>
+        <ChevronDownIcon className="w-3 h-3" />
+      </button>
+      {open && (
+        <div ref={box} role="menu" aria-label="Page width" className="absolute right-0 top-[calc(100%+4px)] z-30 w-60 rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+          {(["normal", "wide", "full"] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              role="menuitemradio"
+              aria-checked={value === w}
+              onClick={() => {
+                onChange(w);
+                setOpen(false);
+              }}
+              className="w-full text-left rounded-lg px-3 py-2 flex items-center gap-2 hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+            >
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-semibold text-ink">{WIDTH_LABEL[w]}</span>
+                <span className="block text-[11px] text-ink-soft">{HINT[w]}</span>
+              </span>
+              {value === w && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Phones: views, paper and export in one menu (the top bar is narrow). */
 function MobileMenu({
   view,
@@ -1386,8 +1820,8 @@ function MobileMenu({
   onDocx,
   onPdf,
 }: {
-  view: "strip" | "pages";
-  onView: (v: "strip" | "pages") => void;
+  view: View;
+  onView: (v: View) => void;
   paper: "light" | "dark";
   onPaper: () => void;
   onDocx: () => void;
@@ -1411,6 +1845,7 @@ function MobileMenu({
           {([
             ["strip", "One long page"],
             ["pages", "Pages"],
+            ["grid", "Pages side by side"],
           ] as const).map(([v, label]) => (
             <button key={v} type="button" className={item} onClick={run(() => onView(v))}>
               {label}

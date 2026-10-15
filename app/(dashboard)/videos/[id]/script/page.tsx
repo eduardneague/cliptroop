@@ -97,6 +97,8 @@ export default async function LongScriptPage({
   scripterIds.forEach((m) => job(m, "Scripter"));
   (assigneeRows ?? []).forEach((r) => STEP_JOB[r.stage as string] && job(r.team_member_id as string, STEP_JOB[r.stage as string]));
 
+  const meUser = people.find((p) => p.memberId === membership?.teamMemberId)?.userId ?? null;
+
   return (
     <ScriptWorkspace
       owner={{ long: id }}
@@ -111,6 +113,8 @@ export default async function LongScriptPage({
       comments={comments}
       roleColors={roleColors}
       people={mentionPeople(people, jobs)}
+      // Who's looking: their own comments and dictionary words (masters: all of them).
+      me={meUser ? { userId: meUser, master: isMaster(roles) } : null}
       title={project.title}
       number={project.entry_number}
       backHref={`/videos/${id}?tab=${doc.kind === "research" ? "research" : "script"}`}

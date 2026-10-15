@@ -328,6 +328,14 @@ body {
   pointer-events: none;
 }
 .script-doc .ProseMirror-selectednode { outline: none; }
+/* Pages (1.23.0): the gap where a page ends and the next begins. The text
+   after it starts at the next page's top margin (its own top margin goes). */
+.pm-page-gap { display: block; width: 100%; margin: 0 !important; padding: 0; pointer-events: none; user-select: none; }
+.pm-page-gap + * { margin-top: 0 !important; }
+/* The grid's small copies: just the writing, no underlines or tags. */
+.pm-grid-page .gr-mark, .pm-grid-page .gr-wide { background-image: none !important; background-color: transparent !important; text-decoration: none !important; }
+.pm-grid-page .script-pending-tag, .pm-grid-page [data-node-view-wrapper] button { display: none !important; }
+.pm-grid-page .script-doc { min-height: 0; }
 .print-only { display: none; }
 
 /* PDF export = the browser's print, showing only the paper. */
@@ -341,6 +349,9 @@ body {
     --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
   }
   .script-print .print-only { display: block; }
+  /* Pages (1.23.0): print at the real size, without the on-screen pages. */
+  .script-print { transform: none !important; min-height: 0 !important; background: rgb(var(--sp-bg)) !important; }
+  .grid-hidden-editor { position: static !important; height: auto !important; overflow: visible !important; width: auto !important; }
   .no-print { display: none !important; }
   .script-image [contenteditable="false"] { display: none !important; }
   .script-doc { min-height: 0; font-size: 12pt; }
@@ -458,6 +469,59 @@ html[data-motion="off"] button:active { scale: none; }
 .script-comment-active {
   background: color-mix(in srgb, var(--c) 38%, transparent);
   border-bottom-color: var(--c);
+}
+
+/* Writing suggestions (1.23.0), Grammarly's way: a coloured line under the
+   words, one colour per kind. Correctness red, Clarity blue, Engagement
+   green, Delivery purple. The paper has its own (it can be light while the
+   app is dark); cards and the panel use the app's. Drawn after the comment
+   highlights, so a word with both keeps both. */
+:root { --gr-correctness: #E5484D; --gr-clarity: #4F6BED; --gr-engagement: #0F9F76; --gr-delivery: #9B5DE5; }
+html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #36CFA0; --gr-delivery: #BC91F7; }
+.script-paper { --gr-correctness: #E5484D; --gr-clarity: #4F6BED; --gr-engagement: #0F9F76; --gr-delivery: #9B5DE5; }
+.script-paper[data-paper="dark"] { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #36CFA0; --gr-delivery: #BC91F7; }
+.gr-mark {
+  --g: var(--gr-correctness);
+  background-image: linear-gradient(var(--g), var(--g));
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.gr-clarity { --g: var(--gr-clarity); }
+.gr-engagement { --g: var(--gr-engagement); }
+.gr-delivery { --g: var(--gr-delivery); }
+.gr-mark:hover,
+.gr-mark.gr-active { background-color: color-mix(in srgb, var(--g) 18%, transparent); }
+.script-comment.gr-mark,
+.script-comment.gr-mark:hover { background-image: linear-gradient(var(--g), var(--g)); }
+/* A long sentence: a light dotted line under all of it. */
+.gr-wide {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  text-decoration-color: color-mix(in srgb, var(--gr-clarity) 65%, transparent);
+  cursor: pointer;
+}
+.gr-wide:hover,
+.gr-wide.gr-wide-active { text-decoration-color: var(--gr-clarity); background-color: color-mix(in srgb, var(--gr-clarity) 7%, transparent); }
+@media print {
+  .gr-mark, .gr-wide { background: none !important; text-decoration: none !important; }
+}
+
+/* Loading lines on the paper: shades of the paper's own ink (light grey on
+   white paper, a lighter dark on dark paper), never the app's dark theme. */
+.script-paper .skeleton {
+  background-color: rgb(var(--sp-line) / 0.07);
+  background-image: linear-gradient(100deg, transparent 38%, rgb(var(--sp-line) / 0.06) 50%, transparent 62%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .script-paper .skeleton { background-image: none; }
 }
 
 /* ---------------------------------------------------------------------------

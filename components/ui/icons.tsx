@@ -981,3 +981,43 @@ export function MoneyIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** Writing suggestions (Scripts, 1.23.0): lines of text and a check. */
+export function SpellCheckIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 6.5h11M4 11h8M4 15.5h4.5" />
+      <path d="m12 16.25 3.1 3.1L21 13.5" />
+    </Svg>
+  );
+}
+
+/** The team's dictionary (Scripts, 1.23.0): a closed book. */
+export function BookIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M5.25 5.5A2 2 0 0 1 7.25 3.5H18.5v14H7.25a2 2 0 0 0-2 2V5.5Z" />
+      <path d="M5.25 19.5a2 2 0 0 0 2 2H18.5v-4" />
+    </Svg>
+  );
+}
+
+/** A page seen through a window (Scripts, 1.23.0: a link opened inside the app). */
+export function WindowIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.25" />
+      <path d="M3.5 8.75h17M6.5 6.6h.01M8.75 6.6h.01" />
+    </Svg>
+  );
+}
+
+/** Page width (Scripts, 1.23.0): arrows pointing out to both sides. */
+export function WidthIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 5v14M20 5v14" />
+      <path d="M7.5 12h9M10 9.25 7.25 12 10 14.75M14 9.25 16.75 12 14 14.75" />
+    </Svg>
+  );
+}
