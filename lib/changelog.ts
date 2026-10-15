@@ -23,6 +23,37 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.24.0",
+    date: "2026-10-15",
+    title: "Posting, as a dashboard",
+    changes: [
+      { kind: "new", text: "Posting is a dashboard now, in tabs: Overview, Upcoming, Posted, Needs attention, and Health for the people who post." },
+      { kind: "new", text: "The Overview has the next post, what's scheduled, what went out in the last 7 days and what needs a hand, then a card for each platform: its account, what goes out next, the latest posts and their views." },
+      { kind: "new", text: "Posted lists everything on your connected accounts, Instagram included, whoever posted it, with its thumbnail and an Analytics button that opens its numbers." },
+      { kind: "new", text: "Upcoming and Posted show as a grid or a table, and your pick is remembered on this device." },
+      { kind: "new", text: "Filters for every list: the platform, a search (#number or title) and the day. Posted can also show one kind (Shorts, long videos, live streams, posts), only what ClipTroop posted, or only what was posted outside it." },
+      { kind: "new", text: "Posts that aren't out yet show a frame of their video as the thumbnail." },
+      { kind: "better", text: "Something ClipTroop posted shows just the ClipTroop logo, on Posting and in a short's Activity." },
+      { kind: "better", text: "Posting checks for news every 15 seconds only while something is uploading or about to go out, and every minute the rest of the time." },
+    ],
+  },
+  {
+    version: "1.23.3",
+    date: "2026-10-15",
+    title: "Strip stays a strip",
+    changes: [
+      { kind: "fixed", text: "Going from Grid or Pages back to Strip no longer leaves text on the right of the script or big gaps between paragraphs. It happened when the zoom changed with the view (Grid zoomed out, or Pages on Wide or Full)." },
+    ],
+  },
+  {
+    version: "1.23.2",
+    date: "2026-10-15",
+    title: "No more ghost drafts",
+    changes: [
+      { kind: "fixed", text: "After posting a comment or an editing idea (or using a sketch in one), the “You have an unsent comment… Restore” box no longer comes up. It only offers a comment you really didn't send, once, when the script opens." },
+    ],
+  },
+  {
     version: "1.23.1",
     date: "2026-10-15",
     title: "Pages you can write on",

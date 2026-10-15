@@ -632,6 +632,8 @@ export function ScriptEditor({
       if (sk) URL.revokeObjectURL(sk.url);
       return null;
     });
+    // (Posted or thrown away: nothing left to bring back.)
+    setBackup(null);
     try {
       localStorage.removeItem(DRAFT_KEY(scriptId));
     } catch {}
@@ -715,9 +717,17 @@ export function ScriptEditor({
     }, 400);
     return () => clearTimeout(t);
   }, [draft, draftKind, sel, sketch, scriptId]);
-  // Found one from last time? Offer it back.
+  // Found one from last time? Offer it back: once, when the script opens
+  // (1.23.2: it looked again every time the page around it redrew, so it
+  // found the comment being written, or one just posted or drawn, and kept
+  // offering it back).
+  const backupChecked = useRef<string | null>(null);
+  const canComment = !!onAddComment;
   useEffect(() => {
-    if (!editor || !onAddComment) return;
+    if (!editor || !canComment || backupChecked.current === scriptId) return;
+    backupChecked.current = scriptId;
+    // (Already writing one: that's the one in the copy.)
+    if (draftRef.current.text !== null) return;
     try {
       const raw = localStorage.getItem(DRAFT_KEY(scriptId));
       if (!raw) return;
@@ -725,7 +735,7 @@ export function ScriptEditor({
       if (Date.now() - (b.at ?? 0) > 14 * 86_400_000 || !findQuote(editor.state.doc, b.quote, b.occurrence)) return localStorage.removeItem(DRAFT_KEY(scriptId));
       setBackup({ quote: b.quote, occurrence: b.occurrence ?? 0, kind: b.kind === "edit_idea" ? "edit_idea" : "comment", text: String(b.text ?? ""), scene: b.scene ?? null });
     } catch {}
-  }, [editor, onAddComment, scriptId]);
+  }, [editor, canComment, scriptId]);
   async function restoreBackup() {
     const b = backup;
     if (!b || !editor) return;
@@ -1209,6 +1219,8 @@ export function ScriptEditor({
                     onClick={() => {
                       setDraftKind(k);
                       setDraft("");
+                      // (A new one takes the old one's place in the copy kept on this device.)
+                      setBackup(null);
                     }}
                     className="rounded-lg px-3 h-9 sm:h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
                     style={{ background: KIND_COLOR[k] }}

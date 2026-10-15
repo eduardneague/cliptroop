@@ -22,8 +22,8 @@ export const metadata: Metadata = { title: "Video analytics" };
 
 const PLATFORMS: SocialPlatform[] = ["youtube", "instagram", "facebook", "tiktok"];
 
-// Where the video was opened from (the back link): Analytics' tabs, the dashboard, the app's search.
-const FROM = ["content", "audience", "dashboard", "overview", "realtime", "insights", "search", "advanced"] as const;
+// Where the video was opened from (the back link): Analytics' tabs, the dashboard, the app's search, Posting.
+const FROM = ["content", "audience", "dashboard", "overview", "realtime", "insights", "search", "advanced", "posting"] as const;
 type From = (typeof FROM)[number];
 
 export default async function VideoAnalyticsPage({ params, searchParams }: { params: Promise<{ platform: string; id: string }>; searchParams: Promise<{ tab?: string; from?: string }> }) {

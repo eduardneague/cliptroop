@@ -35,6 +35,11 @@ function describe(e: ShortEvent, auto: boolean): React.ReactNode {
   }
 }
 
+/** "posted it on YouTube" → "Posted it on YouTube" (the logo stands for the app). */
+function Capital({ children }: { children: React.ReactNode }) {
+  return <span className="inline-block first-letter:uppercase">{children}</span>;
+}
+
 /** The short's history — written by the database, so it can't be edited or faked. */
 export function ActivityCard({ events }: { events: ShortEvent[] }) {
   return (
@@ -49,13 +54,14 @@ export function ActivityCard({ events }: { events: ShortEvent[] }) {
               {e.actor ? (
                 <PersonAvatar name={e.actor.name} avatarUrl={e.actor.avatarUrl} color={e.actor.color} className="w-6 h-6 text-[9px] ring-2 ring-surface" />
               ) : (
-                // No person: the app did it by itself (posting): Clip, the logo.
-                <span className="w-6 h-6 rounded-md bg-surface ring-2 ring-surface flex-shrink-0 flex items-center justify-center" aria-hidden>
+                // No person: the app did it by itself (posting): just ClipTroop's logo.
+                <span className="w-6 h-6 rounded-md bg-surface ring-2 ring-surface flex-shrink-0 flex items-center justify-center" title={APP_NAME} aria-hidden>
                   <ClipLogo size={24} id="clip-logo-activity" />
                 </span>
               )}
               <div className="min-w-0 text-[12.5px] leading-snug pt-0.5">
-                <span className="font-semibold">{e.actor?.name ?? APP_NAME}</span> {describe(e, !e.actor)}
+                {/* The app's own (1.24.0): just the logo says who, the line starts with what. */}
+                {e.actor ? <span className="font-semibold">{e.actor.name}</span> : <span className="sr-only">{APP_NAME}</span>} {e.actor ? describe(e, false) : <Capital>{describe(e, true)}</Capital>}
                 {e.note && (
                   <p className="mt-1 rounded-lg bg-amber/10 text-ink px-2.5 py-1.5 text-[12px] whitespace-pre-wrap">{e.note}</p>
                 )}

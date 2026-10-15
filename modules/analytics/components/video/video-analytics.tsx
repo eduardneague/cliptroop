@@ -43,7 +43,7 @@ export function VideoAnalytics({
   teamId: string;
   data: VideoPageData;
   tab: VideoTab;
-  from: "content" | "advanced" | "audience" | "dashboard" | "overview" | "realtime" | "insights" | "search";
+  from: "content" | "advanced" | "audience" | "dashboard" | "overview" | "realtime" | "insights" | "search" | "posting";
   revenueAllowed: boolean;
 }) {
   const v = data.video;
@@ -113,9 +113,11 @@ export function VideoAnalytics({
   const back =
     from === "dashboard"
       ? { href: "/dashboard", label: "Dashboard" }
-      : from === "advanced"
-        ? { href: `/analytics?tab=advanced&platform=${v.platform}`, label: "Analytics · Advanced" }
-        : { href: `/analytics?tab=${from === "search" ? "overview" : from}`, label: `Analytics · ${TAB_BACK[from] ?? "Overview"}` };
+      : from === "posting"
+        ? { href: "/posting?tab=posted", label: "Posting" }
+        : from === "advanced"
+          ? { href: `/analytics?tab=advanced&platform=${v.platform}`, label: "Analytics · Advanced" }
+          : { href: `/analytics?tab=${from === "search" ? "overview" : from}`, label: `Analytics · ${TAB_BACK[from] ?? "Overview"}` };
 
   return (
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1400px] mx-auto space-y-5 sm:space-y-6">
