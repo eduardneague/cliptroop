@@ -24,6 +24,8 @@ export type ProjectResult = {
   expected_date: string | null;
   matched_title: string | null;
   thumbnail_path: string | null;
+  /** Thumbnail Studio's winner (1.25.0, migration 0089): shown before the sketch. */
+  winner_id?: string | null;
   team: SearchTeamRef;
 };
 

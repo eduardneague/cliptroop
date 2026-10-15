@@ -70,6 +70,31 @@ export async function toggleWinner(id: string, projectId: string): Promise<Resul
   return { winner: !!data };
 }
 
+/** Another title to try on the same thumbnail, side by side (1.25.0). Kept for the whole video. */
+export async function addPackageTitle(projectId: string, title: string): Promise<Result<{ id: string; title: string }>> {
+  if (!UUID.test(projectId)) return { error: "Video not found." };
+  const t = String(title ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return { error: "Write a title first." };
+  if (t.length > 100) return { error: "YouTube titles can be up to 100 characters." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("package_titles").insert({ project_id: projectId, title: t }).select("id, title").single();
+  if (error || !data) {
+    if (error?.code === "42P01" || error?.code === "PGRST205") return { error: "This needs the latest database update (migration 0089)." };
+    return { error: "Only the master or a packager can add titles." };
+  }
+  refresh(projectId);
+  return { id: data.id as string, title: data.title as string };
+}
+
+export async function deletePackageTitle(id: string): Promise<Result> {
+  if (!UUID.test(id)) return { error: "Title not found." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("package_titles").delete().eq("id", id).select("project_id");
+  if (error || !data?.length) return { error: "Only the master or a packager can delete titles." };
+  refresh(data[0].project_id as string);
+  return {};
+}
+
 // ---------------------------------------------------------------------------
 // Placeholder library: import popular videos from YouTube (on demand)
 // ---------------------------------------------------------------------------

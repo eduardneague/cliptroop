@@ -35,6 +35,9 @@ import { getLongScript } from "@/modules/scripts/lib/queries";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { ScriptersButton } from "@/modules/short-videos/components/scripters-button";
 import { setLongScripter } from "./actions";
+import { listNotes, listVersions, type ReviewNote, type VideoVersion } from "@/modules/review/lib/queries";
+import { VideoCard } from "@/modules/review/components/video-card";
+import { LongVideoFile } from "./video-file";
 
 // The steps ARE the tabs.
 const TABS: PipelineStage[] = STAGE_ORDER;
@@ -69,6 +72,8 @@ export default async function ProjectDetailPage({
   const teamId: string = project.team_id;
   // Opens on the video's current step (any step can be opened any time).
   const tab: PipelineStage = TABS.includes(tabParam as PipelineStage) ? (tabParam as PipelineStage) : (project.stage as PipelineStage);
+  // Edit, Review and Post show the uploaded edit (1.25.0).
+  const videoTab = tab === "edit" || tab === "review" || tab === "publish" || tab === "done";
 
   // Everything below depends only on the project id / team id, so it all
   // runs in parallel — one round of waiting instead of a chain.
@@ -87,6 +92,9 @@ export default async function ProjectDetailPage({
     script,
     people,
     { data: packageRows },
+    longVersions,
+    longNotes,
+    { data: reviewDefaults },
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -128,7 +136,17 @@ export default async function ProjectDetailPage({
     listTeamPeople(teamId),
     // Package: the Studio's winner (or first variation) for the summary card.
     supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
+    videoTab ? listVersions(id, "long") : Promise.resolve([] as VideoVersion[]),
+    tab === "edit" || tab === "review" ? listNotes(id, "long") : Promise.resolve([] as ReviewNote[]),
+    // Its own query: long_media_keep_days arrives with 0089.
+    supabase.from("teams").select("long_in_app_review, long_media_keep_days").eq("id", teamId).maybeSingle(),
   ]);
+  // Reviewed in ClipTroop: the video's own choice, else the team's (Team → Defaults).
+  const inAppReview = (project.in_app_review as boolean | null) ?? !!reviewDefaults?.long_in_app_review;
+  const approvedVersionId = (project.approved_version_id as string | null) ?? null;
+  const latestLong = longVersions.find((v) => !v.deleted) ?? null;
+  const postFile = (approvedVersionId ? longVersions.find((v) => v.id === approvedVersionId) : null) ?? latestLong ?? longVersions[0] ?? null;
+  const openLongNotes = latestLong ? longNotes.filter((n) => n.versionId === latestLong.id && !n.parentId && !n.resolvedAt).length : 0;
   // Where this video has its own analytics page (1.17.0): its videos on the accounts connected now.
   const analyticsIds =
     tab === "publish" || tab === "done"
@@ -147,6 +165,9 @@ export default async function ProjectDetailPage({
 
   const userIsMaster = isMaster(membership?.roles ?? []);
   const myRoles = membership?.roles ?? [];
+  // Masters, schedulers and editors upload the edit (the database checks the same, 0089).
+  const canUploadLong = userIsMaster || myRoles.includes("publisher") || myRoles.includes("editor");
+  const showVideo = inAppReview || longVersions.length > 0;
   const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
 
   const memberColors = ["#E8630D", "#178C7C", "#3159C9", "#6B4FD6", "#B84070", "#B4890E", "#2B9757"];
@@ -272,6 +293,8 @@ export default async function ProjectDetailPage({
               platforms={(project.platforms as string[] | null) ?? ["youtube"]}
               people={people}
               scripterIds={scripterIds}
+              inAppReview={(project.in_app_review as boolean | null) ?? null}
+              teamInAppReview={!!reviewDefaults?.long_in_app_review}
               assignees={Object.fromEntries(
                 ["research", "film", "edit", "package", "publish"].map((st) => [
                   st,
@@ -476,6 +499,21 @@ export default async function ProjectDetailPage({
                   editNote={project.edit_note}
                   reviewNote={project.review_note}
                   nasPath={project.nas_path}
+                  needsUpload={inAppReview && !latestLong}
+                  video={
+                    showVideo ? (
+                      <VideoCard
+                        kind="long"
+                        shortId={id}
+                        teamId={teamId}
+                        versions={longVersions}
+                        openNotes={openLongNotes}
+                        canUpload={canUploadLong && project.stage === "edit"}
+                        prominent={project.stage === "edit" && !latestLong}
+                        approvedId={approvedVersionId}
+                      />
+                    ) : null
+                  }
                 />
               )}
               {tab === "review" && (
@@ -489,6 +527,21 @@ export default async function ProjectDetailPage({
                   reviewedAt={project.reviewed_at}
                   reviewedBy={nameOf(project.reviewed_by)}
                   approved={STAGE_ORDER.indexOf(project.stage as PipelineStage) > STAGE_ORDER.indexOf("review")}
+                  video={
+                    showVideo ? (
+                      <VideoCard
+                        kind="long"
+                        shortId={id}
+                        teamId={teamId}
+                        versions={longVersions}
+                        openNotes={openLongNotes}
+                        canUpload={false}
+                        prominent={project.stage === "review" && !!latestLong}
+                        approvedId={approvedVersionId}
+                        hint="Nothing was uploaded for this video."
+                      />
+                    ) : null
+                  }
                 />
               )}
               {tab === "package" && (
@@ -534,6 +587,16 @@ export default async function ProjectDetailPage({
                   value={project.description ?? null}
                   teamDefault={(teamDefaults?.default_long_description as string | undefined) ?? ""}
                   canEdit={canActOnStage(membership, "package")}
+                />
+              )}
+              {(tab === "publish" || tab === "done") && postFile && (
+                <LongVideoFile
+                  projectId={id}
+                  video={postFile}
+                  approved={postFile.id === approvedVersionId}
+                  keepDays={(reviewDefaults?.long_media_keep_days as number | undefined) ?? 7}
+                  keep={!!project.keep_media}
+                  canKeep={userIsMaster || myRoles.includes("publisher")}
                 />
               )}
               {(tab === "publish" || tab === "done") && (

@@ -52,15 +52,26 @@ export async function deleteProject(projectId: string, _teamId?: string) {
 
   const admin = createAdminClient();
 
-  const [{ data: thumbFiles }, { data: attachFiles }] = await Promise.all([
+  // Its edits (1.25.0, up to 3 GB each) and Thumbnail Studio's images live
+  // under <team>/<video>/: they go too, so nothing is left behind.
+  const folder = `${check.project.team_id as string}/${projectId}`;
+  const [{ data: thumbFiles }, { data: attachFiles }, { data: editFiles }, { data: studioFiles }] = await Promise.all([
     admin.storage.from("thumbnails").list(projectId),
     admin.storage.from("comment-attachments").list(projectId),
+    admin.storage.from("long-review-videos").list(folder, { limit: 1000 }),
+    admin.storage.from("package-thumbs").list(folder, { limit: 1000 }),
   ]);
   if (thumbFiles && thumbFiles.length > 0) {
     await admin.storage.from("thumbnails").remove(thumbFiles.map((f) => `${projectId}/${f.name}`));
   }
   if (attachFiles && attachFiles.length > 0) {
     await admin.storage.from("comment-attachments").remove(attachFiles.map((f) => `${projectId}/${f.name}`));
+  }
+  if (editFiles && editFiles.length > 0) {
+    await admin.storage.from("long-review-videos").remove(editFiles.map((f) => `${folder}/${f.name}`));
+  }
+  if (studioFiles && studioFiles.length > 0) {
+    await admin.storage.from("package-thumbs").remove(studioFiles.map((f) => `${folder}/${f.name}`));
   }
 
   const { error } = await admin.from("long_video_projects").delete().eq("id", projectId);

@@ -38,6 +38,8 @@ import { socialKeyConfigured } from "@/lib/social/crypto";
 
 import { getMediaKeep, getShortSettings, listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { MediaKeepForm } from "./media-keep-form";
+import { LongFilesForms, LongReviewToggle } from "./long-files-forms";
+import { getLongFilesKeep } from "@/modules/long-videos/lib/queries";
 import { TasksVisibilityForm } from "./tasks-visibility-form";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
@@ -75,6 +77,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     mediaKeep,
     tasksVis,
     objectivesBoard,
+    longFiles,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -82,7 +85,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     supabase
       .from("teams")
       .select(
-        "id, name, logo_url, color, owner_id, short_color, long_color, default_long_description, default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id"
+        "id, name, logo_url, color, owner_id, short_color, long_color, default_long_description, default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id, long_in_app_review"
       )
       .eq("id", currentTeam.id)
       .single(),
@@ -122,6 +125,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     tab === "defaults" ? supabase.from("teams").select("tasks_visibility").eq("id", currentTeam.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     // Objectives (0078): the team's goals with where each stands now.
     tab === "objectives" ? getObjectivesBoard(supabase, currentTeam.id, { history: "none" }) : Promise.resolve(null),
+    // Long videos' files and Thumbnail Studio's (0089).
+    tab === "defaults" ? getLongFilesKeep(currentTeam.id) : Promise.resolve(null),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -235,6 +240,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           <section className="rounded-xl border border-line/10 bg-surface p-6">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Long videos</h2>
             <p className="text-[12px] text-ink-soft mb-5">What every new long video starts with.</p>
+            <div className="mb-6 pb-5 border-b border-line/10">
+              <LongReviewToggle teamId={currentTeam.id} on={!!longDefaults?.long_in_app_review} />
+            </div>
             <LongSettingsForm
               teamId={currentTeam.id}
               description={(longDefaults?.default_long_description as string | undefined) ?? ""}
@@ -264,8 +272,21 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         {userIsMaster && mediaKeep && (
           <section id="video-files" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Video files</h2>
-            <p className="text-[12px] text-ink-soft mb-5">Shorts&rsquo; uploaded videos take the most space. Once a short is posted everywhere, its files are deleted after this long.</p>
+            <p className="text-[12px] text-ink-soft mb-5">Uploaded videos take the most space. Once a video is posted, its files are deleted after this long.</p>
             <MediaKeepForm teamId={currentTeam.id} days={mediaKeep.days} ready={mediaKeep.ready} files={mediaKeep.files} bytes={mediaKeep.bytes} />
+            {longFiles && (
+              <div className="mt-6 pt-5 border-t border-line/10">
+                <LongFilesForms
+                  teamId={currentTeam.id}
+                  ready={longFiles.ready}
+                  longDays={longFiles.longDays}
+                  studioDays={longFiles.studioDays}
+                  files={longFiles.files}
+                  bytes={longFiles.bytes}
+                  thumbs={longFiles.thumbs}
+                />
+              </div>
+            )}
           </section>
         )}
         {userIsMaster && (

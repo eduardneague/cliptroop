@@ -1,5 +1,5 @@
 import "server-only";
-import { cleanupPostedMedia } from "@/lib/media-cleanup";
+import { cleanupPostedLongMedia, cleanupPostedMedia, cleanupStudioThumbs } from "@/lib/media-cleanup";
 import { refreshExpiring } from "@/lib/social/tokens";
 import { syncAllTeams, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 import { pruneJobRuns } from "@/lib/job-runs";
@@ -13,18 +13,23 @@ import { watchHealth } from "@/lib/health-watch";
  * /api/cron/analytics run the same thing by hand.
  */
 
-/** 03:30 UTC: delete posted shorts' video files after the team's choice, keep sign-ins fresh. */
+type Cleaned = { removed: number; failed: number; checked: number } | { error: string };
+const attempt = (fn: () => Promise<{ removed: number; failed: number; checked: number }>): Promise<Cleaned> =>
+  fn().catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
+
+/**
+ * 03:30 UTC: delete posted videos' files after the team's choice (shorts,
+ * long videos and Thumbnail Studio's thumbnails that didn't win, 1.25.0),
+ * keep sign-ins fresh.
+ */
 export async function runCleanupJob() {
-  let media: Awaited<ReturnType<typeof cleanupPostedMedia>> | { error: string };
-  try {
-    media = await cleanupPostedMedia();
-  } catch (e) {
-    media = { error: e instanceof Error ? e.message : String(e) };
-  }
+  const media = await attempt(cleanupPostedMedia);
+  const longMedia = await attempt(cleanupPostedLongMedia);
+  const studio = await attempt(cleanupStudioThumbs);
   // Keep connected accounts signed in (Instagram lasts 60 days, TikTok a year).
   const tokens = await refreshExpiring().catch(() => ({ refreshed: 0, failed: -1 }));
   await pruneJobRuns(createAdminClient());
-  return { ok: !("error" in media), job: "cleanup" as const, media, tokens };
+  return { ok: !("error" in media) && !("error" in longMedia) && !("error" in studio), job: "cleanup" as const, media, longMedia, studio, tokens };
 }
 
 const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;

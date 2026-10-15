@@ -279,6 +279,7 @@ function RichBody({ n }: { n: NotificationItem }) {
         </>
       );
     case "short_review_note":
+    case "long_review_note":
       return (
         <>
           <b>{m.actor?.name}</b> {m.reply ? "replied to your note" : "left a note"}

@@ -351,12 +351,8 @@ body {
   pointer-events: none;
 }
 .script-doc .ProseMirror-selectednode { outline: none; }
-/* Pages and Grid (1.23.1): the text is laid out as one column and each block
-   is moved onto its page (use-pages.ts); the editor is what they're measured in. */
-.script-paper[data-view="pages"] .script-doc,
-.script-paper[data-view="grid"] .script-doc { position: relative; min-height: 0; }
-/* A page break (Ctrl+Enter): a thin dashed line in the long page; on pages it
-   takes no room (the next page is the break), and shows when it's selected. */
+/* A page break (Ctrl+Enter): a thin dashed line in the script; Word exports
+   and printing start a new page there. */
 .pm-page-break {
   position: relative; height: 22px; margin: 0.6em 0; user-select: none; cursor: default;
   background: linear-gradient(to right, rgb(var(--sp-line) / 0.22) 50%, transparent 0) center / 8px 1px repeat-x;
@@ -367,12 +363,6 @@ body {
   color: rgb(var(--sp-soft)); background: rgb(var(--sp-bg));
 }
 .pm-page-break.ProseMirror-selectednode { outline: 2px solid rgb(var(--amber) / 0.6); outline-offset: 2px; border-radius: 4px; }
-.script-paper[data-view="pages"] .pm-page-break,
-.script-paper[data-view="grid"] .pm-page-break { height: 0; margin: 0 !important; background: none; overflow: visible; }
-.script-paper[data-view="pages"] .pm-page-break::after,
-.script-paper[data-view="grid"] .pm-page-break::after { display: none; }
-.script-paper[data-view="pages"] .pm-page-break.ProseMirror-selectednode::after,
-.script-paper[data-view="grid"] .pm-page-break.ProseMirror-selectednode::after { display: block; top: 12px; }
 .print-only { display: none; }
 
 /* PDF export = the browser's print, showing only the paper. */
@@ -386,9 +376,7 @@ body {
     --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
   }
   .script-print .print-only { display: block; }
-  /* Pages and Grid: print at the real size, in the browser's own pages (the moves undone). */
-  .script-print { transform: none !important; min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
-  .script-print .script-doc > *, .script-print .script-doc li { transform: none !important; }
+  .script-print { min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
   .pm-page-break { break-after: page; height: 0 !important; margin: 0 !important; background: none !important; }
   .pm-page-break::after { display: none !important; }
   .no-print { display: none !important; }

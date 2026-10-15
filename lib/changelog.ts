@@ -23,6 +23,24 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.25.0",
+    date: "2026-10-15",
+    title: "Long videos, reviewed in ClipTroop",
+    changes: [
+      { kind: "new", text: "Long videos can be reviewed in ClipTroop, like shorts: the editor uploads the edit (files up to 3 GB) and the master leaves notes at any moment of it, with replies, Resolve and Compare for two versions." },
+      { kind: "new", text: "Turn it on for the whole team in Team → Defaults → Long videos, or for one video in its settings. When it's on, a video goes to Review once its edit is uploaded." },
+      { kind: "new", text: "Approving keeps the version you watched. The Post step has that file to watch or download for YouTube." },
+      { kind: "new", text: "A posted long video's files are deleted after a week, or after the time you pick in Team → Defaults → Video files (3 days to a month). Masters and schedulers can keep a video's files." },
+      { kind: "new", text: "Thumbnail Studio: try one thumbnail with different titles, side by side. Add as many titles as you like (your title ideas from Ideate are there too) and use the best one in one click." },
+      { kind: "new", text: "Thumbnails that didn't win are deleted a while after the video is posted: 1 month by default, or your pick in Team → Defaults → Video files. The winners always stay." },
+      { kind: "better", text: "Thumbnail Studio's thumbnails sit in a row on top, so the YouTube preview gets the whole screen and is much bigger." },
+      { kind: "better", text: "Compare and Titles show your video up close at its real size, or the whole page." },
+      { kind: "better", text: "Search and the Long videos list show the thumbnail that won in Thumbnail Studio, and the first sketch from Ideate until one wins." },
+      { kind: "better", text: "Scripts are one long page now: Pages and Grid are gone. Ctrl + Enter still starts a new page in Word exports and when printing." },
+      { kind: "fixed", text: "Thumbnail Studio's titles keep the right size after the window gets smaller and bigger again." },
+    ],
+  },
+  {
     version: "1.24.0",
     date: "2026-10-15",
     title: "Posting, as a dashboard",

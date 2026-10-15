@@ -75,7 +75,7 @@ export async function UsageTab() {
           <Widget title="Uploads per day, 30 days">
             <UploadsChart days={usage.uploads} height={120} />
             <p className="mt-3 text-[12px] text-ink-soft">
-              {fmtNum(usage.uploads.reduce((t, d) => t + d.files, 0))} files, {fmtBytes(usage.uploads.reduce((t, d) => t + d.bytes, 0))} in 30 days. Short videos are deleted after posting, on each team&rsquo;s
+              {fmtNum(usage.uploads.reduce((t, d) => t + d.files, 0))} files, {fmtBytes(usage.uploads.reduce((t, d) => t + d.bytes, 0))} in 30 days. Uploaded videos (shorts and long videos) are deleted after posting, on each team&rsquo;s
               schedule (Team → Defaults → Video files), so storage goes down too.
             </p>
           </Widget>
@@ -151,7 +151,8 @@ function StorageOutlook({ uploads, used, limit, buckets, cleaned }: { uploads: {
   const busiest = uploads.reduce<{ day: string; bytes: number } | null>((b, d) => (!b || d.bytes > b.bytes ? d : b), null);
   const room = Math.max(0, limit - used);
   const daysLeft = perDay > 0 ? Math.floor(room / perDay) : null;
-  const videos = buckets.find((b) => b.id === "review-videos")?.bytes ?? 0;
+  // Shorts' and (1.25.0) long videos' uploads.
+  const videos = buckets.filter((b) => b.id === "review-videos" || b.id === "long-review-videos").reduce((t, b) => t + b.bytes, 0);
   const total = buckets.reduce((t, b) => t + b.bytes, 0);
   const byWeekday = WEEKDAYS.map(() => 0);
   for (const d of uploads) byWeekday[(new Date(`${d.day}T00:00:00Z`).getUTCDay() + 6) % 7] += d.bytes;
@@ -166,7 +167,7 @@ function StorageOutlook({ uploads, used, limit, buckets, cleaned }: { uploads: {
     },
     { label: "Average file", value: files30 ? fmtBytes(bytes30 / files30) : "–", sub: `${fmtNum(files30)} files in 30 days` },
     { label: "Busiest day", value: busiest && busiest.bytes ? fmtBytes(busiest.bytes) : "–", sub: busiest && busiest.bytes ? label(busiest.day) : "no uploads yet" },
-    { label: "Short videos", value: total ? `${Math.round((videos / total) * 100)}%` : "–", sub: `of storage · ${fmtNum(cleaned)} cleaned up so far` },
+    { label: "Videos", value: total ? `${Math.round((videos / total) * 100)}%` : "–", sub: `of storage · ${fmtNum(cleaned)} cleaned up so far` },
     {
       label: "Room left",
       value: fmtBytes(room),

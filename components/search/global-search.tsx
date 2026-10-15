@@ -269,7 +269,8 @@ export function GlobalSearch({
 
     data.projects.forEach((p) => {
       const href = `/videos/${p.id}`;
-      const thumb = p.thumbnail_path ? THUMB_BASE + p.thumbnail_path : null;
+      // The thumbnail that won in Thumbnail Studio (1.25.0), else the first sketch from Ideate.
+      const thumb = p.winner_id ? `/api/package-thumb/${p.winner_id}` : p.thumbnail_path ? THUMB_BASE + p.thumbnail_path : null;
       const c = stageColor(p.stage);
       list.push({
         key: `project-${p.id}`,

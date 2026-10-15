@@ -59,7 +59,7 @@ export default async function ShortReviewPage({ params }: { params: Promise<{ id
         <ShortStagePill stage={short.stage} size="md" />
       </div>
       <ReviewWorkspace
-        shortId={id}
+        subjectId={id}
         teamId={short.teamId}
         versions={versions}
         notes={notes}

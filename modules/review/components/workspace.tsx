@@ -13,9 +13,10 @@ import { relativeTime } from "@/lib/relative-time";
 import { CheckIcon, CloseIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { addNote, deleteNote, editNote, setNoteResolved } from "@/app/(dashboard)/shorts/[id]/review/actions";
+import { addLongNote, deleteLongNote, editLongNote, setLongNoteResolved } from "@/app/(dashboard)/videos/[id]/review/actions";
 import { playbackUrl, prefetchPlayback } from "../lib/playback";
 import { formatBytes, formatTime } from "../lib/limits";
-import type { Person, ReviewNote, VideoVersion } from "../lib/queries";
+import type { Person, ReviewKind, ReviewNote, VideoVersion } from "../lib/queries";
 import { ReviewPlayer, type PlayerHandle } from "./player";
 import { VersionUploader } from "./uploader";
 import { CompareView } from "./compare";
@@ -23,6 +24,21 @@ import { sounds } from "@/lib/sounds";
 import { minWidth } from "@/lib/breakpoints";
 
 type Filter = "open" | "all";
+
+/** What each kind of review reads and writes: shorts, and long videos (1.25.0). */
+const NOTES = {
+  short: { add: addNote, remove: deleteNote, edit: editNote, resolve: setNoteResolved },
+  long: { add: addLongNote, remove: deleteLongNote, edit: editLongNote, resolve: setLongNoteResolved },
+} as const;
+const LIVE = {
+  short: { notes: "short_video_comments", versions: "short_video_versions", key: "short_id" },
+  long: { notes: "long_video_comments", versions: "long_video_versions", key: "project_id" },
+} as const;
+/** The picture's height: a short is tall, a long video is wide (16:9). */
+const STAGE = {
+  short: "h-[50vh] lg:h-[min(72vh,780px)]",
+  long: "aspect-video max-h-[min(72vh,780px)]",
+} as const;
 type Pending = { tempId: string; versionId: string; parentId: string | null; body: string; time: number | null };
 type Note = ReviewNote & { pending?: boolean };
 type Thread = { note: Note; replies: Note[] };
@@ -59,22 +75,31 @@ function PlayGlyph({ className }: { className?: string }) {
 }
 
 export function ReviewWorkspace({
-  shortId,
+  kind = "short",
+  subjectId,
   teamId,
   versions,
   notes,
   me,
   canUpload,
   isMaster,
+  approvedId = null,
 }: {
-  shortId: string;
+  /** A short's review, or a long video's (1.25.0). */
+  kind?: ReviewKind;
+  /** The short's id, or the long video's. */
+  subjectId: string;
   teamId: string;
   versions: VideoVersion[];
   notes: ReviewNote[];
   me: Person;
   canUpload: boolean;
   isMaster: boolean;
+  /** The version approved in Review (long videos). */
+  approvedId?: string | null;
 }) {
+  const act = NOTES[kind];
+  const wide = kind === "long";
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
@@ -133,7 +158,7 @@ export function ReviewWorkspace({
     setSrc(null);
     setSrcError(null);
     if (!versionId) return;
-    void playbackUrl(versionId).then((res) => {
+    void playbackUrl(versionId, kind).then((res) => {
       if (cancelled) return;
       if (res.url) setSrc(res.url);
       else setSrcError(res.error ?? "Couldn't open the video.");
@@ -141,15 +166,15 @@ export function ReviewWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [versionId]);
+  }, [versionId, kind]);
 
   const refresh = useCallback(() => startRefresh(() => router.refresh()), [router]);
 
   // Links for every version, up front: switching versions is instant.
   const liveIds = live.map((v) => v.id).join(",");
   useEffect(() => {
-    if (liveIds) prefetchPlayback(liveIds.split(","));
-  }, [liveIds]);
+    if (liveIds) prefetchPlayback(liveIds.split(","), kind);
+  }, [liveIds, kind]);
 
   // Live updates from everyone else.
   useEffect(() => {
@@ -159,16 +184,17 @@ export function ReviewWorkspace({
       if (t) clearTimeout(t);
       t = setTimeout(refresh, 250);
     };
+    const live = LIVE[kind];
     const ch = supabase
-      .channel(`review-${shortId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "short_video_comments", filter: `short_id=eq.${shortId}` }, later)
-      .on("postgres_changes", { event: "*", schema: "public", table: "short_video_versions", filter: `short_id=eq.${shortId}` }, later)
+      .channel(`review-${kind}-${subjectId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: live.notes, filter: `${live.key}=eq.${subjectId}` }, later)
+      .on("postgres_changes", { event: "*", schema: "public", table: live.versions, filter: `${live.key}=eq.${subjectId}` }, later)
       .subscribe();
     return () => {
       if (t) clearTimeout(t);
       void supabase.removeChannel(ch);
     };
-  }, [shortId, refresh]);
+  }, [kind, subjectId, refresh]);
 
   const openComposer = useCallback(() => {
     player.current?.pause();
@@ -256,7 +282,7 @@ export function ReviewWorkspace({
       if (!versionId || !body.trim()) return false;
       const tempId = `temp-${crypto.randomUUID()}`;
       setPending((p) => [...p, { tempId, versionId, parentId, body: body.trim(), time }]);
-      const res = await addNote({ versionId, body, time, parentId });
+      const res = await act.add({ versionId, body, time, parentId });
       if (res.error !== undefined) {
         setPending((p) => p.filter((x) => x.tempId !== tempId));
         toast.error(res.error);
@@ -265,7 +291,7 @@ export function ReviewWorkspace({
       refresh();
       return true;
     },
-    [versionId, toast, refresh]
+    [versionId, toast, refresh, act]
   );
 
   async function resolve(id: string, value: boolean) {
@@ -278,7 +304,7 @@ export function ReviewWorkspace({
       if (!ok) return;
     }
     setBusyId(id);
-    const res = await setNoteResolved(id, value);
+    const res = await act.resolve(id, value);
     setBusyId(null);
     if (res.error !== undefined) toast.error(res.error);
     else refresh();
@@ -287,7 +313,7 @@ export function ReviewWorkspace({
   async function remove(id: string) {
     if (!(await confirm({ title: "Delete this note?", confirmLabel: "Delete", danger: true }))) return;
     setBusyId(id);
-    const res = await deleteNote(id);
+    const res = await act.remove(id);
     setBusyId(null);
     if (res.error !== undefined) toast.error(res.error);
     else refresh();
@@ -295,7 +321,7 @@ export function ReviewWorkspace({
 
   async function edit(id: string, body: string) {
     setBusyId(id);
-    const res = await editNote(id, body);
+    const res = await act.edit(id, body);
     setBusyId(null);
     if (res.error !== undefined) toast.error(res.error);
     else refresh();
@@ -357,6 +383,7 @@ export function ReviewWorkspace({
               versions={ordered}
               value={versionId}
               latestId={latest?.id ?? null}
+              approvedId={approvedId}
               onChange={(id) => {
                 setVersionId(id);
                 setComparing(false);
@@ -381,12 +408,12 @@ export function ReviewWorkspace({
           )}
           <span className="flex-1" />
           {canUpload && !comparing && (
-            <VersionUploader teamId={teamId} shortId={shortId} nextNumber={nextNumber} onUploaded={(id) => setVersionId(id)} prominent={versions.length === 0} />
+            <VersionUploader kind={kind} teamId={teamId} subjectId={subjectId} nextNumber={nextNumber} onUploaded={(id) => setVersionId(id)} prominent={versions.length === 0} />
           )}
         </div>
 
         {comparing ? (
-          <CompareView versions={versions} onClose={() => setComparing(false)} />
+          <CompareView kind={kind} versions={versions} onClose={() => setComparing(false)} />
         ) : version ? (
           <>
             <ReviewPlayer
@@ -394,6 +421,8 @@ export function ReviewWorkspace({
               src={src}
               error={srcError}
               markers={markers}
+              wide={wide}
+              stageClass={STAGE[kind]}
               onTime={setNow}
               onSeeked={() => setSeekingId(null)}
               onMarker={(id) => {
@@ -404,7 +433,9 @@ export function ReviewWorkspace({
               }}
             />
             <p className="text-[12px] text-ink-soft">
-              v{version.number} · {formatBytes(version.size)}
+              v{version.number}
+              {version.id === approvedId ? " (approved)" : ""} · {version.duration ? `${formatTime(version.duration)} · ` : ""}
+              {formatBytes(version.size)}
               {version.width && version.height ? ` · ${version.width}×${version.height}` : ""}
               {version.uploadedBy ? ` · uploaded by ${version.uploadedBy.name}` : ""}, <Ago iso={version.createdAt} />
               <span className="hidden md:inline"> · Space play · J/L 5s · , . frame · C note · N notes</span>
@@ -413,8 +444,8 @@ export function ReviewWorkspace({
         ) : versionId || versions.length > 0 || refreshing ? (
           // A video is on its way (just uploaded, or still loading): skeleton, never "No video yet".
           <div role="status" aria-label="Loading the video" className="rounded-2xl overflow-hidden bg-black ring-1 ring-white/5">
-            <div className="h-[50vh] lg:h-[min(72vh,780px)] flex items-center justify-center">
-              <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
+            <div className={`${STAGE[kind]} flex items-center justify-center`}>
+              <div className={`${wide ? "w-[92%] aspect-video max-h-[86%]" : "h-[86%] aspect-[9/16]"} rounded-xl bg-white/[0.06] animate-pulse`} />
             </div>
             <div className="h-[84px] bg-[#0f0e0c]" />
           </div>
@@ -501,16 +532,18 @@ function VersionPicker({
   versions,
   value,
   latestId,
+  approvedId = null,
   onChange,
 }: {
   versions: VideoVersion[];
   value: string | null;
   latestId: string | null;
+  approvedId?: string | null;
   onChange: (id: string) => void;
 }) {
   const options = versions.map((v) => ({
     value: v.id,
-    label: `v${v.number}${v.id === latestId ? " · latest" : ""}`,
+    label: `v${v.number}${v.id === approvedId ? " · approved" : v.id === latestId ? " · latest" : ""}`,
     hint: v.deleted ? "Cleaned up after posting" : `${formatBytes(v.size)} · ${relativeTime(v.createdAt)}`,
     disabled: v.deleted,
   }));
@@ -539,7 +572,11 @@ function VersionPicker({
             }`}
           >
             v{v.number}
-            {v.id === latestId && <span className="ml-1.5 text-[9.5px] font-bold uppercase tracking-wide opacity-70">latest</span>}
+            {v.id === approvedId ? (
+              <span className="ml-1.5 text-[9.5px] font-bold uppercase tracking-wide text-green">approved</span>
+            ) : (
+              v.id === latestId && <span className="ml-1.5 text-[9.5px] font-bold uppercase tracking-wide opacity-70">latest</span>
+            )}
           </button>
         ))}
       </div>

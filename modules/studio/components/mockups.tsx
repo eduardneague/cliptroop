@@ -28,28 +28,91 @@ type Pal = (typeof PAL)["light"];
 const CHIPS = ["All", "Technology", "Gaming", "Smartphones", "Podcasts", "Live", "Computers", "Recently uploaded", "New to you"];
 const font = "Roboto, Arial, system-ui, sans-serif";
 
-/** Draws a fixed-width page and scales it to the available width. */
-export function ScaleFrame({ width, children, maxScale = 1 }: { width: number; children: React.ReactNode; maxScale?: number }) {
+/**
+ * Draws a page at `width` and scales it down to the available width.
+ * `fill` (1.25.0): with more room than that, the page is drawn wider instead,
+ * at its real size, like a bigger browser window (YouTube's home grid just
+ * gets bigger thumbnails), so the preview uses the whole screen.
+ */
+export function ScaleFrame({ width, children, maxScale = 1, fill = false }: { width: number; children: React.ReactNode; maxScale?: number; fill?: boolean }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ scale: 0, h: 0 });
+  const [box, setBox] = useState({ scale: 0, h: 0, w: width });
   useEffect(() => {
     const o = outer.current;
     const i = inner.current;
     if (!o || !i) return;
     const measure = () => {
-      const scale = Math.min(maxScale, o.clientWidth / width);
-      setBox({ scale, h: i.offsetHeight * scale });
+      const avail = o.clientWidth;
+      const w = fill ? Math.max(width, Math.floor(avail)) : width;
+      const scale = Math.min(maxScale, avail / w);
+      setBox((b) => {
+        const h = i.offsetHeight * scale;
+        return b.scale === scale && b.h === h && b.w === w ? b : { scale, h, w };
+      });
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(o);
     ro.observe(i);
     return () => ro.disconnect();
-  }, [width, maxScale]);
+  }, [width, maxScale, fill]);
   return (
     <div ref={outer} className="w-full overflow-hidden" style={{ height: box.h || undefined }}>
-      <div ref={inner} style={{ width, transform: `scale(${box.scale})`, transformOrigin: "top left", opacity: box.scale ? 1 : 0 }}>
+      <div ref={inner} style={{ width: box.w, transform: `scale(${box.scale})`, transformOrigin: "top left", opacity: box.scale ? 1 : 0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A close-up of your video on the page (1.25.0, trying titles): the page at
+ * its real size, cropped to your video (the element marked data-mine) and a
+ * little around it, smaller only when the space is narrower than the video.
+ * Several of these side by side are readable, where whole pages would be tiny.
+ */
+export function FocusFrame({ width, children, pad = 20 }: { width: number; children: React.ReactNode; pad?: number }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const [f, setF] = useState<{ x: number; y: number; scale: number; h: number } | null>(null);
+  useEffect(() => {
+    const o = outer.current;
+    const i = inner.current;
+    if (!o || !i) return;
+    const measure = () => {
+      const mine = i.querySelector<HTMLElement>('[data-mine="true"]');
+      const paneW = o.clientWidth;
+      if (!mine || !paneW) return;
+      // Where your video sits on the page (offsets ignore the transform below).
+      let x = 0;
+      let y = 0;
+      for (let el: HTMLElement | null = mine; el && el !== i; el = el.offsetParent as HTMLElement | null) {
+        x += el.offsetLeft;
+        y += el.offsetTop;
+      }
+      const cw = mine.offsetWidth;
+      const ch = mine.offsetHeight;
+      const pageW = i.offsetWidth;
+      const pageH = i.offsetHeight;
+      const scale = Math.min(1, (paneW - 2 * pad) / cw);
+      const h = Math.round((ch + 2 * pad) * scale);
+      const fit = (pane: number, page: number, center: number) => (page * scale <= pane ? (pane - page * scale) / 2 : Math.min(0, Math.max(pane - page * scale, pane / 2 - center * scale)));
+      const next = { x: fit(paneW, pageW, x + cw / 2), y: fit(h, pageH, y + ch / 2), scale, h };
+      setF((b) => (b && b.x === next.x && b.y === next.y && b.scale === next.scale && b.h === next.h ? b : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(o);
+    ro.observe(i);
+    return () => ro.disconnect();
+  }, [width, pad]);
+  return (
+    <div ref={outer} className="w-full overflow-hidden relative" style={{ height: f?.h ?? 240 }}>
+      <div
+        ref={inner}
+        style={{ position: "relative", width, transform: f ? `translate(${f.x}px, ${f.y}px) scale(${f.scale})` : undefined, transformOrigin: "top left", opacity: f ? 1 : 0 }}
+      >
         {children}
       </div>
     </div>
@@ -191,8 +254,8 @@ export const SearchMock = memo(function SearchMock({ cards, theme, query }: { ca
   return (
     <div style={{ background: p.bg, paddingBottom: 24, fontFamily: font }}>
       <Header p={p} />
-      <div style={{ padding: "8px 24px", color: p.meta, fontSize: 14 }}>Results for “{query}”</div>
-      <div style={{ display: "grid", gap: 16, padding: "8px 24px", maxWidth: 1096 }}>
+      <div style={{ padding: "8px 24px", color: p.meta, fontSize: 14, maxWidth: 1096, margin: "0 auto" }}>Results for “{query}”</div>
+      <div style={{ display: "grid", gap: 16, padding: "8px 24px", maxWidth: 1096, margin: "0 auto" }}>
         {cards.slice(0, 6).map((c) => (
           <div key={c.key} data-mine={c.mine ? "true" : undefined} style={{ display: "flex", gap: 16 }}>
             <Thumb c={c} p={p} radius={12} width={500} />

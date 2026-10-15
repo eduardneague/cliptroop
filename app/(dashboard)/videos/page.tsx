@@ -64,11 +64,28 @@ export default async function VideosPage({
 
   // Stage counts for the filter chips — one tiny query (just the stage
   // column), run in parallel with the main list.
-  const [{ data: projects }, { data: stageRows }, membership] = await Promise.all([
+  const [{ data: projects }, { data: stageRows }, membership, { data: winnerRows }] = await Promise.all([
     query,
     supabase.from("long_video_projects").select("stage").eq("team_id", currentTeam.id),
     getMembership(supabase, currentTeam.id),
+    // Thumbnail Studio's winners (1.25.0): a video shows its winning thumbnail, else its first sketch.
+    supabase
+      .from("package_entries")
+      .select("id, project_id, position, long_video_projects!inner(team_id)")
+      .eq("long_video_projects.team_id", currentTeam.id)
+      .eq("is_winner", true)
+      .not("thumbnail_storage_path", "is", null)
+      .order("position"),
   ]);
+  const thumbnailBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
+  const winnerOf = new Map<string, string>();
+  for (const w of winnerRows ?? []) if (!winnerOf.has(w.project_id as string)) winnerOf.set(w.project_id as string, w.id as string);
+  const coverOf = (p: { id: string; project_thumbnails?: { storage_path: string; position: number }[] | null }) => {
+    const winner = winnerOf.get(p.id);
+    if (winner) return `/api/package-thumb/${winner}`;
+    const first = [...(p.project_thumbnails ?? [])].sort((a, b) => a.position - b.position)[0];
+    return first ? thumbnailBase + first.storage_path : null;
+  };
   const createRoles = membership?.roles ?? [];
   const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
   const stageCounts = new Map<string, number>();
@@ -86,7 +103,6 @@ export default async function VideosPage({
     const soon = Date.parse(`${p.expected_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`) <= 7 * 86_400_000;
     return { text: `${formatDate(p.expected_date)}${rel ? ` · ${rel}` : ""}`, tone: soon ? "text-amber font-semibold" : "text-ink-soft" };
   };
-  const thumbnailBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
 
   return (
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1720px] mx-auto">
@@ -208,8 +224,7 @@ export default async function VideosPage({
             <span className="hidden sm:block">Expected</span>
           </div>
           {projects.map((p) => {
-            const thumbs = (p.project_thumbnails ?? []).sort((a, b) => a.position - b.position);
-            const cover = thumbs[0];
+            const cover = coverOf(p);
             const c = stageColor(p.stage as PipelineStage);
             const themeColor = colorForId(p.theme || "theme");
             return (
@@ -229,7 +244,7 @@ export default async function VideosPage({
                 >
                   {cover && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img loading="lazy" decoding="async" src={thumbnailBase + cover.storage_path} alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={cover} alt="" className="w-full h-full object-cover" />
                   )}
                 </span>
                 <span className="text-[13px] font-semibold truncate">{p.title}</span>
@@ -256,8 +271,7 @@ export default async function VideosPage({
       ) : (
         <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
           {projects.map((p) => {
-            const thumbs = (p.project_thumbnails ?? []).sort((a, b) => a.position - b.position);
-            const cover = thumbs[0];
+            const cover = coverOf(p);
             const c = stageColor(p.stage as PipelineStage);
             return (
               <Link
@@ -269,7 +283,7 @@ export default async function VideosPage({
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img loading="lazy" decoding="async"
-                      src={thumbnailBase + cover.storage_path}
+                      src={cover}
                       alt=""
                       className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                     />

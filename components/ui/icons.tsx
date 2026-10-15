@@ -1031,3 +1031,20 @@ export function PageBreakIcon(p: IconProps) {
     </Svg>
   );
 }
+/** Several titles on one thumbnail (Thumbnail Studio, 1.25.0): a T and lines of text. */
+export function TitlesIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 5h10M8 5v14" />
+      <path d="M15.5 11H21M15.5 15H21M15.5 19h3.5" />
+    </Svg>
+  );
+}
+/** Shuffle (Thumbnail Studio): crossing arrows. */
+export function ShuffleIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+    </Svg>
+  );
+}

@@ -7,21 +7,29 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { AlertIcon, ArrowLeftIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ExpandIcon, GridIcon, ImageIcon, PlusIcon, SettingsIcon, StarIcon, TrashIcon } from "@/components/ui/icons";
-
-function ShuffleIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
-    </svg>
-  );
-}
-import type { LibraryVideo, StudioData, Variant } from "../lib/queries";
+import {
+  AlertIcon,
+  ArrowLeftIcon,
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  ExpandIcon,
+  GridIcon,
+  ImageIcon,
+  PlusIcon,
+  SettingsIcon,
+  ShuffleIcon,
+  StarIcon,
+  TitlesIcon,
+  TrashIcon,
+} from "@/components/ui/icons";
+import type { LibraryVideo, StudioData, StudioTitle, Variant } from "../lib/queries";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Select } from "@/components/ui/select";
-import { deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
-import { HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
-import { belowWidth, minWidth } from "@/lib/breakpoints";
+import { addPackageTitle, deletePackageTitle, deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
+import { FocusFrame, HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
+import { belowWidth } from "@/lib/breakpoints";
 
 const VIEWS: { id: MockView; label: string }[] = [
   { id: "home", label: "Home" },
@@ -31,6 +39,22 @@ const VIEWS: { id: MockView; label: string }[] = [
   { id: "tablet", label: "Tablet" },
   { id: "tv", label: "TV" },
 ];
+/** The desktop pages use all the room there is (1.25.0); phones, tablets and the TV keep their own size. */
+const FILL: Record<MockView, boolean> = { home: true, search: true, upnext: true, mobile: false, tablet: false, tv: false };
+/**
+ * Comparing up close (1.25.0): your video at its real size, side by side;
+ * search results and Up next are lists, so one under the other.
+ */
+const CLOSE_GRID: Record<MockView, string> = {
+  home: "grid-cols-[repeat(auto-fill,minmax(min(380px,100%),1fr))]",
+  tablet: "grid-cols-[repeat(auto-fill,minmax(min(380px,100%),1fr))]",
+  mobile: "grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]",
+  tv: "grid-cols-[repeat(auto-fill,minmax(min(520px,100%),1fr))]",
+  search: "grid-cols-1",
+  upnext: "grid-cols-1",
+};
+/** Comparing whole pages: up to three side by side. */
+const PAGE_GRID = (n: number) => (n >= 3 ? "md:grid-cols-2 xl:grid-cols-3" : n === 2 ? "md:grid-cols-2" : "");
 const REGIONS = [
   ["US", "United States"],
   ["GB", "United Kingdom"],
@@ -39,6 +63,13 @@ const REGIONS = [
   ["DE", "Germany"],
 ] as const;
 const MAX_BYTES = 2 * 1024 * 1024;
+
+/** Comparing: several thumbnails, or one thumbnail with several titles (1.25.0). */
+type Compare = null | "thumbs" | "titles";
+/** Comparing up close (your video at its real size) or whole pages. */
+type Zoom = "close" | "page";
+/** A title to try on the thumbnail that's showing: its own, one added here, or an idea from Ideate. */
+type TitleOption = { key: string; text: string; source: "thumb" | "studio" | "idea"; id: string | null };
 
 // ---- helpers ----------------------------------------------------------------
 function rng(seed: number) {
@@ -77,6 +108,7 @@ const dur = (s: number | null) => {
   const sec = String(s % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 };
+const same = (a: string, b: string) => a.replace(/\s+/g, " ").trim().toLowerCase() === b.replace(/\s+/g, " ").trim().toLowerCase();
 /** What YouTube won't like about an image: a short label and the full reason. */
 function warnings(v: Variant) {
   const w: { short: string; long: string }[] = [];
@@ -118,6 +150,62 @@ const FILLER: MockCard[] = Array.from({ length: 16 }, (_, i) => ({
   duration: "12:34",
 }));
 
+/**
+ * The title of the thumbnail that's showing: grows with it (1 to 3 lines)
+ * and measures again when the window gets narrower or wider (1.25.0: the
+ * old list beside the preview kept stale heights after a resize). Saved when
+ * you leave it; Esc puts it back.
+ */
+function TitleField({ value, readOnly, label, onSave }: { value: string; readOnly: boolean; label: string; onSave: (t: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.scrollHeight) el.style.height = `${el.scrollHeight}px`;
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    fit();
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      fit();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
+  return (
+    <textarea
+      ref={ref}
+      defaultValue={value}
+      onInput={fit}
+      readOnly={readOnly}
+      maxLength={100}
+      rows={1}
+      onBlur={(e) => {
+        const t = e.target.value.replace(/\s+/g, " ").trim();
+        if (t && t !== value) onSave(t);
+        else e.target.value = value;
+        fit();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          e.currentTarget.value = value;
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-full resize-none bg-transparent text-[14px] font-semibold leading-snug outline-none rounded-md px-1.5 py-1 hover:bg-surface-2/60 focus:bg-surface-2"
+      aria-label={label}
+    />
+  );
+}
+
 // ---- the studio -----------------------------------------------------------
 export function Studio({ data }: { data: StudioData }) {
   const router = useRouter();
@@ -129,16 +217,22 @@ export function Studio({ data }: { data: StudioData }) {
   const [variants, setVariants] = useState<Variant[]>(data.variants);
   useEffect(() => setVariants(data.variants), [data.variants]);
   const [activeId, setActiveId] = useState<string | null>(data.variants.find((v) => v.winner)?.id ?? data.variants[0]?.id ?? null);
-  // Compare starts with the winners (A/B candidates) when there are any.
   useEffect(() => {
     if (!activeId || !variants.some((v) => v.id === activeId)) setActiveId(variants[0]?.id ?? null);
   }, [variants, activeId]);
   const active = variants.find((v) => v.id === activeId) ?? null;
 
+  const [titles, setTitles] = useState<StudioTitle[]>(data.titles);
+  useEffect(() => setTitles(data.titles), [data.titles]);
+  const [hiddenTitles, setHiddenTitles] = useState<string[]>([]);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [addingTitle, setAddingTitle] = useState(false);
+
   const [view, setView] = useState<MockView>("home");
   const [theme, setTheme] = useState<"light" | "dark" | "both">("dark");
-  const [compare, setCompare] = useState(false);
+  const [compare, setCompare] = useState<Compare>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [zoom, setZoom] = useState<Record<"thumbs" | "titles", Zoom>>({ thumbs: "page", titles: "close" });
   const [seed, setSeed] = useState(7);
   const [meta, setMeta] = useState({ views: "24K views", age: "2 days ago", duration: "14:32", query: project.title.split(" ").slice(0, 4).join(" ").toLowerCase() });
   const [panel, setPanel] = useState<null | "details" | "library">(null);
@@ -159,15 +253,6 @@ export function Studio({ data }: { data: StudioData }) {
     if (window.matchMedia(belowWidth("sm")).matches) setView("mobile");
     setCanFullscreen(!!document.fullscreenEnabled);
   }, []);
-  // The list (xl) and the strip + editor (smaller) swap at xl: re-render then so the titles re-measure.
-  const [, setWide] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(minWidth("xl"));
-    const on = () => setWide(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
 
   const others = useMemo(() => {
     const lib = data.library.length ? shuffled(data.library, seed).map(libCard) : FILLER;
@@ -175,10 +260,10 @@ export function Studio({ data }: { data: StudioData }) {
   }, [data.library, seed]);
 
   const mineFor = useCallback(
-    (v: Variant | null): MockCard => ({
+    (v: Variant | null, title?: string): MockCard => ({
       key: `mine-${v?.id ?? "none"}`,
       thumb: v?.url ?? null,
-      title: v?.title ?? data.defaultTitle,
+      title: title ?? v?.title ?? data.defaultTitle,
       channel: data.channel.name,
       avatar: data.channel.avatar,
       views: meta.views,
@@ -189,39 +274,73 @@ export function Studio({ data }: { data: StudioData }) {
     [data.channel, data.defaultTitle, meta]
   );
 
-  /** Your video placed among the others, at a seeded spot near the top. */
+  /** Your video placed among the others, at a seeded spot near the top (the same spot for every title). */
   const cardsFor = useCallback(
-    (v: Variant | null, spots: number) => {
+    (v: Variant | null, spots: number, title?: string) => {
       const pos = rng(seed + 11)() * spots;
       const at = Math.floor(pos);
-      return [...others.slice(0, at), mineFor(v), ...others.slice(at)];
+      return [...others.slice(0, at), mineFor(v, title), ...others.slice(at)];
     },
     [others, seed, mineFor]
   );
 
-  const renderView = (v: Variant | null, t: MockTheme) => {
-    const width = VIEW_SIZE[view];
-    const inner =
-      view === "home" ? (
-        <HomeMock cards={cardsFor(v, 8)} theme={t} />
-      ) : view === "search" ? (
-        <SearchMock cards={cardsFor(v, 3)} theme={t} query={meta.query} />
-      ) : view === "upnext" ? (
-        <UpNextMock cards={cardsFor(v, 5).slice(0)} theme={t} playing={others[others.length - 1] ?? null} />
-      ) : view === "mobile" ? (
-        <MobileMock cards={cardsFor(v, 3)} theme={t} />
-      ) : view === "tablet" ? (
-        <TabletMock cards={cardsFor(v, 4)} theme={t} />
-      ) : (
-        <TvMock cards={cardsFor(v, 4)} />
-      );
-    return (
-      <div className={view === "mobile" ? "mx-auto w-full max-w-[390px]" : view === "tablet" ? "mx-auto w-full max-w-[834px]" : "w-full"}>
-        <ScaleFrame width={width}>{inner}</ScaleFrame>
-      </div>
+  /** The page for the chosen layout, with your video (and, trying titles, the title to try). */
+  const pageFor = (v: Variant | null, t: MockTheme, title?: string) => {
+    const cards = (spots: number) => cardsFor(v, spots, title);
+    return view === "home" ? (
+      <HomeMock cards={cards(8)} theme={t} />
+    ) : view === "search" ? (
+      <SearchMock cards={cards(3)} theme={t} query={meta.query} />
+    ) : view === "upnext" ? (
+      <UpNextMock cards={cards(5)} theme={t} playing={others[others.length - 1] ?? null} />
+    ) : view === "mobile" ? (
+      <MobileMock cards={cards(3)} theme={t} />
+    ) : view === "tablet" ? (
+      <TabletMock cards={cards(4)} theme={t} />
+    ) : (
+      <TvMock cards={cards(4)} />
     );
   };
+  const renderView = (v: Variant | null, t: MockTheme, title?: string) => (
+    <div className={view === "mobile" ? "mx-auto w-full max-w-[390px]" : view === "tablet" ? "mx-auto w-full max-w-[834px]" : "w-full"}>
+      <ScaleFrame width={VIEW_SIZE[view]} fill={FILL[view]}>
+        {pageFor(v, t, title)}
+      </ScaleFrame>
+    </div>
+  );
+  /** One pane of a comparison: up close or the whole page. */
+  const pane = (z: Zoom, v: Variant, t: MockTheme, title: string | undefined, border: string) =>
+    z === "close" ? (
+      // The page's own colour below a shorter title, so a row of close-ups lines up.
+      <div key={t} className={`flex-1 rounded-xl overflow-hidden border ${border}`} style={{ background: t === "dark" || view === "tv" ? "#0f0f0f" : "#ffffff" }}>
+        <FocusFrame width={VIEW_SIZE[view]}>{pageFor(v, t, title)}</FocusFrame>
+      </div>
+    ) : (
+      <div key={t} className={`rounded-xl overflow-hidden border ${border}`}>
+        {renderView(v, t, title)}
+      </div>
+    );
   const themes: MockTheme[] = view === "tv" ? ["dark"] : theme === "both" ? ["light", "dark"] : [theme];
+
+  // ---- titles to try (1.25.0) ----------------------------------------------
+  const titleOptions = useMemo(() => {
+    const out: TitleOption[] = [];
+    const add = (o: TitleOption) => {
+      if (!o.text.trim() || out.some((x) => same(x.text, o.text))) return;
+      out.push(o);
+    };
+    if (active) add({ key: "thumb", text: active.title, source: "thumb", id: null });
+    for (const t of titles) if (t.source === "studio") add({ key: t.id, text: t.title, source: "studio", id: t.id });
+    for (const t of titles) if (t.source === "idea") add({ key: `idea-${t.id}`, text: t.title, source: "idea", id: t.id });
+    return out;
+  }, [active, titles]);
+  const shownTitles = titleOptions.filter((o) => !hiddenTitles.includes(o.key));
+  const toggleTitle = (key: string) => setHiddenTitles((h) => (h.includes(key) ? h.filter((x) => x !== key) : [...h, key]));
+  /** A title added here goes after the other studio titles (and before the ideas). */
+  const withStudioTitle = (list: StudioTitle[], t: StudioTitle) => {
+    const at = list.filter((x) => x.source === "studio").length;
+    return [...list.slice(0, at), t, ...list.slice(at)];
+  };
 
   // ---- actions ------------------------------------------------------------
   async function addFiles(files: FileList | File[]) {
@@ -260,13 +379,15 @@ export function Studio({ data }: { data: StudioData }) {
   }
 
   async function rename(v: Variant, title: string) {
-    if (title === v.title || v.id.startsWith("up-")) return;
+    if (title === v.title || v.id.startsWith("up-")) return false;
     setVariants((vs) => vs.map((x) => (x.id === v.id ? { ...x, title } : x)));
     const r = await renameVariant(v.id, title);
     if (r.error !== undefined) {
       toast.error(r.error);
       setVariants((vs) => vs.map((x) => (x.id === v.id ? { ...x, title: v.title } : x)));
+      return false;
     }
+    return true;
   }
   async function remove(v: Variant) {
     if (!(await confirm({ title: "Delete this thumbnail?", description: v.title, confirmLabel: "Delete", danger: true }))) return;
@@ -300,23 +421,75 @@ export function Studio({ data }: { data: StudioData }) {
       router.refresh();
     }
   }
+  async function addTitle() {
+    const t = draftTitle.replace(/\s+/g, " ").trim();
+    if (!t || addingTitle) return;
+    if (titleOptions.some((o) => same(o.text, t))) return toast.error("That title is already here.");
+    setAddingTitle(true);
+    const r = await addPackageTitle(project.id, t);
+    setAddingTitle(false);
+    if (r.error !== undefined) return toast.error(r.error);
+    setTitles((ts) => withStudioTitle(ts, { id: r.id, title: r.title, source: "studio" }));
+    setDraftTitle("");
+  }
+  async function removeTitle(o: TitleOption) {
+    if (o.source !== "studio" || !o.id) return;
+    const id = o.id;
+    setTitles((ts) => ts.filter((t) => t.id !== id));
+    const r = await deletePackageTitle(id);
+    if (r.error !== undefined) {
+      toast.error(r.error);
+      router.refresh();
+    }
+  }
+  /** Put this title on the thumbnail that's showing. Its old title stays in the list to try. */
+  async function pickTitle(o: TitleOption) {
+    if (!active || o.source === "thumb") return;
+    const before = active.title;
+    if (!(await rename(active, o.text))) return;
+    toast.success("Title changed");
+    if (before.trim() && !titles.some((t) => same(t.title, before))) {
+      const r = await addPackageTitle(project.id, before);
+      if (r.error === undefined) setTitles((ts) => withStudioTitle(ts, { id: r.id, title: r.title, source: "studio" }));
+    }
+  }
   const fullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void stage.current?.requestFullscreen?.();
   };
 
-  // Keep the one that's showing in view inside the strip / list (without moving the page).
+  // Keep the one that's showing in view inside the row (without moving the page).
   useEffect(() => {
     const ul = strip.current;
     const li = ul?.querySelector<HTMLElement>(`[data-variant="${activeId}"]`);
-    if (!ul || !li) return;
-    if (ul.scrollWidth > ul.clientWidth + 1) {
+    if (!ul || !li || ul.scrollWidth <= ul.clientWidth + 1) return;
+    if (li.offsetLeft < ul.scrollLeft || li.offsetLeft + li.offsetWidth > ul.scrollLeft + ul.clientWidth) {
       const left = li.offsetLeft - (ul.clientWidth - li.offsetWidth) / 2;
       ul.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-    } else if (ul.scrollHeight > ul.clientHeight + 1) {
-      if (li.offsetTop < ul.scrollTop || li.offsetTop + li.offsetHeight > ul.scrollTop + ul.clientHeight) ul.scrollTo({ top: Math.max(0, li.offsetTop - 8), behavior: "smooth" });
     }
   }, [activeId]);
+
+  // ---- A/B test: 2 or 3 winners are tested against each other on YouTube ---
+  const testers = variants.filter((v) => v.winner);
+  const abOn = testers.length >= 2;
+  const letterOf = (v: Variant) => (abOn && v.winner ? ("ABC"[testers.indexOf(v)] ?? null) : null);
+  const compareList = variants.filter((v) => compareIds.includes(v.id));
+  const comparingTest = abOn && compare === "thumbs" && compareList.length === testers.length && compareList.every((v) => v.winner);
+  const activeIndex = active ? variants.indexOf(active) : -1;
+  const step = (d: number) => variants.length && setActiveId(variants[(activeIndex + d + variants.length) % variants.length].id);
+
+  function toggleCompare(kind: "thumbs" | "titles") {
+    setCompare((c) => (c === kind ? null : kind));
+    if (kind === "thumbs" && !compareIds.length) {
+      const w = variants.filter((v) => v.winner).map((v) => v.id);
+      setCompareIds(w.length > 1 ? w : variants.slice(0, 3).map((v) => v.id));
+    }
+  }
+  function compareTest() {
+    setCompareIds(testers.map((v) => v.id));
+    setCompare("thumbs");
+  }
+  const tick = (id: string) => setCompareIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   // ---- keyboard ------------------------------------------------------------
   useEffect(() => {
@@ -329,7 +502,9 @@ export function Studio({ data }: { data: StudioData }) {
       else if (e.key === "r" || e.key === "R") setSeed(Math.floor(Math.random() * 1e9));
       else if (e.key === "f" || e.key === "F") fullscreen();
       else if (e.key === "d" || e.key === "D") setTheme((th) => (th === "dark" ? "light" : "dark"));
-      else if (e.key === "c" || e.key === "C") toggleCompare();
+      else if (e.key === "c" || e.key === "C") toggleCompare("thumbs");
+      else if ((e.key === "t" || e.key === "T") && variants.length) toggleCompare("titles");
+      else if (e.key === "Escape" && compare) setCompare(null);
       else return;
       e.preventDefault();
     };
@@ -337,33 +512,27 @@ export function Studio({ data }: { data: StudioData }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // ---- A/B test: 2 or 3 winners are tested against each other on YouTube ---
-  const testers = variants.filter((v) => v.winner);
-  const abOn = testers.length >= 2;
-  const letterOf = (v: Variant) => (abOn && v.winner ? ("ABC"[testers.indexOf(v)] ?? null) : null);
-  const compareList = variants.filter((v) => compareIds.includes(v.id));
-  const comparingTest = abOn && compare && compareList.length === testers.length && compareList.every((v) => v.winner);
-  const activeIndex = active ? variants.indexOf(active) : -1;
-  const step = (d: number) => variants.length && setActiveId(variants[(activeIndex + d + variants.length) % variants.length].id);
-
-  function toggleCompare() {
-    setCompare((c) => !c);
-    if (!compareIds.length) {
-      const w = variants.filter((v) => v.winner).map((v) => v.id);
-      setCompareIds(w.length > 1 ? w : variants.slice(0, 3).map((v) => v.id));
-    }
-  }
-  function compareTest() {
-    setCompareIds(testers.map((v) => v.id));
-    setCompare(true);
-  }
-  const tick = (id: string) => setCompareIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
-
   // ---- UI -----------------------------------------------------------------
   const seg = (on: boolean) =>
     `px-2.5 sm:px-3 h-8 rounded-md text-[12.5px] font-semibold whitespace-nowrap transition-colors ${on ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:text-ink"}`;
   const tool = (on = false) =>
     `inline-flex items-center justify-center gap-1.5 rounded-lg border h-9 min-w-9 px-2.5 text-[13px] font-semibold transition-colors ${on ? "border-amber bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
+  const zoomToggle = (kind: "thumbs" | "titles") => (
+    <div className="flex items-center rounded-lg bg-surface-2/70 p-0.5" role="radiogroup" aria-label="How close">
+      {(
+        [
+          ["close", "Close up"],
+          ["page", "Whole page"],
+        ] as const
+      ).map(([z, label]) => (
+        <button key={z} type="button" role="radio" aria-checked={zoom[kind] === z} onClick={() => setZoom((o) => ({ ...o, [kind]: z }))} className={seg(zoom[kind] === z)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  const box = (on: boolean) =>
+    `flex-shrink-0 w-[18px] h-[18px] rounded-[5px] border-2 flex items-center justify-center transition-colors ${on ? "bg-amber border-amber text-white" : "border-line/35 text-transparent hover:border-line/60"}`;
 
   /** The little marks on a thumbnail: its number, and A/B/C or ★ when it's picked. */
   const marks = (v: Variant, i: number) => {
@@ -385,7 +554,7 @@ export function Studio({ data }: { data: StudioData }) {
             <span className="w-5 h-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
           </span>
         )}
-        {compare && (
+        {compare === "thumbs" && (
           <span
             role="checkbox"
             aria-checked={compareIds.includes(v.id)}
@@ -405,35 +574,7 @@ export function Studio({ data }: { data: StudioData }) {
     );
   };
 
-  /** Grows with the title (1 to 3 lines), so short titles stay on one line. */
-  const fit = (el: HTMLTextAreaElement | null) => {
-    if (!el) return;
-    el.style.height = "auto";
-    // Hidden (the list on small screens, the editor on big ones): measure again once it shows.
-    if (el.scrollHeight) el.style.height = `${el.scrollHeight}px`;
-  };
-  const titleField = (v: Variant, i: number, className = "") => (
-    <textarea
-      defaultValue={v.title}
-      key={`${v.id}-${v.title}`}
-      ref={fit}
-      onInput={(e) => fit(e.currentTarget)}
-      readOnly={!canEdit}
-      maxLength={100}
-      rows={1}
-      onBlur={(e) => void rename(v, e.target.value.replace(/\s+/g, " ").trim() || v.title)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          (e.target as HTMLTextAreaElement).blur();
-        }
-      }}
-      className={`w-full resize-none bg-transparent text-[13px] font-semibold leading-snug outline-none rounded-md px-1 py-0.5 focus:bg-surface-2 ${className}`}
-      aria-label={`Title for variation ${i + 1}`}
-    />
-  );
-
-  const winnerButton = (v: Variant, withLabel: boolean) => {
+  const winnerButton = (v: Variant) => {
     const letter = letterOf(v);
     const label = letter ? `Test ${letter}` : v.winner ? "Winner" : "Make winner";
     return (
@@ -442,19 +583,24 @@ export function Studio({ data }: { data: StudioData }) {
         onClick={() => void crown(v)}
         aria-pressed={v.winner}
         title={v.winner ? "Unpick" : "Pick the best one, or up to 3 for an A/B test"}
-        aria-label={withLabel ? undefined : label}
-        className={`inline-flex items-center gap-1 rounded-md border h-7 text-[12px] font-semibold transition-colors ${withLabel ? "px-2" : "w-7 justify-center"} ${
+        className={`inline-flex items-center gap-1 rounded-lg border h-9 px-2.5 text-[12.5px] font-semibold transition-colors ${
           v.winner ? "border-amber/50 bg-amber/10 text-amber hover:bg-amber/20" : "border-line/20 bg-surface text-ink hover:border-line/40 hover:bg-surface-2"
         }`}
       >
         <StarIcon className="w-4 h-4" filled={v.winner} />
-        {withLabel && label}
+        {label}
       </button>
     );
   };
   const deleteButton = (v: Variant) => (
-    <button type="button" onClick={() => void remove(v)} className="rounded-md border border-line/20 bg-surface w-7 h-7 flex items-center justify-center text-ink hover:text-red hover:border-red/40 hover:bg-red/10 transition-colors" aria-label={`Delete variation ${variants.indexOf(v) + 1}`}>
-      <TrashIcon className="w-3.5 h-3.5" />
+    <button
+      type="button"
+      onClick={() => void remove(v)}
+      className="rounded-lg border border-line/20 bg-surface w-9 h-9 flex items-center justify-center text-ink hover:text-red hover:border-red/40 hover:bg-red/10 transition-colors"
+      aria-label={`Delete variation ${variants.indexOf(v) + 1}`}
+      title="Delete"
+    >
+      <TrashIcon className="w-4 h-4" />
     </button>
   );
 
@@ -471,14 +617,14 @@ export function Studio({ data }: { data: StudioData }) {
             </button>
           ))}
         </span>
+        <span className="text-[11.5px] leading-snug text-ink-soft">
+          Upload {testers.length === 2 ? "both" : "all 3"} to YouTube Studio&rsquo;s Test &amp; compare. It keeps the one people watch most.
+        </span>
         <span className="flex-1" />
         <button type="button" onClick={compareTest} className="text-[12.5px] font-semibold text-amber hover:underline">
           Compare
         </button>
       </div>
-      <p className="mt-1 text-[11.5px] leading-snug text-ink-soft">
-        Upload {testers.length === 2 ? "both" : "all 3"} to YouTube Studio&rsquo;s Test &amp; compare. It keeps the one people watch most.
-      </p>
     </div>
   ) : (
     <p className="text-[12px] text-ink-soft px-0.5">
@@ -558,263 +704,343 @@ export function Studio({ data }: { data: StudioData }) {
         </div>
       </header>
 
-      {/* minmax(0, 1fr): the swipeable strip must never widen the column past the screen. */}
-      <div className="grid gap-3 xl:gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)] items-start">
-        {/* Thumbnails: a strip on phones and tablets, a list on big screens */}
-        <aside
-          onDragOver={(e) => {
-            if (!canEdit) return;
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            void addFiles(e.dataTransfer.files);
-          }}
-          className={`min-w-0 rounded-2xl border bg-surface flex flex-col xl:sticky xl:top-20 xl:max-h-[calc(100dvh-7rem)] transition-colors ${dragOver ? "border-amber bg-amber/5" : "border-line/10"}`}
-        >
-          <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
-            <h2 className="text-[13.5px] font-semibold">
-              Thumbnails <span className="text-ink-faint font-normal">{variants.length}</span>
-            </h2>
-            {uploads.length > 0 && <span className="text-[12px] text-ink-soft">· uploading {uploads.length}…</span>}
-            <span className="flex-1" />
-            {compare && <span className="text-[11.5px] font-semibold text-amber">Tick to compare</span>}
-            {canEdit && (
-              <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-amber text-white h-8 px-2.5 text-[12.5px] font-bold hover:brightness-110">
-                <PlusIcon className="w-3.5 h-3.5" />
-                Add
-              </button>
-            )}
-          </div>
-          {status && <div className="px-3 pb-2">{status}</div>}
+      {/* Thumbnails: one row on top at every size (1.25.0), so the preview gets the whole width. */}
+      <section
+        onDragOver={(e) => {
+          if (!canEdit) return;
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          void addFiles(e.dataTransfer.files);
+        }}
+        aria-label="Thumbnails"
+        className={`min-w-0 rounded-2xl border bg-surface transition-colors ${dragOver ? "border-amber bg-amber/5" : "border-line/10"}`}
+      >
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+          <h2 className="text-[13.5px] font-semibold">
+            Thumbnails <span className="text-ink-faint font-normal">{variants.length}</span>
+          </h2>
+          {uploads.length > 0 && <span className="text-[12px] text-ink-soft">· uploading {uploads.length}…</span>}
+          {canEdit && <span className="hidden lg:inline text-[11.5px] text-ink-faint">· drop images here · 1280×720 JPG or PNG</span>}
+          <span className="flex-1" />
+          {compare === "thumbs" && <span className="text-[11.5px] font-semibold text-amber">Tick to compare</span>}
+          {canEdit && (
+            <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-amber text-white h-8 px-2.5 text-[12.5px] font-bold hover:brightness-110">
+              <PlusIcon className="w-3.5 h-3.5" />
+              Add
+            </button>
+          )}
+        </div>
+        {status && <div className="px-3 pb-2">{status}</div>}
 
-          <ul ref={strip} className="relative flex xl:flex-col gap-2.5 xl:gap-1.5 overflow-x-auto xl:overflow-x-visible xl:overflow-y-auto xl:min-h-0 no-scrollbar px-3 pt-1.5 pb-3 xl:pb-3">
-            {variants.map((v, i) => {
-              const w = warnings(v);
-              const on = v.id === activeId;
-              return (
-                <li key={v.id} data-variant={v.id} className={`flex-shrink-0 w-[128px] xl:w-auto xl:flex xl:gap-3 xl:rounded-xl xl:p-2 transition-colors ${on ? "xl:bg-amber/[0.08] xl:ring-1 xl:ring-inset xl:ring-amber/50" : "xl:hover:bg-surface-2/60"}`}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveId(v.id)}
-                    className={`relative block w-full xl:w-[120px] flex-shrink-0 aspect-video rounded-lg overflow-hidden bg-surface-2 ring-2 ring-offset-2 ring-offset-surface xl:ring-0 xl:ring-offset-0 ${on ? "ring-amber" : "ring-transparent"}`}
-                    aria-label={`Show variation ${i + 1}`}
-                    aria-current={on || undefined}
-                  >
-                    {v.url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={v.url} alt="" className="w-full h-full object-cover" />
-                    )}
-                    {marks(v, i)}
-                    {w.length > 0 && (
-                      <span className="xl:hidden absolute left-1 bottom-1 rounded bg-black/70 text-amber p-0.5" title={w.map((x) => x.long).join(" · ")}>
-                        <AlertIcon className="w-3 h-3" />
-                      </span>
-                    )}
-                  </button>
-                  <div className="hidden xl:flex min-w-0 flex-1 flex-col">
-                    {titleField(v, i)}
-                    <div className="mt-auto flex items-center gap-0.5 min-w-0">
-                      {w.length > 0 && (
-                        <span className="min-w-0 truncate inline-flex items-center gap-1 px-1 text-[11px] font-semibold text-amber" title={w.map((x) => x.long).join(" · ")}>
-                          <AlertIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                          {w[0].short}
-                          {w.length > 1 && <span className="text-ink-faint">+{w.length - 1}</span>}
-                        </span>
-                      )}
-                      <span className="flex-1" />
-                      {canEdit && !v.id.startsWith("up-") && (
-                        <>
-                          {winnerButton(v, false)}
-                          {deleteButton(v)}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-            {canEdit && (
-              <li className="flex-shrink-0 w-[128px] xl:w-auto">
+        <ul ref={strip} className="flex gap-3 overflow-x-auto styled-scroll px-3 pt-1.5 pb-3">
+          {variants.map((v, i) => {
+            const w = warnings(v);
+            const on = v.id === activeId;
+            return (
+              <li key={v.id} data-variant={v.id} className="flex-shrink-0 w-[144px] sm:w-[164px] lg:w-[184px]">
                 <button
                   type="button"
-                  onClick={() => fileInput.current?.click()}
-                  className="w-full aspect-video xl:aspect-auto xl:min-h-[64px] rounded-lg border-2 border-dashed border-line/25 hover:border-amber text-ink-soft hover:text-ink flex flex-col items-center justify-center gap-0.5 px-2 text-[12.5px] font-semibold transition-colors"
+                  onClick={() => setActiveId(v.id)}
+                  className={`relative block w-full aspect-video rounded-lg overflow-hidden bg-surface-2 ring-2 ring-offset-2 ring-offset-surface transition-shadow ${on ? "ring-amber" : "ring-transparent hover:ring-line/30"}`}
+                  aria-label={`Show variation ${i + 1}`}
+                  aria-current={on || undefined}
                 >
-                  <span className="inline-flex items-center gap-1">
-                    <PlusIcon className="w-4 h-4" />
-                    Add thumbnails
-                  </span>
-                  <span className="hidden xl:inline text-[11.5px] font-normal">or drop them here · 1280×720 JPG/PNG</span>
+                  {v.url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.url} alt="" className="w-full h-full object-cover" />
+                  )}
+                  {marks(v, i)}
+                  {w.length > 0 && (
+                    <span className="absolute left-1 bottom-1 rounded bg-black/70 text-amber p-0.5" title={w.map((x) => x.long).join(" · ")}>
+                      <AlertIcon className="w-3 h-3" />
+                    </span>
+                  )}
                 </button>
+                <p className={`mt-1.5 px-0.5 text-[12px] leading-snug line-clamp-2 ${on ? "text-ink font-semibold" : "text-ink-soft"}`} title={v.title}>
+                  {v.title}
+                </p>
               </li>
-            )}
-          </ul>
-          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
+            );
+          })}
+          {canEdit && (
+            <li className="flex-shrink-0 w-[144px] sm:w-[164px] lg:w-[184px]">
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="w-full aspect-video rounded-lg border-2 border-dashed border-line/25 hover:border-amber text-ink-soft hover:text-ink flex flex-col items-center justify-center gap-0.5 px-2 text-[12.5px] font-semibold transition-colors"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <PlusIcon className="w-4 h-4" />
+                  Add thumbnails
+                </span>
+              </button>
+            </li>
+          )}
+        </ul>
+        <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
 
-          {/* Phones and tablets: edit the one that's showing */}
-          {active && (
-            <div className="xl:hidden border-t border-line/10 px-3 py-2.5">
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 flex-shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-mono font-bold">#{activeIndex + 1}</span>
-                <div className="min-w-0 flex-1">{titleField(active, activeIndex)}</div>
-                {canEdit && !active.id.startsWith("up-") && (
-                  <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
-                    {winnerButton(active, true)}
-                    {deleteButton(active)}
-                  </div>
-                )}
-              </div>
+        {/* The one that's showing: its title, winner, delete, and other titles to try */}
+        {active && (
+          <div className="border-t border-line/10 px-3 py-2.5 flex flex-wrap items-start gap-x-2 gap-y-2">
+            <span className="mt-1.5 flex-shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-mono font-bold">#{activeIndex + 1}</span>
+            <div className="min-w-0 flex-1 basis-[220px]">
+              <TitleField key={`${active.id}-${active.title}`} value={active.title} readOnly={!canEdit} label={`Title for variation ${activeIndex + 1}`} onSave={(t) => void rename(active, t)} />
               {warnings(active).length > 0 && (
-                <p className="mt-1 flex items-center gap-1 text-[11.5px] font-semibold text-amber">
+                <p className="px-1.5 flex items-center gap-1 text-[11.5px] font-semibold text-amber">
                   <AlertIcon className="w-3.5 h-3.5 flex-shrink-0" />
                   {warnings(active)
                     .map((x) => x.long)
                     .join(" · ")}
                 </p>
               )}
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button type="button" onClick={() => toggleCompare("titles")} aria-pressed={compare === "titles"} className={tool(compare === "titles")} title="Try other titles on this thumbnail (T)">
+                <TitlesIcon className="w-4 h-4" />
+                Try titles
+              </button>
               {canEdit && !active.id.startsWith("up-") && (
-                <div className="sm:hidden mt-1.5 flex items-center gap-1">
-                  {winnerButton(active, true)}
-                  <span className="flex-1" />
+                <>
+                  {winnerButton(active)}
                   {deleteButton(active)}
-                </div>
+                </>
               )}
             </div>
-          )}
-        </aside>
+          </div>
+        )}
+      </section>
 
-        {/* Preview */}
-        <section ref={stage} className="min-w-0 rounded-2xl border border-line/10 bg-surface overflow-hidden [&:fullscreen]:overflow-auto [&:fullscreen]:bg-paper">
-          <div className="flex flex-wrap items-center gap-2 px-2.5 py-2 border-b border-line/10">
-            <div className="flex items-center rounded-lg bg-surface-2/70 p-0.5 overflow-x-auto no-scrollbar w-full sm:w-auto" role="radiogroup" aria-label="Layout">
-              {VIEWS.map((v) => (
-                <button key={v.id} type="button" role="radio" aria-checked={view === v.id} onClick={() => setView(v.id)} className={`${seg(view === v.id)} flex-1 sm:flex-none`}>
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center rounded-lg bg-surface-2/70 p-0.5" role="radiogroup" aria-label="Theme">
-              {(["light", "dark", "both"] as const).map((t) => (
-                <button key={t} type="button" role="radio" aria-checked={theme === t} onClick={() => setTheme(t)} disabled={view === "tv"} className={`${seg(theme === t)} capitalize disabled:opacity-40`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            <span className="flex-1" />
-            <button type="button" onClick={toggleCompare} aria-pressed={compare} className={tool(compare)} title="Shortcut: C" aria-label="Compare">
-              <GridIcon className="w-4 h-4" />
-              <span className="hidden 2xl:inline">Compare</span>
+      {/* Preview: the whole width */}
+      <section ref={stage} aria-label="Preview" className="min-w-0 rounded-2xl border border-line/10 bg-surface overflow-hidden [&:fullscreen]:overflow-auto [&:fullscreen]:bg-paper">
+        <div className="flex flex-wrap items-center gap-2 px-2.5 py-2 border-b border-line/10">
+          <div className="flex items-center rounded-lg bg-surface-2/70 p-0.5 overflow-x-auto no-scrollbar w-full sm:w-auto" role="radiogroup" aria-label="Layout">
+            {VIEWS.map((v) => (
+              <button key={v.id} type="button" role="radio" aria-checked={view === v.id} onClick={() => setView(v.id)} className={`${seg(view === v.id)} flex-1 sm:flex-none`}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center rounded-lg bg-surface-2/70 p-0.5" role="radiogroup" aria-label="Theme">
+            {(["light", "dark", "both"] as const).map((t) => (
+              <button key={t} type="button" role="radio" aria-checked={theme === t} onClick={() => setTheme(t)} disabled={view === "tv"} className={`${seg(theme === t)} capitalize disabled:opacity-40`}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <span className="flex-1" />
+          <button type="button" onClick={() => toggleCompare("thumbs")} aria-pressed={compare === "thumbs"} disabled={!variants.length} className={`${tool(compare === "thumbs")} disabled:opacity-40`} title="Compare thumbnails side by side (C)" aria-label="Compare thumbnails">
+            <GridIcon className="w-4 h-4" />
+            <span className="hidden lg:inline">Compare</span>
+          </button>
+          <button type="button" onClick={() => toggleCompare("titles")} aria-pressed={compare === "titles"} disabled={!variants.length} className={`${tool(compare === "titles")} disabled:opacity-40`} title="One thumbnail with different titles, side by side (T)" aria-label="Try titles">
+            <TitlesIcon className="w-4 h-4" />
+            <span className="hidden lg:inline">Titles</span>
+          </button>
+          <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1e9))} className={tool()} title="Shuffle the videos around yours (R)" aria-label="Shuffle">
+            <ShuffleIcon className="w-4 h-4" />
+            <span className="hidden lg:inline">Shuffle</span>
+          </button>
+          {canFullscreen && (
+            <button type="button" onClick={fullscreen} className={tool()} title="Fullscreen (F)" aria-label="Fullscreen">
+              <ExpandIcon className="w-4 h-4" />
             </button>
-            <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1e9))} className={tool()} title="Shuffle the videos around yours (R)" aria-label="Shuffle">
-              <ShuffleIcon className="w-4 h-4" />
-              <span className="hidden 2xl:inline">Shuffle</span>
-            </button>
-            {canFullscreen && (
-              <button type="button" onClick={fullscreen} className={tool()} title="Fullscreen (F)" aria-label="Fullscreen">
-                <ExpandIcon className="w-4 h-4" />
+          )}
+        </div>
+
+        {!variants.length ? (
+          <div className="px-6 py-14 text-center space-y-2">
+            <p className="text-[15px] font-semibold">Add your thumbnails to see them on YouTube.</p>
+            <p className="text-[13px] text-ink-soft">Each one gets its own title. Add 10 to 15, compare them, then star the best (or up to 3 for an A/B test).</p>
+            {canEdit && (
+              <button type="button" onClick={() => fileInput.current?.click()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber text-white h-10 px-4 text-[13.5px] font-bold hover:brightness-110">
+                <PlusIcon className="w-4 h-4" />
+                Add thumbnails
               </button>
             )}
           </div>
-
-          {!variants.length ? (
-            <div className="px-6 py-14 text-center space-y-2">
-              <p className="text-[15px] font-semibold">Add your thumbnails to see them on YouTube.</p>
-              <p className="text-[13px] text-ink-soft">Each one gets its own title. Add 10 to 15, compare them, then star the best (or up to 3 for an A/B test).</p>
-              {canEdit && (
-                <button type="button" onClick={() => fileInput.current?.click()} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber text-white h-10 px-4 text-[13.5px] font-bold hover:brightness-110">
-                  <PlusIcon className="w-4 h-4" />
-                  Add thumbnails
-                </button>
-              )}
-            </div>
-          ) : compare ? (
-            <div className="p-2 sm:p-3 space-y-3">
-              <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
-                {comparingTest ? (
-                  <>
-                    <span className="rounded-md bg-amber text-white text-[11px] font-bold uppercase tracking-wide px-1.5 py-0.5">A/B test</span>
-                    <span className="font-semibold">{testers.map((_, i) => "ABC"[i]).join(" vs ")}</span>
-                  </>
-                ) : (
-                  <span className="font-semibold">Comparing {compareList.length}</span>
-                )}
-                <span className="hidden sm:inline text-ink-soft">· tick thumbnails to add or remove</span>
-                <span className="flex-1" />
-                {abOn && !comparingTest && (
-                  <button type="button" onClick={compareTest} className="font-semibold text-amber hover:underline">
-                    Compare the A/B test
-                  </button>
-                )}
-                <button type="button" onClick={() => setCompare(false)} className="font-semibold text-ink-soft hover:text-ink">
-                  Done
-                </button>
-              </div>
-              {compareList.length === 0 ? (
-                <p className="py-8 text-center text-[13.5px] text-ink-soft">Tick the thumbnails you want to compare.</p>
+        ) : compare === "thumbs" ? (
+          <div className="p-2 sm:p-3 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+              {comparingTest ? (
+                <>
+                  <span className="rounded-md bg-amber text-white text-[11px] font-bold uppercase tracking-wide px-1.5 py-0.5">A/B test</span>
+                  <span className="font-semibold">{testers.map((_, i) => "ABC"[i]).join(" vs ")}</span>
+                </>
               ) : (
-                <div className={`grid gap-3 ${compareList.length >= 3 ? "xl:grid-cols-3 md:grid-cols-2" : compareList.length === 2 ? "md:grid-cols-2" : ""}`}>
-                  {compareList.map((v) => {
-                    const letter = letterOf(v);
-                    return (
-                      <div key={v.id} className="space-y-1.5 min-w-0">
-                        <div className="flex items-center gap-2 text-[12.5px] font-semibold">
-                          {letter && <span className="rounded bg-amber text-white text-[11px] font-bold px-1.5 py-0.5">{letter}</span>}
-                          <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11.5px]">#{variants.indexOf(v) + 1}</span>
-                          <span className="truncate">{v.title}</span>
-                          {!letter && v.winner && <StarIcon className="w-3.5 h-3.5 text-amber flex-shrink-0" filled />}
-                        </div>
-                        {themes.map((t) => (
-                          <div key={t} className={`rounded-xl overflow-hidden border ${letter ? "border-amber/50" : "border-line/10"}`}>
-                            {renderView(v, t)}
-                          </div>
-                        ))}
+                <span className="font-semibold">Comparing {compareList.length} thumbnails</span>
+              )}
+              <span className="hidden sm:inline text-ink-soft">· tick thumbnails above to add or remove</span>
+              <span className="flex-1" />
+              {abOn && !comparingTest && (
+                <button type="button" onClick={compareTest} className="font-semibold text-amber hover:underline">
+                  Compare the A/B test
+                </button>
+              )}
+              {zoomToggle("thumbs")}
+              <button type="button" onClick={() => setCompare(null)} className="font-semibold text-ink-soft hover:text-ink">
+                Done
+              </button>
+            </div>
+            {compareList.length === 0 ? (
+              <p className="py-8 text-center text-[13.5px] text-ink-soft">Tick the thumbnails you want to compare.</p>
+            ) : (
+              <div className={`grid gap-x-3 gap-y-4 ${zoom.thumbs === "close" ? CLOSE_GRID[view] : PAGE_GRID(compareList.length)}`}>
+                {compareList.map((v) => {
+                  const letter = letterOf(v);
+                  return (
+                    <div key={v.id} className="flex flex-col gap-1.5 min-w-0">
+                      <div className="flex items-center gap-2 text-[12.5px] font-semibold">
+                        {letter && <span className="rounded bg-amber text-white text-[11px] font-bold px-1.5 py-0.5">{letter}</span>}
+                        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11.5px]">#{variants.indexOf(v) + 1}</span>
+                        <span className="truncate">{v.title}</span>
+                        {!letter && v.winner && <StarIcon className="w-3.5 h-3.5 text-amber flex-shrink-0" filled />}
                       </div>
-                    );
-                  })}
-                </div>
+                      {themes.map((t) => pane(zoom.thumbs, v, t, undefined, letter ? "border-amber/50" : "border-line/10"))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : compare === "titles" && active ? (
+          <div className="p-2 sm:p-3 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap text-[12.5px]">
+              <span className="font-semibold">
+                Thumbnail #{activeIndex + 1} with {shownTitles.length} title{shownTitles.length === 1 ? "" : "s"}
+              </span>
+              <span className="hidden sm:inline text-ink-soft">· ← → for another thumbnail</span>
+              <span className="flex-1" />
+              {zoomToggle("titles")}
+              <button type="button" onClick={() => setCompare(null)} className="font-semibold text-ink-soft hover:text-ink">
+                Done
+              </button>
+            </div>
+
+            {/* The titles: tick the ones to show; add as many as you like. */}
+            <div className="rounded-xl border border-line/10 bg-surface-2/30 p-2 space-y-1.5">
+              <ul className="space-y-0.5">
+                {titleOptions.map((o) => {
+                  const on = !hiddenTitles.includes(o.key);
+                  return (
+                    <li key={o.key} className="flex items-center gap-2 min-w-0 rounded-lg px-1.5 py-1 hover:bg-surface-2/70">
+                      <button type="button" role="checkbox" aria-checked={on} aria-label={`Show “${o.text}”`} onClick={() => toggleTitle(o.key)} className={box(on)}>
+                        <CheckIcon className="w-3 h-3" />
+                      </button>
+                      <span className={`min-w-0 flex-1 truncate text-[13px] ${on ? "font-semibold" : "text-ink-soft"}`} title={o.text}>
+                        {o.text}
+                      </span>
+                      {o.source !== "studio" && (
+                        <span className="hidden sm:inline text-[11px] text-ink-faint whitespace-nowrap">{o.source === "thumb" ? "On this thumbnail" : "From Ideate"}</span>
+                      )}
+                      {canEdit && o.source !== "thumb" && !active.id.startsWith("up-") && (
+                        <button type="button" onClick={() => void pickTitle(o)} className="text-[12px] font-semibold text-amber hover:underline whitespace-nowrap">
+                          Use it
+                        </button>
+                      )}
+                      {canEdit && o.source === "studio" && (
+                        <button type="button" onClick={() => void removeTitle(o)} aria-label={`Delete “${o.text}”`} title="Delete this title" className="w-7 h-7 -my-1 rounded-md flex items-center justify-center text-ink-soft hover:text-red hover:bg-red/10">
+                          <CloseIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {canEdit && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void addTitle();
+                  }}
+                  className="flex items-center gap-2 px-1"
+                >
+                  <input
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    maxLength={100}
+                    placeholder="Add a title to try…"
+                    aria-label="Add a title to try"
+                    className="flex-1 min-w-0 rounded-lg border border-line/15 bg-surface px-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
+                  />
+                  <span className="hidden sm:inline text-[11px] tabular-nums text-ink-faint">{draftTitle.length}/100</span>
+                  <button type="submit" disabled={!draftTitle.trim() || addingTitle} className="inline-flex items-center gap-1 rounded-lg bg-amber text-white h-9 px-3 text-[12.5px] font-bold disabled:opacity-50">
+                    {addingTitle ? <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <PlusIcon className="w-3.5 h-3.5" />}
+                    Add
+                  </button>
+                </form>
               )}
             </div>
-          ) : (
-            <div className="p-2 sm:p-3 space-y-2">
-              {active && (
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <button type="button" onClick={() => step(-1)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2" aria-label="Previous variation">
-                    <ChevronLeftIcon className="w-4 h-4" />
-                  </button>
-                  <span className="flex-shrink-0 text-[12px] font-mono text-ink-soft">
-                    {activeIndex + 1}/{variants.length}
-                  </span>
-                  {letterOf(active) ? (
-                    <span className="flex-shrink-0 rounded bg-amber text-white text-[11px] font-bold px-1.5 py-0.5">Test {letterOf(active)}</span>
-                  ) : active.winner ? (
-                    <span className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold text-amber">
-                      <StarIcon className="w-3.5 h-3.5" filled />
-                      Winner
-                    </span>
-                  ) : null}
-                  <span className="min-w-0 truncate text-[13px] font-semibold">{active.title}</span>
-                  <span className="flex-1" />
-                  <button type="button" onClick={() => step(1)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2" aria-label="Next variation">
-                    <ChevronRightIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              <div className={`grid gap-3 ${themes.length === 2 ? "2xl:grid-cols-2" : ""}`}>
-                {themes.map((t) => (
-                  <div key={t} className="rounded-xl overflow-hidden border border-line/10">
-                    {renderView(active, t)}
+
+            {shownTitles.length === 0 ? (
+              <p className="py-8 text-center text-[13.5px] text-ink-soft">Tick the titles you want to compare.</p>
+            ) : (
+              <div className={`grid gap-x-3 gap-y-4 ${zoom.titles === "close" ? CLOSE_GRID[view] : PAGE_GRID(shownTitles.length)}`}>
+                {shownTitles.map((o, i) => (
+                  <div key={o.key} className="flex flex-col gap-1.5 min-w-0">
+                    <div className="flex items-center gap-2 text-[12.5px] font-semibold min-w-0">
+                      <span className="flex-shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11.5px]">{i + 1}</span>
+                      <span className="min-w-0 truncate" title={o.text}>
+                        {o.text}
+                      </span>
+                      <span className="flex-1" />
+                      {o.source === "thumb" ? (
+                        <span className="flex-shrink-0 text-[11px] font-normal text-ink-faint">Its title now</span>
+                      ) : (
+                        canEdit &&
+                        !active.id.startsWith("up-") && (
+                          <button type="button" onClick={() => void pickTitle(o)} className="flex-shrink-0 text-[12px] font-semibold text-amber hover:underline">
+                            Use this title
+                          </button>
+                        )
+                      )}
+                    </div>
+                    {themes.map((t) => pane(zoom.titles, active, t, o.text, "border-line/10"))}
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-2 sm:p-3 space-y-2">
+            {active && (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <button type="button" onClick={() => step(-1)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2" aria-label="Previous variation">
+                  <ChevronLeftIcon className="w-4 h-4" />
+                </button>
+                <span className="flex-shrink-0 text-[12px] font-mono text-ink-soft">
+                  {activeIndex + 1}/{variants.length}
+                </span>
+                {letterOf(active) ? (
+                  <span className="flex-shrink-0 rounded bg-amber text-white text-[11px] font-bold px-1.5 py-0.5">Test {letterOf(active)}</span>
+                ) : active.winner ? (
+                  <span className="flex-shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold text-amber">
+                    <StarIcon className="w-3.5 h-3.5" filled />
+                    Winner
+                  </span>
+                ) : null}
+                <span className="min-w-0 truncate text-[13px] font-semibold">{active.title}</span>
+                <span className="flex-1" />
+                <button type="button" onClick={() => step(1)} className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2" aria-label="Next variation">
+                  <ChevronRightIcon className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <div className={`grid gap-3 ${themes.length === 2 ? "2xl:grid-cols-2" : ""}`}>
+              {themes.map((t) => (
+                <div key={t} className="rounded-xl overflow-hidden border border-line/10">
+                  {renderView(active, t)}
+                </div>
+              ))}
             </div>
-          )}
-          <p className="hidden lg:block px-3 pb-2.5 text-[11.5px] text-ink-faint">← → switch · R shuffle · F fullscreen · D light/dark · C compare</p>
-        </section>
-      </div>
+          </div>
+        )}
+        <p className="hidden lg:block px-3 pb-2.5 text-[11.5px] text-ink-faint">← → switch · R shuffle · F fullscreen · D light/dark · C compare · T titles · Esc done</p>
+      </section>
     </div>
   );
 }

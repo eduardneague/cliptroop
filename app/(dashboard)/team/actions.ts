@@ -12,7 +12,7 @@ import { displayName } from "@/lib/avatar";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { isOwnStorageUrl } from "@/lib/storage-url";
-import { isMediaKeepDays } from "@/lib/media-keep";
+import { isLongMediaKeepDays, isMediaKeepDays, isStudioKeepDays } from "@/lib/media-keep";
 
 async function requireMaster(teamId: string) {
   const supabase = await createClient();
@@ -578,6 +578,49 @@ export async function updateMediaKeepDays(teamId: string, days: number) {
   }
   if (!data?.length) return { error: "Only the master can do this." };
   revalidatePath("/team");
+  return { success: true };
+}
+
+/** Team → Defaults → Video files (1.25.0): how long a posted long video's edit stays. */
+export async function updateLongMediaKeepDays(teamId: string, days: number) {
+  const check = await requireMaster(teamId);
+  if (!check.ok) return { error: check.error };
+  if (!isLongMediaKeepDays(days)) return { error: "Pick 3 days, 1, 2 or 3 weeks, or 1 month." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("teams").update({ long_media_keep_days: days }).eq("id", teamId).select("id");
+  if (error) {
+    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
+  }
+  if (!data?.length) return { error: "Only the master can do this." };
+  revalidatePath("/team");
+  return { success: true };
+}
+
+/** Team → Defaults → Video files (1.25.0): how long Thumbnail Studio keeps the thumbnails that didn't win (null = keep them). */
+export async function updateStudioKeepDays(teamId: string, days: number | null) {
+  const check = await requireMaster(teamId);
+  if (!check.ok) return { error: check.error };
+  if (days !== null && !isStudioKeepDays(days)) return { error: "Pick 1 or 2 weeks, 1 or 3 months, or keep them." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("teams").update({ studio_keep_days: days }).eq("id", teamId).select("id");
+  if (error) {
+    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
+  }
+  if (!data?.length) return { error: "Only the master can do this." };
+  revalidatePath("/team");
+  return { success: true };
+}
+
+/** Team → Defaults → Long videos: review the edit in ClipTroop (a video can still choose its own way). */
+export async function updateLongInAppReview(teamId: string, on: boolean) {
+  const check = await requireMaster(teamId);
+  if (!check.ok) return { error: check.error };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("teams").update({ long_in_app_review: !!on }).eq("id", teamId).select("id");
+  if (error) return { error: "Couldn't save. Try again." };
+  if (!data?.length) return { error: "Only the master can do this." };
+  revalidatePath("/team");
+  revalidatePath("/videos", "layout");
   return { success: true };
 }
 

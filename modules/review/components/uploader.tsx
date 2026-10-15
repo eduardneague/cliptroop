@@ -6,9 +6,17 @@ import { useRouter } from "next/navigation";
 import type { Upload as TusUpload } from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 import { registerVersion, saveVersionFrames } from "@/app/(dashboard)/shorts/[id]/review/actions";
+import { registerLongVersion } from "@/app/(dashboard)/videos/[id]/review/actions";
 import { useToast } from "@/components/ui/toast-provider";
-import { MAX_VIDEO_BYTES, MAX_VIDEO_MB, UPLOAD_CHUNK_BYTES, VIDEO_TYPES, formatBytes } from "../lib/limits";
+import { MAX_LONG_VIDEO_BYTES, MAX_LONG_VIDEO_MB, MAX_VIDEO_BYTES, MAX_VIDEO_MB, UPLOAD_CHUNK_BYTES, VIDEO_TYPES, formatBytes, sizeLabel } from "../lib/limits";
 import { captureFrames } from "../lib/frames";
+import type { ReviewKind } from "../lib/queries";
+
+/** Where each kind's files go, and how big they may be (long videos: 1.25.0). */
+const KIND = {
+  short: { bucket: "review-videos", max: MAX_VIDEO_BYTES, maxLabel: sizeLabel(MAX_VIDEO_MB), what: "this short" },
+  long: { bucket: "long-review-videos", max: MAX_LONG_VIDEO_BYTES, maxLabel: sizeLabel(MAX_LONG_VIDEO_MB), what: "this video" },
+} as const;
 
 /** Length and size of a local video file, read by the browser. */
 function readMeta(file: File): Promise<{ duration: number | null; width: number | null; height: number | null }> {
@@ -35,21 +43,25 @@ function readMeta(file: File): Promise<{ duration: number | null; width: number 
 /**
  * "Upload new version". Sends the file straight to private storage in
  * 6 MB chunks (resumable: retries on its own if the connection drops),
- * then registers it as the next version.
+ * then registers it as the next version. `subjectId` is the short (or,
+ * with kind "long", the long video).
  */
 export function VersionUploader({
+  kind = "short",
   teamId,
-  shortId,
+  subjectId,
   nextNumber,
   onUploaded,
   prominent = false,
 }: {
+  kind?: ReviewKind;
   teamId: string;
-  shortId: string;
+  subjectId: string;
   nextNumber: number;
   onUploaded?: (versionId: string) => void;
   prominent?: boolean;
 }) {
+  const cfg = KIND[kind];
   const router = useRouter();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,8 +84,8 @@ export function VersionUploader({
       toast.error("Upload an MP4, MOV or WebM video.");
       return;
     }
-    if (file.size > MAX_VIDEO_BYTES) {
-      toast.error(`That file is ${formatBytes(file.size)}. Videos can be up to ${MAX_VIDEO_MB} MB.`);
+    if (file.size > cfg.max) {
+      toast.error(`That file is ${formatBytes(file.size)}. Videos can be up to ${cfg.maxLabel}.`);
       return;
     }
     const supabase = createClient();
@@ -94,11 +106,11 @@ export function VersionUploader({
       toast.error("The uploader didn't load. Check your connection and try again.");
       return;
     }
-    // Eight frames of it (the hook and the story), read from the file while it uploads:
-    // kept for the PDF made for Claude, after the video itself is cleaned up.
-    const framesPromise = captureFrames(file).catch(() => null);
+    // Shorts: eight frames of it (the hook and the story), read from the file while it
+    // uploads: kept for the PDF made for Claude, after the video itself is cleaned up.
+    const framesPromise = kind === "short" ? captureFrames(file).catch(() => null) : Promise.resolve(null);
     const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "mp4";
-    const path = `${teamId}/${shortId}/${crypto.randomUUID()}.${ext}`;
+    const path = `${teamId}/${subjectId}/${crypto.randomUUID()}.${ext}`;
     setProgress({ sent: 0, total: file.size, name: file.name });
 
     const upload = new Upload(file, {
@@ -109,7 +121,7 @@ export function VersionUploader({
       removeFingerprintOnSuccess: true,
       chunkSize: UPLOAD_CHUNK_BYTES,
       metadata: {
-        bucketName: "review-videos",
+        bucketName: cfg.bucket,
         objectName: path,
         contentType: file.type,
         // Every upload is a new file name, so browsers may cache it for good.
@@ -122,25 +134,17 @@ export function VersionUploader({
         const msg = String((err as Error)?.message ?? "");
         toast.error(
           /413|too large|maximum/i.test(msg)
-            ? `The file is bigger than storage allows (${MAX_VIDEO_MB} MB).`
+            ? `The file is bigger than storage allows (${cfg.maxLabel}).`
             : /403|row-level|policy/i.test(msg)
-              ? "You don't have permission to upload to this short."
+              ? `You don't have permission to upload to ${cfg.what}.`
               : "The upload stopped. Check your connection and try again."
         );
       },
       onSuccess: async () => {
         uploadRef.current = null;
         setSaving(true);
-        const res = await registerVersion({
-          shortId,
-          path,
-          fileName: file.name,
-          size: file.size,
-          mime: file.type,
-          duration: meta.duration,
-          width: meta.width,
-          height: meta.height,
-        });
+        const details = { path, fileName: file.name, size: file.size, mime: file.type, duration: meta.duration, width: meta.width, height: meta.height };
+        const res = kind === "long" ? await registerLongVersion({ projectId: subjectId, ...details }) : await registerVersion({ shortId: subjectId, ...details });
         setSaving(false);
         if (res.error !== undefined) {
           setProgress(null);
@@ -153,7 +157,7 @@ export function VersionUploader({
         void (async () => {
           const blob = await framesPromise;
           if (!blob) return;
-          const framesPath = `${teamId}/${shortId}/${versionId}.jpg`;
+          const framesPath = `${teamId}/${subjectId}/${versionId}.jpg`;
           const { error } = await supabase.storage.from("video-frames").upload(framesPath, blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" });
           if (!error) await saveVersionFrames(versionId, framesPath);
         })().catch(() => undefined);

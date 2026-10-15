@@ -66,7 +66,7 @@ when set, Vercel's protection bypass:
 |---|---|---|---|
 | `vplanner-posting` | every minute, when something is due | `{}` | posts, meeting reminders |
 | `vplanner-status` | every 10 minutes | `{"status": true}` | the status page's hourly bars, alerts, the objectives' safety-net count |
-| `vplanner-cleanup` | 03:30 UTC | `{"job": "cleanup"}` | deletes posted shorts' video files after the team's choice, refreshes sign-ins |
+| `vplanner-cleanup` | 03:30 UTC | `{"job": "cleanup"}` | deletes posted shorts' and long videos' files and Thumbnail Studio's thumbnails that didn't win, after the team's choices; refreshes sign-ins |
 | `vplanner-analytics` | 05:10 UTC | `{"job": "analytics"}` | copies every team's numbers |
 | `vplanner-live` | every 10 minutes (:05, :15…) | `{"job": "live", "team", "platform"}` per account | every video's counts, realtime, impressions and CTR (0083) |
 
@@ -261,6 +261,40 @@ time, through `getNotificationHistory()`.
 nightly clean-up once a short is posted everywhere, after the team's choice
 (`teams.media_keep_days`: 7, 14, 21 or 30 days; Team → Defaults → Video
 files; 0070). The short itself always stays. Code: `lib/media-cleanup.ts`.
+Since 1.25.0 the same job deletes a posted long video's edits (bucket
+`long-review-videos`) after `teams.long_media_keep_days` (3, 7, 14, 21 or 30;
+1 week by default), counted from the last platform in `long_video_posts`;
+`long_video_projects.keep_media` skips it (masters and schedulers, through
+`long_set_keep_media`). Thumbnail Studio's thumbnails that didn't win go
+(rows and files) after `teams.studio_keep_days` (7, 14, 30 or 90; empty =
+keep them); winners always stay (with none picked, the first one). Before
+0089 both just do nothing.
+
+**Long video review (1.25.0, 0089).** `long_video_versions` and
+`long_video_comments` mirror the shorts' tables (0038), keyed by
+`project_id`. `modules/review/` serves both: `ReviewKind` ("short" or
+"long") picks the tables (`lib/queries.ts`), the actions (shorts:
+`app/(dashboard)/shorts/[id]/review/actions.ts`, long videos:
+`app/(dashboard)/videos/[id]/review/actions.ts`), the bucket and the shape
+(long videos are 16:9). Masters, schedulers and editors upload while the
+video is at Edit. Reviewing in ClipTroop is the video's `in_app_review`
+(only masters change it: `long_review_fields_guard`) or else the team's
+`long_in_app_review`; when on, `long_mark_edited` refuses until a version is
+uploaded. Approving (`long_review`) records the latest version as
+`approved_version_id`; the Post step shows that file to watch or download
+(`videos/[id]/video-file.tsx`). Files can be up to `NEXT_PUBLIC_MAX_LONG_VIDEO_MB`
+(at most 3072, the bucket's own limit; unset = the shorts' limit), and
+Supabase's global file size limit must allow it too.
+
+**Thumbnail Studio (1.25.0).** `modules/studio/`: the thumbnails are one row
+on top at every size and the preview gets the whole width (`ScaleFrame` with
+`fill` draws the desktop pages at the real width instead of scaling up).
+Compare and Titles show several thumbnails, or one thumbnail with several
+titles (`package_titles`, 0089, plus the video's title ideas), up close
+(`FocusFrame`: the page at its real size, cropped around the element marked
+`data-mine`) or as whole pages. Search and the long videos list show a
+video's winning thumbnail through `/api/package-thumb/<entry>` (a stable
+address, cached by the browser), else its first sketch from Ideate.
 
 **Posting.** One `social_posts` row per short and platform (YouTube,
 Instagram, Facebook, TikTok), moved forward one step at a time by

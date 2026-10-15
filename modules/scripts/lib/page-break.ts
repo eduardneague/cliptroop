@@ -3,10 +3,9 @@ import { TextSelection, type EditorState, type Transaction } from "@tiptap/pm/st
 
 /*
  * A page break (1.23.1), like Word's Ctrl+Enter: what follows starts a new
- * page in Pages and Grid, and when printed or exported to Word. In the long
- * page (Strip) it shows as a thin dashed line. Pressed at the end of the
- * script, it makes a new blank page with the cursor on it. Backspace at the
- * start of the next page takes it out again.
+ * page when printed or exported to Word. On screen the script is one long
+ * page (1.25.0: Pages and Grid are gone), where it shows as a thin dashed
+ * line. Backspace right after it takes it out again.
  */
 
 declare module "@tiptap/core" {

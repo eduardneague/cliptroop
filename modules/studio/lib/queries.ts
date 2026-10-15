@@ -25,9 +25,12 @@ export type LibraryVideo = {
   duration: number | null;
   category: string | null;
 };
+/** A title to try (1.25.0): added in the studio, or one of the video's title ideas (Ideate). */
+export type StudioTitle = { id: string; title: string; source: "studio" | "idea" };
 export type StudioData = {
   project: { id: string; number: number; title: string; teamId: string };
   variants: Variant[];
+  titles: StudioTitle[];
   library: LibraryVideo[];
   channel: { name: string; avatar: string | null };
   defaultTitle: string;
@@ -42,11 +45,14 @@ const HOUR = 3600;
 export const getStudioData = cache(async function getStudioData(projectId: string): Promise<StudioData | null> {
   const supabase = await createClient();
   // What only needs the video's id starts with the video itself.
-  const [{ data: project }, { data: entries }, { data: picked }] = await Promise.all([
+  const [{ data: project }, { data: entries }, { data: ideas }, { data: tried }] = await Promise.all([
     supabase.from("long_video_projects").select("id, entry_number, title, team_id").eq("id", projectId).maybeSingle(),
     supabase.from("package_entries").select("id, title, thumbnail_storage_path, width, height, size_bytes, is_winner, position").eq("project_id", projectId).order("position"),
-    supabase.from("project_titles").select("title").eq("project_id", projectId).eq("is_picked", true).maybeSingle(),
+    supabase.from("project_titles").select("id, title, is_picked, position").eq("project_id", projectId).order("position"),
+    // Before 0089 this table isn't there: no extra titles yet.
+    supabase.from("package_titles").select("id, title, position").eq("project_id", projectId).order("position"),
   ]);
+  const picked = (ideas ?? []).find((t) => t.is_picked) ?? null;
   if (!project) return null;
   const teamId = project.team_id as string;
 
@@ -70,6 +76,10 @@ export const getStudioData = cache(async function getStudioData(projectId: strin
   const canEdit = isMaster(roles) || roles.includes("packager");
   return {
     project: { id: project.id as string, number: project.entry_number as number, title: project.title as string, teamId },
+    titles: [
+      ...(tried ?? []).map((t) => ({ id: t.id as string, title: t.title as string, source: "studio" as const })),
+      ...(ideas ?? []).map((t) => ({ id: t.id as string, title: t.title as string, source: "idea" as const })),
+    ],
     variants: (entries ?? []).map((e) => ({
       id: e.id as string,
       title: e.title as string,

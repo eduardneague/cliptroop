@@ -4,15 +4,18 @@ import { Ago } from "@/components/ui/ago";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ExternalIcon } from "@/components/ui/icons";
 import { formatBytes, formatTime } from "../lib/limits";
-import type { VideoVersion } from "../lib/queries";
+import type { ReviewKind, VideoVersion } from "../lib/queries";
 import { VersionUploader } from "./uploader";
 import { lengthNotes } from "@/lib/short-length";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 
-/** The short's video at a glance: latest version, open notes, review. */
+/**
+ * The video at a glance: latest version, open notes, review. A short's,
+ * or (kind "long", 1.25.0) a long video's.
+ */
 export function VideoCard({
+  kind = "short",
   shortId,
   teamId,
   versions,
@@ -20,7 +23,11 @@ export function VideoCard({
   canUpload,
   prominent,
   platforms = [],
+  approvedId = null,
+  hint,
 }: {
+  kind?: ReviewKind;
+  /** The short's id, or the long video's. */
   shortId: string;
   teamId: string;
   versions: VideoVersion[];
@@ -29,6 +36,10 @@ export function VideoCard({
   prominent: boolean;
   /** Where the short is planned to go: a video too long for one of them says so here. */
   platforms?: readonly string[];
+  /** The version approved in Review (long videos). */
+  approvedId?: string | null;
+  /** What to do when there's no video yet (instead of the usual line). */
+  hint?: string;
 }) {
   const router = useRouter();
   const latest = versions.find((v) => !v.deleted) ?? null;
@@ -75,6 +86,7 @@ export function VideoCard({
       ) : latest ? (
         <p className="text-[13.5px] text-ink">
           <b>v{latest.number}</b>
+          {latest.id === approvedId ? <span className="ml-1.5 text-[11px] font-bold uppercase tracking-wide text-green">approved</span> : null}
           {latest.duration ? ` · ${formatTime(latest.duration)}` : ""} · {formatBytes(latest.size)}
           <span className="block text-[12px] text-ink-soft mt-0.5">
             {latest.uploadedBy ? `Uploaded by ${latest.uploadedBy.name}, ` : "Uploaded "}
@@ -83,7 +95,7 @@ export function VideoCard({
           </span>
         </p>
       ) : (
-        <p className="text-[13.5px] text-ink-soft">{canUpload ? "No video yet. Upload the first version." : "The editor will upload the video here."}</p>
+        <p className="text-[13.5px] text-ink-soft">{hint ?? (canUpload ? "No video yet. Upload the first version." : "The editor will upload the video here.")}</p>
       )}
 
       {latest && !(pending && !arrived) && <LengthNotes duration={latest.duration} platforms={platforms} />}
@@ -91,7 +103,7 @@ export function VideoCard({
       <div className="flex items-center gap-2 mt-3 flex-wrap">
         {latest && (
           <Link
-            href={`/shorts/${shortId}/review`}
+            href={kind === "long" ? `/videos/${shortId}/review` : `/shorts/${shortId}/review`}
             className={`inline-flex items-center gap-1.5 rounded-lg font-bold px-3.5 h-9 text-[13px] transition-[filter] ${
               prominent ? "bg-amber text-white hover:brightness-110" : "border border-line/15 text-ink hover:border-line/30"
             }`}
@@ -101,8 +113,9 @@ export function VideoCard({
         )}
         {canUpload && !(pending && !arrived) && (
           <VersionUploader
+            kind={kind}
             teamId={teamId}
-            shortId={shortId}
+            subjectId={shortId}
             nextNumber={next}
             prominent={!latest && prominent}
             onUploaded={(id) => {
