@@ -501,6 +501,21 @@ create policy "package-access deletes titles" on package_titles for delete to au
 -- 7. Search: a long video's winning thumbnail (0026, plus winner_id)
 -- ---------------------------------------------------------------------------
 
+-- Supabase runs migrations as a role that isn't a superuser. Then a
+-- function's "set pg_trgm.word_similarity_threshold" is refused (42501,
+-- "permission denied to set parameter") unless pg_trgm is already loaded in
+-- this session: until then Postgres doesn't know the setting and treats it as
+-- a superuser-only one. Calling one of its functions loads it. (0024 and 0026
+-- got it loaded by building their trigram indexes first.)
+do $$
+declare
+  s text := (select n.nspname from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'pg_trgm');
+begin
+  if s is not null then
+    execute format('select %I.similarity(%L, %L)', s, 'a', 'a');
+  end if;
+end $$;
+
 create or replace function global_search(q text, max_results int default 6)
 returns jsonb
 language plpgsql

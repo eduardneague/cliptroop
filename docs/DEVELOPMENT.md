@@ -36,6 +36,11 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
   ships in the same push as the code that needs it. Migrations are additive:
   expand now, contract in a later release. Personal one-off SQL goes in
   `supabase/scratch/` (gitignored).
+- Supabase runs migrations as `postgres`, which isn't a superuser (CI's empty
+  database runs them as one, so it can't catch this). A function with
+  `set pg_trgm.…` is refused there unless pg_trgm is loaded earlier in the
+  same migration: call one of its functions first (0089, section 7). The
+  from-scratch check refuses a new migration that doesn't.
 
 ## Security model (read before adding features)
 

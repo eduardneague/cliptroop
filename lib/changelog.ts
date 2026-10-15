@@ -23,6 +23,14 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.25.1",
+    date: "2026-10-15",
+    title: "1.25.0's database update installs",
+    changes: [
+      { kind: "fixed", text: "The database update that came with 1.25.0 installs now, so long video review, extra titles in Thumbnail Studio and the new Video files settings work." },
+    ],
+  },
+  {
     version: "1.25.0",
     date: "2026-10-15",
     title: "Long videos, reviewed in ClipTroop",

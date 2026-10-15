@@ -42,6 +42,25 @@ apply() {
 }
 
 files=("$ROOT"/supabase/migrations/*.sql)
+
+# Supabase runs migrations as a role that isn't a superuser, so a function's
+# "set pg_trgm.…" is refused there (42501) unless pg_trgm is loaded earlier in
+# the same migration; here, as a superuser, it would pass anyway. From 0089 on,
+# a migration that sets it must call one of pg_trgm's functions first (0089,
+# section 7, shows how).
+for f in "${files[@]}"; do
+  n="$(basename "$f")"
+  num="${n%%_*}"
+  [[ "$num" =~ ^[0-9]+$ ]] && [ "$((10#$num))" -ge 89 ] || continue
+  set_line="$(grep -n -m1 -E '^[[:space:]]*set pg_trgm\.' "$f" | cut -d: -f1 || true)"
+  [ -n "$set_line" ] || continue
+  load_line="$(grep -n -m1 -E '\.similarity\(' "$f" | cut -d: -f1 || true)"
+  if [ -z "$load_line" ] || [ "$load_line" -gt "$set_line" ]; then
+    echo "✗ $n sets pg_trgm.* on a function without loading pg_trgm first: Supabase refuses that (see 0089, section 7)." >&2
+    exit 1
+  fi
+done
+
 for f in "${files[@]}"; do apply "$f"; done
 echo "✓ ${#files[@]} migrations applied to an empty database"
 
