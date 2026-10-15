@@ -10,6 +10,7 @@ import type { SocialPlatform } from "@/lib/social/providers";
 import { ScoreBadge } from "../content-list";
 import { compactNum, money, niceDay, pctOf, seconds } from "./format";
 import { MiniCurve } from "./retention-chart";
+import { isWide, KIND_LABEL } from "../../lib/kinds";
 
 type Col = { key: string; label: string; title?: string; get: (v: AdvVideo) => number | null; show: (v: AdvVideo) => string; badge?: boolean };
 
@@ -78,9 +79,9 @@ function columns(platform: SocialPlatform, currency: string, withMoney: boolean)
 const SCORE: Col = { key: "score", label: "× typical", title: "Views next to your typical video of the same kind (the median of the ones posted before it)", get: (v) => v.score, show: () => "", badge: true };
 const fmtRate = (x: number | null) => (x === null ? "–" : `${x < 10 ? x.toFixed(1) : Math.round(x)}%`);
 /** The hook's hold: still watching after 3 s (Shorts) or 30 s (long videos). */
-const holdOf = (v: AdvVideo) => (v.kind === "long" ? v.retention?.at30s : v.retention?.at3s) ?? null;
+const holdOf = (v: AdvVideo) => (isWide(v.kind) ? v.retention?.at30s : v.retention?.at3s) ?? null;
 
-const KIND = { short: "Short", long: "Long video", post: "Post" } as const;
+const KIND = KIND_LABEL;
 
 export function VideoTable({ teamId, platform, videos, currency, withMoney }: { teamId: string; platform: SocialPlatform; videos: AdvVideo[]; currency: string; withMoney: boolean }) {
   const cols = useMemo(() => columns(platform, currency, withMoney), [platform, currency, withMoney]);

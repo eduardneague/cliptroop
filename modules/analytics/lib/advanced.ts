@@ -11,6 +11,7 @@ import { breakdownHref, breakdownLabel, DIMENSIONS, METRIC_HELP } from "./advanc
 import { hookFromScript, pickScript } from "./hooks";
 import { outlierScores } from "./scores";
 import { pickSpan, spanFor, windowWords, youtubeCountries } from "./windows";
+import { isWide, type VideoKind } from "./kinds";
 
 /*
  * The Advanced tab (1.16.0): every number the platforms share, for one
@@ -21,7 +22,7 @@ import { pickSpan, spanFor, windowWords, youtubeCountries } from "./windows";
 
 type Row = Record<string, unknown>;
 type Supa = Awaited<ReturnType<typeof createClient>>;
-export type Content = "all" | "shorts" | "long";
+export type Content = "all" | "shorts" | "long" | "live";
 export type Fmt = "int" | "compact" | "pct" | "seconds" | "hours" | "money" | "decimal";
 
 export type AdvTile = { key: string; label: string; value: number | null; prev: number | null; format: Fmt; good?: "up" | "down" | "none"; hint?: string };
@@ -32,7 +33,7 @@ export type AdvBreakdown = { id: string; title: string; sub: string; measure: "v
 export type AdvVideo = {
   platform: SocialPlatform;
   id: string;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   title: string | null;
   url: string | null;
   thumbnail: string | null;
@@ -433,7 +434,7 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
   const hooks = await hooksFor(supabase, contentRows);
   const toVideo = videoMapper({ platform, tz: o.tz, curveOf, moneyOf, hooks, conv });
   const everything = withScores(contentRows.map(toVideo));
-  const videos = everything.filter((v) => v.platform === platform && (content === "all" || (content === "shorts" ? v.kind === "short" : v.kind === "long")));
+  const videos = everything.filter((v) => v.platform === platform && (content === "all" || v.kind === (content === "shorts" ? "short" : content)));
 
   // Retention: the average curve of Shorts and of long videos.
   let retention: AdvancedData["retention"] = null;
@@ -469,7 +470,7 @@ export async function getAdvanced(teamId: string, w: Window, o: { platform: Soci
     skipRate: v.skipRate,
     subscribersGained: v.subscribersGained,
     // The hook's hold: 3 seconds into a short, 30 into a long video.
-    hold3s: (v.kind === "long" ? v.retention?.at30s : v.retention?.at3s) ?? null,
+    hold3s: (isWide(v.kind) ? v.retention?.at30s : v.retention?.at3s) ?? null,
     ourId: v.ours?.kind === "short" ? v.ours.id : null,
     shortType: (v.ours?.kind === "short" ? (v.ours.type as PatternVideo["shortType"]) : null) ?? null,
     hook: v.hook,
@@ -562,7 +563,7 @@ export function buildBreakdowns(
       // Shorts or long videos only: the window that splits sources by kind.
       const tw = windowOf("traffic_by_type");
       if (tw) {
-        const want = content === "shorts" ? ["SHORTS"] : ["VIDEO_ON_DEMAND", "LIVE_STREAM"];
+        const want = content === "shorts" ? ["SHORTS"] : content === "live" ? ["LIVE_STREAM"] : ["VIDEO_ON_DEMAND"];
         const merged = new Map<string, Omit<AdvRow, "label" | "href">>();
         for (const r of tw.rows) {
           const [type, src] = r.key.split("|");

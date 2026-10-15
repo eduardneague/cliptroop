@@ -1,9 +1,11 @@
 import { Skeleton, SkeletonBack } from "@/components/ui/skeleton";
+import { PaperSheet } from "./paper-sheet";
 
 /**
  * The script workspace while it opens: top bar, formatting toolbar, the
  * versions rail and a sheet of paper with lines shimmering in. Shared by
- * the short and long video script pages.
+ * the short and long video script pages. The paper is the one the person
+ * picked (light or dark, long page or A4), with lines in its own ink.
  */
 export function ScriptSkeleton({ backLabel }: { backLabel: string }) {
   return (
@@ -38,9 +40,9 @@ export function ScriptSkeleton({ backLabel }: { backLabel: string }) {
           ))}
         </div>
         <div className="flex-1 min-w-0 px-3 sm:px-8 py-6 sm:py-10">
-          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-line/10 bg-surface px-5 sm:px-14 py-8 sm:py-14 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]">
+          <PaperSheet>
             <PaperLines />
-          </div>
+          </PaperSheet>
         </div>
       </div>
     </div>

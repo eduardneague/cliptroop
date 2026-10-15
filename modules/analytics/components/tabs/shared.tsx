@@ -38,6 +38,7 @@ export const addUp = (a: Audience, picked: P[], pick: (p: P) => (number | null)[
 };
 export const SHORT_COLOR = "rgb(var(--chart-short))";
 export const LONG_COLOR = "rgb(var(--chart-long))";
+export const LIVE_COLOR = "rgb(var(--chart-live))";
 export const TOTAL_COLOR = "rgb(var(--amber))";
 
 export const niceDay = (d: string, withYear = false) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(withYear ? { year: "numeric" } : {}), timeZone: "UTC" });

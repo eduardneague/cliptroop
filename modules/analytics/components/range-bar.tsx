@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { DateChip } from "@/components/ui/date-picker";
+import { warmPlannedDays } from "@/components/ui/month-calendar";
 import { Select } from "@/components/ui/select";
 import { CalendarIcon } from "@/components/ui/icons";
 import { addDays, RANGES, rangesFor, type RangeId, type TabId, type Window } from "../lib/ranges";
@@ -80,6 +81,12 @@ export function RangeBar({
 function CustomPanel({ w, range, latest, earliest, onApply, onClose }: { w: Window; range: RangeId; latest: string; earliest: string | null; onApply: (c: { from: string; to: string }) => void; onClose: () => void }) {
   const [from, setFrom] = useState(range === "custom" ? w.from : addDays(latest, -27));
   const [to, setTo] = useState(range === "custom" ? w.to : latest);
+  // Both calendars open with their dots (1.22.0).
+  useEffect(() => {
+    warmPlannedDays(from);
+    warmPlannedDays(to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const month = latest.slice(0, 7);
   const prevMonthEnd = addDays(`${month}-01`, -1);
   const year = latest.slice(0, 4);

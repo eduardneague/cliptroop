@@ -277,11 +277,21 @@ export function HomeIcon(p: IconProps) {
 /** The long-video and Shorts shapes on a 24×24 grid (also drawn inside charts: Analytics' "posted" marks). */
 export const VIDEO_ICON_PATH = "M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM10.2 8.9L15.6 12L10.2 15.1Z";
 export const SHORTS_ICON_PATH = "M9.25 2.5H14.75A3 3 0 0 1 17.75 5.5V18.5A3 3 0 0 1 14.75 21.5H9.25A3 3 0 0 1 6.25 18.5V5.5A3 3 0 0 1 9.25 2.5ZM10.4 9.2L15.2 12L10.4 14.8Z";
+/** Live streams (1.22.0): the landscape card with a round "on air" dot cut out. */
+export const LIVE_ICON_PATH = "M5.75 4.75H18.25A3.5 3.5 0 0 1 21.75 8.25V15.75A3.5 3.5 0 0 1 18.25 19.25H5.75A3.5 3.5 0 0 1 2.25 15.75V8.25A3.5 3.5 0 0 1 5.75 4.75ZM12 9.1A2.9 2.9 0 1 0 12 14.9A2.9 2.9 0 1 0 12 9.1Z";
 
 export function VideoIcon(p: IconProps) {
   return (
     <Svg {...p} fill="currentColor" strokeWidth={0}>
       <path fillRule="evenodd" d={VIDEO_ICON_PATH} />
+    </Svg>
+  );
+}
+
+export function LiveIcon(p: IconProps) {
+  return (
+    <Svg {...p} fill="currentColor" strokeWidth={0}>
+      <path fillRule="evenodd" d={LIVE_ICON_PATH} />
     </Svg>
   );
 }
@@ -968,6 +978,56 @@ export function MoneyIcon(p: IconProps) {
     <Svg {...p}>
       <circle cx="12" cy="12" r="8.75" />
       <path d="M14.6 9.1c-.5-.8-1.5-1.35-2.6-1.35-1.55 0-2.75.85-2.75 2.05 0 2.85 5.6 1.45 5.6 4.3 0 1.25-1.25 2.15-2.85 2.15-1.2 0-2.25-.55-2.75-1.4M12 6v1.75M12 16.25V18" />
+    </Svg>
+  );
+}
+
+/** Writing suggestions (Scripts, 1.23.0): lines of text and a check. */
+export function SpellCheckIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 6.5h11M4 11h8M4 15.5h4.5" />
+      <path d="m12 16.25 3.1 3.1L21 13.5" />
+    </Svg>
+  );
+}
+
+/** The team's dictionary (Scripts, 1.23.0): a closed book. */
+export function BookIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M5.25 5.5A2 2 0 0 1 7.25 3.5H18.5v14H7.25a2 2 0 0 0-2 2V5.5Z" />
+      <path d="M5.25 19.5a2 2 0 0 0 2 2H18.5v-4" />
+    </Svg>
+  );
+}
+
+/** A page seen through a window (Scripts, 1.23.0: a link opened inside the app). */
+export function WindowIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.25" />
+      <path d="M3.5 8.75h17M6.5 6.6h.01M8.75 6.6h.01" />
+    </Svg>
+  );
+}
+
+/** Page width (Scripts, 1.23.0): arrows pointing out to both sides. */
+export function WidthIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 5v14M20 5v14" />
+      <path d="M7.5 12h9M10 9.25 7.25 12 10 14.75M14 9.25 16.75 12 14 14.75" />
+    </Svg>
+  );
+}
+
+/** A page break (1.23.1): the end of one page, a dashed line, the top of the next. */
+export function PageBreakIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M6 3v5.5h12V3M6 21v-5.5h12V21" />
+      <path d="M3 12h2.5M9 12h2.5M15 12h2.5M21 12h-.5" />
     </Svg>
   );
 }

@@ -6,12 +6,31 @@ import { useToast } from "@/components/ui/toast-provider";
 import { sendTestAlertEmail, testTimer } from "./actions";
 import { useLocalFormat } from "@/lib/hooks/use-hydrated";
 
-/** Keeps the page live while anything is scheduled or moving. */
+/**
+ * Keeps the page live while anything is scheduled or moving. Only while it's
+ * on screen (1.22.0: a Posting tab left open in the background reloaded the
+ * whole page every minute, all day); coming back to it looks again at once.
+ */
 export function AutoRefresh({ active }: { active: boolean }) {
   const router = useRouter();
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), active ? 15_000 : 60_000);
-    return () => clearInterval(t);
+    let last = Date.now();
+    const every = active ? 15_000 : 60_000;
+    const look = () => {
+      last = Date.now();
+      router.refresh();
+    };
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") look();
+    }, every);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - last > every) look();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [active, router]);
   return null;
 }

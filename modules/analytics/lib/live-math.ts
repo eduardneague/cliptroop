@@ -23,7 +23,7 @@ export type Snapshot = Counts & { id: string; at: string };
  * that's now), so the change is spread over exactly the time it happened in.
  * `keys`: the counts this read has (the others keep their stored values).
  */
-export function snapshotsOf(read: { id: string; counts: Partial<Counts> }[], seen: Map<string, SeenCounts>, keys: readonly CountKey[], now: string): { fresh: Snapshot[]; before: Snapshot[] } {
+export function snapshotsOf(read: { id: string; counts: Partial<Counts>; publishedAt?: string | null }[], seen: Map<string, SeenCounts>, keys: readonly CountKey[], now: string): { fresh: Snapshot[]; before: Snapshot[] } {
   const nowMs = Date.parse(now);
   const fresh: Snapshot[] = [];
   const before: Snapshot[] = [];
@@ -31,6 +31,11 @@ export function snapshotsOf(read: { id: string; counts: Partial<Counts> }[], see
     const was = seen.get(r.id);
     const cur = Object.fromEntries(COUNT_KEYS.map((k) => [k, keys.includes(k) ? (r.counts[k] ?? null) : (was?.[k] ?? null)])) as Counts;
     if (cur.views === null && cur.likes === null) continue;
+    // A video seen for the first time that was posted in the last 8 days
+    // (1.22.0): it started from nothing when it was posted, so its first views
+    // count in the hours they came in (they used to be left out of realtime).
+    const posted = !was && r.publishedAt ? Date.parse(r.publishedAt) : NaN;
+    if (Number.isFinite(posted) && posted < nowMs && nowMs - posted < 8 * 86_400_000) before.push({ id: r.id, at: new Date(posted).toISOString(), views: 0, likes: 0, comments: 0, shares: 0 });
     const changed = !!was && keys.some((k) => cur[k] !== null && cur[k] !== was[k]);
     if (!was || !was.liveAt || changed) fresh.push({ id: r.id, at: now, ...cur });
     if (was && changed && (was.views !== null || was.likes !== null)) {
@@ -104,6 +109,25 @@ export function hourName(at: number, now: number): string {
   const diff = Math.round((dayStart(n) - dayStart(d)) / 86_400_000);
   const day = diff === 0 ? "Today" : diff === 1 ? "Yesterday" : d.toLocaleDateString("en-US", { weekday: "short" });
   return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric" })}`;
+}
+
+/**
+ * An hour as a stretch of time for a tooltip (1.22.0): "Today, 5 PM – 6 PM",
+ * "Yesterday, 11 PM – 12 AM", "Mon, 11 AM – 12 PM" (the viewer's time).
+ */
+export function hourRange(at: number, now: number): string {
+  const d = new Date(at);
+  const n = new Date(now);
+  const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((dayStart(n) - dayStart(d)) / 86_400_000);
+  const day = diff === 0 ? "Today" : diff === 1 ? "Yesterday" : d.toLocaleDateString("en-US", { weekday: "short" });
+  const part = (t: Date) => {
+    const [h, m] = t.toLocaleTimeString("en-US", { hour: "numeric" }).split(" ");
+    return { h, m };
+  };
+  const a = part(d);
+  const b = part(new Date(at + 3_600_000));
+  return `${day}, ${a.h} ${a.m} – ${b.h} ${b.m}`;
 }
 
 /**

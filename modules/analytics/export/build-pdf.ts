@@ -6,6 +6,7 @@ import type { ClaudeExportData } from "../lib/claude-export";
 import type { AdvancedData, AdvVideo, Fmt } from "../lib/advanced";
 import { compact, duration } from "../lib/patterns";
 import { claudePrompt, typeName } from "./build-text";
+import { isWide, KIND_LABEL } from "../lib/kinds";
 
 /*
  * The PDF for Claude (1.16.0), made in the browser with pdf-lib (loaded
@@ -81,7 +82,7 @@ async function fetchImage(url: string, maxW: number, maxH: number) {
 }
 
 const NAME = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" } as const;
-const KIND = { short: "Short", long: "Long video", post: "Post" } as const;
+const KIND = KIND_LABEL;
 
 /** Vertical videos (Shorts, Reels, TikToks) get a tall thumbnail. */
 const vertical = (v: AdvVideo) => v.kind === "short" || v.platform === "tiktok" || (v.platform === "instagram" && v.kind !== "post");
@@ -465,9 +466,9 @@ export async function buildClaudePdf(data: ClaudeExportData, teamId: string, pro
       [
         ["Views", compact(v.views)],
         v.avgViewPct !== null ? ["Watched on average", `${Math.round(v.avgViewPct)}%`] : v.avgViewSeconds !== null ? ["Average watch", duration(v.avgViewSeconds)] : null,
-        v.kind === "long" && v.retention?.at30s !== null && v.retention?.at30s !== undefined
+        isWide(v.kind) && v.retention?.at30s !== null && v.retention?.at30s !== undefined
           ? ["After 30 s", `${Math.round(v.retention.at30s * 100)}%`]
-          : v.kind !== "long" && v.retention?.at3s !== null && v.retention?.at3s !== undefined
+          : !isWide(v.kind) && v.retention?.at3s !== null && v.retention?.at3s !== undefined
             ? ["After 3 s", `${Math.round(v.retention.at3s * 100)}%`]
             : v.skipRate !== null
               ? ["Swiped away", `${Math.round(v.skipRate)}%`]

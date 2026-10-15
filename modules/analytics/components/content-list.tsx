@@ -6,6 +6,7 @@ import { AnalyticsIcon, ExternalIcon, GridIcon, ListIcon } from "@/components/ui
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { ContentItem } from "../lib/queries";
 import { scoreText, scoreTone } from "../lib/scores";
+import { KIND_LABEL, KIND_PLURAL, KIND_SHORT_LABEL, isWide } from "../lib/kinds";
 import type { SocialPlatform } from "@/lib/social/providers";
 
 /*
@@ -15,7 +16,7 @@ import type { SocialPlatform } from "@/lib/social/providers";
  * with their numbers, so there's no second search box here).
  */
 
-export type ContentKind = "all" | "short" | "long" | "post";
+export type ContentKind = "all" | "short" | "long" | "live" | "post";
 type View = "table" | "grid";
 type SortKey = "published" | "views" | "score" | "likes" | "comments" | "shares" | "impressions" | "ctr";
 /** Rows shown at first (and added with each "Show more"): a few thousand videos stay quick. */
@@ -140,7 +141,7 @@ export function ContentList({ items, platform, kind, empty, left }: { items: Con
 
       <div id="content-results">
         {list.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{kind !== "all" ? `No ${kind === "short" ? "shorts" : kind === "long" ? "long videos" : "posts"} here.` : empty}</p>
+          <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{kind !== "all" ? `No ${KIND_PLURAL[kind]} here.` : empty}</p>
         ) : view === "table" ? (
           // (relative: the hidden labels inside scroll with the table instead of widening the page.)
           <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
@@ -175,7 +176,7 @@ export function ContentList({ items, platform, kind, empty, left }: { items: Con
                           )}
                           <span className="flex items-center gap-1.5 text-[11.5px] text-ink-faint min-w-0">
                             <span className="truncate">
-                              {c.kind === "short" ? "Short" : c.kind === "long" ? "Long video" : "Post"}
+                              {KIND_LABEL[c.kind]}
                               {c.noNumbers ? ` · no numbers from ${NAME[c.platform]} yet` : ""}
                             </span>
                             {c.ours && (
@@ -212,13 +213,13 @@ export function ContentList({ items, platform, kind, empty, left }: { items: Con
                 <Link href={c.noNumbers ? "#" : videoHref(c)} aria-disabled={c.noNumbers || undefined} onClick={(e) => c.noNumbers && e.preventDefault()} className="block relative aspect-video bg-surface-2 overflow-hidden">
                   {c.thumbnail ? (
                     <>
-                      {c.kind !== "long" && (
+                      {!isWide(c.kind) && (
                         // A vertical video in a wide frame: blurred behind, whole in front.
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={c.thumbnail} alt="" aria-hidden loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60" />
                       )}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className={`relative w-full h-full ${c.kind === "long" ? "object-cover" : "object-contain"}`} />
+                      <img src={c.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className={`relative w-full h-full ${isWide(c.kind) ? "object-cover" : "object-contain"}`} />
                     </>
                   ) : null}
                   <PlatformIcon platform={c.platform} className="absolute bottom-2 right-2 w-6 h-6 rounded-md shadow" />
@@ -231,7 +232,7 @@ export function ContentList({ items, platform, kind, empty, left }: { items: Con
                   <div className="mt-1 text-[11.5px] text-ink-faint flex items-center gap-1.5 flex-wrap">
                     <span>{c.publishedAt ? niceDay(c.publishedAt) : "–"}</span>
                     <span aria-hidden>·</span>
-                    <span>{c.kind === "short" ? "Short" : c.kind === "long" ? "Long" : "Post"}</span>
+                    <span>{KIND_SHORT_LABEL[c.kind]}</span>
                     {c.ours && (
                       <Link href={c.ours.kind === "short" ? `/shorts/${c.ours.id}` : `/videos/${c.ours.id}`} className="font-mono font-semibold text-amber hover:underline">
                         #{c.ours.number ?? "?"}

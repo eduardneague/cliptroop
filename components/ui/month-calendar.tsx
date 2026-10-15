@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getPlannedDays, type PlannedRange } from "@/app/(dashboard)/calendar/planned-days";
+import type { PlannedRange } from "@/app/(dashboard)/calendar/planned-days";
 import { ArrowLeftIcon, ChevronRightIcon } from "./icons";
 import { PostedTick } from "./posted-tick";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
@@ -25,8 +25,49 @@ export type DayInfo = { count: number; limit: number } | null;
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const DAY_RX = /^\d{4}-\d{2}-\d{2}$/;
-// What's planned per visible 6 weeks, remembered while the page is open.
+// What's planned per visible 6 weeks, remembered while the page is open,
+// and the asks on their way (two calendars asking for the same weeks share one).
 const CACHE = new Map<string, PlannedRange>();
+const ASKING = new Map<string, Promise<PlannedRange | null>>();
+
+/** The 42 days (6 weeks from Monday) a month shows. */
+function gridOf(month: string): string[] {
+  const start = parse(`${month}-01`);
+  const first = isoDay(new Date(start.getFullYear(), start.getMonth(), 1 - ((start.getDay() + 6) % 7)));
+  return Array.from({ length: 42 }, (_, i) => addDays(first, i));
+}
+
+/**
+ * What's planned on a month's days (1.22.0: a GET route, not a server
+ * action, so the dots never wait behind the page's other calls; the same
+ * weeks are asked once at a time and remembered).
+ */
+function plannedFor(month: string, fresh = false): Promise<PlannedRange | null> {
+  const days = gridOf(month);
+  const key = `${days[0]}:${days[41]}`;
+  const busy = ASKING.get(key);
+  if (busy) return busy;
+  if (!fresh && CACHE.has(key)) return Promise.resolve(CACHE.get(key)!);
+  const p = fetch(`/api/calendar/planned?from=${days[0]}&to=${days[41]}`, { cache: "no-store" })
+    .then((r) => (r.ok ? (r.json() as Promise<PlannedRange>) : null))
+    .then((r) => {
+      if (r) CACHE.set(key, r);
+      return r;
+    })
+    .catch(() => null)
+    .finally(() => ASKING.delete(key));
+  ASKING.set(key, p);
+  return p;
+}
+
+/**
+ * Get a calendar's dots ready before it opens (a date button pointed at or
+ * focused): the month of `day` (default: this month).
+ */
+export function warmPlannedDays(day?: string | null) {
+  const d = day && DAY_RX.test(day) ? day : isoDay(new Date());
+  if (!CACHE.has(`${gridOf(d.slice(0, 7))[0]}:${gridOf(d.slice(0, 7))[41]}`)) void plannedFor(d.slice(0, 7));
+}
 
 export const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (s: string) => new Date(s + "T00:00:00");
@@ -81,7 +122,13 @@ export function MonthCalendar({
   // The month on screen. Only the arrows or the keyboard change it, never
   // the mouse (hovering a greyed edge day used to flip months).
   const [viewMonth, setViewMonth] = useState("");
-  const [range, setRange] = useState<PlannedRange | null>(null);
+  // What's planned: from the cache straight away when it's there (a warmed calendar opens with its dots).
+  const [range, setRange] = useState<PlannedRange | null>(() => {
+    const v = value && DAY_RX.test(value) ? value : null;
+    if (!v) return null;
+    const g = gridOf(v.slice(0, 7));
+    return CACHE.get(`${g[0]}:${g[41]}`) ?? null;
+  });
   const [peek, setPeek] = useState<string | null>(null);
   // Phones (press and hold): where the held day is, so the card opens above
   // its row (or below it, for the top rows) instead of over the days around it.
@@ -116,18 +163,18 @@ export function MonthCalendar({
   const days = first ? Array.from({ length: 42 }, (_, i) => addDays(first, i)) : [];
 
   useEffect(() => {
-    if (!days.length) return;
+    if (!viewMonth) return;
     const key = `${days[0]}:${days[41]}`;
-    // Show what we have instantly, then refresh (plans change).
+    // Show what we have instantly, then refresh (plans change), then get the
+    // months either side ready so the arrows are instant too.
     const hit = CACHE.get(key);
     if (hit) setRange(hit);
     let alive = true;
-    getPlannedDays(days[0], days[41])
-      .then((r) => {
-        CACHE.set(key, r);
-        if (alive) setRange(r);
-      })
-      .catch(() => {});
+    void plannedFor(viewMonth, !!hit).then((r) => {
+      if (alive && r) setRange(r);
+      if (!alive) return;
+      for (const m of [addMonths(`${viewMonth}-01`, -1), addMonths(`${viewMonth}-01`, 1)]) warmPlannedDays(m);
+    });
     return () => {
       alive = false;
     };

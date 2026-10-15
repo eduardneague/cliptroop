@@ -105,6 +105,8 @@ export function AdvancedTab({
               { value: "all", label: "Everything" },
               { value: "shorts", label: "Shorts" },
               { value: "long", label: "Long videos" },
+              // 1.22.0: live streams apart (YouTube used to count them as long videos).
+              { value: "live", label: "Live streams" },
             ]}
           />
         )}

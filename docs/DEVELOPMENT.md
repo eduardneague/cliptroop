@@ -276,11 +276,17 @@ file that gets posted (`post-video-preview.tsx`): a closed bar, Watch opens the
 review player. How long a
 short may be per platform lives in `lib/short-length.ts` (used by the cards and
 by the server before scheduling).
-The Posting page reads unfinished posts (soonest first) and the latest 100
-published ones separately, then `posting/post-sections.tsx` filters them in
-the browser (platform, #number/title, day). Platform chips everywhere are
-`modules/short-videos/components/platform-filter.tsx` (also the dashboard's
-Posting today widget, `compact`).
+The Posting page (a dashboard since 1.24.0) reads unfinished posts (soonest
+first), the latest 100 published ones, the platforms' copies of the last 30
+days (`analytics_content`, the connected accounts only) and the shorts
+marked as posted; `modules/posting/lib/dashboard.ts` (pure, tested) works
+out the lists, who posted what (ClipTroop's posts carry its logo), the
+numbers on top and each platform's card, and `modules/posting/components/`
+shows them in tabs kept in the address (`?tab=…&platform=…`), filtered in
+the browser. Posts not out yet use a frame of their video as the thumbnail
+(`/api/frames/<version>`, the strip saved at upload). Platform chips
+everywhere are `modules/short-videos/components/platform-filter.tsx` (also
+the dashboard's Posting today widget, `compact`).
 
 **Developer accounts.** `isDeveloper(user)` (lib/errors.ts) compares the
 email the person is signed in with (the verified session, never the copy in

@@ -6,10 +6,11 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { VideoKey, VideoPageData } from "../../lib/video";
 import { scoreText } from "../../lib/scores";
 import { bucketDays, defaultGran, gransFor, rollup, runningTotal, type Gran, type Num } from "../../lib/trend-math";
-import { hourName } from "../../lib/live-math";
+import { hourRange } from "../../lib/live-math";
 import { ago as agoFrom } from "../../lib/ago";
 import { CardStrip, ChartCard, Legend, LineChart, StackedColumns } from "../charts";
 import { RetentionChart } from "../advanced/retention-chart";
+import { isWide } from "../../lib/kinds";
 import { compactNum, money, niceDay, pctOf, seconds } from "../advanced/format";
 
 /*
@@ -246,7 +247,7 @@ export function LiveCard({ data }: { data: VideoPageData }) {
             <StackedColumns
               ariaLabel={`${word} per hour over the last 48 hours`}
               labels={l.hours.map((h, i) => (i === 0 ? "48 h ago" : i === l.hours.length - 1 ? "Now" : ""))}
-              tips={l.hours.map((h, i) => `${hourName(Date.parse(h.at), t)}${i === l.hours.length - 1 ? " (so far)" : ""}`)}
+              tips={l.hours.map((h, i) => `${hourRange(Date.parse(h.at), t)}${i === l.hours.length - 1 ? " (so far)" : ""}`)}
               series={[{ key: "v", label: word, color: MINE, values: l.hours.map((h) => h.views) }]}
               height={110}
               format={(x) => compactNum(x)}
@@ -288,7 +289,7 @@ export function RetentionCard({ data }: { data: VideoPageData }) {
       {s && (
         <dl className="mt-4 pt-4 border-t border-line/10 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-3">
           {[
-            v.kind === "long" ? ["After 30 s", pctOf(s.at30s)] : ["After 3 s", pctOf(s.at3s)],
+            isWide(v.kind) ? ["After 30 s", pctOf(s.at30s)] : ["After 3 s", pctOf(s.at3s)],
             ["Halfway", pctOf(s.at50)],
             ["At the end", pctOf(s.end)],
             ["Steepest drop", s.biggestDrop ? `${Math.round(s.biggestDrop.at * 100)}% in` : "–"],
@@ -390,23 +391,56 @@ export function DayBarsChart({ title, days, values, format, color = MINE, height
   return <StackedColumns ariaLabel={title} labels={buckets.map((b) => b.label)} tips={buckets.map((b) => b.tip)} series={[{ key: "v", label: title, color, values: r.map((v) => v ?? 0) }]} format={format} height={height} />;
 }
 
-/** A small chart of one per-day number (bars), with its own empty state. */
+/**
+ * A small chart of one per-day number (bars), with its own empty state.
+ * 1.22.0: only the stretch with numbers (impressions start when YouTube's
+ * reach reports do, not when the video was posted).
+ */
 export function DayBars({ title, sub, days, values, format, color = MINE, empty }: { title: string; sub?: string; days: string[]; values: Num[]; format: (n: number | null) => string; color?: string; empty: string }) {
   const has = values.some((v) => v !== null && v !== 0);
+  const first = Math.max(0, values.findIndex((v) => v !== null));
+  const last = values.length - 1 - Math.max(0, [...values].reverse().findIndex((v) => v !== null));
+  const shownDays = has ? days.slice(first, last + 1) : days;
+  const shown = has ? values.slice(first, last + 1) : values;
+  const cut = has && shownDays.length < days.length && first > 0;
   return (
-    <ChartCard title={title} sub={sub ?? `Per ${dayGran(days.length)}`}>
-      {has ? <DayBarsChart title={title} days={days} values={values} format={format} color={color} /> : <p className="py-12 text-center text-[13px] text-ink-faint">{empty}</p>}
+    <ChartCard title={title} sub={`${sub ?? `Per ${dayGran(shownDays.length)}`}${cut ? ` · from ${niceDay(shownDays[0], true)}` : ""}`}>
+      {has ? <DayBarsChart title={title} days={shownDays} values={shown} format={format} color={color} /> : <p className="py-12 text-center text-[13px] text-ink-faint">{empty}</p>}
     </ChartCard>
   );
 }
 
-/** An average per day (lines; days without a number stay empty). */
-export function DayLine({ title, sub, days, values, format, empty }: { title: string; sub?: string; days: string[]; values: Num[]; format: (n: number | null) => string; empty: string }) {
-  const has = values.some((v) => v !== null);
-  const labels = days.map((d) => niceDay(d));
+/**
+ * An average per day as a line. 1.22.0: only the stretch that has numbers
+ * (a click-through rate starts when YouTube's reach reports do, not when the
+ * video was posted: the chart was mostly empty with loose dots), days
+ * without a number bridged, and a rate weighted by what it's a rate of
+ * (impressions) when the days are grouped into weeks.
+ */
+export function DayLine({ title, sub, days, values, format, empty, weights, weightWord }: { title: string; sub?: string; days: string[]; values: Num[]; format: (n: number | null) => string; empty: string; weights?: Num[]; weightWord?: string }) {
+  const first = values.findIndex((v) => v !== null);
+  const last = values.length - 1 - [...values].reverse().findIndex((v) => v !== null);
+  const has = first >= 0;
+  const shownDays = has ? days.slice(first, last + 1) : [];
+  const shown = has ? values.slice(first, last + 1) : [];
+  const w = weights && has ? weights.slice(first, last + 1) : undefined;
+  const buckets = bucketDays(shownDays, shownDays.length > 90 ? "week" : "day");
+  const series = rollup(shown, buckets, w ? w.map((x) => (x === null ? null : Math.max(0, x))) : shown.map((x) => (x === null ? null : 1)));
+  const wsum = w ? rollup(w, buckets) : null;
   return (
-    <ChartCard title={title} sub={sub}>
-      {has ? <LineChart ariaLabel={title} labels={labels} series={[{ key: "v", label: title, color: MINE, values }]} format={format} height={180} /> : <p className="py-12 text-center text-[13px] text-ink-faint">{empty}</p>}
+    <ChartCard title={title} sub={has && shownDays.length < days.length ? `${sub ? `${sub} · ` : ""}from ${niceDay(shownDays[0], true)}` : sub}>
+      {has ? (
+        <LineChart
+          ariaLabel={title}
+          labels={buckets.map((b) => b.label)}
+          tips={buckets.map((b, i) => `${b.tip}${wsum && wsum[i] !== null ? ` · ${compactNum(wsum[i])} ${weightWord ?? ""}`.trimEnd() : ""}`)}
+          series={[{ key: "v", label: title, color: MINE, values: series }]}
+          format={format}
+          height={180}
+        />
+      ) : (
+        <p className="py-12 text-center text-[13px] text-ink-faint">{empty}</p>
+      )}
     </ChartCard>
   );
 }

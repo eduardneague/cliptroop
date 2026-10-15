@@ -391,7 +391,8 @@ export async function youtubeTypeAverages(token: string, start: string, end: str
   const acc = new Map<string, { views: number; dur: number; pct: number; engaged: number | null; gained: number | null; lost: number | null }>();
   for (const x of r?.rows ?? []) {
     const type = String(x.creatorContentType ?? "");
-    const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" || type === "LIVE_STREAM" ? "long" : null;
+    // (1.22.0: live streams apart from long videos.)
+    const content = type === "SHORTS" ? "shorts" : type === "VIDEO_ON_DEMAND" ? "long" : type === "LIVE_STREAM" ? "live" : null;
     if (!content) continue;
     const k = `${x.day}|${content}`;
     const v = num(x.views) ?? 0;

@@ -9,6 +9,7 @@ import { cumulativeByAge, median, perDayFrom, rankOf, typicalCurve, versusTypica
 import { addDays, dayList } from "./ranges";
 import { gainedBetween, perHour, perSlot } from "./live-math";
 import { cache } from "react";
+import { isWide } from "./kinds";
 
 /*
  * One video's own analytics page (1.17.0): every number its platform shares,
@@ -61,6 +62,13 @@ export type VideoPageData = {
   milestones: { day: number; views: number; typical: number | null }[];
   /** True: some of its first days are missing (YouTube can fill them in on request). */
   canFill: boolean;
+  /**
+   * What the ones before it usually got (1.22.0, like YouTube Studio's "That's
+   * similar to the 23,900–39,700 you usually get"): the middle half of the
+   * same kind's views at the same age (the first 60 days; `day` is that age,
+   * 1 = the day it was posted), else since they were posted (`day` null).
+   */
+  usual: { low: number; high: number; day: number | null; count: number } | null;
   retention: { mine: (number | null)[]; average: (number | null)[] | null; averageCount: number } | null;
   /** Its own splits since it was posted (YouTube; 1.21.0: every one its page shows), and when YouTube sent them. */
   breakdowns: { list: AdvBreakdown[]; asOf: string | null; fetchedAt: string | null } | null;
@@ -142,10 +150,11 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
   const eng = (v: AdvVideo) => (v.views ? (((v.likes ?? 0) + (v.comments ?? 0) + (v.shares ?? 0) + (v.saves ?? 0)) / v.views) * 100 : null);
   const likeRate = (v: AdvVideo) => (v.views && v.likes !== null ? (v.likes / v.views) * 100 : null);
   const hold = (v: AdvVideo) => {
-    const h = v.kind === "long" ? v.retention?.at30s : v.retention?.at3s;
+    const h = isWide(v.kind) ? v.retention?.at30s : v.retention?.at3s;
     return h === null || h === undefined ? null : h * 100;
   };
   const watchH = (v: AdvVideo) => (v.watchMinutes === null ? null : v.watchMinutes / 60);
+  const netSubs = (v: AdvVideo) => (v.subscribersGained === null ? null : v.subscribersGained - (typeof v.metrics.subscribers_lost === "number" ? v.metrics.subscribers_lost : 0));
   const subsPer1k = (v: AdvVideo) => (v.views && v.subscribersGained !== null ? (v.subscribersGained / v.views) * 1000 : null);
   const defs: { key: string; label: string; get: (v: AdvVideo) => number | null; format: VideoKey["format"]; good?: "up" | "down" }[] = [
     { key: "views", label: platform === "facebook" ? "Plays" : "Views", get: (v) => v.views, format: "compact" },
@@ -156,7 +165,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     { key: "watch_hours", label: "Watch time", get: watchH, format: "hours" },
     { key: "avg_view", label: platform === "youtube" ? "Average view duration" : "Average watch time", get: (v) => v.avgViewSeconds, format: "seconds" },
     { key: "avg_pct", label: "Average % viewed", get: (v) => v.avgViewPct, format: "pct" },
-    { key: "hold", label: video.kind === "long" ? "Still watching after 30 s" : "Still watching after 3 s", get: hold, format: "pct" },
+    { key: "hold", label: isWide(video.kind) ? "Still watching after 30 s" : "Still watching after 3 s", get: hold, format: "pct" },
     { key: "skip", label: "Skipped in 3 s", get: (v) => v.skipRate, format: "pct", good: "down" },
     { key: "likes", label: platform === "facebook" ? "Reactions" : "Likes", get: (v) => v.likes, format: "compact" },
     { key: "comments", label: "Comments", get: (v) => v.comments, format: "compact" },
@@ -166,7 +175,8 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     { key: "replays", label: "Replays", get: (v) => v.metrics.replays ?? null, format: "compact" },
     { key: "engagement", label: "Engagement rate", get: eng, format: "pct" },
     { key: "like_rate", label: "Like rate", get: likeRate, format: "pct" },
-    { key: "subs", label: platform === "youtube" ? "Subscribers gained" : "Followers gained", get: (v) => v.subscribersGained ?? v.metrics.followers_gained ?? null, format: "compact" },
+    // YouTube: net (gained minus lost), like YouTube Studio's "Subscribers".
+    { key: "subs", label: platform === "youtube" ? "Subscribers" : "Followers gained", get: (v) => (platform === "youtube" ? netSubs(v) : (v.subscribersGained ?? v.metrics.followers_gained ?? null)), format: "compact" },
     { key: "subs_per_1k", label: "Subscribers per 1,000 views", get: subsPer1k, format: "decimal" },
   ];
   const keys: VideoKey[] = defs
@@ -227,7 +237,11 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
         likes: col("likes"),
         comments: col("comments"),
         shares: col("shares"),
-        subs: col("subscribers_gained"),
+        // Net, like YouTube Studio's "Subscribers": gained minus lost (lost from 0086 on).
+        subs: days.map((d) => {
+          const g = n(m.get(d)?.subscribers_gained);
+          return g === null ? null : g - (n(m.get(d)?.subscribers_lost) ?? 0);
+        }),
         avgView: col("avg_view_seconds"),
         impressions: days.map((d) => n(reach.get(d)?.impressions)),
         ctr: days.map((d) => n(reach.get(d)?.ctr)),
@@ -246,6 +260,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
 
   let growth: VideoPageData["growth"] = null;
   const milestones: VideoPageData["milestones"] = [];
+  let usual: VideoPageData["usual"] = null;
   if (postedDay && ageDays !== null) {
     const len = Math.min(GROWTH_DAYS, ageDays) + 1;
     const mine = cumulativeByAge(mineRows.map(asDay), postedDay, len - 1, lastDay);
@@ -255,6 +270,11 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
         return pd ? cumulativeByAge((byVideo.get(p.id) ?? []).filter(hasViews).map(asDay), pd, len - 1, lastDay) : [];
       })
       .filter((c) => c.some((v) => v !== null));
+    // The usual at the same age: the ones before it by the end of the same day of their life.
+    if (ageDays < GROWTH_DAYS) {
+      const at = peerCurves.map((c) => c[ageDays] ?? null).filter((x): x is number => x !== null);
+      if (at.length >= 5) usual = { low: quantile(at, 0.25), high: quantile(at, 0.75), day: ageDays + 1, count: at.length };
+    }
     let typical = typicalCurve(peerCurves, len);
     // A typical line only where it says something: at least 3 days next to this one's.
     const overlap = mine.filter((v, i) => v !== null && typical[i] !== null).length;
@@ -267,10 +287,20 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
       }
     }
   }
-  // YouTube can send any video's whole day-by-day history: worth asking when the start is missing.
+  // Older than 60 days (or not enough curves): since they were posted, like YouTube's "you usually get".
+  if (!usual && video.views !== null) {
+    const totals = peers.map((p) => p.views).filter((x): x is number => x !== null);
+    if (totals.length >= 5) usual = { low: quantile(totals, 0.25), high: quantile(totals, 0.75), day: null, count: totals.length };
+  }
+  // YouTube can send any video's whole day-by-day history (up to 3 years back): worth asking when the start is missing.
+  // Asked once (1.22.0: days_filled_at, migration 0086), not on every visit: a video whose first days YouTube
+  // has nothing for (no views yet, or more than 3 years ago) kept asking every time its page opened.
+  // A video in its first week may be asked again after 12 hours (YouTube is a day or two behind).
   const firstDaily = mineRows.find((r) => r.source === "daily")?.day as string | undefined;
-  const latestDaily = [...mineRows].reverse().find((r) => r.source === "daily")?.day as string | undefined;
-  const canFill = platform === "youtube" && !!postedDay && (!firstDaily || firstDaily > addDays(postedDay, 1) || !latestDaily || latestDaily < addDays(o.today, -5));
+  const reachBack = postedDay && postedDay < addDays(o.today, -1095) ? addDays(o.today, -1095) : postedDay;
+  const filledAt = typeof me.days_filled_at === "string" ? Date.parse(me.days_filled_at) : null;
+  const startMissing = !!reachBack && (!firstDaily || firstDaily > addDays(reachBack, 1));
+  const canFill = platform === "youtube" && startMissing && (filledAt === null || ((ageDays ?? GROWTH_DAYS) < 7 && Date.now() - filledAt > 12 * 3_600_000));
 
   // ---- Retention: this one against the average of its kind ------------------------
   let retention: VideoPageData["retention"] = null;
@@ -306,7 +336,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     const firstCopy = mineRows.find((r) => r.source === "total")?.day as string | undefined;
     notes.push(`${NAME[platform]} only shares running totals, so its day-by-day views come from ClipTroop's copy each morning${firstCopy && postedDay && firstCopy > addDays(postedDay, 1) ? ` (this one's from ${niceDayText(firstCopy)} on)` : ""}.`);
   }
-  const peerWord = video.kind === "long" ? "long videos" : video.kind === "post" ? "posts" : platform === "youtube" ? "Shorts" : platform === "tiktok" ? "videos" : "Reels";
+  const peerWord = video.kind === "long" ? "long videos" : video.kind === "live" ? "live streams" : video.kind === "post" ? "posts" : platform === "youtube" ? "Shorts" : platform === "tiktok" ? "videos" : "Reels";
   const typicalRpm = money ? med((v) => v.revenue?.rpm ?? null) : null;
 
   return {
@@ -318,6 +348,7 @@ export async function getVideoAnalytics(teamId: string, platform: SocialPlatform
     growth,
     milestones,
     canFill,
+    usual,
     retention,
     breakdowns,
     live,
@@ -361,9 +392,11 @@ async function liveFor(supabase: Awaited<ReturnType<typeof createClient>>, teamI
 const DAY_COLS = "external_id, day, source, views, watch_minutes";
 const DAY_COLS_REACH = `${DAY_COLS}, likes, comments, shares, impressions, ctr`;
 const DAY_COLS_ALL = `${DAY_COLS_REACH}, subscribers_gained, avg_view_seconds`;
+/** 0086: subscribers lost per day too (net subscribers, like YouTube Studio's). */
+const DAY_COLS_NET = `${DAY_COLS_ALL}, subscribers_lost`;
 const contentDayCols = cache(async (): Promise<string> => {
   const supabase = await createClient();
-  for (const cols of [DAY_COLS_ALL, DAY_COLS_REACH]) {
+  for (const cols of [DAY_COLS_NET, DAY_COLS_ALL, DAY_COLS_REACH]) {
     const { error } = await supabase.from("analytics_content_days").select(cols).limit(1);
     if (!error) return cols;
   }
@@ -400,7 +433,8 @@ export async function historyToFill(teamId: string, id: string, today: string): 
   const out: { id: string; from: string; to: string }[] = [];
   const mine = span.get(id);
   // This video: its whole life (up to 3 years), when the start or the last days are missing.
-  if (!mine || mine.first > addDays(posted, 1) || mine.last < addDays(today, -5)) out.push({ id, from: posted < addDays(today, -1095) ? addDays(today, -1095) : posted, to: end });
+  const from = posted < addDays(today, -1095) ? addDays(today, -1095) : posted;
+  if (!mine || mine.first > addDays(from, 1) || mine.last < addDays(today, -5)) out.push({ id, from, to: end });
   // The others: their first weeks (enough for "typical"), the closest ones first.
   for (const r of before) {
     if (out.length >= 9) break;
@@ -411,6 +445,16 @@ export async function historyToFill(teamId: string, id: string, today: string): 
     out.push({ id: r.external_id as string, from: p, to: to < end ? to : end });
   }
   return out;
+}
+
+/** The value below which a share of the numbers fall (0.25: the lower quartile), in between two when needed. */
+function quantile(xs: number[], q: number): number {
+  const v = [...xs].sort((a, b) => a - b);
+  if (!v.length) return 0;
+  const at = (v.length - 1) * q;
+  const lo = Math.floor(at);
+  const hi = Math.ceil(at);
+  return v[lo] + (v[hi] - v[lo]) * (at - lo);
 }
 
 /** Every row (1,000 at a time). */

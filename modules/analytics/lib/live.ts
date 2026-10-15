@@ -3,9 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAccessToken } from "@/lib/social/tokens";
 import { FB_GRAPH, hasStatsScopes, isSocialPlatform, STATS_SCOPES, type SocialPlatform } from "@/lib/social/providers";
 import { sameAccount } from "./accounts";
-import { ApiError, get, inBatches, keepStoredMetrics, NEW_CONTENT_COLS, num, upsert, upsertSome, YT, type Admin } from "./sync-core";
-import { IG, linksFor, ytContentRow, ytVideoStats, type Account, type Links, type YtVideo } from "./sync";
-import { youtubeVideoDetails, youtubeVideoExtras, youtubeVideoRevenue } from "./sync-advanced";
+import { ApiError, get, inBatches, NEW_CONTENT_COLS, num, upsert, upsertSome, YT, type Admin } from "./sync-core";
+import { IG, linksFor, refreshYouTubeVideoNumbers, teamMoneyCurrency, youtubeHistory, ytContentRow, ytLiveTab, YT_VIDEO_PARTS, type Account, type Links, type YtVideo } from "./sync";
+import { countRatio, dayAt, ratioDays } from "./realtime-math";
+import { youtubeVideoDetails } from "./sync-advanced";
 import { syncReach } from "./reach";
 import { liveDue, snapshotsOf, type CountKey, type Counts, type SeenCounts, type Snapshot } from "./live-math";
 
@@ -39,17 +40,20 @@ import { liveDue, snapshotsOf, type CountKey, type Counts, type SeenCounts, type
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HOUR = 3_600_000;
-/** How often every video is read, not just the hot ones. */
-const FULL_EVERY: Record<SocialPlatform, number> = { youtube: 6 * HOUR, tiktok: 3 * HOUR, instagram: 6 * HOUR, facebook: 6 * HOUR };
+/**
+ * How often every video is read, not just the hot ones. 1.22.0: YouTube every
+ * 3 hours (was 6), so the views older videos get show up in realtime sooner.
+ */
+const FULL_EVERY: Record<SocialPlatform, number> = { youtube: 3 * HOUR, tiktok: 3 * HOUR, instagram: 6 * HOUR, facebook: 6 * HOUR };
 /** YouTube: videos read per call between full passes (the newest 50 and the ones getting views), 1 unit per 50. */
-const HOT_YT = 100;
+const HOT_YT = 150;
 /** How many videos get their other numbers refreshed per call (the oldest first). */
 const DETAILS_PER_RUN: Record<SocialPlatform, number> = { youtube: 50, tiktok: 0, instagram: 15, facebook: 15 };
 /** Instagram and Facebook: at most this many hot videos' views per call (one call each). */
 const HOT_INSIGHTS = 10;
 /** YouTube retention curves (with their traffic sources) per call. */
 const CURVES_PER_RUN = 3;
-const HOT_MAX = 100;
+const HOT_MAX = 150;
 const REACH_EVERY = HOUR;
 type Key = CountKey;
 
@@ -94,6 +98,9 @@ export async function liveTeamPlatform(teamId: string, platform: SocialPlatform,
     return { ok: true, platform, note: "Another account's numbers are kept: waiting for the morning copy." };
   const full = !!o.full || !!state.live_cursor || !state.live_full_at || Date.now() - Date.parse(state.live_full_at) > FULL_EVERY[platform];
   const now = new Date().toISOString();
+  // Since when every video is counted (0086; before it, the column isn't there).
+  const since = await admin.from("analytics_syncs").select("live_since").eq("team_id", teamId).eq("platform", platform).maybeSingle();
+  const liveSince = since.error ? undefined : (((since.data as { live_since?: string | null } | null)?.live_since ?? null) as string | null);
   try {
     const ctx: Ctx = { admin, acc: acc as Account, links: await linksFor(admin, teamId), full, deadline, now, state, totals: {} };
     const r = platform === "youtube" ? await liveYouTube(ctx) : platform === "tiktok" ? await liveTikTok(ctx) : platform === "instagram" ? await liveInstagram(ctx) : await liveFacebook(ctx);
@@ -101,10 +108,25 @@ export async function liveTeamPlatform(teamId: string, platform: SocialPlatform,
     if (full) {
       patch.live_cursor = r.complete ? null : r.cursor;
       if (r.complete) patch.live_full_at = now;
+      // The first pass over every video is done: from now on each one is counted (realtime is exact from here).
+      if (r.complete && liveSince === null) patch.live_since = now;
     }
     if (r.reachState) Object.assign(patch, r.reachState);
+    // The platform's own count next to the public counts (1.23.1): every 6 hours, when there's time.
+    if (liveSince && Date.now() < deadline - 6_000) {
+      const ratio = await ratioDue(admin, teamId, platform, liveSince).catch(() => null);
+      if (ratio) patch.live_ratio = ratio;
+    }
     const totals = Object.fromEntries(Object.entries(ctx.totals).filter(([, v]) => v !== null && v !== undefined));
-    if (Object.keys(totals).length) patch.live_totals = { ...totals, at: now };
+    if (Object.keys(totals).length) {
+      patch.live_totals = { ...totals, at: now };
+      // …and kept over time (0086): realtime's hours before every video was counted, followers per hour.
+      const t = totals as Record<string, number>;
+      const { error: totalsError } = await admin
+        .from("analytics_live_totals")
+        .upsert({ team_id: teamId, platform, at: now, followers: t.followers ?? null, total_views: t.total_views ?? null, videos: t.videos ?? null }, { onConflict: "team_id,platform,at", ignoreDuplicates: true });
+      void totalsError; // (Before migration 0086 there's no table: nothing to keep.)
+    }
     await admin.from("analytics_syncs").update(patch).eq("team_id", teamId).eq("platform", platform);
     return { ok: true, platform, videos: r.videos, changed: r.changed, details: r.details, full, complete: r.complete, reach: (r.reachState?.reach_note as string | null | undefined) ?? null };
   } catch (e) {
@@ -176,7 +198,7 @@ async function saveLive(ctx: Ctx, platform: SocialPlatform, list: Record<string,
         updatedAt: (r.updated_at as string | null) ?? null,
       });
   }
-  const read = rows.map((r) => ({ id: String(r.external_id), counts: Object.fromEntries(keys.map((k) => [k, num(r[k])])) as Partial<Counts> }));
+  const read = rows.map((r) => ({ id: String(r.external_id), counts: Object.fromEntries(keys.map((k) => [k, num(r[k])])) as Partial<Counts>, publishedAt: typeof r.published_at === "string" ? r.published_at : null }));
   const { fresh, before } = snapshotsOf(read, seen, keys, ctx.now);
   const row = (x: Snapshot): Snap => ({ team_id: teamId, platform, external_id: x.id, at: x.at, views: x.views, likes: x.likes, comments: x.comments, shares: x.shares });
   await upsertSome(ctx.admin, "analytics_content", rows.map((r) => ({ ...r, live_at: ctx.now })), "team_id,platform,external_id", ["live_at", ...NEW_CONTENT_COLS]);
@@ -236,7 +258,7 @@ async function ytVideosQuick(token: string, ids: string[]): Promise<YtVideo[]> {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
   const lists = await inBatches(chunks, 4, async (chunk) => {
-    const r = (await get(`${YT}/videos?${new URLSearchParams({ part: "snippet,statistics,contentDetails", id: chunk.join(","), maxResults: "50" })}`, token)) as { items?: YtVideo[] };
+    const r = (await get(`${YT}/videos?${new URLSearchParams({ part: YT_VIDEO_PARTS, id: chunk.join(","), maxResults: "50" })}`, token)) as { items?: YtVideo[] };
     return r.items ?? [];
   });
   return lists.flat();
@@ -306,38 +328,40 @@ async function liveYouTube(ctx: Ctx): Promise<PlatformResult> {
   const vids = ids.length ? await ytVideosQuick(token, [...new Set(ids)]) : [];
   const rows = vids.map((v) => ytContentRow(ctx.acc, v, ctx.links));
   const changed = await saveLive(ctx, "youtube", rows, ["views", "likes", "comments"]);
+  // Live streams or premieres (1.23.1): the channel's Live tab says which.
+  if (left(ctx, 18_000)) await settleLiveTab(ctx, token, vids).catch(() => 0);
 
-  // The other numbers (YouTube Analytics: a day or two behind anyway), the oldest first.
+  // The other numbers (YouTube Analytics: a day or two behind anyway), the
+  // oldest first; live streams YouTube hasn't named yet go first (1.22.0: a
+  // premiere looks like one until YouTube says it's a video).
   let details = 0;
+  const money = (ctx.acc.scopes ?? []).includes(STATS_SCOPES.youtube[1]);
   if (left(ctx, 15_000)) {
-    const stale = await staleVideos(ctx, "youtube", DETAILS_PER_RUN.youtube);
-    const staleIds = stale.map((v) => v.id);
-    if (staleIds.length) {
-      const [stats, extras] = await Promise.all([ytVideoStats(token, staleIds), youtubeVideoExtras(token, staleIds).catch(() => new Map<string, Record<string, number | null>>())]);
-      const base = { team_id: ctx.acc.team_id, platform: "youtube" };
-      // (Only when YouTube answered: otherwise they wait for the next call.)
-      if (stats) {
-        const none = { engaged_views: null, watch_minutes: null, avg_view_seconds: null, avg_view_pct: null, subscribers_gained: null };
-        await upsertSome(ctx.admin, "analytics_content", staleIds.map((id) => ({ ...base, external_id: id, ...(stats.get(id) ?? none), details_at: ctx.now })), "team_id,platform,external_id", ["details_at", ...NEW_CONTENT_COLS]);
-        details = staleIds.length;
-      }
-      // Shares only where YouTube sent them (one upsert sends one set of columns: a
-      // row without shares in a batch with them would have its shares blanked).
-      const extraRows = staleIds
-        .filter((id) => extras.has(id))
-        .map((id) => {
-          const x = extras.get(id)!;
-          const metrics = Object.fromEntries(Object.entries(x).filter(([k]) => k !== "shares"));
-          return x.shares === null || x.shares === undefined ? { ...base, external_id: id, metrics } : { ...base, external_id: id, shares: x.shares, metrics };
-        });
-      for (const group of [extraRows.filter((r) => "shares" in r), extraRows.filter((r) => !("shares" in r))])
-        if (group.length) await upsertSome(ctx.admin, "analytics_content", await keepStoredMetrics(ctx.admin, "analytics_content", ctx.acc.team_id, "youtube", group), "team_id,platform,external_id", NEW_CONTENT_COLS);
+    const streams = vids.filter((v) => v.liveStreamingDetails?.actualStartTime).map((v) => v.id);
+    let unnamed: string[] = [];
+    if (streams.length) {
+      const { data, error } = await ctx.admin.from("analytics_content").select("external_id").eq("team_id", ctx.acc.team_id).eq("platform", "youtube").is("content_type", null).in("external_id", streams.slice(0, 50));
+      if (!error) unnamed = ((data ?? []) as { external_id: string }[]).map((r) => r.external_id);
+    }
+    const stale = await staleVideos(ctx, "youtube", Math.max(0, DETAILS_PER_RUN.youtube - unnamed.length), unnamed);
+    const ids = [...unnamed, ...stale.map((v) => v.id)];
+    if (ids.length) {
       const adv = { admin: ctx.admin, teamId: ctx.acc.team_id, deadline: ctx.deadline - 12_000 };
-      if ((ctx.acc.scopes ?? []).includes(STATS_SCOPES.youtube[1]) && left(ctx, 14_000))
-        await youtubeVideoRevenue(adv, token, staleIds, (process.env.ANALYTICS_CURRENCY || "USD").toUpperCase()).catch(() => 0);
+      await refreshYouTubeVideoNumbers(ctx.admin, ctx.acc.team_id, token, ids, { money, currency: money ? await teamMoneyCurrency(ctx.admin, ctx.acc.team_id) : null, deadline: ctx.deadline - 14_000 });
+      details = ids.length;
       // Retention curves and traffic sources: a few per call (never fetched first).
       if (left(ctx, 14_000)) await youtubeVideoDetails(adv, token, stale, CURVES_PER_RUN).catch(() => 0);
     }
+  }
+  // The channel's older years (1.21.0), while they aren't all in: a year per
+  // call when there's time (the morning copy does the same), so Lifetime
+  // reaches the channel's first day within the hour, not over a few mornings.
+  if (!ctx.full && left(ctx, 22_000)) {
+    const adv = { admin: ctx.admin, teamId: ctx.acc.team_id, deadline: ctx.deadline - 10_000 };
+    await youtubeHistory(ctx.admin, ctx.acc, token, { monetary: money, currency: await teamMoneyCurrency(ctx.admin, ctx.acc.team_id), deadline: ctx.deadline - 18_000, adv }).catch((e) => {
+      console.error("[analytics history, live]", e instanceof Error ? e.message : e);
+      return 0;
+    });
   }
 
   // Impressions and CTR: new reach reports, once an hour.
@@ -348,6 +372,75 @@ async function liveYouTube(ctx: Ctx): Promise<PlatformResult> {
     reachState = { reach_job: r.job, reach_after: r.after, reach_checked_at: ctx.now, reach_note: r.note };
   }
   return { videos: rows.length, changed, details, complete, cursor, reachState };
+}
+
+/**
+ * A video that went "live" is a live stream only if it's on the channel's
+ * Live tab (1.23.1): a premiere goes live too, and it's a video. Asked once
+ * for each such video that ended a while ago (the tab lists a stream once
+ * it's over) and isn't known yet, public ones only (the tab lists those).
+ * The database sets the kind from it (0088).
+ */
+async function settleLiveTab(ctx: Ctx, token: string, vids: YtVideo[]): Promise<number> {
+  const ended = vids.filter((v) => {
+    const end = Date.parse(v.liveStreamingDetails?.actualEndTime ?? "");
+    return Number.isFinite(end) && Date.now() - end > 45 * 60_000 && v.status?.privacyStatus === "public";
+  });
+  if (!ended.length) return 0;
+  const { data, error } = await ctx.admin
+    .from("analytics_content")
+    .select("external_id")
+    .eq("team_id", ctx.acc.team_id)
+    .eq("platform", "youtube")
+    .is("live_tab", null)
+    .in("external_id", ended.slice(0, 200).map((v) => v.id));
+  if (error) return 0; // (Before migration 0088.)
+  const open = ((data ?? []) as { external_id: string }[]).map((r) => r.external_id);
+  if (!open.length) return 0;
+  const tab = await ytLiveTab(token, ctx.acc.external_id ?? "", { until: ctx.deadline - 16_000 });
+  if (!tab) return 0;
+  // On the list: a stream. Not on it: a video, but only once the whole list was read.
+  const rows = open.filter((id) => tab.ids.has(id) || tab.complete).map((id) => ({ team_id: ctx.acc.team_id, platform: "youtube", external_id: id, live_tab: tab.ids.has(id) }));
+  return rows.length ? upsert(ctx.admin, "analytics_content", rows, "team_id,platform,external_id") : 0;
+}
+
+/** The days each platform counts in (YouTube's and Facebook's end at midnight Pacific). */
+const DAY_TZ: Record<SocialPlatform, string> = { youtube: "America/Los_Angeles", facebook: "America/Los_Angeles", instagram: "UTC", tiktok: "UTC" };
+
+/**
+ * The platform's own views per day next to the public counts the job read
+ * on the same days (1.23.1), worked out again every 6 hours: what realtime
+ * scales its hours by (lib/live-hours.ts). Null when it isn't time yet.
+ */
+async function ratioDue(admin: Admin, teamId: string, platform: SocialPlatform, liveSince: string): Promise<Record<string, unknown> | null> {
+  const { data: st, error: stErr } = await admin.from("analytics_syncs").select("live_ratio").eq("team_id", teamId).eq("platform", platform).maybeSingle();
+  if (stErr) return null; // (Before migration 0088.)
+  const was = (st as { live_ratio?: { at?: string } | null } | null)?.live_ratio ?? null;
+  if (was?.at && Date.now() - Date.parse(was.at) < 6 * HOUR) return null;
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const tz = DAY_TZ[platform];
+  const days = ratioDays(Date.parse(liveSince), now, tz);
+  if (days.length < 2) return { ratio: null, at, why: "Not enough complete days counted yet." };
+  const [series, daily] = await Promise.all([
+    admin.rpc("analytics_live_series", { p_team: teamId, p_hours: 192 }),
+    admin.from("analytics_daily").select("day, views").eq("team_id", teamId).eq("platform", platform).eq("content", "all").in("day", days),
+  ]);
+  if (series.error || daily.error) return null;
+  const counted = new Map<string, number>();
+  for (const r of (series.data ?? []) as { hour: string; platform: string; views: number | string | null }[]) {
+    if (r.platform !== platform) continue;
+    // (Pacific days start on the hour: each hour is in one day.)
+    const d = dayAt(Date.parse(r.hour) + HOUR / 2, tz);
+    counted.set(d, (counted.get(d) ?? 0) + Math.max(0, num(r.views) ?? 0));
+  }
+  const own = new Map<string, number>();
+  for (const r of (daily.data ?? []) as { day: string; views: number | string | null }[]) {
+    const v = num(r.views);
+    if (v !== null) own.set(String(r.day).slice(0, 10), v);
+  }
+  const r = countRatio(counted, own, days);
+  return r ? { ...r, at } : { ratio: null, at, why: "Not enough views on complete days to compare." };
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +525,8 @@ async function liveTikTok(ctx: Ctx): Promise<PlatformResult> {
     const u = user.data?.user ?? {};
     Object.assign(ctx.totals, { followers: num(u.follower_count), total_likes: num(u.likes_count), videos: num(u.video_count) });
   } catch {}
+  // Every video in one go: their views add up to the account's (1.22.0, realtime's running total).
+  if (whole) ctx.totals.total_views = [...vids.values()].reduce((t, v) => t + (num(v.view_count) ?? 0), 0);
   const rows = [...vids.values()].map((v) => ttRow(ctx, v));
   const changed = await saveLive(ctx, "tiktok", rows, ["views", "likes", "comments", "shares"]);
   return { videos: rows.length, changed, details: 0, complete, cursor };

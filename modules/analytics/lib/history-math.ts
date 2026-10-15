@@ -39,8 +39,13 @@ export function historyRows(rows: Row[], from: string, to: string, base: Row): {
   if (!first) return { rows: [], first: null };
   const kept = inside.filter((r) => (r.day as string) >= first);
   const have = new Set(kept.filter((r) => (r.content ?? "all") === "all").map((r) => r.day as string));
+  // The kinds YouTube split this stretch into (1.22.0: Shorts, long videos, live streams):
+  // a day left out had none of any of them either.
+  const kinds = [...new Set(kept.map((r) => String(r.content ?? "all")).filter((c) => c !== "all"))];
+  const split = new Set(kept.filter((r) => (r.content ?? "all") !== "all").map((r) => `${r.day}|${r.content}`));
   for (let d = first; d <= to; d = addDays(d, 1)) {
     if (!have.has(d)) kept.push({ ...base, day: d, content: "all", views: 0, watch_minutes: 0, likes: 0, comments: 0, shares: 0, followers_gained: 0, followers_lost: 0 });
+    for (const k of kinds) if (!split.has(`${d}|${k}`)) kept.push({ ...base, day: d, content: k, views: 0, watch_minutes: 0, likes: 0, comments: 0, shares: 0 });
   }
   kept.sort((a, b) => String(a.day).localeCompare(String(b.day)) || String(a.content ?? "all").localeCompare(String(b.content ?? "all")));
   return { rows: kept, first };

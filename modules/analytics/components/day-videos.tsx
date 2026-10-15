@@ -8,6 +8,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { loadViewsDay } from "@/app/(dashboard)/analytics/actions";
 import type { DayVideo, DayViews } from "../lib/queries";
 import { fmtCompact, fmtInt } from "./charts";
+import { KIND_LABEL } from "../lib/kinds";
 
 /*
  * One day of the Views chart, opened by clicking it: every video that got
@@ -20,7 +21,7 @@ const NAME = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", fac
 const COLOR = { youtube: "rgb(var(--chart-yt))", instagram: "rgb(var(--chart-ig))", tiktok: "rgb(var(--chart-tt))", facebook: "rgb(var(--chart-fb))" } as const;
 type P = keyof typeof NAME;
 type Kind = "all" | DayVideo["kind"];
-const KIND_WORD: Record<DayVideo["kind"], string> = { short: "Short", long: "Long video", post: "Post" };
+const KIND_WORD: Record<DayVideo["kind"], string> = KIND_LABEL;
 
 const longDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

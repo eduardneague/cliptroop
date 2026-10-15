@@ -7,6 +7,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { AdvancedData, AdvVideo } from "../../lib/advanced";
 import { ScoreBadge } from "../content-list";
 import { compactNum, money, seconds } from "./format";
+import { KIND_LABEL, isWide } from "../../lib/kinds";
 
 /*
  * Advanced → Best performing (1.17.0): the platform's top videos by what
@@ -107,12 +108,12 @@ export function BestPerforming({ data }: { data: AdvancedData }) {
                   <span className="relative block w-[42%] max-w-[180px] sm:w-auto sm:max-w-none aspect-video self-center sm:self-auto flex-shrink-0 bg-surface-2 overflow-hidden">
                     {v.thumbnail && (
                       <>
-                        {v.kind !== "long" && (
+                        {!isWide(v.kind) && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={v.thumbnail} alt="" aria-hidden referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60" />
                         )}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={v.thumbnail} alt="" referrerPolicy="no-referrer" className={`relative w-full h-full ${v.kind === "long" ? "object-cover" : "object-contain"} group-hover:scale-[1.02] transition-transform`} />
+                        <img src={v.thumbnail} alt="" referrerPolicy="no-referrer" className={`relative w-full h-full ${isWide(v.kind) ? "object-cover" : "object-contain"} group-hover:scale-[1.02] transition-transform`} />
                       </>
                     )}
                     <span className={`absolute top-1.5 left-1.5 sm:top-2.5 sm:left-2.5 w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg flex items-center justify-center font-display text-[14px] sm:text-[17px] font-semibold shadow ${i === 0 ? "bg-gold text-[#3a2a00]" : "bg-surface text-ink"}`}>{i + 1}</span>
@@ -151,7 +152,7 @@ export function BestPerforming({ data }: { data: AdvancedData }) {
                     <span className="min-w-0">
                       <span className="block text-[13px] font-semibold truncate">{v.title || "Untitled"}</span>
                       <span className="block text-[11px] text-ink-faint truncate">
-                        {v.kind === "short" ? "Short" : v.kind === "long" ? "Long video" : "Post"}
+                        {KIND_LABEL[v.kind]}
                         {v.ours ? ` · #${v.ours.number ?? "?"}` : ""}
                       </span>
                     </span>

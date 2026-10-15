@@ -15,7 +15,8 @@ const TABS: Record<string, string[]> = {
 /**
  * A video's analytics (1.21.0): back link, the video with its numbers, its
  * tabs (real words: they don't change), then the Overview: the cards that
- * switch its chart and the chart, realtime beside it.
+ * switch its chart and the chart, realtime beside it. 1.22.0: the header's
+ * new shape (no "right now" box beside it).
  */
 export default function Loading() {
   const platform = /^\/analytics\/video\/([a-z]+)\//.exec(usePathname() ?? "")?.[1] ?? "youtube";
@@ -24,16 +25,21 @@ export default function Loading() {
     <SkeletonPage width="max-w-[1400px]">
       <div className="space-y-5 sm:space-y-6">
         <Skeleton className="h-5 w-40 rounded-md" />
+        {/* The header (1.22.0): a bigger picture, the views with what's usual, then every main number in a row. */}
         <div className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5" aria-hidden>
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
-            <div className="skeleton rounded-xl w-full sm:w-[240px] lg:w-[300px] aspect-video flex-shrink-0 self-start" />
-            <div className="flex-1 min-w-0 space-y-3 pt-1">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+            <div className="skeleton rounded-xl w-full sm:w-[320px] lg:w-[380px] xl:w-[420px] aspect-video flex-shrink-0 self-start" />
+            <div className="flex-1 min-w-0 pt-1">
               <Skeleton className="h-3.5 w-36" />
-              <Skeleton className="h-7 w-3/4" />
-              <Skeleton className="h-3.5 w-56" />
-              <div className="stat-cq pt-1">
-                <div className="stat-grid" data-n="6">
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton className="h-7 w-3/4 mt-2.5" />
+              <Skeleton className="h-3.5 w-56 mt-2.5" />
+              <div className="mt-4 rounded-xl bg-surface-2/60 px-4 py-3 space-y-2">
+                <Skeleton className="h-9 w-48" />
+                <Skeleton className="h-3.5 w-4/5" />
+              </div>
+              <div className="stat-cq mt-3.5">
+                <div className="stat-grid" data-n="7">
+                  {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                     <div key={i}>
                       <Skeleton className="h-3 w-16 mb-2" />
                       <Skeleton className="h-6 w-14" />
@@ -41,11 +47,9 @@ export default function Loading() {
                   ))}
                 </div>
               </div>
-              <Skeleton className="h-8 w-36 rounded-lg" />
+              <Skeleton className="h-8 w-36 rounded-lg mt-3.5" />
             </div>
-            <div className="skeleton rounded-xl w-[240px] h-[120px] flex-shrink-0 hidden xl:block" />
           </div>
-          <div className="skeleton rounded-xl h-[110px] mt-4 xl:hidden" />
         </div>
         <div className="flex items-center gap-0.5 border-b border-line/15 overflow-hidden -mx-4 px-3 sm:mx-0 sm:px-0">
           {tabs.map((t, i) => (

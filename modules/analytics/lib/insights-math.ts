@@ -1,5 +1,7 @@
 import { compact, median, type Finding, type Platform } from "./patterns";
 import { total, type Num } from "./trend-math";
+import type { VideoKind } from "./kinds";
+import type { PatternKind } from "./patterns";
 
 /*
  * Analytics → Insights (1.20.0), pure so it's tested
@@ -13,7 +15,7 @@ import { total, type Num } from "./trend-math";
 export type InsightVideo = {
   platform: Platform;
   id: string;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   title: string | null;
   publishedAt: string | null;
   views: number | null;
@@ -28,7 +30,7 @@ export type Alert = {
   id: string;
   tone: "good" | "bad" | "info";
   platform: Platform | null;
-  kind: "short" | "long" | null;
+  kind: PatternKind | null;
   title: string;
   detail: string;
   tip: string | null;
@@ -40,13 +42,13 @@ export type Alert = {
 
 const DAY = 86_400_000;
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
-export const NOUNS: Record<Platform, Record<"short" | "long", [string, string]>> = {
-  youtube: { short: ["Short", "Shorts"], long: ["long video", "long videos"] },
-  instagram: { short: ["Reel", "Reels"], long: ["video", "videos"] },
-  tiktok: { short: ["TikTok", "TikToks"], long: ["long video", "long videos"] },
-  facebook: { short: ["Reel", "Reels"], long: ["video", "videos"] },
+export const NOUNS: Record<Platform, Record<PatternKind, [string, string]>> = {
+  youtube: { short: ["Short", "Shorts"], long: ["long video", "long videos"], live: ["live stream", "live streams"] },
+  instagram: { short: ["Reel", "Reels"], long: ["video", "videos"], live: ["live", "lives"] },
+  tiktok: { short: ["TikTok", "TikToks"], long: ["long video", "long videos"], live: ["live", "lives"] },
+  facebook: { short: ["Reel", "Reels"], long: ["video", "videos"], live: ["live video", "live videos"] },
 };
-const nounOf = (p: Platform, k: "short" | "long", many = true) => NOUNS[p][k][many ? 1 : 0];
+const nounOf = (p: Platform, k: PatternKind, many = true) => NOUNS[p][k][many ? 1 : 0];
 const times = (r: number) => (r >= 10 ? `${Math.round(r)}×` : `${r.toFixed(1)}×`);
 const title = (t: string | null) => `“${(t ?? "Untitled").trim().slice(0, 70)}${(t ?? "").trim().length > 70 ? "…" : ""}”`;
 
@@ -129,7 +131,7 @@ export function breakoutAlerts(videos: InsightVideo[], now: number): Alert[] {
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     .slice(0, 3)
     .map((v) => {
-      const k = v.kind as "short" | "long";
+      const k = v.kind as PatternKind;
       const days = Math.max(1, Math.round((now - Date.parse(v.publishedAt!)) / DAY));
       return {
         id: `breakout-${v.platform}-${v.id}`,
@@ -145,12 +147,16 @@ export function breakoutAlerts(videos: InsightVideo[], now: number): Alert[] {
     });
 }
 
-/** The latest 5 settled videos of a kind all under 0.7× the usual. */
+/**
+ * The latest 5 settled videos of a kind all under 0.7× the usual. 1.23.1:
+ * settled means 10 days old (was 3): "the usual" is older videos' views,
+ * so a few days old always looked behind (Reels keep growing for weeks).
+ */
 export function slumpAlerts(videos: InsightVideo[], now: number): Alert[] {
   const out: Alert[] = [];
   for (const [platform, kind] of groupsOf(videos)) {
     const recent = videos
-      .filter((v) => v.platform === platform && v.kind === kind && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY && v.score !== null)
+      .filter((v) => v.platform === platform && v.kind === kind && v.publishedAt && now - Date.parse(v.publishedAt) >= 10 * DAY && v.score !== null)
       .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!))
       .slice(0, 5);
     if (recent.length < 5 || !recent.every((v) => (v.score as number) < 0.7)) continue;
@@ -185,14 +191,17 @@ export function gapAlerts(videos: InsightVideo[], now: number): Alert[] {
     const since = (now - dates[0]) / DAY;
     // Only for a team that posted regularly (at least every 3 weeks), and a clear break.
     if (usual > 21 || since < Math.max(3, usual * 2)) continue;
-    const every = usual < 1.5 ? "every day or so" : `every ${Math.round(usual)} days`;
+    // 1.23.1: a kind left behind long ago (148 days without a live stream after
+    // one every 2 days) was stopped on purpose: not a nudge to post the next one.
+    if (since > Math.max(45, usual * 8)) continue;
+    const every = usual < 1.5 ? "every day or so" : `about every ${Math.round(usual)} days`;
     out.push({
       id: `gap-${platform}-${kind}`,
       tone: "info",
       platform,
       kind,
       title: `No new ${nounOf(platform, kind, false)} on ${NAME[platform]} for ${Math.floor(since)} days`,
-      detail: `You usually post one ${every} (the last 10).`,
+      detail: `Your last ${dates.length} came out ${every}.`,
       tip: TIPS.gap,
       weight: 1 + Math.min(3, since / Math.max(1, usual) / 2),
     });
@@ -239,15 +248,15 @@ export function followerAlerts(list: { platform: Platform; net: Num[] }[]): Aler
   return out;
 }
 
-function groupsOf(videos: InsightVideo[]): [Platform, "short" | "long"][] {
+function groupsOf(videos: InsightVideo[]): [Platform, PatternKind][] {
   const seen = new Set<string>();
-  const out: [Platform, "short" | "long"][] = [];
+  const out: [Platform, PatternKind][] = [];
   for (const v of videos) {
     if (v.kind === "post") continue;
     const k = `${v.platform}|${v.kind}`;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push([v.platform, v.kind]);
+    out.push([v.platform, v.kind as PatternKind]);
   }
   return out;
 }
@@ -278,7 +287,7 @@ export const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export type HeatCell = { weekday: number; band: number; n: number; median: number | null };
 export type Heat = {
   platform: Platform;
-  kind: "short" | "long";
+  kind: PatternKind;
   considered: number;
   /** 7 × 6 cells, Monday first, then by band. */
   cells: HeatCell[];
@@ -291,7 +300,7 @@ export type Heat = {
  * middle "× typical" of the videos posted in each slot (settled ones only:
  * a week old). Null with fewer than 12 videos.
  */
-export function bestTimes(videos: InsightVideo[], o: { platform: Platform; kind: "short" | "long"; now: number; minAgeDays?: number }): Heat | null {
+export function bestTimes(videos: InsightVideo[], o: { platform: Platform; kind: PatternKind; now: number; minAgeDays?: number }): Heat | null {
   const minAge = (o.minAgeDays ?? 7) * DAY;
   const list = videos.filter(
     (v) => v.platform === o.platform && v.kind === o.kind && v.score !== null && v.hour !== null && v.weekday !== null && v.publishedAt && o.now - Date.parse(v.publishedAt) >= minAge

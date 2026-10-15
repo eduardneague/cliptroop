@@ -6,12 +6,17 @@
  * Pure: the Advanced page, the dashboard and the export for Claude share it.
  */
 
+import type { VideoKind } from "./kinds";
+
+/** The groups "What works" compares within (1.22.0: live streams on their own, never with long videos). */
+export type PatternKind = "short" | "long" | "live";
+
 export type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
 
 export type PatternVideo = {
   platform: Platform;
   id: string;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   title: string | null;
   publishedAt: string | null;
   durationSec: number | null;
@@ -129,7 +134,7 @@ export function sidesOf(fit: { label: string; members: PatternVideo[] }, rest: {
 
 export type Patterns = {
   platform: Platform;
-  kind: "short" | "long";
+  kind: PatternKind;
   /** Videos compared (old enough to have settled). */
   considered: number;
   /** Too new to count yet. */
@@ -145,6 +150,33 @@ const DAY = 86_400_000;
 export const MIN_AGE_DAYS = 7;
 const MIN_GROUP = 3;
 const MIN_VIDEOS = 6;
+/**
+ * 1.23.1: only the channel as it is lately (the latest 200 settled videos of
+ * a kind, from the last 18 months): a channel's views grow and its habits
+ * change, so what worked three years ago says little now.
+ */
+const RECENT_MAX = 200;
+const RECENT_DAYS = 548;
+
+/** The middle posting time of some videos (ms), null without dates. */
+function middleTime(list: PatternVideo[]): number | null {
+  return median(list.map((v) => (v.publishedAt ? Date.parse(v.publishedAt) : NaN)).filter((t) => Number.isFinite(t)));
+}
+
+/**
+ * Were the two sides posted at about the same time? (1.23.1) When one side
+ * is mostly older videos and the other newer ones, the difference in views
+ * is the channel changing over time (it grew, or a habit changed), not the
+ * thing being compared: such a finding isn't said.
+ */
+export function sameTime(a: PatternVideo[], b: PatternVideo[], all: PatternVideo[]): boolean {
+  const ta = middleTime(a);
+  const tb = middleTime(b);
+  if (ta === null || tb === null) return true;
+  const times = all.map((v) => (v.publishedAt ? Date.parse(v.publishedAt) : NaN)).filter((t) => Number.isFinite(t));
+  const span = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  return Math.abs(ta - tb) <= Math.max(60 * DAY, span * 0.3);
+}
 
 export function median(xs: number[]): number | null {
   const v = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -199,7 +231,7 @@ const HOURS: [string, number, number][] = [
 ];
 const WEEKDAYS = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
 
-function lengthGroups(kind: "short" | "long"): Group[] {
+function lengthGroups(kind: PatternKind): Group[] {
   const b: [string, number, number][] =
     kind === "short"
       ? [
@@ -208,6 +240,13 @@ function lengthGroups(kind: "short" | "long"): Group[] {
           ["of 40–59 seconds", 40, 59.999],
           ["of a minute or more", 60, Infinity],
         ]
+      : kind === "live"
+        ? [
+            ["under an hour", 0, 3599.999],
+            ["of 1–2 hours", 3600, 7199.999],
+            ["of 2–3 hours", 7200, 10799.999],
+            ["of 3 hours or more", 10800, Infinity],
+          ]
       : [
           ["under 8 minutes", 0, 479.999],
           ["of 8–14 minutes", 480, 899.999],
@@ -217,7 +256,7 @@ function lengthGroups(kind: "short" | "long"): Group[] {
   return b.map(([label, lo, hi]) => ({ key: label, label, test: (v) => (v.durationSec === null ? null : v.durationSec >= lo && v.durationSec <= hi) }));
 }
 
-function splits(kind: "short" | "long", vids: PatternVideo[]): Split[] {
+function splits(kind: PatternKind, vids: PatternVideo[]): Split[] {
   const out: Split[] = [
     { id: "length", phrase: (l, n) => `${n} ${l} get`, groups: lengthGroups(kind) },
     {
@@ -320,11 +359,11 @@ function splits(kind: "short" | "long", vids: PatternVideo[]): Split[] {
   return out;
 }
 
-const NOUN: Record<Platform, Record<"short" | "long", string>> = {
-  youtube: { short: "Shorts", long: "Long videos" },
-  instagram: { short: "Reels", long: "Videos" },
-  tiktok: { short: "Videos", long: "Long videos" },
-  facebook: { short: "Reels", long: "Videos" },
+const NOUN: Record<Platform, Record<PatternKind, string>> = {
+  youtube: { short: "Shorts", long: "Long videos", live: "Live streams" },
+  instagram: { short: "Reels", long: "Videos", live: "Lives" },
+  tiktok: { short: "Videos", long: "Long videos", live: "Lives" },
+  facebook: { short: "Reels", long: "Videos", live: "Live videos" },
 };
 
 function strengthOf(nBest: number, nRest: number, ratio: number): Finding["strength"] {
@@ -333,12 +372,17 @@ function strengthOf(nBest: number, nRest: number, ratio: number): Finding["stren
 }
 
 /** The patterns in one platform's shorts (or long videos). */
-export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind: "short" | "long"; now?: number; minAgeDays?: number }): Patterns {
+export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind: PatternKind; now?: number; minAgeDays?: number }): Patterns {
   const now = o.now ?? Date.now();
   const minAge = (o.minAgeDays ?? MIN_AGE_DAYS) * DAY;
   const mine = all.filter((v) => v.platform === o.platform && v.kind === o.kind && v.views !== null && v.views !== undefined);
-  const settled = mine.filter((v) => v.publishedAt && now - Date.parse(v.publishedAt) >= minAge);
-  const base: Patterns = { platform: o.platform, kind: o.kind, considered: settled.length, tooNew: mine.length - settled.length, findings: [], topVsRest: null, needed: MIN_VIDEOS };
+  const settledAll = mine
+    .filter((v) => v.publishedAt && now - Date.parse(v.publishedAt) >= minAge)
+    .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!));
+  // The channel as it is lately (1.23.1).
+  const newest = settledAll.length ? Date.parse(settledAll[0].publishedAt!) : now;
+  const settled = settledAll.filter((v) => newest - Date.parse(v.publishedAt!) <= RECENT_DAYS * DAY).slice(0, RECENT_MAX);
+  const base: Patterns = { platform: o.platform, kind: o.kind, considered: settled.length, tooNew: mine.length - settledAll.length, findings: [], topVsRest: null, needed: MIN_VIDEOS };
   if (settled.length < MIN_VIDEOS) return base;
   const noun = NOUN[o.platform][o.kind];
   const views = (v: PatternVideo) => v.views as number;
@@ -356,6 +400,8 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
     const restMembers = groups.filter((x) => x !== best).flatMap((x) => x.members);
     const rest = median(restMembers.map(views));
     if (rest === null || restMembers.length < MIN_GROUP) continue;
+    // (Older videos on one side, newer on the other: that's time, not the split.)
+    if (!sameTime(best.members, restMembers, settled)) continue;
     const ratio = rest > 0 ? best.median! / rest : best.median! > 0 ? Infinity : 1;
     if (!(ratio >= 1.25) || !Number.isFinite(ratio)) continue;
     // "vs 12K for titles without a question", "vs 9K for the rest".
@@ -376,7 +422,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
   }
 
   // Momentum: the latest ten next to the ten before.
-  const byDate = [...settled, ...mine.filter((v) => !settled.includes(v) && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY)]
+  const byDate = [...settled, ...mine.filter((v) => !settledAll.includes(v) && v.publishedAt && now - Date.parse(v.publishedAt) >= 3 * DAY)]
     .filter((v) => v.publishedAt)
     .sort((a, b) => Date.parse(b.publishedAt!) - Date.parse(a.publishedAt!));
   const n = Math.min(10, Math.floor(byDate.length / 2));
@@ -429,7 +475,7 @@ export function findPatterns(all: PatternVideo[], o: { platform: Platform; kind:
 }
 
 /** The top fifth by views (at least 3) next to the rest, on what tells them apart. */
-export function topVsRest(vids: PatternVideo[], kind: "short" | "long" = "short"): Patterns["topVsRest"] {
+export function topVsRest(vids: PatternVideo[], kind: PatternKind = "short"): Patterns["topVsRest"] {
   const ranked = vids.filter((v) => v.views !== null && v.views !== undefined).sort((a, b) => (b.views as number) - (a.views as number));
   const k = Math.max(3, Math.round(ranked.length / 5));
   if (ranked.length < k + 3) return null;
@@ -447,7 +493,7 @@ export function topVsRest(vids: PatternVideo[], kind: "short" | "long" = "short"
   add("Median views", med(top, (v) => v.views), med(rest, (v) => v.views), compact);
   add("Length", med(top, (v) => v.durationSec), med(rest, (v) => v.durationSec), duration);
   add("Watched on average", med(top, (v) => v.avgViewPct), med(rest, (v) => v.avgViewPct), (n) => `${Math.round(n)}%`);
-  add(kind === "long" ? "Still watching after 30 s" : "Still watching after 3 s", med(top, (v) => (v.hold3s === null || v.hold3s === undefined ? null : v.hold3s * 100)), med(rest, (v) => (v.hold3s === null || v.hold3s === undefined ? null : v.hold3s * 100)), (n) => `${Math.round(n)}%`);
+  add(kind !== "short" ? "Still watching after 30 s" : "Still watching after 3 s", med(top, (v) => (v.hold3s === null || v.hold3s === undefined ? null : v.hold3s * 100)), med(rest, (v) => (v.hold3s === null || v.hold3s === undefined ? null : v.hold3s * 100)), (n) => `${Math.round(n)}%`);
   add("Skipped", med(top, (v) => v.skipRate), med(rest, (v) => v.skipRate), (n) => `${Math.round(n)}%`);
   const per1k = (f: (v: PatternVideo) => number | null | undefined) => (v: PatternVideo) => {
     const x = f(v);

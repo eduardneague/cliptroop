@@ -11,6 +11,8 @@ import { addDays, bucketOf, bucketsFor, dayIn, daysBetween, dayList, type Bucket
 import { inAccountTime, numbersVisibility, visibleRows } from "./accounts";
 import { outlierScores } from "./scores";
 import { youtubeCountries } from "./windows";
+import type { VideoKind } from "./kinds";
+import { searchWords } from "./search-words";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 type Row = Record<string, unknown>;
@@ -541,7 +543,7 @@ export async function getAudience(teamId: string, w: Window, shared: Shared = {}
 export type ContentItem = {
   platform: SocialPlatform;
   id: string;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   title: string | null;
   url: string | null;
   thumbnail: string | null;
@@ -616,14 +618,25 @@ async function scoresFor(supabase: Supa, teamId: string, vis: Awaited<ReturnType
 export async function findVideos(teamId: string, q: string): Promise<ContentItem[]> {
   const supabase = await createClient();
   const vis = await numbersVisibility(supabase, teamId);
-  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const esc = (x: string) => x.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const words = searchWords(q);
+  // Every word somewhere in the title (else the phrase as typed, for searches without words: emoji, symbols).
+  const likes = words.length ? words.map((w) => `%${esc(w)}%`) : [`%${esc(q)}%`];
   const num = q.match(/^#?(\d{1,6})$/)?.[1];
   const none = Promise.resolve({ data: [] as Row[] });
   const cols = await contentCols();
+  let content = supabase.from("analytics_content").select(cols).eq("team_id", teamId);
+  let shorts = supabase.from("short_videos").select("id").eq("team_id", teamId);
+  let longs = supabase.from("long_video_projects").select("id").eq("team_id", teamId);
+  for (const p of likes) {
+    content = content.ilike("title", p);
+    shorts = shorts.ilike("title", p);
+    longs = longs.ilike("title", p);
+  }
   const [byTitle, shortsT, longsT, shortsN, longsN, scores] = await Promise.all([
-    supabase.from("analytics_content").select(cols).eq("team_id", teamId).ilike("title", like).order("views", { ascending: false, nullsFirst: false }).limit(60),
-    supabase.from("short_videos").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
-    supabase.from("long_video_projects").select("id").eq("team_id", teamId).ilike("title", like).limit(60),
+    content.order("views", { ascending: false, nullsFirst: false }).limit(80),
+    shorts.limit(60),
+    longs.limit(60),
     num ? supabase.from("short_videos").select("id").eq("team_id", teamId).eq("entry_number", Number(num)).limit(5) : none,
     num ? supabase.from("long_video_projects").select("id").eq("team_id", teamId).eq("entry_number", Number(num)).limit(5) : none,
     scoresFor(supabase, teamId, vis),
@@ -644,12 +657,15 @@ export async function findVideos(teamId: string, q: string): Promise<ContentItem
   });
   const needle = q.toLowerCase().replace(/^#/, "");
   const numbered = new Set([...ids(shortsN), ...ids(longsN)]);
+  const phrase = words.join(" ");
   const rankOf = (i: ContentItem) => {
     const t = (i.title ?? "").toLowerCase();
+    const tw = searchWords(t).join(" ");
     if (i.ours && numbered.has(i.ours.id)) return 0;
-    if (t === needle) return 1;
-    if (t.startsWith(needle)) return 2;
-    return 3;
+    if (t === needle || (phrase && tw === phrase)) return 1;
+    if (t.startsWith(needle) || (phrase && tw.startsWith(phrase))) return 2;
+    if (phrase && tw.includes(phrase)) return 3;
+    return 4;
   };
   return rows
     .map((r) => {
@@ -756,7 +772,7 @@ export type DayVideo = {
   title: string | null;
   url: string | null;
   thumbnail: string | null;
-  kind: "short" | "long" | "post";
+  kind: VideoKind;
   publishedAt: string | null;
   /** Views that day. */
   views: number;
@@ -1024,7 +1040,7 @@ export type RevenueVideo = {
   title: string | null;
   thumbnail: string | null;
   url: string;
-  kind: "short" | "long";
+  kind: VideoKind;
   publishedAt: string | null;
   revenue: number;
   views: number | null;

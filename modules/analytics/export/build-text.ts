@@ -3,6 +3,7 @@ import type { AdvancedData, AdvVideo, Fmt } from "../lib/advanced";
 import { METRIC_HELP } from "../lib/advanced-labels";
 import { resample } from "../lib/retention";
 import { compact, duration } from "../lib/patterns";
+import { isWide, KIND_LABEL } from "../lib/kinds";
 
 /*
  * The text file for Claude (1.16.0): Markdown inside a .txt (Claude reads
@@ -15,7 +16,7 @@ import { compact, duration } from "../lib/patterns";
 const NAME = { youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" } as const;
 /** "filler" → "everyday short"; a long video's types stay ("Hub + Help"). */
 export const typeName = (t: string | null) => (t === "filler" ? "everyday short" : t === "sponsorship" ? "sponsored short" : t === "big" ? "big short" : t);
-const KIND = { short: "Short", long: "Long video", post: "Post" } as const;
+const KIND = KIND_LABEL;
 
 /** The ask, also offered to copy on its own (paste it with the file). */
 export function claudePrompt(team: string, platforms: string[]) {
@@ -76,7 +77,7 @@ function videoBlock(v: AdvVideo, i: number, data: ClaudeExportData, a: AdvancedD
   out.push(`#### ${i}. "${md(v.title || "Untitled")}"`);
   out.push(`${meta.join(" · ")}`);
   const nums = [
-    v.views !== null ? `${int(v.views)} views${v.score !== null && v.score !== undefined ? ` (${v.score >= 10 ? Math.round(v.score) : v.score.toFixed(1)}× the typical ${v.kind === "long" ? "long video" : "short"}: ${int(v.typical)})` : ""}` : null,
+    v.views !== null ? `${int(v.views)} views${v.score !== null && v.score !== undefined ? ` (${v.score >= 10 ? Math.round(v.score) : v.score.toFixed(1)}× the typical ${KIND_LABEL[v.kind].toLowerCase()}: ${int(v.typical)})` : ""}` : null,
     v.engagedViews !== null ? `${int(v.engagedViews)} engaged views` : null,
     v.reach !== null ? `reach ${int(v.reach)}` : null,
     v.watchMinutes !== null ? `${fmt("hours", v.watchMinutes / 60, a.currency)} watched` : null,
@@ -101,7 +102,7 @@ function videoBlock(v: AdvVideo, i: number, data: ClaudeExportData, a: AdvancedD
     out.push(
       `- Retention (still watching at 0%, 10% … 100% of the video): ${pts.map((y) => (y === null ? "–" : `${Math.round(y * 100)}`)).join(" · ")}` +
         [
-          v.kind === "long" ? (v.retention.at30s !== null ? `; after 30 s: ${pct(v.retention.at30s)}` : "") : v.retention.at3s !== null ? `; after 3 s: ${pct(v.retention.at3s)}` : "",
+          isWide(v.kind) ? (v.retention.at30s !== null ? `; after 30 s: ${pct(v.retention.at30s)}` : "") : v.retention.at3s !== null ? `; after 3 s: ${pct(v.retention.at3s)}` : "",
           v.retention.relative !== null ? `; vs similar videos ${Math.round(v.retention.relative * 100)}/100 (50 = typical)` : "",
           v.retention.biggestDrop ? `; steepest drop around ${Math.round(v.retention.biggestDrop.at * 100)}%` : "",
           v.retention.rewatchPeak ? `; rewatched around ${Math.round(v.retention.rewatchPeak.at * 100)}%` : "",

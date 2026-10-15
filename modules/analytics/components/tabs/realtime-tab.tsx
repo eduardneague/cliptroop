@@ -7,9 +7,10 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { SocialPlatform } from "@/lib/social/providers";
 import type { PlatformStatus } from "../../lib/queries";
 import { ago } from "../../lib/ago";
-import { hourName } from "../../lib/live-math";
+import { hourRange } from "../../lib/live-math";
+import { KIND_LABEL } from "../../lib/kinds";
 import { ChartCard, fmtCompact, fmtInt, Legend, StackedColumns } from "../charts";
-import { Big, RealtimeHeader, RealtimeSkeleton, realtimeState, RT_ORDER, RT_PLATFORM, Thumb, useRealtime } from "../realtime-card";
+import { Big, fainterNote, fmt3, liftedWords, RealtimeHeader, RealtimeSkeleton, realtimeState, RT_ORDER, RT_PLATFORM, soft, Thumb, useRealtime } from "../realtime-card";
 import { StatusRow, SetupCard } from "./shared";
 
 /*
@@ -72,7 +73,18 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
   const slots = hourly ? data.hours : data.minutes;
   const withViews = platforms.filter((p) => slots.some((h) => (h.per[p] ?? 0) > 0));
   const shownSeries = withViews.length ? withViews : platforms.slice(0, 1);
-  const series = shownSeries.map((p) => ({ key: p, label: RT_PLATFORM[p].name, color: RT_PLATFORM[p].color, values: slots.map((h) => Math.round(h.per[p] ?? 0)) }));
+  // 48 hours: each platform's counted views, and (fainter, on top) the part worked out from its total views (1.22.0).
+  const estOf = (p: SocialPlatform) => (hourly ? data.hours.map((h) => Math.round(h.est?.[p] ?? 0)) : []);
+  const series = shownSeries.flatMap((p) => {
+    const est = estOf(p);
+    const all = slots.map((h) => Math.round(h.per[p] ?? 0));
+    const anyEst = est.some((v) => v > 0);
+    return [
+      { key: p, label: anyEst ? `${RT_PLATFORM[p].name} counted` : RT_PLATFORM[p].name, color: RT_PLATFORM[p].color, values: anyEst ? all.map((v, i) => Math.max(0, v - est[i])) : all },
+      ...(anyEst ? [{ key: `${p}-est`, label: data.coverage[p]?.ratio ? `${RT_PLATFORM[p].name}'s own count on top` : `${RT_PLATFORM[p].name} estimated`, color: soft(RT_PLATFORM[p].color), values: est }] : []),
+    ];
+  });
+  const note = hourly ? fainterNote(data, platforms) : null;
   const top = (hourly ? data.top : data.top60.length ? data.top60 : [...data.top].filter((v) => v.views60 > 0).sort((a, b) => b.views60 - a.views60)).filter((v) => platforms.includes(v.platform));
   const waiting = !data.since;
   const young = data.since && now - Date.parse(data.since) < 48 * 3_600_000;
@@ -132,11 +144,18 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
               <dl className="mt-2 grid grid-cols-3 gap-2">
                 <div className="min-w-0">
                   <dt className="text-[11px] text-ink-faint truncate">{RT_PLATFORM[p.platform].people[0].toUpperCase() + RT_PLATFORM[p.platform].people.slice(1)}</dt>
-                  <dd className="text-[16px] font-semibold tabular-nums leading-tight">{fmtCompact(p.followers)}</dd>
+                  <dd
+                    className="text-[16px] font-semibold tabular-nums leading-tight"
+                    title={p.followers === null ? undefined : p.followersRounded ? `About ${fmtInt(p.followers)}: YouTube shares subscriber counts rounded to 3 digits with every app` : fmtInt(p.followers)}
+                  >
+                    {p.followers === null ? "–" : p.followersRounded ? fmt3(p.followers) : fmtCompact(p.followers)}
+                  </dd>
                 </div>
                 <div className="min-w-0">
                   <dt className="text-[11px] text-ink-faint truncate">All views</dt>
-                  <dd className="text-[16px] font-semibold tabular-nums leading-tight">{fmtCompact(p.totalViews)}</dd>
+                  <dd className="text-[16px] font-semibold tabular-nums leading-tight" title={p.totalViews === null ? undefined : fmtInt(p.totalViews)}>
+                    {fmtCompact(p.totalViews)}
+                  </dd>
                 </div>
                 <div className="min-w-0">
                   <dt className="text-[11px] text-ink-faint truncate">Videos</dt>
@@ -153,6 +172,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <Tile>
           <Big label={`Views · ${words}`} value={waiting ? null : views} live={!hourly} />
+          {note && <p className="text-[11px] text-ink-faint mt-1.5">{liftedWords(data, platforms)}</p>}
         </Tile>
         <Tile>
           <Big label={`Likes · ${words}`} value={waiting ? null : likes} />
@@ -175,7 +195,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
             <StackedColumns
               ariaLabel="Views per hour over the last 48 hours"
               labels={data.hours.map((h) => new Date(h.at).toLocaleTimeString("en-US", { hour: "numeric" }))}
-              tips={data.hours.map((h, i) => `${hourName(Date.parse(h.at), now)}${i === data.hours.length - 1 ? " (so far)" : ""}`)}
+              tips={data.hours.map((h, i) => `${hourRange(Date.parse(h.at), now)}${i === data.hours.length - 1 ? " (so far)" : ""}`)}
               series={series}
               height={260}
             />
@@ -193,7 +213,8 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
         ) : (
           <p className="py-16 text-center text-[13px] text-ink-faint">{data.minutes.length ? "No views in the last hour yet." : "The 10-minute slots start once the latest database update has run."}</p>
         )}
-        {hourly && young && views > 0 && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
+        {hourly && note && <p className="text-[11.5px] text-ink-faint mt-1">{note}</p>}
+        {hourly && !note && young && views > 0 && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
       </ChartCard>
 
       <ChartCard title="Getting views now" sub={hourly ? "The videos with the most views in the last 48 hours, and their last 60 minutes" : "The videos with the most views in the last 60 minutes"}>
@@ -219,7 +240,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
                         <span className="min-w-0">
                           <span className="block font-semibold truncate group-hover:underline">{v.title || "Untitled"}</span>
                           <span className="block text-[11.5px] text-ink-faint">
-                            {v.kind === "short" ? "Short" : v.kind === "long" ? "Long video" : "Post"}
+                            {KIND_LABEL[v.kind] ?? "Video"}
                             {v.ours ? ` · #${v.ours.number ?? "?"}` : ""}
                             {/* Phones: the other window and when it was posted, here. */}
                             <span className="sm:hidden">

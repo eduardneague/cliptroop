@@ -6,6 +6,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Mascot } from "@/components/ui/mascot";
 import type { SocialPlatform } from "@/lib/social/providers";
 import type { Insights } from "../../lib/insights";
+import type { PatternKind } from "../../lib/patterns";
 import { BANDS, NOUNS, slotName, tipFor, WEEKDAY_SHORT, type Alert, type Heat } from "../../lib/insights-math";
 import { FindingCard, PatternsBlock } from "../advanced/findings";
 import { SparkleIcon } from "../advanced/sparkle";
@@ -19,7 +20,7 @@ import { PLATFORM, StatusRow, SetupCard } from "./shared";
  * and how the same shorts do on each platform. All from your own numbers.
  */
 
-const groupName = (p: SocialPlatform, k: "short" | "long") => `${PLATFORM[p].name} · ${NOUNS[p][k][1][0].toUpperCase()}${NOUNS[p][k][1].slice(1)}`;
+const groupName = (p: SocialPlatform, k: PatternKind) => `${PLATFORM[p].name} · ${NOUNS[p][k][1][0].toUpperCase()}${NOUNS[p][k][1].slice(1)}`;
 
 export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insights; onDownload: () => void }) {
   void teamId;
@@ -200,6 +201,7 @@ function HeatMap({ h }: { h: Heat }) {
               const c = cell(d, bi);
               const a = alpha(c.median, c.n);
               const key = `${d}:${bi}`;
+              const rank = h.best.findIndex((x) => x.weekday === d && x.band === bi);
               return (
                 <span
                   key={key}
@@ -210,9 +212,14 @@ function HeatMap({ h }: { h: Heat }) {
                   onFocus={() => setHover(key)}
                   onBlur={() => setHover(null)}
                   aria-label={c.n ? `${slotName(c)}: ${c.median!.toFixed(1)}× your usual, ${c.n} video${c.n === 1 ? "" : "s"}` : `${slotName(c)}: nothing posted`}
-                  className={`relative h-11 sm:h-12 rounded-[6px] flex flex-col items-center justify-center tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber ${c.n ? "" : "bg-line/[0.04]"}`}
+                  className={`relative h-11 sm:h-12 rounded-[6px] flex flex-col items-center justify-center tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-amber ${c.n ? "" : "bg-line/[0.04]"} ${rank >= 0 ? "ring-2 ring-ink/70 ring-offset-1 ring-offset-surface" : ""}`}
                   style={c.n ? { background: `rgb(var(--amber) / ${a})` } : undefined}
                 >
+                  {rank >= 0 && (
+                    <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-[5px] bg-ink text-paper text-[9.5px] font-bold flex items-center justify-center" aria-hidden>
+                      {rank + 1}
+                    </span>
+                  )}
                   {c.n > 0 && (
                     <>
                       <span className={`text-[12px] font-bold leading-none ${a > 0.55 ? "text-white" : "text-ink"}`}>{c.median!.toFixed(1)}×</span>
@@ -242,15 +249,59 @@ function HeatMap({ h }: { h: Heat }) {
         </span>
         <span>· the small number: videos posted then ({h.considered} in all); slots with 1 or 2 stay pale</span>
       </div>
-      <p className="mt-3 text-[13px] text-ink-soft">
-        {h.best.length ? (
-          <>
-            Best so far: <b className="text-ink">{h.best.map((c) => `${slotName(c)} (${c.median!.toFixed(1)}×)`).join(", ")}</b>. Try a few posts there on purpose, then look again.
-          </>
-        ) : (
-          "No time clearly beats the others yet (a slot needs 3+ videos doing 1.2× your usual)."
-        )}
-      </p>
+      <BestSlots h={h} />
+    </div>
+  );
+}
+
+const DAY_NAME = ["Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays"];
+const bandHours = (bi: number) => {
+  const b = BANDS[bi];
+  const hh = (n: number) => `${String(n % 24).padStart(2, "0")}:00`;
+  return `${hh(b.from)} – ${hh(b.to + 1)}`;
+};
+
+/**
+ * The best slots so far as a podium (1.22.0: it was one sentence): each
+ * one's day and hours in big type, how far above the usual its videos do
+ * (a bar), and how many videos say so. The same slots are ringed and
+ * numbered on the map above.
+ */
+function BestSlots({ h }: { h: Heat }) {
+  if (!h.best.length)
+    return <p className="mt-4 text-[13px] text-ink-soft">No time clearly beats the others yet (a slot needs 3 or more videos doing 1.2× your usual).</p>;
+  const top = Math.max(...h.best.map((c) => c.median ?? 0), 1.2);
+  return (
+    <div className="mt-4 pt-4 border-t border-line/10">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <h3 className="text-[14px] font-semibold">Best so far</h3>
+        <span className="text-[12px] text-ink-faint">Try a few posts there on purpose, then look again.</span>
+      </div>
+      <ol className="mt-3 grid gap-2.5 sm:grid-cols-3">
+        {h.best.map((c, i) => (
+          <li key={`${c.weekday}:${c.band}`} className={`relative rounded-xl border px-3.5 py-3 min-w-0 ${i === 0 ? "border-amber/40 bg-amber/[0.07]" : "border-line/10 bg-surface-2/40"}`}>
+            <div className="flex items-start gap-2.5">
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-[13px] font-bold tabular-nums flex-shrink-0 ${i === 0 ? "bg-amber text-white" : "bg-surface text-ink-soft border border-line/15"}`} aria-label={`Number ${i + 1}`}>
+                {i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold leading-tight">{DAY_NAME[c.weekday]}</span>
+                <span className="block text-[12.5px] text-ink-soft tabular-nums">{bandHours(c.band)}</span>
+              </span>
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-1.5">
+              <span className="font-display text-[24px] font-semibold leading-none tabular-nums">{c.median!.toFixed(1)}×</span>
+              <span className="text-[12px] text-ink-soft">your usual</span>
+            </div>
+            <span className="mt-2 block h-1.5 rounded-[3px] bg-line/10 overflow-hidden" aria-hidden>
+              <span className="block h-full rounded-[3px] bg-amber" style={{ width: `${Math.max(8, ((c.median ?? 0) / top) * 100)}%`, opacity: i === 0 ? 1 : 0.65 }} />
+            </span>
+            <span className="mt-1.5 block text-[11.5px] text-ink-faint">
+              from {c.n} video{c.n === 1 ? "" : "s"} posted then
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

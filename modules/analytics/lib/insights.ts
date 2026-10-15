@@ -4,7 +4,8 @@ import { PLATFORMS } from "@/lib/social/providers";
 import { addDays, dayList, todayIn } from "./ranges";
 import { numbersVisibility, visibleRows } from "./accounts";
 import { all, contentCols, dailyCols, getPlatformStatus, safeUrl, type PlatformStatus } from "./queries";
-import { crossPlatform, findPatterns, type Finding, type PatternVideo, type Patterns, type Platform } from "./patterns";
+import { crossPlatform, findPatterns, type Finding, type PatternKind, type PatternVideo, type Patterns, type Platform } from "./patterns";
+import { isWide } from "./kinds";
 import { hooksFor, localParts } from "./advanced";
 import { readCurve, summarize, type RetentionPoint } from "./retention";
 import { outlierScores } from "./scores";
@@ -20,7 +21,7 @@ import { allAlerts, bestTimes, breakoutAlerts, ctrAlert, followerAlerts, gapAler
  */
 
 type Row = Record<string, unknown>;
-export type PlatformFinding = Finding & { platform: Platform; kind: "short" | "long" };
+export type PlatformFinding = Finding & { platform: Platform; kind: PatternKind };
 export type Insights = {
   alerts: Alert[];
   /** Each platform's shorts (and long videos) with enough to compare, most videos first. */
@@ -82,7 +83,7 @@ export async function getInsights(teamId: string, tz: string, o: { light?: boole
       avgViewPct: n(r.avg_view_pct),
       skipRate: n(r.skip_rate),
       subscribersGained: n(r.subscribers_gained),
-      hold3s: (kind === "long" ? sum?.at30s : sum?.at3s) ?? null,
+      hold3s: (isWide(kind) ? sum?.at30s : sum?.at3s) ?? null,
       ourId: r.short_id ? (r.short_id as string) : null,
       shortType: (r.short_id ? ((sv?.short_type as PatternVideo["shortType"]) ?? null) : null) ?? null,
       hook: hooks.get(`${r.short_id ? "s" : "l"}:${(r.short_id ?? r.project_id) as string}`) ?? null,
@@ -96,7 +97,8 @@ export async function getInsights(teamId: string, tz: string, o: { light?: boole
   const patterns: Patterns[] = [];
   for (const p of PLATFORMS) {
     if (!vis.platforms.has(p)) continue;
-    for (const kind of ["short", "long"] as const) {
+    // (1.22.0: live streams on their own, never mixed into long videos.)
+    for (const kind of ["short", "long", "live"] as const) {
       if (!pv.some((v) => v.platform === p && v.kind === kind)) continue;
       const res = findPatterns(pv, { platform: p as Platform, kind });
       if (res.considered + res.tooNew > 0) patterns.push(res);
