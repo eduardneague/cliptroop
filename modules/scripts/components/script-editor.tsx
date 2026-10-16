@@ -47,7 +47,8 @@ import {
   WidthIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CommentHighlights, commentKey, findQuote, occurrenceAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
+import { CommentHighlights, commentKey, findQuote, findText, occurrenceAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
+import { SearchHit, searchHitKey } from "../lib/search-hit";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
 import { HeadingKeys } from "../lib/heading-keys";
@@ -165,7 +166,10 @@ export function ScriptEditor({
   me = null,
   posting = null,
   onPosting,
+  find = null,
 }: {
+  /** Words to show (a search result, ?find=): marked for a moment, scrolled to. */
+  find?: string | null;
   scriptId: string;
   teamId: string;
   initialContent: Record<string, unknown>;
@@ -359,6 +363,8 @@ export function ScriptEditor({
       PageBreak,
       // Writing suggestions (1.23.0): only where you can write.
       ...(canEdit ? [GrammarMarks] : []),
+      // What the search bar found, marked for a moment (1.26.0).
+      SearchHit,
     ],
     content: isEmptyDoc(initialContent) ? EMPTY_DOC : fixHeadings(initialContent),
     editorProps: {
@@ -400,6 +406,36 @@ export function ScriptEditor({
     },
   });
   editorRef.current = editor;
+
+  // ---- opened from the search bar: the words found, marked and in view (1.26.0) ----
+  const foundRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${scriptId}|${find ?? ""}`;
+    if (!editor || editor.isDestroyed || !find || foundRef.current === key) return;
+    const t = window.setTimeout(() => {
+      if (editor.isDestroyed) return;
+      foundRef.current = key;
+      const r = findText(editor.state.doc, find);
+      if (r) {
+        editor.view.dispatch(editor.state.tr.setMeta(searchHitKey, r));
+        try {
+          const at = editor.view.domAtPos(r.from);
+          const el = at.node.nodeType === Node.TEXT_NODE ? at.node.parentElement : (at.node as HTMLElement);
+          el?.scrollIntoView({ block: "center", behavior: "smooth" });
+        } catch {}
+        window.setTimeout(() => {
+          if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(searchHitKey, null));
+        }, 6000);
+      }
+      // Done: a reload shouldn't mark it again.
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.delete("find");
+        window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+      } catch {}
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [editor, find, scriptId]);
 
   // ---- writing suggestions (Grammarly style) ------------------------------------
   const grammar = useGrammar(canEdit ? editor : null, { enabled: canEdit, scriptId, teamId, me });

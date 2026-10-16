@@ -34,7 +34,20 @@ const tabOf = (p: ProjectionView): Tab => (p.archived ? "archived" : p.a.status 
 const NEED: Record<string, number> = { behind: 0, new: 1, waiting: 1, on_track: 2, ahead: 3, reached: 4, done: 5, missed: 5 };
 const byNeed = (a: ProjectionView, b: ProjectionView) => (NEED[a.a.status] ?? 2) - (NEED[b.a.status] ?? 2) || a.deadline.localeCompare(b.deadline);
 
-export function ProjectionsView({ initial, canEdit, openId, tabs }: { initial: ProjectionsBoard; canEdit: boolean; openId: string | null; tabs?: React.ReactNode }) {
+export function ProjectionsView({
+  initial,
+  canEdit,
+  openId,
+  tabs,
+  startNew = false,
+}: {
+  initial: ProjectionsBoard;
+  canEdit: boolean;
+  openId: string | null;
+  tabs?: React.ReactNode;
+  /** ?new=1 (the search bar's "New projection"): the editor opens at once. */
+  startNew?: boolean;
+}) {
   const [board, setBoard] = useState(initial);
   const toast = useToast();
   const confirm = useConfirm();
@@ -44,6 +57,15 @@ export function ProjectionsView({ initial, canEdit, openId, tabs }: { initial: P
   const [compareId, setCompareId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ open: boolean; editing: ProjectionView | null; start: EditorStart | null }>({ open: false, editing: null, start: null });
   useEffect(() => setBoard(initial), [initial]);
+  useEffect(() => {
+    if (!startNew || !canEdit || !initial.ready) return;
+    setEditor({ open: true, editing: null, start: null });
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("new");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }, [startNew, canEdit, initial.ready]);
   // A link to one (?p=) opens it once: the page refreshing after a save
   // doesn't open it again over whatever is open now.
   const openedFromLink = useRef<string | null>(null);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { setSounds } from "@/app/(dashboard)/settings/actions";
-import { setSoundsEnabled, sounds, type SoundName } from "@/lib/sounds";
+import { SOUNDS_EVENT, setSoundsEnabled, sounds, type SoundName } from "@/lib/sounds";
 import { useToast } from "./toast-provider";
 
 /**
@@ -38,6 +38,12 @@ export function SoundsChoice({ on: initial }: { on: boolean }) {
   const [on, setOn] = useState(initial);
   const [pending, start] = useTransition();
   const toast = useToast();
+  // Switched somewhere else (the search bar): show it here too.
+  useEffect(() => {
+    const follow = (e: Event) => setOn(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener(SOUNDS_EVENT, follow);
+    return () => window.removeEventListener(SOUNDS_EVENT, follow);
+  }, []);
 
   function choose(next: boolean) {
     if (next === on) return;

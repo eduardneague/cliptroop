@@ -124,9 +124,9 @@ export function StreakCount({ s, size = 34, className = "" }: { s: WinStreak; si
  * and the wins of the last 30 days. Beside the overview on wide screens (a
  * column), across under it on the rest (a row; a column again on phones).
  */
-export function StreakCard({ s, wins30, action, className = "" }: { s: WinStreak; wins30: number; action?: React.ReactNode; className?: string }) {
+export function StreakCard({ s, wins30, action, className = "", id }: { s: WinStreak; wins30: number; action?: React.ReactNode; className?: string; id?: string }) {
   return (
-    <section aria-label="Win streak" className={`rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0 grid gap-x-6 gap-y-3 md:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto] md:items-center xl:grid-cols-1 xl:items-stretch xl:content-center ${className}`}>
+    <section id={id} aria-label="Win streak" className={`rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 min-w-0 scroll-mt-24 grid gap-x-6 gap-y-3 md:grid-cols-[minmax(0,auto)_minmax(0,1fr)_auto] md:items-center xl:grid-cols-1 xl:items-stretch xl:content-center ${className}`}>
       <div className="flex items-center gap-3 min-w-0">
         <StreakFlame lit={s.current > 0} size={48} />
         <div className="min-w-0 flex-1">

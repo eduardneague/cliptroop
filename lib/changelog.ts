@@ -23,6 +23,26 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.26.0",
+    date: "2026-10-16",
+    title: "Search finds everything",
+    changes: [
+      { kind: "new", text: "The search bar finds everything now: videos, scripts and research, meetings and their action items, objectives, projections, people, teams, and every page, tab and setting of the app." },
+      { kind: "new", text: "Search inside scripts: type a few words, open the script, and it scrolls to where they are and marks them for a moment." },
+      { kind: "new", text: "Videos are also found by their caption, hook, description or notes, not just their title." },
+      { kind: "new", text: "Do things right from the search: dark mode, sounds on or off, What's new, the tour, Log out, Sync analytics, Download for Claude, add a widget. New short, New long video, Plan a meeting and Invite people too, for the people who can." },
+      { kind: "new", text: "Type a day to open it in the calendar: “tomorrow”, “friday”, “oct 20”, “next week”." },
+      { kind: "new", text: "Filters along the top: Videos, Scripts, Meetings, Goals, People and App, with how many each found. Tab moves between them. Type > for actions and pages, @ for people." },
+      { kind: "new", text: "On a video's pages, the search offers its script, research, review and Thumbnail Studio first." },
+      { kind: "better", text: "Typos are fine, and so are other words for things: “night mode”, “keep files”, “logout”, “how do I invite someone”." },
+      { kind: "better", text: "Opening a setting from the search, or a link to one, scrolls to it and makes it glow for a moment." },
+      { kind: "better", text: "Your recent searches come back when you open the search, next to what you opened lately." },
+      { kind: "better", text: "Ctrl + Enter (⌘ + Enter on a Mac), Ctrl + click or a middle click opens a result in a new tab." },
+      { kind: "better", text: "Dark mode and sounds stay in step everywhere: the header, Settings and the search." },
+      { kind: "fixed", text: "A team under Recent in the search switches to that team again." },
+    ],
+  },
+  {
     version: "1.25.1",
     date: "2026-10-15",
     title: "1.25.0's database update installs",

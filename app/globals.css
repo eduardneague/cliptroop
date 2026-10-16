@@ -458,6 +458,20 @@ button { transition-timing-function: var(--ease-out); }
 /* Switch knobs move with a little spring. */
 [role="switch"] span span { transition: transform 0.28s var(--ease-spring) !important; }
 
+/* A part of a page the address (or the search bar) pointed at: a soft glow
+   for a moment (lib/flash.ts). Painted over the background, never instead
+   of it; fades out where motion is on. */
+[data-flash] {
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+  transition: box-shadow 0.6s var(--ease-out), outline-color 0.6s var(--ease-out);
+}
+[data-flash="on"] {
+  outline-color: rgb(var(--amber) / 0.55);
+  box-shadow: 0 0 0 6px rgb(var(--amber) / 0.08);
+  background-image: linear-gradient(rgb(var(--amber) / 0.08), rgb(var(--amber) / 0.08));
+}
+
 /* Off: the user's setting, or the device asks for less motion. */
 html[data-motion="off"] *,
 html[data-motion="off"] *::before,
@@ -480,6 +494,13 @@ html[data-motion="off"] button:active { scale: none; }
     scroll-behavior: auto !important;
   }
   html:not([data-motion="on"]) button:active { scale: none; }
+}
+
+/* Words the search bar found in a script (1.26.0), for a few seconds. */
+.script-doc .search-hit {
+  background: rgb(var(--amber) / 0.32);
+  box-shadow: 0 0 0 2px rgb(var(--amber) / 0.32);
+  border-radius: 3px;
 }
 
 /* Inline script comments (drawn over the text, never stored in it). */

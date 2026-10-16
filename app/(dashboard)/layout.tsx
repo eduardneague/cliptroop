@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { getTeamsAndCurrent } from "@/lib/teams";
+import { getMembership } from "@/lib/permissions/membership";
 import { kindColorCss } from "@/lib/kind-colors";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileTopBar, MobileBottomNav } from "@/components/ui/mobile-nav";
@@ -31,6 +32,7 @@ import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
 import { ConfettiHost } from "@/components/ui/confetti";
 import { ObjectiveCelebrations } from "@/modules/objectives/components/celebrations";
+import { HashFlash } from "@/components/ui/hash-flash";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -62,13 +64,17 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // Everything the shell needs in ONE round trip: profile (with the colour
   // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam }, { data: notifications }, tour, developer] = await Promise.all([
+  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
       .eq("id", user!.id)
       .single(),
-    getTeamsAndCurrent(supabase),
+    // Your roles in the team you're in: the search bar offers what you can do (1.26.0).
+    getTeamsAndCurrent(supabase).then(async (t) => ({
+      ...t,
+      roles: t.currentTeam ? ((await getMembership(supabase, t.currentTeam.id).catch(() => null))?.roles ?? []) : [],
+    })),
     supabase
       .from("notifications")
       .select(NOTIFICATION_SELECT)
@@ -100,6 +106,10 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       <ConfirmProvider>
         {/* A thin bar the moment you click a link, until the page is there. */}
         <NavProgress />
+        {/* "…#sounds" in the address: that part of the page scrolls into view and glows (1.26.0). */}
+        <Suspense fallback={null}>
+          <HashFlash />
+        </Suspense>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
@@ -143,6 +153,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                   username={profile?.username ?? null}
                   teams={teams}
                   currentTeamId={currentTeam?.id ?? null}
+                  roles={roles}
+                  developer={developer}
                 />
               </div>
               <div className="flex items-center justify-end gap-2 sm:gap-4">

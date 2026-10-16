@@ -47,8 +47,8 @@ import { TEAM_TABS, TeamTabSkeleton, teamTab, type TeamTab } from "./skeletons";
 
 import { getObjectivesBoard } from "@/modules/objectives/lib/board";
 
-export default async function TeamPage({ searchParams }: { searchParams: Promise<{ tab?: string; edit?: string }> }) {
-  const { tab: tabParam, edit: editParam } = await searchParams;
+export default async function TeamPage({ searchParams }: { searchParams: Promise<{ tab?: string; edit?: string; invite?: string }> }) {
+  const { tab: tabParam, edit: editParam, invite: inviteParam } = await searchParams;
   const tab: TeamTab = teamTab(tabParam);
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
@@ -183,7 +183,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
         <div className="space-y-6">
         {/* Members: one list; "Invite people" right in the header */}
         <section>
-          <MembersHeader count={memberRows.length} canInvite={userIsMaster}>
+          {/* ?invite=1 (the search bar's "Invite people"): the invite box is open. */}
+          <MembersHeader count={memberRows.length} canInvite={userIsMaster} startOpen={inviteParam === "1"}>
               <PendingInvitesList
                 teamId={currentTeam.id}
                 invites={(pendingInvites ?? []).map((inv) => {
@@ -222,7 +223,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       {tab === "defaults" && userIsMaster && (
         <div className="grid gap-6 xl:grid-cols-2 items-start">
         {userIsMaster && (
-          <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <section id="short-defaults" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">
               Short videos
             </h2>
@@ -237,10 +238,10 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           </section>
         )}
         {userIsMaster && (
-          <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <section id="long-defaults" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Long videos</h2>
             <p className="text-[12px] text-ink-soft mb-5">What every new long video starts with.</p>
-            <div className="mb-6 pb-5 border-b border-line/10">
+            <div id="long-review" className="mb-6 pb-5 border-b border-line/10 rounded-lg scroll-mt-24">
               <LongReviewToggle teamId={currentTeam.id} on={!!longDefaults?.long_in_app_review} />
             </div>
             <LongSettingsForm
@@ -290,7 +291,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           </section>
         )}
         {userIsMaster && (
-          <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <section id="script-defaults" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Scripts</h2>
             <p className="text-[12px] text-ink-soft mb-5">Script → Review → Staging: who&rsquo;s next when a script is handed on.</p>
             <ScriptSettingsForm
@@ -375,7 +376,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       {tab === "appearance" && (
         <div className="grid gap-6 lg:grid-cols-2 items-start">
         {userIsMaster && (
-          <section className="rounded-xl border border-line/10 bg-surface p-6">
+          <section id="kind-colors" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Colors</h2>
             <p className="text-[12px] text-ink-soft mb-5">The colours for shorts and long videos, used everywhere in the app.</p>
             <KindColorsForm
@@ -386,7 +387,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
           </section>
         )}
         {/* Role colors */}
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
+        <section id="role-colors" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
           <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">
             Role colors
           </h2>
@@ -412,7 +413,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       {tab === "team" && (
         <div className="grid gap-6 lg:grid-cols-2 items-start">
         {/* Workspace branding */}
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
+        <section id="workspace" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
           <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
             Workspace
           </h2>

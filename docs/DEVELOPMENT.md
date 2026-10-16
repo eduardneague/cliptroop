@@ -197,7 +197,16 @@ the page is live, or React throws that part away (production error #418).
 - **"/" and ⌘K / Ctrl+K open the app's search** everywhere
   (`components/search/global-search.tsx`). Pages don't get their own search
   box (1.20.0: Analytics → Content's is gone): the palette finds videos with
-  their numbers too (`use-video-search.ts` → `searchVideos()`).
+  their numbers too (`use-video-search.ts` → `searchVideos()`). A new page,
+  tab, setting or action goes in `lib/search/catalog.ts` (who sees it, the
+  other words people use for it), or nobody can find it there (1.26.0).
+- **A link to a part of a page** is `…#id`: give the part an `id` and
+  `scroll-mt-24`; it scrolls into view and glows once it's on screen
+  (`components/ui/hash-flash.tsx`, `lib/flash.ts`, `[data-flash]` in
+  globals.css). Something a link should open (a window, Customize) reads a
+  query parameter and tidies the address with `history.replaceState` once
+  it's done (`?new=1`, `?invite=1`, `?customize=1&add=…`, `?claude=1`,
+  `?find=` in a script).
 - **`next/dynamic` and `useId`**: a component loaded with `dynamic()` and
   rendered on the server can get other `useId()` values in the browser (a
   hydration mismatch). Don't put SVG ids from `useId` inside one (1.20.0:
@@ -718,10 +727,26 @@ empties every uncontrolled box after the action, error or not. Use onSubmit +
 `startTransition(() => formAction(fd))` (or controlled inputs), and answer
 every save with a toast (it plays the sound).
 
-**Search.** `global_search()` (0024) is SECURITY INVOKER on purpose: RLS
-decides what anyone can find. To make something searchable, add a trigram
-index on `lower(column)`, a section in the function, then a section in
-`components/search/global-search.tsx`.
+**Search.** `global_search()` (0024, 0090) is SECURITY INVOKER on purpose:
+RLS decides what anyone can find (projections' money rule included). To make
+something searchable, add a section in the function (a trigram index on
+`lower(column)` if the table can grow), a list in `components/search/types.ts`,
+rows in `components/search/build.tsx` and a section in `sections.ts`. Every
+list keeps its `score` (4 a #number, 3 the name exactly, 2 its start, 1
+inside it, plus how alike); `lib/search/strength.ts` turns those into 0–1 so
+the best match goes first whatever it is, next to the app's own pages and
+settings (`lib/search/catalog.ts`, matched in the browser by
+`lib/search/match.ts`: word starts, typos, other words) and days for the
+calendar (`lib/search/dates.ts`). Scripts, notes, captions and descriptions
+are only searched from 3 letters (`deep`). Under RLS a filter can only use
+an index when it's leakproof, and LIKE isn't: a big table's text search
+reads every row. So the scripts part is `search_docs()`, SECURITY DEFINER,
+which applies the table's own rule (`team_id = any(my_team_ids())`) and lets
+the trigram index work; do the same for any other big text column, and
+keep the rule in step with the table's policy. A function that sets
+`pg_trgm.word_similarity_threshold` must load pg_trgm first in its migration
+(0089, section 7). Tests: `tests/search.test.ts`,
+`supabase/tests/search-everything.test.sql`.
 
 **Short videos.** Script → Editing → In review → Ready to post → Posted.
 "Posted" follows `short_video_posts` (every planned platform marked).

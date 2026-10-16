@@ -92,7 +92,9 @@ function steps(phone: boolean, mac: boolean): Step[] {
       id: "search",
       targets: ["search"],
       title: "Find anything",
-      text: phone ? "Search any video, script or person." : `Search any video, script or person. Press ${mac ? "⌘ K" : "Ctrl K"} from anywhere.`,
+      text: phone
+        ? "Search anything: videos, scripts, meetings, people, and every setting. Typos are fine."
+        : `Search anything: videos, scripts, meetings, people, and every setting. Typos are fine. Press ${mac ? "⌘ K" : "Ctrl K"} from anywhere.`,
     },
     {
       id: "bell",

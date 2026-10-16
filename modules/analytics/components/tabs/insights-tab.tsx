@@ -54,7 +54,7 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
         </button>
       </div>
 
-      <Section title="What changed" sub="The last 7 and 28 days next to the ones before, the newest videos next to your usual, and your posting rhythm">
+      <Section id="what-changed" title="What changed" sub="The last 7 and 28 days next to the ones before, the newest videos next to your usual, and your posting rhythm">
         {i.alerts.length ? (
           <ul className="grid gap-3 lg:grid-cols-2">
             {i.alerts.map((a) => (
@@ -66,7 +66,7 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
         )}
       </Section>
 
-      <Section title="What works" sub="Patterns in your own videos: groups of videos side by side (old enough to have settled: a week)">
+      <Section id="what-works" title="What works" sub="Patterns in your own videos: groups of videos side by side (old enough to have settled: a week)">
         {groups.length ? (
           <div className="space-y-4">
             {groups.length > 1 && (
@@ -83,7 +83,7 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
         )}
       </Section>
 
-      <Section title="Best time to post" sub="Each day and time of day: how the videos posted then did next to your usual (the middle one, × typical), in the team's time zone">
+      <Section id="best-time" title="Best time to post" sub="Each day and time of day: how the videos posted then did next to your usual (the middle one, × typical), in the team's time zone">
         {heat ? (
           <div className="space-y-4">
             {heats.length > 1 && (
@@ -101,7 +101,7 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
       </Section>
 
       {i.cross && (
-        <Section title="The same short everywhere" sub="Shorts the team posted on more than one platform">
+        <Section id="same-short" title="The same short everywhere" sub="Shorts the team posted on more than one platform">
           <ul>
             <FindingCard f={i.cross} tip={tipFor(i.cross)} />
           </ul>
@@ -112,9 +112,9 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
   );
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Section({ id, title, sub, children }: { id?: string; title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section>
+    <section id={id} className={id ? "rounded-2xl scroll-mt-24" : undefined}>
       <div className="mb-3">
         <h2 className="font-display text-[21px] font-semibold leading-tight">{title}</h2>
         {sub && <p className="text-[12.5px] text-ink-soft mt-0.5">{sub}</p>}

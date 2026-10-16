@@ -48,6 +48,30 @@ export function findQuote(doc: PMNode, quote: string, occurrence: number): { fro
   return null;
 }
 
+/**
+ * The first place `query` is written (1.26.0, a search result opened from the
+ * search bar): any case; the words in a row first, else the first word of 3+
+ * letters. Null when it isn't there (the document changed since).
+ */
+export function findText(doc: PMNode, query: string): { from: number; to: number } | null {
+  const lower = (t: string) => Array.from({ length: t.length }, (_, i) => {
+    const c = t[i].toLowerCase();
+    return c.length === 1 ? c : t[i];
+  }).join("");
+  const q = lower(query.trim().replace(/\s+/g, " "));
+  if (!q) return null;
+  const all = blocks(doc);
+  const tries = [q, ...q.split(" ").filter((w) => w.length >= 3)];
+  for (const t of tries) {
+    for (const b of all) {
+      // Line breaks inside a paragraph read as spaces here.
+      const i = lower(b.text.replace(/\u0000/g, " ")).indexOf(t);
+      if (i >= 0) return { from: b.map[i], to: b.map[i + t.length - 1] + 1 };
+    }
+  }
+  return null;
+}
+
 /** Which occurrence of `quote` starts at document position `from`. */
 export function occurrenceAt(doc: PMNode, quote: string, from: number): number {
   let seen = 0;

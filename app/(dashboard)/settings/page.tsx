@@ -123,7 +123,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
       {tab === "profile" && (
         <div className="grid gap-6 md:grid-cols-[minmax(0,18rem)_1fr] items-start">
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
+        <section id="profile-picture" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
           <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
             Profile picture
           </h2>
@@ -135,7 +135,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           />
         </section>
 
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
+        <section id="profile" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
           <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
             Profile
           </h2>
@@ -168,7 +168,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </Link>
             )}
           </div>
-          <div className="flex items-center justify-between gap-3 mb-4 pb-4 border-b border-line/10">
+          <div id="teams-public" className="flex items-center justify-between gap-3 mb-4 pb-4 border-b border-line/10 rounded-lg scroll-mt-24">
             <div>
               <div className="text-[13px] font-semibold">Show my teams publicly</div>
               <div className="text-[11.5px] text-ink-faint">
@@ -209,7 +209,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       )}
       {tab === "notifications" && (
         <div className="grid gap-6 lg:grid-cols-2 items-start">
-          <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
+          <section id="install" className="rounded-xl border border-line/10 bg-surface p-6 space-y-4 scroll-mt-24">
             <div>
               <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">{APP_NAME} on your phone</h2>
               <p className="text-[12.5px] text-ink-soft">
@@ -218,7 +218,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             <InstallApp />
           </section>
-          <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
+          <section id="push" className="rounded-xl border border-line/10 bg-surface p-6 space-y-4 scroll-mt-24">
             <div>
               <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">Notifications on this device</h2>
               <p className="text-[12.5px] text-ink-soft">
@@ -228,7 +228,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             {showKeysHelper && <PushKeysHelper />}
             <PushSettings userId={user!.id} />
-            <div className="pt-4 border-t border-line/10">
+            <div id="devices" className="pt-4 border-t border-line/10 rounded-lg scroll-mt-24">
               <div className="text-[13px] font-semibold mb-2">Your devices</div>
               <PushDevices devices={devices} />
             </div>
@@ -241,28 +241,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
             Preferences
           </h2>
-          <div className="flex items-center justify-between">
+          <div id="appearance" className="flex items-center justify-between rounded-lg scroll-mt-24">
             <div>
               <div className="text-[13.5px] font-semibold">Appearance</div>
               <div className="text-[11.5px] text-ink-faint">Switch between light and dark mode</div>
             </div>
             <ThemeToggle />
           </div>
-          <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
+          <div id="animations" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
             <div>
               <div className="text-[13.5px] font-semibold">Animations</div>
               <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. &ldquo;Match device&rdquo; turns them off if your device asks for less motion.</div>
             </div>
             <AnimationsChoice pref={(profile?.animations_enabled as boolean | null) ?? null} />
           </div>
-          <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
+          <div id="sounds" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
             <div>
               <div className="text-[13.5px] font-semibold">Sounds</div>
               <div className="text-[11.5px] text-ink-faint">Quiet little sounds when you check things off, save, get a notification or drag something.</div>
             </div>
             <SoundsChoice on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
           </div>
-          <div className="mt-5 pt-5 border-t border-line/10">
+          <div id="colours" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
             <div className="text-[13.5px] font-semibold">Colours</div>
             <div className="text-[11.5px] text-ink-faint mb-3">The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.</div>
             <PaletteChoice value={palette} />

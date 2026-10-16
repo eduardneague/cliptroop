@@ -48,6 +48,7 @@ export function MeetingsHome({
   myActions,
   people,
   canOrganize,
+  startPlanning = false,
 }: {
   teamId: string;
   upcoming: Meeting[];
@@ -55,8 +56,19 @@ export function MeetingsHome({
   myActions: MyAction[];
   people: MeetingPerson[];
   canOrganize: boolean;
+  /** ?new=1 (the search bar's "Plan a meeting"): the window opens at once. */
+  startPlanning?: boolean;
 }) {
   const [planning, setPlanning] = useState(false);
+  useEffect(() => {
+    if (!startPlanning || !canOrganize) return;
+    setPlanning(true);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("new");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }, [startPlanning, canOrganize]);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => setNow(Date.now()), []);
   // Still-running meetings count as upcoming until they end.
@@ -104,7 +116,7 @@ export function MeetingsHome({
           {next && <NextUp m={next} />}
 
           {myActions.length > 0 && (
-            <section>
+            <section id="my-actions" className="rounded-2xl scroll-mt-24">
               <h2 className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2.5">Your action items</h2>
               <div className="rounded-2xl border border-line/10 bg-surface divide-y divide-line/10 overflow-hidden">
                 {myActions.map((a) => (
@@ -133,7 +145,7 @@ export function MeetingsHome({
           )}
 
           {earlier.length > 0 && (
-            <section>
+            <section id="earlier" className="rounded-2xl scroll-mt-24">
               <h2 className="text-[11.5px] font-bold uppercase tracking-wide text-ink-soft mb-2.5">Earlier</h2>
               <div className="rounded-2xl border border-line/10 bg-surface divide-y divide-line/10 overflow-hidden">
                 {earlier.map((m) => (

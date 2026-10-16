@@ -40,8 +40,8 @@ function Tabs({ view }: { view: "objectives" | "projections" }) {
  * ?o=<id> opens an objective, ?view=projections&p=<id> a projection (where
  * notifications lead).
  */
-export default async function ObjectivesPage({ searchParams }: { searchParams: Promise<{ o?: string; view?: string; p?: string }> }) {
-  const { o, view, p } = await searchParams;
+export default async function ObjectivesPage({ searchParams }: { searchParams: Promise<{ o?: string; view?: string; p?: string; new?: string }> }) {
+  const { o, view, p, new: startNew } = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
@@ -57,7 +57,7 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
       );
     return (
       <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-[1500px] mx-auto">
-        <ProjectionsView initial={board} canEdit={isMaster(membership?.roles ?? [])} openId={p && UUID.test(p) ? p : null} tabs={<Tabs view="projections" />} />
+        <ProjectionsView initial={board} canEdit={isMaster(membership?.roles ?? [])} openId={p && UUID.test(p) ? p : null} tabs={<Tabs view="projections" />} startNew={startNew === "1"} />
       </div>
     );
   }
@@ -79,7 +79,7 @@ export default async function ObjectivesPage({ searchParams }: { searchParams: P
   const streakOnDashboard = widgets.some((w) => w.type === "streak");
   return (
     <div className="px-4 sm:px-8 py-5 sm:py-8 w-full max-w-[1500px] mx-auto">
-      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} streakOnDashboard={streakOnDashboard} tabs={<Tabs view="objectives" />} />
+      <ObjectivesView initial={board} teamId={currentTeam.id} canEdit={isMaster(membership?.roles ?? [])} openId={o && UUID.test(o) ? o : null} onDashboard={onDashboard} streakOnDashboard={streakOnDashboard} tabs={<Tabs view="objectives" />} startNew={startNew === "1"} />
     </div>
   );
 }

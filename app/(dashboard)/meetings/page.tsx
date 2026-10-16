@@ -8,7 +8,8 @@ import { MeetingsHome } from "@/modules/meetings/components/meetings-home";
 
 export const metadata: Metadata = { title: "Meetings" };
 
-export default async function MeetingsPage() {
+export default async function MeetingsPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
+  const sp = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first.</div>;
@@ -32,6 +33,7 @@ export default async function MeetingsPage() {
       myActions={myActions}
       people={people.map((p) => ({ userId: p.userId, name: p.name, username: p.username, avatarUrl: p.avatarUrl, color: p.color }))}
       canOrganize={roles.includes("master") || roles.includes("publisher")}
+      startPlanning={sp.new === "1"}
     />
   );
 }
