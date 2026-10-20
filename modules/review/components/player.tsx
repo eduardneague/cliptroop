@@ -210,9 +210,11 @@ export const ReviewPlayer = forwardRef<
     /** Height of the picture area. */
     stageClass?: string;
     preload?: "auto" | "metadata";
+    /** A wide (16:9) video, like a long video (1.25.0): the loading shape matches. */
+    wide?: boolean;
   }
 >(function ReviewPlayer(
-  { src, error, markers, onTime, onMarker, onSeeked, shortcuts = "page", stageClass = "h-[50vh] lg:h-[min(72vh,780px)]", preload = "auto" },
+  { src, error, markers, onTime, onMarker, onSeeked, shortcuts = "page", stageClass = "h-[50vh] lg:h-[min(72vh,780px)]", preload = "auto", wide = false },
   ref
 ) {
   const video = useRef<HTMLVideoElement>(null);
@@ -360,7 +362,7 @@ export const ReviewPlayer = forwardRef<
         ) : null}
         {(!src || !ready) && !error && (
           <div className="absolute inset-0 flex items-center justify-center" aria-label="Loading the video" role="status">
-            <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
+            <div className={`${wide ? "w-[92%] aspect-video max-h-[86%]" : "h-[86%] aspect-[9/16]"} rounded-xl bg-white/[0.06] animate-pulse`} />
             <span className="absolute w-8 h-8 rounded-full border-2 border-white/25 border-t-white animate-spin" />
           </div>
         )}

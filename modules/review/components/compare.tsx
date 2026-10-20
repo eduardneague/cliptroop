@@ -4,25 +4,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Select } from "@/components/ui/select";
 import { formatTime } from "../lib/limits";
 import { playbackUrl, prefetchPlayback } from "../lib/playback";
-import type { VideoVersion } from "../lib/queries";
+import type { ReviewKind, VideoVersion } from "../lib/queries";
 import { CtrlButton, SpeedPills, Timeline } from "./player";
 import { Back5Icon, Forward5Icon, FrameBackIcon, FrameForwardIcon, PauseIcon, PlayIcon, SoundIcon } from "./player-icons";
 
 const FRAME = 1 / 30;
 
-function useSignedUrl(versionId: string | null) {
+function useSignedUrl(versionId: string | null, kind: ReviewKind) {
   const [state, setState] = useState<{ url: string | null; error: string | null }>({ url: null, error: null });
   useEffect(() => {
     let cancelled = false;
     setState({ url: null, error: null });
     if (!versionId) return;
-    void playbackUrl(versionId).then((res) => {
+    void playbackUrl(versionId, kind).then((res) => {
       if (!cancelled) setState(res.url ? { url: res.url, error: null } : { url: null, error: res.error ?? "Couldn't open the video." });
     });
     return () => {
       cancelled = true;
     };
-  }, [versionId]);
+  }, [versionId, kind]);
   return state;
 }
 
@@ -30,14 +30,17 @@ function useSignedUrl(versionId: string | null) {
  * Two versions side by side. One set of controls drives both: play,
  * pause, scrub, ±5s, frame step and speed stay in sync. The speaker next
  * to each version picks whose sound you hear (one at a time, or none).
- * Keyboard: Space/K, J/L, , and . — Esc leaves compare.
+ * Keyboard: Space/K, J/L, , and . — Esc leaves compare. Long videos
+ * (kind "long", 1.25.0) are wide: two 16:9 pictures, one above the other
+ * on phones.
  */
-export function CompareView({ versions, onClose }: { versions: VideoVersion[]; onClose: () => void }) {
+export function CompareView({ versions, onClose, kind = "short" }: { versions: VideoVersion[]; onClose: () => void; kind?: ReviewKind }) {
+  const wide = kind === "long";
   const live = versions.filter((v) => !v.deleted).sort((a, b) => a.number - b.number);
   const [leftId, setLeftId] = useState(live[live.length - 2]?.id ?? live[0]?.id ?? null);
   const [rightId, setRightId] = useState(live[live.length - 1]?.id ?? null);
-  const left = useSignedUrl(leftId);
-  const right = useSignedUrl(rightId);
+  const left = useSignedUrl(leftId, kind);
+  const right = useSignedUrl(rightId, kind);
   const a = useRef<HTMLVideoElement>(null);
   const b = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -57,9 +60,9 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
 
   // Links for every version, fetched up front: switching is instant.
   useEffect(() => {
-    prefetchPlayback(live.map((v) => v.id));
+    prefetchPlayback(live.map((v) => v.id), kind);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [versions]);
+  }, [versions, kind]);
 
   const both = useCallback((fn: (v: HTMLVideoElement) => void) => {
     [a.current, b.current].forEach((v) => v && fn(v));
@@ -156,7 +159,11 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
         <span className="hidden sm:inline">{sound === key ? "Sound on" : "Hear this"}</span>
       </button>
       </div>
-      <div className="relative flex items-center justify-center rounded-2xl bg-black overflow-hidden ring-1 ring-white/5 h-[42vh] sm:h-[min(62vh,700px)]">
+      <div
+        className={`relative flex items-center justify-center rounded-2xl bg-black overflow-hidden ring-1 ring-white/5 ${
+          wide ? "aspect-video max-h-[min(62vh,700px)]" : "h-[42vh] sm:h-[min(62vh,700px)]"
+        }`}
+      >
         {src.url && (
           <video
             ref={ref}
@@ -185,7 +192,7 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
         {src.error && <p className="text-white/70 text-[13px] px-6 text-center">{src.error}</p>}
         {!src.error && (!src.url || !loaded[key]) && (
           <div className="absolute inset-0 flex items-center justify-center" role="status" aria-label="Loading">
-            <div className="h-[86%] aspect-[9/16] rounded-xl bg-white/[0.06] animate-pulse" />
+            <div className={`${wide ? "w-[92%] aspect-video max-h-[86%]" : "h-[86%] aspect-[9/16]"} rounded-xl bg-white/[0.06] animate-pulse`} />
             <span className="absolute w-7 h-7 rounded-full border-2 border-white/25 border-t-white animate-spin" />
           </div>
         )}
@@ -195,7 +202,7 @@ export function CompareView({ versions, onClose }: { versions: VideoVersion[]; o
 
   return (
     <div className="space-y-3 animate-[modalin_.22s_var(--ease-out)]">
-      <div className="grid gap-3 grid-cols-2">
+      <div className={`grid gap-3 ${wide ? "grid-cols-1 md:grid-cols-2" : "grid-cols-2"}`}>
         {side(a, left, leftId, setLeftId, "a")}
         {side(b, right, rightId, setRightId, "b")}
       </div>

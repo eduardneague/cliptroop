@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { MAP_MODES } from "@/modules/analytics/lib/map-modes";
@@ -164,6 +165,43 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
     setDraft(structuredClone(layout));
   };
   const set = (patch: Partial<Layout>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+
+  // From the search bar (1.26.0): ?customize=1 starts Customize; &add=<widget>
+  // puts that widget on the board (or shows it, if it's there already);
+  // &add=1 opens the widget library. Then the address is tidied up.
+  const params = useSearchParams();
+  const asked = params.get("customize") === "1" ? params.get("add") ?? "" : null;
+  const askedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (asked === null) {
+      askedRef.current = null;
+      return;
+    }
+    if (askedRef.current === asked) return;
+    askedRef.current = asked;
+    preloadAll();
+    const base = draft ?? structuredClone(layout);
+    if (asked && asked in CATALOG) {
+      const there = base.widgets.find((w) => w.type === asked);
+      const r = there ? { layout: base, id: there.id } : addWidget(base, asked as WidgetType);
+      setDraft(r.layout);
+      setFresh(r.id);
+      if (!there) sounds.pop();
+      window.setTimeout(() => document.querySelector(".is-new")?.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+      window.setTimeout(() => setFresh((f) => (f === r.id ? null : f)), 1400);
+    } else {
+      setDraft(base);
+      if (asked === "1") setLibrary(true);
+    }
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("customize");
+      u.searchParams.delete("add");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+    // Only when asked (draft and layout are read as they are right then).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
   const active = data.tasks.filter((t) => t.state === "active").length;
   const editingWidget = shown.widgets.find((w) => w.id === settingsFor) ?? null;
   const onBoard = new Set(shown.widgets.map((w) => w.type));

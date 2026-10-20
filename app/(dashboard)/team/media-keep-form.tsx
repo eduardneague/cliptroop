@@ -54,7 +54,7 @@ export function MediaKeepForm({
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] font-semibold">Delete video files after posting</div>
+          <div className="text-[13px] font-semibold">Delete short video files after posting</div>
           <div className="text-[11.5px] text-ink-faint">Counted from the last platform a short went out on. Checked every night.</div>
         </div>
         <div className="w-40 flex-shrink-0">
@@ -62,7 +62,7 @@ export function MediaKeepForm({
             value={String(value)}
             onChange={(v) => v && void pick(Number(v) as MediaKeepDays)}
             options={MEDIA_KEEP_CHOICES.map((c) => ({ value: String(c.days), label: c.label }))}
-            ariaLabel="Delete video files after posting"
+            ariaLabel="Delete short video files after posting"
             disabled={!ready || save.pending}
           />
         </div>

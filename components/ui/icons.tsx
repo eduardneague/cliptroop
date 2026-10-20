@@ -718,6 +718,17 @@ export function AnalyticsIcon(p: IconProps) {
   );
 }
 
+/** Outliers: a row of bars with one shooting past the rest, and a spark. */
+export function OutliersIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 20v-4M8.5 20v-6M13 20V5M17.5 20v-5" />
+      <path d="M19.5 3.5v3M18 5h3" />
+      <path d="M3 20h18" />
+    </Svg>
+  );
+}
+
 /** "More" in the phone bar: a 2×2 grid of rounded squares. */
 export function AppsIcon(p: IconProps) {
   return (
@@ -1028,6 +1039,23 @@ export function PageBreakIcon(p: IconProps) {
     <Svg {...p}>
       <path d="M6 3v5.5h12V3M6 21v-5.5h12V21" />
       <path d="M3 12h2.5M9 12h2.5M15 12h2.5M21 12h-.5" />
+    </Svg>
+  );
+}
+/** Several titles on one thumbnail (Thumbnail Studio, 1.25.0): a T and lines of text. */
+export function TitlesIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 5h10M8 5v14" />
+      <path d="M15.5 11H21M15.5 15H21M15.5 19h3.5" />
+    </Svg>
+  );
+}
+/** Shuffle (Thumbnail Studio): crossing arrows. */
+export function ShuffleIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
     </Svg>
   );
 }

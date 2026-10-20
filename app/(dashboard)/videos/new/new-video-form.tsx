@@ -3,12 +3,13 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { createProject } from "./actions";
-import { ArrowLeftIcon, CloseIcon, PlusIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, CloseIcon, OutliersIcon, PlusIcon } from "@/components/ui/icons";
 import { DateChip } from "@/components/ui/date-picker";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PersonSelect, type PersonKind } from "@/modules/short-videos/components/person-select";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
+import type { IdeaPrefill } from "@/modules/outliers/lib/idea-prefill";
 
 const TYPES = ["Hub", "Help", "Hero"];
 const STEPS: { stage: "research" | "script" | "film" | "edit" | "package" | "publish"; label: string; kind: PersonKind }[] = [
@@ -50,19 +51,22 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
 export function NewVideoForm({
   people,
   defaults,
+  idea = null,
 }: {
   people: TeamPerson[];
   defaults: Record<"research" | "script" | "film" | "edit" | "package" | "publish", string | null>;
+  /** Started from a saved Outliers idea: its titles, type, hook and background, ready to edit. */
+  idea?: (IdeaPrefill & { notes: string }) | null;
 }) {
   const [state, formAction, pending] = useActionState(createProject, undefined);
-  const [types, setTypes] = useState<string[]>([]);
-  const [theme, setTheme] = useState("");
-  const [subtheme, setSubtheme] = useState("");
-  const [titles, setTitles] = useState<string[]>(["", ""]);
+  const [types, setTypes] = useState<string[]>(idea ? [idea.type] : []);
+  const [theme, setTheme] = useState(idea?.niche ?? "");
+  const [subtheme, setSubtheme] = useState(idea?.format ?? "");
+  const [titles, setTitles] = useState<string[]>(idea ? (idea.titles.length >= 2 ? idea.titles : [...idea.titles, ""]) : ["", ""]);
   const [picked, setPicked] = useState(0);
-  const [hook, setHook] = useState("");
+  const [hook, setHook] = useState(idea?.hook ?? "");
   const [date, setDate] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(idea?.notes ?? "");
   const [budget, setBudget] = useState("");
   const [crew, setCrew] = useState(defaults);
   const [platforms, setPlatforms] = useState<string[]>(["youtube"]);
@@ -78,7 +82,29 @@ export function NewVideoForm({
         <h1 className="text-[26px] sm:text-[30px] font-display font-semibold leading-tight">New long video</h1>
       </div>
 
+      {idea && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber/30 bg-amber/[0.06] px-4 py-3.5">
+          <OutliersIcon className="w-5 h-5 text-amber flex-shrink-0 mt-0.5" />
+          <div className="min-w-0 text-[13px] text-ink-soft">
+            <p>
+              <span className="font-semibold text-ink">From an Outliers idea</span>
+              {idea.format && <> ({idea.format})</>}. Its titles, type, hook and where it comes from are filled in; change anything.
+            </p>
+            {idea.started && (
+              <p className="mt-1">
+                Already started once:{" "}
+                <Link href={idea.started.kind === "short" ? `/shorts/${idea.started.id}` : `/videos/${idea.started.id}`} className="font-semibold text-amber hover:underline">
+                  open that {idea.started.kind === "short" ? "short" : "video"}
+                </Link>
+                .
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       <form action={formAction} className="space-y-5">
+        {idea && <input type="hidden" name="idea" value={idea.id} />}
         <Section title="Titles" hint="2 to 5 options. Pick the main one: it becomes the video's name.">
           <div className="space-y-2">
             {titles.map((t, i) => (

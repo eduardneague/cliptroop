@@ -55,6 +55,13 @@ function steps(phone: boolean, mac: boolean): Step[] {
       text: "Your day at a glance: what's yours to do, what's coming up and what the team is working on.",
     },
     {
+      id: "outliers",
+      only: "desktop",
+      targets: ["nav-outliers"],
+      title: "Outliers",
+      text: "Videos in your niche doing far better than their channel's usual, what they have in common, and ideas for your next ones made from them.",
+    },
+    {
       id: "videos",
       targets: ["nav-shorts", "nav-videos"],
       title: "Your videos",
@@ -86,13 +93,15 @@ function steps(phone: boolean, mac: boolean): Step[] {
       only: "phone",
       targets: ["nav-more"],
       title: "Everything else",
-      text: "Meetings, posting to YouTube, Instagram, Facebook and TikTok, analytics, the team's objectives and your team are under More.",
+      text: "Outliers (ideas from what's taking off in your niche), meetings, posting to YouTube, Instagram, Facebook and TikTok, analytics, the team's objectives and your team are under More.",
     },
     {
       id: "search",
       targets: ["search"],
       title: "Find anything",
-      text: phone ? "Search any video, script or person." : `Search any video, script or person. Press ${mac ? "⌘ K" : "Ctrl K"} from anywhere.`,
+      text: phone
+        ? "Search anything: videos, scripts, meetings, people, and every setting. Typos are fine."
+        : `Search anything: videos, scripts, meetings, people, and every setting. Typos are fine. Press ${mac ? "⌘ K" : "Ctrl K"} from anywhere.`,
     },
     {
       id: "bell",

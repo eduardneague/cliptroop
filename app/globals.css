@@ -351,12 +351,8 @@ body {
   pointer-events: none;
 }
 .script-doc .ProseMirror-selectednode { outline: none; }
-/* Pages and Grid (1.23.1): the text is laid out as one column and each block
-   is moved onto its page (use-pages.ts); the editor is what they're measured in. */
-.script-paper[data-view="pages"] .script-doc,
-.script-paper[data-view="grid"] .script-doc { position: relative; min-height: 0; }
-/* A page break (Ctrl+Enter): a thin dashed line in the long page; on pages it
-   takes no room (the next page is the break), and shows when it's selected. */
+/* A page break (Ctrl+Enter): a thin dashed line in the script; Word exports
+   and printing start a new page there. */
 .pm-page-break {
   position: relative; height: 22px; margin: 0.6em 0; user-select: none; cursor: default;
   background: linear-gradient(to right, rgb(var(--sp-line) / 0.22) 50%, transparent 0) center / 8px 1px repeat-x;
@@ -367,12 +363,6 @@ body {
   color: rgb(var(--sp-soft)); background: rgb(var(--sp-bg));
 }
 .pm-page-break.ProseMirror-selectednode { outline: 2px solid rgb(var(--amber) / 0.6); outline-offset: 2px; border-radius: 4px; }
-.script-paper[data-view="pages"] .pm-page-break,
-.script-paper[data-view="grid"] .pm-page-break { height: 0; margin: 0 !important; background: none; overflow: visible; }
-.script-paper[data-view="pages"] .pm-page-break::after,
-.script-paper[data-view="grid"] .pm-page-break::after { display: none; }
-.script-paper[data-view="pages"] .pm-page-break.ProseMirror-selectednode::after,
-.script-paper[data-view="grid"] .pm-page-break.ProseMirror-selectednode::after { display: block; top: 12px; }
 .print-only { display: none; }
 
 /* PDF export = the browser's print, showing only the paper. */
@@ -386,9 +376,7 @@ body {
     --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
   }
   .script-print .print-only { display: block; }
-  /* Pages and Grid: print at the real size, in the browser's own pages (the moves undone). */
-  .script-print { transform: none !important; min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
-  .script-print .script-doc > *, .script-print .script-doc li { transform: none !important; }
+  .script-print { min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
   .pm-page-break { break-after: page; height: 0 !important; margin: 0 !important; background: none !important; }
   .pm-page-break::after { display: none !important; }
   .no-print { display: none !important; }
@@ -470,6 +458,20 @@ button { transition-timing-function: var(--ease-out); }
 /* Switch knobs move with a little spring. */
 [role="switch"] span span { transition: transform 0.28s var(--ease-spring) !important; }
 
+/* A part of a page the address (or the search bar) pointed at: a soft glow
+   for a moment (lib/flash.ts). Painted over the background, never instead
+   of it; fades out where motion is on. */
+[data-flash] {
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+  transition: box-shadow 0.6s var(--ease-out), outline-color 0.6s var(--ease-out);
+}
+[data-flash="on"] {
+  outline-color: rgb(var(--amber) / 0.55);
+  box-shadow: 0 0 0 6px rgb(var(--amber) / 0.08);
+  background-image: linear-gradient(rgb(var(--amber) / 0.08), rgb(var(--amber) / 0.08));
+}
+
 /* Off: the user's setting, or the device asks for less motion. */
 html[data-motion="off"] *,
 html[data-motion="off"] *::before,
@@ -492,6 +494,13 @@ html[data-motion="off"] button:active { scale: none; }
     scroll-behavior: auto !important;
   }
   html:not([data-motion="on"]) button:active { scale: none; }
+}
+
+/* Words the search bar found in a script (1.26.0), for a few seconds. */
+.script-doc .search-hit {
+  background: rgb(var(--amber) / 0.32);
+  box-shadow: 0 0 0 2px rgb(var(--amber) / 0.32);
+  border-radius: 3px;
 }
 
 /* Inline script comments (drawn over the text, never stored in it). */
@@ -1032,3 +1041,27 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 @media (prefers-reduced-motion: reduce) {
   .obj-row-in { animation: none; }
 }
+
+/* ---- Outliers (1.27.0) ---------------------------------------------------
+   The card's spike: the channel's videos as thin bars, grown once from the
+   baseline. Ideas are dealt like cards when you shuffle (each one's
+   --i staggers it). The video panel slides in from the side (phones: up). */
+@keyframes spike-grow { from { transform: scaleY(0.06); } to { transform: none; } }
+.spike rect { transform-box: fill-box; transform-origin: 50% 100%; animation: spike-grow 0.7s var(--ease-out) backwards; }
+@keyframes deal-in {
+  from { opacity: 0; transform: translateY(16px) rotate(-1.5deg) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.deal > * { animation: deal-in 0.5s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 26ms); }
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+/* The multiplier: tabular figures, a hair tighter. */
+.mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* A thumbnail wall: pictures fill their tiles, the title rises on hover/focus. */
+.thumb-tile .thumb-caption { opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
+.thumb-tile:hover .thumb-caption, .thumb-tile:focus-visible .thumb-caption { opacity: 1; transform: none; }
+@media (hover: none) { .thumb-tile .thumb-caption { opacity: 1; transform: none; } }
+/* The panels' bar charts grow from the baseline once (each bar a little after the last). */
+.spike-bar > span { transform-origin: 50% 100%; animation: spike-grow 0.6s var(--ease-out) backwards; animation-delay: inherit; }

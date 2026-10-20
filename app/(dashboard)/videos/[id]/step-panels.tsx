@@ -157,6 +157,8 @@ export function EditPanel({
   editNote,
   reviewNote,
   nasPath,
+  needsUpload = false,
+  video,
 }: {
   projectId: string;
   isCurrent: boolean;
@@ -166,6 +168,10 @@ export function EditPanel({
   editNote: string | null;
   reviewNote: string | null;
   nasPath: string | null;
+  /** Reviewed in ClipTroop and nothing uploaded yet (1.25.0): the edit goes up first. */
+  needsUpload?: boolean;
+  /** The uploaded edit and its review (1.25.0). */
+  video?: React.ReactNode;
 }) {
   const [note, setNote] = useState("");
   const { pending, run } = useStep();
@@ -184,6 +190,7 @@ export function EditPanel({
           <CopyText text={nasPath} />
         </div>
       )}
+      {video}
       {isCurrent && canAct ? (
         <TurnBox title="Edit">
           <label className="block">
@@ -192,7 +199,7 @@ export function EditPanel({
           </label>
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || needsUpload}
             onClick={async () => {
               if (!(await confirm({ title: "Mark editing complete?", description: "It moves to Review and the master is notified.", confirmLabel: "Editing complete" }))) return;
               run(() => markEdited(projectId, note), "Editing marked complete", "review");
@@ -202,6 +209,7 @@ export function EditPanel({
             {pending && <Spinner />}
             Mark editing complete
           </button>
+          {needsUpload && <p className="text-[12.5px] text-ink-soft">Upload the edit above first. This video is reviewed in ClipTroop.</p>}
         </TurnBox>
       ) : editedAt ? (
         <DoneBox title="Editing complete" by={editedBy} at={editedAt}>
@@ -224,6 +232,7 @@ export function ReviewPanel({
   reviewedAt,
   reviewedBy,
   approved,
+  video,
 }: {
   projectId: string;
   isCurrent: boolean;
@@ -234,6 +243,8 @@ export function ReviewPanel({
   reviewedAt: string | null;
   reviewedBy: string | null;
   approved: boolean;
+  /** The uploaded edit and its review (1.25.0). */
+  video?: React.ReactNode;
 }) {
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
@@ -250,6 +261,7 @@ export function ReviewPanel({
           {editNote ? <p className="mt-1.5 text-[14px] whitespace-pre-wrap">{editNote}</p> : <p className="mt-1.5 text-[13.5px] text-ink-soft">No note.</p>}
         </div>
       )}
+      {video}
       {isCurrent && canReview ? (
         <TurnBox title="Review">
           {!asking ? (

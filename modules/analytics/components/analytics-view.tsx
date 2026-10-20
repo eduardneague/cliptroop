@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DownloadIcon, LockIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
@@ -154,6 +154,17 @@ export function AnalyticsView({
     } catch {}
   }, [advPlatform]);
   const [claudeOpen, setClaudeOpen] = useState(false);
+  // ?claude=1 (the search bar's "Download for Claude"): the window opens, the address is tidied up.
+  const wantsClaude = useSearchParams().get("claude") === "1";
+  useEffect(() => {
+    if (!wantsClaude) return;
+    setClaudeOpen(true);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("claude");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }, [wantsClaude]);
   const custom = range === "custom" ? { from: w.from, to: w.to } : null;
 
   type HrefOpts = { tab?: TabId; range?: RangeId; custom?: { from: string; to: string } | null; compare?: boolean; platform?: string; content?: AdvContent; view?: AdvView | null };

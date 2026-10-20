@@ -220,7 +220,8 @@ export function ConnectedAccounts({
           return (
             <div
               key={p}
-              className={`rounded-xl border p-4 flex flex-col gap-3 ${needs ? "border-amber bg-amber/5" : "border-line/10 bg-surface-2/40"}`}
+              id={`account-${p}`}
+              className={`rounded-xl border p-4 flex flex-col gap-3 scroll-mt-24 ${needs ? "border-amber bg-amber/5" : "border-line/10 bg-surface-2/40"}`}
             >
               <div className="flex items-center gap-2.5">
                 <PlatformIcon platform={p} className="w-7 h-7 rounded-lg" />

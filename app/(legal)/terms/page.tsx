@@ -32,8 +32,8 @@ export default function TermsPage() {
 
       <H>Platforms you connect</H>
       <p>
-        Content published through {APP_NAME} must follow each platform&rsquo;s own rules. By connecting a YouTube channel you agree to be bound by the{" "}
-        <A href="https://www.youtube.com/t/terms">YouTube Terms of Service</A>; Instagram and Facebook posts follow{" "}
+        Content published through {APP_NAME} must follow each platform&rsquo;s own rules. {APP_NAME} uses YouTube API Services (to post, for Analytics and for
+        Outliers): by using {APP_NAME} you agree to be bound by the <A href="https://www.youtube.com/t/terms">YouTube Terms of Service</A>; Instagram and Facebook posts follow{" "}
         <A href="https://help.instagram.com/581066165581870">Instagram&rsquo;s Terms of Use</A> and <A href="https://www.facebook.com/terms.php">Meta&rsquo;s Terms</A>; TikTok posts
         follow <A href="https://www.tiktok.com/legal/page/global/terms-of-service/en">TikTok&rsquo;s Terms of Service</A>.
       </p>

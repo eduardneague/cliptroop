@@ -12,6 +12,9 @@ import { ScheduleField, type ScheduleValue } from "@/modules/short-videos/compon
 import { PlatformPicker } from "@/modules/short-videos/components/platform-picker";
 import { PersonSelect } from "@/modules/short-videos/components/person-select";
 import { formatShortDate } from "@/modules/short-videos/lib/dates";
+import type { IdeaPrefill } from "@/modules/outliers/lib/idea-prefill";
+import { OutliersIcon } from "@/components/ui/icons";
+import Link from "next/link";
 
 function Label({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
@@ -31,6 +34,7 @@ export function NewShortForm({
   limits,
   queueStart,
   canStartQueue,
+  idea = null,
 }: {
   canAssignPeople: boolean;
   people: TeamPerson[];
@@ -40,13 +44,17 @@ export function NewShortForm({
   limits: Record<string, number>;
   queueStart: { id: string; number: number; date: string } | null;
   canStartQueue: boolean;
+  /** Started from a saved Outliers idea: its first title, with the others and its hook to hand. */
+  idea?: IdeaPrefill | null;
 }) {
   const router = useRouter();
   const toast = useToast();
   const titleRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(idea?.titles[0] ?? "");
+  // The idea goes with the first short made from it (not with "add another").
+  const [ideaId, setIdeaId] = useState<string | null>(idea?.id ?? null);
   const [schedule, setSchedule] = useState<ScheduleValue>({ mode: "auto" });
   // Start from the team defaults — change them only when you need someone else.
   const [editor, setEditor] = useState<string | null>(settings.defaultEditor);
@@ -80,6 +88,7 @@ export function NewShortForm({
         captionEnabled: captionOn,
         shortType,
         ...(canAssignPeople ? { scripterIds } : {}),
+        ...(ideaId ? { ideaId } : {}),
       });
       if (!("id" in res) || !res.id) {
         const message = res.error ?? "Couldn't create the short. Try again.";
@@ -88,6 +97,7 @@ export function NewShortForm({
         return;
       }
       const when = res.plannedDate ? ` for ${formatShortDate(res.plannedDate)}` : "";
+      setIdeaId(null);
       if (addAnother) {
         toast.success(`#${res.number} scheduled${when}. Add the next one`);
         setTitle("");
@@ -112,6 +122,40 @@ export function NewShortForm({
       }}
       className="space-y-7"
     >
+      {idea && (
+        <div className="rounded-2xl border border-amber/30 bg-amber/[0.06] px-4 py-3.5 text-[13px] text-ink-soft">
+          <p className="flex items-center gap-2">
+            <OutliersIcon className="w-4 h-4 text-amber flex-shrink-0" />
+            <span>
+              <span className="font-semibold text-ink">From an Outliers idea</span>
+              {idea.format && <> ({idea.format})</>}
+              {idea.started && (
+                <>
+                  {" "}
+                  · already started once:{" "}
+                  <Link href={idea.started.kind === "short" ? `/shorts/${idea.started.id}` : `/videos/${idea.started.id}`} className="font-semibold text-amber hover:underline">
+                    open it
+                  </Link>
+                </>
+              )}
+            </span>
+          </p>
+          {idea.titles.length > 1 && (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {idea.titles.map((t) => (
+                <button key={t} type="button" onClick={() => setTitle(t)} aria-pressed={title === t} className={`rounded-lg border px-2.5 py-1 text-left text-[12.5px] font-semibold transition-colors ${title === t ? "border-amber/60 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+          {idea.hook && (
+            <p className="mt-2.5">
+              <span className="font-semibold text-ink">Hook:</span> {idea.hook}
+            </p>
+          )}
+        </div>
+      )}
       <div>
         <label htmlFor="short-title">
           <Label>Title</Label>

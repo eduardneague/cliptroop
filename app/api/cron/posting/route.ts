@@ -7,6 +7,7 @@ import { recordStatus } from "@/lib/status";
 import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
 import { runLiveJob } from "@/modules/analytics/lib/live";
 import { syncAllObjectives } from "@/modules/objectives/lib/sync";
+import { runOutliersJob } from "@/modules/outliers/lib/collector";
 
 /**
  * Called by the Supabase timers (pg_cron → pg_net), protected by
@@ -24,6 +25,10 @@ import { syncAllObjectives } from "@/modules/objectives/lib/sync";
  *     once per team and platform (0083): every video's counts within
  *     minutes, Analytics' realtime, impressions and CTR
  *     (modules/analytics/lib/live.ts).
+ *   - every 30 minutes (:17, :47) with {"job": "outliers", "team"} once per
+ *     team that follows a niche or tracks a channel, and {"job":
+ *     "outliers", "explore": true} once (0091): Outliers' collector
+ *     (modules/outliers/lib/collector.ts).
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -40,7 +45,7 @@ async function handle(request: Request) {
   if (!authorized(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown; live?: unknown } | null) : null;
+  const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown; live?: unknown; explore?: unknown } | null) : null;
   if (body?.job === "cleanup") {
     const r = await runCleanupJob();
     return NextResponse.json(r, { status: r.ok ? 200 : 500 });
@@ -48,6 +53,7 @@ async function handle(request: Request) {
   // One team and platform at a time (0082), or the retries.
   if (body?.job === "analytics") return NextResponse.json(await runAnalyticsJob({ team: body.team, platform: body.platform, retry: body.retry, live: body.live }));
   if (body?.job === "live") return NextResponse.json(await runLiveJob({ team: body.team, platform: body.platform }));
+  if (body?.job === "outliers") return NextResponse.json(await runOutliersJob({ team: body.team, explore: body.explore }));
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);

@@ -1,12 +1,22 @@
 "use client";
 
 import { APP_NAME } from "@/lib/brand";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PlusIcon } from "@/components/ui/icons";
 
 /** Members header: the count, and "Invite people" which expands the invite panel. */
-export function MembersHeader({ count, canInvite, children }: { count: number; canInvite: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function MembersHeader({ count, canInvite, startOpen = false, children }: { count: number; canInvite: boolean; startOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(startOpen && canInvite);
+  // Opened from the search bar (?invite=1): open it (also when already on this page), then tidy the address.
+  useEffect(() => {
+    if (!startOpen || !canInvite) return;
+    setOpen(true);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("invite");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }, [startOpen, canInvite]);
   return (
     <>
       <div className="flex items-center gap-2 mb-3">

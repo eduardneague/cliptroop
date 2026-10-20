@@ -2,100 +2,118 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter } from "next/navigation";
 import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
-import { useRouter } from "next/navigation";
-import { switchTeam } from "@/app/(dashboard)/actions";
-import { colorForId, displayName } from "@/lib/avatar";
+import { signOut, switchTeam } from "@/app/(dashboard)/actions";
+import { syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
+import { setSounds } from "@/app/(dashboard)/settings/actions";
 import { profileHref } from "@/lib/profile-link";
 import type { TeamSummary } from "@/lib/teams";
-import { STAGE_LABELS, stageColor } from "@/modules/long-videos/lib/stages";
-import { SHORT_STAGE_COLOR, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
-import { formatShortDate } from "@/modules/short-videos/lib/dates";
-import {
-  ArrowRightIcon,
-  CloseIcon,
-  HomeIcon,
-  PlusIcon,
-  ShortsIcon,
-  UserIcon,
-  SearchIcon,
-  SettingsIcon,
-  UsersIcon,
-  VideoIcon,
-} from "@/components/ui/icons";
+import { buildCatalog, prepared, SUGGESTED, type Entry } from "@/lib/search/catalog";
+import { rank } from "@/lib/search/match";
+import { localToday, parseDate } from "@/lib/search/dates";
+import { isDark, onThemeChange, setDark } from "@/lib/theme";
+import { setSoundsEnabled, sounds, soundsEnabled } from "@/lib/sounds";
+import { flashWhenReady } from "@/lib/flash";
+import { minWidth } from "@/lib/breakpoints";
+import { openWhatsNew } from "@/components/ui/whats-new";
+import { startTutorial } from "@/components/tutorial/tutorial";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-provider";
+import { startNavProgress } from "@/components/ui/nav-progress";
+import { ArrowRightIcon, CloseIcon, SearchIcon } from "@/components/ui/icons";
 import { useGlobalSearch } from "./use-global-search";
 import { useVideoSearch } from "./use-video-search";
-import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { KIND_LABEL } from "@/modules/analytics/lib/kinds";
-import { clearRecents, pushRecent, readRecents } from "./recents";
-import { Highlight } from "./highlight";
+import { clearRecents, pushRecent, pushTerm, readRecents, readTerms } from "./recents";
 import { InvitePanel } from "./invite-panel";
-import { PersonAvatar, ProjectThumb, ShortThumb, TeamBadge } from "./visuals";
-import type { PersonResult, RecentItem } from "./types";
-import { startNavProgress } from "@/components/ui/nav-progress";
-
-const THUMB_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
-
-type Item = {
-  key: string;
-  section: string;
-  visual: React.ReactNode;
-  title: React.ReactNode;
-  subtitle?: React.ReactNode;
-  trailing?: React.ReactNode;
-  /** Plain text for screen readers. */
-  label: string;
-  href?: string;
-  run: () => void;
-  person?: PersonResult;
-};
-
-type QuickAction = { key: string; label: string; keywords: string; href: string; icon: React.ReactNode };
-
-/** 12,345 → "12K". */
-function compactViews(n: number | null | undefined) {
-  if (n === null || n === undefined) return "–";
-  const a = Math.abs(n);
-  if (a >= 1e6) return `${(n / 1e6).toFixed(a >= 1e7 ? 0 : 1)}M`;
-  if (a >= 1e4) return `${Math.round(n / 1e3)}K`;
-  if (a >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
-  return String(Math.round(n));
-}
+import { entryItem, recentItem, resultItems, switchItem, type BuildHelpers } from "./build";
+import { FILTERS, LIMIT_ALL, SECTION_TITLE, filterOf, orderSections, readPrefix, type FilterId, type Item, type SectionId } from "./sections";
+import { EMPTY_RESPONSE, type PersonResult, type RecentItem, type SearchResponse, type SearchTeamRef } from "./types";
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
   return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
 }
 
+const NO_ROLES: readonly string[] = [];
+
+/** The main places, for "Go to" when nothing is typed. */
+const GOTO = ["dashboard", "shorts", "videos", "calendar", "meetings", "posting", "analytics", "objectives", "team", "settings", "profile"];
+/** Things to try, when nothing is typed. */
+const TRY = ["#1", "editing", "tomorrow", "dark mode", "best time to post"];
+/** The app's areas, in the order the App filter lists them with nothing typed. */
+const AREAS = ["Pages", "Actions", "Dashboard", "Short videos", "Long videos", "Calendar", "Meetings", "Posting", "Analytics", "Objectives", "Team", "Settings", "Developer"];
+const areaOf = (e: Entry) => (e.trail.length ? e.trail[0] : e.kind === "action" ? "Actions" : "Pages");
+
+/** What Recent shows under each filter, with nothing typed. */
+const RECENT_KINDS: Partial<Record<FilterId, RecentItem["kind"][]>> = {
+  videos: ["project", "short"],
+  scripts: ["script"],
+  meetings: ["meeting"],
+  goals: ["goal"],
+  people: ["person", "team"],
+};
+
+/** Which list of the database answer a section is (to tell when there may be more). */
+const RPC_KEY: Partial<Record<SectionId, keyof SearchResponse>> = {
+  projects: "projects",
+  shorts: "shorts",
+  scripts: "scripts",
+  meetings: "meetings",
+  actionItems: "actions",
+  objectives: "objectives",
+  projections: "projections",
+  people: "people",
+  teams: "teams",
+};
+
 /**
- * The search bar in the header.
+ * The search bar in the header (1.26.0: finds everything).
  *
- * Opens with a click, Ctrl/⌘+K, or "/" — a centered command palette on
- * desktop, a full-screen sheet on phones. Finds projects (with thumbnail +
- * team), people (with "Invite to…" for Masters) and teams, plus quick
- * navigation and recent picks when the box is empty.
+ * Opens with a click, Ctrl/⌘+K, or "/": a centered window on desktop, a
+ * full-screen sheet on phones. One box for videos (by title, #number,
+ * caption or notes), scripts, meetings and action items, objectives and
+ * projections, people and teams, every page, tab and setting of the app,
+ * things to do right there (dark mode, sounds, What's new…) and days in the
+ * calendar ("tomorrow", "oct 20"). Typos are fine. The filters along the
+ * top pick one kind; ">" means actions and pages, "@" people.
  *
- * Keyboard: ↑/↓ move · Enter opens · Tab or → on a person opens Invite ·
- * Esc closes (or goes back from Invite).
+ * Keyboard: ↑/↓ move · Enter opens (Ctrl/⌘+Enter: a new tab) · Tab the
+ * next filter · → on a person opens Invite · Esc closes (or goes back).
  */
 export function GlobalSearch({
   userId,
   username,
   teams,
   currentTeamId,
+  roles = NO_ROLES,
+  developer = false,
 }: {
   userId: string;
   username: string | null;
   teams: TeamSummary[];
   currentTeamId: string | null;
+  /** Your roles in the current team: what you're offered (the database still decides). */
+  roles?: readonly string[];
+  developer?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<FilterId>("all");
   const [highlighted, setHighlighted] = useState(0);
   const [invitee, setInvitee] = useState<PersonResult | null>(null);
   const [recents, setRecents] = useState<RecentItem[]>([]);
-  // Mac shows ⌘ first, everyone else Ctrl first — both always shown.
+  const [terms, setTerms] = useState<string[]>([]);
+  const [dark, setDarkState] = useState(false);
+  const [soundsOn, setSoundsOn] = useState(true);
+  const [today, setToday] = useState("");
+  // Wide enough for the long hint in the box (not on phones).
+  const [wide, setWide] = useState(true);
+  // Mac shows ⌘ first, everyone else Ctrl first: both always shown.
   const [isMac, setIsMac] = useState(false);
   const [, startTransition] = useTransition();
 
@@ -106,13 +124,23 @@ export function GlobalSearch({
     subKeyHandler.current = h;
   }, []);
 
-  // "@edu4rd" should find the username "edu4rd".
-  const searchText = query.trim().replace(/^@/, "");
-  const { data, loading, error, term, patchPerson } = useGlobalSearch(searchText, open);
+  // What's typed: a ">" or "@" in front picks the filter; the rest is looked for.
+  const prefix = readPrefix(query);
+  const activeFilter: FilterId = prefix.filter ?? filter;
+  const text = prefix.text;
+  const typed = text.length > 0;
   // "#12" / "12" look up entry numbers, so even one digit counts.
-  const hasQuery = term.length >= 2 || /^#?\d+$/.test(term);
+  const rpcText = text;
+  const hasQuery = rpcText.length >= 2 || /^#?\d+$/.test(rpcText);
+  const wantsRpc = open && activeFilter !== "app";
+  const limit = activeFilter === "all" || activeFilter === "app" ? 6 : 20;
+  const search = useGlobalSearch(rpcText, wantsRpc, limit);
+  const data = wantsRpc ? search.data : EMPTY_RESPONSE;
+  const { loading, error, patchPerson } = search;
   // Videos with their numbers (the current team's accounts).
-  const videos = useVideoSearch(term, open && hasQuery, currentTeamId);
+  const videos = useVideoSearch(rpcText, open && hasQuery && (activeFilter === "all" || activeFilter === "videos"), currentTeamId);
+  const textRef = useRef(text);
+  textRef.current = text;
 
   useEffect(() => {
     const platform =
@@ -120,10 +148,17 @@ export function GlobalSearch({
       navigator.platform ||
       navigator.userAgent;
     setIsMac(/mac|iphone|ipad|ipod/i.test(platform));
+    setDarkState(isDark());
+    return onThemeChange(setDarkState);
   }, []);
 
   const openPalette = useCallback(() => {
     setRecents(readRecents(userId));
+    setTerms(readTerms(userId));
+    setDarkState(isDark());
+    setSoundsOn(soundsEnabled());
+    setToday(localToday());
+    setWide(window.matchMedia?.(minWidth("sm")).matches ?? true);
     setOpen(true);
   }, [userId]);
 
@@ -131,6 +166,7 @@ export function GlobalSearch({
     setOpen(false);
     setInvitee(null);
     setQuery("");
+    setFilter("all");
     setHighlighted(0);
   }, []);
 
@@ -138,7 +174,7 @@ export function GlobalSearch({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.isComposing || e.repeat) return;
-      // ⌘K (Mac) and Ctrl+K (Windows/Linux — and Mac too) both work.
+      // ⌘K (Mac) and Ctrl+K (Windows/Linux, and Mac too) both work.
       // e.code is the PHYSICAL key, so it also works on non-English
       // keyboard layouts where the K key types a different letter.
       const isK = e.code === "KeyK" || e.key.toLowerCase() === "k";
@@ -163,352 +199,275 @@ export function GlobalSearch({
     return () => clearTimeout(t);
   }, [open]);
 
+  /** Remember what was searched for, once something found is opened. */
+  const rememberTerm = useCallback(() => {
+    const t = textRef.current;
+    if (t.length >= 2) pushTerm(userId, t);
+  }, [userId]);
+
   const go = useCallback(
     (href: string, recent?: RecentItem) => {
       if (recent) pushRecent(userId, recent);
+      rememberTerm();
       close();
       startNavProgress(href);
       router.push(href);
+      // A part of a page ("…#sounds"): scroll to it and make it glow once it's there.
+      const hash = href.indexOf("#");
+      if (hash >= 0) flashWhenReady(decodeURIComponent(href.slice(hash + 1)), href.slice(0, hash));
     },
-    [close, router, userId]
+    [close, router, userId, rememberTerm]
   );
 
-  const quickActions: QuickAction[] = useMemo(() => {
-    const me = profileHref({ username, userId });
-    return [
-      { key: "new-project", label: "New long-form project", keywords: "create add idea video", href: "/videos/new", icon: <PlusIcon className="w-4 h-4" /> },
-      { key: "new-short", label: "New short", keywords: "create add short reel tiktok script", href: "/shorts/new", icon: <PlusIcon className="w-4 h-4" /> },
-      { key: "shorts", label: "Short videos", keywords: "shorts reels tiktok posted schedule", href: "/shorts", icon: <ShortsIcon className="w-4 h-4 text-short" /> },
-      { key: "videos", label: "Long videos", keywords: "projects pipeline list", href: "/videos", icon: <VideoIcon className="w-4 h-4 text-long" /> },
-      { key: "dashboard", label: "Dashboard", keywords: "home", href: "/dashboard", icon: <HomeIcon className="w-4 h-4" /> },
-      { key: "team", label: "Team settings", keywords: "members roles invite", href: "/team", icon: <UsersIcon className="w-4 h-4" /> },
-      { key: "settings", label: "Account settings", keywords: "profile avatar password privacy logout", href: "/settings", icon: <SettingsIcon className="w-4 h-4" /> },
-      ...(me ? [{ key: "profile", label: "My profile", keywords: "me account public", href: me, icon: <UserIcon className="w-4 h-4" /> }] : []),
-      { key: "new-team", label: "Create a team", keywords: "new workspace channel", href: "/teams/new", icon: <PlusIcon className="w-4 h-4" /> },
-    ];
-  }, [username, userId]);
-
-  const canInviteAnyone = data.master_teams.length > 0;
-
-  const items: Item[] = useMemo(() => {
-    const list: Item[] = [];
-    const actionVisual = (icon: React.ReactNode) => (
-      <span className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-ink-soft flex-shrink-0">{icon}</span>
-    );
-
-    if (!hasQuery) {
-      recents.forEach((r) =>
-        list.push({
-          key: `recent-${r.kind}-${r.id}`,
-          section: "Recent",
-          label: r.label,
-          visual:
-            r.kind === "project" ? (
-              <ProjectThumb url={r.imageUrl ?? null} color={r.color ?? "#999"} />
-            ) : r.kind === "short" ? (
-              <ShortThumb color={r.color ?? "#999"} />
-            ) : r.kind === "team" ? (
-              <TeamBadge team={{ name: r.label, color: r.color ?? "#999", logo_url: r.imageUrl ?? null }} />
-            ) : (
-              <PersonAvatar name={r.label} avatarUrl={r.imageUrl ?? null} color={r.color ?? "#999"} />
-            ),
-          title: r.label,
-          subtitle: r.sublabel,
-          href: r.href,
-          run: () => go(r.href, r),
-        })
-      );
-      quickActions.forEach((a) =>
-        list.push({
-          key: `action-${a.key}`,
-          section: "Jump to",
-          label: a.label,
-          visual: actionVisual(a.icon),
-          title: a.label,
-          href: a.href,
-          run: () => go(a.href),
-        })
-      );
-      teams
-        .filter((t) => t.id !== currentTeamId)
-        .forEach((t) =>
-          list.push({
-            key: `switch-${t.id}`,
-            section: "Switch team",
-            label: `Switch to ${t.name}`,
-            visual: <TeamBadge team={{ name: t.name, color: t.color, logo_url: t.logoUrl }} />,
-            title: t.name,
-            subtitle: "Switch workspace",
-            run: () => {
-              close();
-              startTransition(async () => {
-                await switchTeam(t.id);
-                router.push("/dashboard");
-              });
-            },
-          })
-        );
-      return list;
-    }
-
-    const q = term.toLowerCase();
-    quickActions
-      .filter((a) => a.label.toLowerCase().includes(q) || a.keywords.includes(q))
-      .slice(0, 3)
-      .forEach((a) =>
-        list.push({
-          key: `action-${a.key}`,
-          section: "Actions",
-          label: a.label,
-          visual: actionVisual(a.icon),
-          title: <Highlight text={a.label} query={term} />,
-          href: a.href,
-          run: () => go(a.href),
-        })
-      );
-
-    data.projects.forEach((p) => {
-      const href = `/videos/${p.id}`;
-      const thumb = p.thumbnail_path ? THUMB_BASE + p.thumbnail_path : null;
-      const c = stageColor(p.stage);
-      list.push({
-        key: `project-${p.id}`,
-        section: "Long videos",
-        label: `Long video #${p.entry_number} ${p.title}, ${STAGE_LABELS[p.stage]}, in ${p.team.name}`,
-        visual: <ProjectThumb url={thumb} color={c} />,
-        title: (
-          <>
-            <span className="font-mono text-[11.5px] font-semibold text-ink-faint mr-1.5">#{p.entry_number}</span>
-            <Highlight text={p.title} query={term} />
-          </>
-        ),
-        subtitle: (
-          <span className="flex items-center gap-1.5 min-w-0">
-            <TeamBadge team={p.team} size="w-4 h-4 text-[7px] rounded-[4px]" />
-            <span className="truncate flex-shrink-0 max-w-[45%]">{p.team.name}</span>
-            {p.matched_title && (
-              <span className="hidden sm:inline truncate text-ink-faint">
-                · also titled &ldquo;<Highlight text={p.matched_title} query={term} />&rdquo;
-              </span>
-            )}
-          </span>
-        ),
-        trailing: (
-          <span
-            className="text-[10.5px] font-bold px-2 py-0.5 rounded-md flex-shrink-0"
-            style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
-          >
-            {STAGE_LABELS[p.stage]}
-          </span>
-        ),
-        href,
-        run: () =>
-          go(href, {
-            kind: "project",
-            id: p.id,
-            label: `#${p.entry_number} ${p.title}`,
-            sublabel: `Long video · ${p.team.name}`,
-            href,
-            imageUrl: thumb,
-            color: c,
-          }),
+  const switchTo = useCallback(
+    (team: { id: string; name: string; color: string; logo_url: string | null }) => {
+      pushRecent(userId, { kind: "team", id: team.id, label: team.name, href: "/dashboard", imageUrl: team.logo_url, color: team.color });
+      rememberTerm();
+      close();
+      startTransition(async () => {
+        if (team.id !== currentTeamId) await switchTeam(team.id);
+        router.push("/dashboard");
       });
-    });
+    },
+    [close, currentTeamId, rememberTerm, router, userId]
+  );
 
-    (data.shorts ?? []).forEach((sh) => {
-      const href = `/shorts/${sh.id}`;
-      const c = SHORT_STAGE_COLOR[sh.stage];
-      const date = formatShortDate(sh.planned_date);
-      list.push({
-        key: `short-${sh.id}`,
-        section: "Short videos",
-        label: `Short #${sh.entry_number} ${sh.title}, ${SHORT_STAGE_LABELS[sh.stage]}, in ${sh.team.name}`,
-        visual: <ShortThumb color={c} />,
-        title: (
-          <>
-            <span className="font-mono text-[11.5px] font-semibold text-ink-faint mr-1.5">#{sh.entry_number}</span>
-            <Highlight text={sh.title} query={term} />
-          </>
-        ),
-        subtitle: (
-          <span className="flex items-center gap-1.5 min-w-0">
-            <TeamBadge team={sh.team} size="w-4 h-4 text-[7px] rounded-[4px]" />
-            <span className="truncate flex-shrink-0 max-w-[45%]">{sh.team.name}</span>
-            {date && <span className="truncate text-ink-faint">· {date}</span>}
-          </span>
-        ),
-        trailing: (
-          <span className="flex items-center gap-2 flex-shrink-0">
-            {sh.posted_count > 0 && sh.stage !== "posted" && (
-              <span className="hidden sm:inline text-[10.5px] font-bold text-amber tabular-nums">
-                {sh.posted_count}/{sh.platform_count} posted
-              </span>
-            )}
-            <span
-              className="text-[10.5px] font-bold px-2 py-0.5 rounded-md"
-              style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
-            >
-              {SHORT_STAGE_LABELS[sh.stage]}
-            </span>
-          </span>
-        ),
-        href,
-        run: () =>
-          go(href, {
-            kind: "short",
-            id: sh.id,
-            label: `#${sh.entry_number} ${sh.title}`,
-            sublabel: `Short · ${sh.team.name}`,
-            href,
-            color: c,
-          }),
+  const goInTeam = useCallback(
+    (team: SearchTeamRef, href: string, recent?: RecentItem) => {
+      if (!team.id || team.id === currentTeamId) return go(href, recent);
+      if (recent) pushRecent(userId, recent);
+      rememberTerm();
+      close();
+      startTransition(async () => {
+        await switchTeam(team.id);
+        router.push(href);
       });
-    });
+    },
+    [close, currentTeamId, go, rememberTerm, router, userId]
+  );
 
-    videos.items.slice(0, 5).forEach((v) => {
-      const href = `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=search`;
-      const platformName = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" }[v.platform];
-      const kind = KIND_LABEL[v.kind] ?? "Video";
-      list.push({
-        key: `video-${v.platform}-${v.id}`,
-        section: "Video analytics",
-        label: `${v.title || "Untitled"}, ${kind} on ${platformName}, ${v.views ?? 0} views`,
-        visual: (
-          <span className="relative w-12 h-8 rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
-            {v.thumbnail && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={v.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-            )}
-            <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
-          </span>
-        ),
-        title: (
-          <>
-            {v.ours?.number ? <span className="font-mono text-[11.5px] font-semibold text-ink-faint mr-1.5">#{v.ours.number}</span> : null}
-            <Highlight text={v.title || "Untitled"} query={term} />
-          </>
-        ),
-        subtitle: (
-          <span className="truncate">
-            {kind} on {platformName}
-            {v.publishedAt ? ` · ${new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}
-          </span>
-        ),
-        trailing: (
-          <span className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[12px] font-bold tabular-nums text-ink">{compactViews(v.views)}</span>
-            <span className="hidden sm:inline text-[11px] text-ink-faint">views</span>
-            {v.score !== null && v.score !== undefined && (
-              <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-md tabular-nums ${v.score >= 1.4 ? "text-green bg-green/10" : v.score <= 0.7 ? "text-coral bg-coral/10" : "text-ink-soft bg-surface-2"}`}>
-                {v.score >= 10 ? Math.round(v.score) : v.score.toFixed(1)}×
-              </span>
-            )}
-          </span>
-        ),
-        href,
-        run: () => go(href),
-      });
-    });
-
-    data.people.forEach((person) => {
-      const name = displayName(person.username, person.full_name, person.email_name);
-      const href = profileHref({ username: person.username, userId: person.id }) ?? "/dashboard";
-      const color = colorForId(person.id);
-      const invitable = canInviteAnyone && !person.is_self;
-      list.push({
-        key: `person-${person.id}`,
-        section: "People",
-        label: name,
-        person,
-        visual: <PersonAvatar name={name} avatarUrl={person.avatar_url} color={color} />,
-        title: (
-          <span className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate">
-              <Highlight text={name} query={term} />
-            </span>
-            {person.is_self && <span className="text-[10.5px] font-semibold text-ink-faint">(you)</span>}
-            {person.is_teammate && !person.is_self && (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-teal bg-teal/10 px-1.5 py-0.5 rounded">
-                Teammate
-              </span>
-            )}
-          </span>
-        ),
-        subtitle:
-          person.username && person.full_name
-            ? (
-                <span className="truncate">
-                  @<Highlight text={person.username} query={term} /> · {person.full_name}
-                </span>
-              )
-            : person.username
-              ? <span>@{person.username}</span>
-              : undefined,
-        trailing: invitable ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setInvitee(person);
-            }}
-            className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-line/15 px-2.5 py-1 text-[11.5px] font-semibold text-ink-soft hover:border-amber hover:text-amber transition-colors"
-          >
-            Invite
-            <ArrowRightIcon className="w-3 h-3" />
-          </button>
-        ) : undefined,
-        href,
-        run: () =>
-          go(href, {
-            kind: "person",
-            id: person.id,
-            label: name,
-            sublabel: person.username ? `@${person.username}` : undefined,
-            href,
-            imageUrl: person.avatar_url,
-            color,
-          }),
-      });
-    });
-
-    data.teams.forEach((t) => {
-      const isCurrent = t.id === currentTeamId;
-      list.push({
-        key: `team-${t.id}`,
-        section: "Teams",
-        label: t.name,
-        visual: <TeamBadge team={t} />,
-        title: <Highlight text={t.name} query={term} />,
-        subtitle: `${t.member_count} member${t.member_count === 1 ? "" : "s"}${t.is_master ? " · you're a Master" : ""}`,
-        trailing: (
-          <span className="text-[11px] font-semibold text-ink-faint flex-shrink-0">
-            {isCurrent ? "Current" : "Switch"}
-          </span>
-        ),
-        run: () => {
-          pushRecent(userId, { kind: "team", id: t.id, label: t.name, href: "/dashboard", imageUrl: t.logo_url, color: t.color });
-          close();
+  const runEntry = useCallback(
+    (e: Entry) => {
+      if (e.href) {
+        // Pages, tabs and settings come back under Recent; actions are always one search away.
+        const recent: RecentItem | undefined =
+          e.kind === "action" ? undefined : { kind: "page", id: e.id, label: e.title, sublabel: e.trail.join(" › ") || undefined, href: e.href, icon: e.icon };
+        return go(e.href, recent);
+      }
+      rememberTerm();
+      close();
+      switch (e.run) {
+        case "theme": {
+          const next = !isDark();
+          setDark(next);
+          sounds.tick();
+          toast.success(next ? "Dark mode on" : "Dark mode off");
+          return;
+        }
+        case "sounds": {
+          const next = !soundsEnabled();
+          setSoundsEnabled(next);
           startTransition(async () => {
-            if (!isCurrent) await switchTeam(t.id);
-            router.push("/dashboard");
+            const res = await setSounds(next);
+            if (res?.error) {
+              setSoundsEnabled(!next);
+              toast.error(res.error);
+            } else toast.success(next ? "Sounds on" : "Sounds off");
           });
-        },
-      });
-    });
+          return;
+        }
+        case "whatsNew":
+          openWhatsNew();
+          return;
+        case "tour":
+          startTutorial();
+          router.push("/dashboard");
+          return;
+        case "copyLink":
+          navigator.clipboard?.writeText(window.location.href).then(
+            () => toast.success("Link copied"),
+            () => toast.error("Couldn't copy the link")
+          );
+          return;
+        case "sync":
+          if (!currentTeamId) return;
+          startTransition(async () => {
+            try {
+              const r = await syncAnalyticsNow(currentTeamId);
+              if (r.error !== undefined) toast.error(r.error);
+              else toast.success(r.summary);
+            } catch {
+              toast.error("Couldn't start the sync. Check your connection and try again.");
+            }
+          });
+          return;
+        case "logout":
+          void confirm({
+            title: "Log out?",
+            description: "You'll need your email and password to sign back in. Notifications on this device stop until you do.",
+            confirmLabel: "Log out",
+            cancelLabel: "Stay signed in",
+          }).then((ok) => {
+            if (ok) startTransition(() => signOut());
+          });
+          return;
+      }
+    },
+    [close, confirm, currentTeamId, go, rememberTerm, router, toast]
+  );
 
+  const canInviteAnyone = data.master_teams.length > 0 || search.data.master_teams.length > 0;
+  const helpers: BuildHelpers = useMemo(
+    () => ({ term: text, currentTeamId, canInviteAnyone, go, goInTeam, switchTo, runEntry, invite: setInvitee }),
+    [text, currentTeamId, canInviteAnyone, go, goInTeam, switchTo, runEntry]
+  );
+
+  // On a video's pages: that video's script, review and studio are one step away.
+  const here = useMemo(() => {
+    const m = /^\/(videos|shorts)\/([0-9a-f-]{36})(?:\/|$)/i.exec(pathname ?? "");
+    return m ? { kind: m[1] === "videos" ? ("long" as const) : ("short" as const), id: m[2] } : null;
+  }, [pathname]);
+  // Everything in the app you could open or do (who you are decides).
+  const catalog = useMemo(
+    () =>
+      buildCatalog({
+        roles,
+        developer,
+        hasTeam: !!currentTeamId,
+        profileHref: profileHref({ username, userId }),
+        dark,
+        sounds: soundsOn,
+        here,
+      }).filter((e) => !e.id.startsWith("here.") || e.href?.split("?")[0] !== pathname || e.href?.includes("?")),
+    [roles, developer, currentTeamId, username, userId, dark, soundsOn, here, pathname]
+  );
+  const byId = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog]);
+
+  // ---- What's shown -------------------------------------------------------------
+  const number = prefix.number;
+  const ranked = useMemo(
+    () => (typed && !number ? rank(text, catalog, prepared, { boost: (e) => e.boost ?? 0 }).slice(0, 20) : []),
+    [typed, number, text, catalog]
+  );
+  const date = useMemo(() => {
+    if (!typed || number || !today) return null;
+    const hit = parseDate(text, today);
+    if (!hit) return null;
+    // Below a name that starts the same ("March update"); "may" alone, below most things.
+    return { hit, strength: text.replace(/[^a-z]/gi, "").length >= 4 ? 0.75 : 0.45 };
+  }, [typed, number, text, today]);
+
+  const results = useMemo(
+    () =>
+      typed
+        ? resultItems(helpers, data, activeFilter === "all" || activeFilter === "videos" ? videos.items : [], ranked, date, activeFilter === "videos" ? 20 : 8)
+        : [],
+    [typed, helpers, data, videos.items, ranked, date, activeFilter]
+  );
+
+  const emptyItems = useMemo(() => {
+    if (typed) return [] as Item[];
+    if (activeFilter === "app") return catalog.map((e) => entryItem(helpers, e, 0, `area:${areaOf(e)}`));
+    // A filter with nothing typed: what you opened lately of that kind.
+    if (activeFilter !== "all") {
+      const kinds = RECENT_KINDS[activeFilter] ?? [];
+      return recents.filter((r) => kinds.includes(r.kind)).map((r) => recentItem(helpers, r));
+    }
+    // Where you are first: this video's other pages.
+    const list: Item[] = catalog.filter((e) => e.id.startsWith("here.")).map((e) => ({ ...entryItem(helpers, e, 0, "here"), subtitle: undefined }));
+    recents.forEach((r) => {
+      // A remembered page runs like the page itself (a setting's glow, a team switch).
+      const e = r.kind === "page" ? byId.get(r.id) : undefined;
+      list.push(recentItem(helpers, r, e ? () => runEntry(e) : undefined));
+    });
+    SUGGESTED.forEach((id) => {
+      const e = byId.get(id);
+      if (e) list.push(entryItem(helpers, e, 0, "suggested"));
+    });
+    GOTO.forEach((id) => {
+      const e = byId.get(id);
+      if (e) list.push(entryItem(helpers, e, 0, "goto"));
+    });
+    teams.filter((t) => t.id !== currentTeamId).forEach((t) => list.push(switchItem(helpers, t)));
     return list;
-  }, [hasQuery, recents, quickActions, teams, currentTeamId, term, data, videos.items, canInviteAnyone, go, close, router, userId]);
+  }, [typed, activeFilter, catalog, helpers, recents, byId, runEntry, teams, currentTeamId]);
+
+  const source = typed ? results : emptyItems;
+  const allowed = FILTERS.find((f) => f.id === activeFilter)!.sections;
+  const sectionOrder: SectionId[] = typed
+    ? orderSections(results, allowed)
+    : activeFilter === "app"
+      ? [...AREAS, ...new Set(catalog.map(areaOf))].filter((a, i, all) => all.indexOf(a) === i).map((a) => `area:${a}` as SectionId)
+      : ["here", "recent", "suggested", "goto", "switch"];
+
+  /** The database sent as many as it was asked for: there may be more. */
+  const full = useCallback(
+    (s: SectionId) => {
+      if (s === "analytics") return videos.items.length > (LIMIT_ALL.analytics ?? 4);
+      const key = RPC_KEY[s];
+      return !!key && Array.isArray(data[key]) && (data[key] as unknown[]).length >= limit;
+    },
+    [data, limit, videos.items.length]
+  );
+
+  const sections: { id: SectionId; items: { item: Item; index: number }[]; more: boolean }[] = [];
+  const items: Item[] = [];
+  for (const s of sectionOrder) {
+    const all = source.filter((i) => i.section === s);
+    // Best first inside each list too (the order among equals stays).
+    if (typed) all.sort((a, b) => b.strength - a.strength);
+    if (!all.length) continue;
+    const cap = typed && activeFilter === "all" ? (LIMIT_ALL[s] ?? all.length) : all.length;
+    const list = all.slice(0, cap);
+    sections.push({
+      id: s,
+      items: list.map((item) => ({ item, index: items.push(item) - 1 })),
+      more: typed && activeFilter === "all" && (all.length > cap || full(s)),
+    });
+  }
+
+  // Each filter's count, for the chips.
+  const counts = useMemo(() => {
+    const out = {} as Record<FilterId, { n: number; plus: boolean }>;
+    for (const f of FILTERS) {
+      const inIt = f.id === "all" ? results : results.filter((i) => f.sections.includes(i.section));
+      out[f.id] = { n: inIt.length, plus: f.id !== "all" && f.sections.some((s) => full(s)) };
+    }
+    return out;
+  }, [results, full]);
 
   // New results → start from the top.
-  useEffect(() => setHighlighted(0), [term, open]);
+  useEffect(() => setHighlighted(0), [text, activeFilter, open]);
+  const safeHighlighted = Math.min(highlighted, Math.max(0, items.length - 1));
 
   // Keep the highlighted row visible; warm up its page so Enter is instant.
+  const highlightedHref = items[safeHighlighted]?.href;
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${highlighted}"]`);
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${safeHighlighted}"]`);
     el?.scrollIntoView({ block: "nearest" });
-    const href = items[highlighted]?.href;
-    if (href && open) router.prefetch(href);
-  }, [highlighted, items, open, router]);
+    if (highlightedHref && open) router.prefetch(highlightedHref);
+  }, [safeHighlighted, highlightedHref, open, router]);
+
+  function pickFilter(id: FilterId) {
+    setFilter(id);
+    // ">" or "@" typed in front: picking another filter takes it away.
+    if (prefix.filter && prefix.filter !== id) setQuery(prefix.text);
+    setHighlighted(0);
+    inputRef.current?.focus();
+  }
+  function cycleFilter(step: number) {
+    const i = FILTERS.findIndex((f) => f.id === activeFilter);
+    pickFilter(FILTERS[(i + step + FILTERS.length) % FILTERS.length].id);
+  }
+  function tryText(t: string) {
+    setQuery(t);
+    inputRef.current?.focus();
+  }
+  function openInTab(item: Item | undefined) {
+    if (!item?.href) return false;
+    window.open(item.href, "_blank", "noopener");
+    return true;
+  }
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Escape") {
@@ -536,34 +495,33 @@ export function GlobalSearch({
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (items.length === 0) return;
-      setHighlighted((i) =>
-        e.key === "ArrowDown" ? (i + 1) % items.length : (i - 1 + items.length) % items.length
-      );
+      setHighlighted((i) => {
+        const cur = Math.min(i, items.length - 1);
+        return e.key === "ArrowDown" ? (cur + 1) % items.length : (cur - 1 + items.length) % items.length;
+      });
     } else if (e.key === "Enter") {
       if (e.target instanceof HTMLButtonElement) return; // let the button act
       e.preventDefault();
-      items[highlighted]?.run();
-    } else if (e.key === "Tab" || (e.key === "ArrowRight" && (e.target as HTMLInputElement).selectionStart === query.length)) {
-      const person = items[highlighted]?.person;
+      const item = items[safeHighlighted];
+      if ((e.metaKey || e.ctrlKey) && openInTab(item)) return;
+      item?.run();
+    } else if (e.key === "Tab") {
+      // Tab and Shift+Tab: the next or previous filter (focus stays in the box).
+      e.preventDefault();
+      cycleFilter(e.shiftKey ? -1 : 1);
+    } else if (e.key === "ArrowRight" && (e.target as HTMLInputElement).selectionStart === query.length) {
+      const person = items[safeHighlighted]?.person;
       if (person && canInviteAnyone && !person.is_self) {
         e.preventDefault();
         setInvitee(person);
-      } else if (e.key === "Tab") {
-        e.preventDefault(); // keep focus inside the palette
       }
     }
   }
 
-  // Group consecutive items under their section headers.
-  const sections: { name: string; items: { item: Item; index: number }[] }[] = [];
-  items.forEach((item, index) => {
-    const last = sections[sections.length - 1];
-    if (last && last.name === item.section) last.items.push({ item, index });
-    else sections.push({ name: item.section, items: [{ item, index }] });
-  });
-
-  const nothingFound =
-    hasQuery && !loading && !videos.loading && !error && items.length === 0;
+  const busy = wantsRpc && hasQuery && (loading || videos.loading);
+  const nothingFound = typed && !busy && !(wantsRpc && error && hasQuery) && items.length === 0;
+  const highlightedPerson = items[safeHighlighted]?.person;
+  const filterMeta = FILTERS.find((f) => f.id === activeFilter)!;
 
   return (
     <>
@@ -576,19 +534,15 @@ export function GlobalSearch({
         aria-label="Search"
       >
         <SearchIcon className="w-4 h-4 flex-shrink-0" />
-        <span className="flex-1 text-left truncate">Search videos, shorts, people…</span>
+        <span className="flex-1 text-left truncate">Search videos, people, settings…</span>
         <span className="flex items-center gap-1 flex-shrink-0" aria-label={isMac ? "Command K or Control K" : "Control K or Command K"}>
           {(isMac ? ["⌘", "Ctrl"] : ["Ctrl", "⌘"]).map((mod, i) => (
             <span key={mod} className="flex items-center gap-1">
               {i > 0 && <span className="text-[10px] text-ink-faint/60">/</span>}
-              <kbd className="font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint leading-none min-w-[20px] text-center">
-                {mod}
-              </kbd>
+              <kbd className="font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint leading-none min-w-[20px] text-center">{mod}</kbd>
             </span>
           ))}
-          <kbd className="font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint leading-none">
-            K
-          </kbd>
+          <kbd className="font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint leading-none">K</kbd>
         </span>
       </button>
 
@@ -605,24 +559,17 @@ export function GlobalSearch({
 
       {open &&
         createPortal(
-          <div
-            className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[12vh] sm:px-4"
-            onKeyDown={onKeyDown}
-          >
-            <div
-              className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-[fadein_.12s_ease]"
-              onClick={close}
-              aria-hidden
-            />
+          <div className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4" onKeyDown={onKeyDown}>
+            <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-[fadein_.12s_ease]" onClick={close} aria-hidden />
             <div
               role="dialog"
               aria-modal="true"
               aria-label="Search"
-              className="relative w-full h-full sm:h-auto sm:max-h-[min(640px,76vh)] sm:max-w-[640px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
+              className="relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
               style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
             >
               {/* Input row */}
-              <div className="flex items-center gap-2.5 px-4 h-14 border-b border-line/10 flex-shrink-0">
+              <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0">
                 <SearchIcon className="w-[18px] h-[18px] text-ink-faint flex-shrink-0" />
                 <input
                   ref={inputRef}
@@ -631,23 +578,18 @@ export function GlobalSearch({
                     setQuery(e.target.value);
                     if (invitee) setInvitee(null);
                   }}
-                  placeholder="Search videos, shorts, people, teams… (or #12)"
+                  placeholder={wide ? "Search everything: videos, scripts, people, settings…" : "Search everything…"}
                   className="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[15px] outline-none placeholder:text-ink-faint"
                   role="combobox"
                   aria-expanded="true"
                   aria-controls="global-search-results"
-                  aria-activedescendant={items[highlighted] ? `gs-item-${highlighted}` : undefined}
+                  aria-activedescendant={items[safeHighlighted] ? `gs-item-${safeHighlighted}` : undefined}
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="search"
                 />
-                {loading && hasQuery && (
-                  <span
-                    aria-hidden
-                    className="w-4 h-4 rounded-full border-2 border-ink-faint/40 border-t-amber animate-spin flex-shrink-0"
-                  />
-                )}
+                {busy && <span aria-hidden className="w-4 h-4 rounded-full border-2 border-ink-faint/40 border-t-amber animate-spin flex-shrink-0" />}
                 {query && (
                   <button
                     type="button"
@@ -662,29 +604,55 @@ export function GlobalSearch({
                     <CloseIcon className="w-3.5 h-3.5" />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={close}
-                  className="sm:hidden text-[14px] font-semibold text-amber pl-1"
-                >
+                <button type="button" onClick={close} className="sm:hidden text-[14px] font-semibold text-amber pl-1">
                   Cancel
                 </button>
-                <kbd className="hidden sm:inline font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint">
-                  Esc
-                </kbd>
+                <kbd className="hidden sm:inline font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint">Esc</kbd>
               </div>
 
+              {/* Filters: what kind of thing to look for */}
+              {!invitee && (
+                <div className="border-b border-line/10 flex-shrink-0">
+                <div
+                  className="flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto no-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent)] sm:[mask-image:none]"
+                  role="toolbar"
+                  aria-label="Look for"
+                >
+                  {FILTERS.map((f) => {
+                    const on = f.id === activeFilter;
+                    const c = counts[f.id];
+                    const dim = typed && !on && f.id !== "all" && c.n === 0;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        tabIndex={-1}
+                        aria-pressed={on}
+                        onClick={() => pickFilter(f.id)}
+                        className={`h-7 px-2.5 rounded-lg text-[12.5px] font-semibold whitespace-nowrap inline-flex items-center gap-1.5 transition-colors flex-shrink-0 ${
+                          on ? "bg-ink text-paper" : dim ? "text-ink-faint/70 hover:text-ink-soft" : "text-ink-soft hover:text-ink hover:bg-surface-2"
+                        }`}
+                      >
+                        {f.label}
+                        {typed && f.id !== "all" && c.n > 0 && (
+                          <span className={`text-[10.5px] tabular-nums font-bold ${on ? "text-paper/70" : "text-ink-faint"}`}>
+                            {c.n}
+                            {c.plus ? "+" : ""}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                </div>
+              )}
+
               {/* Body */}
-              <div
-                ref={listRef}
-                id="global-search-results"
-                role="listbox"
-                className="flex-1 overflow-y-auto overscroll-contain styled-scroll"
-              >
+              <div ref={listRef} id="global-search-results" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto overscroll-contain styled-scroll">
                 {invitee ? (
                   <InvitePanel
                     person={invitee}
-                    masterTeams={data.master_teams}
+                    masterTeams={search.data.master_teams}
                     registerKeyHandler={registerKeyHandler}
                     onBack={() => {
                       setInvitee(null);
@@ -696,74 +664,99 @@ export function GlobalSearch({
                       inputRef.current?.focus();
                     }}
                   />
-                ) : error && !items.length ? (
-                  <p className="px-5 py-12 text-center text-[13px] text-ink-faint">
-                    Search isn&rsquo;t available right now. Check your connection and try again.
-                  </p>
+                ) : wantsRpc && error && hasQuery && !items.length ? (
+                  <p className="px-5 py-12 text-center text-[13px] text-ink-faint">Search isn&rsquo;t available right now. Check your connection and try again.</p>
                 ) : nothingFound ? (
                   <div className="px-5 py-12 text-center">
-                    <p className="text-[14px] font-semibold mb-1">No matches for &ldquo;{query.trim()}&rdquo;</p>
-                    <p className="text-[12.5px] text-ink-faint">
-                      Try a video&rsquo;s title or #number, a person&rsquo;s name or @username, or a team name.
+                    <p className="text-[14px] font-semibold mb-1">
+                      {filterMeta.none} for &ldquo;{text}&rdquo;
                     </p>
+                    <p className="text-[12.5px] text-ink-faint">Try fewer words, or another spelling.</p>
+                    {activeFilter !== "all" && counts.all.n > 0 && (
+                      <button type="button" onClick={() => pickFilter("all")} className="mt-3 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
+                        Look everywhere ({counts.all.n})
+                      </button>
+                    )}
                   </div>
+                ) : !typed && activeFilter !== "all" && activeFilter !== "app" && !items.length ? (
+                  <p className="px-6 py-12 text-center text-[13px] text-ink-soft max-w-sm mx-auto">{filterMeta.empty}</p>
                 ) : (
-                  <div className="p-2 pb-4">
-                    {sections.map((section) => (
-                      <div key={section.name} className="mb-1">
-                        <div className="flex items-center justify-between px-2.5 pt-2.5 pb-1">
-                          <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
-                            {section.name}
-                          </span>
-                          {section.name === "Recent" && (
+                  <div className="p-2 pb-3">
+                    {/* Nothing remembered yet: what you can do here, first. */}
+                    {!typed && activeFilter === "all" && !recents.length && !terms.length && <Tips onTry={tryText} />}
+                    {/* What you searched for lately. */}
+                    {!typed && activeFilter === "all" && terms.length > 0 && (
+                      <div className="px-2.5 pt-2 pb-1.5">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Recent searches</span>
+                          <ClearButton
+                            onClear={() => {
+                              clearRecents(userId);
+                              setRecents([]);
+                              setTerms([]);
+                              inputRef.current?.focus();
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {terms.map((t) => (
                             <button
+                              key={t}
                               type="button"
+                              tabIndex={-1}
                               onClick={() => {
-                                clearRecents(userId);
-                                setRecents([]);
+                                setQuery(t);
                                 inputRef.current?.focus();
                               }}
-                              className="text-[11px] font-semibold text-ink-faint hover:text-ink"
+                              className="inline-flex items-center gap-1.5 h-7 rounded-lg border border-line/15 px-2.5 text-[12.5px] text-ink-soft hover:text-ink hover:border-line/30 max-w-[14rem]"
                             >
-                              Clear
+                              <SearchIcon className="w-3 h-3 flex-shrink-0 text-ink-faint" />
+                              <span className="truncate">{t}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {sections.map((section) => {
+                      const name = section.id === "here" ? (here?.kind === "short" ? "This short" : "This video") : (SECTION_TITLE[section.id] ?? section.id.replace(/^area:/, ""));
+                      return (
+                      <div key={section.id} className="mb-1" role="group" aria-label={name}>
+                        <div className="flex items-center justify-between px-2.5 pt-2.5 pb-1">
+                          <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{name}</span>
+                          {section.id === "recent" && terms.length === 0 && (
+                            <ClearButton
+                              onClear={() => {
+                                clearRecents(userId);
+                                setRecents([]);
+                                setTerms([]);
+                                inputRef.current?.focus();
+                              }}
+                            />
+                          )}
+                          {section.more && (
+                            <button type="button" tabIndex={-1} onClick={() => pickFilter(filterOf(section.id))} className="text-[11px] font-semibold text-ink-faint hover:text-ink">
+                              See all
                             </button>
                           )}
                         </div>
-                        {section.items.map(({ item, index }) => {
-                          const active = index === highlighted;
-                          return (
-                            <div
-                              key={item.key}
-                              id={`gs-item-${index}`}
-                              data-index={index}
-                              role="option"
-                              aria-selected={active}
-                              aria-label={item.label}
-                              onMouseMove={() => highlighted !== index && setHighlighted(index)}
-                              onClick={() => item.run()}
-                              className={`flex items-center gap-3 rounded-xl px-2.5 py-2.5 sm:py-2 cursor-pointer transition-colors ${
-                                active ? "bg-surface-2" : ""
-                              }`}
-                            >
-                              {item.visual}
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[13.5px] font-semibold truncate">{item.title}</div>
-                                {item.subtitle && (
-                                  <div className="text-[11.5px] text-ink-soft truncate mt-0.5">{item.subtitle}</div>
-                                )}
-                              </div>
-                              {item.trailing}
-                              {active && !item.trailing && (
-                                <ArrowRightIcon className="w-3.5 h-3.5 text-ink-faint flex-shrink-0 hidden sm:block" />
-                              )}
-                            </div>
-                          );
-                        })}
+                        {section.items.map(({ item, index }) => (
+                          <Row
+                            key={item.key}
+                            item={item}
+                            index={index}
+                            active={index === safeHighlighted}
+                            onHover={() => highlighted !== index && setHighlighted(index)}
+                            onTab={() => openInTab(item)}
+                          />
+                        ))}
                       </div>
-                    ))}
-                    {!hasQuery && term.length === 1 && (
-                      <p className="px-3 py-2 text-[11.5px] text-ink-faint">Keep typing…</p>
-                    )}
+                      );
+                    })}
+
+                    {!typed && activeFilter === "all" && (recents.length > 0 || terms.length > 0) && <Tips onTry={tryText} />}
+                    {!typed && activeFilter === "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">Everything in the app. Type to narrow it down.</p>}
+                    {!typed && activeFilter !== "all" && activeFilter !== "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">{filterMeta.empty}</p>}
                   </div>
                 )}
               </div>
@@ -772,17 +765,40 @@ export function GlobalSearch({
               <div className="hidden sm:flex items-center gap-4 px-4 h-10 border-t border-line/10 text-[11px] text-ink-faint flex-shrink-0">
                 {invitee ? (
                   <>
-                    <span><Kbd>↑</Kbd><Kbd>↓</Kbd> team</span>
-                    <span><Kbd>1–6</Kbd> roles</span>
-                    <span><Kbd>↵</Kbd> send</span>
-                    <span><Kbd>Esc</Kbd> back</span>
+                    <span>
+                      <Kbd>↑</Kbd>
+                      <Kbd>↓</Kbd> team
+                    </span>
+                    <span>
+                      <Kbd>1–6</Kbd> roles
+                    </span>
+                    <span>
+                      <Kbd>↵</Kbd> send
+                    </span>
+                    <span>
+                      <Kbd>Esc</Kbd> back
+                    </span>
                   </>
                 ) : (
                   <>
-                    <span><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-                    <span><Kbd>↵</Kbd> open</span>
-                    {canInviteAnyone && <span><Kbd>Tab</Kbd> invite person</span>}
-                    <span className="ml-auto"><Kbd>Esc</Kbd> close</span>
+                    <span>
+                      <Kbd>↑</Kbd>
+                      <Kbd>↓</Kbd> move
+                    </span>
+                    <span>
+                      <Kbd>↵</Kbd> open
+                    </span>
+                    <span>
+                      <Kbd>Tab</Kbd> filters
+                    </span>
+                    {highlightedPerson && canInviteAnyone && !highlightedPerson.is_self && (
+                      <span>
+                        <Kbd>→</Kbd> invite
+                      </span>
+                    )}
+                    <span className="ml-auto">
+                      <Kbd>Esc</Kbd> close
+                    </span>
                   </>
                 )}
               </div>
@@ -794,10 +810,66 @@ export function GlobalSearch({
   );
 }
 
-function Kbd({ children }: { children: React.ReactNode }) {
+/** One result. Ctrl/⌘ or middle click opens a link in a new tab. */
+function Row({ item, index, active, onHover, onTab }: { item: Item; index: number; active: boolean; onHover: () => void; onTab: () => boolean }) {
   return (
-    <kbd className="font-mono text-[10px] font-semibold rounded border border-line/15 px-1 py-[1px] mr-1 text-ink-soft">
-      {children}
-    </kbd>
+    <div
+      id={`gs-item-${index}`}
+      data-index={index}
+      role="option"
+      aria-selected={active}
+      aria-label={item.label}
+      onMouseMove={onHover}
+      onClick={(e) => {
+        if ((e.metaKey || e.ctrlKey) && onTab()) return;
+        item.run();
+      }}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          onTab();
+        }
+      }}
+      className={`flex items-center gap-3 rounded-xl px-2.5 py-2.5 sm:py-2 cursor-pointer transition-colors ${active ? "bg-surface-2" : ""}`}
+    >
+      {item.visual}
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-semibold truncate">{item.title}</div>
+        {item.subtitle && <div className="text-[11.5px] text-ink-soft truncate mt-0.5">{item.subtitle}</div>}
+      </div>
+      {item.trailing}
+      {active && !item.trailing && <ArrowRightIcon className="w-3.5 h-3.5 text-ink-faint flex-shrink-0 hidden sm:block" />}
+    </div>
   );
+}
+
+/** What you can type, with a few to try. */
+function Tips({ onTry }: { onTry: (t: string) => void }) {
+  return (
+    <div className="px-2.5 pt-3 pb-1.5 text-[12px] text-ink-faint space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-0.5">Try</span>
+        {TRY.map((t) => (
+          <button key={t} type="button" tabIndex={-1} onClick={() => onTry(t)} className="h-6 rounded-md bg-surface-2 px-2 text-[12px] font-semibold text-ink-soft hover:text-ink">
+            {t}
+          </button>
+        ))}
+      </div>
+      <p>
+        Type <Kbd>&gt;</Kbd> for actions and pages, <Kbd>@</Kbd> for people. Typos are fine.
+      </p>
+    </div>
+  );
+}
+
+function ClearButton({ onClear }: { onClear: () => void }) {
+  return (
+    <button type="button" tabIndex={-1} onClick={onClear} className="text-[11px] font-semibold text-ink-faint hover:text-ink">
+      Clear
+    </button>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="font-mono text-[10px] font-semibold rounded border border-line/15 px-1 py-[1px] mr-1 text-ink-soft">{children}</kbd>;
 }

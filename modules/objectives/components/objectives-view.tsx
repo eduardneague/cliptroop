@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Mascot } from "@/components/ui/mascot";
 import { Segmented } from "@/components/ui/segmented";
@@ -52,7 +52,10 @@ export function ObjectivesView({
   onDashboard,
   streakOnDashboard = false,
   tabs,
+  startNew = false,
 }: {
+  /** ?new=1 (the search bar's "New objective"): the editor opens at once. */
+  startNew?: boolean;
   initial: LiveBoard;
   teamId: string;
   canEdit: boolean;
@@ -83,6 +86,17 @@ export function ObjectivesView({
     b.objectives.map((o) => o.color),
     () => void reload()
   );
+  const openNew = useRef(add.open);
+  openNew.current = add.open;
+  useEffect(() => {
+    if (!startNew || !canEdit) return;
+    openNew.current();
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("new");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {}
+  }, [startNew, canEdit]);
 
   const active = useMemo(() => b.objectives.filter((o) => !o.paused), [b.objectives]);
   const paused = useMemo(() => b.objectives.filter((o) => o.paused), [b.objectives]);
@@ -306,6 +320,7 @@ export function ObjectivesView({
 
         {streak && (
           <StreakCard
+            id="streak"
             s={streak}
             wins30={wins30}
             action={

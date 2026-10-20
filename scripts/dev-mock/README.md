@@ -38,7 +38,11 @@ screenshots. It never touches a real Supabase project.
 #    (projections.cjs: running, reached, ended, money), MOCK_SWITCHED=1 the Facebook Page replaced 5 days ago
 #    (Analytics says whose numbers it shows), MOCK_LIVE=0 no live counts yet (Realtime waits for its first reads),
 #    MOCK_LIVE_FRESH=1 realtime started 3 hours ago, MOCK_NO_REACH=1 no impressions / CTR yet (the YouTube
-#    Reporting API isn't on: Analytics says so)
+#    Reporting API isn't on: Analytics says so),
+#    Outliers (1.27.0, outliers.cjs): a sample of ~2,200 tech videos and the Explore niches, made by
+#    `npx tsx scripts/dev-mock/make-outliers.ts` (writes scripts/dev-mock/.outliers.json, git-ignored; restart
+#    the server after), MOCK_OUTLIERS_EMPTY=1 the team has no niche yet (Explore and the setup card),
+#    MOCK_OUTLIERS_NEW=1 its niche was just added (collecting), MOCK_OUTLIERS_ACCESS=0 no way to read YouTube
 #    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
 #    every 10 minutes for the busiest videos; 0084's 10-minute slots and top content work out the
 #    same way as the database), YouTube's impressions and CTR per day (Shorts and long videos apart),
@@ -62,6 +66,11 @@ node scripts/dev-mock/shot.cjs /shorts shorts 1440 900 "" full
 
 # 4. open every page signed in: status code, time, browser errors, error screens
 node scripts/dev-mock/sweep.cjs
+
+# 5. Outliers' tabs and panels on a phone, a laptop and a big screen (thumbnails are drawn from the sample's
+#    colours: YouTube's images can't load here); SHOT_FONTS=<folder with @fontsource-variable/{fraunces,inter}>
+#    when Google Fonts can't be reached
+node scripts/dev-mock/outliers-shot.cjs /tmp/shots "" --size=phone [--dark] [--view]
 ```
 
 - `fixtures.cjs`: the sample team, people, shorts, long videos and

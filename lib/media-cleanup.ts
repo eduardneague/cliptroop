@@ -1,6 +1,15 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEFAULT_MEDIA_KEEP_DAYS, dueForCleanup, isMediaKeepDays } from "@/lib/media-keep";
+import {
+  DEFAULT_LONG_MEDIA_KEEP_DAYS,
+  DEFAULT_MEDIA_KEEP_DAYS,
+  dueForCleanup,
+  isLongMediaKeepDays,
+  isMediaKeepDays,
+  isStudioKeepDays,
+  longPostedTimes,
+  studioDue,
+} from "@/lib/media-keep";
 
 /**
  * The nightly clean-up (Supabase's timer, {"job": "cleanup"}, 0070):
@@ -76,4 +85,126 @@ export async function cleanupPostedMedia(): Promise<{ removed: number; failed: n
     removed += due.length;
   }
   return { removed, failed, checked: shorts.length };
+}
+
+/** Before migration 0089 the tables and columns below aren't there yet: nothing to do. */
+const missing = (e: { code?: string } | null) => !!e && (e.code === "42P01" || e.code === "42703" || e.code === "PGRST205" || e.code === "PGRST204");
+
+type PostedProject = { id: string; team_id: string; posted_at: string | null; long_video_posts: { posted_at: string }[] | null };
+
+/** Posted long videos among these ids, 150 per request (the address has a length limit). */
+async function postedLongVideos(admin: ReturnType<typeof createAdminClient>, ids: string[], onlyUnkept: boolean): Promise<PostedProject[]> {
+  const out: PostedProject[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    let q = admin.from("long_video_projects").select("id, team_id, posted_at, long_video_posts(posted_at)").eq("stage", "done").in("id", ids.slice(i, i + 150));
+    if (onlyUnkept) q = q.eq("keep_media", false);
+    const { data, error } = await q;
+    if (error) throw new Error(`Couldn't read the long videos: ${error.message}`);
+    out.push(...((data ?? []) as unknown as PostedProject[]));
+  }
+  return out;
+}
+
+const postedTimes = (p: PostedProject) => longPostedTimes(p.long_video_posts, p.posted_at);
+
+/**
+ * Long videos (1.25.0), the same nightly clean-up: once a long video is
+ * posted (Posted step), every version of its edit is deleted from storage
+ * after the team's choice (teams.long_media_keep_days: 3 days to a month,
+ * 1 week by default), counted from the last platform it went out on.
+ * Videos with keep_media are skipped; the video itself stays, its versions
+ * are marked deleted_at.
+ */
+export async function cleanupPostedLongMedia(): Promise<{ removed: number; failed: number; checked: number }> {
+  const admin = createAdminClient();
+  const now = Date.now();
+
+  const { data: live, error: liveError } = await admin.from("long_video_versions").select("project_id").is("deleted_at", null).limit(5000);
+  if (missing(liveError)) return { removed: 0, failed: 0, checked: 0 };
+  if (liveError) throw new Error(`Couldn't read the long video files: ${liveError.message}`);
+  const withFiles = Array.from(new Set((live ?? []).map((v) => v.project_id as string)));
+  if (withFiles.length === 0) return { removed: 0, failed: 0, checked: 0 };
+
+  const keepFor = new Map<string, number>();
+  const { data: teams, error: teamsError } = await admin.from("teams").select("id, long_media_keep_days");
+  if (teamsError) throw new Error(`Couldn't read the teams: ${teamsError.message}`);
+  for (const t of teams ?? []) keepFor.set(t.id as string, isLongMediaKeepDays(t.long_media_keep_days) ? t.long_media_keep_days : DEFAULT_LONG_MEDIA_KEEP_DAYS);
+
+  const projects = await postedLongVideos(admin, withFiles, true);
+  let removed = 0;
+  let failed = 0;
+  for (const p of projects) {
+    const keepDays = keepFor.get(p.team_id) ?? DEFAULT_LONG_MEDIA_KEEP_DAYS;
+    if (!dueForCleanup(postedTimes(p), keepDays, now)) continue;
+
+    const { data: versions } = await admin.from("long_video_versions").select("id, storage_path").eq("project_id", p.id).is("deleted_at", null);
+    const due = versions ?? [];
+    if (due.length === 0) continue;
+    const { error: rmError } = await admin.storage.from("long-review-videos").remove(due.map((v) => v.storage_path as string));
+    if (rmError) {
+      failed += due.length;
+      continue;
+    }
+    await admin
+      .from("long_video_versions")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", due.map((v) => v.id as string));
+    removed += due.length;
+  }
+  return { removed, failed, checked: projects.length };
+}
+
+/**
+ * Thumbnail Studio (1.25.0): once a long video is posted, the thumbnails
+ * that didn't win are deleted (their files and their rows) after the team's
+ * choice (teams.studio_keep_days: 1 week to 3 months, 1 month by default;
+ * empty = keep them), counted from the last platform it went out on. The
+ * winners always stay (search and the lists show them); with none picked,
+ * the first one stays.
+ */
+export async function cleanupStudioThumbs(): Promise<{ removed: number; failed: number; checked: number }> {
+  const admin = createAdminClient();
+  const now = Date.now();
+
+  const { data: teams, error: teamsError } = await admin.from("teams").select("id, studio_keep_days");
+  if (missing(teamsError)) return { removed: 0, failed: 0, checked: 0 };
+  if (teamsError) throw new Error(`Couldn't read the teams: ${teamsError.message}`);
+  // Only teams that chose a time (empty = keep them).
+  const keepFor = new Map<string, number>();
+  for (const t of teams ?? []) if (isStudioKeepDays(t.studio_keep_days)) keepFor.set(t.id as string, t.studio_keep_days);
+  if (keepFor.size === 0) return { removed: 0, failed: 0, checked: 0 };
+
+  const { data: losers, error: losersError } = await admin.from("package_entries").select("project_id").eq("is_winner", false).limit(5000);
+  if (losersError) throw new Error(`Couldn't read the thumbnails: ${losersError.message}`);
+  const withLosers = Array.from(new Set((losers ?? []).map((e) => e.project_id as string)));
+  if (withLosers.length === 0) return { removed: 0, failed: 0, checked: 0 };
+
+  const projects = await postedLongVideos(admin, withLosers, false);
+  let removed = 0;
+  let failed = 0;
+  for (const p of projects) {
+    const keepDays = keepFor.get(p.team_id);
+    if (!keepDays || !dueForCleanup(postedTimes(p), keepDays, now)) continue;
+
+    const { data: entries } = await admin.from("package_entries").select("id, thumbnail_storage_path, is_winner").eq("project_id", p.id).order("position");
+    // No winner picked: the first one stays, as the video's picture (the Package card's too).
+    const due = studioDue((entries ?? []) as { id: string; thumbnail_storage_path: string | null; is_winner: boolean }[]);
+    if (due.length === 0) continue;
+    const paths = due.map((e) => e.thumbnail_storage_path as string | null).filter((x): x is string => !!x);
+    if (paths.length) {
+      const { error: rmError } = await admin.storage.from("package-thumbs").remove(paths);
+      if (rmError) {
+        failed += due.length;
+        continue;
+      }
+    }
+    const { error: delError } = await admin
+      .from("package_entries")
+      .delete()
+      .in("id", due.map((e) => e.id as string))
+      .eq("is_winner", false);
+    if (delError) failed += due.length;
+    else removed += due.length;
+  }
+  return { removed, failed, checked: projects.length };
 }

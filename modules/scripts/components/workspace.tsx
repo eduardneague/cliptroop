@@ -161,6 +161,7 @@ function Workspace({
     <>
     <ScriptEditor
       key={doc.id}
+      find={params.get("find")}
       switching={switching}
       scriptId={doc.id}
       teamId={doc.teamId}

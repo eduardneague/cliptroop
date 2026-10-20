@@ -39,16 +39,24 @@ const person = (id: string | null, p: unknown): Person | null => {
     : null;
 };
 
-export async function listVersions(shortId: string): Promise<VideoVersion[]> {
+/** A short's or (1.25.0) a long video's review: which tables hold it. */
+export type ReviewKind = "short" | "long";
+const T = {
+  short: { versions: "short_video_versions", notes: "short_video_comments", key: "short_id" },
+  long: { versions: "long_video_versions", notes: "long_video_comments", key: "project_id" },
+} as const;
+
+export async function listVersions(shortId: string, kind: ReviewKind = "short"): Promise<VideoVersion[]> {
   const supabase = await createClient();
+  const t = T[kind];
   const { data } = await supabase
-    .from("short_video_versions")
+    .from(t.versions)
     .select(
-      "id, version_number, file_name, size_bytes, mime_type, duration_sec, width, height, created_at, deleted_at, uploaded_by, uploader:profiles!short_video_versions_uploaded_by_fkey(username, full_name, email, avatar_url)"
+      `id, version_number, file_name, size_bytes, mime_type, duration_sec, width, height, created_at, deleted_at, uploaded_by, uploader:profiles!${t.versions}_uploaded_by_fkey(username, full_name, email, avatar_url)`
     )
-    .eq("short_id", shortId)
+    .eq(t.key, shortId)
     .order("version_number", { ascending: false });
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     id: r.id as string,
     number: r.version_number as number,
     fileName: r.file_name as string,
@@ -63,16 +71,17 @@ export async function listVersions(shortId: string): Promise<VideoVersion[]> {
   }));
 }
 
-export async function listNotes(shortId: string): Promise<ReviewNote[]> {
+export async function listNotes(shortId: string, kind: ReviewKind = "short"): Promise<ReviewNote[]> {
   const supabase = await createClient();
+  const t = T[kind];
   const { data } = await supabase
-    .from("short_video_comments")
+    .from(t.notes)
     .select(
-      "id, version_id, parent_id, body, time_sec, created_at, edited_at, resolved_at, resolved_by, author_id, author:profiles!short_video_comments_author_id_fkey(username, full_name, email, avatar_url)"
+      `id, version_id, parent_id, body, time_sec, created_at, edited_at, resolved_at, resolved_by, author_id, author:profiles!${t.notes}_author_id_fkey(username, full_name, email, avatar_url)`
     )
-    .eq("short_id", shortId)
+    .eq(t.key, shortId)
     .order("created_at", { ascending: true });
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
     id: r.id as string,
     versionId: r.version_id as string,
     parentId: (r.parent_id as string | null) ?? null,

@@ -16,11 +16,16 @@ try {
   if (typeof window !== "undefined" && localStorage.getItem(SOUNDS_KEY) === "off") enabled = false;
 } catch {}
 
+/** Fired when sounds are switched (1.26.0): every Sounds switch on screen follows. */
+export const SOUNDS_EVENT = "vp-sounds-change";
+
 export function setSoundsEnabled(on: boolean) {
+  const changed = on !== enabled;
   enabled = on;
   try {
     localStorage.setItem(SOUNDS_KEY, on ? "on" : "off");
   } catch {}
+  if (changed && typeof window !== "undefined") window.dispatchEvent(new CustomEvent<boolean>(SOUNDS_EVENT, { detail: on }));
 }
 export const soundsEnabled = () => enabled;
 

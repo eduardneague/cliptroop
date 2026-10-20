@@ -11,6 +11,7 @@ import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import type { PipelineStage } from "@/lib/permissions/roles";
 import { AssigneeRow, ScriptersRow } from "./assignee-row";
 import { setLongPlatforms, updateExpectedDate, updateTypeTheme } from "./actions";
+import { setLongInAppReview } from "./review/actions";
 
 type Assignee = { rowId: string; teamMemberId: string; name: string; color: string };
 const TYPES = ["Hub", "Help", "Hero"];
@@ -46,6 +47,8 @@ export function LongVideoSettings({
   people,
   assignees,
   scripterIds,
+  inAppReview: inApp0 = null,
+  teamInAppReview = false,
 }: {
   projectId: string;
   teamId: string;
@@ -57,6 +60,10 @@ export function LongVideoSettings({
   people: TeamPerson[];
   assignees: Record<string, Assignee[]>;
   scripterIds: string[];
+  /** Review in ClipTroop: this video's own choice (null = the team's). */
+  inAppReview?: boolean | null;
+  /** The team's choice (Team → Defaults). */
+  teamInAppReview?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -66,6 +73,7 @@ export function LongVideoSettings({
   const [theme, setTheme] = useState(theme0);
   const [subtheme, setSubtheme] = useState(subtheme0 ?? "");
   const [platforms, setPlatforms] = useState(platforms0);
+  const [inApp, setInApp] = useState<boolean | null>(inApp0);
   const dirty = types.join() !== videoType.join() || theme !== theme0 || subtheme !== (subtheme0 ?? "");
 
   const run = (fn: () => Promise<{ error?: string } | object | undefined>, ok: string) =>
@@ -165,6 +173,44 @@ export function LongVideoSettings({
                 })}
               </div>
             </div>
+          </section>
+
+          <section className="pt-5 border-t border-line/10">
+            <span className={label}>Review</span>
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line/15 p-1" role="radiogroup" aria-label="Review">
+              {([
+                [null, `Like the team (${teamInAppReview ? "in ClipTroop" : "outside"})`],
+                [true, "In ClipTroop"],
+                [false, "Outside ClipTroop"],
+              ] as const).map(([v, text]) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={inApp === v}
+                  disabled={pending}
+                  onClick={() => {
+                    if (inApp === v) return;
+                    const before = inApp;
+                    setInApp(v);
+                    start(async () => {
+                      const r = await setLongInAppReview(projectId, v);
+                      if (r.error !== undefined) {
+                        setInApp(before);
+                        toast.error(r.error);
+                      } else {
+                        toast.success("Review setting saved");
+                        router.refresh();
+                      }
+                    });
+                  }}
+                  className={`rounded-lg px-3 h-8 text-[12.5px] font-semibold transition-colors ${inApp === v ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"}`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            <p className="text-[12px] text-ink-faint mt-2">In ClipTroop, the editor uploads the edit here and the master leaves notes on it before approving.</p>
           </section>
 
           <section className="pt-5 border-t border-line/10">

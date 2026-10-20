@@ -1,10 +1,11 @@
-import { HomeIcon, VideoIcon, ShortsIcon, CalendarIcon, UsersIcon, PostingIcon, MeetingIcon, AnalyticsIcon, CodeIcon, TargetIcon } from "@/components/ui/icons";
+import { HomeIcon, VideoIcon, ShortsIcon, CalendarIcon, UsersIcon, PostingIcon, MeetingIcon, AnalyticsIcon, CodeIcon, TargetIcon, OutliersIcon } from "@/components/ui/icons";
 
 /**
  * Sidebar + phone bar destinations, in groups. Icons are SVG components,
  * never Unicode symbols (iOS turns those into emoji).
  */
 const DASHBOARD = { href: "/dashboard", label: "Dashboard", shortLabel: "Home", Icon: HomeIcon, available: true } as const;
+const OUTLIERS = { href: "/outliers", label: "Outliers", shortLabel: "Outliers", Icon: OutliersIcon, available: true } as const;
 const SHORTS = { href: "/shorts", label: "Short videos", shortLabel: "Shorts", Icon: ShortsIcon, available: true } as const;
 const VIDEOS = { href: "/videos", label: "Long videos", shortLabel: "Long", Icon: VideoIcon, available: true } as const;
 const CALENDAR = { href: "/calendar", label: "Calendar", shortLabel: "Calendar", Icon: CalendarIcon, available: true } as const;
@@ -16,10 +17,11 @@ const TEAM = { href: "/team", label: "Team", shortLabel: "Team", Icon: UsersIcon
 /** Developer accounts only (the layout decides; see isDeveloper in lib/errors.ts). */
 export const DEVELOPER = { href: "/developer", label: "Developer", shortLabel: "Developer", Icon: CodeIcon, available: true } as const;
 
-export type NavItem = typeof DASHBOARD | typeof SHORTS | typeof VIDEOS | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof OBJECTIVES | typeof TEAM | typeof DEVELOPER;
+export type NavItem = typeof DASHBOARD | typeof OUTLIERS | typeof SHORTS | typeof VIDEOS | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof OBJECTIVES | typeof TEAM | typeof DEVELOPER;
 
 export const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   { label: null, items: [DASHBOARD] },
+  { label: "Research", items: [OUTLIERS] },
   { label: "Content", items: [SHORTS, VIDEOS] },
   { label: "Schedule", items: [CALENDAR, MEETINGS, POSTING] },
   { label: "Insights", items: [ANALYTICS, OBJECTIVES] },
@@ -30,4 +32,4 @@ export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 /** The phone bar: the four you use most; the rest live under More. */
 export const BOTTOM_ITEMS: NavItem[] = [DASHBOARD, SHORTS, VIDEOS, CALENDAR];
-export const MORE_ITEMS: NavItem[] = [MEETINGS, POSTING, ANALYTICS, OBJECTIVES, TEAM];
+export const MORE_ITEMS: NavItem[] = [OUTLIERS, MEETINGS, POSTING, ANALYTICS, OBJECTIVES, TEAM];

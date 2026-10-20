@@ -93,6 +93,13 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
         </Card>
         <Card title="Long videos" text="What every new long video starts with.">
           <div className="space-y-5">
+            <div className="flex items-start gap-3 pb-5 border-b border-line/10">
+              <Skeleton className="w-10 h-6 rounded-lg flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold">Review the edit in ClipTroop</div>
+                <Skeleton className="h-3 w-4/5 mt-1.5" />
+              </div>
+            </div>
             <div>
               <div className={label}>Default description</div>
               <Skeleton className="h-[138px] w-full rounded-lg" />
@@ -104,11 +111,11 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
             <Skeleton className="h-9 w-20 rounded-lg" />
           </div>
         </Card>
-        <Card title="Video files" text="Shorts’ uploaded videos take the most space. Once a short is posted everywhere, its files are deleted after this long.">
+        <Card title="Video files" text="Uploaded videos take the most space. Once a video is posted, its files are deleted after this long.">
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold">Delete video files after posting</div>
+                <div className="text-[13px] font-semibold">Delete short video files after posting</div>
                 <div className="text-[11.5px] text-ink-faint">Counted from the last platform a short went out on. Checked every night.</div>
               </div>
               <Skeleton className="h-10 w-40 rounded-lg flex-shrink-0" />
@@ -116,6 +123,15 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
             <Skeleton className="h-3 w-4/5" />
             <Skeleton className="h-3 w-3/5" />
             <Skeleton className="h-9 w-full rounded-lg" />
+            {["Delete long video files after posting", "Delete thumbnails that didn’t win"].map((t) => (
+              <div key={t} className="flex flex-col sm:flex-row sm:items-center gap-3 pt-4 border-t border-line/10">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold">{t}</div>
+                  <Skeleton className="h-3 w-3/5 mt-1.5" />
+                </div>
+                <Skeleton className="h-10 w-40 rounded-lg flex-shrink-0" />
+              </div>
+            ))}
           </div>
         </Card>
         <Card title="Scripts" text="Script → Review → Staging: who’s next when a script is handed on.">
