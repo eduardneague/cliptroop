@@ -23,6 +23,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.27.0",
+    date: "2026-10-20",
+    title: "Outliers: what's taking off, and ideas from it",
+    changes: [
+      { kind: "new", text: "Outliers, in the sidebar under Research: videos in your niche doing far better than their own channel's usual (24× its usual, not just lots of views), so a small channel's hit counts as much as a big one's." },
+      { kind: "new", text: "Set up your niche with a few keywords: ClipTroop finds the channels making those videos and collects them, usually within minutes. A team can follow several niches, and 24 Explore niches (gaming, food, finance, cars and more) are there to look around." },
+      { kind: "new", text: "For you: the biggest outliers of the week, month or year, what's taking off right now, small channels with big hits, the formats and keywords that win, your tracked channels' latest videos and ideas made for you, a new set every day." },
+      { kind: "new", text: "Search every collected video with filters: × usual, views, when it was posted, channel size, length, views per hour, engagement, formats, language and words to leave out. As cards or a table." },
+      { kind: "new", text: "Ideas: 24 at once (up to 48), made instantly from the formats and topics that win in your niche, or that win in other niches and are written for yours. Each one has titles, a hook, the numbers behind it and the outliers it comes from. Lock a format or a topic, Shuffle for more, hide the ones you don't want." },
+      { kind: "new", text: "Start a long video or a short from an idea: its titles, type, hook and where it comes from are filled in for you." },
+      { kind: "new", text: "Formats: 49 kinds of video (Fake vs real, Cheap vs expensive, I tested it, Tier list…) with how each does in your niche and everywhere, its title patterns and hooks, plus title templates found in real outliers." },
+      { kind: "new", text: "Keywords: the names and phrases in your niche's titles, how often videos with them hit 3× and which are rising. Pick one for its best videos, the words that come with it and ideas about it." },
+      { kind: "new", text: "Channels: every channel in the niche with its usual views, how often it hits 3× and its biggest outlier. Add one by its link, and track the ones you watch." },
+      { kind: "new", text: "Title lab: score a title against your niche, see what helps it and what holds it back, compare up to five, and see your topic written in the formats that win." },
+      { kind: "new", text: "Thumbnails: the outliers' thumbnails by colour, the colours that win here, and a preview of your own thumbnail and title on YouTube (computer or phone, dark or light) between the niche's real outliers." },
+      { kind: "new", text: "Each video opens in a panel: its × usual next to its channel's other videos, views over time, likes and comments, title changes, thumbnails and titles like it, and ideas in its shape for your niche. Channels open the same way." },
+      { kind: "new", text: "Save videos, channels and ideas in the team's folders, with a note for the team." },
+      { kind: "new", text: "Alerts when a tracked channel's video takes off (or a video with a word you watch), and a Monday summary of the week's best outliers." },
+      { kind: "better", text: "The search finds Outliers' tabs too: try “video ideas”, “title lab” or “outlier alerts”." },
+      { kind: "better", text: "Clip's tour shows Outliers, and the privacy policy and terms say what Outliers reads from YouTube." },
+    ],
+  },
+  {
     version: "1.26.0",
     date: "2026-10-16",
     title: "Search finds everything",

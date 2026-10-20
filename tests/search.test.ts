@@ -58,6 +58,10 @@ ok(top("revenue") === "analytics.revenue", `"revenue" → the Revenue tab (got $
 ok(top("last 7 days") === "analytics.range.7d", `"last 7 days" → Analytics for 7 days (got ${top("last 7 days")})`);
 ok(ids("youtube").filter((id) => id.startsWith("platform.youtube")).length === 4, "YouTube: its shorts, numbers, posts and account");
 ok(top("colours") === "settings.colors" || top("colors") === "settings.colors", "colours and colors");
+ok(top("outliers") === "outliers" && top("viral") === "outliers" && top("1of10") === "outliers", `"outliers", "viral" or "1of10" → Outliers (got ${top("viral")})`);
+ok(top("video ideas") === "outliers.ideas" && top("title lab") === "outliers.titles", `Outliers' tabs (got ${top("video ideas")}, ${top("title lab")})`);
+ok(ids("niche").includes("outliers.add-niche") && !buildCatalog(ctx({ roles: ["editor"] })).some((e) => e.id === "outliers.add-niche"), "only masters and researchers add niches");
+ok(buildCatalog(ctx({ roles: ["researcher"] })).some((e) => e.id === "outliers.add-niche"), "researchers add niches");
 ok(top("invite") === "invite", "masters can invite");
 ok(!ids("mar").includes("posting.overview"), `the middle of another word doesn't count ("mar" isn't "summary")`);
 ok(top("how do i invite someone new") === "invite", `a question with a word that isn't there still finds it (got ${top("how do i invite someone new")})`);

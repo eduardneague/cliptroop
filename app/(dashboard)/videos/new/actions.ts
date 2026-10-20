@@ -99,6 +99,10 @@ export async function createProject(
   const platforms = formData.getAll("platforms").map(String).filter((x) => ["youtube", "facebook", "instagram", "tiktok"].includes(x));
   if (platforms.length) await supabase.from("long_video_projects").update({ platforms }).eq("id", project.id);
 
+  // Started from a saved Outliers idea: the save remembers it became this video.
+  const ideaId = String(formData.get("idea") ?? "");
+  if (UUID.test(ideaId)) await supabase.rpc("outliers_link_idea", { p_save: ideaId, p_project: project.id });
+
   // A new idea can move the team's objectives (counted again after the response).
   queueObjectivesSync(currentTeam.id, { change: "created" });
   redirect(`/videos/${project.id}`);

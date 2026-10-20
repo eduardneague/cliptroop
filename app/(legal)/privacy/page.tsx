@@ -38,6 +38,11 @@ export default function PrivacyPage() {
           <b>Statistics of those accounts</b>, copied once a day: views, watch time, likes, comments, shares, followers, audience by country, the latest
           posts and their numbers, and (for YouTube channels in the Partner Program) estimated revenue. Income a team adds by hand is stored too.
         </li>
+        <li>
+          <b>Public YouTube videos and channels</b> (Outliers): the details YouTube makes public about videos in the niches your team follows (titles, descriptions, tags,
+          views, likes, comments, length, thumbnails) and their channels (name, picture, subscribers), read with YouTube API Services. No YouTube account is needed for
+          this, and none of it is about you.
+        </li>
         <li><b>Devices for notifications:</b> if you turn on notifications, the address your browser gives us to deliver them, and a label like &ldquo;iPhone · Safari&rdquo;.</li>
         <li><b>Technical logs:</b> when something breaks, the error message, the page, and which account saw it, so it can be fixed.</li>
       </ul>
@@ -59,6 +64,8 @@ export default function PrivacyPage() {
         {APP_NAME} uses YouTube API Services. By connecting a YouTube channel you also agree to the <A href="https://www.youtube.com/t/terms">YouTube Terms of Service</A>,
         and Google&rsquo;s use of your data is covered by the <A href="https://policies.google.com/privacy">Google Privacy Policy</A>. With your permission{" "}
         {APP_NAME} uploads videos, changes or cancels the ones it scheduled, and reads YouTube Analytics (including revenue when allowed) for the connected channel.
+        Outliers also reads public videos and channels to show which ones do far better than usual; the scores, formats, keywords and ideas it shows are worked
+        out by {APP_NAME}, not by YouTube.
       </p>
       <p>
         {APP_NAME}&rsquo;s use and transfer of information received from Google APIs adheres to the{" "}
@@ -100,6 +107,7 @@ export default function PrivacyPage() {
       <ul className="list-disc pl-6 space-y-1.5">
         <li>Uploaded video files are deleted after the video is posted everywhere: after 1, 2 or 3 weeks or 1 month, as the team chooses (2 weeks unless it changes that).</li>
         <li>Sign-in tokens are deleted the moment an account is disconnected.</li>
+        <li>Public YouTube videos and channels (Outliers) are read again from YouTube or deleted within 30 days, as YouTube&rsquo;s rules ask.</li>
         <li>Notification devices are removed when you turn them off, log out on that device, or the browser stops accepting messages.</li>
         <li>Everything else is kept while your team uses {APP_NAME}, and deleted on request (below).</li>
       </ul>

@@ -7,11 +7,13 @@ import { isMaster } from "@/lib/permissions/roles";
 import { ArrowLeftIcon } from "@/components/ui/icons";
 import { NewVideoForm } from "./new-video-form";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { ideaNotes, loadIdeaPrefill } from "@/modules/outliers/lib/idea-prefill";
 
 export const metadata: Metadata = { title: "New long video" };
 
-/** Only masters and schedulers can create long videos (migration 0032). */
-export default async function NewVideoProjectPage() {
+/** Only masters and schedulers can create long videos (migration 0032). ?idea=<saved Outliers idea> fills it in. */
+export default async function NewVideoProjectPage({ searchParams }: { searchParams: Promise<{ idea?: string }> }) {
+  const { idea: ideaId } = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first from the sidebar.</div>;
@@ -19,13 +21,14 @@ export default async function NewVideoProjectPage() {
   const membership = await getMembership(supabase, currentTeam.id);
   const roles = membership?.roles ?? [];
   if (isMaster(roles) || roles.includes("publisher")) {
-    const [people, { data: d }] = await Promise.all([
+    const [people, { data: d }, idea] = await Promise.all([
       listTeamPeople(currentTeam.id),
       supabase
         .from("teams")
         .select("default_long_scripter_member_id, default_long_researcher_id, default_long_filmer_id, default_long_editor_id, default_long_packager_id, default_long_publisher_id")
         .eq("id", currentTeam.id)
         .maybeSingle(),
+      loadIdeaPrefill(supabase, currentTeam.id, ideaId),
     ]);
     return (
       <NewVideoForm
@@ -38,6 +41,7 @@ export default async function NewVideoProjectPage() {
           package: (d?.default_long_packager_id as string | null) ?? null,
           publish: (d?.default_long_publisher_id as string | null) ?? null,
         }}
+        idea={idea ? { ...idea, notes: ideaNotes(idea) } : null}
       />
     );
   }

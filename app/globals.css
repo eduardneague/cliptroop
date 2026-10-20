@@ -1041,3 +1041,27 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 @media (prefers-reduced-motion: reduce) {
   .obj-row-in { animation: none; }
 }
+
+/* ---- Outliers (1.27.0) ---------------------------------------------------
+   The card's spike: the channel's videos as thin bars, grown once from the
+   baseline. Ideas are dealt like cards when you shuffle (each one's
+   --i staggers it). The video panel slides in from the side (phones: up). */
+@keyframes spike-grow { from { transform: scaleY(0.06); } to { transform: none; } }
+.spike rect { transform-box: fill-box; transform-origin: 50% 100%; animation: spike-grow 0.7s var(--ease-out) backwards; }
+@keyframes deal-in {
+  from { opacity: 0; transform: translateY(16px) rotate(-1.5deg) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.deal > * { animation: deal-in 0.5s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 26ms); }
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+/* The multiplier: tabular figures, a hair tighter. */
+.mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* A thumbnail wall: pictures fill their tiles, the title rises on hover/focus. */
+.thumb-tile .thumb-caption { opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
+.thumb-tile:hover .thumb-caption, .thumb-tile:focus-visible .thumb-caption { opacity: 1; transform: none; }
+@media (hover: none) { .thumb-tile .thumb-caption { opacity: 1; transform: none; } }
+/* The panels' bar charts grow from the baseline once (each bar a little after the last). */
+.spike-bar > span { transform-origin: 50% 100%; animation: spike-grow 0.6s var(--ease-out) backwards; animation-delay: inherit; }

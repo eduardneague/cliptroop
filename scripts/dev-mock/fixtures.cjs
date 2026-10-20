@@ -665,3 +665,11 @@ module.exports = {
   },
   helpers: { day, at, people, members },
 };
+
+// Outliers (1.27.0): outliers.cjs (its sample data is made on first use; see that file's flags).
+{
+  const O = require("./outliers.cjs").outliersFixtures({ TEAM, U, people });
+  Object.assign(module.exports.rpc, O.rpc);
+  Object.assign(module.exports.tables, O.tables);
+  if (process.env.MOCK_OUTLIERS_ACCESS === "0") module.exports.tables.social_accounts = module.exports.tables.social_accounts.filter((a) => a.platform !== "youtube");
+}

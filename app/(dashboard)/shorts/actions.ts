@@ -146,6 +146,8 @@ export async function createShort(input: {
   /** Scripters to start with (masters/schedulers). Leave out for the team default. */
   scripterIds?: string[];
   captionEnabled?: boolean;
+  /** A saved Outliers idea it's made from (the save remembers it). */
+  ideaId?: string;
 }): Promise<Result<{ id: string; plannedDate: string | null; number: number }>> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
@@ -235,6 +237,9 @@ export async function createShort(input: {
       }));
     }
   }
+
+  // Made from a saved Outliers idea: the save remembers it became this short.
+  if (typeof input.ideaId === "string" && /^[0-9a-f-]{36}$/i.test(input.ideaId)) await supabase.rpc("outliers_link_idea", { p_save: input.ideaId, p_short: data.id });
 
   // The queue assigns Auto dates right after the insert — read it back.
   const { data: dated } = await supabase.from("short_videos").select("planned_date").eq("id", data.id).maybeSingle();

@@ -20,7 +20,7 @@ export type IconKey =
   | "users" | "settings" | "word" | "user" | "code" | "flag" | "lock" | "document" | "trash" | "plus"
   | "moon" | "sun" | "sound" | "bell" | "star" | "bug" | "lightbulb" | "logout" | "link" | "download"
   | "grid" | "list" | "clock" | "money" | "compass" | "alert" | "check" | "fill" | "retry" | "history"
-  | "eye" | "trophy" | "image" | "flame";
+  | "eye" | "trophy" | "image" | "flame" | "outliers";
 
 export type Entry = {
   id: string;
@@ -78,6 +78,18 @@ const PLATFORM_WORDS: Record<Platform, string> = {
   tiktok: "tt tik tok",
 };
 
+/** Outliers' tabs (1.27.0): [tab, title, other words, icon]. */
+const OUTLIER_TABS: [string, string, string, IconKey][] = [
+  ["search", "Search outliers", "find videos filters multiplier views", "outliers"],
+  ["ideas", "Video ideas", "ideas generator content topics shuffle what to make next", "lightbulb"],
+  ["formats", "Formats that win", "formats templates title shapes video types", "grid"],
+  ["keywords", "Outlier keywords", "keywords words phrases topics rising", "trend"],
+  ["channels", "Outlier channels", "channels competitors creators track tracked", "users"],
+  ["titles", "Title lab", "title score test titles rewrite compare", "document"],
+  ["thumbnails", "Outlier thumbnails", "thumbnails thumbnail colours colors preview mockup", "image"],
+  ["saved", "Saved outliers", "saved bookmarks folders boards collections", "star"],
+];
+
 const ANALYTICS_TABS: [string, string, string][] = [
   ["overview", "Overview", "summary totals chart views"],
   ["content", "Content", "videos every video performance top best worst list"],
@@ -129,6 +141,7 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "calendar", kind: "page", title: "Calendar", trail: [], words: "schedule month week agenda dates planned when", icon: "calendar", href: "/calendar", boost: 0.05 }, team);
   add({ id: "meetings", kind: "page", title: "Meetings", trail: [], words: "calls call discord zoom agenda notes", icon: "meeting", href: "/meetings", boost: 0.05 }, team);
   add({ id: "posting", kind: "page", title: "Posting", trail: [], words: "posts post scheduled uploads published auto queue", icon: "posting", href: "/posting", boost: 0.05 }, team);
+  add({ id: "outliers", kind: "page", title: "Outliers", trail: [], hint: "Videos beating their channel's usual, and ideas from them", words: "outlier viral trending research competitors competition ideas niche 1of10 viewstats what works spy", icon: "outliers", href: "/outliers", boost: 0.05 }, team);
   add({ id: "analytics", kind: "page", title: "Analytics", trail: [], words: "stats statistics numbers views growth metrics performance", icon: "analytics", href: "/analytics", boost: 0.05 }, team);
   add({ id: "objectives", kind: "page", title: "Objectives", trail: [], words: "goals goal targets rings okr okrs", icon: "target", href: "/objectives", boost: 0.05 }, team);
   add({ id: "projections", kind: "page", title: "Projections", trail: ["Objectives"], words: "forecast forecasts targets deadline future milestone", icon: "trend", href: "/objectives?view=projections", boost: 0.03 }, team);
@@ -179,6 +192,15 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
     for (const s of STAGE_ORDER) add({ id: `videos.stage.${s}`, kind: "filter", title: LONG_STAGE[s].title, trail: ["Long videos"], words: LONG_STAGE[s].words, icon: "video", href: `/videos?stage=${s}` });
     add({ id: "videos.grid", kind: "filter", title: "Long videos as cards", trail: ["Long videos"], words: "grid cards view", icon: "grid", href: "/videos?view=grid" });
     add({ id: "videos.table", kind: "filter", title: "Long videos as a table", trail: ["Long videos"], words: "table list rows view", icon: "list", href: "/videos?view=table" });
+  }
+
+  // ---- Outliers --------------------------------------------------------------
+  if (team) {
+    const researcher = master || ctx.roles.includes("researcher");
+    for (const [id, title, words, icon] of OUTLIER_TABS) add({ id: `outliers.${id}`, kind: "tab", title, trail: ["Outliers"], words, icon, href: `/outliers?tab=${id}` });
+    add({ id: "outliers.shorts", kind: "filter", title: "Shorts outliers", trail: ["Outliers"], words: "shorts short reels vertical viral", icon: "shorts", href: "/outliers?kind=short" });
+    add({ id: "outliers.add-niche", kind: "action", title: "Add a niche", trail: ["Outliers"], hint: "Keywords for a kind of video to follow", words: "new niche keywords topic follow research competitors", icon: "plus", href: "/outliers?open=niche" }, researcher);
+    add({ id: "outliers.alerts", kind: "setting", title: "Outlier alerts", trail: ["Outliers"], hint: "When a tracked channel's video takes off", words: "alerts notify notifications tracked channel takes off digest watch words weekly", icon: "bell", href: "/outliers?open=alerts" });
   }
 
   // ---- Calendar, meetings, posting ---------------------------------------

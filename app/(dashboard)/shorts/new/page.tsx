@@ -15,17 +15,20 @@ import {
   listTeamPeople,
 } from "@/modules/short-videos/lib/queries";
 import { NewShortForm } from "./new-short-form";
+import { loadIdeaPrefill } from "@/modules/outliers/lib/idea-prefill";
 
 export const metadata: Metadata = { title: "New short" };
 
-export default async function NewShortPage() {
+/** ?idea=<saved Outliers idea> starts it with the idea's title (and its other titles and hook to hand). */
+export default async function NewShortPage({ searchParams }: { searchParams: Promise<{ idea?: string }> }) {
+  const { idea: ideaId } = await searchParams;
   const supabase = await createClient();
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) return <div className="p-8 text-sm text-ink-soft">Create a team first from the sidebar.</div>;
 
   // The queue is rolled forward first (new day), then the dates are read;
   // the rest loads alongside.
-  const [membership, everyone, settings, limits, [planned, nextSlot, queueStart]] = await Promise.all([
+  const [membership, everyone, settings, limits, [planned, nextSlot, queueStart], idea] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     listTeamPeople(currentTeam.id),
     getShortSettings(currentTeam.id),
@@ -33,6 +36,7 @@ export default async function NewShortPage() {
     refreshShortQueue(currentTeam.id).then(() =>
       Promise.all([listPlannedDates(currentTeam.id), getNextShortSlot(currentTeam.id), getQueueStart(currentTeam.id)])
     ),
+    loadIdeaPrefill(supabase, currentTeam.id, ideaId),
   ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
@@ -61,6 +65,7 @@ export default async function NewShortPage() {
           limits={limits}
           queueStart={queueStart}
           canStartQueue={master}
+          idea={idea}
         />
       ) : (
         <p className="rounded-xl border border-line/10 bg-surface px-5 py-4 text-[13.5px] text-ink-soft">

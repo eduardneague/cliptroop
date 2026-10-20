@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 1.26.0" src="https://img.shields.io/badge/version-1.26.0-E8630D?style=flat-square&labelColor=2B2118">
+  <img alt="Version 1.27.0" src="https://img.shields.io/badge/version-1.27.0-E8630D?style=flat-square&labelColor=2B2118">
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-2B2118?style=flat-square&logo=nextdotjs&logoColor=FFF4E6">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Postgres-2B2118?style=flat-square&logo=supabase&logoColor=3ECF8E">
   <img alt="Vercel" src="https://img.shields.io/badge/Vercel-hosted-2B2118?style=flat-square&logo=vercel&logoColor=FFF4E6">
@@ -127,6 +127,7 @@ and its views right now.
 
 ## Also starring
 
+- **Outliers**: Videos in your niche doing far better than their own channel's usual, the formats, keywords, titles and thumbnails behind them, and ideas for your next videos made from them (no AI), with alerts when a tracked channel's video takes off.
 - **Your turn, on your phone**: Install it from the browser on iPhone or Android and get a notification when it's your turn. No app store.
 - **Clip**: The clapperboard who shows new people around, cheers when things are done and keeps you company while pages load.
 - **Meetings**: Agenda, notes and action items that land in each person's tasks.
@@ -144,9 +145,10 @@ and its views right now.
 
 - **App**: Next.js 15 (App Router) and React 19, styled with Tailwind. One codebase for pages and server actions.
 - **Data**: Supabase, with Postgres (row-level security on every table), Auth, Storage and Realtime.
-- **Clockwork**: Supabase's own timer (pg_cron) runs the posting queue every minute, the status check and every video's counts every 10 minutes, and two daily jobs.
+- **Clockwork**: Supabase's own timer (pg_cron) runs the posting queue every minute, the status check and every video's counts every 10 minutes, Outliers' collector every 30 minutes, and two daily jobs.
 - **Hosting**: Vercel. `staging` deploys to staging.cliptroop.com, `main` to app.cliptroop.com.
 - **Posting**: The official YouTube, Instagram, Facebook and TikTok APIs, through each team's own accounts.
+- **Outliers**: Public videos read with YouTube API Services within a daily budget, refreshed or deleted within 30 days; the scores, formats, keywords and ideas are worked out by pure TypeScript that runs on the server and in the browser.
 - **Quality**: Every push runs type checks, lint, tests, a production build and every database migration from scratch.
 
 ```text

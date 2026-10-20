@@ -718,6 +718,17 @@ export function AnalyticsIcon(p: IconProps) {
   );
 }
 
+/** Outliers: a row of bars with one shooting past the rest, and a spark. */
+export function OutliersIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4 20v-4M8.5 20v-6M13 20V5M17.5 20v-5" />
+      <path d="M19.5 3.5v3M18 5h3" />
+      <path d="M3 20h18" />
+    </Svg>
+  );
+}
+
 /** "More" in the phone bar: a 2×2 grid of rounded squares. */
 export function AppsIcon(p: IconProps) {
   return (

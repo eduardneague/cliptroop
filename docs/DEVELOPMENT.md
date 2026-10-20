@@ -74,6 +74,7 @@ when set, Vercel's protection bypass:
 | `vplanner-cleanup` | 03:30 UTC | `{"job": "cleanup"}` | deletes posted shorts' and long videos' files and Thumbnail Studio's thumbnails that didn't win, after the team's choices; refreshes sign-ins |
 | `vplanner-analytics` | 05:10 UTC | `{"job": "analytics"}` | copies every team's numbers |
 | `vplanner-live` | every 10 minutes (:05, :15…) | `{"job": "live", "team", "platform"}` per account | every video's counts, realtime, impressions and CTR (0083) |
+| `vplanner-outliers` | every 30 minutes (:17, :47) | `{"job": "outliers", "team"}` per team with a niche, `{"job": "outliers", "explore": true}` once | Outliers' collector: searches, channels' uploads, stats, thumbnails, insights, alerts, the Monday summary (0091) |
 
 Vercel Cron isn't used (it only runs on the production deployment). The
 daily jobs live in `lib/daily-jobs.ts`; `/api/cron/cleanup-media` and
@@ -747,6 +748,75 @@ keep the rule in step with the table's policy. A function that sets
 `pg_trgm.word_similarity_threshold` must load pg_trgm first in its migration
 (0089, section 7). Tests: `tests/search.test.ts`,
 `supabase/tests/search-everything.test.sql`.
+
+**Outliers (1.27.0, 0091).** Research on public YouTube videos: what beats
+its own channel's usual in a niche, why, and ideas made from it. No AI.
+- Data. `yt_channels`, `yt_videos` (+ `yt_video_stats`, views over time, and
+  `yt_video_changes`, title/thumbnail changes) are shared by every team: the
+  same video is stored once. A team's niches are `outlier_niches` (keywords,
+  words to leave out, language, region, kinds; `team_id` null = the built-in
+  Explore niches), their channels `outlier_niche_channels` (source,
+  relevance, hidden), tracked channels `outlier_tracked`. Saves
+  (`outlier_saves`: videos, channels, ideas, in `outlier_folders`), hidden
+  ideas (`outlier_dismissed`, per person),
+  `outlier_settings` (alerts, the Monday summary) and `outlier_alerts` (what
+  was already announced). The quota and search tables
+  (`outlier_quota`, `outlier_search_cache`, `outlier_search_log`,
+  `outlier_locks`) are service role only; `outlier_global` holds the
+  Explore niches' insights together. Pages read through security-definer
+  functions that first check the caller is in the team (`is_team_member`):
+  `outliers_overview`, `outliers_videos` (every filter, one query),
+  `outliers_channels`, `outliers_video`, `outliers_channel`. An idea
+  started as a video is linked by `outliers_link_idea()` (security definer:
+  the save, the video and the caller in one team).
+- YouTube's rules. Everything stored is refreshed within 30 days or deleted
+  (`outliers_purge`, run by the collector): details are read again after
+  22 days.
+  Views over time are kept `OUTLIERS_STATS_DAYS` (30; up to 1095 only once
+  the derived metrics amendment is accepted in YouTube's API Services
+  form). Scores, formats, keywords and ideas are ClipTroop's own and say so
+  (`SourceNote`); never call a YouTube number anything else.
+- Reading YouTube: `modules/outliers/lib/youtube.ts` with `YOUTUBE_API_KEY`,
+  else the team's connected YouTube channel. `lib/budget.ts` keeps it inside
+  `OUTLIERS_DAILY_UNITS` (searches cost 100 units, lists 1 per 50 videos):
+  the collector's share and each person's and team's fresh searches
+  (`OUTLIERS_*_SEARCHES`) are counted in `outlier_quota`; a search typed on
+  the page reads the stored videos first and asks YouTube only when there
+  are few. The collector (`lib/collector.ts`, `runOutliersJob`) does one
+  team per call with a time budget and carries on next time.
+- Scores (`lib/scores.ts`, pure): a video's score is its views ÷ the median
+  of the same channel's 30 previous videos of the same kind (long or
+  Short); `projected` is where a young video is heading (`shareAt()`: the
+  share of its views a video has at each age); bands for the colours.
+- The engine (pure, shared by the collector, the page and the tests):
+  `text.ts` (tokens, glue and style words, topic words), `formats.ts` (the
+  formats: tests on titles, title patterns, hooks), `keywords.ts` (names,
+  "fake iPhone", "GoPro review", never cut names or verbs), `skeleton.ts`
+  (title templates found in the data), `titles.ts` (what titles have and
+  how that does, a title's score), `insights.ts` (a niche's numbers, saved
+  in `outlier_niches.insights` by the collector), `ideas.ts` (ideas: a
+  winning format × a strong or rising topic, written with the format's
+  patterns or real templates; seeded, so the same day gives the same ideas),
+  `similar.ts` and `thumb-math.ts` (thumbnails' colours and look-alikes).
+  New format = an entry in `FORMATS` (bump `FORMAT_VERSION`: stored videos
+  are tagged again) and a check in `tests/outliers-engine.test.ts`.
+- The page (`app/(dashboard)/outliers/page.tsx`) loads only the open tab
+  (`?tab=`, `lib/view.ts`); a video's or channel's panel opens over any tab
+  with `?v=` / `?c=` (history entries of their own, so Back closes them;
+  `components/context.tsx`), `?open=niche` / `?open=alerts` open those
+  dialogs. Ideas are made in the browser from the niche's insights, so
+  Shuffle is instant. Start a video saves the idea and opens
+  `/videos/new?idea=<save>` or `/shorts/new?idea=<save>`
+  (`lib/idea-prefill.ts` fills the form).
+- Notifications: `outlier_alert` (a tracked channel's video, or a watched
+  word, heading past `alert_min`; the 4 strongest each, the rest in one) and
+  `outlier_digest` (Monday from 8 in the team's time zone).
+- Tests: `tests/outliers-engine.test.ts`, `tests/outliers-collector.test.ts`,
+  `scripts/e2e/outliers.e2e.ts` (a real database). The mock
+  (`scripts/dev-mock/outliers.cjs`) serves a sample made by
+  `npx tsx scripts/dev-mock/make-outliers.ts`; `MOCK_OUTLIERS_EMPTY=1`,
+  `MOCK_OUTLIERS_NEW=1` and `MOCK_OUTLIERS_ACCESS=0` show the other states,
+  and `scripts/dev-mock/outliers-shot.cjs` takes the screenshots.
 
 **Short videos.** Script → Editing → In review → Ready to post → Posted.
 "Posted" follows `short_video_posts` (every planned platform marked).

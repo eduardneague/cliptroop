@@ -18,7 +18,7 @@ import { Dialog } from "./dialog";
 import { useToast } from "./toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
-import { ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
+import { OutliersIcon, ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { sounds } from "@/lib/sounds";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -94,6 +94,17 @@ export type NotificationItem = {
     title?: string;
     early?: number;
     made?: boolean;
+    /** outlier_alert / outlier_digest (1.27.0): the video, its channel and how far past its usual. */
+    videoId?: string;
+    channel?: string | null;
+    mult?: string;
+    heading?: boolean;
+    why?: "tracked" | "word";
+    word?: string | null;
+    count?: number;
+    many?: boolean;
+    niche?: string | null;
+    best?: { id: string; title: string; mult: string } | null;
   } | null;
 };
 
@@ -135,6 +146,21 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
     return (
       <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }} aria-label={n.kind === "objective_reached" ? "Objective reached" : "Projection reached"}>
         <TrophyIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  if (n.kind === "outlier_alert" || n.kind === "outlier_digest") {
+    const id = m?.videoId ?? m?.best?.id;
+    if (id && /^[A-Za-z0-9_-]{11}$/.test(id))
+      return (
+        <span className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 bg-surface-2 ring-1 ring-line/10" aria-label="Outlier">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img loading="lazy" decoding="async" referrerPolicy="no-referrer" src={`https://i.ytimg.com/vi/${id}/mqdefault.jpg`} alt="" className="w-full h-full object-cover" />
+        </span>
+      );
+    return (
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber/15 text-amber" aria-label="Outliers">
+        <OutliersIcon className="w-4 h-4" />
       </span>
     );
   }
@@ -473,6 +499,24 @@ function RichBody({ n }: { n: NotificationItem }) {
         <>
           <b>{m.actor?.name}</b> {n.kind === "meeting_scheduled" ? "invited you to" : n.kind === "meeting_changed" ? "moved" : "cancelled"} <b>{m.meetingTitle}</b>
           {m.startsAt && n.kind !== "meeting_cancelled" ? <span className="text-ink-soft"> · {meetingWhen(m.startsAt)}{m.location ? `, ${m.location}` : ""}</span> : null}
+        </>
+      );
+    case "outlier_alert":
+      if (m.many) return <><b>{m.count} more</b> new outliers in your niches{m.team?.name ? <> (<b>{m.team.name}</b>)</> : null}</>;
+      return m.why === "word" ? (
+        <>
+          <b>&ldquo;{m.word}&rdquo;</b>: <b>{m.channel ?? "A channel"}</b> has a video heading for <b>{m.mult}</b> its usual: &ldquo;{m.title}&rdquo;
+        </>
+      ) : (
+        <>
+          <b>{m.channel ?? "A tracked channel"}</b> posted a video {m.heading ? "heading for" : "at"} <b>{m.mult}</b> its usual: &ldquo;{m.title}&rdquo;
+        </>
+      );
+    case "outlier_digest":
+      if (!m.best) return <>{n.body}</>;
+      return (
+        <>
+          This week in <b>{m.niche ?? "your niches"}</b>: {m.count} new outlier{m.count === 1 ? "" : "s"}, the best at <b>{m.best.mult}</b>: &ldquo;{m.best.title}&rdquo;
         </>
       );
     case "meeting_reminder":
