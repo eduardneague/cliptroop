@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnStorageUrl } from "@/lib/storage-url";
+import { clampDim, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
 
 export type UpdateProfileState = { error?: string; success?: boolean } | undefined;
 
@@ -121,6 +122,58 @@ export async function setPalette(palette: string | null) {
   const { error } = await supabase.from("profiles").update({ palette }).eq("id", user.id);
   // Before migration 0060 the column doesn't exist: keep it on this device and say so.
   if (error) return { error: /palette/.test(error.message) ? "Saved on this device only (the database needs migration 0060)." : "Couldn't save that setting. Try again." };
+  return { success: true };
+}
+
+/** The glass look for this account (1.27.5). Settings → Preferences → Glass. */
+export async function setGlass(on: boolean): Promise<{ success?: true; error?: string; deviceOnly?: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { error } = await supabase.from("profiles").update({ glass_ui: !!on }).eq("id", user.id);
+  // Before migration 0092 the column doesn't exist: it stays on this device, and says so.
+  if (error) return /glass_ui/.test(error.message) || error.code === "PGRST204" ? { error: `Glass ${on ? "on" : "off"} on this device only (the database needs migration 0092).`, deviceOnly: true } : { error: "Couldn't save that setting. Try again." };
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
+/**
+ * Your dashboard's background (1.27.5): the file you just uploaded to your
+ * own folder, whether it shows, and how much it's darkened. A new file
+ * replaces the old one (deleted from storage once it's saved).
+ */
+export async function updateDashboardBackground(patch: { path?: string | null; on?: boolean; dim?: number }): Promise<{ success?: true; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const row: { dashboard_bg_path?: string | null; dashboard_bg_on?: boolean; dashboard_bg_dim?: number } = {};
+  if (patch.path !== undefined) {
+    if (patch.path !== null && !isOwnBgPath(patch.path, user.id)) return { error: "That file can't be used. Upload it again." };
+    row.dashboard_bg_path = patch.path;
+  }
+  if (patch.on !== undefined) row.dashboard_bg_on = !!patch.on;
+  if (patch.dim !== undefined) row.dashboard_bg_dim = clampDim(patch.dim);
+  if (!Object.keys(row).length) return { success: true };
+
+  // The file it replaces, to remove once the new one is saved.
+  const { data: before, error: readError } = patch.path !== undefined ? await supabase.from("profiles").select("dashboard_bg_path").eq("id", user.id).maybeSingle() : { data: null, error: null };
+  if (readError) return { error: /dashboard_bg/.test(readError.message) ? "This needs the latest database update (migration 0092)." : "Couldn't save. Try again." };
+  const { error } = await supabase.from("profiles").update(row).eq("id", user.id);
+  if (error) {
+    if (/dashboard_bg/.test(error.message) || error.code === "PGRST204") return { error: "This needs the latest database update (migration 0092)." };
+    return { error: error.code === "23514" ? "That file can't be used. Upload it again." : "Couldn't save. Try again." };
+  }
+  const old = (before as { dashboard_bg_path?: string | null } | null)?.dashboard_bg_path ?? null;
+  if (old && old !== row.dashboard_bg_path && isOwnBgPath(old, user.id)) {
+    // Best effort: a file left behind only takes a little room in your own folder.
+    await supabase.storage.from(DASH_BG_BUCKET).remove([old]).catch(() => null);
+  }
+  revalidatePath("/dashboard");
+  revalidatePath("/settings");
   return { success: true };
 }
 

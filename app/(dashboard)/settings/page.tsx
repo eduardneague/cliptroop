@@ -2,6 +2,9 @@ import { TabNav } from "@/components/ui/tab-nav";
 import { AnimationsChoice } from "@/components/ui/motion";
 import { SoundsChoice } from "@/components/ui/sound-sync";
 import { PaletteChoice } from "@/components/ui/palette";
+import { GlassChoice } from "@/components/ui/glass";
+import { DashboardBackground } from "./dashboard-background";
+import { clampDim, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
@@ -39,7 +42,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const user = await getCachedUser();
 
-  const [{ data: profile }, { data: memberships }, { data: paletteRow }] = await Promise.all([
+  const [{ data: profile }, { data: memberships }, { data: paletteRow }, look] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, bio, avatar_url, teams_visible, animations_enabled, sounds_enabled")
@@ -52,7 +55,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       .eq("status", "active"),
     // Own query: before migration 0060 the column doesn't exist.
     supabase.from("profiles").select("palette").eq("id", user!.id).maybeSingle(),
+    // The glass look and the dashboard background (1.27.5): before 0092 they don't exist.
+    tab === "preferences"
+      ? supabase.from("profiles").select("glass_ui, dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim").eq("id", user!.id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
+  const lookReady = !look.error;
+  const lookRow = (look.data ?? null) as { glass_ui?: boolean; dashboard_bg_on?: boolean; dashboard_bg_path?: string | null; dashboard_bg_dim?: number } | null;
+  const bgPath = lookRow?.dashboard_bg_path && isOwnBgPath(lookRow.dashboard_bg_path, user!.id) ? lookRow.dashboard_bg_path : null;
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
   // Account tab: the report form (with what you sent before), and for the
   // developer the Developer and App setup pages. One round.
@@ -266,6 +276,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <div className="text-[13.5px] font-semibold">Colours</div>
             <div className="text-[11.5px] text-ink-faint mb-3">The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.</div>
             <PaletteChoice value={palette} />
+          </div>
+          <div id="glass" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+            <div>
+              <div className="text-[13.5px] font-semibold">Glass</div>
+              <div className="text-[11.5px] text-ink-faint">Frosted, see-through cards and bars over a soft wash of your colours, across the whole app. Works with every colour theme, light and dark.</div>
+            </div>
+            <GlassChoice on={!!lookRow?.glass_ui} />
+          </div>
+          <div id="background" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+            <DashboardBackground
+              userId={user!.id}
+              ready={lookReady}
+              on={!!lookRow?.dashboard_bg_on}
+              path={bgPath}
+              url={bgPath ? supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(bgPath).data.publicUrl : null}
+              dim={clampDim(lookRow?.dashboard_bg_dim)}
+            />
           </div>
         </section>
 

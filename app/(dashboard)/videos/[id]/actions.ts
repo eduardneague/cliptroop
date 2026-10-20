@@ -42,15 +42,30 @@ async function requireProjectMaster(projectId: string) {
  * which live in storage and aren't covered by the database's own cascade
  * deletes on the comment/title/assignee rows.
  */
-export async function deleteProject(projectId: string, _teamId?: string) {
+export async function deleteProject(projectId: string, _teamId?: string, opts?: { stay?: boolean; confirmTitle?: string }) {
   // The team is taken from the project itself — previously a master of
   // team A could pass their own teamId and delete team B's project.
   const check = await requireProjectMaster(projectId);
   if (!check.ok) {
     return { error: check.error === "Only the master can do this." ? "Only the master can delete a project." : check.error };
   }
+  // From the list (1.27.5): the name typed in the window must be this video's.
+  if (opts?.confirmTitle !== undefined && opts.confirmTitle.trim().toLowerCase() !== String(check.project.title ?? "").trim().toLowerCase()) {
+    return { error: "The name doesn't match. Nothing was deleted." };
+  }
 
   const admin = createAdminClient();
+  // Its scripts' pictures and drawings (1.27.5): <team>/<script>/ in their buckets.
+  const { data: docs } = await admin.from("scripts").select("id").eq("long_video_id", projectId);
+  await Promise.all(
+    (docs ?? []).flatMap((d) =>
+      (["script-images", "script-sketches"] as const).map(async (bucket) => {
+        const dir = `${check.project.team_id as string}/${d.id as string}`;
+        const { data: files } = await admin.storage.from(bucket).list(dir, { limit: 1000 });
+        if (files?.length) await admin.storage.from(bucket).remove(files.map((f) => `${dir}/${f.name}`));
+      })
+    )
+  );
 
   // Its edits (1.25.0, up to 3 GB each) and Thumbnail Studio's images live
   // under <team>/<video>/: they go too, so nothing is left behind.
@@ -79,7 +94,71 @@ export async function deleteProject(projectId: string, _teamId?: string) {
 
   queueObjectivesSync(check.project.team_id as string);
   revalidatePath("/videos");
+  if (opts?.stay) return {};
   redirect("/videos");
+}
+
+export type VideoWork = {
+  number: number;
+  title: string;
+  /** Its documents with words in them (scripts, then research). */
+  docs: { name: string; research: boolean; words: number; updatedAt: string | null; by: string | null }[];
+  comments: number;
+  ideas: number;
+  /** Uploaded edits, thumbnails (ideas and Thumbnail Studio), notes. */
+  files: number;
+  thumbnails: number;
+  notes: number;
+};
+
+/**
+ * What deleting a long video would take with it (1.27.5, from the list): the
+ * words in its scripts and research and who wrote last, open comments and
+ * editing ideas, edits, thumbnails, notes. Masters only (they're the ones who
+ * can delete).
+ */
+export async function getVideoWork(projectId: string): Promise<({ error?: undefined } & VideoWork) | { error: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(projectId)) return { error: "Video not found." };
+  const check = await requireProjectMaster(projectId);
+  if (!check.ok) return { error: check.error === "Only the master can do this." ? "Only the master can delete a long video." : check.error };
+  const { supabase } = check;
+  const head = { count: "exact" as const, head: true };
+  const [{ data: p }, { data: docs }, files, thumbs, entries, notes] = await Promise.all([
+    supabase.from("long_video_projects").select("entry_number, title").eq("id", projectId).maybeSingle(),
+    supabase
+      .from("scripts")
+      .select("id, kind, name, word_count, updated_at, editor:profiles!scripts_updated_by_fkey(username, full_name, email)")
+      .eq("long_video_id", projectId)
+      .order("kind", { ascending: false })
+      .order("position"),
+    supabase.from("long_video_versions").select("id", head).eq("project_id", projectId).is("deleted_at", null),
+    supabase.from("project_thumbnails").select("id", head).eq("project_id", projectId),
+    supabase.from("package_entries").select("id", head).eq("project_id", projectId),
+    supabase.from("project_comments").select("id", head).eq("project_id", projectId),
+  ]);
+  const ids = (docs ?? []).map((d) => d.id as string);
+  const { data: cm } = ids.length ? await supabase.from("script_comments").select("kind").in("script_id", ids).is("resolved_at", null) : { data: [] };
+  return {
+    number: (p?.entry_number as number | undefined) ?? 0,
+    title: (p?.title as string | undefined) ?? String(check.project.title ?? ""),
+    docs: (docs ?? [])
+      .filter((d) => Number(d.word_count) > 0)
+      .map((d) => {
+        const e = d.editor as unknown as { username: string | null; full_name: string | null; email: string | null } | null;
+        return {
+          name: String(d.name),
+          research: d.kind === "research",
+          words: Number(d.word_count) || 0,
+          updatedAt: (d.updated_at as string | null) ?? null,
+          by: e ? displayName(e.username, e.full_name, e.email) : null,
+        };
+      }),
+    comments: (cm ?? []).filter((c) => c.kind !== "edit_idea").length,
+    ideas: (cm ?? []).filter((c) => c.kind === "edit_idea").length,
+    files: files.count ?? 0,
+    thumbnails: (thumbs.count ?? 0) + (entries.count ?? 0),
+    notes: notes.count ?? 0,
+  };
 }
 
 const VIDEO_TYPES = ["Hub", "Help", "Hero"];

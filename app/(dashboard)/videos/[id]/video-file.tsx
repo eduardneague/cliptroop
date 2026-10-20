@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { formatBytes, formatTime } from "@/modules/review/lib/limits";
 import { playbackUrl } from "@/modules/review/lib/playback";
 import { getLongDownloadUrl, setLongKeepMedia } from "./review/actions";
+import { keepLabel } from "@/lib/media-keep";
 
 export type LongFile = {
   id: string;
@@ -37,7 +38,8 @@ export function LongVideoFile({
   projectId: string;
   video: LongFile;
   approved: boolean;
-  keepDays: number;
+  /** The team's choice (null: never deleted, 1.27.5). */
+  keepDays: number | null;
   keep: boolean;
   canKeep: boolean;
 }) {
@@ -143,7 +145,9 @@ export function LongVideoFile({
             ? "The file was deleted after posting. The posts themselves stay."
             : keep
               ? "This file is kept after posting."
-              : `The file is deleted ${keepDays} day${keepDays === 1 ? "" : "s"} after posting (Team → Defaults).`}
+              : keepDays === null
+                ? "The team keeps these files after posting (Team → Defaults)."
+                : `The file is deleted ${keepLabel(keepDays)} after posting (Team → Defaults).`}
         </span>
         {canKeep && !video.deleted && (
           <label className="inline-flex items-center gap-2 font-semibold cursor-pointer">

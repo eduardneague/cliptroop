@@ -97,9 +97,9 @@ export default function RootLayout({
         <script
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
-            // Also applies the user's "Animations off" choice and colour theme before first paint
+            // Also applies the user's "Animations off" choice, colour theme and glass look (1.27.5) before first paint
             // (not on the brand pages: home, sign-in, status, legal; see lib/public-pages.ts).
-            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname))d.dataset.palette=p}catch(e){}`,
+            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var b=new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname);var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!b)d.dataset.palette=p;if(localStorage.getItem('vp-glass')==='on'&&!b)d.dataset.glass='on'}catch(e){}`,
           }}
         />
       </head>

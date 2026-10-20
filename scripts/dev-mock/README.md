@@ -18,6 +18,11 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
 #    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
 #    MOCK_TOUR=1 the sample user hasn't seen Clip's tour yet (it starts on the dashboard),
+#    1.27.5: MOCK_SCRIPT=/path/doc.json the first script's document (a TipTap JSON), MOCK_COMMENTS=many comments on every
+#    third paragraph of it, MOCK_MEETING=soon the sample meeting 3 hours from the real "now" (Next meeting's answers),
+#    MOCK_STRANGER=1 someone on none of the sample user's teams (/u/radu: Invite to team), MOCK_GLASS=1 the glass look,
+#    MOCK_DASH_BG=jpg|gif|webm|mp4 a dashboard background of that kind (MOCK_DASH_BG_FILE=/path/to/file serves it, else a
+#    drawn dusk; MOCK_DASH_BG_DIM=0..80); uploads (storage.upload) and copies are accepted, MOCK_UPLOAD_FAIL=1 refuses them,
 #    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),
 #    MOCK_NOTIFS=0 no notifications (otherwise 13 over the last 12 days, for the bell and its History),
 #    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),

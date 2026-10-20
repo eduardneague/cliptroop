@@ -112,6 +112,29 @@ function sampleImage(res, p) {
   res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600", "Access-Control-Allow-Origin": "*" });
   res.end(svg);
 }
+/** MOCK_DASH_BG_FILE=/path/to/file (.jpg .png .webp .gif .mp4 .webm): the dashboard background; else a drawn dusk sky. */
+function sampleBackground(req, res) {
+  const file = process.env.MOCK_DASH_BG_FILE;
+  if (!file || !fs.existsSync(file)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22184a"/><stop offset=".55" stop-color="#c45262"/><stop offset="1" stop-color="#faaa5c"/></linearGradient><radialGradient id="g" cx=".3" cy=".35" r=".4"><stop offset="0" stop-color="#ffc878" stop-opacity=".7"/><stop offset="1" stop-color="#ffc878" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="900" fill="url(#s)"/><rect width="1600" height="900" fill="url(#g)"/><path d="M0 700 Q 300 620 600 690 T 1200 670 T 1600 690 V900 H0Z" fill="#1c1228"/></svg>`;
+    res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600", "Access-Control-Allow-Origin": "*" });
+    return res.end(svg);
+  }
+  const ext = file.split(".").pop().toLowerCase();
+  const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", avif: "image/avif", gif: "image/gif", mp4: "video/mp4", webm: "video/webm" }[ext] || "application/octet-stream";
+  const size = fs.statSync(file).size;
+  const m = /bytes=(\d*)-(\d*)/.exec(String(req.headers.range || ""));
+  const head = { "Content-Type": type, "Accept-Ranges": "bytes", "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=3600" };
+  if (!m) {
+    res.writeHead(200, { ...head, "Content-Length": size });
+    return req.method === "HEAD" ? res.end() : fs.createReadStream(file).pipe(res);
+  }
+  const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+  const end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+  res.writeHead(206, { ...head, "Content-Length": end - start + 1, "Content-Range": `bytes ${start}-${end}/${size}` });
+  return req.method === "HEAD" ? res.end() : fs.createReadStream(file, { start, end }).pipe(res);
+}
+
 // Resumable uploads (TUS, what Supabase Storage speaks): id → { length, offset, name }.
 /** MOCK_VIDEO=/path/to/file.mp4 (or .webm): the file every signed review-videos link plays (with Range support). */
 function sampleVideo(req, res) {
@@ -180,6 +203,16 @@ function answer(req, res, url, body) {
       }
       // Removing files (storage.remove): accepted.
       if (req.method === "DELETE" && url.pathname.startsWith("/storage/v1/object/")) return send(res, 200, []);
+      // Plain uploads (storage.upload, e.g. a picture pasted into a script) and copies: accepted
+      // (MOCK_UPLOAD_FAIL=1: refused); public files answer with a generated sample picture.
+      if (url.pathname === "/storage/v1/object/copy" && req.method === "POST") return send(res, 200, { Key: (body ? JSON.parse(body).destinationKey : "") ?? "" });
+      if ((req.method === "POST" || req.method === "PUT") && /^\/storage\/v1\/object\/(?!sign\/|public\/|upload\/)[^/]+\/.+/.test(url.pathname)) {
+        if (process.env.MOCK_UPLOAD_FAIL) return send(res, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
+        return send(res, 200, { Key: decodeURIComponent(url.pathname.replace("/storage/v1/object/", "")), Id: Math.random().toString(36).slice(2) });
+      }
+      // A dashboard background (1.27.5): MOCK_DASH_BG_FILE (a picture, GIF or video), else a generated dusk.
+      if (url.pathname.startsWith("/storage/v1/object/public/dashboard-backgrounds/")) return sampleBackground(req, res);
+      if (url.pathname.startsWith("/storage/v1/object/public/")) return sampleImage(res, decodeURIComponent(url.pathname));
       // Batch signing (createSignedUrls): links to generated sample images below.
       if (req.method === "POST" && /\/object\/sign\/[^/]+\/?$/.test(url.pathname)) {
         const bucket = url.pathname.split("/sign/")[1].replace(/\/$/, "");

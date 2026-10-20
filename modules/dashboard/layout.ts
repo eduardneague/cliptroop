@@ -32,6 +32,10 @@ export type WidgetInstance = { id: string; type: WidgetType; x: number; y: numbe
 
 /** The Contributions widget's colours (its settings list them without loading the widget). */
 export const CONTRIB_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#f97316", "#eab308", "#14b8a6"];
+/** 1.27.5: the colour theme's own accent, whichever theme is on (it changes with it). */
+export const CONTRIB_THEME = "theme";
+/** A Contributions colour as CSS. */
+export const contribColor = (v: unknown) => (v === CONTRIB_THEME ? "rgb(var(--amber))" : typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : "#22c55e");
 export type Layout = { v: 2; widgets: WidgetInstance[]; fill: boolean; sounds: boolean };
 
 /**
@@ -49,7 +53,7 @@ type Meta = { name: string; description: string; w: number; h: number; limits: L
 export const CATALOG: Record<WidgetType, Meta> = {
   tasks: { name: "My tasks", description: "What you need to do: overdue, today, coming up.", w: 4, h: 6, limits: { minW: 3, minH: 3, maxW: 12, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
   teams: { name: "Teams", description: "Your teams and who's in them. Click to switch.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 6, maxH: 6 } , stack: { min: 2, max: 4 } },
-  clock: { name: "Clock", description: "A clock face with moving hands, the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true } , stack: { min: 2, max: 3, phone: 2 } },
+  clock: { name: "Clock", description: "A clock face with moving hands, or a digital one (1.27.5), with the time and date.", w: 2, h: 2, limits: { minW: 2, minH: 2, maxW: 4, maxH: 4 }, bare: true, settings: { h24: true, secondHand: true, skin: "analog" } , stack: { min: 2, max: 3, phone: 2 } },
   word: { name: "Daily word", description: "Start your day with a five-letter word. Finishing it counts as a contribution.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 4, maxH: 6 }, stack: { min: 3, max: 4, phone: 4 } },
   // Objectives (1.14.0): loads its own numbers and stays live.
   objectives: { name: "Objectives", description: "The team's goals as rings that fill up live as videos go out, with what's left and the days to go. Confetti when one is reached.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 12, maxH: 8 }, settings: { show: "all" }, stack: { min: 3, max: 6, phone: 4 } },
@@ -59,7 +63,7 @@ export const CATALOG: Record<WidgetType, Meta> = {
   todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
   upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step and editor.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 6 } },
   minicalendar: { name: "Calendar", description: "This month with shorts and long videos marked.", w: 2, h: 4, limits: { minW: 2, minH: 4, maxW: 4, maxH: 8 } , stack: { min: 6, max: 7, phone: 6 } },
-  upcomingLongs: { name: "Long videos", description: "Long videos in progress, with thumbnails and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } , stack: { min: 4, max: 7, phone: 5 } },
+  upcomingLongs: { name: "Upcoming longs", description: "The long videos coming up next, with their thumbnails, steps and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } , stack: { min: 4, max: 7, phone: 5 } },
   contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", w: 6, h: 3, limits: { minW: 4, minH: 3, maxW: 12, maxH: 5 }, settings: { color: "#22c55e", scope: "all" } , stack: { span: 2, min: 3, max: 4, phone: 3 } },
   pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
   meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 2, max: 4, phone: 3 } },
@@ -67,8 +71,8 @@ export const CATALOG: Record<WidgetType, Meta> = {
   // Analytics (1.5): each loads its own numbers when it appears.
   output: { name: "This week", description: "Shorts and long videos out in the last 7 days, how many on time, and what's late.", w: 6, h: 2, limits: { minW: 2, minH: 2, maxW: 12, maxH: 4 } , stack: { min: 3, max: 3, phone: 3 } },
   views: { name: "Views", description: "Views on YouTube, Instagram and TikTok in the last 7 days, and the trend.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 3, max: 4, phone: 3 } },
-  followers: { name: "Followers", description: "Subscribers and followers on each platform, and how they changed.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } , stack: { min: 4, max: 5, phone: 4 } },
-  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views. Click one for its analytics.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
+  followers: { name: "Followers", description: "Subscribers and followers on each platform, with a graph of the last 28 days.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 } , stack: { min: 4, max: 5, phone: 4 } },
+  topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views: every platform together or one at a time. Click one for its analytics.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 }, settings: { platform: "all" } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
   audienceMap: { name: "Audience map", description: "Where your audience is, last 28 days: a world map or a 3D globe of YouTube views, followers, or all platforms together.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 }, settings: { view: "map", mode: "all" } , stack: { span: 2, min: 5, max: 7, phone: (st) => (st?.view === "globe" ? 7 : 5) } },
 };
 

@@ -357,7 +357,8 @@ function HandOffDialog({
               start(async () => {
                 const r = await handOffScript(step.docId, nextEmpty && copy);
                 if (r.error !== undefined) return toast.error(r.error);
-                toast.success(`Sent to ${word}. ${r.notified ? `${r.notified === 1 ? "1 person was" : `${r.notified} people were`} notified.` : ""}`.trim());
+                const brought = r.comments ? ` Its ${r.comments === 1 ? "comment came" : `${r.comments} comments and editing ideas came`} along.` : "";
+                toast.success(`Sent to ${word}.${brought} ${r.notified ? `${r.notified === 1 ? "1 person was" : `${r.notified} people were`} notified.` : ""}`.trim());
                 onClose();
                 // The script moves on, and so does the page: open the next step's document.
                 const to = r.nextId || next?.docId;
@@ -401,7 +402,7 @@ function HandOffDialog({
               <input type="checkbox" checked={copy} onChange={(e) => setCopy(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[rgb(var(--amber))]" />
               <span className="text-[13px]">
                 <b>Copy this script into {next.name}</b>
-                <span className="block text-ink-soft text-[12px]">{next.name} is empty, so it starts from what&rsquo;s here.</span>
+                <span className="block text-ink-soft text-[12px]">{next.name} is empty, so it starts from what&rsquo;s here, comments and editing ideas included.</span>
               </span>
             </label>
           ) : (

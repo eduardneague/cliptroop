@@ -6,8 +6,11 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { GridIcon, ListIcon, PlusIcon, CalendarIcon, PinIcon } from "@/components/ui/icons";
-import { LinkPendingIndicator } from "@/components/ui/link-pending";
+import { PlusIcon, CalendarIcon, PinIcon } from "@/components/ui/icons";
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { FilterChip } from "@/components/ui/filter-chip";
+import { ShortCardsSkeleton, ShortTableSkeleton } from "@/modules/short-videos/components/list-skeletons";
 import {
   getShortSettings,
   listDayLimits,
@@ -206,7 +209,14 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       ? []
       : emptyExceptionDays.filter((d) => d < day && (prev === null || d > prev));
 
+  const viewHref = (mode: "grid" | "table") => {
+    const q = new URLSearchParams(currentQs);
+    q.set("view", mode);
+    return `/shorts?${q}`;
+  };
+
   return (
+    <PendingNav>
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1500px] mx-auto">
       <ShortsRealtime teamId={currentTeam.id} />
 
@@ -246,51 +256,28 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
               label: SHORT_STAGE_LABELS[st],
               count: counts.get(st) ?? 0,
               color: SHORT_STAGE_COLOR[st] as string | null,
-            }))].map((f) => {
-              const active = (stageFilter ?? "") === f.key;
-              return (
-                <Link
-                  key={f.key || "all"}
-                  href={buildHref({ stage: f.key || undefined })}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-ink text-paper"
-                      : f.count === 0
-                        ? "text-ink-faint hover:bg-surface-2 hover:text-ink-soft"
-                        : "text-ink-soft hover:bg-surface-2 hover:text-ink"
-                  }`}
-                >
-                  {f.color && <span className="w-1.5 h-1.5 rounded-[2px] flex-shrink-0" style={{ background: f.color, opacity: f.count ? 1 : 0.45 }} aria-hidden />}
-                  {f.label}
-                  <span className={`text-[11px] tabular-nums font-medium ${active ? "text-paper/60" : "text-ink-faint"}`}>
-                    {f.count}
-                  </span>
-                  <LinkPendingIndicator />
-                </Link>
-              );
-            })}
+            }))].map((f) => (
+              <FilterChip
+                key={f.key || "all"}
+                href={buildHref({ stage: f.key || undefined })}
+                navKey={`stage:${f.key}`}
+                active={(stageFilter ?? "") === f.key}
+                label={f.label}
+                count={f.count}
+                color={f.color}
+                tall
+              />
+            ))}
           </div>
         </div>
 
-        <div className="flex-shrink-0 flex items-center rounded-lg border border-line/15 p-0.5">
-          {(["grid", "table"] as const).map((mode) => (
-            <form key={mode} action={setShortsViewMode}>
-              <input type="hidden" name="mode" value={mode} />
-              <input type="hidden" name="qs" value={currentQs} />
-              <button
-                type="submit"
-                aria-label={mode === "grid" ? "Card view" : "Table view"}
-                className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                  (mode === "table") === isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-                }`}
-              >
-                {mode === "grid" ? <GridIcon className="w-[15px] h-[15px]" /> : <ListIcon className="w-[15px] h-[15px]" />}
-              </button>
-            </form>
-          ))}
-        </div>
+        <ViewToggle
+          value={isTable ? "table" : "grid"}
+          cookie={SHORTS_VIEW_COOKIE}
+          hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
+          action={setShortsViewMode}
+          fields={{ qs: currentQs }}
+        />
       </div>
 
       <div className="-mt-3 mb-6">
@@ -367,6 +354,8 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
       {!newest && firstUpcoming && <ScrollToToday />}
 
+      {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
+      <PendingSwap fallback={isTable ? <ShortTableSkeleton /> : <ShortCardsSkeleton />} fallbacks={{ grid: <ShortCardsSkeleton />, table: <ShortTableSkeleton /> }}>
       {shorts.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-line/15 py-20 px-6 text-center">
           <p className="text-[15px] font-semibold mb-1">
@@ -655,6 +644,8 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
+      </PendingSwap>
+
       {user && all.length > 0 && (
         <p className="mt-4 text-[11.5px] text-ink-faint">
           {canPost
@@ -663,5 +654,6 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
         </p>
       )}
     </div>
+    </PendingNav>
   );
 }

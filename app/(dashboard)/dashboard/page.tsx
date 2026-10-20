@@ -7,6 +7,8 @@ import { listDone, listMyTasks, listPostsAroundToday, listTeamCards, listTeamTas
 import { readLayout } from "@/modules/dashboard/layout";
 import { DashboardStudio } from "@/modules/dashboard/components/studio";
 import { listMeetings } from "@/modules/meetings/lib/queries";
+import { DashboardBackdrop } from "@/modules/dashboard/components/backdrop";
+import { bgKind, clampDim, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -41,7 +43,7 @@ export default async function DashboardPage() {
   const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
   const t = new Date();
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings, teamTasks] = await Promise.all([
+  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings, teamTasks, { data: look }] = await Promise.all([
     listMyTasks(currentTeam.id),
     listDone(since, currentTeam.id),
     listTodos(),
@@ -51,14 +53,25 @@ export default async function DashboardPage() {
     listPostsAroundToday(currentTeam.id),
     listMeetings(currentTeam.id, { from: new Date(Date.now() - 12 * 3_600_000).toISOString(), limit: 5 }),
     listTeamTasks(currentTeam.id),
+    // Your background (1.27.5): its own query, so a database before 0092 just shows none.
+    supabase.from("profiles").select("dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim").eq("id", user?.id ?? "").maybeSingle(),
   ]);
   const name = ((profile?.full_name as string | null) || (profile?.username as string | null) || "there").split(" ")[0];
+  const bgPath = look?.dashboard_bg_on && user && isOwnBgPath(look.dashboard_bg_path, user.id) ? look.dashboard_bg_path : null;
 
-  return (
+  const studio = (
     <DashboardStudio
       name={name}
       initial={readLayout(profile?.dashboard_layout)}
       data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts, meetings, teamTasks }}
     />
+  );
+  if (!bgPath) return studio;
+  return (
+    // data-dash-bg: the widgets and the top bar turn frosted over it (globals.css).
+    <div data-dash-bg className="contents">
+      <DashboardBackdrop src={supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(bgPath).data.publicUrl} video={bgKind(bgPath) === "video"} dim={clampDim(look?.dashboard_bg_dim)} />
+      {studio}
+    </div>
   );
 }

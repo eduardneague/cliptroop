@@ -8,7 +8,8 @@
  *
  *  - compact():  everything slides up until something is above it.
  *  - preview():  where everything goes while one widget is dragged or
- *                resized (push aside, swap with a similar widget, slide up).
+ *                resized from any edge or corner (push aside, swap with a
+ *                similar widget, slide up).
  *  - fill():     widgets grow into empty space next to them (display only,
  *                the saved sizes stay as you set them).
  */
@@ -68,7 +69,11 @@ export function compact(items: Box[], fixed: Box[] = []): Box[] {
 
 export type Interaction =
   | { kind: "move"; id: string; x: number; y: number }
-  | { kind: "resize"; id: string; w: number; h: number };
+  /**
+   * `left` / `top` (1.27.5): pulled by its left or top edge (or a corner
+   * there): that edge moves and the opposite one stays where it is.
+   */
+  | { kind: "resize"; id: string; w: number; h: number; left?: boolean; top?: boolean };
 
 /**
  * The board while one widget is moved or resized. `base` is the saved
@@ -82,7 +87,16 @@ export function preview(base: Box[], act: Interaction, limits: Record<string, Li
 
   if (act.kind === "resize") {
     const r = clampBox({ ...me, w: act.w, h: act.h }, limits[me.i]);
-    const fixed = { ...r, x: Math.min(me.x, COLS - r.w) };
+    // Its right (bottom) edge stays put when it's pulled by the left (top) one.
+    const w = act.left ? Math.min(r.w, me.x + me.w) : r.w;
+    const h = act.top ? Math.min(r.h, me.y + me.h) : r.h;
+    const fixed = {
+      ...r,
+      w,
+      h,
+      x: act.left ? me.x + me.w - w : Math.min(me.x, COLS - w),
+      y: act.top ? me.y + me.h - h : me.y,
+    };
     const moved = compact(others, [fixed]);
     return compact([fixed, ...moved]);
   }

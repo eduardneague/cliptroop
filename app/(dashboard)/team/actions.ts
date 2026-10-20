@@ -12,7 +12,7 @@ import { displayName } from "@/lib/avatar";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { isOwnStorageUrl } from "@/lib/storage-url";
-import { isLongMediaKeepDays, isMediaKeepDays, isStudioKeepDays } from "@/lib/media-keep";
+import { isKeepDays } from "@/lib/media-keep";
 
 async function requireMaster(teamId: string) {
   const supabase = await createClient();
@@ -566,49 +566,40 @@ export async function updateShortSettings(
   return { success: true };
 }
 
-/** Team → Defaults → Video files: how long posted shorts' files stay (masters). */
-export async function updateMediaKeepDays(teamId: string, days: number) {
+/**
+ * Saving a team's "how long files stay" (1.27.5: 1 day to 1 year, or never = null; the database takes those from
+ * 0092 on). Masters only.
+ */
+async function saveKeep(teamId: string, column: "media_keep_days" | "long_media_keep_days" | "studio_keep_days", days: number | null, since: string) {
   const check = await requireMaster(teamId);
   if (!check.ok) return { error: check.error };
-  if (!isMediaKeepDays(days)) return { error: "Pick 1, 2 or 3 weeks, or 1 month." };
+  if (days !== null && !isKeepDays(days)) return { error: "Pick from 1 day to 1 year, or never." };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ media_keep_days: days }).eq("id", teamId).select("id");
+  const { data, error } = await supabase.from("teams").update({ [column]: days }).eq("id", teamId).select("id");
   if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0070)." : "Couldn't save. Try again." };
+    if (error.code === "42703" || error.code === "PGRST204") return { error: `This needs the latest database update (migration ${since}).` };
+    // The old choices only (0092 not in yet): the new lengths and "never" don't fit them.
+    if (error.code === "23514" || error.code === "23502") return { error: "This choice needs the latest database update (migration 0092)." };
+    return { error: "Couldn't save. Try again." };
   }
   if (!data?.length) return { error: "Only the master can do this." };
   revalidatePath("/team");
   return { success: true };
 }
 
-/** Team → Defaults → Video files (1.25.0): how long a posted long video's edit stays. */
-export async function updateLongMediaKeepDays(teamId: string, days: number) {
-  const check = await requireMaster(teamId);
-  if (!check.ok) return { error: check.error };
-  if (!isLongMediaKeepDays(days)) return { error: "Pick 3 days, 1, 2 or 3 weeks, or 1 month." };
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ long_media_keep_days: days }).eq("id", teamId).select("id");
-  if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
-  }
-  if (!data?.length) return { error: "Only the master can do this." };
-  revalidatePath("/team");
-  return { success: true };
+/** Team → Defaults → Video files: how long posted shorts' files stay (null: never deleted). */
+export async function updateMediaKeepDays(teamId: string, days: number | null) {
+  return saveKeep(teamId, "media_keep_days", days, "0070");
+}
+
+/** Team → Defaults → Video files (1.25.0): how long a posted long video's edit stays (null: never deleted). */
+export async function updateLongMediaKeepDays(teamId: string, days: number | null) {
+  return saveKeep(teamId, "long_media_keep_days", days, "0089");
 }
 
 /** Team → Defaults → Video files (1.25.0): how long Thumbnail Studio keeps the thumbnails that didn't win (null = keep them). */
 export async function updateStudioKeepDays(teamId: string, days: number | null) {
-  const check = await requireMaster(teamId);
-  if (!check.ok) return { error: check.error };
-  if (days !== null && !isStudioKeepDays(days)) return { error: "Pick 1 or 2 weeks, 1 or 3 months, or keep them." };
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ studio_keep_days: days }).eq("id", teamId).select("id");
-  if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
-  }
-  if (!data?.length) return { error: "Only the master can do this." };
-  revalidatePath("/team");
-  return { success: true };
+  return saveKeep(teamId, "studio_keep_days", days, "0089");
 }
 
 /** Team → Defaults → Long videos: review the edit in ClipTroop (a video can still choose its own way). */

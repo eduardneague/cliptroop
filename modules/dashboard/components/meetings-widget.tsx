@@ -33,6 +33,8 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
   const going = next.attendees.filter((a) => a.rsvp === "yes").map((a) => a.person);
   const tall = box.h >= 150;
   const roomy = box.h >= 230;
+  // Short (the default size): the countdown joins the time line, so the answer buttons fit too (1.27.5).
+  const short = box.h < 118;
   const soon = Date.parse(next.startsAt) - now < 2 * 3_600_000;
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -44,10 +46,20 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
           </Link>
           <p className="text-[12px] text-ink-soft truncate">
             <LocalTime iso={next.startsAt} format="time" /> · {durationLabel(next.durationMin)} · {next.location}
+            {short && (
+              <>
+                {" · "}
+                <span className="font-semibold text-violet">
+                  <Countdown iso={next.startsAt} durationMin={next.durationMin} />
+                </span>
+              </>
+            )}
           </p>
-          <span className="mt-1 inline-flex rounded-md bg-violet/12 text-violet px-2 h-5 items-center text-[11px] font-bold">
-            <Countdown iso={next.startsAt} durationMin={next.durationMin} />
-          </span>
+          {!short && (
+            <span className="mt-1 inline-flex rounded-md bg-violet/12 text-violet px-2 h-5 items-center text-[11px] font-bold">
+              <Countdown iso={next.startsAt} durationMin={next.durationMin} />
+            </span>
+          )}
         </div>
         {next.link && soon && (
           <a href={next.link} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-violet text-white dark:text-paper font-bold px-2.5 h-8 text-[12px] hover:brightness-110">
@@ -56,16 +68,15 @@ export function MeetingsWidget({ meetings }: { meetings: Meeting[] }) {
           </a>
         )}
       </div>
-      {tall && (
-        <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <RsvpButtons meetingId={next.id} value={next.myRsvp} size="sm" />
-          {going.length > 0 && box.w > 330 && (
-            <span className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
-              <AvatarStack people={going} max={4} />
-            </span>
-          )}
-        </div>
-      )}
+      {/* Your answer, right here at every size (1.27.5). */}
+      <div className={`${short ? "mt-auto pt-2" : "mt-3"} flex items-center gap-2 flex-wrap`}>
+        <RsvpButtons meetingId={next.id} value={next.myRsvp} size={tall ? "sm" : "xs"} fill={box.w < 330} />
+        {tall && going.length > 0 && box.w > 330 && (
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
+            <AvatarStack people={going} max={4} />
+          </span>
+        )}
+      </div>
       {roomy && list.length > 1 && (
         <ul className="mt-3 pt-2.5 border-t border-line/10 space-y-1.5 min-h-0 overflow-hidden">
           {list.slice(1, 4).map((m) => (

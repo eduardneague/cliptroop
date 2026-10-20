@@ -4,7 +4,7 @@ import { Ago } from "@/components/ui/ago";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
@@ -17,12 +17,16 @@ import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
 import { PageBreak } from "../lib/page-break";
 import { HeadingKeys } from "../lib/heading-keys";
-import { fixHeadings, smallHeadingsToH3 } from "../lib/headings";
+import { ScriptKeys, ScriptOrderedList } from "../lib/script-keys";
+import { imageFiles, pastePlan } from "../lib/paste-images";
+import { useScriptImages } from "./use-script-images";
+import { smallHeadingsToH3 } from "../lib/headings";
+import { repairDoc } from "../lib/repair";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
 import { findQuote, type PostingComment } from "../lib/anchors";
 import { dock, useDock } from "../lib/dock";
 import { Skeleton, SkeletonCircle } from "@/components/ui/skeleton";
-import { addComment, createDoc, deleteComment, deleteDoc, getDocContent, renameDoc, resolveComment, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
+import { addComment, copyCommentsFrom, createDoc, deleteComment, deleteDoc, getDocContent, renameDoc, resolveComment, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
@@ -212,7 +216,13 @@ function Workspace({
           toast.error(r.error);
           return null;
         }
-        return r.content;
+        return { content: r.content, comments: canComment ? r.comments : 0 };
+      }}
+      onCopyComments={async (from) => {
+        const r = await copyCommentsFrom(from, doc.id);
+        if (r.error !== undefined) return void toast.error(r.error);
+        if (r.copied) toast.success(r.copied === 1 ? "Copied, with its comment." : `Copied, with ${r.copied} comments and editing ideas.`);
+        router.refresh();
       }}
       subBar={
         flow?.data.ready && doc.kind === "script" ? (
@@ -792,36 +802,84 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
       window.removeEventListener("vp-width", onWidth);
     };
   }, []);
+  // Pictures pasted or dropped here too (1.27.5): shown at once, saved once uploaded.
+  const editorRef = useRef<Editor | null>(null);
+  const images = useScriptImages(editorRef, { teamId: side.teamId, scriptId: side.id, onError: (m) => toast.error(m) });
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const save = async (e: Editor) => {
+    const content = imagesRef.current.forSave(e.getJSON());
+    // (A picture still uploading: once it's up.)
+    if (!content) {
+      timer.current = setTimeout(() => void save(e), 700);
+      return;
+    }
+    setStatus("saving");
+    const text = e.getText();
+    const r = await saveScript({ scriptId: side.id, expectedVersion: version.current, content, text, wordCount: text.trim() ? text.trim().split(/\s+/).length : 0 });
+    if (r.ok) {
+      version.current = r.version;
+      setStatus("saved");
+    } else if ("conflict" in r) {
+      setStatus("conflict");
+      toast.error(`Someone else saved “${side.name}”. Reload to see their version.`);
+    } else {
+      setStatus("unsaved");
+      toast.error(r.error);
+    }
+  };
   const editor = useEditor(
     {
       immediatelyRender: false,
       editable: canEdit,
-      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }), Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, HeadingKeys, PageBreak],
-      content: fixHeadings(side.content),
-      editorProps: { attributes: { class: "script-doc outline-none" }, transformPastedHTML: smallHeadingsToH3 },
+      extensions: [
+        StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }),
+        ScriptOrderedList,
+        ScriptKeys,
+        Highlight.configure({ multicolor: true }),
+        TextAlign.configure({ types: ["heading", "paragraph"] }),
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        ScriptImage,
+        HeadingKeys,
+        PageBreak,
+      ],
+      content: repairDoc(side.content),
+      editorProps: {
+        attributes: { class: "script-doc outline-none" },
+        transformPastedHTML: (html) => imagesRef.current.fromHtml(smallHeadingsToH3(html)),
+        handlePaste: (_view, event) => {
+          if (!canEdit) return false;
+          const dt = event.clipboardData;
+          const files = imageFiles(dt);
+          const plan = pastePlan({ files: files.length, html: dt?.getData("text/html") ?? "", text: dt?.getData("text/plain") ?? "" });
+          if (plan === "files") {
+            imagesRef.current.insert(files);
+            return true;
+          }
+          if (plan === "files-after") setTimeout(() => imagesRef.current.insert(files), 0);
+          return false;
+        },
+        handleDrop: (view, event, _slice, moved) => {
+          if (moved || !canEdit) return false;
+          const files = imageFiles(event.dataTransfer);
+          if (!files.length) return false;
+          event.preventDefault();
+          imagesRef.current.insert(files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos);
+          return true;
+        },
+      },
       onUpdate: ({ editor: e }) => {
         if (!canEdit) return;
+        queueMicrotask(() => imagesRef.current.settle());
         setStatus("unsaved");
         if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(async () => {
-          setStatus("saving");
-          const text = e.getText();
-          const r = await saveScript({ scriptId: side.id, expectedVersion: version.current, content: e.getJSON(), text, wordCount: text.trim() ? text.trim().split(/\s+/).length : 0 });
-          if (r.ok) {
-            version.current = r.version;
-            setStatus("saved");
-          } else if ("conflict" in r) {
-            setStatus("conflict");
-            toast.error(`Someone else saved “${side.name}”. Reload to see their version.`);
-          } else {
-            setStatus("unsaved");
-            toast.error(r.error);
-          }
-        }, 1200);
+        timer.current = setTimeout(() => void save(e), 1200);
       },
     },
     [side.id]
   );
+  editorRef.current = editor;
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
@@ -926,7 +984,7 @@ export function CommentsChat({
     {
       immediatelyRender: false,
       editable: false,
-      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }), Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
+      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }), ScriptOrderedList, Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
       content: docContent,
     },
     [docContent]

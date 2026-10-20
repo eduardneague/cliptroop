@@ -38,6 +38,7 @@ import { setLongScripter } from "./actions";
 import { listNotes, listVersions, type ReviewNote, type VideoVersion } from "@/modules/review/lib/queries";
 import { VideoCard } from "@/modules/review/components/video-card";
 import { LongVideoFile } from "./video-file";
+import { DEFAULT_LONG_MEDIA_KEEP_DAYS, readKeep } from "@/lib/media-keep";
 
 // The steps ARE the tabs.
 const TABS: PipelineStage[] = STAGE_ORDER;
@@ -594,7 +595,7 @@ export default async function ProjectDetailPage({
                   projectId={id}
                   video={postFile}
                   approved={postFile.id === approvedVersionId}
-                  keepDays={(reviewDefaults?.long_media_keep_days as number | undefined) ?? 7}
+                  keepDays={readKeep(reviewDefaults ? reviewDefaults.long_media_keep_days : undefined, DEFAULT_LONG_MEDIA_KEEP_DAYS)}
                   keep={!!project.keep_media}
                   canKeep={userIsMaster || myRoles.includes("publisher")}
                 />

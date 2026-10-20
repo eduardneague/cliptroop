@@ -111,7 +111,15 @@ export async function loadDashAudience(teamId: string): Promise<Result<{ data: D
   // The connected platforms and whose numbers they are: looked up once for both.
   const shared = sharedLookups(teamId, await createClient());
   const [audience, content] = await Promise.all([getAudience(teamId, w, shared), getContent(teamId, w, shared, { limit: 60 })]);
-  return { data: { audience, top: content.items.slice(0, 8) } };
+  // Top videos (1.27.5): enough of each platform for its own filter, not only the 8 best overall.
+  const top: typeof content.items = [];
+  const per = new Map<string, number>();
+  for (const it of content.items) {
+    const n = per.get(it.platform) ?? 0;
+    if (top.length < 8 || n < 8) top.push(it);
+    per.set(it.platform, n + 1);
+  }
+  return { data: { audience, top } };
 }
 
 // A day's YouTube videos asked for at most once per 10 minutes (per server), when the daily copy didn't keep them.

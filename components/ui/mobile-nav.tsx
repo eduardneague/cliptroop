@@ -20,7 +20,7 @@ export function MobileTopBar({
   userColor: string;
 }) {
   return (
-    <div className="md:hidden border-b border-line/10 px-4 py-2.5 flex items-center gap-2">
+    <div data-shell="topbar" className="md:hidden border-b border-line/10 px-4 py-2.5 flex items-center gap-2">
       <div className="flex-1 min-w-0">
         <WorkspaceSwitcher teams={teams} currentTeam={currentTeam} />
       </div>
@@ -45,6 +45,7 @@ export function MobileTopBar({
 export function MobileBottomNav({ developer = false }: { developer?: boolean }) {
   return (
     <nav
+      data-shell="bottom-nav"
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface/95 backdrop-blur border-t border-line/10 flex"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >

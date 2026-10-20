@@ -699,11 +699,35 @@ export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: 
  * Everything on screen for one editor's suggestions: the card over a word,
  * the corner button and the panel.
  */
-export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: { editor: Editor | null; g: Grammar; open: boolean; onOpen: () => void; onClose: () => void; fab?: boolean }) {
+export function GrammarLayer({
+  editor,
+  g,
+  open,
+  onOpen,
+  onClose,
+  fab = true,
+  skipInside,
+  request = null,
+}: {
+  editor: Editor | null;
+  g: Grammar;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  fab?: boolean;
+  /**
+   * 1.27.5: words inside this (the comments' highlights) don't open their
+   * suggestion on a point or a click: the comment opens, with the
+   * suggestion as a button on it (`request`).
+   */
+  skipInside?: string;
+  /** Open this suggestion's card (pinned), e.g. from "Suggestion here" on a comment. `n` changes each time. */
+  request?: { id: string; n: number } | null;
+}) {
   const [card, setCard] = useState<{ id: string; pinned: boolean } | null>(null);
   const timers = useRef<{ show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
-  const live = useRef({ open, card });
-  live.current = { open, card };
+  const live = useRef({ open, card, skipInside });
+  live.current = { open, card, skipInside };
 
   const { pick, enabled } = g;
   const close = useCallback(() => {
@@ -717,6 +741,8 @@ export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: {
     const t = timers.current;
     const markOf = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null;
+      // (A comment's words: the comment opens instead.)
+      if (live.current.skipInside && target.closest(live.current.skipInside)) return null;
       const word = target.closest<HTMLElement>("[data-gr]");
       if (word) return word.dataset.gr ?? null;
       return target.closest<HTMLElement>("[data-gr-wide]")?.dataset.grWide ?? null;
@@ -760,6 +786,18 @@ export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: {
   useEffect(() => {
     if (open) setCard(null);
   }, [open]);
+
+  // Asked for (a comment's "Suggestion here"): its card, pinned (or picked in the open panel).
+  const asked = request?.n ?? 0;
+  useEffect(() => {
+    if (!request) return;
+    if (live.current.open) pick(request.id, false);
+    else {
+      setCard({ id: request.id, pinned: true });
+      pick(request.id, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
 
   if (!editor || !g.enabled) return null;
   return (

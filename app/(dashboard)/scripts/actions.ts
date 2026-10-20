@@ -114,11 +114,83 @@ export async function deleteDoc(id: string): Promise<DocResult> {
 }
 
 /** "Copy from…": another document's content (the editor applies it and saves). */
-export async function getDocContent(id: string): Promise<DocResult<{ content: Record<string, unknown> }>> {
+export async function getDocContent(id: string): Promise<DocResult<{ content: Record<string, unknown>; comments: number }>> {
+  if (!UUID_RX.test(id)) return { error: "Not found." };
   const supabase = await createClient();
-  const { data } = await supabase.from("scripts").select("content").eq("id", id).maybeSingle();
+  const [{ data }, { count }] = await Promise.all([
+    supabase.from("scripts").select("content").eq("id", id).maybeSingle(),
+    // How many comments and editing ideas it has (1.27.5: "Copy from…" asks whether to bring them).
+    supabase.from("script_comments").select("id", { count: "exact", head: true }).eq("script_id", id).is("resolved_at", null),
+  ]);
   if (!data) return { error: "Not found." };
-  return { content: (data.content as Record<string, unknown>) ?? {} };
+  return { content: (data.content as Record<string, unknown>) ?? {}, comments: count ?? 0 };
+}
+
+/**
+ * Comments and editing ideas from one document of a video into another
+ * (1.27.5): with "Ready for review / staging" when the text went over, and
+ * "Copy from…" when you say so. Each keeps its author, date and whether it
+ * was resolved; its drawing is copied into the new document's folder (every
+ * comment has its own file, deleted with it). Ones already there aren't
+ * copied twice. The database checks who's asking (migration 0092).
+ */
+async function copyComments(supabase: Awaited<ReturnType<typeof createClient>>, from: string, to: string): Promise<DocResult<{ copied: number }>> {
+  if (!UUID_RX.test(from) || !UUID_RX.test(to) || from === to) return { error: "Document not found." };
+  const [{ data: rows, error }, { data: target }] = await Promise.all([
+    supabase.from("script_comments").select("id, sketch_path").eq("script_id", from),
+    supabase.from("scripts").select("id, team_id").eq("id", to).maybeSingle(),
+  ]);
+  if (error) return { error: "Couldn't read the comments." };
+  if (!target) return { error: "Document not found." };
+  if (!rows?.length) return { copied: 0 };
+  if (!(await mayComment(supabase, to))) return { error: NOT_ON_SCRIPT };
+
+  // Drawings first, each to the id its copy will have (the database checks the folder).
+  const admin = createAdminClient();
+  const bucket = admin.storage.from(SKETCH_BUCKET);
+  const items = await Promise.all(
+    rows.map(async (r) => {
+      const newId = crypto.randomUUID();
+      const path = (r.sketch_path as string | null) ?? null;
+      let sketch: string | null = null;
+      if (path && SKETCH_RX.test(path)) {
+        const dest = `${target.team_id}/${target.id}/${newId}.png`;
+        const { error: e } = await bucket.copy(path, dest);
+        if (!e) {
+          sketch = dest;
+          // (The editable drawing too, when there is one.)
+          await bucket.copy(path.replace(/\.png$/, ".json"), dest.replace(/\.png$/, ".json"));
+        }
+      }
+      return { id: r.id as string, new_id: newId, sketch: !!sketch, dest: sketch };
+    })
+  );
+  const { data, error: rpcError } = await supabase.rpc("script_copy_comments", {
+    p_from: from,
+    p_to: to,
+    p_items: items.map(({ id, new_id, sketch }) => ({ id, new_id, sketch })),
+  });
+  const made = new Set(((data as string[] | null) ?? []).map(String));
+  // Drawings of comments that weren't copied (already there, or it failed) go again.
+  const extra = items.filter((x) => x.dest && !made.has(x.new_id)).flatMap((x) => [x.dest!, x.dest!.replace(/\.png$/, ".json")]);
+  if (extra.length) await bucket.remove(extra);
+  if (rpcError) return { error: /script_copy_comments|does not exist|schema cache/i.test(rpcError.message ?? "") ? "Run migration 0092 first." : rpcError.message || "Couldn't copy the comments." };
+  return { copied: made.size };
+}
+
+/** "Copy from…" (1.27.5): the other document's comments and editing ideas come too. */
+export async function copyCommentsFrom(from: string, to: string): Promise<DocResult<{ copied: number }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const r = await copyComments(supabase, from, to);
+  if (r.error === undefined) {
+    const { data } = await supabase.from("scripts").select("short_video_id, long_video_id").eq("id", to).maybeSingle();
+    refreshDocs({ short: data?.short_video_id as string | null, long: data?.long_video_id as string | null });
+  }
+  return r;
 }
 
 const SKETCH_RX = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/i;
@@ -407,7 +479,7 @@ export async function setScriptPeople(input: { scriptId?: string; teamId?: strin
  * copies the text into the next document when it's still empty and logs it;
  * then the next step's people get a notification and an email.
  */
-export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; notified: number }>> {
+export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; comments: number; notified: number }>> {
   if (!UUID_RX.test(scriptId)) return { error: "Document not found." };
   const supabase = await createClient();
   const {
@@ -417,6 +489,12 @@ export async function handOffScript(scriptId: string, copy: boolean): Promise<Do
   const { data, error } = await supabase.rpc("script_hand_off", { p_script: scriptId, p_copy: !!copy });
   if (error || !data) return { error: flowError(error?.message) };
   const r = data as { next_id: string; next_name: string; next_step: "review" | "staging"; name: string; copied: boolean; team: string; short: string | null; long: string | null; recipients: string[] };
+  // The text went over: its comments and editing ideas go with it (1.27.5).
+  let comments = 0;
+  if (r.copied) {
+    const c = await copyComments(supabase, scriptId, r.next_id);
+    if (c.error === undefined) comments = c.copied;
+  }
   refreshDocs({ short: r.short, long: r.long });
 
   const recipients = (r.recipients ?? []).filter((id) => UUID_RX.test(id));
@@ -460,7 +538,7 @@ export async function handOffScript(scriptId: string, copy: boolean): Promise<Do
       );
     }
   }
-  return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, notified: recipients.length };
+  return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, comments, notified: recipients.length };
 }
 
 /**

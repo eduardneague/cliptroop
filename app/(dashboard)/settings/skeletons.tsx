@@ -119,6 +119,24 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
             ))}
           </div>
         </div>
+        {/* 1.27.5: the glass look and the dashboard background. */}
+        <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
+          <div>
+            <div className="text-[13.5px] font-semibold">Glass</div>
+            <div className="text-[11.5px] text-ink-faint">Frosted, see-through cards and bars over a soft wash of your colours, across the whole app. Works with every colour theme, light and dark.</div>
+          </div>
+          <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
+        </div>
+        <div className="mt-5 pt-5 border-t border-line/10">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[13.5px] font-semibold">Dashboard background</div>
+              <div className="text-[11.5px] text-ink-faint">A picture, a GIF or a short video behind your dashboard, like a profile background. Only you see it; the widgets turn frosted so it shows through.</div>
+            </div>
+            <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
+          </div>
+          <Skeleton className="mt-3 aspect-video w-full max-w-[17rem] rounded-xl" />
+        </div>
       </section>
     );
   }

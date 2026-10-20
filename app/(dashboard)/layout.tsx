@@ -15,6 +15,7 @@ import { GlobalSearch } from "@/components/search/global-search";
 import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
+import { GlassSync } from "@/components/ui/glass";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
 import { TutorialHost } from "@/components/tutorial/tutorial";
@@ -64,7 +65,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // Everything the shell needs in ONE round trip: profile (with the colour
   // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer] = await Promise.all([
+  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer, look] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
@@ -85,6 +86,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
     supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
     isDeveloper(user),
+    // The glass look (1.27.5): on its own, so a database without 0092 just leaves this device's choice alone.
+    supabase.from("profiles").select("glass_ui").eq("id", user!.id).maybeSingle(),
   ]);
   const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
@@ -112,6 +115,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         </Suspense>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
+        <GlassSync on={look.error || !look.data ? null : !!(look.data as { glass_ui?: boolean | null }).glass_ui} />
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
         {/* Keeps this device's push notifications working after logging in again. */}
         <PushKeeper userId={user!.id} deviceHash={(await cookies()).get(PUSH_COOKIE)?.value ?? null} />
@@ -132,7 +136,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             {/* Three columns on desktop so the search bar sits in the true
                 middle of the top bar: [brand] [search] [actions]. On phones:
                 brand on the left, search icon + actions on the right. */}
-            <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,22rem)_1fr] lg:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
+            <header data-shell="header" className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,22rem)_1fr] lg:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
               <span className="flex items-center gap-2 min-w-0">
                 <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="md:hidden">
                   <Brand className="[&_.font-display]:text-[15px]" />

@@ -49,6 +49,8 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
   const [viewing, setViewing] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const editable = editor.isEditable;
+  // Shown from the device while it uploads (1.27.5: pasted and dropped pictures).
+  const uploading = typeof src === "string" && src.startsWith("blob:");
 
   /** Swap this image with the block above (-1) or below (+1). */
   function move(dir: -1 | 1) {
@@ -119,9 +121,17 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           draggable={false}
           loading="lazy"
           decoding="async"
-          className="block w-full h-auto rounded-lg"
+          className={`block w-full h-auto rounded-lg transition-opacity ${uploading ? "opacity-70" : ""}`}
           onDoubleClick={() => setViewing(true)}
         />
+        {uploading && (
+          <span contentEditable={false} className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-live="polite">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-black/70 text-white px-2.5 h-8 text-[12.5px] font-semibold shadow-lg">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" aria-hidden />
+              Uploading…
+            </span>
+          </span>
+        )}
 
         {/* Toolbar: always for editors when selected; view/download on hover for readers. */}
         <div

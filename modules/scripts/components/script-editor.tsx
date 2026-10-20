@@ -16,8 +16,9 @@ import { prepareSketchUpload, saveScript } from "@/app/(dashboard)/scripts/actio
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
+import { Dialog } from "@/components/ui/dialog";
 import { useMenuKeyboard } from "@/lib/hooks/use-menu-keyboard";
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -53,10 +54,15 @@ import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
 import { HeadingKeys } from "../lib/heading-keys";
 import { PageBreak } from "../lib/page-break";
+import { ScriptKeys, ScriptOrderedList } from "../lib/script-keys";
+import { printScript, watchPrinting } from "../lib/print-script";
+import { imageFiles, pastePlan } from "../lib/paste-images";
 import { LinkCard, LinkWindow, openInTab } from "./link-ui";
-import { fixHeadings, smallHeadingsToH3 } from "../lib/headings";
+import { smallHeadingsToH3 } from "../lib/headings";
+import { repairDoc } from "../lib/repair";
 import { useGrammar, type Grammar } from "../grammar/use-grammar";
 import { GrammarLayer, GrammarToolbarButton } from "../grammar/grammar-ui";
+import { CATEGORY_COLOR, type GrammarCategory } from "../grammar/types";
 import { dock, useDock } from "../lib/dock";
 import { CommentComposer, KIND_COLOR } from "./comment-composer";
 import type { MentionPerson } from "../lib/mention-people";
@@ -72,26 +78,9 @@ const SketchStudio = dynamic(() => import("../sketch/sketch-studio").then((m) =>
 const DRAFT_KEY = (id: string) => `vp:comment-draft:${id}`;
 type SketchDraft = { scene: Scene; blob: Blob; w: number; h: number; url: string };
 import { ScriptImage } from "./script-image";
+import { useScriptImages } from "./use-script-images";
 import { countWords, EMPTY_DOC, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
 import { sounds } from "@/lib/sounds";
-
-/**
- * Where a block (like an image) can go near `pos`: right after the
- * paragraph/list/quote it's in, or in place of an empty paragraph. Never
- * inside a line of text (that's what caused "Inserted content deeper
- * than insertion position").
- */
-function blockRange(editor: Editor, pos?: number) {
-  const { doc, selection } = editor.state;
-  const at = typeof pos === "number" ? Math.min(Math.max(pos, 0), doc.content.size) : selection.from;
-  const $pos = doc.resolve(at);
-  if ($pos.depth === 0) return { from: at, to: at };
-  const top = $pos.node(1);
-  const start = $pos.before(1);
-  const end = $pos.after(1);
-  if (top.type.name === "paragraph" && top.content.size === 0) return { from: start, to: end };
-  return { from: end, to: end };
-}
 
 const HIGHLIGHTS = [
   { name: "Yellow", color: "#FDE68A" },
@@ -160,6 +149,7 @@ export function ScriptEditor({
   onCommentClick,
   copySources = [],
   onCopyFrom,
+  onCopyComments,
   people = [],
   roleColors = {},
   switching = false,
@@ -203,7 +193,10 @@ export function ScriptEditor({
   onCommentClick?: (id: string) => void;
   /** "Copy from…" when this document is empty. */
   copySources?: { id: string; name: string }[];
-  onCopyFrom?: (id: string) => Promise<Record<string, unknown> | null>;
+  /** Another document's text, and how many open comments / editing ideas it has. */
+  onCopyFrom?: (id: string) => Promise<{ content: Record<string, unknown>; comments: number } | null>;
+  /** 1.27.5: its comments and editing ideas come too (asked when it has any). */
+  onCopyComments?: (fromId: string) => Promise<void>;
   /** Teammates for @mentions (with what they do on this video). */
   people?: MentionPerson[];
   roleColors?: Record<string, string>;
@@ -225,7 +218,6 @@ export function ScriptEditor({
 
   const paperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [uploading, setUploading] = useState(0);
 
   const versionRef = useRef(initialVersion);
   const pendingRef = useRef(false);
@@ -255,11 +247,16 @@ export function ScriptEditor({
     const editor = editorRef.current;
     if (!editor || !pendingRef.current || inflightRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
+    // Pictures with their real addresses (1.27.5); one still uploading: saved once it's up.
+    const json = imagesRef.current.forSave(normalized(editor.getJSON() as Json));
+    if (!json) {
+      timerRef.current = setTimeout(() => void flushRef.current(), 700);
+      return;
+    }
     pendingRef.current = false;
     inflightRef.current = true;
     setStatus("saving");
     const text = editor.getText({ blockSeparator: "\n" });
-    const json = normalized(editor.getJSON() as Json);
     const jsonText = JSON.stringify(json);
     if (jsonText === savedJsonRef.current) {
       inflightRef.current = false;
@@ -302,40 +299,11 @@ export function ScriptEditor({
   }, []);
 
   // ---- images -----------------------------------------------------------------
-
-  const uploadImages = useCallback(
-    async (files: File[], pos?: number) => {
-      const editor = editorRef.current;
-      if (!editor) return;
-      const supabase = createClient();
-      for (const original of files) {
-        if (!original.type.startsWith("image/")) continue;
-        if (original.size > 25 * 1024 * 1024) {
-          toast.error(`${original.name} is too big (25 MB max).`);
-          continue;
-        }
-        setUploading((n) => n + 1);
-        try {
-          const file = await compressImage(original, IMAGE_PRESETS.attachment);
-          const path = `${teamId}/${scriptId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
-          const { error } = await supabase.storage
-            .from("script-images")
-            .upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });
-          if (error) throw error;
-          const { data } = supabase.storage.from("script-images").getPublicUrl(path);
-          const node = { type: "image", attrs: { src: data.publicUrl, alt: original.name, align: "center", width: 60 } };
-          editor.chain().focus().insertContentAt(blockRange(editor, pos), node).run();
-        } catch {
-          toast.error(`Couldn't upload ${original.name}.`);
-        } finally {
-          setUploading((n) => n - 1);
-        }
-      }
-    },
-    [scriptId, teamId, toast]
-  );
-  const uploadRef = useRef(uploadImages);
-  uploadRef.current = uploadImages;
+  // Pasted, dropped or picked: on the page at once, uploaded in the background (1.27.5).
+  const images = useScriptImages(editorRef, { teamId, scriptId, onError: (m) => toast.error(m) });
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const uploading = images.uploading;
 
   // ---- editor -------------------------------------------------------------------
 
@@ -349,7 +317,12 @@ export function ScriptEditor({
         link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
         codeBlock: false,
         code: false,
+        // Ours: lettered and roman lists too (1.27.5).
+        orderedList: false,
       }),
+      ScriptOrderedList,
+      // Tab in the text, lists from "1." / "a." (1.27.5).
+      ScriptKeys,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TaskList,
@@ -366,23 +339,32 @@ export function ScriptEditor({
       // What the search bar found, marked for a moment (1.26.0).
       SearchHit,
     ],
-    content: isEmptyDoc(initialContent) ? EMPTY_DOC : fixHeadings(initialContent),
+    content: isEmptyDoc(initialContent) ? EMPTY_DOC : repairDoc(initialContent),
     editorProps: {
       attributes: { class: "script-doc outline-none", spellcheck: "true" },
-      transformPastedHTML: smallHeadingsToH3,
+      // Pictures inside pasted text (Word, Google Docs, Firefox): uploaded like files (1.27.5).
+      transformPastedHTML: (html) => imagesRef.current.fromHtml(smallHeadingsToH3(html)),
       handlePaste: (_view, event) => {
-        const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
-        if (!canEdit || files.length === 0) return false;
-        void uploadRef.current(files);
-        return true;
+        if (!canEdit) return false;
+        const dt = event.clipboardData;
+        const files = imageFiles(dt);
+        const plan = pastePlan({ files: files.length, html: dt?.getData("text/html") ?? "", text: dt?.getData("text/plain") ?? "" });
+        // A screenshot or a copied picture: just the picture.
+        if (plan === "files") {
+          imagesRef.current.insert(files);
+          return true;
+        }
+        // Text with pictures that only came as files: the text first, then the pictures.
+        if (plan === "files-after") setTimeout(() => imagesRef.current.insert(files), 0);
+        return false;
       },
       handleDrop: (view, event, _slice, moved) => {
         if (moved || !canEdit) return false;
-        const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+        const files = imageFiles(event.dataTransfer);
         if (files.length === 0) return false;
         event.preventDefault();
         const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-        void uploadRef.current(files, pos);
+        imagesRef.current.insert(files, pos);
         return true;
       },
     },
@@ -393,6 +375,8 @@ export function ScriptEditor({
     onUpdate: ({ editor }) => {
       setWords(countWords(editor.getText()));
       if (!canEdit) return;
+      // (Undo / redo can bring back a picture's device link: its real one again.)
+      queueMicrotask(() => imagesRef.current.settle());
       if (JSON.stringify(normalized(editor.getJSON() as Json)) === savedJsonRef.current) {
         // Back to exactly what's saved (e.g. undo, or a no-op edit).
         if (!inflightRef.current) {
@@ -406,6 +390,11 @@ export function ScriptEditor({
     },
   });
   editorRef.current = editor;
+
+  // ---- printing (1.27.5): Ctrl+P prints the same plain copy as Export → PDF ----
+  const printTitle = useRef("");
+  printTitle.current = `#${number} ${title}`;
+  useEffect(() => watchPrinting(() => ({ editor: editorRef.current, title: printTitle.current })), []);
 
   // ---- opened from the search bar: the words found, marked and in view (1.26.0) ----
   const foundRef = useRef<string | null>(null);
@@ -515,13 +504,31 @@ export function ScriptEditor({
   const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [draftKind, setDraftKind] = useState<"comment" | "edit_idea">("comment");
-  const [pop, setPop] = useState<{ id: string; top: number; left: number } | null>(null);
+  // The comment open at its words; `suggestion`: a writing suggestion on the same words (1.27.5).
+  const [pop, setPop] = useState<{ id: string; top: number; left: number; suggestion?: string | null } | null>(null);
+  // A writing suggestion's card asked for from a comment ("Suggestion here").
+  const [grCard, setGrCard] = useState<{ id: string; n: number } | null>(null);
   // A drawing for the editing idea being written, and the studio itself.
   const [sketch, setSketch] = useState<SketchDraft | null>(null);
   const [studio, setStudio] = useState(false);
   const [sending, setSending] = useState(false);
   const [isPhone, setIsPhone] = useState(false);
   const [backup, setBackup] = useState<{ quote: string; occurrence: number; kind: "comment" | "edit_idea"; text: string; scene: Scene | null } | null>(null);
+  // "Copy from…" a document with comments: bring them too? (1.27.5)
+  const [copyAsk, setCopyAsk] = useState<{ id: string; name: string; content: Record<string, unknown>; comments: number } | null>(null);
+  const [copying, setCopying] = useState(false);
+  async function finishCopy(withComments: boolean) {
+    const ask = copyAsk;
+    const editor = editorRef.current;
+    if (!ask || !editor || copying) return;
+    setCopying(true);
+    editor.commands.setContent(repairDoc(ask.content), { emitUpdate: true });
+    // Saved first, so the comments land on text that's there.
+    await flushRef.current();
+    if (withComments && onCopyComments) await onCopyComments(ask.id);
+    setCopying(false);
+    setCopyAsk(null);
+  }
   const draftRef = useRef<{ text: string | null; sketch: boolean }>({ text: null, sketch: false });
   draftRef.current = { text: draft, sketch: !!sketch };
   useEffect(() => {
@@ -908,7 +915,7 @@ export function ScriptEditor({
             const { exportScriptDocx } = await import("../lib/export-docx");
             await exportScriptDocx(editor.getJSON() as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
           }}
-          onPdf={() => window.print()}
+          onPdf={() => editor && void printScript(editor, `#${number} ${title}`)}
         />
         <button
           type="button"
@@ -928,7 +935,7 @@ export function ScriptEditor({
             const { exportScriptDocx } = await import("../lib/export-docx");
             await exportScriptDocx(editor.getJSON() as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
           }}
-          onPdf={() => window.print()}
+          onPdf={() => editor && void printScript(editor, `#${number} ${title}`)}
         />
         </span>
       </div>
@@ -975,7 +982,7 @@ export function ScriptEditor({
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (files.length) void uploadImages(files);
+          if (files.length) images.insert(files);
         }}
       />
 
@@ -992,23 +999,23 @@ export function ScriptEditor({
           ref={paperRef}
           data-paper={paper}
           onClick={(e) => {
-            // A word with a writing suggestion opens that suggestion, not the comment under it.
-            if ((e.target as HTMLElement).closest("[data-gr], [data-gr-wide]")) return setPop(null);
-            const el = (e.target as HTMLElement).closest<HTMLElement>("[data-comment-id]");
+            const target = e.target as HTMLElement;
+            const el = target.closest<HTMLElement>("[data-comment-id]");
             const id = el?.dataset.commentId;
+            // No comment here: a writing suggestion (if any) opens its own card (GrammarLayer).
             if (!id) return setPop(null);
-            // The comment opens right where you clicked.
+            // A comment wins (1.27.5): it opens right where you clicked; a suggestion on the
+            // same words is one click away ("Suggestion here"), never taken by accident.
+            const gr = target.closest<HTMLElement>("[data-gr], [data-gr-wide]");
+            const suggestion = gr ? (gr.dataset.gr ?? gr.dataset.grWide ?? null) : null;
             const box = paperRef.current?.getBoundingClientRect();
             const r = el!.getBoundingClientRect();
             if (box && renderCommentPopover) {
-              setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 300)) });
+              setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 300)), suggestion });
             } else onCommentClick?.(id);
           }}
-          className={`script-paper script-print relative isolate transition-colors mx-auto w-full ${STRIP_W[width]} rounded-2xl px-5 sm:px-14 py-8 sm:py-14 border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]`}
+          className={`script-paper relative isolate transition-colors mx-auto w-full ${STRIP_W[width]} rounded-2xl px-5 sm:px-14 py-8 sm:py-14 border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]`}
         >
-          <h1 className="print-only text-[22px] font-bold mb-6">
-            #{number} {title}
-          </h1>
           {switching && <PaperLines />}
           {canEdit && empty && !switching && (
             <div className="no-print mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-dashed px-4 py-3.5 script-soft-border">
@@ -1036,8 +1043,14 @@ export function ScriptEditor({
                   options={copySources.map((d) => ({ value: d.id, label: d.name }))}
                   onChange={async (id) => {
                     if (!id) return;
-                    const content = await onCopyFrom(id);
-                    if (content && editor) editor.commands.setContent(fixHeadings(content), { emitUpdate: true });
+                    const got = await onCopyFrom(id);
+                    if (!got || !editor) return;
+                    // It has comments: bring them too? (1.27.5)
+                    if (got.comments > 0 && onCopyComments) {
+                      setCopyAsk({ id, name: copySources.find((d) => d.id === id)?.name ?? "that document", content: got.content, comments: got.comments });
+                      return;
+                    }
+                    editor.commands.setContent(repairDoc(got.content), { emitUpdate: true });
                   }}
                 />
               )}
@@ -1080,6 +1093,13 @@ export function ScriptEditor({
           {pop && renderCommentPopover && (
             <div className="no-print absolute z-30 w-[300px]" style={{ top: pop.top, left: pop.left }}>
               {renderCommentPopover(pop.id, () => setPop(null))}
+              <SuggestionHere
+                s={pop.suggestion ? grammar.items.find((x) => x.id === pop.suggestion) ?? null : null}
+                onOpen={(id) => {
+                  setPop(null);
+                  setGrCard((c) => ({ id, n: (c?.n ?? 0) + 1 }));
+                }}
+              />
             </div>
           )}
           {sel && onAddComment && draft === null && (
@@ -1159,9 +1179,34 @@ export function ScriptEditor({
           </div>,
           document.body
         )}
+      <Dialog
+        open={!!copyAsk}
+        onClose={() => !copying && setCopyAsk(null)}
+        title={`Copy ${copyAsk?.name ?? "it"} here?`}
+        description={copyAsk ? `It has ${copyAsk.comments === 1 ? "an open comment or editing idea" : `${copyAsk.comments} open comments and editing ideas`}. Bring ${copyAsk.comments === 1 ? "it" : "them"} too? ${copyAsk.comments === 1 ? "It stays" : "They stay"} on the same words, with who wrote ${copyAsk.comments === 1 ? "it" : "them"}.` : undefined}
+        footer={
+          <>
+            <button type="button" disabled={copying} onClick={() => setCopyAsk(null)} className="rounded-lg px-3.5 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="button" disabled={copying} onClick={() => void finishCopy(false)} className="rounded-lg border border-line/20 px-3.5 h-10 text-[13.5px] font-semibold text-ink hover:border-line/40 disabled:opacity-50">
+              Just the text
+            </button>
+            <button type="button" data-autofocus disabled={copying} onClick={() => void finishCopy(true)} className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] disabled:opacity-60">
+              {copying && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden />}
+              Text and comments
+            </button>
+          </>
+        }
+      >
+        <p className="text-[13px] text-ink-soft">Resolved ones come along as resolved, and drawings on editing ideas are copied with them.</p>
+      </Dialog>
       <GrammarLayer
         editor={editor}
         g={grammar}
+        // Words with a comment open the comment (1.27.5): their suggestion is a button on it.
+        skipInside={renderCommentPopover || onCommentClick ? "[data-comment-id]" : undefined}
+        request={grCard}
         open={grammarOpen}
         onOpen={() => dock.open("grammar")}
         onClose={() => dock.close("grammar")}
@@ -1785,5 +1830,27 @@ function MobileMenu({
         </div>
       </AnchoredMenu>
     </div>
+  );
+}
+
+/**
+ * Under a comment opened on words that also have a writing suggestion
+ * (1.27.5): the suggestion, one click away, so clicking the words for the
+ * comment never takes a fix by accident.
+ */
+function SuggestionHere({ s, onOpen }: { s: { id: string; title: string; category: GrammarCategory } | null; onOpen: (id: string) => void }) {
+  if (!s) return null;
+  const color = CATEGORY_COLOR[s.category];
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(s.id)}
+      className="mt-1.5 w-full flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-3 h-9 text-left text-[12.5px] shadow-xl hover:border-line/30 animate-[modalin_.12s_var(--ease-out)]"
+    >
+      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} aria-hidden />
+      <span className="font-semibold text-ink-soft flex-shrink-0">Suggestion here</span>
+      <span className="min-w-0 flex-1 truncate text-ink">{s.title}</span>
+      <ChevronDownIcon className="w-3.5 h-3.5 -rotate-90 text-ink-soft flex-shrink-0" />
+    </button>
   );
 }

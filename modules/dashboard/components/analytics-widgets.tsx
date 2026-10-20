@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { loadDashAudience, loadDashProduction, type DashAudience, type DashProduction } from "@/app/(dashboard)/analytics/actions";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
@@ -175,6 +175,80 @@ export function ViewsWidget({ teamId }: { teamId: string }) {
 // Followers: each platform now, and the change over 28 days.
 // ---------------------------------------------------------------------------
 
+/**
+ * Followers of every platform together, per day (1.27.5): each platform's
+ * count carried over days it has none (before its first count: its first
+ * one), so the line doesn't jump where a platform's history starts.
+ */
+export function followersLine(daily: Partial<Record<P, (number | null)[]>> | undefined, days: number): (number | null)[] {
+  const series = PLATFORMS.map((p) => daily?.[p]).filter((x): x is (number | null)[] => Array.isArray(x) && x.some((v) => v !== null));
+  if (!series.length) return [];
+  const filled = series.map((xs) => {
+    const first = xs.find((v) => v !== null) ?? 0;
+    let last = first;
+    return Array.from({ length: days }, (_, i) => {
+      const v = xs[i];
+      if (v !== null && v !== undefined) last = v;
+      return last;
+    });
+  });
+  return Array.from({ length: days }, (_, i) => filled.reduce((s, xs) => s + (xs[i] ?? 0), 0));
+}
+
+/**
+ * An area graph: the line, a soft fill under it, the last day's dot. It
+ * fills the box it's put in (the widget gives it what's left under the
+ * numbers), so it never pushes the platforms out of the widget.
+ */
+function AreaGraph({ values, color }: { values: (number | null)[]; color: string }) {
+  const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null);
+  if (pts.length < 2) return null;
+  const max = Math.max(...pts.map((p) => p[1]));
+  const min = Math.min(...pts.map((p) => p[1]));
+  // A little room above and below, so a flat line sits in the middle.
+  const pad = (max - min || Math.max(1, max * 0.01)) * 0.18;
+  const lo = min - pad;
+  const span = max + pad - lo || 1;
+  // 0–100 both ways; the line keeps its width however the box is stretched.
+  const x = (i: number) => (i / (values.length - 1)) * 98 + 1;
+  const y = (v: number) => 4 + (1 - (v - lo) / span) * 92;
+  const line = pts.map(([i, v], k) => `${k ? "L" : "M"}${x(i).toFixed(2)},${y(v).toFixed(2)}`).join("");
+  const area = `${line}L${x(pts[pts.length - 1][0]).toFixed(2)},100L${x(pts[0][0]).toFixed(2)},100Z`;
+  const last = pts[pts.length - 1];
+  return (
+    <>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 w-full h-full overflow-visible">
+        <path d={area} fill={color} fillOpacity={0.13} />
+        <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      {/* The dot as its own element: round in any box. */}
+      <span
+        aria-hidden
+        className="absolute w-[7px] h-[7px] -ml-[3.5px] -mt-[3.5px] rounded-full ring-[1.5px] ring-surface"
+        style={{ left: `${x(last[0])}%`, top: `${y(last[1])}%`, background: color }}
+      />
+    </>
+  );
+}
+
+/** What's left under the numbers; the graph is drawn only when that's tall enough to read (the words can wrap). */
+function GraphRoom({ title, children }: { title?: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setH(e.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="relative flex-1 min-h-0 mt-3" title={title}>
+      {h >= 28 && children}
+    </div>
+  );
+}
+
 export function FollowersWidget({ teamId }: { teamId: string }) {
   const r = useLoaded(caches.audience, teamId, loadDashAudience);
   const box = useBox();
@@ -185,16 +259,43 @@ export function FollowersWidget({ teamId }: { teamId: string }) {
   if (!list.length) return <Note text="Follower counts arrive with the next sync." href="/analytics?tab=audience" link="Analytics" />;
   const total = list.reduce((s, p) => s + (a.followersNow[p] ?? 0), 0);
   const net = a.totals.followersNet.value;
-  const rows = box.h >= 70 + list.length * 30;
+  // The graph (1.27.5): followers over the 28 days, all platforms together.
+  const line = followersLine(a.followersDaily, a.days.length);
+  const rowsH = list.length * 30;
+  const rows = box.h >= 70 + rowsH + (line.length ? 70 : 0);
+  // How much the numbers take (roughly): the total and its change (on two lines when narrow), and the platforms in a
+  // row of small chips (as many lines as they wrap to). The graph gets exactly what's left (GraphRoom); this decides
+  // whether there's room to try, and in a small box the graph wins over the chips (their numbers stay in the tooltip).
+  const change = net === null ? 0 : (net === 0 ? 20 : fmtCompact(Math.abs(net)).length + 12) * 6.4;
+  const headH = box.w >= fmtCompact(total).length * 17 + 8 + change ? 32 : 50;
+  const perLine = Math.max(1, Math.floor((box.w + 10) / 55));
+  const chipLines = Math.ceil(list.length / perLine);
+  const chipsH = chipLines * 17 + (chipLines - 1) * 4 + 10;
+  const withChips = box.h - headH - 12 - (rows ? rowsH + 10 : chipsH);
+  const graph = line.length > 1 && (withChips >= 36 || (!rows && box.h - headH - 12 >= 44));
+  const chips = rows || !graph || withChips >= 36;
+  const from = line.find((v) => v !== null) ?? null;
+  const breakdown = list.map((p) => `${NAME[p]} ${fmtCompact(a.followersNow[p]!)}`).join(", ");
   return (
-    <Link href="/analytics?tab=audience" className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
-      <div className="flex items-baseline gap-2 flex-wrap">
+    <Link href="/analytics?tab=audience" title={chips ? undefined : breakdown} className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
+      {/* The change says its own period, so no line of words under it: that room is the graph's (1.27.5). */}
+      <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
         <span className="font-display text-[28px] leading-none font-semibold tabular-nums">{fmtCompact(total)}</span>
-        {net !== null && net !== 0 && <span className={`text-[12px] font-bold tabular-nums ${net > 0 ? "text-green" : "text-red"}`}>{`${net > 0 ? "+" : "−"}${fmtCompact(Math.abs(net))}`}</span>}
+        {net !== null && (
+          <span className="text-[12px] tabular-nums whitespace-nowrap">
+            {net !== 0 && <b className={net > 0 ? "text-green" : "text-red"}>{`${net > 0 ? "+" : "−"}${fmtCompact(Math.abs(net))}`} </b>}
+            <span className="text-ink-faint">{net === 0 ? "no change in 28 days" : "in 28 days"}</span>
+          </span>
+        )}
       </div>
-      <span className="text-[11.5px] text-ink-faint mt-1">followers in all{net !== null ? ", change over 28 days" : ""}</span>
-      {rows ? (
-        <ul className="mt-auto pt-2 space-y-1.5">
+      {!graph && <span className="text-[11.5px] text-ink-faint mt-1 truncate">followers in all</span>}
+      {graph && (
+        <GraphRoom title={from !== null ? `${fmtInt(from)} → ${fmtInt(total)} over 28 days${chips ? "" : `\n${breakdown}`}` : undefined}>
+          <AreaGraph values={line} color="rgb(var(--amber))" />
+        </GraphRoom>
+      )}
+      {!chips ? null : rows ? (
+        <ul className={`${graph ? "mt-2.5" : "mt-auto pt-2"} space-y-1.5 flex-shrink-0`}>
           {list.map((p) => (
             <li key={p} className="flex items-center gap-2 text-[12.5px]">
               <PlatformIcon platform={p} className="w-5 h-5 rounded-md" />
@@ -207,10 +308,10 @@ export function FollowersWidget({ teamId }: { teamId: string }) {
           ))}
         </ul>
       ) : (
-        <div className="mt-auto flex items-center gap-3 flex-wrap">
+        <div className={`${graph ? "mt-2.5" : "mt-auto"} flex items-center gap-x-2.5 gap-y-1 flex-wrap flex-shrink-0`}>
           {list.map((p) => (
-            <span key={p} className="inline-flex items-center gap-1.5 text-[11.5px]">
-              <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />
+            <span key={p} className="inline-flex items-center gap-1 text-[11.5px]" title={NAME[p]}>
+              <PlatformIcon platform={p} className="w-3.5 h-3.5 rounded-[4px]" />
               <b className="tabular-nums">{fmtCompact(a.followersNow[p]!)}</b>
             </span>
           ))}
@@ -229,52 +330,99 @@ const ago = (iso: string) => {
   return d === 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
 };
 
-export function TopVideosWidget({ teamId }: { teamId: string }) {
+const isP = (v: unknown): v is P => PLATFORMS.includes(v as P);
+
+/**
+ * Top videos (1.27.5): every platform together or one at a time, from the
+ * chips on top (or the widget's settings); the choice is saved with the
+ * dashboard.
+ */
+export function TopVideosWidget({ teamId, settings, onSettings }: { teamId: string; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const r = useLoaded(caches.audience, teamId, loadDashAudience);
   const box = useBox();
+  const saved: P | "all" = isP(settings?.platform) ? settings!.platform : "all";
+  const [pick, setPick] = useState<P | "all">(saved);
+  useEffect(() => setPick(saved), [saved]);
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
-  const items = r.data.top.filter((t) => t.views !== null);
-  if (!items.length) return <Note text="Nothing published in the last 28 days yet." href="/analytics?tab=content" link="Content" />;
+  const withViews = r.data.top.filter((t) => t.views !== null);
+  // Only platforms that have videos here get a chip.
+  const has = PLATFORMS.filter((p) => withViews.some((t) => t.platform === p));
+  const shown: P | "all" = pick !== "all" && has.includes(pick) ? pick : "all";
+  const items = (shown === "all" ? withViews : withViews.filter((t) => t.platform === shown)).slice(0, 12);
+  const chips = has.length > 1 && box.h >= 90;
+  const choose = (v: P | "all") => {
+    setPick(v);
+    onSettings?.({ platform: v });
+  };
+  if (!withViews.length) return <Note text="Nothing published in the last 28 days yet." href="/analytics?tab=content" link="Content" />;
   const thumbs = box.w >= 260;
   const rowH = thumbs ? 50 : 34;
-  const count = Math.max(1, Math.min(items.length, Math.floor((box.h + 6) / rowH)));
-  const max = items[0].views ?? 1;
+  const listH = box.h - (chips ? 34 : 0);
+  const count = Math.max(1, Math.min(items.length, Math.floor((listH + 6) / rowH)));
+  const max = items[0]?.views ?? 1;
   return (
-    <ol className="h-full overflow-hidden -mx-1 motion-stagger">
-      {items.slice(0, count).map((v, i) => (
-        <li key={`${v.platform}${v.id}`}>
-          {/* Each opens the video's own analytics (1.17.0). */}
-          <Link href={v.noNumbers ? "/analytics?tab=content" : `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=dashboard`} className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-surface-2/70" style={{ height: rowH }}>
-            <span className="w-4 text-[11px] font-bold text-ink-faint tabular-nums text-center flex-shrink-0">{i + 1}</span>
-            {thumbs && (
-              <span className="relative w-[64px] h-[36px] rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
-                {v.thumbnail && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={v.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover" />
-                )}
-                <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
-              </span>
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5 min-w-0">
-                {!thumbs && <PlatformIcon platform={v.platform} className="w-3.5 h-3.5 rounded-[3px] flex-shrink-0" />}
-                <span className="block text-[12.5px] font-semibold truncate">{v.title || "Untitled"}</span>
-              </span>
-              {thumbs && (
-                <span className="mt-1 flex items-center gap-2">
-                  <span className="flex-1 h-1 rounded-[2px] bg-line/[0.07] overflow-hidden" aria-hidden>
-                    <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((v.views ?? 0) / max) * 100)}%`, background: COLOR[v.platform] }} />
+    <div className="h-full flex flex-col min-h-0">
+      {chips && (
+        <div role="radiogroup" aria-label="Platform" className="flex items-center gap-1 mb-1.5 flex-shrink-0 overflow-x-auto no-scrollbar">
+          {(["all", ...has] as const).map((p) => {
+            const on = shown === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => choose(p)}
+                title={p === "all" ? "Every platform together" : NAME[p]}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2 h-7 text-[11.5px] font-semibold whitespace-nowrap transition-colors ${on ? "bg-ink text-paper" : "text-ink-soft hover:bg-surface-2 hover:text-ink"}`}
+              >
+                {p === "all" ? "All" : <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />}
+                {p !== "all" && box.w >= 420 && NAME[p]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {!items.length ? (
+        <Note text={`No ${shown === "all" ? "" : `${NAME[shown]} `}videos with views in the last 28 days.`} />
+      ) : (
+        <ol key={shown} className="flex-1 min-h-0 overflow-hidden -mx-1 motion-stagger">
+          {items.slice(0, count).map((v, i) => (
+            <li key={`${v.platform}${v.id}`}>
+              {/* Each opens the video's own analytics (1.17.0). */}
+              <Link href={v.noNumbers ? "/analytics?tab=content" : `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=dashboard`} className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-surface-2/70" style={{ height: rowH }}>
+                <span className="w-4 text-[11px] font-bold text-ink-faint tabular-nums text-center flex-shrink-0">{i + 1}</span>
+                {thumbs && (
+                  <span className="relative w-[64px] h-[36px] rounded-md overflow-hidden bg-surface-2 flex-shrink-0">
+                    {v.thumbnail && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={v.thumbnail} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    )}
+                    <PlatformIcon platform={v.platform} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-[3px]" />
                   </span>
-                  {v.publishedAt && box.w >= 360 && <span className="text-[10.5px] text-ink-faint whitespace-nowrap">{ago(v.publishedAt)}</span>}
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {!thumbs && <PlatformIcon platform={v.platform} className="w-3.5 h-3.5 rounded-[3px] flex-shrink-0" />}
+                    <span className="block text-[12.5px] font-semibold truncate">{v.title || "Untitled"}</span>
+                  </span>
+                  {thumbs && (
+                    <span className="mt-1 flex items-center gap-2">
+                      <span className="flex-1 h-1 rounded-[2px] bg-line/[0.07] overflow-hidden" aria-hidden>
+                        <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((v.views ?? 0) / max) * 100)}%`, background: COLOR[v.platform] }} />
+                      </span>
+                      {v.publishedAt && box.w >= 360 && <span className="text-[10.5px] text-ink-faint whitespace-nowrap">{ago(v.publishedAt)}</span>}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-            <span className="text-[12px] font-bold tabular-nums flex-shrink-0">{fmtCompact(v.views)}</span>
-          </Link>
-        </li>
-      ))}
-    </ol>
+                <span className="text-[12px] font-bold tabular-nums flex-shrink-0">{fmtCompact(v.views)}</span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -365,11 +513,13 @@ export function OutputWidget({ teamId }: { teamId: string }) {
   if (r.state === "loading") return <Loading />;
   if (r.state === "error") return <Note text={r.error} />;
   const k = r.data.kpis;
+  // Narrow (two small tiles a row): the short words, so none is cut off (1.27.5).
+  const tight = box.w < 230;
   const tiles = [
-    { key: "s", label: "Shorts out", value: fmtInt(k.shortsPosted.value), extra: <Delta now={k.shortsPosted.value ?? 0} prev={k.shortsPosted.prev} />, dot: "rgb(var(--chart-short))" },
-    { key: "l", label: "Long videos", value: fmtInt(k.longsPublished.value), dot: "rgb(var(--chart-long))" },
+    { key: "s", label: tight ? "Shorts" : "Shorts out", value: fmtInt(k.shortsPosted.value), extra: <Delta now={k.shortsPosted.value ?? 0} prev={k.shortsPosted.prev} />, dot: "rgb(var(--chart-short))" },
+    { key: "l", label: tight ? "Longs" : "Long videos", value: fmtInt(k.longsPublished.value), dot: "rgb(var(--chart-long))" },
     { key: "o", label: "On time", value: k.onTime.value === null ? "–" : `${Math.round(k.onTime.value)}%` },
-    { key: "d", label: "Overdue now", value: fmtInt(k.overdueNow), tone: k.overdueNow > 0 ? "text-red" : "text-green" },
+    { key: "d", label: tight ? "Overdue" : "Overdue now", value: fmtInt(k.overdueNow), tone: k.overdueNow > 0 ? "text-red" : "text-green" },
   ];
   const cols = box.w >= 400 ? 4 : 2;
   const show = box.h >= 120 || cols === 4 ? tiles : tiles.slice(0, 2);

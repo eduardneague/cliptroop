@@ -2,6 +2,7 @@
 
 import type * as DocxLib from "docx";
 import type { IParagraphOptions, ParagraphChild, Paragraph as ParagraphT } from "docx";
+import { shownType, type ListType } from "./list-markers";
 
 type Docx = typeof DocxLib;
 
@@ -61,8 +62,10 @@ function runs(D: Docx, nodes: Node[] | undefined): ParagraphChild[] {
     const has = (t: string) => marks.some((m) => m.type === t);
     const hl = marks.find((m) => m.type === "highlight");
     const link = marks.find((m) => m.type === "link");
+    // A tab typed in the script (1.27.5) is Word's own tab.
+    const parts = n.text.split("\t");
     const run = new TextRun({
-      text: n.text,
+      ...(parts.length > 1 ? { children: parts.flatMap((p, i) => (i ? [new D.Tab(), p] : [p])).filter((x) => x !== "") } : { text: n.text }),
       bold: has("bold"),
       italics: has("italic"),
       underline: has("underline") || link ? {} : undefined,
@@ -93,11 +96,15 @@ async function imageData(src: string): Promise<{ data: ArrayBuffer; w: number; h
   }
 }
 
-async function blocks(
-  D: Docx,
-  nodes: Node[] | undefined,
-  ctx: { list?: { kind: "bullet" | "number"; level: number }; quote?: boolean } = {}
-): Promise<ParagraphT[]> {
+/**
+ * Numbered lists (1.27.5): each list its own numbering in Word (they used to
+ * share one, so a second list went on from the first's last number), in its
+ * own style: numbers, letters or roman numerals, from its first number.
+ */
+type Numbering = { lists: { ref: string; format: ListType; start: number }[] };
+type Ctx = { list?: { kind: "bullet" | "number"; level: number; ref?: string }; quote?: boolean; olDepth?: number; numbering: Numbering };
+
+async function blocks(D: Docx, nodes: Node[] | undefined, ctx: Ctx): Promise<ParagraphT[]> {
   const { Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } = D;
   const ALIGN = alignMap(D);
   const out: ParagraphT[] = [];
@@ -116,7 +123,7 @@ async function blocks(
             ...(ctx.list
               ? ctx.list.kind === "bullet"
                 ? { bullet: { level: ctx.list.level } }
-                : { numbering: { reference: "script-numbers", level: ctx.list.level } }
+                : { numbering: { reference: ctx.list.ref ?? "script-numbers", level: ctx.list.level } }
               : {}),
             spacing: { after: 120 },
           })
@@ -135,16 +142,20 @@ async function blocks(
         break;
       }
       case "bulletList":
-      case "orderedList":
         for (const item of n.content ?? []) {
-          out.push(
-            ...(await blocks(D, item.content, {
-              ...ctx,
-              list: { kind: n.type === "bulletList" ? "bullet" : "number", level: ctx.list ? Math.min(ctx.list.level + 1, 5) : 0 },
-            }))
-          );
+          out.push(...(await blocks(D, item.content, { ...ctx, list: { kind: "bullet", level: ctx.list ? Math.min(ctx.list.level + 1, 5) : 0 } })));
         }
         break;
+      case "orderedList": {
+        const depth = ctx.olDepth ?? 0;
+        const ref = `script-list-${ctx.numbering.lists.length + 1}`;
+        const start = Math.max(0, Math.round(Number(n.attrs?.start ?? 1)) || 1);
+        ctx.numbering.lists.push({ ref, format: shownType(n.attrs?.type, depth), start });
+        for (const item of n.content ?? []) {
+          out.push(...(await blocks(D, item.content, { ...ctx, olDepth: depth + 1, list: { kind: "number", level: ctx.list ? Math.min(ctx.list.level + 1, 5) : 0, ref } })));
+        }
+        break;
+      }
       case "taskList":
         for (const item of n.content ?? []) {
           const checked = !!item.attrs?.checked;
@@ -195,22 +206,29 @@ async function blocks(
 export async function exportScriptDocx(doc: Node, title: string, fileName: string) {
   const D = await loadDocx();
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, LevelFormat, AlignmentType } = D;
-  const body = await blocks(D, doc.content);
+  const numbering: Numbering = { lists: [] };
+  const body = await blocks(D, doc.content, { numbering });
+  const FORMAT: Record<ListType, (typeof LevelFormat)[keyof typeof LevelFormat]> = {
+    "1": LevelFormat.DECIMAL,
+    a: LevelFormat.LOWER_LETTER,
+    A: LevelFormat.UPPER_LETTER,
+    i: LevelFormat.LOWER_ROMAN,
+    I: LevelFormat.UPPER_ROMAN,
+  };
   const document = new Document({
     title,
     numbering: {
-      config: [
-        {
-          reference: "script-numbers",
-          levels: Array.from({ length: 6 }, (_, i) => ({
-            level: i,
-            format: LevelFormat.DECIMAL,
-            text: `%${i + 1}.`,
-            alignment: AlignmentType.START,
-            style: { paragraph: { indent: { left: 720 * (i + 1), hanging: 360 } } },
-          })),
-        },
-      ],
+      config: numbering.lists.map((l) => ({
+        reference: l.ref,
+        levels: Array.from({ length: 6 }, (_, i) => ({
+          level: i,
+          format: FORMAT[l.format],
+          start: l.start,
+          text: `%${i + 1}.`,
+          alignment: AlignmentType.START,
+          style: { paragraph: { indent: { left: 720 * (i + 1), hanging: 360 } } },
+        })),
+      })),
     },
     sections: [
       {

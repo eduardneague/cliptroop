@@ -28,6 +28,8 @@ export const IMAGE_PRESETS = {
   logo: { maxWidth: 512, maxHeight: 512, quality: 0.9, preserveAlpha: true },
   /** Images attached to notes — readable, not archival. */
   attachment: { maxWidth: 2400, maxHeight: 2400, quality: 0.85 },
+  /** A dashboard background (1.27.5): sharp on a big screen. */
+  background: { maxWidth: 3840, maxHeight: 2400, quality: 0.86 },
 } satisfies Record<string, CompressOptions>;
 
 const SKIP_TYPES = new Set(["image/gif", "image/svg+xml"]);

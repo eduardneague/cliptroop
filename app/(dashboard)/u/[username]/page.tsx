@@ -3,7 +3,7 @@ import { getProfileByHandle } from "@/lib/profiles";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { InviteToTeam } from "./invite-to-team";
+import { InviteToTeam, type InviteTeam } from "./invite-to-team";
 import { colorForId, initialsFor } from "@/lib/avatar";
 import Link from "next/link";
 
@@ -57,25 +57,30 @@ export default async function PublicProfilePage({
     commonTeams = (visibleTeams ?? []).filter((t: { id: string }) => myTeamIds.has(t.id));
   }
 
-  // Teams where the viewer is master and this person isn't a member yet.
-  let invitable: { id: string; name: string; color: string }[] = [];
+  // Every team the viewer is master of, and where this person stands in each (1.27.5: shown even when they're
+  // already in all of them, so the button is always where a master expects it).
+  let invitable: InviteTeam[] = [];
   if (currentUser && !isSelf) {
-    const [{ data: mine }, { data: theirs }] = await Promise.all([
+    const [{ data: mine }, { data: theirs }, { data: invites }] = await Promise.all([
       supabase
         .from("team_members")
-        .select("team_id, teams(name, color), member_roles!inner(role)")
+        .select("team_id, teams(name, color, logo_url), member_roles!inner(role)")
         .eq("user_id", currentUser.id)
         .eq("status", "active")
         .eq("member_roles.role", "master"),
-      supabase.from("team_members").select("team_id").eq("user_id", profile.id),
+      supabase.from("team_members").select("team_id, status").eq("user_id", profile.id),
+      // A live invite (they haven't answered, it hasn't run out): no second one.
+      supabase.from("team_invites").select("team_id").eq("invited_user_id", profile.id).eq("status", "pending").gt("expires_at", new Date().toISOString()),
     ]);
-    const inTeam = new Set((theirs ?? []).map((t) => t.team_id as string));
+    const status = new Map((theirs ?? []).map((t) => [t.team_id as string, t.status === "active" ? ("member" as const) : ("invited" as const)]));
+    const invited = new Set((invites ?? []).map((i) => i.team_id as string));
     invitable = (mine ?? [])
-      .filter((m) => !inTeam.has(m.team_id as string))
       .map((m) => {
-        const t = (Array.isArray(m.teams) ? m.teams[0] : m.teams) as { name: string; color: string } | null;
-        return { id: m.team_id as string, name: t?.name ?? "Team", color: t?.color ?? "#999" };
-      });
+        const t = (Array.isArray(m.teams) ? m.teams[0] : m.teams) as { name: string; color: string; logo_url: string | null } | null;
+        const id = m.team_id as string;
+        return { id, name: t?.name ?? "Team", color: t?.color ?? "#999", logo_url: t?.logo_url ?? null, status: status.get(id) ?? (invited.has(id) ? "invited" : "available") } satisfies InviteTeam;
+      })
+      .sort((a, b) => Number(b.status === "available") - Number(a.status === "available") || a.name.localeCompare(b.name));
   }
 
   const name = profile.full_name || profile.username || "Unnamed member";

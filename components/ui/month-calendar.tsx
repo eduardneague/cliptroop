@@ -122,13 +122,17 @@ export function MonthCalendar({
   // The month on screen. Only the arrows or the keyboard change it, never
   // the mouse (hovering a greyed edge day used to flip months).
   const [viewMonth, setViewMonth] = useState("");
-  // What's planned: from the cache straight away when it's there (a warmed calendar opens with its dots).
-  const [range, setRange] = useState<PlannedRange | null>(() => {
+  // What's planned, for which 6 weeks: from the cache straight away when it's there (a warmed calendar opens with its dots).
+  const [got, setGot] = useState<{ key: string; r: PlannedRange } | null>(() => {
     const v = value && DAY_RX.test(value) ? value : null;
     if (!v) return null;
     const g = gridOf(v.slice(0, 7));
-    return CACHE.get(`${g[0]}:${g[41]}`) ?? null;
+    const key = `${g[0]}:${g[41]}`;
+    const r = CACHE.get(key);
+    return r ? { key, r } : null;
   });
+  // The weeks we stopped waiting for (it failed, or took too long): the days show without their dots.
+  const [gaveUp, setGaveUp] = useState<string | null>(null);
   const [peek, setPeek] = useState<string | null>(null);
   // Phones (press and hold): where the held day is, so the card opens above
   // its row (or below it, for the top rows) instead of over the days around it.
@@ -168,24 +172,32 @@ export function MonthCalendar({
     // Show what we have instantly, then refresh (plans change), then get the
     // months either side ready so the arrows are instant too.
     const hit = CACHE.get(key);
-    if (hit) setRange(hit);
+    if (hit) setGot({ key, r: hit });
     let alive = true;
+    // 1.27.5: the days wait for their dots (a moment), so they arrive together; not forever.
+    const slow = hit ? 0 : window.setTimeout(() => alive && setGaveUp(key), 1500);
     void plannedFor(viewMonth, !!hit).then((r) => {
-      if (alive && r) setRange(r);
       if (!alive) return;
+      if (r) setGot({ key, r });
+      else setGaveUp(key);
       for (const m of [addMonths(`${viewMonth}-01`, -1), addMonths(`${viewMonth}-01`, 1)]) warmPlannedDays(m);
     });
     return () => {
       alive = false;
+      window.clearTimeout(slow);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMonth]);
+  const weeksKey = days.length ? `${days[0]}:${days[41]}` : "";
+  const range = got?.key === weeksKey ? got.r : null;
+  // Waiting for this month's dots: the grid shimmers instead of showing days that are about to change.
+  const waiting = !!weeksKey && !range && gaveUp !== weeksKey;
 
-  // Keyboard users: focus follows the cursor day.
+  // Keyboard users: focus follows the cursor day (once the days are there).
   useEffect(() => {
-    if (!cursor || !focusDays.current) return;
+    if (!cursor || !focusDays.current || waiting) return;
     grid.current?.querySelector<HTMLElement>(`[data-date="${cursor}"]`)?.focus({ preventScroll: true });
-  }, [cursor, viewMonth]);
+  }, [cursor, viewMonth, waiting]);
 
   const go = (next: string) => {
     setCursor(next);
@@ -234,9 +246,23 @@ export function MonthCalendar({
     meetingsByDay.set(k, [...(meetingsByDay.get(k) ?? []), m]);
   }
 
-  // Until the browser has told us what day it is: the same box, empty.
+  // Until the browser has told us what day it is: the same box, shimmering (1.27.5: it was empty).
   if (!viewMonth || !monthStart)
-    return <div aria-hidden className={`${fit ? "h-full" : "h-[338px]"} ${className}`} />;
+    return (
+      <div aria-hidden className={`flex flex-col ${fit ? "h-full min-h-0" : "h-[338px]"} ${className}`}>
+        <div className={`flex items-center justify-center flex-shrink-0 ${fit ? "h-7 mb-1" : "h-8 mb-2"}`}>
+          <span className="skeleton block w-24 h-3.5 rounded-md" />
+        </div>
+        <div className="grid grid-cols-7 mb-1 flex-shrink-0">
+          {WEEKDAYS.map((w, i) => (
+            <span key={w} className={`text-center text-[10.5px] font-bold uppercase ${i >= 5 ? "text-ink-faint" : "text-ink-soft"}`}>
+              {w}
+            </span>
+          ))}
+        </div>
+        <DaysSkeleton fit={fit} />
+      </div>
+    );
 
   const peekPlan = peek ? plan(peek) ?? { shorts: [], longs: [] } : undefined;
   const peekMeetings = peek ? meetingsByDay.get(peek) ?? [] : [];
@@ -303,6 +329,9 @@ export function MonthCalendar({
         </div>
       )}
 
+      {waiting ? (
+        <DaysSkeleton fit={fit} busy />
+      ) : (
       <div
         key={viewMonth}
         ref={grid}
@@ -395,6 +424,7 @@ export function MonthCalendar({
           );
         })}
       </div>
+      )}
 
       <div className={`flex items-center justify-between flex-shrink-0 border-t border-line/10 ${fit ? "mt-1 pt-1" : "mt-2 pt-2"}`}>
         <span className="flex items-center">
@@ -441,5 +471,18 @@ export function Legend({ compact = false, className = "" }: { compact?: boolean;
       {item("bg-long", "long")}
       {item("bg-violet", "meeting")}
     </span>
+  );
+}
+
+/** The six weeks while they load: a shimmering square where each day goes. */
+function DaysSkeleton({ fit, busy = false }: { fit?: boolean; busy?: boolean }) {
+  return (
+    <div className={`grid grid-cols-7 gap-0.5 ${fit ? "grid-rows-6 flex-1 min-h-0" : ""}`} {...(busy ? { role: "status", "aria-busy": true, "aria-label": "Loading the month" } : { "aria-hidden": true })}>
+      {Array.from({ length: 42 }, (_, i) => (
+        <span key={i} className={`${fit ? "min-h-0 h-full" : "h-10"} rounded-lg flex items-center justify-center`} aria-hidden>
+          <span className="skeleton block w-[58%] h-[58%] max-w-7 max-h-7 rounded-md" />
+        </span>
+      ))}
+    </div>
   );
 }

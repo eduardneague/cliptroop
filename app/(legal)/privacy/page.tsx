@@ -28,7 +28,7 @@ export default function PrivacyPage() {
 
       <H>What we store</H>
       <ul className="list-disc pl-6 space-y-1.5">
-        <li><b>Your account:</b> email address, name, username, profile picture, your preferences (theme, sounds, currency) and the teams you belong to.</li>
+        <li><b>Your account:</b> email address, name, username, profile picture, your preferences (theme, sounds, currency, the glass look, and your dashboard background if you upload one) and the teams you belong to.</li>
         <li><b>Your team&rsquo;s work:</b> video plans, titles, scripts and research, comments, notes, sketches, thumbnails, uploaded video files, meetings, tasks and to-dos.</li>
         <li>
           <b>Connected social accounts</b> (YouTube, Instagram, TikTok, Facebook Pages): the account&rsquo;s ID, name, username and picture, which permissions were
@@ -88,6 +88,9 @@ export default function PrivacyPage() {
         <li>Resend: sending emails.</li>
         <li>Google (YouTube), Meta (Instagram, Facebook) and TikTok: the platforms your team connects, when publishing or reading statistics.</li>
         <li>Push services of your browser (Apple, Google, Mozilla, Microsoft): to deliver notifications you turned on. Messages are encrypted for your device.</li>
+        <li>LanguageTool: the writing suggestions in scripts, when they&rsquo;re on (the text being checked).</li>
+        <li>Open-Meteo: the weather on your dashboard (only the place, rounded to about a kilometre, and the city names you search).</li>
+        <li>GIPHY: the GIFs you search for in comments (the search words).</li>
       </ul>
 
       <H>Cookies and device storage</H>
@@ -100,6 +103,7 @@ export default function PrivacyPage() {
       <ul className="list-disc pl-6 space-y-1.5">
         <li>Everything travels encrypted (HTTPS). Platform sign-in tokens are encrypted at rest and only ever used by our server, never sent to a browser.</li>
         <li>Uploaded videos are private; viewing them uses links that expire.</li>
+        <li>Profile pictures and dashboard backgrounds are shown from a fixed address, like on most sites: anyone with that address can see the file, so don&rsquo;t use them for anything private.</li>
         <li>Database rules check every request against the person&rsquo;s team and role.</li>
       </ul>
 

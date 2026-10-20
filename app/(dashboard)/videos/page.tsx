@@ -14,11 +14,15 @@ import {
 } from "@/modules/long-videos/lib/stages";
 import type { PipelineStage } from "@/lib/permissions/roles";
 import { colorForId } from "@/lib/avatar";
-import { GridIcon, ListIcon, CalendarIcon, PlusIcon, VideoIcon } from "@/components/ui/icons";
+import { CalendarIcon, PlusIcon, VideoIcon } from "@/components/ui/icons";
 import { relativeDay, todayISO } from "@/modules/short-videos/lib/dates";
 import { setViewMode } from "./view-mode-actions";
-import { LinkPendingIndicator } from "@/components/ui/link-pending";
 import { VIEW_MODE_COOKIE } from "@/lib/view-mode";
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { FilterChip } from "@/components/ui/filter-chip";
+import { VideoMenu } from "@/modules/long-videos/components/video-menu";
+import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modules/long-videos/components/list-skeletons";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Long videos" };
@@ -88,6 +92,14 @@ export default async function VideosPage({
   };
   const createRoles = membership?.roles ?? [];
   const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
+  // Deleting straight from the list (1.27.5): masters.
+  const canDelete = isMaster(createRoles);
+  const viewHref = (mode: "grid" | "table") => {
+    const q = new URLSearchParams();
+    if (stageFilter) q.set("stage", stageFilter);
+    q.set("view", mode);
+    return `/videos?${q}`;
+  };
   const stageCounts = new Map<string, number>();
   (stageRows ?? []).forEach((r) => stageCounts.set(r.stage, (stageCounts.get(r.stage) ?? 0) + 1));
   const totalCount = stageRows?.length ?? 0;
@@ -105,6 +117,7 @@ export default async function VideosPage({
   };
 
   return (
+    <PendingNav>
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1720px] mx-auto">
       <div className="flex items-start justify-between gap-6 mb-7 flex-wrap">
         <div>
@@ -144,77 +157,41 @@ export default async function VideosPage({
               label: STAGE_LABELS[st],
               count: stageCounts.get(st) ?? 0,
             }))].map((f) => {
-              const active = (stageFilter ?? "") === f.key;
               const params = new URLSearchParams();
               if (f.key) params.set("stage", f.key);
               if (isTable) params.set("view", "table");
-              const href = `/videos${params.toString() ? `?${params}` : ""}`;
               return (
-                <Link
+                <FilterChip
                   key={f.key || "all"}
-                  href={href}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-ink text-paper"
-                      : f.count === 0
-                        ? "text-ink-faint/70 hover:bg-surface-2 hover:text-ink-soft"
-                        : "text-ink-soft hover:bg-surface-2 hover:text-ink"
-                  }`}
-                >
-                  {f.label}
-                  <span
-                    className={`text-[11px] tabular-nums font-medium ${
-                      active ? "text-paper/60" : "text-ink-faint"
-                    }`}
-                  >
-                    {f.count}
-                  </span>
-                  <LinkPendingIndicator />
-                </Link>
+                  href={`/videos${params.toString() ? `?${params}` : ""}`}
+                  navKey={`stage:${f.key}`}
+                  active={(stageFilter ?? "") === f.key}
+                  label={f.label}
+                  count={f.count}
+                />
               );
             })}
           </div>
         </div>
 
-        <div className="flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
-          <form action={setViewMode}>
-            <input type="hidden" name="mode" value="grid" />
-            <input type="hidden" name="stage" value={stageFilter ?? ""} />
-            <button
-              type="submit"
-              aria-label="Card view"
-              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                !isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-              }`}
-            >
-              <GridIcon className="w-[15px] h-[15px]" />
-            </button>
-          </form>
-          <form action={setViewMode}>
-            <input type="hidden" name="mode" value="table" />
-            <input type="hidden" name="stage" value={stageFilter ?? ""} />
-            <button
-              type="submit"
-              aria-label="Table view"
-              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-              }`}
-            >
-              <ListIcon className="w-[15px] h-[15px]" />
-            </button>
-          </form>
-        </div>
+        <ViewToggle
+          value={isTable ? "table" : "grid"}
+          cookie={VIEW_MODE_COOKIE}
+          hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
+          action={setViewMode}
+          fields={{ stage: stageFilter ?? "" }}
+        />
       </div>
 
+      {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
+      <PendingSwap fallback={isTable ? <VideoTableSkeleton /> : <VideoCardsSkeleton />} fallbacks={{ grid: <VideoCardsSkeleton />, table: <VideoTableSkeleton /> }}>
       {!projects || projects.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-line/15 py-24 text-center text-[15px] text-ink-faint">
           No projects{stageFilter ? " in this stage" : " yet"}.
         </div>
       ) : isTable ? (
         <div className="motion-stagger rounded-xl border border-line/10 overflow-hidden">
-          <div className="grid grid-cols-[40px_56px_1fr] sm:grid-cols-[48px_64px_1fr_110px_160px_110px_110px] gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
+          <div className={`${VIDEO_TABLE_COLS} gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint`}>
             <span className="text-right">#</span>
             <span></span>
             <span>Title</span>
@@ -222,16 +199,16 @@ export default async function VideosPage({
             <span className="hidden sm:block">Theme</span>
             <span className="hidden sm:block">Stage</span>
             <span className="hidden sm:block">Expected</span>
+            <span />
           </div>
           {projects.map((p) => {
             const cover = coverOf(p);
             const c = stageColor(p.stage as PipelineStage);
             const themeColor = colorForId(p.theme || "theme");
             return (
-              <Link
+              <div
                 key={p.id}
-                href={`/videos/${p.id}`}
-                className="grid grid-cols-[40px_56px_1fr] sm:grid-cols-[48px_64px_1fr_110px_160px_110px_110px] gap-3 px-3 py-2 items-center border-t border-line/10 hover:bg-surface-2 transition-colors"
+                className={`relative ${VIDEO_TABLE_COLS} gap-3 px-3 py-2 items-center border-t border-line/10 hover:bg-surface-2 transition-colors`}
               >
                 <span className="text-right font-mono text-[12px] text-ink-faint tabular-nums">{p.entry_number}</span>
                 <span
@@ -247,7 +224,10 @@ export default async function VideosPage({
                     <img loading="lazy" decoding="async" src={cover} alt="" className="w-full h-full object-cover" />
                   )}
                 </span>
-                <span className="text-[13px] font-semibold truncate">{p.title}</span>
+                {/* The title's link stretches over the whole row; the ⋯ sits above it. */}
+                <Link href={`/videos/${p.id}`} className="text-[13px] font-semibold truncate after:absolute after:inset-0 after:content-['']">
+                  {p.title}
+                </Link>
                 <span className="hidden sm:block text-[11.5px] text-ink-soft truncate">
                   {(p.video_type ?? []).join(" + ") || "None"}
                 </span>
@@ -264,7 +244,10 @@ export default async function VideosPage({
                   </span>
                 </span>
                 <span className={`hidden sm:block text-[11.5px] tabular-nums ${due(p).tone}`}>{p.stage === "done" ? "Posted" : formatDate(p.expected_date)}</span>
-              </Link>
+                <span className="justify-self-end">
+                  {canDelete && <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} className="text-ink-soft hover:text-ink hover:bg-surface" />}
+                </span>
+              </div>
             );
           })}
         </div>
@@ -274,10 +257,9 @@ export default async function VideosPage({
             const cover = coverOf(p);
             const c = stageColor(p.stage as PipelineStage);
             return (
-              <Link
+              <div
                 key={p.id}
-                href={`/videos/${p.id}`}
-                className="group rounded-2xl border border-line/10 bg-surface overflow-hidden hover:border-line/25 hover:shadow-[0_10px_28px_-14px_rgb(0_0_0/0.35)] hover:-translate-y-0.5 transition-all flex flex-col"
+                className="group relative rounded-2xl border border-line/10 bg-surface overflow-hidden hover:border-line/25 hover:shadow-[0_10px_28px_-14px_rgb(0_0_0/0.35)] hover:-translate-y-0.5 transition-all flex flex-col"
               >
                 <div className="aspect-video relative overflow-hidden bg-surface-2">
                   {cover ? (
@@ -297,8 +279,13 @@ export default async function VideosPage({
                     <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: c }} aria-hidden />
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
-                  <span className="absolute top-2.5 right-2.5 font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
-                    #{p.entry_number}
+                  <span className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                    <span className="font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
+                      #{p.entry_number}
+                    </span>
+                    {canDelete && (
+                      <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
+                    )}
                   </span>
                   {/* Where it is in the pipeline: one segment per step. */}
                   <span className="absolute inset-x-2.5 bottom-2.5 flex gap-[3px]" aria-hidden>
@@ -315,7 +302,10 @@ export default async function VideosPage({
                   </span>
                 </div>
                 <div className="p-4 flex flex-col gap-1.5 flex-1">
-                  <span className="font-semibold text-[15px] leading-snug line-clamp-2">{p.title}</span>
+                  {/* The title's link covers the whole card; the ⋯ sits above it. */}
+                  <Link href={`/videos/${p.id}`} className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']">
+                    {p.title}
+                  </Link>
                   {(p.theme || (p.video_type ?? []).length > 0) && (
                     <span className="flex items-center gap-2 text-[12px] min-w-0">
                       {p.theme && (
@@ -339,11 +329,13 @@ export default async function VideosPage({
                     );
                   })()}
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>
       )}
+      </PendingSwap>
     </div>
+    </PendingNav>
   );
 }

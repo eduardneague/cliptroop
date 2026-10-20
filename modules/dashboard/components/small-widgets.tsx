@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { switchTeam } from "@/app/(dashboard)/actions";
-import { MonthCalendar } from "@/components/ui/month-calendar";
+import { MonthCalendar, warmPlannedDays } from "@/components/ui/month-calendar";
 import type { TeamCard } from "../lib/queries";
 import { useBox } from "./widget-box";
 import { localDay } from "./tasks-widget";
@@ -141,9 +141,99 @@ function AnalogClock({ now, seconds }: { now: Date; seconds: boolean }) {
   );
 }
 
+/*
+ * The digital skin (1.27.5): seven-segment digits like an alarm clock's,
+ * the unlit segments faintly there, the colon blinking with the seconds.
+ */
+const SEG: Record<string, string> = {
+  "0": "abcdef",
+  "1": "bc",
+  "2": "abged",
+  "3": "abgcd",
+  "4": "fgbc",
+  "5": "afgcd",
+  "6": "afgecd",
+  "7": "abc",
+  "8": "abcdefg",
+  "9": "abcdfg",
+};
+const DW = 12;
+const DH = 22;
+const T = 2.3;
+function segPoints(seg: string): string {
+  const L = 1.4, R = DW - 1.4, TOP = 1.4, MID = DH / 2, BOT = DH - 1.4, g = 0.55, h = T / 2;
+  const hor = (y: number) => [[L + g, y], [L + g + h, y - h], [R - g - h, y - h], [R - g, y], [R - g - h, y + h], [L + g + h, y + h]];
+  const ver = (x: number, y1: number, y2: number) => [[x, y1 + g], [x + h, y1 + g + h], [x + h, y2 - g - h], [x, y2 - g], [x - h, y2 - g - h], [x - h, y1 + g + h]];
+  const pts = { a: hor(TOP), g: hor(MID), d: hor(BOT), f: ver(L, TOP, MID), b: ver(R, TOP, MID), e: ver(L, MID, BOT), c: ver(R, MID, BOT) }[seg as "a"]!;
+  return pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+}
+function Digit({ d, x }: { d: string; x: number }) {
+  const on = SEG[d] ?? "";
+  return (
+    <g transform={`translate(${x} 0) skewX(-7)`}>
+      {"abcdefg".split("").map((k) => (
+        <polygon key={k} points={segPoints(k)} fill={on.includes(k) ? "rgb(var(--ink))" : "rgb(var(--line) / 0.07)"} />
+      ))}
+    </g>
+  );
+}
+
+function DigitalClock({ now, h24, seconds }: { now: Date; h24: boolean; seconds: boolean }) {
+  const box = useBox();
+  const hRaw = now.getHours();
+  const hh = h24 ? String(hRaw).padStart(2, "0") : String(hRaw % 12 || 12).padStart(2, " ");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  const blink = now.getSeconds() % 2 === 0;
+  // Seconds smaller, after the minutes (when on and there's room).
+  const showS = seconds && box.w >= 150;
+  const small = 0.55;
+  // Each digit a little apart from the next, like a real display's.
+  const P = DW + 2.8;
+  const COLON = 4;
+  const colonX = P + DW + 1.6;
+  const minX = colonX + COLON + 1.6;
+  const secX = minX + P + DW + 3.2;
+  const width = (showS ? secX + (P + DW) * small : minX + P + DW) + 1.5;
+  const dateLine = box.h >= 70;
+  const maxH = box.h - (dateLine ? 34 : 4);
+  const scale = Math.max(0.5, Math.min(box.w / width, maxH / DH));
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-1.5 text-center" role="img" aria-label={now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: !h24 })}>
+      <div className="flex items-end gap-1.5">
+        <svg width={width * scale} height={DH * scale} viewBox={`-1 0 ${width + 1} ${DH}`} aria-hidden className="overflow-visible">
+          {hh.split("").map((d, i) => (d === " " ? null : <Digit key={`h${i}`} d={d} x={i * P} />))}
+          <g className="digital-colon" style={{ opacity: blink ? 1 : 0.25 }}>
+            <rect x={colonX + 1.2} y={DH * 0.3} width={2.2} height={2.2} rx={0.5} fill="rgb(var(--amber))" />
+            <rect x={colonX + 0.5} y={DH * 0.62} width={2.2} height={2.2} rx={0.5} fill="rgb(var(--amber))" />
+          </g>
+          {mm.split("").map((d, i) => (
+            <Digit key={`m${i}`} d={d} x={minX + i * P} />
+          ))}
+          {showS && (
+            <g transform={`translate(${secX} ${DH * (1 - small)}) scale(${small})`}>
+              {ss.split("").map((d, i) => (
+                <Digit key={`s${i}`} d={d} x={i * P} />
+              ))}
+            </g>
+          )}
+        </svg>
+        {!h24 && <span className="text-[11px] font-bold text-ink-soft mb-0.5">{hRaw < 12 ? "AM" : "PM"}</span>}
+      </div>
+      {dateLine && (
+        <div className="leading-tight">
+          <div className="text-[12px] text-ink-soft truncate">{now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+          {box.h >= 96 && <div className="text-[10.5px] text-ink-faint truncate">{Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ")}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ClockWidget({ settings }: { settings?: Record<string, unknown> }) {
   const h24 = settings?.h24 !== false;
   const secondHand = settings?.secondHand !== false;
+  const digital = settings?.skin === "digital";
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -152,6 +242,7 @@ export function ClockWidget({ settings }: { settings?: Record<string, unknown> }
   }, []);
   const box = useBox();
   if (!now) return <div className="h-full" />;
+  if (digital) return <DigitalClock now={now} h24={h24} seconds={secondHand} />;
   // Wide: face beside the time. Tall: face above it. Small: just the time.
   const face = Math.min(box.h, 150);
   const side = box.w >= face + 120;
@@ -174,6 +265,9 @@ export function ClockWidget({ settings }: { settings?: Record<string, unknown> }
     </div>
   );
 }
+
+// The Calendar widget's dots start loading with this code (1.27.5), so they arrive with the calendar.
+if (typeof window !== "undefined") warmPlannedDays();
 
 /** The dashboard Calendar: THE calendar (same as every date picker), filling the widget. A day opens it in the big calendar. */
 export function MiniCalendarWidget() {

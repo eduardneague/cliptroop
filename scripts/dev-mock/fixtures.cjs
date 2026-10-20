@@ -62,7 +62,10 @@ const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+// MOCK_GLASS=1: the glass look; MOCK_DASH_BG=jpg|gif|webm|mp4: a dashboard background of that kind (1.27.5; the file:
+// MOCK_DASH_BG_FILE, else a drawn picture), MOCK_DASH_BG_DIM=0..80.
+const DASH_BG = process.env.MOCK_DASH_BG;
+const prof = (i) => ({ ...people[i], glass_ui: process.env.MOCK_GLASS === "1", dashboard_bg_on: !!DASH_BG, dashboard_bg_path: DASH_BG ? `${people[i].id}/1761000000000-dusk.${DASH_BG}` : null, dashboard_bg_dim: Number(process.env.MOCK_DASH_BG_DIM ?? 30), palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -74,6 +77,8 @@ const members = people.map((p, i) => ({
   member_roles: roles[i].map((role) => ({ role })),
   profiles: prof(i),
   profile: prof(i),
+  // The team itself (the profile page's Invite to team names it).
+  teams: { name: "Viverro Main", color: "#e8630d", logo_url: null },
 }));
 const team = {
   id: TEAM,
@@ -156,6 +161,15 @@ const scriptDocs = [
   doc("dd000000-0000-4000-8000-000000000003", "Staging", 3, "staging", ""),
   doc("dd000000-0000-4000-8000-000000000004", "Version 4", 4, null, ""),
 ];
+// MOCK_SCRIPT=/path/to/doc.json (the editor's JSON): the first short's Script is that document, e.g. a long
+// one to check the PDF export (1.27.5). With MOCK_COMMENTS=many it gets a comment or editing idea on every
+// third paragraph.
+const SCRIPT_DOC = process.env.MOCK_SCRIPT ? JSON.parse(require("fs").readFileSync(process.env.MOCK_SCRIPT, "utf8")) : null;
+const blockText = (n) => (n.text ?? "") + (n.content ?? []).map(blockText).join("");
+if (SCRIPT_DOC) {
+  const text = (SCRIPT_DOC.content ?? []).map(blockText).join("\n");
+  Object.assign(scriptDocs[0], { content: SCRIPT_DOC, content_text: text, word_count: text.split(/\s+/).filter(Boolean).length });
+}
 
 // ---- Analytics (0058)
 let seed = 11;
@@ -503,6 +517,8 @@ module.exports = {
     ],
     // MOCK_NO_COMMENT=1: the sample user isn't on the script (reads comments, can't add them).
     can_comment_script: !process.env.MOCK_NO_COMMENT,
+    // Comments copied with their document (0092): every one asked for is copied (their new ids).
+    script_copy_comments: (b) => (Array.isArray(b.p_items) ? b.p_items.map((x) => x.new_id) : []),
     is_master_of: ME === 0,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
     // "Ready for review / staging" (0062): Script → Review → Staging of short #231.
@@ -535,7 +551,10 @@ module.exports = {
   },
   tables: {
     teams: [team],
-    profiles: people.map((_, i) => prof(i)),
+    // MOCK_STRANGER=1: someone on none of the sample user's teams (/u/radu: Invite to team, 1.27.5).
+    profiles: people.map((_, i) => prof(i)).concat(
+      process.env.MOCK_STRANGER ? [{ id: "aaaaaaaa-0000-4000-8000-000000000021", username: "radu", full_name: "Radu Ionescu", email: "radu@example.com", avatar_url: null, color: "#0f766e", bio: "Editor in Cluj: long videos, colour and sound.", banner_url: null, created_at: "2026-03-02T10:00:00Z", teams_visible: true }] : []
+    ),
     team_members: members,
     notifications: process.env.MOCK_NOTIFS === "0" ? [] : sampleNotifications(),
     role_colors: [],
@@ -570,7 +589,18 @@ module.exports = {
     package_entries: packageEntries,
     scripts: [...scriptDocs, ...ADV.scripts],
     // MOCK_COMMENTS=1: comments on short #231's Script, two of them on words rewritten since.
-    script_comments: process.env.MOCK_COMMENTS
+    script_comments: process.env.MOCK_COMMENTS === "many" && SCRIPT_DOC
+      ? (SCRIPT_DOC.content ?? [])
+          .map(blockText)
+          .map((t, i) => ({ t: t.trim().split(/\s+/).slice(0, 4).join(" "), i }))
+          .filter((x, k) => x.t.length > 8 && k % 3 === 0)
+          .map(({ t, i }, k) => ({
+            id: `cm000000-0000-4000-8000-${String(100 + k).padStart(12, "0")}`, kind: k % 2 ? "edit_idea" : "comment", quote: t, occurrence: 0,
+            body: k % 2 ? `B-roll here (paragraph ${i + 1})` : `Can we tighten this? (paragraph ${i + 1})`, created_at: at(-3, k), resolved_at: null, author_id: U[k % 3],
+            sketch_path: null, sketch_w: null, sketch_h: null, script_id: "dd000000-0000-4000-8000-000000000001", team_id: TEAM,
+            author: { username: people[k % 3]?.username ?? null, full_name: people[k % 3]?.full_name ?? null, email: null, avatar_url: null },
+          }))
+      : process.env.MOCK_COMMENTS
       ? [
           ["cm000000-0000-4000-8000-000000000001", "comment", "three stalls, three prices", 0, "Can we show the prices on screen as they say them?", U[1], at(-2, 11)],
           ["cm000000-0000-4000-8000-000000000002", "edit_idea", "follow for part two", 0, "Freeze frame + the part two title card here", U[2], at(-1, 15)],
@@ -632,7 +662,9 @@ module.exports = {
       user_id: U[0], day: new Date(Date.now() - d * 86400e3).toISOString().slice(0, 10), puzzle: 10 - d, guesses: ["crane", "slate", "trace", "brace"].slice(0, 2 + (d % 3)), solved: d !== 5,
       finished_at: new Date(Date.now() - d * 86400e3).toISOString(), updated_at: new Date(Date.now() - d * 86400e3).toISOString(),
     })),
-    meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
+    // MOCK_MEETING=soon: the sample meeting in 3 hours from the real "now", with a video link (the Next meeting widget, its answers).
+    meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: process.env.MOCK_MEETING === "soon" ? new Date(Date.now() + 3 * 3600e3).toISOString() : at(1, 11), duration_min: 30, location: null, link: process.env.MOCK_MEETING === "soon" ? "https://meet.example.com/weekly" : null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
+    meeting_attendees: process.env.MOCK_MEETING === "soon" ? U.map((u, i) => ({ meeting_id: "cccccccc-0000-4000-8000-000000000001", user_id: u, rsvp: i === 0 ? "pending" : i === 3 ? "maybe" : "yes" })) : [],
     meeting_actions: [
       { id: "ca000000-0000-4000-8000-000000000001", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Send the sponsor the draft cut", owner_id: U[0], done_at: null, created_by: U[0], team_id: TEAM, created_at: at(-1, 10), due_date: day(2), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
       { id: "ca000000-0000-4000-8000-000000000002", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Book the bakery for filming", owner_id: U[0], done_at: at(-1, 15), created_by: U[1], team_id: TEAM, created_at: at(-2, 10), due_date: day(-1), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },

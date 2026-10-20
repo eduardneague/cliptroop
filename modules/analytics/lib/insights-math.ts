@@ -286,7 +286,10 @@ export const BANDS: { label: string; from: number; to: number }[] = [
 export const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export type HeatCell = { weekday: number; band: number; n: number; median: number | null };
 export type Heat = {
-  platform: Platform;
+  /** "all" (1.27.5): every platform's videos of this kind together, each one against its own platform's usual. */
+  platform: Platform | "all";
+  /** The platforms whose videos are in it (one, or the ones "all" brings together). */
+  platforms: Platform[];
   kind: PatternKind;
   considered: number;
   /** 7 × 6 cells, Monday first, then by band. */
@@ -295,17 +298,35 @@ export type Heat = {
   best: HeatCell[];
 };
 
-/**
- * Weekday × time of day for one platform's shorts (or long videos): the
- * middle "× typical" of the videos posted in each slot (settled ones only:
- * a week old). Null with fewer than 12 videos.
- */
-export function bestTimes(videos: InsightVideo[], o: { platform: Platform; kind: PatternKind; now: number; minAgeDays?: number }): Heat | null {
+/** Videos a map needs before it's drawn. */
+export const HEAT_MIN = 12;
+const PLATFORM_ORDER: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
+
+/** The videos a best-time map reads: settled (a week old), with a time and a "× typical". */
+export function heatVideos(videos: InsightVideo[], o: { platform: Platform | "all"; kind: PatternKind; now: number; minAgeDays?: number }): InsightVideo[] {
   const minAge = (o.minAgeDays ?? 7) * DAY;
-  const list = videos.filter(
-    (v) => v.platform === o.platform && v.kind === o.kind && v.score !== null && v.hour !== null && v.weekday !== null && v.publishedAt && o.now - Date.parse(v.publishedAt) >= minAge
+  return videos.filter(
+    (v) =>
+      (o.platform === "all" || v.platform === o.platform) &&
+      v.kind === o.kind &&
+      v.score !== null &&
+      v.hour !== null &&
+      v.weekday !== null &&
+      v.publishedAt &&
+      o.now - Date.parse(v.publishedAt) >= minAge
   );
-  if (list.length < 12) return null;
+}
+
+/**
+ * Weekday × time of day for one platform's shorts (or long videos), or for
+ * every platform's together ("all", 1.27.5: each video's "× typical" is
+ * against its own platform's usual, so they can share one map): the middle
+ * "× typical" of the videos posted in each slot (settled ones only: a week
+ * old). Null with fewer than 12 videos.
+ */
+export function bestTimes(videos: InsightVideo[], o: { platform: Platform | "all"; kind: PatternKind; now: number; minAgeDays?: number }): Heat | null {
+  const list = heatVideos(videos, o);
+  if (list.length < HEAT_MIN) return null;
   const cells: HeatCell[] = [];
   for (let d = 0; d < 7; d++)
     BANDS.forEach((b, bi) => {
@@ -313,7 +334,38 @@ export function bestTimes(videos: InsightVideo[], o: { platform: Platform; kind:
       cells.push({ weekday: d, band: bi, n: xs.length, median: median(xs) });
     });
   const best = cells.filter((c) => c.n >= 3 && (c.median ?? 0) >= 1.2).sort((a, b) => (b.median ?? 0) - (a.median ?? 0)).slice(0, 3);
-  return { platform: o.platform, kind: o.kind, considered: list.length, cells, best };
+  const platforms = PLATFORM_ORDER.filter((p) => list.some((v) => v.platform === p));
+  return { platform: o.platform, platforms, kind: o.kind, considered: list.length, cells, best };
+}
+
+/**
+ * Every map the Insights tab shows (1.27.5): all platforms together first
+ * (shorts, then long videos: when more than one platform has them), then
+ * each platform's own. `waiting`: the platforms with videos but not enough
+ * yet for their own map (they're already in "all").
+ */
+export function allBestTimes(
+  videos: InsightVideo[],
+  groups: { platform: Platform; kind: PatternKind }[],
+  now: number
+): { heat: Heat[]; waiting: { platform: Platform; kind: PatternKind; have: number }[] } {
+  const own: Heat[] = [];
+  const waiting: { platform: Platform; kind: PatternKind; have: number }[] = [];
+  for (const g of groups) {
+    const h = bestTimes(videos, { ...g, now });
+    if (h) own.push(h);
+    else if (g.kind !== "live") {
+      const have = heatVideos(videos, { ...g, now }).length;
+      if (have > 0) waiting.push({ ...g, have });
+    }
+  }
+  const together: Heat[] = [];
+  for (const kind of ["short", "long"] as const) {
+    const h = bestTimes(videos, { platform: "all", kind, now });
+    // One platform only: the same map as its own.
+    if (h && h.platforms.length > 1) together.push(h);
+  }
+  return { heat: [...together, ...own], waiting };
 }
 
 /** "Tuesdays 16–20". */

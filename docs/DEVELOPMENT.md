@@ -274,16 +274,38 @@ time, through `getNotificationHistory()`.
 
 **Video files.** Shorts' uploads (bucket `review-videos`) are deleted by the
 nightly clean-up once a short is posted everywhere, after the team's choice
-(`teams.media_keep_days`: 7, 14, 21 or 30 days; Team → Defaults → Video
-files; 0070). The short itself always stays. Code: `lib/media-cleanup.ts`.
+(`teams.media_keep_days`; Team → Defaults → Video files; 0070, 2 weeks by
+default). The short itself always stays. Code: `lib/media-cleanup.ts`.
 Since 1.25.0 the same job deletes a posted long video's edits (bucket
-`long-review-videos`) after `teams.long_media_keep_days` (3, 7, 14, 21 or 30;
-1 week by default), counted from the last platform in `long_video_posts`;
+`long-review-videos`) after `teams.long_media_keep_days` (1 week by default),
+counted from the last platform in `long_video_posts`;
 `long_video_projects.keep_media` skips it (masters and schedulers, through
 `long_set_keep_media`). Thumbnail Studio's thumbnails that didn't win go
-(rows and files) after `teams.studio_keep_days` (7, 14, 30 or 90; empty =
-keep them); winners always stay (with none picked, the first one). Before
-0089 both just do nothing.
+(rows and files) after `teams.studio_keep_days` (1 month by default); winners
+always stay (with none picked, the first one). Before 0089 both just do
+nothing. Since 1.27.5 (0092) all three take the same choices, from
+`lib/media-keep.ts` (`KEEP_CHOICES`): 1, 3, 7, 14, 21, 30, 60, 90, 180 or 365
+days, or null = never deleted (the clean-up skips that team); `readKeep()`
+reads a stored value, anything unknown is the default.
+
+**Glass and dashboard backgrounds (1.27.5, 0092).** `profiles.glass_ui` is
+the glass look: `components/ui/glass.tsx` keeps `<html data-glass>` and
+localStorage `vp-glass` in step with the account (the first-paint script in
+`app/layout.tsx` applies it early; brand pages drop it). The CSS is one block
+in `app/globals.css`: the wash is `body::before`; `bg-surface` /
+`bg-surface-2` turn see-through through Tailwind's `--tw-bg-opacity`; real
+blur (`backdrop-filter`) only on `[data-shell]` bars, `.dash-item` and
+`.glass-pane` (Dialog, AnchoredMenu, Select). Don't put `backdrop-filter` on
+ordinary cards: it makes them the frame for any `position: fixed` pop-up
+inside them. A dashboard background is `profiles.dashboard_bg_path` (a file
+in the public `dashboard-backgrounds` bucket, `<user id>/<time>-<name>.<ext>`,
+25 MB, pictures, GIFs, MP4 and WebM; `lib/dashboard-bg.ts` checks the same
+as the database), shown when `dashboard_bg_on`, darkened by
+`dashboard_bg_dim` % (0–80). The dashboard page draws it
+(`modules/dashboard/components/backdrop.tsx`) inside `[data-dash-bg]`, which
+frosts the widgets and the top bar; Settings → Preferences uploads it
+(`settings/dashboard-background.tsx`, `updateDashboardBackground` removes the
+file it replaces).
 
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by

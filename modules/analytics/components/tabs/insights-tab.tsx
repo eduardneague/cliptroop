@@ -7,7 +7,7 @@ import { Mascot } from "@/components/ui/mascot";
 import type { SocialPlatform } from "@/lib/social/providers";
 import type { Insights } from "../../lib/insights";
 import type { PatternKind } from "../../lib/patterns";
-import { BANDS, NOUNS, slotName, tipFor, WEEKDAY_SHORT, type Alert, type Heat } from "../../lib/insights-math";
+import { BANDS, HEAT_MIN, NOUNS, slotName, tipFor, WEEKDAY_SHORT, type Alert, type Heat } from "../../lib/insights-math";
 import { FindingCard, PatternsBlock } from "../advanced/findings";
 import { SparkleIcon } from "../advanced/sparkle";
 import { ToneIcon } from "./overview-tab";
@@ -21,6 +21,9 @@ import { PLATFORM, StatusRow, SetupCard } from "./shared";
  */
 
 const groupName = (p: SocialPlatform, k: PatternKind) => `${PLATFORM[p].name} · ${NOUNS[p][k][1][0].toUpperCase()}${NOUNS[p][k][1].slice(1)}`;
+/** Shorts, Reels and TikToks (or long videos) of every platform together (1.27.5). */
+const ALL_KIND: Record<PatternKind, string> = { short: "Shorts", long: "Long videos", live: "Live" };
+const heatName = (h: Heat) => (h.platform === "all" ? `Every platform · ${ALL_KIND[h.kind]}` : groupName(h.platform, h.kind));
 
 export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insights; onDownload: () => void }) {
   void teamId;
@@ -89,14 +92,18 @@ export function InsightsTab({ teamId, i, onDownload }: { teamId: string; i: Insi
             {heats.length > 1 && (
               <div className="flex items-center gap-1.5 flex-wrap" role="radiogroup" aria-label="Which videos">
                 {heats.map((g) => (
-                  <Chip key={g.key} on={heat.key === g.key} onClick={() => setHeatKey(g.key)} platform={g.h.platform} label={groupName(g.h.platform, g.h.kind)} count={g.h.considered} />
+                  <Chip key={g.key} on={heat.key === g.key} onClick={() => setHeatKey(g.key)} platform={g.h.platform} platforms={g.h.platforms} label={heatName(g.h)} count={g.h.considered} />
                 ))}
               </div>
             )}
             <HeatMap h={heat.h} />
+            <HeatWaiting waiting={i.heatWaiting} />
           </div>
         ) : (
-          <Empty text="The best times show up once a platform has at least 12 videos a week old, posted at different times." />
+          <>
+            <Empty text={`The best times show up once there are at least ${HEAT_MIN} videos a week old (every platform's together), posted at different times.`} />
+            <HeatWaiting waiting={i.heatWaiting} />
+          </>
         )}
       </Section>
 
@@ -133,7 +140,7 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function Chip({ on, onClick, platform, label, count }: { on: boolean; onClick: () => void; platform: SocialPlatform; label: string; count: number }) {
+function Chip({ on, onClick, platform, platforms = [], label, count }: { on: boolean; onClick: () => void; platform: SocialPlatform | "all"; platforms?: SocialPlatform[]; label: string; count: number }) {
   return (
     <button
       type="button"
@@ -144,7 +151,16 @@ function Chip({ on, onClick, platform, label, count }: { on: boolean; onClick: (
         on ? "border-ink/40 bg-surface shadow-[inset_0_0_0_1px_rgb(var(--ink)/0.15)] text-ink" : "border-line/15 bg-surface/50 text-ink-soft hover:text-ink"
       }`}
     >
-      <PlatformIcon platform={platform} className="w-6 h-6 rounded-md" />
+      {platform === "all" ? (
+        // Every platform in it, overlapping a little.
+        <span className="flex -space-x-1.5 pl-0.5" aria-hidden>
+          {platforms.map((p) => (
+            <PlatformIcon key={p} platform={p} className="w-5 h-5 rounded-md ring-2 ring-surface" />
+          ))}
+        </span>
+      ) : (
+        <PlatformIcon platform={platform} className="w-6 h-6 rounded-md" />
+      )}
       {label}
       <span className="text-ink-faint font-medium tabular-nums">{count}</span>
     </button>
@@ -249,6 +265,11 @@ function HeatMap({ h }: { h: Heat }) {
         </span>
         <span>· the small number: videos posted then ({h.considered} in all); slots with 1 or 2 stay pale</span>
       </div>
+      {h.platform === "all" && (
+        <p className="mt-2 text-[11.5px] text-ink-faint">
+          {h.platforms.map((p) => PLATFORM[p].name).join(", ").replace(/, ([^,]*)$/, " and $1")} together: each video next to its own platform&apos;s usual, so a big channel doesn&apos;t outweigh a small one.
+        </p>
+      )}
       <BestSlots h={h} />
     </div>
   );
@@ -303,5 +324,22 @@ function BestSlots({ h }: { h: Heat }) {
         ))}
       </ol>
     </div>
+  );
+}
+
+/** The platforms still collecting for a map of their own (1.27.5); they already count in "Every platform". */
+function HeatWaiting({ waiting }: { waiting: Insights["heatWaiting"] }) {
+  if (!waiting.length) return null;
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-ink-soft" aria-label="Not enough videos yet">
+      {waiting.map((w) => (
+        <li key={`${w.platform}:${w.kind}`} className="inline-flex items-center gap-1.5">
+          <PlatformIcon platform={w.platform} className="w-4 h-4 rounded-[4px] opacity-70" />
+          <span>
+            {groupName(w.platform, w.kind)}: a map of its own after {HEAT_MIN} videos ({w.have} so far)
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

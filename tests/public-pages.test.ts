@@ -27,10 +27,10 @@ ok((m.facebook as { appId?: string } | undefined)?.appId === "1234567890", "fb:a
 delete env.FACEBOOK_APP_ID;
 ok(publicMetadata("/", null).facebook === undefined, "no fb:app_id without FACEBOOK_APP_ID");
 
-ok(MEDIA_KEEP_CHOICES.map((c) => c.days).join() === "7,14,21,30", "1, 2, 3 weeks or 1 month");
+ok(MEDIA_KEEP_CHOICES.map((c) => c.days).join() === "1,3,7,14,21,30,60,90,180,365", "1 day to 1 year (1.27.5)");
 ok(DEFAULT_MEDIA_KEEP_DAYS === 14, "2 weeks by default");
-ok(isMediaKeepDays(21) && !isMediaKeepDays(2) && !isMediaKeepDays("14"), "only those four numbers");
-ok(mediaKeepLabel(30) === "1 month", "labels");
+ok(isMediaKeepDays(21) && !isMediaKeepDays(2) && !isMediaKeepDays("14"), "only those ten numbers");
+ok(mediaKeepLabel(30) === "1 month" && mediaKeepLabel(null) === "Never", "labels");
 const D = 86_400_000;
 const NOW = Date.parse("2026-10-20T12:00:00Z");
 const ago = (d: number) => new Date(NOW - d * D).toISOString();

@@ -210,6 +210,124 @@ body {
   color: rgb(var(--ink));
 }
 
+/*
+  The glass look (1.27.5, Settings → Preferences → Glass; <html data-glass>):
+  frosted, see-through cards and bars over a soft wash of the colour theme,
+  in light and dark mode and with every colour theme. Off by default.
+
+  - The wash: the paper with three soft fields of colour (the theme's own,
+    and two hues beside it where the browser can work them out; meetings'
+    violet and long videos' blue otherwise), fixed behind the page.
+  - Cards (bg-surface) and their insets (bg-surface-2) let it through; the
+    things that float over the page (menus, tooltips, sticky bars) stay
+    nearly solid, so nothing under them gets in the way of reading.
+  - Real blur (backdrop-filter) only where it's safe: the side bar, the top
+    bar, the bottom bar on phones, dashboard widgets and the pop-ups that
+    are drawn at the top of the page (.glass-pane). (A blur makes its box
+    the frame for anything "fixed" inside it, which would trap a pop-up
+    drawn inside a card.)
+  - Text keeps the theme's own colours; the edges get a bright hairline.
+*/
+html[data-glass] {
+  --glass-tint: 0.58;
+  --glass-raise: 255 255 255 / 0.7;
+  --glass-float: 0.93;
+  --glass-edge: 255 255 255 / 0.62;
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 14px 34px -22px rgb(var(--ink) / 0.4);
+  --glass-blur: blur(18px) saturate(1.6);
+  background: rgb(var(--paper));
+}
+html.dark[data-glass] {
+  --glass-tint: 0.52;
+  --glass-raise: 255 255 255 / 0.075;
+  --glass-float: 0.94;
+  --glass-edge: 255 255 255 / 0.12;
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 40px -22px rgb(0 0 0 / 0.75);
+}
+html[data-glass] body { background: transparent; }
+html[data-glass] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--amber) / 0.3), transparent 62%),
+    radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--violet) / 0.2), transparent 60%),
+    radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--long) / 0.2), transparent 62%),
+    rgb(var(--paper));
+}
+@supports (color: hsl(from red h s l)) {
+  html[data-glass] body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--amber) / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, hsl(from rgb(var(--amber)) calc(h - 36) s calc(l + 6) / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, hsl(from rgb(var(--amber)) calc(h + 26) s calc(l + 10) / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
+}
+html[data-glass] .bg-surface { --tw-bg-opacity: var(--glass-tint); }
+/* Insets, hovers and picked options: a brighter pane on the card (glass on glass), so they still stand out. */
+html[data-glass] .bg-surface-2,
+html[data-glass] [class*="hover:bg-surface-2"]:hover { background-color: rgb(var(--glass-raise)); }
+html[data-glass] .bg-surface:is(.fixed, .absolute, .sticky, .shadow-lg, .shadow-xl, .shadow-2xl, [class^="shadow-[0_"], [class*=" shadow-[0_"]) { --tw-bg-opacity: var(--glass-float); }
+html[data-glass] .bg-surface[class*="border-line/"] { border-color: rgb(var(--glass-edge)); }
+html[data-glass] .bg-surface[class*="border-line/"]:not([class*="shadow"]) {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--glass-shadow);
+}
+html[data-glass] [data-shell],
+html[data-glass] .dash-item,
+html[data-glass] .glass-pane {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+html[data-glass] [data-shell="header"],
+html[data-glass] [data-shell="topbar"] { background-color: rgb(var(--surface) / 0.42); }
+html[data-glass] [data-shell="sidebar"] { --tw-bg-opacity: 0.5; border-color: rgb(var(--glass-edge)); }
+html[data-glass] [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / 0.7); }
+html[data-glass] .glass-pane { --tw-bg-opacity: 0.8; }
+html[data-glass] .dash-board .dash-item:not(.is-lifted):not(.is-resizing) { box-shadow: var(--glass-shadow); }
+
+/*
+  A dashboard background (1.27.5, Settings → Preferences → Dashboard
+  background): the picture, GIF or video sits behind the page
+  (DashboardBackdrop); the widgets and the top bar turn frosted over it,
+  with or without the glass look.
+*/
+[data-dash-bg] .dash-item {
+  --tw-bg-opacity: 0.6;
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border-color: rgb(255 255 255 / 0.45);
+}
+.dark [data-dash-bg] .dash-item { --tw-bg-opacity: 0.55; border-color: rgb(255 255 255 / 0.09); }
+html:has([data-dash-bg]) [data-shell="header"],
+html:has([data-dash-bg]) [data-shell="topbar"] {
+  background-color: rgb(var(--paper) / 0.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+}
+/* (The glass look's wash isn't needed under it. The body stays see-through: with the glass look on, the page's
+   own background is on <html>, and a painted body would hide the picture.) */
+html:has([data-dash-bg]) body::before { display: none; }
+/* The Customize button (and the toolbar while customizing) on a frosted pane of its own. */
+[data-dash-bg] .dash-tool {
+  background: rgb(var(--surface) / 0.7);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+}
+[data-dash-bg] div.dash-tool { padding: 4px; }
+/* The greeting over the picture: a soft halo of the paper behind the words. */
+[data-dash-bg] .dash-greeting { text-shadow: 0 1px 14px rgb(var(--paper) / 0.9), 0 0 2px rgb(var(--paper) / 0.6); }
+/* Settings' little preview of it: frosted cards like the widgets. */
+.dash-bg-sample {
+  background: rgb(var(--surface) / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.45);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+}
+.dark .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
+
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -363,26 +481,43 @@ body {
   color: rgb(var(--sp-soft)); background: rgb(var(--sp-bg));
 }
 .pm-page-break.ProseMirror-selectednode { outline: 2px solid rgb(var(--amber) / 0.6); outline-offset: 2px; border-radius: 4px; }
-.print-only { display: none; }
+/* Links: the hand, like on any page (a click shows where it goes; Ctrl / ⌘ + click opens it). */
+.script-doc a { cursor: pointer; }
+/* Tab (1.27.5): a tab stop about half an inch in, like Word. */
+.script-doc { tab-size: 6; tab-size: 2.6em; }
+/* Lists inside lists without a style of their own go 1. → a. → i. (lib/list-markers.ts). */
+.script-doc ol ol { list-style-type: lower-alpha; }
+.script-doc ol ol ol { list-style-type: lower-roman; }
+.script-doc ol ol ol ol { list-style-type: decimal; }
 
-/* PDF export = the browser's print, showing only the paper. */
+/* PDF export (1.27.5) = the browser's print of a plain copy of the script
+   (modules/scripts/lib/print-script.ts), straight under <body>: everything
+   else is taken off the page while it prints, so nothing hidden can make
+   room (Firefox printed long scripts with page after page left blank). */
+#script-print-root { display: none; }
 @media print {
   @page { margin: 18mm; }
-  body * { visibility: hidden !important; }
-  .script-print, .script-print * { visibility: visible !important; }
-  .script-print {
-    position: absolute; left: 0; top: 0; width: 100% !important; max-width: none !important;
-    border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
-    --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
+  html.vp-printing, html.vp-printing body {
+    background: #fff !important; height: auto !important; min-height: 0 !important; overflow: visible !important;
   }
-  .script-print .print-only { display: block; }
-  .script-print { min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
-  .pm-page-break { break-after: page; height: 0 !important; margin: 0 !important; background: none !important; }
-  .pm-page-break::after { display: none !important; }
+  html.vp-printing body { display: block !important; padding: 0 !important; margin: 0 !important; }
+  html.vp-printing body > *:not(#script-print-root) { display: none !important; }
+  html.vp-printing #script-print-root { display: block !important; }
+  #script-print-root .script-paper {
+    --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
+    background: #fff; color: #000; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; max-width: none;
+  }
+  #script-print-root .print-title { font-size: 20pt; font-weight: 700; line-height: 1.25; margin: 0 0 14pt; }
+  /* (pre-wrap: tabs and runs of spaces print as they're typed.) */
+  #script-print-root .script-doc { font-size: 12pt; line-height: 1.6; min-height: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+  #script-print-root .script-doc h1, #script-print-root .script-doc h2, #script-print-root .script-doc h3 { break-after: avoid; }
+  #script-print-root .script-doc p, #script-print-root .script-doc li { orphans: 2; widows: 2; }
+  #script-print-root .print-image { margin: 0.8em 0; break-inside: avoid; }
+  #script-print-root .print-image img { display: inline-block; max-width: 100%; height: auto; border-radius: 4px; }
+  #script-print-root .pm-page-break { break-after: page; height: 0; margin: 0; border: 0; background: none; }
+  #script-print-root .pm-page-break::after { content: none; display: none; }
+  #script-print-root mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
-  .script-image [contenteditable="false"] { display: none !important; }
-  .script-doc { min-height: 0; font-size: 12pt; }
-  .script-doc mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 
@@ -580,6 +715,10 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
    in studio.tsx) stack the widgets in reading order (--o), 2 columns on
    small laptops and tablets, 1 under 600px.
    ------------------------------------------------------------------------- */
+/* The digital clock's colon fades with the seconds (1.27.5); still when motion is off. */
+.digital-colon { transition: opacity 0.35s ease; }
+html[data-motion="off"] .digital-colon { opacity: 1 !important; }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion="on"]) .digital-colon { opacity: 1 !important; } }
 .dash-cq { container-type: inline-size; }
 .dash-board {
   --gap: 12px;
@@ -630,6 +769,8 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
   z-index: 40;
   width: var(--rw);
   height: var(--rh);
+  /* Pulled by a left or top edge, its corner moves with it (1.27.5). */
+  transform: translate(var(--rx, calc(var(--x) * var(--col))), var(--ry, calc(var(--y) * var(--row)))) rotate(0deg) scale(1);
   transition: box-shadow 0.2s ease;
   box-shadow: 0 18px 40px -16px rgb(0 0 0 / 0.35), 0 0 0 1.5px rgb(var(--amber) / 0.7);
 }

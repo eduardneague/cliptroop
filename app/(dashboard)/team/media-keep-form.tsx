@@ -6,12 +6,13 @@ import { useAction } from "@/lib/hooks/use-action";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
 import { formatBytes } from "@/modules/review/lib/limits";
-import { MEDIA_KEEP_CHOICES, mediaKeepLabel, type MediaKeepDays } from "@/lib/media-keep";
+import { KEEP_OPTIONS, keepLabel, keepsLess, keepValue, parseKeep, type KeepSetting } from "@/lib/media-keep";
 
 /**
  * Team → Defaults → Video files (masters): how long a posted short's video
- * files stay before the nightly clean-up deletes them. Shorter asks first:
- * older files go the same night and can't be brought back.
+ * files stay before the nightly clean-up deletes them (1.27.5: 1 day to 1
+ * year, or never). Shorter asks first: older files go the same night and
+ * can't be brought back.
  */
 export function MediaKeepForm({
   teamId,
@@ -21,25 +22,25 @@ export function MediaKeepForm({
   bytes,
 }: {
   teamId: string;
-  days: MediaKeepDays;
+  days: KeepSetting;
   ready: boolean;
   files: number;
   bytes: number;
 }) {
-  const [value, setValue] = useState<MediaKeepDays>(days);
+  const [value, setValue] = useState<KeepSetting>(days);
   const confirm = useConfirm();
   const save = useAction(updateMediaKeepDays, {
-    success: (_t, d) => `Video files now stay ${mediaKeepLabel(d)} after posting`,
+    success: (_t, d) => (d === null ? "Video files of posted shorts are kept now" : `Video files now stay ${keepLabel(d)} after posting`),
     onError: () => setValue(days),
   });
 
-  async function pick(next: MediaKeepDays) {
+  async function pick(next: KeepSetting) {
     if (next === value) return;
-    if (next < value) {
+    if (next !== null && keepsLess(next, value)) {
       const ok = await confirm({
-        title: `Keep video files for ${mediaKeepLabel(next)}?`,
-        description: `Tonight, the video files of shorts posted more than ${mediaKeepLabel(next)} ago are deleted. They can't be brought back. The shorts themselves stay.`,
-        confirmLabel: `Keep for ${mediaKeepLabel(next)}`,
+        title: `Keep video files for ${keepLabel(next)}?`,
+        description: `Tonight, the video files of shorts posted more than ${keepLabel(next)} ago are deleted. They can't be brought back. The shorts themselves stay.`,
+        confirmLabel: `Keep for ${keepLabel(next)}`,
         danger: true,
       });
       if (!ok) return;
@@ -59,9 +60,12 @@ export function MediaKeepForm({
         </div>
         <div className="w-40 flex-shrink-0">
           <Select
-            value={String(value)}
-            onChange={(v) => v && void pick(Number(v) as MediaKeepDays)}
-            options={MEDIA_KEEP_CHOICES.map((c) => ({ value: String(c.days), label: c.label }))}
+            value={keepValue(value)}
+            onChange={(v) => {
+              const next = v ? parseKeep(v) : undefined;
+              if (next !== undefined) void pick(next);
+            }}
+            options={KEEP_OPTIONS}
             ariaLabel="Delete short video files after posting"
             disabled={!ready || save.pending}
           />

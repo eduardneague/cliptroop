@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
@@ -11,7 +12,29 @@ import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
 import { saveLayout } from "../actions";
 import { COLS, bottom, fill, preview as previewBoxes, compact, readingOrder, type Box, type Interaction } from "../grid";
-import { CATALOG, CONTRIB_COLORS, DEFAULT_LAYOUT, addWidget, applyBoxes, limitsFor, toBox, type Layout, type WidgetInstance, type WidgetType } from "../layout";
+import { CATALOG, CONTRIB_COLORS, CONTRIB_THEME, DEFAULT_LAYOUT, addWidget, applyBoxes, limitsFor, toBox, type Layout, type WidgetInstance, type WidgetType } from "../layout";
+import { PALETTES } from "@/components/ui/palette";
+
+/** Every colour theme's accent once (1.27.5: the Contributions widget's colours). */
+const THEME_SWATCHES = (() => {
+  const seen = new Set<string>();
+  const out: { hex: string; name: string }[] = [];
+  for (const p of PALETTES) {
+    const hex = `#${p.light.accent.split(" ").map((n) => Number(n).toString(16).padStart(2, "0")).join("")}`;
+    if (seen.has(hex)) continue;
+    seen.add(hex);
+    out.push({ hex, name: p.name });
+  }
+  return out;
+})();
+/** Top videos (1.27.5): every platform together, or one. */
+const TOP_PLATFORMS = [
+  { id: "all", label: "All platforms together" },
+  { id: "youtube", label: "YouTube" },
+  { id: "instagram", label: "Instagram" },
+  { id: "tiktok", label: "TikTok" },
+  { id: "facebook", label: "Facebook" },
+] as const;
 import type { Done, Pipeline, PostToday, Task, TeamCard, TeamTasks, Todo, UpcomingLong, UpcomingShort } from "../lib/queries";
 import { BoxContext } from "./widget-box";
 import { WidgetBoundary } from "./widget-boundary";
@@ -165,6 +188,20 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
     setDraft(structuredClone(layout));
   };
   const set = (patch: Partial<Layout>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  /**
+   * A widget's settings, from its settings window or from the widget itself
+   * (1.27.5: Top videos' platform chips): they apply right away and are saved
+   * with the layout (in Customize, with the rest when it's saved).
+   */
+  const updateSettings = (id: string, settings: Record<string, unknown>) => {
+    const apply = (ws: WidgetInstance[]) => ws.map((x) => (x.id === id ? { ...x, settings: { ...x.settings, ...settings } } : x));
+    if (draft) setDraft({ ...draft, widgets: apply(draft.widgets) });
+    else {
+      const next = { ...layout, widgets: apply(layout.widgets) };
+      setLayout(next);
+      void saveLayout(next);
+    }
+  };
 
   // From the search bar (1.26.0): ?customize=1 starts Customize; &add=<widget>
   // puts that widget on the board (or shows it, if it's there already);
@@ -210,24 +247,28 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
     <div className="px-3 sm:px-5 xl:px-6 py-4 sm:py-5 w-full">
       <header className="flex items-center gap-3 flex-wrap mb-4">
         {/* Never narrower than ~15rem: on phones the Customize toolbar wraps below instead of squeezing the greeting. */}
-        <div className="flex-1 min-w-[min(100%,15rem)]">
+        <div className="dash-greeting flex-1 min-w-[min(100%,15rem)]">
           <h1 className="font-display text-[22px] sm:text-[24px] font-semibold leading-tight">
             {hello}, {name}
           </h1>
           <p className="text-[13px] text-ink-soft">{active ? `You have ${active} thing${active === 1 ? "" : "s"} on your plate.` : "Nothing on your plate right now."}</p>
         </div>
         {!editing ? (
-          <button type="button" onClick={edit} onPointerEnter={preloadAll} onFocus={preloadAll} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 hover:bg-surface-2">
+          <button type="button" onClick={edit} onPointerEnter={preloadAll} onFocus={preloadAll} className="dash-tool inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 hover:bg-surface-2">
             <SettingsIcon className="w-3.5 h-3.5" />
             Customize
           </button>
         ) : (
-          <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto animate-[modalin_.2s_var(--ease-out)]">
-            <button type="button" onClick={() => setLibrary(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold hover:border-line/40 hover:bg-surface-2">
-              <PlusIcon className="w-3.5 h-3.5" />
+          <div className="dash-tool flex items-center gap-1.5 flex-wrap w-full sm:w-auto rounded-xl animate-[modalin_.2s_var(--ease-out)]">
+            <button type="button" onClick={() => setLibrary(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber/50 bg-amber/10 px-3 h-8 text-[12.5px] font-bold text-amber hover:bg-amber/15">
+              <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
               Add widget
             </button>
             <Toggle on={shown.fill} onChange={(v) => set({ fill: v })} label="Fill empty space" icon={<FillIcon className="w-3.5 h-3.5" />} />
+            {/* A picture, GIF or video behind it (1.27.5): set in Settings. */}
+            <Link href="/settings?tab=preferences#background" className="rounded-lg px-2.5 h-8 inline-flex items-center text-[12.5px] font-semibold text-ink-soft hover:text-ink">
+              Background
+            </Link>
             <span className="w-px h-5 bg-line/15 mx-0.5" />
             <button type="button" onClick={() => setDraft(structuredClone({ ...DEFAULT_LAYOUT, sounds: shown.sounds }))} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
               Reset
@@ -250,7 +291,20 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
         data={data}
         onChange={(widgets) => setDraft((d) => (d ? { ...d, widgets } : d))}
         onSettings={setSettingsFor}
+        onWidgetSettings={updateSettings}
       />
+
+      {/* Customize: a big way to add a widget, the whole width of the board (1.27.5). */}
+      {editing && shown.widgets.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setLibrary(true)}
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-amber/45 bg-amber/[0.04] h-14 text-[14px] font-bold text-amber hover:bg-amber/[0.09] hover:border-amber/70 transition-colors animate-[fadein_.2s_ease]"
+        >
+          <PlusIcon className="w-4 h-4" strokeWidth={2.5} />
+          Add a widget
+        </button>
+      )}
 
       {!shown.widgets.length && (
         <div className="rounded-xl border border-dashed border-line/25 py-12 text-center">
@@ -295,22 +349,7 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
       </Dialog>
 
       <Dialog open={!!editingWidget} onClose={() => setSettingsFor(null)} title={editingWidget ? `${CATALOG[editingWidget.type].name} settings` : ""}>
-        {editingWidget && (
-          <WidgetSettings
-            w={editingWidget}
-            teamId={data.teamId}
-            onChange={(settings) => {
-              // Settings apply right away (saved with the layout).
-              const apply = (ws: WidgetInstance[]) => ws.map((x) => (x.id === editingWidget.id ? { ...x, settings: { ...x.settings, ...settings } } : x));
-              if (draft) setDraft({ ...draft, widgets: apply(draft.widgets) });
-              else {
-                const next = { ...layout, widgets: apply(layout.widgets) };
-                setLayout(next);
-                void saveLayout(next);
-              }
-            }}
-          />
-        )}
+        {editingWidget && <WidgetSettings w={editingWidget} teamId={data.teamId} onChange={(settings) => updateSettings(editingWidget.id, settings)} />}
       </Dialog>
     </div>
   );
@@ -336,10 +375,13 @@ function Toggle({ on, onChange, label, icon }: { on: boolean; onChange: (v: bool
 // Board: placement, drag, resize
 // ---------------------------------------------------------------------------
 
+/** Which edge or corner a widget is pulled by (1.27.5: every one): l(eft) r(ight) t(op) b(ottom). */
+type Edge = "l" | "r" | "t" | "b" | "lt" | "rt" | "lb" | "rb";
+
 type Grab = {
   id: string;
   kind: "move" | "resize";
-  edge: "r" | "b" | "rb";
+  edge: Edge;
   pointerId: number;
   el: HTMLElement;
   sx: number;
@@ -361,6 +403,7 @@ function Board({
   data,
   onChange,
   onSettings,
+  onWidgetSettings,
 }: {
   layout: Layout;
   editing: boolean;
@@ -369,6 +412,7 @@ function Board({
   data: StudioData;
   onChange: (w: WidgetInstance[]) => void;
   onSettings: (id: string) => void;
+  onWidgetSettings: (id: string, settings: Record<string, unknown>) => void;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -400,7 +444,7 @@ function Board({
   const [extraRows, setExtraRows] = useState(0);
   const grab = useRef<Grab | null>(null);
   /** Pointer (screen), the card's drawn position (board px, eased toward the pointer), tilt, frame time. */
-  const pointer = useRef({ x: 0, y: 0, cx: 0, cy: 0, tilt: 0, t: 0, cellX: -1, cellY: -1, rw: 0, rh: 0 });
+  const pointer = useRef({ x: 0, y: 0, cx: 0, cy: 0, tilt: 0, t: 0, cellX: -1, cellY: -1, rw: 0, rh: 0, rx: 0, ry: 0 });
   const frame = useRef(0);
   const lastAct = useRef<string>("");
   const scrollAtGrab = useRef(0);
@@ -477,26 +521,39 @@ function Board({
       const me = widgets.find((w) => w.id === g.id)!;
       const lim = limits[g.id];
       const startBox = byIdRef.current.get(g.id) ?? toBox(me);
-      const maxW = Math.min(lim.maxW, COLS - startBox.x);
-      const dx = g.edge === "b" ? 0 : p.x - g.sx;
-      const dy = g.edge === "r" ? 0 : p.y - g.sy + (window.scrollY - scrollAtGrab.current);
-      const wpx = Math.max(lim.minW * m.col - GAP, Math.min(maxW * m.col - GAP, g.w0 + dx));
-      const hpx = Math.max(lim.minH * m.row - GAP, Math.min(lim.maxH * m.row - GAP, g.h0 + dy));
+      // Pulled by the left / top edge (or a corner there): that edge moves, the opposite one stays.
+      const left = g.edge.includes("l");
+      const top = g.edge.includes("t");
+      const sideways = left || g.edge.includes("r");
+      const upDown = top || g.edge.includes("b");
+      const maxW = Math.min(lim.maxW, left ? startBox.x + startBox.w : COLS - startBox.x);
+      const maxH = Math.min(lim.maxH, top ? startBox.y + startBox.h : lim.maxH);
+      const dx = sideways ? p.x - g.sx : 0;
+      const dy = upDown ? p.y - g.sy + (window.scrollY - scrollAtGrab.current) : 0;
+      const wpx = Math.max(lim.minW * m.col - GAP, Math.min(maxW * m.col - GAP, g.w0 + (left ? -dx : dx)));
+      const hpx = Math.max(lim.minH * m.row - GAP, Math.min(maxH * m.row - GAP, g.h0 + (top ? -dy : dy)));
       const now = performance.now();
       const dt = Math.min(48, now - (p.t || now - 16));
       p.t = now;
       const ease = 1 - Math.exp(-dt / 45);
       p.rw += (wpx - p.rw) * ease;
       p.rh += (hpx - p.rh) * ease;
+      // Where its top-left corner is drawn (it moves with a left or top edge).
+      const x0 = startBox.x * m.col;
+      const y0 = startBox.y * m.row;
+      p.rx = left ? x0 + (g.w0 - p.rw) : x0;
+      p.ry = top ? y0 + (g.h0 - p.rh) : y0;
       g.el.style.setProperty("--rw", `${p.rw.toFixed(1)}px`);
       g.el.style.setProperty("--rh", `${p.rh.toFixed(1)}px`);
+      g.el.style.setProperty("--rx", `${p.rx.toFixed(1)}px`);
+      g.el.style.setProperty("--ry", `${p.ry.toFixed(1)}px`);
       const w = Math.round((wpx + GAP) / m.col);
       const h = Math.round((hpx + GAP) / m.row);
-      const key = `r${w},${h}`;
+      const key = `r${w},${h},${left ? 1 : 0}${top ? 1 : 0}`;
       if (key !== lastAct.current) {
         lastAct.current = key;
-        setAct({ kind: "resize", id: g.id, w, h });
-        setExtraRows(Math.max(0, startBox.y + h - bottom(base)));
+        setAct({ kind: "resize", id: g.id, w, h, left, top });
+        setExtraRows(Math.max(0, (top ? startBox.y + startBox.h - h : startBox.y) + h - bottom(base)));
       }
     }
     frame.current = requestAnimationFrame(tick);
@@ -504,7 +561,7 @@ function Board({
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
-  function begin(e: React.PointerEvent<HTMLElement>, id: string, kind: "move" | "resize", edge: Grab["edge"] = "rb") {
+  function begin(e: React.PointerEvent<HTMLElement>, id: string, kind: "move" | "resize", edge: Edge = "rb") {
     if (!canDrag || e.button !== 0) return;
     const el = (e.currentTarget.closest("[data-widget]") as HTMLElement) ?? e.currentTarget;
     const rect = el.getBoundingClientRect();
@@ -523,7 +580,7 @@ function Board({
       started: false,
     };
     scrollAtGrab.current = window.scrollY;
-    pointer.current = { x: e.clientX, y: e.clientY, cx: 0, cy: 0, tilt: 0, t: 0, cellX: -1, cellY: -1, rw: rect.width, rh: rect.height };
+    pointer.current = { x: e.clientX, y: e.clientY, cx: 0, cy: 0, tilt: 0, t: 0, cellX: -1, cellY: -1, rw: rect.width, rh: rect.height, rx: 0, ry: 0 };
     el.setPointerCapture(e.pointerId);
     e.stopPropagation();
   }
@@ -550,11 +607,15 @@ function Board({
         setLifted(g.id);
         sounds.lift();
       } else {
+        p.rx = r.left - b.left;
+        p.ry = r.top - b.top;
         g.el.style.setProperty("--rw", `${r.width}px`);
         g.el.style.setProperty("--rh", `${r.height}px`);
+        g.el.style.setProperty("--rx", `${p.rx}px`);
+        g.el.style.setProperty("--ry", `${p.ry}px`);
         setResizing(g.id);
       }
-      document.body.style.cursor = g.kind === "move" ? "grabbing" : g.edge === "r" ? "ew-resize" : g.edge === "b" ? "ns-resize" : "nwse-resize";
+      document.body.style.cursor = g.kind === "move" ? "grabbing" : EDGE_CURSOR[g.edge];
       document.body.style.userSelect = "none";
       frame.current = requestAnimationFrame(tick);
     }
@@ -664,24 +725,27 @@ function Board({
               onRemove={() => remove(w.id)}
               onSettings={() => onSettings(w.id)}
             >
-              {mounted ? <WidgetBoundary name={CATALOG[w.type].name}>{renderWidget(w, data)}</WidgetBoundary> : <WidgetSkeleton />}
+              {mounted ? <WidgetBoundary name={CATALOG[w.type].name}>{renderWidget(w, data, (st) => onWidgetSettings(w.id, st))}</WidgetBoundary> : <WidgetSkeleton />}
             </WidgetCard>
           );
         })}
       </div>
       {editing && (
         <p className="mt-3 text-center text-[12px] text-ink-faint">
-          {m.narrow ? "Make the window wider to move and resize widgets." : "Drag a widget to move it. Pull its edges to resize. Arrow keys move the selected one, Shift + arrows resize."}
+          {m.narrow ? "Make the window wider to move and resize widgets." : "Drag a widget to move it. Pull any edge or corner to resize. Arrow keys move the selected one, Shift + arrows resize."}
         </p>
       )}
     </div>
   );
 }
 
+/** The pointer while pulling each edge and corner. */
+const EDGE_CURSOR: Record<Edge, string> = { l: "ew-resize", r: "ew-resize", t: "ns-resize", b: "ns-resize", lt: "nwse-resize", rb: "nwse-resize", rt: "nesw-resize", lb: "nesw-resize" };
+
 const vars = (b: Box, extra: Record<string, string | number> = {}) =>
   ({ ["--x" as string]: b.x, ["--y" as string]: b.y, ["--w" as string]: b.w, ["--h" as string]: b.h, ...extra }) as React.CSSProperties;
 
-export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data: StudioData) {
+export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data: StudioData, update?: (settings: Record<string, unknown>) => void) {
   switch (w.type) {
     case "tasks":
       return <TasksWidget tasks={data.tasks} done={data.done} teamTasks={data.teamTasks ?? null} settings={w.settings} />;
@@ -712,7 +776,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "followers":
       return <FollowersWidget teamId={data.teamId} />;
     case "topVideos":
-      return <TopVideosWidget teamId={data.teamId} />;
+      return <TopVideosWidget teamId={data.teamId} settings={w.settings} onSettings={update} />;
     case "audienceMap":
       return <AudienceMapWidget teamId={data.teamId} settings={w.settings} />;
     case "output":
@@ -725,7 +789,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <StreakWidget teamId={data.teamId} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos"];
 
 /** Measures its content box so widgets can adapt to the space they get. */
 function Measured({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -772,7 +836,7 @@ function WidgetCard({
   canDrag: boolean;
   className: string;
   onGrab: (e: React.PointerEvent<HTMLElement>) => void;
-  onResize: (e: React.PointerEvent<HTMLElement>, edge: "r" | "b" | "rb") => void;
+  onResize: (e: React.PointerEvent<HTMLElement>, edge: Edge) => void;
   onResetSize: () => void;
   onPointerMove: (e: React.PointerEvent<HTMLElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLElement>) => void;
@@ -837,16 +901,30 @@ function WidgetCard({
       <Measured className={`flex-1 min-h-0 flex flex-col ${editing ? "pointer-events-none" : ""}`}>{children}</Measured>
       {canDrag && (
         <>
-          <span onPointerDown={(e) => onResize(e, "r")} className="dash-resize absolute top-3 bottom-6 right-0 w-2.5 cursor-ew-resize group/edge flex items-center justify-center" aria-hidden>
-            <span className="w-[3px] h-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
-          </span>
-          <span onPointerDown={(e) => onResize(e, "b")} className="dash-resize absolute left-3 right-6 bottom-0 h-2.5 cursor-ns-resize group/edge flex items-center justify-center" aria-hidden>
-            <span className="h-[3px] w-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
-          </span>
+          {/* Every edge and corner pulls (1.27.5); the bottom-right one shows how. */}
+          {(["l", "r"] as const).map((edge) => (
+            <span key={edge} onPointerDown={(e) => onResize(e, edge)} className={`dash-resize absolute top-4 bottom-4 ${edge === "l" ? "left-0" : "right-0"} w-2.5 cursor-ew-resize group/edge flex items-center justify-center`} aria-hidden>
+              <span className="w-[3px] h-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
+            </span>
+          ))}
+          {(["t", "b"] as const).map((edge) => (
+            <span key={edge} onPointerDown={(e) => onResize(e, edge)} className={`dash-resize absolute left-4 right-6 ${edge === "t" ? "top-0" : "bottom-0"} h-2.5 cursor-ns-resize group/edge flex items-center justify-center`} aria-hidden>
+              <span className="h-[3px] w-8 rounded-[2px] bg-amber/0 group-hover/edge:bg-amber/70 transition-colors" />
+            </span>
+          ))}
+          {(["lt", "rt", "lb"] as const).map((edge) => (
+            <span
+              key={edge}
+              onPointerDown={(e) => onResize(e, edge)}
+              onDoubleClick={onResetSize}
+              className={`dash-resize absolute w-4 h-4 ${edge === "lt" ? "left-0 top-0 cursor-nwse-resize" : edge === "rt" ? "right-0 top-0 cursor-nesw-resize" : "left-0 bottom-0 cursor-nesw-resize"}`}
+              aria-hidden
+            />
+          ))}
           <span
             onPointerDown={(e) => onResize(e, "rb")}
             onDoubleClick={onResetSize}
-            title="Drag to resize. Double-click for the normal size."
+            title="Drag any edge or corner to resize. Double-click a corner for the normal size."
             className="dash-resize absolute right-0 bottom-0 w-6 h-6 cursor-nwse-resize flex items-end justify-end p-0.5 text-ink-faint hover:text-amber"
           >
             <ResizeCornerIcon className="w-4 h-4" />
@@ -936,18 +1014,38 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
   );
   if (w.type === "contributions") {
     const color = (s.color as string) ?? "#22c55e";
+    const swatch = (c: string, label: string, css = c) => (
+      <button
+        key={c}
+        type="button"
+        role="radio"
+        aria-checked={color === c}
+        onClick={() => onChange({ color: c })}
+        aria-label={label}
+        title={label}
+        className={`w-7 h-7 rounded-lg transition-transform hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-surface ring-ink" : ""}`}
+        style={{ background: css }}
+      />
+    );
     return (
       <div>
-        <div className={row}>
-          <span className="text-[13.5px] font-semibold">Colour</span>
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {CONTRIB_COLORS.map((c) => (
-              <button key={c} type="button" onClick={() => onChange({ color: c })} aria-label={c} className={`w-7 h-7 rounded-lg transition-transform hover:scale-110 ${color === c ? "ring-2 ring-offset-2 ring-offset-surface ring-ink" : ""}`} style={{ background: c }} />
-            ))}
+        <div className="py-3 border-b border-line/10">
+          <div className="flex items-center justify-between gap-4 mb-2">
+            <span className="text-[13.5px] font-semibold">Colour</span>
+            <span className="text-[12px] text-ink-soft truncate">{color === CONTRIB_THEME ? "Your colour theme's own (it changes with it)" : THEME_SWATCHES.find((t) => t.hex === color)?.name ?? ""}</span>
+          </div>
+          <div role="radiogroup" aria-label="Colour" className="flex items-center gap-1.5 flex-wrap">
+            {swatch(CONTRIB_THEME, "Your colour theme's colour", "rgb(var(--amber))")}
+            {CONTRIB_COLORS.map((c) => swatch(c, c))}
             <label className="relative w-7 h-7 rounded-lg border border-dashed border-line/40 flex items-center justify-center text-ink-soft cursor-pointer" title="Custom colour">
               <PlusIcon className="w-3.5 h-3.5" />
-              <input type="color" value={color} onChange={(e) => onChange({ color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" />
+              <input type="color" value={/^#[0-9a-f]{6}$/i.test(color) ? color : "#22c55e"} onChange={(e) => onChange({ color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" />
             </label>
+          </div>
+          {/* Every colour theme's colour (1.27.5). */}
+          <div className="mt-3 text-[11.5px] font-semibold text-ink-soft mb-1.5">From the colour themes</div>
+          <div role="radiogroup" aria-label="Colour theme colours" className="flex items-center gap-1.5 flex-wrap">
+            {THEME_SWATCHES.map((t) => swatch(t.hex, t.name))}
           </div>
         </div>
         <div className={row}>
@@ -964,14 +1062,25 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
     );
   }
   if (w.type === "clock") {
+    const digital = s.skin === "digital";
     return (
       <div>
+        <div className={row}>
+          <span className="text-[13.5px] font-semibold">Look</span>
+          <div className="flex rounded-lg border border-line/15 p-0.5">
+            {(["analog", "digital"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => onChange({ skin: v })} className={`px-3 h-8 rounded-md text-[12.5px] font-semibold ${(s.skin ?? "analog") === v ? "bg-surface-2 text-ink" : "text-ink-soft"}`}>
+                {v === "analog" ? "Clock face" : "Digital"}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className={row}>
           <span className="text-[13.5px] font-semibold">24-hour time</span>
           <Switch on={s.h24 !== false} set={(v) => onChange({ h24: v })} />
         </div>
         <div className={row}>
-          <span className="text-[13.5px] font-semibold">Second hand</span>
+          <span className="text-[13.5px] font-semibold">{digital ? "Seconds" : "Second hand"}</span>
           <Switch on={s.secondHand !== false} set={(v) => onChange({ secondHand: v })} />
         </div>
       </div>
@@ -1021,6 +1130,22 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
           <div className="w-56">
             <Select value={(s.mode as string) ?? "all"} onChange={(v) => v && onChange({ mode: v })} options={MAP_MODES.map((m) => ({ value: m.id, label: m.label }))} ariaLabel="Numbers" className="!h-9 !text-[13px]" />
           </div>
+        </div>
+      </div>
+    );
+  }
+  if (w.type === "topVideos") {
+    return (
+      <div className={row}>
+        <span className="text-[13.5px] font-semibold">Platform</span>
+        <div className="w-56">
+          <Select
+            value={(s.platform as string) ?? "all"}
+            onChange={(v) => v && onChange({ platform: v })}
+            options={TOP_PLATFORMS.map((p) => ({ value: p.id, label: p.label }))}
+            ariaLabel="Platform"
+            className="!h-9 !text-[13px]"
+          />
         </div>
       </div>
     );

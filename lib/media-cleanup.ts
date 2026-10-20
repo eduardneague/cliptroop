@@ -1,21 +1,12 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  DEFAULT_LONG_MEDIA_KEEP_DAYS,
-  DEFAULT_MEDIA_KEEP_DAYS,
-  dueForCleanup,
-  isLongMediaKeepDays,
-  isMediaKeepDays,
-  isStudioKeepDays,
-  longPostedTimes,
-  studioDue,
-} from "@/lib/media-keep";
+import { DEFAULT_LONG_MEDIA_KEEP_DAYS, DEFAULT_MEDIA_KEEP_DAYS, DEFAULT_STUDIO_KEEP_DAYS, dueForCleanup, longPostedTimes, readKeep, studioDue, type KeepSetting } from "@/lib/media-keep";
 
 /**
  * The nightly clean-up (Supabase's timer, {"job": "cleanup"}, 0070):
  * once a short is posted everywhere, every version of its video (the
  * approved one too) is deleted from storage after the team's choice
- * (teams.media_keep_days: 1, 2, 3 weeks or 1 month; 2 weeks by default).
+ * (teams.media_keep_days: 1 day to 1 year, or never (null; 1.27.5); 2 weeks by default).
  *
  *   - Counted from the LAST platform it went out on.
  *   - Never while a post still needs the file (scheduled, running, failed).
@@ -33,11 +24,11 @@ export async function cleanupPostedMedia(): Promise<{ removed: number; failed: n
   const withFiles = new Set((live ?? []).map((v) => v.short_id as string));
   if (withFiles.size === 0) return { removed: 0, failed: 0, checked: 0 };
 
-  // Each team's choice (before 0070: the default for everyone).
-  const keepFor = new Map<string, number>();
+  // Each team's choice (before 0070: the default for everyone; null: never).
+  const keepFor = new Map<string, KeepSetting>();
   const { data: teams, error: teamsError } = await admin.from("teams").select("id, media_keep_days");
   if (!teamsError) {
-    for (const t of teams ?? []) keepFor.set(t.id as string, isMediaKeepDays(t.media_keep_days) ? t.media_keep_days : DEFAULT_MEDIA_KEEP_DAYS);
+    for (const t of teams ?? []) keepFor.set(t.id as string, readKeep(t.media_keep_days, DEFAULT_MEDIA_KEEP_DAYS));
   }
 
   // Posted shorts with files, 150 ids per request (the address has a length limit).
@@ -57,7 +48,7 @@ export async function cleanupPostedMedia(): Promise<{ removed: number; failed: n
   let removed = 0;
   let failed = 0;
   for (const s of shorts) {
-    const keepDays = keepFor.get(s.team_id) ?? DEFAULT_MEDIA_KEEP_DAYS;
+    const keepDays = keepFor.has(s.team_id) ? keepFor.get(s.team_id)! : DEFAULT_MEDIA_KEEP_DAYS;
     if (!dueForCleanup((s.short_video_posts ?? []).map((p) => p.posted_at), keepDays, now)) continue;
 
     // Never while a post still needs the file (scheduled, running or failed).
@@ -110,8 +101,8 @@ const postedTimes = (p: PostedProject) => longPostedTimes(p.long_video_posts, p.
 /**
  * Long videos (1.25.0), the same nightly clean-up: once a long video is
  * posted (Posted step), every version of its edit is deleted from storage
- * after the team's choice (teams.long_media_keep_days: 3 days to a month,
- * 1 week by default), counted from the last platform it went out on.
+ * after the team's choice (teams.long_media_keep_days: 1 day to 1 year, or
+ * never (1.27.5); 1 week by default), counted from the last platform it went out on.
  * Videos with keep_media are skipped; the video itself stays, its versions
  * are marked deleted_at.
  */
@@ -125,16 +116,16 @@ export async function cleanupPostedLongMedia(): Promise<{ removed: number; faile
   const withFiles = Array.from(new Set((live ?? []).map((v) => v.project_id as string)));
   if (withFiles.length === 0) return { removed: 0, failed: 0, checked: 0 };
 
-  const keepFor = new Map<string, number>();
+  const keepFor = new Map<string, KeepSetting>();
   const { data: teams, error: teamsError } = await admin.from("teams").select("id, long_media_keep_days");
   if (teamsError) throw new Error(`Couldn't read the teams: ${teamsError.message}`);
-  for (const t of teams ?? []) keepFor.set(t.id as string, isLongMediaKeepDays(t.long_media_keep_days) ? t.long_media_keep_days : DEFAULT_LONG_MEDIA_KEEP_DAYS);
+  for (const t of teams ?? []) keepFor.set(t.id as string, readKeep(t.long_media_keep_days, DEFAULT_LONG_MEDIA_KEEP_DAYS));
 
   const projects = await postedLongVideos(admin, withFiles, true);
   let removed = 0;
   let failed = 0;
   for (const p of projects) {
-    const keepDays = keepFor.get(p.team_id) ?? DEFAULT_LONG_MEDIA_KEEP_DAYS;
+    const keepDays = keepFor.has(p.team_id) ? keepFor.get(p.team_id)! : DEFAULT_LONG_MEDIA_KEEP_DAYS;
     if (!dueForCleanup(postedTimes(p), keepDays, now)) continue;
 
     const { data: versions } = await admin.from("long_video_versions").select("id, storage_path").eq("project_id", p.id).is("deleted_at", null);
@@ -157,7 +148,7 @@ export async function cleanupPostedLongMedia(): Promise<{ removed: number; faile
 /**
  * Thumbnail Studio (1.25.0): once a long video is posted, the thumbnails
  * that didn't win are deleted (their files and their rows) after the team's
- * choice (teams.studio_keep_days: 1 week to 3 months, 1 month by default;
+ * choice (teams.studio_keep_days: 1 day to 1 year, 1 month by default;
  * empty = keep them), counted from the last platform it went out on. The
  * winners always stay (search and the lists show them); with none picked,
  * the first one stays.
@@ -171,7 +162,10 @@ export async function cleanupStudioThumbs(): Promise<{ removed: number; failed: 
   if (teamsError) throw new Error(`Couldn't read the teams: ${teamsError.message}`);
   // Only teams that chose a time (empty = keep them).
   const keepFor = new Map<string, number>();
-  for (const t of teams ?? []) if (isStudioKeepDays(t.studio_keep_days)) keepFor.set(t.id as string, t.studio_keep_days);
+  for (const t of teams ?? []) {
+    const d = readKeep(t.studio_keep_days, DEFAULT_STUDIO_KEEP_DAYS);
+    if (d !== null) keepFor.set(t.id as string, d);
+  }
   if (keepFor.size === 0) return { removed: 0, failed: 0, checked: 0 };
 
   const { data: losers, error: losersError } = await admin.from("package_entries").select("project_id").eq("is_winner", false).limit(5000);

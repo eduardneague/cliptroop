@@ -1,14 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import {
-  DEFAULT_LONG_MEDIA_KEEP_DAYS,
-  DEFAULT_STUDIO_KEEP_DAYS,
-  isLongMediaKeepDays,
-  isStudioKeepDays,
-  type LongMediaKeepDays,
-  type StudioKeepDays,
-} from "@/lib/media-keep";
+import { DEFAULT_LONG_MEDIA_KEEP_DAYS, DEFAULT_STUDIO_KEEP_DAYS, readKeep, type KeepSetting } from "@/lib/media-keep";
 
 /**
  * One project row, fetched at most ONCE per request — generateMetadata
@@ -34,8 +27,9 @@ export const getProject = cache(async (id: string) => {
  */
 export async function getLongFilesKeep(teamId: string): Promise<{
   ready: boolean;
-  longDays: LongMediaKeepDays;
-  studioDays: StudioKeepDays | null;
+  /** null: never deleted (1.27.5). */
+  longDays: KeepSetting;
+  studioDays: KeepSetting;
   files: number;
   bytes: number;
   thumbs: number;
@@ -52,8 +46,8 @@ export async function getLongFilesKeep(teamId: string): Promise<{
   const studio = row?.studio_keep_days;
   return {
     ready: !team.error,
-    longDays: isLongMediaKeepDays(longRaw) ? longRaw : DEFAULT_LONG_MEDIA_KEEP_DAYS,
-    studioDays: team.error ? DEFAULT_STUDIO_KEEP_DAYS : studio === null ? null : isStudioKeepDays(studio) ? studio : DEFAULT_STUDIO_KEEP_DAYS,
+    longDays: team.error ? DEFAULT_LONG_MEDIA_KEEP_DAYS : readKeep(longRaw, DEFAULT_LONG_MEDIA_KEEP_DAYS),
+    studioDays: team.error ? DEFAULT_STUDIO_KEEP_DAYS : readKeep(studio, DEFAULT_STUDIO_KEEP_DAYS),
     files: sizes.length,
     bytes: sizes.reduce((a, b) => a + b, 0),
     thumbs: thumbs.count ?? 0,
