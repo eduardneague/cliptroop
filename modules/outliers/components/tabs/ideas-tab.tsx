@@ -11,17 +11,19 @@ import { generateIdeas, type IdeaScope } from "../../lib/ideas";
 import type { IdeasTabData } from "../../lib/view";
 import { BTN, EmptyNote } from "../bits";
 import { useOutliers } from "../context";
-import { IdeaCard, useIdeaMarks } from "../idea-card";
+import { IdeaCard, leadSources, useIdeaMarks } from "../idea-card";
 
 /*
- * Ideas (1.27.0): 24 at once (up to 48), Shuffle for more, instantly (they're made
- * right here in the browser, from the niche's numbers). Draw from this
- * niche, every niche (formats that win elsewhere, written for yours), or a
- * mix; lock a format or a topic to get many takes on one.
+ * Ideas (1.27.0, simpler since 1.29.0): 24 at once, Show more for up to 48,
+ * Shuffle for new ones, instantly (they're made right here in the browser,
+ * from the niche's numbers). Draw from this niche, every niche (formats that
+ * win elsewhere, written for yours), or a mix; pick a format or a topic to
+ * get many takes on one. Each idea shows the outlier it comes from; tap it
+ * for the whole idea.
  */
 
-// Counts that fill whole rows at 2, 3 and 4 columns.
-const COUNTS = [12, 24, 36, 48];
+const FIRST = 24;
+const MOST = 48;
 
 export function IdeasTab({ data }: { data: IdeasTabData }) {
   const ctx = useOutliers();
@@ -30,7 +32,7 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
   const short = ctx.kind === "short";
   const [seed, setSeed] = useState(data.seed);
   const [scope, setScope] = useState<IdeaScope>("mixed");
-  const [count, setCount] = useState(24);
+  const [count, setCount] = useState(FIRST);
   const [lockFormat, setLockFormat] = useState<string | null>(data.lockFormat);
   const [lockTopic, setLockTopic] = useState<string>(data.lockTopic ?? "");
   const [topicText, setTopicText] = useState<string>(data.lockTopic ?? "");
@@ -58,6 +60,7 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
     [seed, count, scope, short, ctx.niche, d, lockFormat, lockTopic, data.year]
   );
   const shown = ideas.filter((i) => !marks.hidden.has(i.key));
+  const leads = useMemo(() => leadSources(shown, d.examples), [shown, d.examples]);
 
   const formatOptions = useMemo(() => {
     const ids = new Map<string, number>();
@@ -107,37 +110,38 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
               ]}
             />
           </div>
-          <div>
-            <span className="block text-[11.5px] font-semibold text-ink-faint mb-1.5">How many</span>
-            <Segmented ariaLabel="How many ideas" value={String(count)} onChange={(v) => setCount(Number(v))} options={COUNTS.map((c) => ({ value: String(c), label: String(c) }))} />
-          </div>
           <div className="w-full sm:w-56">
             <span className="block text-[11.5px] font-semibold text-ink-faint mb-1.5">Format</span>
             <Select value={lockFormat} onChange={setLockFormat} emptyOption="Any format" options={formatOptions} ariaLabel="Only this format" searchable />
           </div>
-          <div className="w-full sm:w-60">
+          <div className="w-full sm:w-72">
             <span className="block text-[11.5px] font-semibold text-ink-faint mb-1.5">Topic</span>
             <form
-              className="relative"
+              className="flex items-center gap-1.5"
               onSubmit={(e) => {
                 e.preventDefault();
                 setLockTopic(topicText);
               }}
             >
-              <input value={topicText} onChange={(e) => setTopicText(e.target.value)} onBlur={() => setLockTopic(topicText)} maxLength={60} placeholder="Any topic (type one)" className="w-full rounded-lg border border-line/15 bg-surface px-3 pr-8 h-10 text-[14px] outline-none focus:ring-2 focus:ring-amber" aria-label="Only this topic" />
-              {topicText && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTopicText("");
-                    setLockTopic("");
-                  }}
-                  aria-label="Any topic"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint hover:text-ink"
-                >
-                  <CloseIcon className="w-3 h-3" />
-                </button>
-              )}
+              <span className="relative flex-1 min-w-0">
+                <input value={topicText} onChange={(e) => setTopicText(e.target.value)} maxLength={60} placeholder="Any topic (type one)" className="w-full rounded-lg border border-line/15 bg-surface px-3 pr-8 h-10 text-[14px] outline-none focus:ring-2 focus:ring-amber" aria-label="Only this topic" />
+                {topicText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTopicText("");
+                      setLockTopic("");
+                    }}
+                    aria-label="Any topic"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint hover:text-ink"
+                  >
+                    <CloseIcon className="w-3 h-3" />
+                  </button>
+                )}
+              </span>
+              <button type="submit" className={`${BTN} h-10 text-ink`} disabled={topicText.trim() === lockTopic.trim()}>
+                Find
+              </button>
             </form>
           </div>
           <span className="flex-1 hidden xl:block" />
@@ -190,7 +194,8 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
       </div>
 
       {shown.length ? (
-        <div key={`${seed}-${scope}-${count}-${lockFormat}-${lockTopic}`} className="deal grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <>
+        <div key={`${seed}-${scope}-${lockFormat}-${lockTopic}`} className="deal grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {shown.map((idea, i) => (
             <IdeaCard
               key={idea.key}
@@ -203,13 +208,32 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
               savedId={marks.savedMap.get(idea.key) ?? null}
               onSaved={marks.markSaved}
               onHide={marks.hide}
+              lead={leads.get(idea.key) ?? null}
             />
           ))}
         </div>
+        {count < MOST && ideas.length >= count && (
+          <div className="mt-6 flex justify-center">
+            <button type="button" onClick={() => setCount((c) => Math.min(MOST, c + 12))} className={BTN}>
+              Show more ideas
+            </button>
+          </div>
+        )}
+        </>
       ) : (
-        <EmptyNote title="No ideas with these settings" action={<button type="button" onClick={() => { setLockFormat(null); setTopicText(""); setLockTopic(""); setScope("mixed"); }} className={BTN}>Reset</button>}>
-          A locked format or topic may not have enough behind it here. Try drawing from every niche.
-        </EmptyNote>
+        <NoIdeas
+          locked={!!lockFormat || !!lockTopic.trim()}
+          scope={scope}
+          hiddenCount={hiddenCount}
+          onClear={() => {
+            setLockFormat(null);
+            setTopicText("");
+            setLockTopic("");
+          }}
+          onEvery={() => setScope("every")}
+          onBringBack={bringBack}
+          onShuffle={() => setSeed((s) => (s * 1103515245 + 12345) >>> 0 || 1)}
+        />
       )}
 
       <details className="mt-10 rounded-2xl border border-line/10 bg-surface px-4 py-3 text-[12.5px] text-ink-soft group">
@@ -227,5 +251,61 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
         </div>
       </details>
     </div>
+  );
+}
+
+/** Nothing to show: what's behind it, and a button that changes it (1.29.0: "Reset" did nothing when nothing was set). */
+function NoIdeas({ locked, scope, hiddenCount, onClear, onEvery, onBringBack, onShuffle }: { locked: boolean; scope: IdeaScope; hiddenCount: number; onClear: () => void; onEvery: () => void; onBringBack: () => void; onShuffle: () => void }) {
+  if (locked)
+    return (
+      <EmptyNote
+        title="No ideas for that format or topic"
+        action={
+          <>
+            <button type="button" onClick={onClear} className={BTN}>
+              Any format, any topic
+            </button>
+            {scope !== "every" && (
+              <button type="button" onClick={onEvery} className={BTN}>
+                Draw from every niche
+              </button>
+            )}
+          </>
+        }
+      >
+        There isn&rsquo;t enough behind it here yet.
+      </EmptyNote>
+    );
+  if (hiddenCount > 0)
+    return (
+      <EmptyNote
+        title="You've hidden these ideas"
+        action={
+          <>
+            <button type="button" onClick={onShuffle} className={BTN}>
+              Shuffle
+            </button>
+            <button type="button" onClick={onBringBack} className={BTN}>
+              Bring back {hiddenCount} hidden
+            </button>
+          </>
+        }
+      >
+        Shuffle for others, or bring the hidden ones back.
+      </EmptyNote>
+    );
+  return (
+    <EmptyNote
+      title="Not enough to go on here yet"
+      action={
+        scope !== "every" ? (
+          <button type="button" onClick={onEvery} className={BTN}>
+            Draw from every niche
+          </button>
+        ) : undefined
+      }
+    >
+      Ideas come from the formats and topics that win in this niche. They show up as more of its videos come in.
+    </EmptyNote>
   );
 }

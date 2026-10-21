@@ -6,6 +6,7 @@ import { loadDashAudience, loadDashProduction, type DashAudience, type DashProdu
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Mascot } from "@/components/ui/mascot";
 import { fmtCompact, fmtInt } from "@/modules/analytics/components/charts";
+import { reportedUntil } from "@/modules/analytics/lib/trend-math";
 import { countryName } from "@/modules/analytics/components/world-map";
 import { AudienceMapView, layerFor, MAP_MODES, type MapMode, type MapView } from "@/modules/analytics/components/audience-map";
 import { useBox } from "./widget-box";
@@ -138,21 +139,31 @@ export function ViewsWidget({ teamId }: { teamId: string }) {
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
   const a = r.data.audience;
-  const n = a.days.length;
-  const total = a.days.map((_, i) => (PLATFORMS.some((p) => a.views[p][i] !== null) ? sum(PLATFORMS.map((p) => a.views[p][i])) : null));
-  const last7 = sum(total.slice(n - 7));
-  const prev7 = anyNum(total.slice(n - 14, n - 7)) ? sum(total.slice(n - 14, n - 7)) : null;
+  // Up to the last day every platform has reported (1.29.0): YouTube's last two or three days come late, and
+  // a total of only the other platforms' looked like views dropping to almost nothing. The line ends there,
+  // and the week's numbers are the last 7 days the line has (so the change compares two whole weeks).
+  const cut = reportedUntil(PLATFORMS.map((p) => a.views[p]));
+  const n = cut + 1;
+  const total = a.days.map((_, i) => (i <= cut && PLATFORMS.some((p) => a.views[p][i] !== null) ? sum(PLATFORMS.map((p) => a.views[p][i])) : null));
+  const last7 = sum(total.slice(Math.max(0, n - 7), n));
+  const prev7 = anyNum(total.slice(Math.max(0, n - 14), Math.max(0, n - 7))) ? sum(total.slice(Math.max(0, n - 14), Math.max(0, n - 7))) : null;
   const active = PLATFORMS.filter((p) => anyNum(a.views[p]));
   const sparkH = Math.max(0, Math.min(90, box.h - 92));
+  // Days the line doesn't reach yet: the numbers say which week they are.
+  const lateBy = a.days.length - n;
+  const upTo = lateBy > 0 && cut >= 0 ? new Date(`${a.days[cut]}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : null;
   return (
     <Link href="/analytics?tab=overview" className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-display text-[28px] leading-none font-semibold tabular-nums">{fmtCompact(last7)}</span>
         <Delta now={last7} prev={prev7} />
       </div>
-      <span className="text-[11.5px] text-ink-faint mt-1">views in the last 7 days{prev7 !== null ? ` · ${fmtCompact(prev7)} the 7 before` : ""}</span>
+      <span className="text-[11.5px] text-ink-faint mt-1" title={upTo ? `YouTube's numbers for the days after ${upTo} aren't in yet` : undefined}>
+        {upTo ? `views in the 7 days to ${upTo}` : "views in the last 7 days"}
+        {prev7 !== null ? ` · ${fmtCompact(prev7)} the 7 before` : ""}
+      </span>
       {sparkH >= 28 && (
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2" title={upTo ? `No data yet after ${upTo}` : undefined}>
           <Spark values={total} color="rgb(var(--amber))" height={sparkH} />
         </div>
       )}
@@ -161,7 +172,7 @@ export function ViewsWidget({ teamId }: { teamId: string }) {
           {active.map((p) => (
             <span key={p} className="inline-flex items-center gap-1.5 text-[11.5px] text-ink-soft">
               <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />
-              <b className="text-ink tabular-nums">{fmtCompact(sum(a.views[p].slice(n - 7)))}</b>
+              <b className="text-ink tabular-nums">{fmtCompact(sum(a.views[p].slice(Math.max(0, n - 7), n)))}</b>
               {box.w >= 330 && NAME[p]}
             </span>
           ))}

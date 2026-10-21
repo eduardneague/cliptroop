@@ -14,17 +14,53 @@ import { useEffect, useRef } from "react";
 
 let locks = 0;
 
+/*
+ * The scrollbar's width is kept as padding while the page is still, so
+ * nothing jumps sideways as a panel or dialog opens (1.29.0: opening a video
+ * in Outliers shook the whole page). --scroll-gap carries it for anything
+ * pinned to the right edge.
+ */
+function hold() {
+  const body = document.body;
+  const gap = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+  body.style.overflow = "hidden";
+  if (gap > 0) {
+    body.style.paddingRight = `${gap}px`;
+    document.documentElement.style.setProperty("--scroll-gap", `${gap}px`);
+  }
+}
+function letGo() {
+  document.body.style.overflow = "";
+  document.body.style.paddingRight = "";
+  document.documentElement.style.removeProperty("--scroll-gap");
+  for (const f of freed) f();
+}
+
+/*
+ * Things that size themselves to their box (the contributions grid) wait
+ * while a popup is open, and measure again once the page is let go: a
+ * popup never makes anything behind it grow or shrink (1.29.1).
+ */
+const freed = new Set<() => void>();
+/** Calls `f` each time the last popup lets the page go; returns the unsubscribe. */
+export function onScrollFree(f: () => void): () => void {
+  freed.add(f);
+  return () => {
+    freed.delete(f);
+  };
+}
+
 /** Locks page scroll; call what it returns to let go (calling it twice is harmless). */
 export function lockScroll(): () => void {
   if (typeof document === "undefined") return () => {};
   locks++;
-  if (locks === 1) document.body.style.overflow = "hidden";
+  if (locks === 1) hold();
   let released = false;
   return () => {
     if (released) return;
     released = true;
     locks = Math.max(0, locks - 1);
-    if (locks === 0) document.body.style.overflow = "";
+    if (locks === 0) letGo();
   };
 }
 
@@ -38,7 +74,7 @@ export const scrollLocked = () => locks > 0;
  */
 export function releaseStrayScrollLock() {
   if (typeof document === "undefined" || locks > 0) return;
-  if (document.body.style.overflow === "hidden") document.body.style.overflow = "";
+  if (document.body.style.overflow === "hidden") letGo();
 }
 
 /** Holds the lock while `active` (or while mounted, when left out). */

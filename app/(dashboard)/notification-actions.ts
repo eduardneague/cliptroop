@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { ROLES } from "@/lib/permissions/roles";
 import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { clearAllButQuestions, clearOne } from "@/lib/notification-clear";
 import type { NotificationItem } from "@/components/ui/notification-bell";
 
 /** How far back the bell's History goes, and how many come at a time. */
@@ -61,6 +62,28 @@ export async function markAllNotificationsRead() {
     .update({ is_read: true })
     .eq("recipient_id", user.id)
     .eq("is_read", false);
+}
+
+/**
+ * Takes one out of the bell (1.29.1): the X on it. It's read from then on,
+ * and History still has it for 2 weeks.
+ */
+export async function clearNotification(id: string): Promise<{ error?: string }> {
+  return clearOne(await createClient(), id);
+}
+
+/**
+ * Clear all (1.29.1): everything in the bell, older ones it hasn't shown
+ * yet too. Invites and ownership requests still waiting for your answer
+ * stay (clearing them would hide the question).
+ */
+export async function clearAllNotifications(): Promise<{ error?: string; kept?: string[] }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  return clearAllButQuestions(supabase, user.id);
 }
 
 /** Roles an invite is allowed to grant — never Master, never unknown values. */

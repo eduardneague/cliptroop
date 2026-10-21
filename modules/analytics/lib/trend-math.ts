@@ -92,6 +92,38 @@ export function addSeries(list: Num[][]): Num[] {
   return Array.from({ length: len }, (_, i) => total(list.map((s) => s[i] ?? null)));
 }
 
+/** The last point a series has a number at (-1: none). */
+export function lastIndex(xs: readonly (number | null | undefined)[]): number {
+  for (let i = xs.length - 1; i >= 0; i--) if (xs[i] !== null && xs[i] !== undefined && Number.isFinite(xs[i])) return i;
+  return -1;
+}
+
+/**
+ * How far every platform has reported (1.29.0): the last point all of them
+ * have a number at. YouTube's numbers come two or three days after the day,
+ * so until then a total of those days is only the other platforms' and reads
+ * as a drop to almost nothing. A platform whose last number is more than
+ * `lag` points before the others' stopped reporting (it isn't late), so it
+ * doesn't hold the rest back. -1: none has a number.
+ */
+export function reportedUntil(list: readonly (readonly Num[])[], lag = 4): number {
+  const lasts = list.map(lastIndex).filter((i) => i >= 0);
+  if (!lasts.length) return -1;
+  const end = Math.max(...lasts);
+  return Math.min(...lasts.filter((i) => end - i <= lag));
+}
+
+/**
+ * Series added point by point up to where every platform has reported; the
+ * points after are null ("no data yet"), so the line ends there instead of
+ * dropping to almost nothing (1.29.0).
+ */
+export function addReported(list: Num[][], lag = 4): Num[] {
+  const sum = addSeries(list);
+  const cut = reportedUntil(list, lag);
+  return sum.map((v, i) => (i > cut ? null : v));
+}
+
 /** An average of rates, weighted (CTR by impressions). Null without weight. */
 export function weightedAvg(values: Num[], weights: Num[]): Num {
   let s = 0;
@@ -167,12 +199,17 @@ export function rollup(values: Num[], buckets: TrendBucket[], weights?: Num[]): 
   );
 }
 
-/** Running total: everything up to each point (null before the first number; gaps keep the total). */
+/**
+ * Running total: everything up to each point (null before the first number;
+ * gaps keep the total; null after the last number too, 1.29.0: days with no
+ * data yet don't carry it on as if nothing happened).
+ */
 export function runningTotal(values: Num[]): Num[] {
   let s: number | null = null;
-  return values.map((v) => {
+  const last = lastIndex(values);
+  return values.map((v, i) => {
     if (v !== null && Number.isFinite(v)) s = (s ?? 0) + v;
-    return s;
+    return i > last ? null : s;
   });
 }
 

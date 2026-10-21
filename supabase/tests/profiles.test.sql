@@ -211,7 +211,7 @@ end;
 $$;
 
 -- 8. Leaving a team: anyone but the owner; then they're on it no more.
-insert into team_members (team_id, user_id, status) values ('10000000-0000-4000-8000-0000000009f1', '00000000-0000-4000-8000-0000000009f2', 'active');
+insert into team_members (team_id, user_id, invited_email, status) values ('10000000-0000-4000-8000-0000000009f1', '00000000-0000-4000-8000-0000000009f2', 'q-prof@example.com', 'active');
 do $$
 begin
   perform pg_temp.as_user('00000000-0000-4000-8000-0000000009f1');

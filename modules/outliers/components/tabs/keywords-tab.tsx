@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Dialog } from "@/components/ui/dialog";
-import { SearchIcon } from "@/components/ui/icons";
+import { CloseIcon, SearchIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { loadVideos } from "@/app/(dashboard)/outliers/actions";
 import { titleHasKeyword, type KeywordStat } from "../../lib/keywords";
@@ -36,6 +36,7 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
   const [sort, setSort] = useState<SortId>("rank");
   const [size, setSize] = useState<"all" | "one" | "phrase">("all");
   const [filter, setFilter] = useState("");
+  const [typed, setTyped] = useState("");
   const [selected, setSelected] = useState<string | null>(data.selected);
   const [sheet, setSheet] = useState(false);
   const [all, setAll] = useState(false);
@@ -75,11 +76,35 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          <label className="relative flex-1 min-w-[12rem] max-w-sm">
-            <span className="sr-only">Find a keyword</span>
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find a keyword" className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
-          </label>
+          <form
+            className="flex items-center gap-1.5 flex-1 min-w-[12rem] max-w-sm"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFilter(typed);
+            }}
+          >
+            <label className="relative flex-1 min-w-0">
+              <span className="sr-only">Find a keyword</span>
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Find a keyword" className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-8 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
+              {(typed || filter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTyped("");
+                    setFilter("");
+                  }}
+                  aria-label="Clear"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink"
+                >
+                  <CloseIcon className="w-3 h-3" />
+                </button>
+              )}
+            </label>
+            <button type="submit" className={`${BTN} text-ink`}>
+              Find
+            </button>
+          </form>
           <Segmented
             ariaLabel="Order"
             size="sm"

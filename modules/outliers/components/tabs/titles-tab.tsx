@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CloseIcon, PlusIcon, CopyIcon } from "@/components/ui/icons";
+import { useEffect, useMemo, useState } from "react";
+import { CloseIcon, PlusIcon, CopyIcon, SearchIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { similarOutliers } from "@/app/(dashboard)/outliers/actions";
 import { formatName } from "../../lib/formats";
@@ -70,7 +70,8 @@ export function TitlesTab({ data }: { data: TitlesData }) {
   const [title, setTitle] = useState(data.title);
   const [others, setOthers] = useState<string[]>(data.compare.length ? data.compare : []);
   const [similar, setSimilar] = useState<(OutlierVideo & { sim: number })[] | null>(null);
-  const timer = useRef<number | null>(null);
+  const [asked, setAsked] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
   useEffect(() => setTitle(data.title), [data.title]);
 
   const model = data.local;
@@ -85,24 +86,27 @@ export function TitlesTab({ data }: { data: TitlesData }) {
       .sort((a, b) => (b.s?.score ?? 0) - (a.s?.score ?? 0));
   }, [topic, model, data.cross, ctx.niche, title, enough]);
 
-  // The outliers worded most like it (after typing stops).
-  useEffect(() => {
-    if (timer.current) window.clearTimeout(timer.current);
-    const t = title.trim();
-    if (t.length < 10) {
-      setSimilar(null);
-      return;
+  // The outliers worded most like it: on the button or Enter (1.29.0: not while typing).
+  const findSimilar = async (text = title) => {
+    const t = text.trim();
+    if (t.length < 10 || finding) return;
+    setFinding(true);
+    setAsked(t);
+    shallowParam("t", t);
+    try {
+      const r = await similarOutliers(ctx.teamId, ctx.nicheId, t, ctx.kind);
+      setSimilar(r.error !== undefined ? [] : r.rows.slice(0, 10));
+    } catch {
+      setSimilar([]);
+    } finally {
+      setFinding(false);
     }
-    timer.current = window.setTimeout(() => {
-      shallowParam("t", t);
-      similarOutliers(ctx.teamId, ctx.nicheId, t, ctx.kind)
-        .then((r) => setSimilar(r.error !== undefined ? [] : r.rows.slice(0, 10)))
-        .catch(() => setSimilar([]));
-    }, 650);
-    return () => {
-      if (timer.current) window.clearTimeout(timer.current);
-    };
-  }, [title, ctx.teamId, ctx.nicheId, ctx.kind]);
+  };
+  // A title in the address (a link, Back): looked up once.
+  useEffect(() => {
+    if (data.title.trim().length >= 10) findSimilar(data.title);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.title, ctx.nicheId, ctx.kind]);
 
   const best = model?.title.length.best;
   const len = title.trim().length;
@@ -128,6 +132,13 @@ export function TitlesTab({ data }: { data: TitlesData }) {
                 id="lab-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    findSimilar();
+                  }
+                }}
+                enterKeyHint="search"
                 rows={2}
                 maxLength={120}
                 placeholder="I Tested a $200 Fake iPhone 17. How Bad Is It?"
@@ -139,7 +150,11 @@ export function TitlesTab({ data }: { data: TitlesData }) {
                 </button>
               )}
             </div>
-            <div className="mt-2 flex items-center gap-3 text-[12px] text-ink-faint">
+            <div className="mt-2 flex items-center gap-3 text-[12px] text-ink-faint flex-wrap">
+              <button type="button" onClick={() => findSimilar()} disabled={len < 10 || finding || asked === title.trim()} className={`${BTN} h-8 text-ink`} title={len < 10 ? "Type a longer title first" : "The outliers here worded most like it"}>
+                <SearchIcon className="w-3.5 h-3.5" />
+                {finding ? "Finding…" : "Find outliers like it"}
+              </button>
               <span className={`tabular-nums ${len > 70 ? "text-red font-semibold" : ""}`}>{len} characters</span>
               {best && (
                 <span>
@@ -228,16 +243,14 @@ export function TitlesTab({ data }: { data: TitlesData }) {
 
         <section className="min-w-0">
           <SectionHead title="Outliers worded like it" sub="The videos here whose titles are most like yours" />
-          {similar === null ? (
-            title.trim().length >= 10 ? (
-              <div className="space-y-2">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="skeleton h-[70px] rounded-xl" />
-                ))}
-              </div>
-            ) : (
-              <EmptyNote title="Type a title to see videos like it" />
-            )
+          {finding && similar === null ? (
+            <div className="space-y-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="skeleton h-[70px] rounded-xl" />
+              ))}
+            </div>
+          ) : similar === null ? (
+            <EmptyNote title="Type a title, then Find outliers like it" />
           ) : similar.length ? (
             <ul className="rounded-2xl border border-line/10 bg-surface px-3 sm:px-4 grid lg:grid-cols-2 lg:gap-x-8 [&>li]:border-b [&>li]:border-line/[0.07]">
               {similar.map((v) => (

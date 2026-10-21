@@ -13,9 +13,9 @@ import { BAND_LABEL, band, multText } from "../lib/scores";
 import { similarThumbs } from "../lib/similar";
 import { scoreTitle } from "../lib/titles";
 import type { OutlierVideo, VideoDetail } from "../lib/types";
-import { ChannelAvatar, FormatChip, heat, Mult, SourceNote, Thumb, Tile, TimeAgo, youtubeVideo } from "./bits";
+import { BRIGHTNESS_HELP, ChannelAvatar, COLOURFUL_HELP, EyeOffIcon, FormatChip, heat, Mult, pct255, SourceNote, Thumb, Tile, TimeAgo, youtubeVideo } from "./bits";
 import { BarsChart, ScoreDial, Swatches } from "./charts";
-import { useOutliers } from "./context";
+import { previews, useOutliers, useOutliersBlocked } from "./context";
 import { IdeaCard, useIdeaMarks } from "./idea-card";
 import { PanelSection, PanelShell } from "./panel";
 import { SaveButton } from "./save-menu";
@@ -88,6 +88,10 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
   const d = state.id === id ? state.detail : null;
   const error = state.id === id ? state.error : null;
   const v = d?.video;
+  // What the card knew: shown at once while the rest loads (1.29.0: no blank panel first).
+  const preview = !d && !error ? previews.get(id) ?? null : null;
+  const { blocked, hide } = useOutliersBlocked();
+  const head = d ? { channelId: d.video.channelId, title: d.channel.title, avatar: d.channel.avatar, subs: d.channel.subs } : preview ? { channelId: preview.channelId, title: preview.channel.title, avatar: preview.channel.avatar, subs: preview.channel.subs } : null;
 
   return (
     <PanelShell
@@ -97,20 +101,34 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
       backLabel="Back to the last one"
       bodyKey={id}
       header={
-        d ? (
+        head ? (
           <>
-            <button type="button" onClick={() => ctx.openChannel(d.video.channelId)} className="flex items-center gap-2.5 min-w-0 rounded-lg pr-2 hover:bg-surface-2 py-1 pl-1 -ml-1">
-              <ChannelAvatar src={d.channel.avatar} title={d.channel.title} size={32} />
+            <button type="button" onClick={() => ctx.openChannel(head.channelId)} className="flex items-center gap-2.5 min-w-0 rounded-lg pr-2 hover:bg-surface-2 py-1 pl-1 -ml-1">
+              <ChannelAvatar src={head.avatar} title={head.title} size={32} />
               <span className="min-w-0 text-left">
-                <span className="block text-[13.5px] font-semibold truncate">{d.channel.title}</span>
-                <span className="block text-[11.5px] text-ink-faint truncate">{d.channel.subs !== null ? `${compact(d.channel.subs)} subscribers` : "Subscribers hidden"}</span>
+                <span className="block text-[13.5px] font-semibold truncate">{head.title}</span>
+                <span className="block text-[11.5px] text-ink-faint truncate">{head.subs !== null ? `${compact(head.subs)} subscribers` : "Subscribers hidden"}</span>
               </span>
             </button>
             <span className="flex-1" />
             <div className="flex items-center gap-1.5">
-              <TrackButton channelId={d.video.channelId} label={false} />
-              <SaveButton videoId={d.video.id} menu />
-              <a href={youtubeVideo(d.video.id)} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube" title="Open on YouTube" className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30">
+              <TrackButton channelId={head.channelId} label={false} />
+              {d && <SaveButton videoId={d.video.id} menu />}
+              {!blocked.has(head.channelId) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    hide(head.channelId, head.title, head.avatar);
+                    ctx.closePanel();
+                  }}
+                  aria-label={`Hide ${head.title}`}
+                  title="Hide this channel: its videos never show in Outliers again"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-red hover:border-red/40"
+                >
+                  <EyeOffIcon className="w-4 h-4" />
+                </button>
+              )}
+              <a href={youtubeVideo(id)} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube" title="Open on YouTube" className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30">
                 <ExternalIcon className="w-4 h-4" />
               </a>
             </div>
@@ -129,11 +147,47 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
           </a>
         </div>
       ) : !d || !v ? (
-        <PanelSkeleton />
+        preview ? <PreviewBody v={preview} /> : <PanelSkeleton />
       ) : (
         <VideoBody d={d} />
       )}
     </PanelShell>
+  );
+}
+
+/** The panel's first picture, from what the card knew: the video, its title and headline numbers. */
+function PreviewBody({ v }: { v: OutlierVideo }) {
+  const short = v.kind === "short";
+  const h = heat(v.score);
+  return (
+    <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-7" aria-busy="true">
+      <div className={short ? "grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)] items-start" : "space-y-4"}>
+        <Player id={v.id} short={short} title={v.title} />
+        <div className="min-w-0 space-y-4">
+          <div>
+            <h2 className="font-display text-[21px] sm:text-[24px] leading-[1.18] font-semibold text-balance">{v.title}</h2>
+            <p className="mt-1.5 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
+              <TimeAgo iso={v.publishedAt} />
+              {v.durationS ? <span>· {duration(v.durationS)}</span> : null}
+              {short && <span>· Short</span>}
+            </p>
+          </div>
+          <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+            <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }}>
+              <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
+              <div className="mt-1 font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
+                {multText(v.score)}
+              </div>
+              <div className="mt-1 text-[11.5px] text-ink-soft truncate">{BAND_LABEL[band(v.score)]}</div>
+            </div>
+            <Tile label="Views" value={compact(v.views)} sub={v.channel.usual ? `usual ${compact(v.channel.usual)}` : undefined} />
+            <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} />
+            <Tile label="Likes" value={compact(v.likes)} />
+          </div>
+        </div>
+      </div>
+      <div className="skeleton h-44 w-full rounded-2xl" />
+    </div>
   );
 }
 
@@ -316,8 +370,8 @@ function Remix({ d, model }: { d: VideoDetail; model: ReturnType<typeof useNiche
   if (!ideas.length) return null;
   return (
     <PanelSection
-      title="Make it yours"
-      sub={niche ? `This video's shape with topics from ${niche.name}` : "This video's shape with your niche's topics"}
+      title="Ideas from this video"
+      sub={niche ? `Its shape, with topics from ${niche.name}` : "Its shape, with your niche's topics"}
       right={
         <button type="button" onClick={() => setSeed((s) => s + 1)} className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
           Shuffle
@@ -326,7 +380,7 @@ function Remix({ d, model }: { d: VideoDetail; model: ReturnType<typeof useNiche
     >
       <div className="grid gap-3 sm:grid-cols-2 deal" key={seed}>
         {ideas.map((idea, i) => (
-          <IdeaCard key={idea.key} idea={idea} index={i} teamId={ctx.teamId} nicheName={niche?.name ?? null} kind={short ? "short" : "long"} savedId={marks.savedMap.get(idea.key) ?? null} onSaved={marks.markSaved} onHide={marks.hide} dense examples={{}} />
+          <IdeaCard key={idea.key} idea={idea} index={i} teamId={ctx.teamId} nicheName={niche?.name ?? null} kind={short ? "short" : "long"} savedId={marks.savedMap.get(idea.key) ?? null} onSaved={marks.markSaved} onHide={marks.hide} thumb={false} examples={{}} />
         ))}
       </div>
     </PanelSection>
@@ -408,16 +462,16 @@ function ThumbnailSection({ d }: { d: VideoDetail }) {
         <div className="flex items-center gap-4 flex-wrap">
           <Swatches colors={v.colors} />
           <dl className="flex gap-5 text-[12px]">
-            {v.lum !== null && (
-              <div>
-                <dt className="text-ink-faint">Brightness</dt>
-                <dd className="font-semibold tabular-nums">{Math.round(v.lum * 100)}%</dd>
+            {pct255(v.lum) !== null && (
+              <div title={BRIGHTNESS_HELP}>
+                <dt className="text-ink-faint underline decoration-dotted decoration-line/40 underline-offset-2 cursor-help">Brightness</dt>
+                <dd className="font-semibold tabular-nums">{pct255(v.lum)}%</dd>
               </div>
             )}
-            {v.sat !== null && (
-              <div>
-                <dt className="text-ink-faint">Colourfulness</dt>
-                <dd className="font-semibold tabular-nums">{Math.round(v.sat * 100)}%</dd>
+            {pct255(v.sat) !== null && (
+              <div title={COLOURFUL_HELP}>
+                <dt className="text-ink-faint underline decoration-dotted decoration-line/40 underline-offset-2 cursor-help">Colourfulness</dt>
+                <dd className="font-semibold tabular-nums">{pct255(v.sat)}%</dd>
               </div>
             )}
           </dl>

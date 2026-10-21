@@ -61,7 +61,8 @@ export function ShortSettingsForm({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-5 sm:grid-cols-3">
+      {/* 1.29.1: as many columns as fit (the card is half the page on wide screens), never squeezed past their contents. */}
+      <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
         <div>
           <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Shorts per day</div>
           <div className="inline-flex items-center rounded-lg border border-line/15 overflow-hidden">
@@ -143,7 +144,7 @@ export function ShortSettingsForm({
 
       <div>
         <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Default people for new shorts</div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-x-4 gap-y-3 grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))]">
           <div>
             <div className="text-[11px] text-ink-faint mb-1">Scripter</div>
             <PersonSelect kind="scripter" people={people} value={scripter} onChange={setScripter} />

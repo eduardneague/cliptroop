@@ -10,9 +10,9 @@ import type { HomeData, Period } from "../../lib/view";
 import { EmptyNote, heat, SectionHead, Thumb, Trend } from "../bits";
 import { Lift } from "../charts";
 import { useOutliers, useOutliersNav } from "../context";
-import { formatColor, IdeaCard, useIdeaMarks } from "../idea-card";
+import { formatColor, IdeaCard, leadSources, useIdeaMarks } from "../idea-card";
 import { useShellNav } from "../shell-nav";
-import { FeatureCard, Shelf, ShortCard, VideoCard, VideoRow } from "../video-card";
+import { FeatureCard, Shelf, ShortCard, useVisible, VideoCard, VideoRow } from "../video-card";
 import { multText } from "../../lib/scores";
 
 /*
@@ -34,9 +34,16 @@ export function HomeTab({ data }: { data: HomeData }) {
   const ctx = useOutliers();
   const nav = useShellNav();
   const short = ctx.kind === "short";
-  const [lead, ...rest] = data.best.rows;
-  const days = data.period === "week" ? 7 : data.period === "year" ? 365 : 30;
-  const nothing = !data.best.rows.length && !data.rising.length;
+  // The team's hidden channels leave at once (they're gone on the next read too).
+  const best = useVisible(data.best.rows);
+  const rising = useVisible(data.rising);
+  const small = useVisible(data.small);
+  const [lead, ...rest] = best;
+  // The stretch shown: the one picked, or a longer one when it had too little.
+  const shownPeriod = data.widened ?? data.period;
+  const days = shownPeriod === "week" ? 7 : shownPeriod === "year" ? 365 : 30;
+  const stretch = (p: Period) => (p === "week" ? "in the last 7 days" : p === "month" ? "in the last 30 days" : "in the last year");
+  const nothing = !best.length && !rising.length;
 
   if (nothing)
     return (
@@ -57,11 +64,15 @@ export function HomeTab({ data }: { data: HomeData }) {
       <section>
         <SectionHead
           title="The biggest outliers"
-          sub={`${ctx.niche ? ctx.niche.name : "Every niche"} · ${short ? "Shorts" : "long videos"} posted ${data.period === "week" ? "in the last 7 days" : data.period === "month" ? "in the last 30 days" : "in the last year"}`}
+          sub={
+            data.widened
+              ? `Not much ${data.period === "week" ? "this week" : "this month"}, so these are ${short ? "Shorts" : "long videos"} posted ${stretch(data.widened)}`
+              : `${ctx.niche ? ctx.niche.name : "Every niche"} · ${short ? "Shorts" : "long videos"} posted ${stretch(data.period)}`
+          }
           right={
             <>
               <Segmented ariaLabel="How far back" size="sm" value={data.period} onChange={(p) => nav.go({ params: { period: p === "month" ? null : p } }, { replace: true })} options={PERIODS} className="hidden sm:inline-flex" />
-              <Link href={nav.href({ tab: "search", params: { days, sort: null } })} className={SEE_ALL}>
+              <Link href={nav.href({ tab: "search", params: { days, min: 1.5, sort: null } })} className={SEE_ALL}>
                 See all
               </Link>
             </>
@@ -75,8 +86,8 @@ export function HomeTab({ data }: { data: HomeData }) {
               <div className="col-span-2 sm:row-span-2">
                 <FeatureCard v={lead} />
               </div>
-              {rest.slice(0, 17).map((v, i) => (
-                <div key={v.id} className={`min-w-0 ${i >= 14 ? "hidden 2xl:block" : i >= 11 ? "hidden xl:block" : i >= 8 ? "hidden lg:block" : i >= 6 ? "hidden sm:block" : ""}`}>
+              {rest.slice(0, 24).map((v, i) => (
+                <div key={v.id} className={`min-w-0 ${i >= 20 ? "hidden 2xl:block" : i >= 16 ? "hidden xl:block" : i >= 12 ? "hidden lg:block" : i >= 8 ? "hidden md:block" : i >= 6 ? "hidden sm:block" : ""}`}>
                   <ShortCard v={v} eager={i < 4} />
                 </div>
               ))}
@@ -87,8 +98,8 @@ export function HomeTab({ data }: { data: HomeData }) {
                 <div className="min-[480px]:col-span-2 lg:row-span-2">
                   <FeatureCard v={lead} />
                 </div>
-                {rest.slice(0, 11).map((v, i) => (
-                  <div key={v.id} className={`min-w-0 ${i >= 8 ? "hidden 2xl:block" : i >= 4 ? "hidden lg:block" : "hidden min-[480px]:block"}`}>
+                {rest.slice(0, 16).map((v, i) => (
+                  <div key={v.id} className={`min-w-0 ${i >= 12 ? "hidden 2xl:block" : i >= 8 ? "hidden xl:block" : i >= 6 ? "hidden lg:block" : "hidden min-[480px]:block"}`}>
                     <VideoCard v={v} eager={i < 4} />
                   </div>
                 ))}
@@ -96,7 +107,7 @@ export function HomeTab({ data }: { data: HomeData }) {
               {/* Phones: the rest in a row to swipe through, not a long column. */}
               <div className="relative min-[480px]:hidden -mx-4 px-4 mt-5 overflow-x-auto no-scrollbar snap-x snap-mandatory">
                 <ul className="flex gap-3 pb-1">
-                  {rest.slice(0, 11).map((v) => (
+                  {rest.slice(0, 16).map((v) => (
                     <li key={v.id} className="snap-start flex-shrink-0 w-[74vw] max-w-[300px]">
                       <VideoCard v={v} />
                     </li>
@@ -114,21 +125,21 @@ export function HomeTab({ data }: { data: HomeData }) {
         <section className="min-w-0">
           <SectionHead
             title="Taking off right now"
-            sub="Posted in the last few days and already beating their channel"
+            sub="Posted this week and already beating their channel"
             right={
-              <Link href={nav.href({ tab: "search", params: { days: 3, sort: "projected" } })} className={SEE_ALL}>
+              <Link href={nav.href({ tab: "search", params: { days: 7, sort: "projected" } })} className={SEE_ALL}>
                 See all
               </Link>
             }
           />
-          {data.rising.length ? (
+          {rising.length ? (
             <ul className="divide-y divide-line/[0.07] rounded-2xl border border-line/10 bg-surface px-3 sm:px-4">
-              {data.rising.slice(0, 6).map((v, i) => (
-                <VideoRow key={v.id} v={v} className={i >= 4 ? "hidden md:flex" : ""} />
+              {rising.slice(0, 8).map((v, i) => (
+                <VideoRow key={v.id} v={v} className={i >= 5 ? "hidden md:flex" : ""} />
               ))}
             </ul>
           ) : (
-            <EmptyNote title="Nothing new is taking off yet">Videos from the last few days show up here as their views come in.</EmptyNote>
+            <EmptyNote title="Nothing new is taking off yet">Videos from this week show up here as their views come in.</EmptyNote>
           )}
         </section>
         <section className="min-w-0">
@@ -232,9 +243,9 @@ export function HomeTab({ data }: { data: HomeData }) {
               </Link>
             }
           />
-          {data.small.length ? (
+          {small.length ? (
             <ul className="divide-y divide-line/[0.07] rounded-2xl border border-line/10 bg-surface px-3 sm:px-4">
-              {data.small.slice(0, 5).map((v) => (
+              {small.slice(0, 5).map((v) => (
                 <VideoRow key={v.id} v={v} compact />
               ))}
             </ul>
@@ -316,6 +327,7 @@ function HomeIdeas({ promise, seed, year }: { promise: Promise<IdeasData>; seed:
     [seed, year, short, ctx.niche, data]
   );
   const shown = ideas.filter((i) => !marks.hidden.has(i.key)).slice(0, 4);
+  const leads = leadSources(shown, data.examples);
   // As tall as "Taking off right now" beside it: 2 in one column, 4 where there are two columns.
   const extra = "hidden md:flex lg:hidden 2xl:flex";
   if (!shown.length)
@@ -328,7 +340,7 @@ function HomeIdeas({ promise, seed, year }: { promise: Promise<IdeasData>; seed:
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
       {shown.map((idea, i) => (
         <div key={idea.key} className={`min-w-0 flex-col ${i >= 2 ? extra : "flex"}`}>
-          <IdeaCard idea={idea} index={i} teamId={ctx.teamId} examples={data.examples} nicheName={ctx.niche?.name ?? null} kind={short ? "short" : "long"} savedId={marks.savedMap.get(idea.key) ?? null} onSaved={marks.markSaved} onHide={marks.hide} dense />
+          <IdeaCard idea={idea} index={i} teamId={ctx.teamId} examples={data.examples} nicheName={ctx.niche?.name ?? null} kind={short ? "short" : "long"} savedId={marks.savedMap.get(idea.key) ?? null} onSaved={marks.markSaved} onHide={marks.hide} lead={leads.get(idea.key) ?? null} />
         </div>
       ))}
     </div>

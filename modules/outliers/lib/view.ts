@@ -2,22 +2,23 @@ import type { Filters, Sort } from "./filters";
 import type { ColorStats, FormatStat, KindInsights, NicheModel } from "./insights";
 import type { KeywordStat } from "./keywords";
 import type { TemplateStat } from "./skeleton";
-import type { ChannelRowData, IdeasData, MiniVideo, OutlierVideo, SavedItem, VideoPage } from "./types";
+import type { AudienceData, ChannelRowData, IdeasData, MiniVideo, OutlierVideo, SavedItem, VideoPage } from "./types";
 
 /*
  * The Outliers page's tabs and what each one gets from the server (1.27.0).
  * Shared by the page (server) and the view (browser). Pure.
  */
 
-export type TabId = "home" | "search" | "ideas" | "formats" | "keywords" | "channels" | "titles" | "thumbnails" | "saved";
+export type TabId = "home" | "search" | "ideas" | "formats" | "keywords" | "channels" | "audience" | "titles" | "thumbnails" | "saved";
 
 export const TABS: { id: TabId; label: string; short?: string }[] = [
   { id: "home", label: "For you" },
   { id: "search", label: "Search" },
   { id: "ideas", label: "Ideas" },
+  { id: "channels", label: "Channels" },
+  { id: "audience", label: "Audience" },
   { id: "formats", label: "Formats" },
   { id: "keywords", label: "Keywords" },
-  { id: "channels", label: "Channels" },
   { id: "titles", label: "Title lab" },
   { id: "thumbnails", label: "Thumbnails" },
   { id: "saved", label: "Saved" },
@@ -46,6 +47,8 @@ export const readChannelSort = (v: string | null | undefined): ChannelSort => (C
 export type HomeData = {
   tab: "home";
   period: Period;
+  /** Too few in the period picked: a longer one is shown instead (null: the one picked). */
+  widened: Period | null;
   best: VideoPage;
   rising: OutlierVideo[];
   small: OutlierVideo[];
@@ -83,7 +86,14 @@ export type FormatsData = {
 
 export type KeywordsData = { tab: "keywords"; keywords: KeywordStat[]; examples: Record<string, MiniVideo>; n: number; selected: string | null };
 
-export type ChannelsData = { tab: "channels"; rows: ChannelRowData[]; total: number; sort: ChannelSort; q: string; only: "all" | "tracked" | "hidden" };
+/** Which channels the Channels tab lists (1.29.0): the ones that count, the niche's own, found ones that count, found ones left out, tracked, taken out of the niche. */
+export type ChannelsOnly = "all" | "group" | "found" | "out" | "tracked" | "hidden";
+const ONLY = new Set<string>(["all", "group", "found", "out", "tracked", "hidden"]);
+export const readOnly = (v: string | null | undefined): ChannelsOnly => (v && ONLY.has(v) ? (v as ChannelsOnly) : "all");
+
+export type ChannelsData = { tab: "channels"; rows: ChannelRowData[]; total: number; sort: ChannelSort; q: string; only: ChannelsOnly };
+
+export type AudienceTabData = { tab: "audience"; audience: AudienceData; youtube: boolean };
 
 export type TitlesData = { tab: "titles"; local: NicheModel | null; cross: Pick<KindInsights, "formats" | "numbers"> | null; title: string; compare: string[] };
 
@@ -91,4 +101,4 @@ export type ThumbsData = { tab: "thumbnails"; rows: OutlierVideo[]; colors: Colo
 
 export type SavedData = { tab: "saved"; items: SavedItem[]; folder: string | null };
 
-export type TabData = HomeData | SearchData | IdeasTabData | FormatsData | KeywordsData | ChannelsData | TitlesData | ThumbsData | SavedData;
+export type TabData = HomeData | SearchData | IdeasTabData | FormatsData | KeywordsData | ChannelsData | AudienceTabData | TitlesData | ThumbsData | SavedData;

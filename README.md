@@ -127,7 +127,7 @@ and its views right now.
 
 ## Also starring
 
-- **Outliers**: Videos in your niche doing far better than their own channel's usual, the formats, keywords, titles and thumbnails behind them, and ideas for your next videos made from them (no AI), with alerts when a tracked channel's video takes off.
+- **Outliers**: Videos in your niche doing far better than their own channel's usual, the formats, keywords, titles and thumbnails behind them, and ideas for your next videos made from them (no AI), with alerts when a tracked channel's video takes off. A niche is the channels you pick and the ones its keywords find that fit (language, where they're from, what they post); the channels your viewers also watch; hide any channel for good.
 - **Your turn, on your phone**: Install it from the browser on iPhone or Android and get a notification when it's your turn. No app store.
 - **Clip**: The clapperboard who shows new people around, cheers when things are done and keeps you company while pages load.
 - **Meetings**: Agenda, notes and action items that land in each person's tasks.

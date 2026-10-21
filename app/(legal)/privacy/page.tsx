@@ -66,7 +66,8 @@ export default function PrivacyPage() {
         and Google&rsquo;s use of your data is covered by the <A href="https://policies.google.com/privacy">Google Privacy Policy</A>. With your permission{" "}
         {APP_NAME} uploads videos, changes or cancels the ones it scheduled, and reads YouTube Analytics (including revenue when allowed) for the connected channel.
         Outliers also reads public videos and channels to show which ones do far better than usual; the scores, formats, keywords and ideas it shows are worked
-        out by {APP_NAME}, not by YouTube.
+        out by {APP_NAME}, not by YouTube. From the connected channel&rsquo;s YouTube Analytics it also lists the channels whose videos send viewers to
+        yours, for your team only.
       </p>
       <p>
         {APP_NAME}&rsquo;s use and transfer of information received from Google APIs adheres to the{" "}

@@ -84,7 +84,8 @@ const OUTLIER_TABS: [string, string, string, IconKey][] = [
   ["ideas", "Video ideas", "ideas generator content topics shuffle what to make next", "lightbulb"],
   ["formats", "Formats that win", "formats templates title shapes video types", "grid"],
   ["keywords", "Outlier keywords", "keywords words phrases topics rising", "trend"],
-  ["channels", "Outlier channels", "channels competitors creators track tracked", "users"],
+  ["channels", "Outlier channels", "channels competitors creators track tracked group only these channels", "users"],
+  ["audience", "Channels your viewers watch", "audience viewers also watch suggested related similar channels fans", "users"],
   ["titles", "Title lab", "title score test titles rewrite compare", "document"],
   ["thumbnails", "Outlier thumbnails", "thumbnails thumbnail colours colors preview mockup", "image"],
   ["saved", "Saved outliers", "saved bookmarks folders boards collections", "star"],
@@ -199,8 +200,9 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
     const researcher = master || ctx.roles.includes("researcher");
     for (const [id, title, words, icon] of OUTLIER_TABS) add({ id: `outliers.${id}`, kind: "tab", title, trail: ["Outliers"], words, icon, href: `/outliers?tab=${id}` });
     add({ id: "outliers.shorts", kind: "filter", title: "Shorts outliers", trail: ["Outliers"], words: "shorts short reels vertical viral", icon: "shorts", href: "/outliers?kind=short" });
-    add({ id: "outliers.add-niche", kind: "action", title: "Add a niche", trail: ["Outliers"], hint: "Keywords for a kind of video to follow", words: "new niche keywords topic follow research competitors", icon: "plus", href: "/outliers?open=niche" }, researcher);
-    add({ id: "outliers.alerts", kind: "setting", title: "Outlier alerts", trail: ["Outliers"], hint: "When a tracked channel's video takes off", words: "alerts notify notifications tracked channel takes off digest watch words weekly", icon: "bell", href: "/outliers?open=alerts" });
+    add({ id: "outliers.add-niche", kind: "action", title: "Add a niche", trail: ["Outliers"], hint: "The channels and keywords to follow", words: "new niche keywords topic follow research competitors channels group", icon: "plus", href: "/outliers?open=niche" }, researcher);
+    add({ id: "outliers.settings", kind: "setting", title: "Outlier settings", trail: ["Outliers"], hint: "Alerts and hidden channels", words: "settings outlier alerts notify notifications tracked channel takes off digest watch words weekly", icon: "settings", href: "/outliers?open=alerts" });
+    add({ id: "outliers.hidden", kind: "setting", title: "Hidden channels", trail: ["Outliers", "Outlier settings"], hint: "Channels you never want to see in Outliers", words: "hidden blocked block hide mute channels filter out never show", icon: "eye", href: "/outliers?open=hidden" });
   }
 
   // ---- Calendar, meetings, posting ---------------------------------------

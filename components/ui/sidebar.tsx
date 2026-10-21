@@ -29,7 +29,7 @@ export function Sidebar({
   developer?: boolean;
 }) {
   return (
-    <aside data-shell="sidebar" className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden styled-scroll">
+    <aside data-shell="sidebar" className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden side-scroll">
       <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="flex items-center px-1.5 pt-0.5 pb-3 rounded-lg">
         <Brand />
       </Link>

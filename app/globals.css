@@ -422,6 +422,36 @@ html[data-glass-style="liquid"] [data-shell="header"]::before {
 }
 html[data-glass-style="liquid"] [data-shell="topbar"] { border-bottom-color: transparent; }
 
+/*
+  A page's own bar under the top bar (Outliers' niche, kind and tabs;
+  1.29.0): as see-through as the top bar, so the two read as one; with
+  Liquid, the top bar's fade moves to the bottom of this bar.
+*/
+html[data-glass] [data-shell="subbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.75)); }
+html[data-glass-style="liquid"] [data-shell="subbar"] {
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-glass-style="liquid"] [data-shell="subbar"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -20px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(rgb(var(--paper) / 0.4), rgb(var(--paper) / 0.4) calc(100% - 20px), rgb(var(--paper) / 0));
+  -webkit-backdrop-filter: blur(14px) saturate(1.7);
+  backdrop-filter: blur(14px) saturate(1.7);
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+}
+html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]::before {
+  inset: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: linear-gradient(rgb(var(--paper) / 0.66), rgb(var(--paper) / 0.4));
+}
+
 @media (min-width: 768px) {
   /* The side bar floats, its corners round like the window's (iPadOS 26's). */
   html[data-glass-style="liquid"] [data-shell="sidebar"] {
@@ -534,6 +564,25 @@ html:has([data-dash-bg]) [data-shell="topbar"] {
 /* (The glass look's wash isn't needed under it. The body stays see-through: with the glass look on, the page's
    own background is on <html>, and a painted body would hide the picture.) */
 html:has([data-dash-bg]) body::before { display: none; }
+/*
+  Light mode over a wallpaper (1.29.1): the side bar and the top and bottom
+  bars stay a light frost you can read, whatever the picture (a dark one
+  turned them a murky grey). The picture behind them is lifted as well as
+  blurred, and a see-through side bar keeps enough of its pane.
+*/
+html:not(.dark):has([data-dash-bg]) [data-shell="header"],
+html:not(.dark):has([data-dash-bg]) [data-shell="topbar"] {
+  background-color: rgb(var(--paper) / 0.62);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4) brightness(1.3);
+  backdrop-filter: blur(16px) saturate(1.4) brightness(1.3);
+}
+html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="sidebar"],
+html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="bottom-nav"] {
+  -webkit-backdrop-filter: var(--glass-blur) brightness(1.3);
+  backdrop-filter: var(--glass-blur) brightness(1.3);
+}
+html[data-glass][data-glass-sidebar]:not(.dark):has([data-dash-bg]) [data-shell="sidebar"] { --tw-bg-opacity: max(0.7, calc(var(--glass-tint) * 0.85)); }
+html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / max(0.72, calc(var(--glass-tint) * 0.9))); }
 /* The Customize button (and the toolbar while customizing) on a frosted pane of its own. */
 [data-dash-bg] .dash-tool {
   background: rgb(var(--surface) / 0.7);
@@ -575,6 +624,20 @@ html:has([data-dash-bg]) body::before { display: none; }
 .styled-scroll::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--amber) / 0.75);
 }
+
+/* The side bar's scroll bar (1.29.1): only when you point at the bar, and
+   grey (the theme's colour down the edge of every page was loud). */
+.side-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.side-scroll:hover { scrollbar-color: rgb(var(--line) / 0.28) transparent; }
+.side-scroll::-webkit-scrollbar { width: 6px; }
+.side-scroll::-webkit-scrollbar-track { background: transparent; }
+.side-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
+.side-scroll:hover::-webkit-scrollbar-thumb { background: rgb(var(--line) / 0.28); }
+
+/* The bell (1.29.1): a cleared notification folds away before it leaves. */
+.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s var(--ease-out), opacity 0.16s ease; }
+.notif-item > div { min-height: 0; overflow: hidden; }
+.notif-item[data-leaving] { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
 
 @keyframes toastin {
   0% { opacity: 0; transform: translateY(14px) scale(0.96); }

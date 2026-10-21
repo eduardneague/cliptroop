@@ -61,7 +61,7 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
       <div className="xl:columns-2 gap-6 [&>section]:break-inside-avoid [&>section]:mb-6 [&>section:last-child]:mb-0" aria-hidden>
         <Card title="Short videos" text="Your daily rhythm, and who works on new shorts by default.">
           <div className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
               {["Shorts per day", "Post on weekends", "Time zone"].map((n) => (
                 <div key={n}>
                   <div className={label}>{n}</div>
@@ -87,7 +87,7 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
             </div>
             <div>
               <div className={label}>Default people for new shorts</div>
-              {people(["Scripter", "Editor", "Reviewer", "Scheduler"], "grid-cols-2 sm:grid-cols-4")}
+              {people(["Scripter", "Editor", "Reviewer", "Scheduler"], "grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))]")}
             </div>
           </div>
         </Card>

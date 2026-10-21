@@ -5,13 +5,13 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
 import { runOutliersJob } from "@/modules/outliers/lib/collector";
-import { addChannelByRef, liveSearch, refreshVideo, searchesLeft, type LiveSearchOptions } from "@/modules/outliers/lib/requests";
-import { crossInsights, getChannelDetail, getVideoDetail, nicheInsights, readChannels, readVideos } from "@/modules/outliers/lib/queries";
+import { addChannelByRef, addToNiche, findChannels, liveSearch, prepareChannel, refreshVideo, searchesLeft, type FoundChannel, type LiveSearchOptions } from "@/modules/outliers/lib/requests";
+import { crossInsights, getAudience, getChannelDetail, getVideoDetail, nicheInsights, readChannels, readVideos } from "@/modules/outliers/lib/queries";
 import { forKind, toModel, type NicheModel } from "@/modules/outliers/lib/insights";
 import { NICHE_COLORS } from "@/modules/outliers/lib/explore";
 import { similarTitles } from "@/modules/outliers/lib/similar";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ChannelDetail, ChannelRowData, OutlierVideo, SavedIdea, VideoDetail, VideoPage } from "@/modules/outliers/lib/types";
+import type { AudienceData, ChannelDetail, ChannelRowData, OutlierVideo, SavedIdea, VideoDetail, VideoPage } from "@/modules/outliers/lib/types";
 
 /*
  * Outliers (1.27.0). Everyone on a team browses, searches, saves and hides
@@ -23,11 +23,11 @@ type R<T = object> = ({ error?: undefined } & T) | { error: string };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VIDEO = /^[A-Za-z0-9_-]{11}$/;
 const CHANNEL = /^UC[A-Za-z0-9_-]{22}$/;
-const NEEDS_0091 = "This needs the latest database update (migration 0091).";
+const NEEDS_UPDATE = "This needs the latest database update (migration 0094).";
 
 function dbError(error: { code?: string; message?: string } | null, fallback: string) {
   if (!error) return fallback;
-  if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST204" || error.code === "42883" || error.code === "PGRST202") return NEEDS_0091;
+  if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST204" || error.code === "42883" || error.code === "PGRST202" || error.code === "42703") return NEEDS_UPDATE;
   if (error.code === "P0001" && error.message) return error.message;
   if (error.code === "23505") return "That's already there.";
   if (error.code === "42501") return "You can't change that here.";
@@ -53,25 +53,79 @@ const refresh = () => revalidatePath("/outliers");
 // Niches
 // ---------------------------------------------------------------------------
 
-export type NicheInput = { name: string; keywords: string[]; excludeWords?: string[]; color?: string; lang?: string | null; region?: string | null; kinds?: ("long" | "short")[] };
+export type NicheInput = {
+  name: string;
+  keywords: string[];
+  excludeWords?: string[];
+  color?: string;
+  lang?: string | null;
+  region?: string | null;
+  kinds?: ("long" | "short")[];
+  // 1.29.0
+  /** Languages its creators speak (null: the team's own; []: any). */
+  langs?: string[] | null;
+  /** Where its creators are from ([]: anywhere). */
+  regions?: string[];
+  /** Only its own channels count. */
+  onlyGroup?: boolean;
+  kids?: boolean;
+  /** Its own channels (ids). Given: the niche's own channels become exactly these. */
+  channels?: string[];
+};
 
-function cleanNiche(input: NicheInput): R<{ row: Record<string, unknown> }> {
+const LANG = /^[a-z]{2}$/;
+const COUNTRY = /^[A-Z]{2}$/;
+
+function cleanNiche(input: NicheInput): R<{ row: Record<string, unknown>; extra: Record<string, unknown>; channels: string[] | null }> {
   const name = (input.name ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
   if (!name) return { error: "Give the niche a name." };
   const keywords = [...new Set((input.keywords ?? []).map((k) => k.trim().toLowerCase().replace(/\s+/g, " ")).filter((k) => k.length >= 2 && k.length <= 60))].slice(0, 12);
-  if (!keywords.length) return { error: "Add at least one keyword: the words people would search for videos in this niche." };
+  const channels = input.channels ? [...new Set(input.channels.filter((c) => CHANNEL.test(c)))].slice(0, 200) : null;
+  if (!keywords.length && !channels?.length) return { error: "Add at least one keyword or one channel: what the niche is about." };
   const kinds = (input.kinds ?? ["long", "short"]).filter((k) => k === "long" || k === "short");
+  const langs = input.langs === null || input.langs === undefined ? null : [...new Set(input.langs.filter((l) => LANG.test(l)))].slice(0, 8);
+  const regions = [...new Set((input.regions ?? []).filter((r) => COUNTRY.test(r)))].slice(0, 80);
+  // Only its own channels, and none yet: nothing would show.
+  const onlyGroup = !!input.onlyGroup && (channels === null || channels.length > 0);
   return {
     row: {
       name,
       keywords,
       exclude_words: [...new Set((input.excludeWords ?? []).map((w) => w.trim().toLowerCase()).filter((w) => w && w.length <= 40))].slice(0, 30),
       color: (NICHE_COLORS as readonly string[]).includes(input.color ?? "") ? input.color : "blue",
-      lang: input.lang && /^[a-z]{2}$/.test(input.lang) ? input.lang : null,
-      region: input.region && /^[A-Z]{2}$/.test(input.region) ? input.region : null,
+      // The first language is the one YouTube is searched in.
+      lang: langs?.length ? langs[0] : input.lang && LANG.test(input.lang) ? input.lang : null,
+      region: input.region && COUNTRY.test(input.region) ? input.region : null,
       kinds: kinds.length ? kinds : ["long", "short"],
     },
+    extra: { langs, regions, only_group: onlyGroup, kids: !!input.kids },
+    channels,
   };
+}
+
+/** The niche's own channels become `want`: new ones added (picked), ones left out taken out of the niche. */
+async function syncOwnChannels(teamId: string, nicheId: string, want: string[], userId: string) {
+  const admin = createAdminClient();
+  const { data } = await admin.from("outlier_niche_channels").select("channel_id, source, hidden").eq("niche_id", nicheId);
+  const rows = (data ?? []) as { channel_id: string; source: string; hidden: boolean }[];
+  const own = new Set(rows.filter((r) => ["manual", "seed", "audience"].includes(r.source) && !r.hidden).map((r) => r.channel_id));
+  const add = want.filter((id) => !own.has(id));
+  const drop = [...own].filter((id) => !want.includes(id));
+  if (add.length) await addToNiche(teamId, nicheId, add, { userId });
+  if (drop.length) await admin.from("outlier_niche_channels").update({ hidden: true }).eq("niche_id", nicheId).in("channel_id", drop);
+  return add;
+}
+
+/** Channels just added: read the first few now (the rest come with the next run). */
+function readSoon(teamId: string, ids: string[]) {
+  if (!ids.length) return;
+  after(async () => {
+    for (const id of ids.slice(0, 6)) {
+      try {
+        await prepareChannel(teamId, id, { deep: true });
+      } catch {}
+    }
+  });
 }
 
 /** A new niche, filled in right away (the first searches run in the background). */
@@ -81,16 +135,21 @@ export async function createNiche(teamId: string, input: NicheInput): Promise<R<
   if (!manager) return { error: "Only masters and researchers can add niches." };
   const c = cleanNiche(input);
   if ("error" in c && c.error) return { error: c.error };
+  const { row, extra, channels } = c as { row: Record<string, unknown>; extra: Record<string, unknown>; channels: string[] | null };
   const { count } = await supabase.from("outlier_niches").select("id", { count: "exact", head: true }).eq("team_id", teamId);
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("outlier_niches")
-    .insert({ team_id: teamId, position: count ?? 0, ...(c as { row: Record<string, unknown> }).row })
+    .insert({ team_id: teamId, position: count ?? 0, ...row, ...extra })
     .select("id")
     .single();
+  // Before 0094: without the new choices.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await supabase.from("outlier_niches").insert({ team_id: teamId, position: count ?? 0, ...row }).select("id").single());
   if (error || !data) return { error: dbError(error, "Couldn't add the niche. Try again.") };
   const id = data.id as string;
+  const added = channels?.length ? await syncOwnChannels(teamId, id, channels, user.id) : [];
   after(async () => {
     try {
+      for (const ch of added.slice(0, 4)) await prepareChannel(teamId, ch, { deep: true });
       await runOutliersJob({ team: teamId, niche: id, budgetMs: 45_000 });
     } catch (e) {
       console.error("[outliers first fill]", e instanceof Error ? e.message : e);
@@ -106,16 +165,41 @@ export async function updateNiche(teamId: string, id: string, input: NicheInput)
   if (!manager || !UUID.test(id)) return { error: "Only masters and researchers can change niches." };
   const c = cleanNiche(input);
   if ("error" in c && c.error) return { error: c.error };
-  const { data, error } = await supabase.from("outlier_niches").update((c as { row: Record<string, unknown> }).row).eq("id", id).eq("team_id", teamId).select("id");
+  const { row, extra, channels } = c as { row: Record<string, unknown>; extra: Record<string, unknown>; channels: string[] | null };
+  let { data, error } = await supabase.from("outlier_niches").update({ ...row, ...extra }).eq("id", id).eq("team_id", teamId).select("id");
+  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await supabase.from("outlier_niches").update(row).eq("id", id).eq("team_id", teamId).select("id"));
   if (error || !(data ?? []).length) return { error: dbError(error, "Couldn't save the niche. Try again.") };
-  // New keywords: their first searches now.
+  const added = channels ? await syncOwnChannels(teamId, id, channels, user.id) : [];
+  // New keywords or choices: checked again and searched now.
   after(async () => {
     try {
+      for (const ch of added.slice(0, 4)) await prepareChannel(teamId, ch, { deep: true });
       await runOutliersJob({ team: teamId, niche: id, budgetMs: 40_000 });
     } catch {}
   });
   refresh();
   return {};
+}
+
+/** Only the niche's own channels count (or found ones too again). */
+export async function setNicheOnlyGroup(teamId: string, id: string, on: boolean): Promise<R> {
+  const { supabase, user, manager } = await who(teamId);
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!manager || !UUID.test(id)) return { error: "Only masters and researchers can change niches." };
+  const { data, error } = await supabase.from("outlier_niches").update({ only_group: on }).eq("id", id).eq("team_id", teamId).select("id");
+  if (error || !(data ?? []).length) return { error: dbError(error, "Couldn't change it. Try again.") };
+  after(async () => {
+    try {
+      await runOutliersJob({ team: teamId, niche: id, budgetMs: 30_000 });
+    } catch {}
+  });
+  refresh();
+  return {};
+}
+
+/** A niche made of channels (from the viewers list, or any picked ones): only they count. */
+export async function nicheFromChannels(teamId: string, name: string, ids: string[]): Promise<R<{ id: string }>> {
+  return createNiche(teamId, { name, keywords: [], channels: ids, onlyGroup: true, langs: [], regions: [] });
 }
 
 export async function deleteNiche(teamId: string, id: string): Promise<R> {
@@ -148,6 +232,33 @@ export async function collectNow(teamId: string, nicheId: string | null): Promis
     } catch {}
   });
   return {};
+}
+
+/**
+ * An explore niche someone opened that's still filling: its seed channels
+ * and videos now (anyone on a team; at most once every few minutes for
+ * everyone together, the collector's lock and the niche's own clock see to it).
+ */
+export async function exploreNow(teamId: string, nicheId: string): Promise<R<{ started: boolean }>> {
+  const { supabase, user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  if (!UUID.test(nicheId)) return { error: "That niche isn't there." };
+  const { data } = await supabase.from("outlier_niches").select("id, team_id, crawl").eq("id", nicheId).maybeSingle();
+  if (!data || data.team_id !== null) return { started: false };
+  const crawl = (data.crawl ?? {}) as { counts?: { videos?: number }; explore_kick_at?: string };
+  if ((crawl.counts?.videos ?? 0) >= 400) return { started: false };
+  const admin = createAdminClient();
+  // Once every 4 minutes for a niche, whoever asks.
+  const { data: got } = await admin.rpc("outlier_lock", { p_key: `explore-kick:${nicheId}`, p_seconds: 240 });
+  if (got === false) return { started: false };
+  after(async () => {
+    try {
+      await runOutliersJob({ explore: true, niche: nicheId, budgetMs: 50_000 });
+    } catch (e) {
+      console.error("[outliers explore now]", e instanceof Error ? e.message : e);
+    }
+  });
+  return { started: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +301,17 @@ export async function loadChannelDetail(teamId: string, id: string): Promise<R<{
   if (!user || !member) return { error: "Your session expired. Sign in again." };
   if (!CHANNEL.test(id)) return { error: "That channel isn't here." };
   const detail = await getChannelDetail(teamId, id);
-  if (!detail) return { error: "That channel isn't kept any more." };
+  if (!detail) {
+    // Not collected (a link, a channel found by name): read it now, then it opens (its longer history comes right after).
+    if (await prepareChannel(teamId, id).catch(() => false)) {
+      readSoon(teamId, [id]);
+      const again = await getChannelDetail(teamId, id);
+      if (again) return { detail: again };
+    }
+    return { error: "That channel isn't kept any more." };
+  }
+  // Its videos were never read (only found by a search), or only a few: read deep now, in the background; the panel looks again.
+  if (detail.pending || detail.videos.length < 30) readSoon(teamId, [id]);
   return { detail };
 }
 
@@ -300,7 +421,71 @@ export async function setTracked(teamId: string, channelId: string, on: boolean)
     ? await supabase.from("outlier_tracked").upsert({ team_id: teamId, channel_id: channelId }, { onConflict: "team_id,channel_id", ignoreDuplicates: true })
     : await supabase.from("outlier_tracked").delete().eq("team_id", teamId).eq("channel_id", channelId);
   if (error) return { error: dbError(error, "Couldn't change it. Try again.") };
+  // Its details and videos right away, so it shows in Tracked at once (not after the next run).
+  if (on) readSoon(teamId, [channelId]);
   return {};
+}
+
+/** Channels become one of a niche's own (they always count), read right away. */
+export async function addChannelsToNiche(teamId: string, nicheId: string, ids: string[], source: "manual" | "audience" = "manual"): Promise<R<{ added: number }>> {
+  const { user, manager } = await who(teamId);
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!manager || !UUID.test(nicheId)) return { error: "Only masters and researchers can change a niche's channels." };
+  try {
+    const r = await addToNiche(teamId, nicheId, ids, { userId: user.id, source });
+    if ("error" in r) return { error: r.error };
+    readSoon(teamId, ids);
+    after(async () => {
+      try {
+        await runOutliersJob({ team: teamId, niche: nicheId, budgetMs: 30_000 });
+      } catch {}
+    });
+    refresh();
+    return r;
+  } catch (e) {
+    console.error("[outliers add to niche]", e instanceof Error ? e.message : e);
+    return { error: "Couldn't add them right now. Try again in a minute." };
+  }
+}
+
+/** Channels by name, handle or link: the collected ones, then YouTube (by handle; with `youtube`, a search too). */
+export async function lookUpChannels(teamId: string, q: string, youtube = false): Promise<R<{ rows: FoundChannel[]; searched: boolean; left?: { person: number; team: number } }>> {
+  const { user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  try {
+    const r = await findChannels(teamId, user.id, q.slice(0, 200), { youtube });
+    return "error" in r ? { error: r.error } : r;
+  } catch (e) {
+    console.error("[outliers find channels]", e instanceof Error ? e.message : e);
+    return { error: "Couldn't look that up right now. Try again in a minute." };
+  }
+}
+
+/** A channel the team never wants to see in Outliers (anyone on the team). */
+export async function hideChannel(teamId: string, channelId: string, title: string | null): Promise<R> {
+  const { supabase, user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  if (!CHANNEL.test(channelId)) return { error: "That channel isn't here." };
+  const { error } = await supabase.from("outlier_blocked").upsert({ team_id: teamId, channel_id: channelId, title: (title ?? "").slice(0, 120) || null }, { onConflict: "team_id,channel_id", ignoreDuplicates: true });
+  if (error) return { error: dbError(error, "Couldn't hide it. Try again.") };
+  return {};
+}
+
+export async function unhideChannel(teamId: string, channelId: string): Promise<R> {
+  const { supabase, user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  if (!CHANNEL.test(channelId)) return { error: "That channel isn't here." };
+  const { error } = await supabase.from("outlier_blocked").delete().eq("team_id", teamId).eq("channel_id", channelId);
+  if (error) return { error: dbError(error, "Couldn't bring it back. Try again.") };
+  refresh();
+  return {};
+}
+
+/** The channels the team's viewers also watch. */
+export async function loadAudience(teamId: string): Promise<R<{ audience: AudienceData }>> {
+  const { user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  return { audience: await getAudience(teamId) };
 }
 
 export async function setChannelHidden(teamId: string, nicheId: string, channelId: string, hidden: boolean): Promise<R> {

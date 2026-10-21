@@ -1,17 +1,26 @@
 "use client";
 
+import { useMemo } from "react";
 import { compact, duration } from "../lib/filters";
 import { multText } from "../lib/scores";
 import type { OutlierVideo } from "../lib/types";
 import { ChannelAvatar, DurationChip, heat, Mult, Spike, Thumb, TimeAgo } from "./bits";
-import { useOutliersNav } from "./context";
+import { CardMenu } from "./card-menu";
+import { useOutliersBlocked, useOutliersNav } from "./context";
 import { SaveButton } from "./save-menu";
 
 /*
  * Outlier videos as cards, Shorts as tall cards, and rows for lists and
- * tables (1.27.0). Every one opens the video's panel; the channel's name
- * and picture open the channel's.
+ * tables (1.27.0). Every one opens the video's panel (1.29.0: at once, with
+ * what the card already knows); the channel's name and picture open the
+ * channel's. A hidden channel's videos leave every list at once.
  */
+
+/** The rows whose channel the team didn't hide. */
+export function useVisible<T extends { channelId: string }>(rows: T[]): T[] {
+  const { blocked } = useOutliersBlocked();
+  return useMemo(() => (blocked.size ? rows.filter((v) => !blocked.has(v.channelId)) : rows), [rows, blocked]);
+}
 
 /** A long video's card: the thumbnail with its multiplier, the title, the channel (not on its own channel's panel), the spike. */
 export function VideoCard({ v, eager = false, hideChannel = false }: { v: OutlierVideo; eager?: boolean; hideChannel?: boolean }) {
@@ -19,11 +28,12 @@ export function VideoCard({ v, eager = false, hideChannel = false }: { v: Outlie
   return (
     <article className="group relative flex flex-col min-w-0">
       <div className="relative">
-        <button type="button" onClick={() => openVideo(v.id)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-video rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
+        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-video rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
           <Thumb id={v.id} kind={v.kind} eager={eager} tint={v.colors?.[0]} />
           <Mult score={v.score} projected={v.projected} on className="absolute top-2 left-2" />
           <DurationChip secs={v.durationS} />
         </button>
+        <CardMenu v={v} overlay />
         <SaveButton videoId={v.id} overlay />
       </div>
       <div className="mt-2.5 flex gap-2.5 min-w-0">
@@ -34,7 +44,7 @@ export function VideoCard({ v, eager = false, hideChannel = false }: { v: Outlie
         )}
         <div className="min-w-0 flex-1">
           <h3 className="text-[13.5px] font-semibold leading-snug line-clamp-2">
-            <button type="button" onClick={() => openVideo(v.id)} className="text-left hover:underline decoration-ink/30 underline-offset-2">
+            <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/30 underline-offset-2">
               {v.title}
             </button>
           </h3>
@@ -64,16 +74,17 @@ export function ShortCard({ v, eager = false }: { v: OutlierVideo; eager?: boole
   return (
     <article className="group relative flex flex-col min-w-0">
       <div className="relative">
-        <button type="button" onClick={() => openVideo(v.id)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-[9/16] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
+        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-[9/16] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
           <Thumb id={v.id} kind="short" eager={eager} sizes="(min-width: 1400px) 200px, 40vw" tint={v.colors?.[0]} />
-          <Mult score={v.score} projected={v.projected} on size="sm" className="absolute top-2 left-2" />
+          <Mult score={v.score} projected={v.projected} on className="absolute top-2 left-2" />
           <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
           <span className="absolute left-2 bottom-2 text-[12.5px] font-semibold text-white tabular-nums drop-shadow">{compact(v.views)} views</span>
         </button>
+        <CardMenu v={v} overlay />
         <SaveButton videoId={v.id} overlay />
       </div>
       <h3 className="mt-2 text-[13px] font-semibold leading-snug line-clamp-2">
-        <button type="button" onClick={() => openVideo(v.id)} className="text-left hover:underline decoration-ink/30 underline-offset-2">
+        <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/30 underline-offset-2">
           {v.title}
         </button>
       </h3>
@@ -95,12 +106,14 @@ export function VideoRow({ v, rank, compact: tight = false, className = "" }: { 
   return (
     <li className={`group flex items-center min-w-0 ${tight ? "gap-2.5 py-2" : "gap-3 py-2.5"} ${className}`}>
       {rank !== undefined && <span className="w-5 text-right text-[12px] font-semibold text-ink-faint tabular-nums flex-shrink-0">{rank}</span>}
-      <button type="button" onClick={() => openVideo(v.id)} aria-label={`Open “${v.title}”`} className={`relative flex-shrink-0 rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 ${short ? (tight ? "w-[44px]" : "w-[54px]") + " aspect-[9/16]" : tight ? "w-[96px] aspect-video" : "w-[124px] sm:w-[140px] aspect-video"}`}>
+      <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className={`relative flex-shrink-0 rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 ${short ? (tight ? "w-[44px]" : "w-[54px]") + " aspect-[9/16]" : tight ? "w-[96px] aspect-video" : "w-[124px] sm:w-[140px] aspect-video"}`}>
         <Thumb id={v.id} kind={v.kind} sizes={short ? "54px" : "140px"} tint={v.colors?.[0]} />
         {!short && !tight && <DurationChip secs={v.durationS} className="!bottom-1 !right-1 !text-[10px]" />}
+        {/* Phones: the multiplier on the picture, so the words get the width. */}
+        {!tight && <Mult score={v.score} size="sm" className="absolute top-1 left-1 sm:hidden" />}
       </button>
       <div className="min-w-0 flex-1">
-        <button type="button" onClick={() => openVideo(v.id)} className={`block text-left font-semibold leading-snug line-clamp-2 hover:underline decoration-ink/30 underline-offset-2 ${tight ? "text-[13px]" : "text-[13.5px]"}`}>
+        <button type="button" onClick={() => openVideo(v.id, v)} className={`block text-left font-semibold leading-snug line-clamp-2 hover:underline decoration-ink/30 underline-offset-2 ${tight ? "text-[13px]" : "text-[13.5px]"}`}>
           {v.title}
         </button>
         <div className="mt-0.5 text-[12px] text-ink-faint truncate">
@@ -116,17 +129,19 @@ export function VideoRow({ v, rank, compact: tight = false, className = "" }: { 
           </div>
         )}
       </div>
-      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-        <Mult score={v.score} projected={tight ? null : v.projected} size="sm" className="flex-col !items-end sm:flex-row sm:!items-center" />
+      <div className={`flex-col items-end gap-1.5 flex-shrink-0 ${tight ? "flex" : "hidden sm:flex"}`}>
+        <Mult score={v.score} projected={tight ? null : v.projected} size={tight ? "sm" : "md"} className="flex-col !items-end sm:flex-row sm:!items-center" />
         {tight ? <span className="text-[11.5px] tabular-nums text-ink-faint">{compact(v.views)}</span> : <Spike peers={v.peers} at={v.peerI} score={v.score} width={46} height={16} reserve />}
       </div>
+      {!tight && <CardMenu v={v} className="flex-shrink-0 -mr-1.5 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100" />}
     </li>
   );
 }
 
 /** Videos as a table (computers): every number in its own column. */
-export function VideoTable({ rows }: { rows: OutlierVideo[] }) {
+export function VideoTable({ rows: all }: { rows: OutlierVideo[] }) {
   const { openVideo, openChannel } = useOutliersNav();
+  const rows = useVisible(all);
   const th = "px-3 py-2.5 text-left text-[11.5px] font-semibold text-ink-faint whitespace-nowrap";
   return (
     <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
@@ -141,15 +156,18 @@ export function VideoTable({ rows }: { rows: OutlierVideo[] }) {
             <th className={`${th} text-right hidden 2xl:table-cell`}>Engagement</th>
             <th className={`${th} text-right hidden xl:table-cell`}>Length</th>
             <th className={`${th} text-right`}>Posted</th>
+            <th className="w-10">
+              <span className="sr-only">More</span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line/[0.07]">
           {rows.map((v) => {
             const eng = v.views ? (((v.likes ?? 0) + (v.comments ?? 0)) / v.views) * 100 : null;
             return (
-              <tr key={v.id} className="hover:bg-surface-2/50">
+              <tr key={v.id} className="group hover:bg-surface-2/50">
                 <td className="px-3 py-2 min-w-[240px]">
-                  <button type="button" onClick={() => openVideo(v.id)} className="flex items-center gap-3 text-left min-w-0">
+                  <button type="button" onClick={() => openVideo(v.id, v)} className="flex items-center gap-3 text-left min-w-0">
                     <span className={`relative flex-shrink-0 rounded-md overflow-hidden bg-surface-2 ${v.kind === "short" ? "w-[34px] aspect-[9/16]" : "w-[96px] aspect-video"}`}>
                       <Thumb id={v.id} kind={v.kind} sizes="96px" tint={v.colors?.[0]} />
                     </span>
@@ -165,7 +183,7 @@ export function VideoTable({ rows }: { rows: OutlierVideo[] }) {
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="inline-flex flex-col items-end gap-1">
-                    <Mult score={v.score} projected={v.projected} size="sm" />
+                    <Mult score={v.score} projected={v.projected} />
                     <Spike peers={v.peers} at={v.peerI} score={v.score} width={44} height={14} reserve />
                   </div>
                 </td>
@@ -175,6 +193,9 @@ export function VideoTable({ rows }: { rows: OutlierVideo[] }) {
                 <td className="px-3 py-2 text-right tabular-nums text-ink-soft hidden xl:table-cell">{duration(v.durationS)}</td>
                 <td className="px-3 py-2 text-right text-ink-soft whitespace-nowrap">
                   <TimeAgo iso={v.publishedAt} />
+                </td>
+                <td className="pr-2 py-2 w-10">
+                  <CardMenu v={v} className="[@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100" />
                 </td>
               </tr>
             );
@@ -186,7 +207,8 @@ export function VideoTable({ rows }: { rows: OutlierVideo[] }) {
 }
 
 /** Cards in a grid that fills the width (Shorts get tall, narrower tiles). */
-export function VideoGrid({ rows, kind, eagerFirst = 0, className = "", hideChannel = false }: { rows: OutlierVideo[]; kind: "long" | "short"; eagerFirst?: number; className?: string; hideChannel?: boolean }) {
+export function VideoGrid({ rows: all, kind, eagerFirst = 0, className = "", hideChannel = false }: { rows: OutlierVideo[]; kind: "long" | "short"; eagerFirst?: number; className?: string; hideChannel?: boolean }) {
+  const rows = useVisible(all);
   if (kind === "short")
     return (
       <ul className={`grid gap-x-3 gap-y-5 grid-cols-[repeat(auto-fill,minmax(min(46%,150px),1fr))] sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] ${className}`}>
@@ -212,7 +234,8 @@ export function VideoGrid({ rows, kind, eagerFirst = 0, className = "", hideChan
  * A row of cards that scrolls sideways on phones (no long scroll for a
  * shelf) and wraps into a grid on bigger screens, cut to whole rows.
  */
-export function Shelf({ rows, kind }: { rows: OutlierVideo[]; kind: "long" | "short" }) {
+export function Shelf({ rows: all, kind }: { rows: OutlierVideo[]; kind: "long" | "short" }) {
+  const rows = useVisible(all);
   const short = kind === "short";
   const list = rows.slice(0, short ? 14 : 10);
   // Two whole rows at every width: 3 / 4 / 5 long videos a row, 4 / 5 / 6 / 7 Shorts.
@@ -250,24 +273,25 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
   return (
     <article className={`group relative grid rounded-2xl border border-line/10 bg-surface overflow-hidden min-w-0 h-full ${short ? "grid-cols-[minmax(0,42%)_minmax(0,1fr)]" : "sm:grid-rows-[auto_1fr]"}`}>
       <div className="relative">
-        <button type="button" onClick={() => openVideo(v.id)} aria-label={`Open “${v.title}”`} className={`relative block w-full overflow-hidden bg-surface-2 ${short ? "h-full aspect-[9/16]" : "aspect-video"}`}>
+        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className={`relative block w-full overflow-hidden bg-surface-2 ${short ? "h-full aspect-[9/16]" : "aspect-video"}`}>
           <Thumb id={v.id} kind={v.kind} eager sizes="(min-width: 1180px) 50vw, 100vw" tint={v.colors?.[0]} />
           {!short && <DurationChip secs={v.durationS} />}
         </button>
+        <CardMenu v={v} overlay />
         <SaveButton videoId={v.id} overlay />
       </div>
       <div className="flex flex-col p-4 sm:p-5 min-w-0">
         <div className="flex items-end justify-between gap-3">
           <div>
             <div className="text-[11.5px] font-semibold text-ink-faint">× its channel&rsquo;s usual</div>
-            <div className="font-display font-semibold leading-none mult text-[46px] sm:text-[56px]" style={{ color: h.text }}>
+            <div className="font-display font-bold leading-none mult text-[52px] sm:text-[64px] tracking-tight" style={{ color: h.text }}>
               {multText(v.score)}
             </div>
           </div>
           <Spike peers={v.peers} at={v.peerI} score={v.score} width={short ? 96 : 150} height={short ? 40 : 52} />
         </div>
         <h3 className="mt-3 font-display text-[19px] sm:text-[22px] leading-[1.2] font-semibold line-clamp-3 text-balance">
-          <button type="button" onClick={() => openVideo(v.id)} className="text-left hover:underline decoration-ink/25 underline-offset-[3px]">
+          <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/25 underline-offset-[3px]">
             {v.title}
           </button>
         </h3>

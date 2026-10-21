@@ -64,7 +64,8 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-5" onClick={() => close(false)}>
+        // data-confirm: a menu or panel under it (the bell's Clear all) stays open while you answer.
+        <div data-confirm className="fixed inset-0 z-[300] flex items-center justify-center p-5" onClick={() => close(false)}>
           {/* The dimmer is a layer of its own (not the box's parent), so the glass look can blur the page through the box. */}
           <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-[fadein_.12s_ease]" aria-hidden />
           <div

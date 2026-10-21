@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalIcon } from "@/components/ui/icons";
+import { ExternalIcon, PlusIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
-import { loadChannelDetail, setChannelHidden } from "@/app/(dashboard)/outliers/actions";
+import { addChannelsToNiche, loadChannelDetail, setChannelHidden } from "@/app/(dashboard)/outliers/actions";
 import { median } from "../lib/corpus";
 import { compact } from "../lib/filters";
 import { formatName } from "../lib/formats";
 import { multText } from "../lib/scores";
+import { countryName, langName } from "../lib/regions";
 import type { ChannelDetail, ChannelRowData, OutlierVideo } from "../lib/types";
-import { ChannelAvatar, heat, Mult, NicheDot, SourceNote, Tile, TimeAgo, youtubeChannel } from "./bits";
+import { ChannelAvatar, EyeOffIcon, FitChip, heat, Mult, NicheDot, PeopleIcon, SourceNote, Tile, TimeAgo, youtubeChannel } from "./bits";
 import { BarsChart, PostingHeat, ShareBar } from "./charts";
-import { useOutliers } from "./context";
+import { useOutliers, useOutliersBlocked } from "./context";
 import { PanelSection, PanelShell } from "./panel";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
@@ -21,8 +22,10 @@ import { VideoGrid, VideoRow } from "./video-card";
 /*
  * A channel's panel (1.27.0): its numbers, every stored video against its
  * usual, its biggest outliers and latest uploads, the formats it uses and
- * how they do, when it posts, the team's niches it's in, and channels like
- * it.
+ * how they do, when it posts, the team's niches it's in (and why it counts
+ * there or not), and channels like it. A channel ClipTroop hasn't read in
+ * full is read when it opens; the panel looks again until its videos are
+ * in (1.29.0). Hide it, and it never shows in Outliers again.
  */
 
 const details = new Map<string, ChannelDetail>();
@@ -58,6 +61,34 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
   const d = state.id === id ? state.detail : null;
   const error = state.id === id ? state.error : null;
   const c = d?.channel;
+  const { blocked, hide, unhide } = useOutliersBlocked();
+
+  // Still being read (or only a few videos in): it looks again a few times, until they're in.
+  const [waited, setWaited] = useState<string | null>(null);
+  const reading = !!d && waited !== id && (d.pending || (d.videos.length < 30 && (d.channel.videoCount ?? 0) > d.videos.length + 5));
+  useEffect(() => {
+    if (!reading) return;
+    let live = true;
+    const done = window.setTimeout(() => live && setWaited(id), 135_000);
+    const timers = [12, 28, 50, 80, 120].map((sec) =>
+      window.setTimeout(() => {
+        loadChannelDetail(ctx.teamId, id)
+          .then((r) => {
+            if (!live || r.error !== undefined) return;
+            details.set(id, r.detail);
+            setState((old) => (old.id === id ? { id, detail: r.detail, error: null } : old));
+          })
+          .catch(() => {});
+      }, sec * 1000)
+    );
+    return () => {
+      live = false;
+      window.clearTimeout(done);
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+    // Once per channel opened while it's being read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, reading]);
 
   return (
     <PanelShell
@@ -74,6 +105,16 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
             <div className="flex items-center gap-1.5">
               <TrackButton channelId={c.id} />
               <SaveButton channelId={c.id} menu />
+              {blocked.has(c.id) ? (
+                <button type="button" onClick={() => unhide(c.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red/30 bg-red/[0.06] px-3 h-9 text-[13px] font-semibold text-red hover:bg-red/10" title="Hidden: its videos don't show in Outliers. Click to show them again.">
+                  <EyeOffIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Hidden</span>
+                </button>
+              ) : (
+                <button type="button" onClick={() => hide(c.id, c.title, c.avatar)} aria-label={`Hide ${c.title}`} title="Hide this channel: its videos never show in Outliers again" className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-red hover:border-red/40">
+                  <EyeOffIcon className="w-4 h-4" />
+                </button>
+              )}
               <a href={youtubeChannel(c.id, c.handle)} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube" title="Open on YouTube" className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30">
                 <ExternalIcon className="w-4 h-4" />
               </a>
@@ -106,16 +147,17 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
           <div className="skeleton h-48 rounded-2xl" />
         </div>
       ) : (
-        <ChannelBody d={d} />
+        <ChannelBody d={d} reading={reading} />
       )}
     </PanelShell>
   );
 }
 
-function ChannelBody({ d }: { d: ChannelDetail }) {
+function ChannelBody({ d, reading }: { d: ChannelDetail; reading: boolean }) {
   const ctx = useOutliers();
   const toast = useToast();
   const c = d.channel;
+  const [added, setAdded] = useState<Set<string>>(new Set());
   const longs = d.videos.filter((v) => v.kind === "long");
   const shorts = d.videos.filter((v) => v.kind === "short");
   const [kind, setKind] = useState<"long" | "short">(() => (ctx.kind === "short" && shorts.length ? "short" : longs.length ? "long" : "short"));
@@ -173,15 +215,45 @@ function ChannelBody({ d }: { d: ChannelDetail }) {
     }
   };
 
+  const addTo = async (nicheId: string, name: string) => {
+    setAdded((s) => new Set(s).add(nicheId));
+    try {
+      const r = await addChannelsToNiche(ctx.teamId, nicheId, [c.id]);
+      if (r.error !== undefined) throw new Error(r.error);
+      setHiddenIn((s) => {
+        const n = new Set(s);
+        n.delete(nicheId);
+        return n;
+      });
+      toast.success(`${c.title} is one of ${name}'s channels now`);
+    } catch (e) {
+      setAdded((s) => {
+        const n = new Set(s);
+        n.delete(nicheId);
+        return n;
+      });
+      toast.error(e instanceof Error && e.message ? e.message : "Couldn't add it. Try again.");
+    }
+  };
+  const where = countryName(c.region ?? c.country);
+  const lang = c.mainLang && c.mainLang !== "en" ? langName(c.mainLang) : "";
+
   return (
     <div className="px-4 sm:px-6 py-5 space-y-7">
+      {reading && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-blue/25 bg-blue/[0.06] px-3.5 py-2.5 text-[12.5px] text-ink-soft" role="status">
+          <span className="w-3.5 h-3.5 rounded-full border-2 border-blue/30 border-t-blue animate-spin flex-shrink-0" aria-hidden />
+          Reading its videos{d.videos.length ? ` (${d.videos.length} so far)` : ""}. Scores fill in within a minute or two.
+        </div>
+      )}
       <div className="flex items-start gap-4">
         <ChannelAvatar src={c.avatar} title={c.title} size={68} />
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-[23px] sm:text-[26px] leading-tight font-semibold">{c.title}</h2>
           <p className="mt-1 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
             {c.handle && <span>{c.handle}</span>}
-            {c.country && <span>· {c.country}</span>}
+            {where && <span>· {where}</span>}
+            {lang && <span>· speaks {lang}</span>}
             {age !== null && <span>· started {age < 1 ? `${Math.max(1, Math.round(age * 12))} months` : `${Math.round(age)} year${Math.round(age) === 1 ? "" : "s"}`} ago</span>}
             {c.uploadsWeek !== null && <span>· {c.uploadsWeek >= 10 ? Math.round(c.uploadsWeek) : c.uploadsWeek.toFixed(1)} uploads a week</span>}
             {c.lastUploadAt && (
@@ -191,6 +263,12 @@ function ChannelBody({ d }: { d: ChannelDetail }) {
             )}
           </p>
           {c.description && <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft line-clamp-3">{c.description}</p>}
+          {d.audience && (
+            <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-violet/10 text-violet px-2.5 h-7 text-[12px] font-semibold">
+              <PeopleIcon className="w-3.5 h-3.5" />
+              Your viewers watch it: {d.audience.views ? `${compact(d.audience.views)} views sent to` : "next to"} {d.audience.ours} of your videos
+            </p>
+          )}
         </div>
       </div>
 
@@ -264,27 +342,46 @@ function ChannelBody({ d }: { d: ChannelDetail }) {
         </div>
       </div>
 
-      {d.niches.some((n) => n.team) && (
-        <PanelSection title="In your niches" sub={ctx.canManage ? "Take it out of a niche if it doesn't belong there." : undefined}>
+      {ctx.niches.length > 0 && (
+        <PanelSection title="In your niches" sub={ctx.canManage ? "Add it to a niche to make it one of its own (it always counts there), or take it out where it doesn't belong." : "Where it counts, and why not."}>
           <ul className="rounded-2xl border border-line/10 bg-surface divide-y divide-line/[0.07]">
-            {d.niches
-              .filter((n) => n.team)
-              .map((n) => {
-                const off = hiddenIn.has(n.id);
-                const info = ctx.niches.find((x) => x.id === n.id);
-                return (
-                  <li key={n.id} className="flex items-center gap-3 px-4 py-3">
-                    <NicheDot color={info?.color ?? "blue"} />
-                    <span className={`flex-1 min-w-0 truncate text-[13.5px] ${off ? "text-ink-faint line-through" : "font-semibold"}`}>{n.name}</span>
-                    <span className="text-[11.5px] text-ink-faint hidden sm:inline">{n.source === "manual" ? "added by hand" : n.source === "seed" ? "from a search" : n.source === "featured" ? "featured by a channel" : "found by search"}</span>
-                    {ctx.canManage && (
-                      <button type="button" onClick={() => toggleNiche(n.id, !off)} className="rounded-lg border border-line/15 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
-                        {off ? "Put back" : "Take out"}
+            {ctx.niches.map((info) => {
+              const n = d.niches.find((x) => x.id === info.id) ?? null;
+              const off = hiddenIn.has(info.id);
+              const mine = added.has(info.id) || !!n?.group;
+              const btn = "rounded-lg border border-line/15 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 flex-shrink-0";
+              return (
+                <li key={info.id} className="flex items-center gap-3 px-4 py-3">
+                  <NicheDot color={info.color} />
+                  <span className={`flex-1 min-w-0 truncate text-[13.5px] ${off ? "text-ink-faint line-through" : "font-semibold"}`}>{info.name}</span>
+                  {n || added.has(info.id) ? (
+                    <FitChip c={{ group: mine, counted: mine || !!n?.counted, verdict: n?.verdict ?? null, hidden: off, pending: false, source: n?.source ?? "manual" }} />
+                  ) : (
+                    <span className="text-[11.5px] text-ink-faint">Not in it</span>
+                  )}
+                  {ctx.canManage &&
+                    (off ? (
+                      <button type="button" onClick={() => toggleNiche(info.id, false)} className={btn}>
+                        Put back
                       </button>
-                    )}
-                  </li>
-                );
-              })}
+                    ) : !mine ? (
+                      <button type="button" onClick={() => addTo(info.id, info.name)} className={`${btn} inline-flex items-center gap-1`} title="One of this niche's own channels: it always counts">
+                        <PlusIcon className="w-3.5 h-3.5" />
+                        Add
+                      </button>
+                    ) : n ? (
+                      <button type="button" onClick={() => toggleNiche(info.id, true)} className={btn}>
+                        Take out
+                      </button>
+                    ) : null)}
+                  {ctx.canManage && n && !off && !mine && (n.counted || n.verdict) && (
+                    <button type="button" onClick={() => toggleNiche(info.id, true)} className={btn}>
+                      Take out
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </PanelSection>
       )}

@@ -999,7 +999,8 @@ export type Revenue = {
   isMaster: boolean;
   buckets: Bucket[];
   /** Per bucket: YouTube's estimate, Facebook's earnings and the other income added by hand. */
-  perBucket: { key: string; revenue: number; facebook: number; other: number }[];
+  /** Null: that platform's money for the stretch isn't in yet (after its last day with any, 1.29.0). */
+  perBucket: { key: string; revenue: number | null; facebook: number | null; other: number }[];
   /** YouTube's estimated revenue. */
   total: Kpi;
   /** Facebook Content Monetization earnings (a Page that's in the program; migration 0074). */
@@ -1251,7 +1252,13 @@ export async function getRevenue(teamId: string, w: Window, isMaster: boolean, w
   const granted = new Set(((access as { data: Row[] | null }).data ?? []).map((r) => r.user_id as string));
   return {
     ...empty,
-    perBucket: buckets.map((b) => ({ key: b.key, revenue: sumMap(b.from, b.to, revOn) ?? 0, facebook: sumMap(b.from, b.to, fbOn) ?? 0, other: sumEntries(b.from, b.to) ?? 0 })),
+    perBucket: (() => {
+      // YouTube's money comes two or three days late: the stretches after its last one are "no data yet", not 0 (1.29.0).
+      const rows = buckets.map((b) => ({ key: b.key, revenue: sumMap(b.from, b.to, revOn), facebook: sumMap(b.from, b.to, fbOn), other: sumEntries(b.from, b.to) ?? 0 }));
+      const lastRev = rows.map((x) => x.revenue).findLastIndex((v) => v !== null);
+      const lastFb = rows.map((x) => x.facebook).findLastIndex((v) => v !== null);
+      return rows.map((x, i) => ({ ...x, revenue: x.revenue ?? (i > lastRev ? null : 0), facebook: x.facebook ?? (i > lastFb ? null : 0) }));
+    })(),
     total,
     facebook,
     hasFacebook,

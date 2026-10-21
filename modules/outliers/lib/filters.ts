@@ -41,7 +41,8 @@ export type Filters = {
   excludeChannels?: string[];
   channelDays?: number;
   sort?: Sort;
-  scope?: "niche" | "tracked" | "all";
+  /** 1.29.0: "audience", the channels the team's viewers also watch. */
+  scope?: "niche" | "tracked" | "all" | "audience";
 };
 
 export const SCORE_STEPS = [1, 1.5, 2, 3, 5, 10, 25, 50, 100];
@@ -116,7 +117,7 @@ export function readFilters(p: Params): Filters {
   const s = g("sort");
   if (s && SORT_IDS.has(s)) f.sort = s as Sort;
   const scope = g("scope");
-  if (scope === "tracked" || scope === "all") f.scope = scope;
+  if (scope === "tracked" || scope === "all" || scope === "audience") f.scope = scope;
   for (const key of Object.keys(f) as (keyof Filters)[]) if (f[key] === undefined || (Array.isArray(f[key]) && !(f[key] as unknown[]).length)) delete f[key];
   return f;
 }
@@ -156,7 +157,7 @@ export function filtersToParams(f: Filters, base?: URLSearchParams): URLSearchPa
 /** Filters → what outliers_videos() reads (p_f). */
 export function filtersToRpc(f: Filters): Record<string, unknown> {
   const r: Record<string, unknown> = {};
-  if (f.scope === "tracked") r.scope = "tracked";
+  if (f.scope === "tracked" || f.scope === "audience") r.scope = f.scope;
   if (f.kind) r.kind = f.kind;
   if (f.minScore !== undefined) r.min_score = f.minScore;
   if (f.maxScore !== undefined) r.max_score = f.maxScore;

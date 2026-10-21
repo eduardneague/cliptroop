@@ -55,6 +55,23 @@ export type NicheInfo = {
   phase: string | null;
   explore: boolean;
   slug: string | null;
+  // 1.29.0
+  /** Languages its creators speak (null: the team's own; []: any). */
+  langs: string[] | null;
+  /** Where its creators are from ([]: anywhere). */
+  regions: string[];
+  /** Only its own channels count. */
+  onlyGroup: boolean;
+  /** Made-for-kids videos count. */
+  kids: boolean;
+  /** Its own channels, found ones that count, found ones left out (or not checked yet). */
+  groupN: number;
+  foundN: number;
+  outN: number;
+  /** The team's own language, as the server worked it out (null: not known). */
+  teamLang: string | null;
+  /** Which version of the fit last checked all its channels (below the current one: being checked). */
+  fitV: number;
 };
 
 export type Folder = { id: string; name: string; color: string; position: number; createdBy: string | null; count: number };
@@ -62,6 +79,9 @@ export type OutlierSettings = { alertMin: number; alertTo: "managers" | "everyon
 
 /** One save of a video or channel: what, in which folder (null: no folder), and the save's id. */
 export type SaveRef = { ref: string; folderId: string | null; id: string };
+
+/** A channel the team hid (it shows nowhere in Outliers). */
+export type BlockedChannel = { id: string; title: string; avatar: string | null; at: string | null };
 
 export type Overview = {
   niches: NicheInfo[];
@@ -72,6 +92,8 @@ export type Overview = {
   unsorted: number;
   saves: SaveRef[];
   settings: OutlierSettings;
+  blocked: BlockedChannel[];
+  audienceN: number;
 };
 
 /** A video in a few words (examples next to formats, keywords, ideas). */
@@ -99,7 +121,20 @@ export type ChannelRowData = {
   source: string | null;
   relevance: number | null;
   hidden: boolean;
+  // 1.29.0
+  /** Why a found channel doesn't count (null: not checked yet; "ok": it counts). */
+  verdict: Verdict | null;
+  /** One of the niche's own channels. */
+  group: boolean;
+  counted: boolean;
+  blocked: boolean;
+  /** Its videos aren't read yet. */
+  pending: boolean;
+  mainLang: string | null;
+  region: string | null;
 };
+
+export type Verdict = "ok" | "topic" | "lang" | "region" | "kids";
 
 export type VideoDetail = {
   video: OutlierVideo & {
@@ -123,6 +158,7 @@ export type VideoDetail = {
   changes: { at: string; field: string; before: string | null; after: string | null; views: number | null }[];
   saves: { id: string; folderId: string | null }[];
   tracked: boolean;
+  blocked: boolean;
   niches: string[];
   /** What it would have earned at the team's own revenue per 1,000 views (only for people who see revenue). */
   earnings: { rpm: number; currency: string; estimate: number } | null;
@@ -132,10 +168,37 @@ export type ChannelDetail = {
   channel: VideoDetail["channel"];
   videos: { id: string; title: string; views: number | null; likes: number | null; comments: number | null; score: number | null; projected: number | null; publishedAt: string; durationS: number | null; kind: "long" | "short" | "live"; formats: string[]; vph: number | null }[];
   tracked: boolean;
+  blocked: boolean;
   saves: { id: string; folderId: string | null }[];
-  niches: { id: string; name: string; team: boolean; source: string; relevance: number | null; hidden: boolean }[];
+  niches: { id: string; name: string; team: boolean; source: string; relevance: number | null; hidden: boolean; verdict: Verdict | null; group: boolean; counted: boolean }[];
   similar: ChannelRowData[];
+  /** How much the team's viewers watch it (null: not in that list). */
+  audience: { views: number; videos: number; ours: number } | null;
+  /** Its videos aren't read yet (they're being read now). */
+  pending: boolean;
 };
+
+/** A channel the team's viewers also watch. */
+export type AudienceChannel = {
+  id: string;
+  title: string;
+  handle: string | null;
+  avatar: string | null;
+  subs: number | null;
+  country: string | null;
+  lang: string | null;
+  longMedian: number | null;
+  shortMedian: number | null;
+  /** Views YouTube sent the team's videos from this channel's, how many of its videos, next to how many of the team's. */
+  views: number;
+  videos: number;
+  ours: number;
+  top: string[];
+  tracked: boolean;
+  /** The team's niches it's one of the own channels of. */
+  niches: string[];
+};
+export type AudienceData = { at: string | null; note: string | null; rows: AudienceChannel[] };
 
 export type SavedItem = {
   id: string;

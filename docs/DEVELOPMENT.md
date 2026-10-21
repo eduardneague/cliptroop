@@ -270,7 +270,16 @@ phone) for a new main area.
 
 **Notifications.** The bell shows the latest 25 and patches itself from
 realtime. History (in the bell's header) loads the last 2 weeks, 40 at a
-time, through `getNotificationHistory()`.
+time, through `getNotificationHistory()`. Since 1.29.1 (0095) the bell lists
+only the ones not cleared (`loadBell()` in `lib/notification-select.ts`; a
+database without 0095 lists them all): the X on one (`clearOne`) and Clear
+all (`clearAllButQuestions`, `lib/notification-clear.ts`) set
+`notifications.cleared_at` and `is_read` with the person's own client (RLS,
+and the two columns they may update). Clear all leaves an invite or an
+ownership request still waiting for an answer, and reaches older ones the
+bell hasn't shown. History keeps cleared ones. A clear from another tab or
+device arrives over realtime (an UPDATE with `cleared_at`) and leaves the
+bell there too.
 
 **Video files.** Shorts' uploads (bucket `review-videos`) are deleted by the
 nightly clean-up once a short is posted everywhere, after the team's choice
@@ -856,15 +865,52 @@ its own channel's usual in a niche, why, and ideas made from it. No AI.
 - The page (`app/(dashboard)/outliers/page.tsx`) loads only the open tab
   (`?tab=`, `lib/view.ts`); a video's or channel's panel opens over any tab
   with `?v=` / `?c=` (history entries of their own, so Back closes them;
-  `components/context.tsx`), `?open=niche` / `?open=alerts` open those
-  dialogs. Ideas are made in the browser from the niche's insights, so
+  `components/context.tsx`), `?open=niche` / `?open=alerts` (Outlier
+  settings, the gear) / `?open=hidden` open those dialogs. The niche picker,
+  the kind switch and the tabs stick under the top bar (`data-shell="subbar"`,
+  its height in `--ol-bar` for what sticks under it). Search boxes look things
+  up on a button or Enter, never while typing. Ideas are made in the browser from the niche's insights, so
   Shuffle is instant. Start a video saves the idea and opens
   `/videos/new?idea=<save>` or `/shorts/new?idea=<save>`
   (`lib/idea-prefill.ts` fills the form).
 - Notifications: `outlier_alert` (a tracked channel's video, or a watched
   word, heading past `alert_min`; the 4 strongest each, the rest in one) and
   `outlier_digest` (Monday from 8 in the team's time zone).
+- Which channels count (1.29.0, 0094). A niche is its own channels
+  (`outlier_niche_channels.source` manual / seed / audience: always count)
+  and the channels its keywords find, which count only once they're judged
+  to fit (`verdict = 'ok'`, `rel_v` = `FIT_VERSION`) and the niche takes
+  found ones (`only_group` off). `lib/fit.ts` (pure) judges each found
+  channel on its own titles against the niche's profile (its own channels'
+  words, the titles its keywords found, the keywords): made for kids →
+  `kids`, another language (`langs`, null = the team's own, worked out from
+  its titles) → `lang`, a country it doesn't take (`regions`, `lib/regions.ts`:
+  the channel's country, else its videos' audio language, money or a
+  language spoken in one country) → `region`, too little about the topic →
+  `topic`. A channel is judged only once its uploads were read (or 8 videos
+  are stored); a word only one channel uses isn't part of the niche. The
+  collector's fit step (`fitNiche`) checks again when the niche's key
+  (keywords, choices, own channels) or `FIT_VERSION` changes; bump it when
+  `fit.ts` changes how channels are judged. Search hits count only when the
+  video fits (`outlier_niche_hits.ok`). Every page reads through
+  `outlier_members` / `outlier_scope`, so the For you numbers, Search and the
+  insights all agree.
+- Explore niches start from well-known channels (`EXPLORE[].seeds`, read by
+  handle) with their own budget (`OUTLIERS_EXPLORE_UNITS`,
+  `OUTLIERS_EXPLORE_SEARCHES`; buckets `xunits` / `xsearch`); opening one
+  that's still filling starts it (`exploreNow`, once every 4 minutes).
+- Hidden channels (`outlier_blocked`, anyone on the team): out of every list,
+  alert and insight; their own page still opens. The viewers list
+  (`outlier_audience`, the collector's audience step once a day): channels
+  whose videos YouTube sends viewers from (`analytics_breakdowns`
+  `suggested_by`, and `RELATED_VIDEO` for the team's best 15 videos), with a
+  note when it can't (`no-youtube`, `no-analytics`, `nothing-yet`).
+- Channels are found by name, @handle or link (`findChannels`: the collected
+  ones, then YouTube by handle, a YouTube channel search only on request,
+  one of the person's fresh searches). A channel opened that was read only
+  shallowly is read deep (150 long videos) in the background.
 - Tests: `tests/outliers-engine.test.ts`, `tests/outliers-collector.test.ts`,
+  `tests/outliers-fit.test.ts`, `supabase/tests/outliers-fit.test.sql`,
   `scripts/e2e/outliers.e2e.ts` (a real database). The mock
   (`scripts/dev-mock/outliers.cjs`) serves a sample made by
   `npx tsx scripts/dev-mock/make-outliers.ts`; `MOCK_OUTLIERS_EMPTY=1`,

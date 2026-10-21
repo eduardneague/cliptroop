@@ -1,4 +1,4 @@
-"use client";
+GIT"use client";
 
 import { APP_NAME } from "@/lib/brand";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

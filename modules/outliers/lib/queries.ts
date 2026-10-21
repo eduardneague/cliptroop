@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/avatar";
 import { forKind, mergeFormats, exampleIds, type Insights, type KindInsights } from "./insights";
 import type { TemplateStat } from "./skeleton";
-import type { ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, VideoDetail, VideoPage } from "./types";
+import type { AudienceData, BlockedChannel, ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, Verdict, VideoDetail, VideoPage } from "./types";
 
 /*
  * Reading Outliers for the pages (1.27.0), as the person: the database
@@ -63,8 +63,20 @@ function toNiche(r: Row, explore: boolean): NicheInfo {
     phase: str(r.phase),
     explore,
     slug: str(r.slug),
+    langs: Array.isArray(r.langs) ? (r.langs as string[]) : null,
+    regions: Array.isArray(r.regions) ? (r.regions as string[]) : [],
+    onlyGroup: r.only_group === true,
+    kids: r.kids === true,
+    groupN: num(r.group_n) ?? 0,
+    foundN: num(r.found_n) ?? 0,
+    outN: num(r.out_n) ?? 0,
+    teamLang: str(r.team_lang),
+    fitV: num(r.fit_v) ?? 0,
   };
 }
+
+const VERDICTS = new Set(["ok", "topic", "lang", "region", "kids"]);
+const verdictOf = (v: unknown): Verdict | null => (typeof v === "string" && VERDICTS.has(v) ? (v as Verdict) : null);
 
 const DEFAULT_SETTINGS: OutlierSettings = { alertMin: 5, alertTo: "managers", watchWords: [], digest: true };
 
@@ -83,6 +95,8 @@ export const getOverview = cache(async function getOverview(teamId: string): Pro
     unsorted: num(o.unsorted) ?? 0,
     saves: ((o.saves as unknown[][] | undefined) ?? []).filter((x) => Array.isArray(x) && x[0] && x[2]).map((x) => ({ ref: String(x[0]), folderId: str(x[1]), id: String(x[2]) })),
     settings: s ? { alertMin: num(s.alert_min) ?? 5, alertTo: (s.alert_to as OutlierSettings["alertTo"]) ?? "managers", watchWords: (s.watch_words as string[] | null) ?? [], digest: s.digest !== false } : DEFAULT_SETTINGS,
+    blocked: ((o.blocked as Row[] | undefined) ?? []).map((b): BlockedChannel => ({ id: String(b.id), title: String(b.title ?? ""), avatar: str(b.avatar), at: str(b.at) })),
+    audienceN: num(o.audience_n) ?? 0,
   };
 });
 
@@ -211,6 +225,13 @@ function toChannelRow(r: Row): ChannelRowData {
     source: str(r.source),
     relevance: num(r.relevance),
     hidden: r.hidden === true,
+    verdict: verdictOf(r.verdict),
+    group: r.grp === true,
+    counted: r.counted === true,
+    blocked: r.blocked === true,
+    pending: r.pending === true,
+    mainLang: str(r.main_lang),
+    region: str(r.region),
   };
 }
 
@@ -268,6 +289,7 @@ export async function getVideoDetail(teamId: string, id: string): Promise<VideoD
     changes: ((d.changes as Row[] | undefined) ?? []).map((ch) => ({ at: String(ch.at), field: String(ch.field), before: str(ch.before), after: str(ch.after), views: num(ch.views) })),
     saves: ((d.saves as Row[] | undefined) ?? []).map((s) => ({ id: String(s.id), folderId: str(s.folder_id) })),
     tracked: d.tracked === true,
+    blocked: d.blocked === true,
     niches: (d.niches as string[] | undefined) ?? [],
     earnings: rpm && base.views !== null ? { ...rpm, estimate: Math.round((base.views / 1000) * rpm.rpm) } : null,
   };
@@ -279,11 +301,22 @@ export async function getChannelDetail(teamId: string, id: string): Promise<Chan
   if (error || !data) return null;
   const d = data as Row;
   const c = (d.channel ?? {}) as Row;
-  const niches = ((d.niches as Row[] | undefined) ?? []).map((n) => ({ id: String(n.id), name: String(n.name), team: n.team === true, source: String(n.source ?? ""), relevance: num(n.relevance), hidden: n.hidden === true }));
+  const niches = ((d.niches as Row[] | undefined) ?? []).map((n) => ({
+    id: String(n.id),
+    name: String(n.name),
+    team: n.team === true,
+    source: String(n.source ?? ""),
+    relevance: num(n.relevance),
+    hidden: n.hidden === true,
+    verdict: verdictOf(n.verdict),
+    group: n.grp === true || ["manual", "seed", "audience"].includes(String(n.source ?? "")),
+    // Before 0094 there's no "counted": what 1.27 counted.
+    counted: n.counted === undefined ? n.hidden !== true : n.counted === true,
+  }));
   const videos = ((d.videos as Row[] | undefined) ?? []).map((v) => ({ id: String(v.id), title: String(v.title ?? ""), views: num(v.views), likes: num(v.likes), comments: num(v.comments), score: num(v.score), projected: num(v.projected), publishedAt: String(v.published_at), durationS: num(v.duration_s), kind: (v.kind as "long" | "short" | "live") ?? "long", formats: (v.formats as string[] | null) ?? [], vph: num(v.vph) }));
   // Channels like it: the same niche, a similar size, the most outliers first.
   let similar: ChannelRowData[] = [];
-  const home = niches.find((n) => !n.hidden) ?? null;
+  const home = niches.find((n) => n.counted && n.team) ?? niches.find((n) => n.counted) ?? null;
   if (home) {
     const subs = num(c.subscribers);
     const f = subs ? { min_subs: Math.round(subs / 4), max_subs: Math.round(subs * 4) } : {};
@@ -294,9 +327,41 @@ export async function getChannelDetail(teamId: string, id: string): Promise<Chan
     channel: { ...toChannelRow({ ...c, stored: videos.length, outliers: videos.filter((v) => (v.score ?? 0) >= 3).length, best: Math.max(0, ...videos.map((v) => v.score ?? 0)) || null }), description: str(c.description), keywords: str(c.keywords), longN: num(c.long_n) ?? 0, shortN: num(c.short_n) ?? 0 },
     videos,
     tracked: d.tracked === true,
+    blocked: d.blocked === true,
     saves: ((d.saves as Row[] | undefined) ?? []).map((s) => ({ id: String(s.id), folderId: str(s.folder_id) })),
     niches,
     similar,
+    audience: d.audience ? { views: num((d.audience as Row).views) ?? 0, videos: num((d.audience as Row).videos) ?? 0, ours: num((d.audience as Row).ours) ?? 0 } : null,
+    pending: !c.scanned_at,
+  };
+}
+
+/** The channels the team's viewers also watch (and when that was worked out). */
+export async function getAudience(teamId: string): Promise<AudienceData> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("outliers_audience", { p_team: teamId, p_limit: 150 });
+  if (error || !data) return { at: null, note: error ? "needs-update" : null, rows: [] };
+  const d = data as Row;
+  return {
+    at: str(d.at),
+    note: str(d.note),
+    rows: ((d.rows as Row[] | undefined) ?? []).map((r) => ({
+      id: String(r.id),
+      title: String(r.title ?? ""),
+      handle: str(r.handle),
+      avatar: str(r.avatar),
+      subs: num(r.subs),
+      country: str(r.country),
+      lang: str(r.lang),
+      longMedian: num(r.long_median),
+      shortMedian: num(r.short_median),
+      views: num(r.views) ?? 0,
+      videos: num(r.videos) ?? 0,
+      ours: num(r.ours) ?? 0,
+      top: (r.top as string[] | null) ?? [],
+      tracked: r.tracked === true,
+      niches: (r.niches as string[] | null) ?? [],
+    })),
   };
 }
 

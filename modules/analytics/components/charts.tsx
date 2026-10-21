@@ -28,6 +28,12 @@ export function fmtCompact(n: number | null | undefined) {
 }
 
 /** Clean axis maximum and ticks (0, 1K, 2K…). */
+/** The last point with a number (-1: none). Days after it have no data yet. */
+function lastNum(xs: readonly (number | null | undefined)[]): number {
+  for (let i = xs.length - 1; i >= 0; i--) if (xs[i] !== null && xs[i] !== undefined && Number.isFinite(xs[i])) return i;
+  return -1;
+}
+
 function niceScale(max: number, count = 4) {
   if (!(max > 0)) return { max: 1, ticks: [0, 1] };
   const raw = max / count;
@@ -362,6 +368,8 @@ export function LineChart({
   const [hover, setHover] = useState<number | null>(null);
   const gradId = useId().replace(/:/g, "");
   const n = labels.length;
+  // Where each line's numbers end (1.29.0): the points after are days with no data yet, not zeros.
+  const lastOf = series.map((s) => lastNum(s.values));
   const all = [...series.flatMap((s) => s.values), ...(previous?.values ?? [])].filter((v): v is number => v !== null);
   const { max, ticks } = niceScale(Math.max(0, ...all));
   const left = Math.max(32, String(format(max)).length * 7 + 10);
@@ -544,14 +552,18 @@ export function LineChart({
       {hover !== null && width > 0 && (
         <Tooltip x={x(hover)} y={top} width={width}>
           <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
-          {series.map((s) => (
-            <div key={s.key} className="flex items-center gap-2 py-0.5">
-              <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
-              <span className="font-bold tabular-nums text-ink">{format(s.values[hover])}</span>
-              <span className="text-ink-soft truncate">{s.label}</span>
-              {s.est?.[hover] && <span className="ml-auto text-[10px] font-semibold text-ink-faint">estimated</span>}
-            </div>
-          ))}
+          {series.every((s, k) => s.values[hover] === null && hover > lastOf[k]) ? (
+            <div className="py-0.5 text-ink-soft">No data yet</div>
+          ) : (
+            series.map((s, k) => (
+              <div key={s.key} className="flex items-center gap-2 py-0.5">
+                <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0" style={{ background: s.color }} />
+                {s.values[hover] === null && hover > lastOf[k] ? <span className="text-ink-faint">No data yet</span> : <span className="font-bold tabular-nums text-ink">{format(s.values[hover])}</span>}
+                <span className="text-ink-soft truncate">{s.label}</span>
+                {s.est?.[hover] && <span className="ml-auto text-[10px] font-semibold text-ink-faint">estimated</span>}
+              </div>
+            ))
+          )}
           {previous && (
             <div className="flex items-center gap-2 py-0.5">
               <span className="w-3 h-[2px] rounded-[1px] flex-shrink-0 bg-ink-faint/60" />
@@ -590,7 +602,8 @@ export function StackedColumns({
   tips?: string[];
   /** The tooltip's "Total" line (off for shares, which always make 100%). */
   showTotal?: boolean;
-  series: { key: string; label: string; color: string; values: number[] }[];
+  /** Null: no number for that column yet (1.29.0: it says "No data yet" instead of showing 0). */
+  series: { key: string; label: string; color: string; values: (number | null)[] }[];
   format?: (n: number | null) => string;
   height?: number;
   ariaLabel: string;
@@ -601,6 +614,9 @@ export function StackedColumns({
   const [hover, setHover] = useState<number | null>(null);
   const n = labels.length;
   const totals = labels.map((_, i) => series.reduce((a, s) => a + (s.values[i] ?? 0), 0));
+  // Columns past every series' last number: days with no data yet.
+  const last = Math.max(-1, ...series.map((s) => lastNum(s.values)));
+  const empty = (i: number) => i > last && series.every((s) => s.values[i] === null || s.values[i] === undefined);
   const { max, ticks } = niceScale(Math.max(1, ...totals));
   const left = Math.max(28, String(format(max)).length * 7 + 10);
   const top = 10;
@@ -641,7 +657,7 @@ export function StackedColumns({
                 key={i}
                 tabIndex={0}
                 role="img"
-                aria-label={`${tips?.[i] ?? l}: ${series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
+                aria-label={`${tips?.[i] ?? l}: ${empty(i) ? "no data yet" : series.map((s) => `${s.label} ${format(s.values[i] ?? 0)}`).join(", ")}`}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover((h) => (h === i ? null : h))}
                 onFocus={() => setHover(i)}
@@ -683,14 +699,18 @@ export function StackedColumns({
       {hover !== null && width > 0 && (
         <Tooltip x={left + slot * hover + slot / 2} y={top} width={width}>
           <div className="text-[11px] font-semibold text-ink-faint mb-1">{tips?.[hover] ?? labels[hover]}</div>
-          {series.map((s) => (
-            <div key={s.key} className="flex items-center gap-2 py-0.5">
-              <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: s.color }} />
-              <span className="font-bold tabular-nums text-ink">{format(s.values[hover] ?? 0)}</span>
-              <span className="text-ink-soft">{s.label}</span>
-            </div>
-          ))}
-          {showTotal && series.length > 1 && <div className="mt-1 pt-1 border-t border-line/10 text-ink-soft">Total <b className="text-ink tabular-nums">{format(totals[hover])}</b></div>}
+          {empty(hover) ? (
+            <div className="py-0.5 text-ink-soft">No data yet</div>
+          ) : (
+            series.map((s) => (
+              <div key={s.key} className="flex items-center gap-2 py-0.5">
+                <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: s.color }} />
+                {(s.values[hover] ?? null) === null && hover > lastNum(s.values) ? <span className="text-ink-faint">No data yet</span> : <span className="font-bold tabular-nums text-ink">{format(s.values[hover] ?? 0)}</span>}
+                <span className="text-ink-soft">{s.label}</span>
+              </div>
+            ))
+          )}
+          {showTotal && series.length > 1 && !empty(hover) && <div className="mt-1 pt-1 border-t border-line/10 text-ink-soft">Total <b className="text-ink tabular-nums">{format(totals[hover])}</b></div>}
           {onPick && <div className="mt-1 pt-1 border-t border-line/10 text-[10.5px] text-ink-faint">{pickHint}</div>}
         </Tooltip>
       )}

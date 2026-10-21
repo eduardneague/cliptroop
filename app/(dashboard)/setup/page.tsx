@@ -150,6 +150,8 @@ export default async function SetupPage() {
     { name: "OUTLIERS_DAILY_UNITS", what: "Outliers: how much of YouTube's 10,000 daily units it may use (default 4000, leaving the rest for posting and analytics).", set: env("OUTLIERS_DAILY_UNITS"), need: "optional" },
     { name: "OUTLIERS_STATS_DAYS", what: "Outliers: days of views over time to keep (default 30). Up to 1095 only after accepting YouTube's derived metrics amendment (YouTube API Services form → Analytics & Reporting); titles and names are always refreshed or deleted within 30 days.", set: env("OUTLIERS_STATS_DAYS"), need: "optional" },
     { name: "OUTLIERS_EXPLORE", what: "Outliers: 0 turns off the built-in Explore niches (and the YouTube units they use).", set: env("OUTLIERS_EXPLORE"), need: "optional" },
+    { name: "OUTLIERS_EXPLORE_UNITS", what: "Outliers (1.29.0): of its daily units, the ones kept for the Explore niches (default 1200, at most half). They fill from well-known channels, so a team's collecting can't use them up.", set: env("OUTLIERS_EXPLORE_UNITS"), need: "optional" },
+    { name: "OUTLIERS_EXPLORE_SEARCHES", what: "Outliers (1.29.0): of the collector's daily YouTube searches, the ones kept for the Explore niches (default 6, at most half).", set: env("OUTLIERS_EXPLORE_SEARCHES"), need: "optional" },
     { name: "SUPABASE_PLAN", what: "pro once this Supabase project is on the Pro plan: the developer's Usage page then measures against Pro's 8 GB database and 100 GB of files (else Free's 500 MB and 1 GB).", set: env("SUPABASE_PLAN"), need: "optional" },
   ];
 

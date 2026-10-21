@@ -142,7 +142,6 @@ export function SavedTab({ data }: { data: SavedData }) {
       <nav aria-label="Folders" className="mb-5 lg:mb-0">
         <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 lg:sticky lg:top-[4.5rem]">
           {folderBtn(null, "Everything", null)}
-          {folderBtn("unsorted", "No folder", null)}
           {saves.folders.map((f) => folderBtn(f.id, f.name, f.count, f.color))}
           {naming === "new" ? (
             <form
@@ -174,7 +173,7 @@ export function SavedTab({ data }: { data: SavedData }) {
             ) : (
               <h2 className="font-display text-[22px] font-semibold leading-tight truncate flex items-center gap-2">
                 {current && <span className="w-3 h-3 rounded-[3px]" style={{ background: folderColor(current.color) }} aria-hidden />}
-                {current ? current.name : folder === "unsorted" ? "No folder" : "Everything saved"}
+                {current ? current.name : folder === "unsorted" ? "Not in a folder" : "Everything saved"}
               </h2>
             )}
             <p className="text-[12.5px] text-ink-faint mt-0.5">{folder ? `${items.length} saved here` : `${items.length} saved by the team${total ? ` · ${total} in folders` : ""}`}</p>
@@ -337,8 +336,8 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
           </button>
           <AnchoredMenu open={menu} onClose={() => setMenu(false)} anchor={anchor} width={240} label="Saved item">
             <div className="p-1.5">
-              <p className="px-3 pt-1 pb-1 text-[11.5px] font-semibold text-ink-faint">Move to</p>
-              {[{ id: null as string | null, name: "No folder", color: "" }, ...folders].map((f) => (
+              {folders.length > 0 && <p className="px-3 pt-1 pb-1 text-[11.5px] font-semibold text-ink-faint">Move to</p>}
+              {folders.map((f) => (
                 <button
                   key={f.id ?? "none"}
                   type="button"
@@ -354,6 +353,20 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
                   {item.folderId === f.id && <CheckIcon className="w-3.5 h-3.5 text-amber" />}
                 </button>
               ))}
+              {item.folderId && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(false);
+                    onMove(null);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-left text-[13px] hover:bg-surface-2"
+                >
+                  <span className="w-2.5" />
+                  <span className="flex-1 truncate">Take out of {folderName ?? "its folder"}</span>
+                </button>
+              )}
               <button
                 type="button"
                 role="menuitem"

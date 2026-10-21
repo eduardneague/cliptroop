@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { SearchIcon, CloseIcon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
@@ -19,10 +19,12 @@ import { useShellNav } from "../shell-nav";
 import { VideoGrid, VideoRow, VideoTable } from "../video-card";
 
 /*
- * Search (1.27.0): everything collected, at once, by words and every
- * filter; sorted any way; as cards or a table. "Search YouTube" goes out
- * for what isn't collected yet (a few searches a day each, YouTube's
- * limit), and what it finds stays for everyone on the team.
+ * Search (1.27.0): everything collected, by words and every filter; sorted
+ * any way; as cards or a table. Words are looked up when you press Search
+ * or Enter (1.29.0: nothing loads while you type). "Search YouTube" goes
+ * out for what isn't collected yet (a few searches a day each, YouTube's
+ * limit), in the niche's language, and what it finds stays for everyone on
+ * the team.
  */
 
 type Chip = { key: string; label: string; clear: Partial<Filters> };
@@ -31,6 +33,7 @@ function chipsOf(f: Filters): Chip[] {
   const out: Chip[] = [];
   if (f.scope === "tracked") out.push({ key: "scope", label: "Tracked channels", clear: { scope: undefined } });
   if (f.scope === "all") out.push({ key: "scope", label: "Every niche", clear: { scope: undefined } });
+  if (f.scope === "audience") out.push({ key: "scope", label: "Channels your viewers watch", clear: { scope: undefined } });
   if (f.minScore !== undefined || f.maxScore !== undefined)
     out.push({ key: "score", label: f.maxScore !== undefined ? `${f.minScore !== undefined ? multText(f.minScore) : "0×"}–${multText(f.maxScore)}` : `${multText(f.minScore)}+ usual`, clear: { minScore: undefined, maxScore: undefined } });
   if (f.days !== undefined) out.push({ key: "days", label: DAY_OPTIONS.find((d) => d.days === f.days)?.label ?? `Last ${f.days} days`, clear: { days: undefined } });
@@ -79,7 +82,6 @@ export function SearchTab({ data }: { data: SearchData }) {
   const [live, setLive] = useState<{ q: string; rows: OutlierVideo[]; fresh: boolean } | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
   const [left, setLeft] = useState<{ person: number; team: number } | null>(null);
-  const timer = useRef<number | null>(null);
   const kind = ctx.kind;
 
   // The server's answer for the address wins (another niche, Back, a link).
@@ -106,12 +108,9 @@ export function SearchTab({ data }: { data: SearchData }) {
     setSort(nextSort);
     nav.go({ tab: "search", params: paramsOf(c, nextSort) }, { replace: true });
   };
-  const typed = (text: string) => {
-    setQ(text);
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => apply({ ...f, q: text.trim() || undefined }), 380);
-  };
-  useEffect(() => () => void (timer.current && window.clearTimeout(timer.current)), []);
+  const submit = () => apply({ ...f, q: q.trim() || undefined });
+  // The niche's language for YouTube (its first one, or the team's own when it follows the team).
+  const nicheLang = ctx.niche ? (ctx.niche.langs === null ? ctx.niche.teamLang : ctx.niche.langs[0] ?? null) ?? ctx.niche.lang : null;
 
   const showMore = () =>
     startMore(async () => {
@@ -133,7 +132,7 @@ export function SearchTab({ data }: { data: SearchData }) {
     if (!words || liveBusy) return;
     setLiveBusy(true);
     try {
-      const r = await searchYouTube(ctx.teamId, words, { kind, days: f.days ?? null, lang: f.langs?.[0] ?? null, region: ctx.niche?.region ?? null });
+      const r = await searchYouTube(ctx.teamId, words, { kind, days: f.days ?? null, lang: f.langs?.[0] ?? nicheLang ?? null, region: ctx.niche?.region ?? null });
       if (r.error !== undefined) return toast.error(r.error);
       setLeft(r.left);
       const found = r.ids.length ? await videosByIds(ctx.teamId, r.ids) : null;
@@ -164,7 +163,7 @@ export function SearchTab({ data }: { data: SearchData }) {
   return (
     <div className="lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)] 2xl:grid-cols-[19rem_minmax(0,1fr)] lg:gap-8">
       <aside className="hidden lg:block" aria-label="Filters">
-        <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto styled-scroll pr-2 -mr-2 pb-6">
+        <div className="sticky top-[calc(3.5rem+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-3.5rem-var(--ol-bar,104px)-1.5rem)] overflow-y-auto styled-scroll pr-2 -mr-2 pb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[14px] font-semibold">Filters{n ? ` · ${n}` : ""}</h2>
             {n > 0 && (
@@ -179,28 +178,42 @@ export function SearchTab({ data }: { data: SearchData }) {
 
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="relative flex-1 min-w-[min(100%,16rem)]">
-            <span className="sr-only">Search videos</span>
-            <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-ink-faint pointer-events-none" />
-            <input
-              value={q}
-              onChange={(e) => typed(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (timer.current) window.clearTimeout(timer.current);
-                  apply({ ...f, q: q.trim() || undefined });
-                }
-              }}
-              placeholder={`Search ${ctx.niche ? ctx.niche.name : "every niche"}: titles, tags, channels`}
-              className="w-full rounded-xl border border-line/15 bg-surface pl-11 pr-10 h-11 text-[14.5px] outline-none focus:ring-2 focus:ring-amber"
-              enterKeyHint="search"
-            />
-            {q && (
-              <button type="button" onClick={() => apply({ ...f, q: undefined })} aria-label="Clear the search" className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
-                <CloseIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </label>
+          <form
+            role="search"
+            className="flex items-center gap-2 flex-1 min-w-[min(100%,18rem)]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <label className="relative flex-1 min-w-0">
+              <span className="sr-only">Search videos</span>
+              <SearchIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-ink-faint pointer-events-none" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={`Search ${ctx.niche ? ctx.niche.name : "every niche"}: titles, tags, channels`}
+                className="w-full rounded-xl border border-line/15 bg-surface pl-11 pr-10 h-11 text-[14.5px] outline-none focus:ring-2 focus:ring-amber"
+                enterKeyHint="search"
+              />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    if (f.q) apply({ ...f, q: undefined });
+                  }}
+                  aria-label="Clear the search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2"
+                >
+                  <CloseIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </label>
+            <button type="submit" className={`${BTN_MAIN} h-11 px-4 rounded-xl`}>
+              Search
+            </button>
+          </form>
           <button type="button" onClick={() => setSheet(true)} className={`lg:hidden ${BTN} h-11 rounded-xl ${n ? "!border-amber/50 !bg-amber/10 !text-ink" : ""}`}>
             Filters{n ? ` · ${n}` : ""}
           </button>

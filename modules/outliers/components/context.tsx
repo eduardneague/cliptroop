@@ -3,7 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLatest } from "@/lib/hooks/use-scroll-lock";
-import type { Folder, Kind, NicheInfo, SaveRef } from "../lib/types";
+import { useToast } from "@/components/ui/toast-provider";
+import { hideChannel, unhideChannel } from "@/app/(dashboard)/outliers/actions";
+import type { BlockedChannel, Folder, Kind, NicheInfo, OutlierVideo, SaveRef } from "../lib/types";
 
 /*
  * What every part of the Outliers page shares (1.27.0): the team, the niche
@@ -22,8 +24,19 @@ import type { Folder, Kind, NicheInfo, SaveRef } from "../lib/types";
 export type Panel = { type: "video" | "channel"; id: string };
 
 export type OutliersNav = {
-  openVideo: (id: string) => void;
+  /** `preview`: what the card already knows (the panel shows it at once while the rest loads). */
+  openVideo: (id: string, preview?: OutlierVideo) => void;
   openChannel: (id: string) => void;
+};
+
+/** What a card knew about a video when it was opened (the panel's first picture). */
+export const previews = new Map<string, OutlierVideo>();
+
+/** Channels the team hid (1.29.0): they leave every list at once. */
+export type OutliersBlocked = {
+  blocked: Map<string, BlockedChannel>;
+  hide: (id: string, title: string, avatar?: string | null) => void;
+  unhide: (id: string) => void;
 };
 
 export type OutliersSaves = {
@@ -62,6 +75,14 @@ export type OutliersCtx = OutliersNav &
 const Ctx = createContext<OutliersCtx | null>(null);
 const NavCtx = createContext<OutliersNav | null>(null);
 const SavesCtx = createContext<OutliersSaves | null>(null);
+const BlockedCtx = createContext<OutliersBlocked | null>(null);
+
+/** Hidden channels (cards leave when their channel is hidden). */
+export function useOutliersBlocked(): OutliersBlocked {
+  const c = useContext(BlockedCtx);
+  if (!c) throw new Error("useOutliersBlocked outside OutliersProvider");
+  return c;
+}
 
 export function useOutliers(): OutliersCtx {
   const c = useContext(Ctx);
@@ -119,15 +140,20 @@ export function OutliersProvider({
   folders: initialFolders,
   tracked: initialTracked,
   saves: initialSaves,
+  blocked: initialBlocked,
   ...base
 }: Base & {
   children: React.ReactNode;
   folders: Folder[];
   tracked: string[];
   saves: SaveRef[];
+  blocked: BlockedChannel[];
   initialVideo: string | null;
   initialChannel: string | null;
 }) {
+  const toast = useToast();
+  const [blocked, setBlocked] = useState<Map<string, BlockedChannel>>(() => new Map(initialBlocked.map((b) => [b.id, b])));
+  useEffect(() => setBlocked(new Map(initialBlocked.map((b) => [b.id, b]))), [initialBlocked]);
   const [panel, setPanel] = useState<Panel | null>(initialVideo ? { type: "video", id: initialVideo } : initialChannel ? { type: "channel", id: initialChannel } : null);
   const [trail, setTrail] = useState<Panel[]>([]);
   const [folders, setFolders] = useState<Folder[]>(initialFolders);
@@ -162,7 +188,16 @@ export function OutliersProvider({
     }
     setPanel(next);
   }, [now]);
-  const nav = useMemo<OutliersNav>(() => ({ openVideo: (id) => open({ type: "video", id }), openChannel: (id) => open({ type: "channel", id }) }), [open]);
+  const nav = useMemo<OutliersNav>(
+    () => ({
+      openVideo: (id, preview) => {
+        if (preview) previews.set(id, preview);
+        open({ type: "video", id });
+      },
+      openChannel: (id) => open({ type: "channel", id }),
+    }),
+    [open]
+  );
   const panelBack = useCallback(() => {
     const t = now.current.trail;
     const prev = t[t.length - 1];
@@ -212,6 +247,50 @@ export function OutliersProvider({
 
   const { teamId, teamName, nicheId, niche, niches, explore, kind, canManage, isMaster } = base;
   const savesValue = useMemo<OutliersSaves>(() => ({ teamId, folders, setFolders, saves, addSave, dropSave }), [teamId, folders, saves, addSave, dropSave]);
+
+  const hide = useCallback(
+    (id: string, title: string, avatar?: string | null) => {
+      setBlocked((m) => new Map(m).set(id, { id, title, avatar: avatar ?? null, at: new Date().toISOString() }));
+      hideChannel(teamId, id, title)
+        .then((r) => {
+          if (r.error !== undefined) {
+            setBlocked((m) => {
+              const n = new Map(m);
+              n.delete(id);
+              return n;
+            });
+            toast.error(r.error);
+          } else
+            toast.success(`${title || "That channel"} is hidden. It won't show anywhere in Outliers.`, {
+              action: { label: "Undo", onClick: () => unhideRef.current(id) },
+            });
+        })
+        .catch(() => toast.error("Couldn't hide it. Check your connection and try again."));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [teamId, toast]
+  );
+  const unhide = useCallback(
+    (id: string) => {
+      const before = blocked.get(id);
+      setBlocked((m) => {
+        const n = new Map(m);
+        n.delete(id);
+        return n;
+      });
+      unhideChannel(teamId, id)
+        .then((r) => {
+          if (r.error !== undefined) {
+            if (before) setBlocked((m) => new Map(m).set(id, before));
+            toast.error(r.error);
+          }
+        })
+        .catch(() => toast.error("Couldn't bring it back. Try again."));
+    },
+    [teamId, toast, blocked]
+  );
+  const unhideRef = useLatest(unhide);
+  const blockedValue = useMemo<OutliersBlocked>(() => ({ blocked, hide, unhide }), [blocked, hide, unhide]);
   const value = useMemo<OutliersCtx>(
     () => ({
       ...nav,
@@ -239,7 +318,9 @@ export function OutliersProvider({
   return (
     <NavCtx.Provider value={nav}>
       <SavesCtx.Provider value={savesValue}>
-        <Ctx.Provider value={value}>{children}</Ctx.Provider>
+        <BlockedCtx.Provider value={blockedValue}>
+          <Ctx.Provider value={value}>{children}</Ctx.Provider>
+        </BlockedCtx.Provider>
       </SavesCtx.Provider>
     </NavCtx.Provider>
   );

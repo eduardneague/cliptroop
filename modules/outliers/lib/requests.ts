@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readBudgets } from "./budget";
 import { addChannels, ensureChannels, ingestVideos, requestCtx, scanChannel, type Niche } from "./collector";
-import { channelRow, parseChannelRef, type ChannelRef } from "./ingest";
+import { CHANNEL_ID, channelRow, parseChannelRef, type ChannelRef } from "./ingest";
 import { projectedScore } from "./scores";
 import { outliersAccess, QuotaError, spender, YouTube, YtError, quotaDay } from "./youtube";
 
@@ -176,4 +176,133 @@ export async function refreshVideo(teamId: string, id: string): Promise<boolean>
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 1.29.0: channels on demand, finding channels by name, a niche's own channels
+// ---------------------------------------------------------------------------
+
+/**
+ * A channel someone just tracked, added to a niche or opened: its details
+ * and its latest videos right away (so it shows with scores, not "reading"),
+ * unless it was read in the last `freshHours`. `deep`: 150 long videos.
+ */
+export async function prepareChannel(teamId: string, channelId: string, o: { deep?: boolean; freshHours?: number } = {}): Promise<boolean> {
+  if (!CHANNEL_ID.test(channelId)) return false;
+  const admin = createAdminClient();
+  let { data: c, error } = await admin.from("yt_channels").select("id, scanned_at, scan_depth").eq("id", channelId).maybeSingle();
+  // Before 0094: no scan_depth.
+  if (error) ({ data: c } = await admin.from("yt_channels").select("id, scanned_at").eq("id", channelId).maybeSingle());
+  const row = c as { scanned_at: string | null; scan_depth?: number | null } | null;
+  const fresh = row?.scanned_at;
+  // Read lately, and deep enough for what's asked (1.29.0: a channel read shallow once was never read deep after).
+  if (fresh && Date.parse(fresh) > Date.now() - (o.freshHours ?? 6) * 3_600_000 && (!o.deep || row?.scan_depth === undefined || (row.scan_depth ?? 0) >= 3)) return true;
+  const access = await outliersAccess(teamId);
+  if (!access) return false;
+  const b = readBudgets();
+  const yt = new YouTube(access, spender(admin, { search: 0, units: b.units, stats: b.stats }, { search: 0, units: o.deep ? 14 : 8, stats: 0 }));
+  const ctx = requestCtx(admin, yt, teamId, [], 25_000);
+  try {
+    const known = await ensureChannels(ctx, [channelId]);
+    if (!known.has(channelId)) return false;
+    await scanChannel(ctx, channelId, ["long", "short"], [], { deep: o.deep });
+    return true;
+  } catch (e) {
+    if (e instanceof QuotaError || e instanceof YtError) return false;
+    throw e;
+  }
+}
+
+export type FoundChannel = { id: string; title: string; handle: string | null; avatar: string | null; subs: number | null; country: string | null; stored: boolean };
+
+const toFound = (r: { id: string; title: string; handle: string | null; avatar_url: string | null; subscribers: number | null; country: string | null }, stored: boolean): FoundChannel => ({ id: r.id, title: r.title, handle: r.handle, avatar: r.avatar_url, subs: r.subscribers, country: r.country, stored });
+
+/**
+ * Channels by name, an @handle, a link or an id: the ones already collected
+ * (anyone's: it's public data) first, then YouTube by handle (one unit; a
+ * name like "linus tech tips" is tried as @linustechtips). `youtube`: also a
+ * YouTube search of channels (one of the person's daily searches).
+ */
+export async function findChannels(teamId: string, userId: string, qRaw: string, o: { youtube?: boolean } = {}): Promise<{ rows: FoundChannel[]; searched: boolean; left?: { person: number; team: number } } | { error: string }> {
+  const q = qRaw.trim().replace(/\s+/g, " ").slice(0, 100);
+  if (q.length < 2) return { error: "Type at least two letters." };
+  const admin = createAdminClient();
+  const out = new Map<string, FoundChannel>();
+  const ref = parseChannelRef(q);
+  const like = `%${q.replace(/^@/, "").replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const [{ data: byTitle }, { data: byHandle }] = await Promise.all([
+    admin.from("yt_channels").select("id, title, handle, avatar_url, subscribers, country").ilike("title", like).order("subscribers", { ascending: false, nullsFirst: false }).limit(12),
+    admin.from("yt_channels").select("id, title, handle, avatar_url, subscribers, country").ilike("handle", like).order("subscribers", { ascending: false, nullsFirst: false }).limit(8),
+  ]);
+  for (const r of [...((byTitle ?? []) as Parameters<typeof toFound>[0][]), ...((byHandle ?? []) as Parameters<typeof toFound>[0][])]) out.set(r.id, toFound(r, true));
+  const access = await outliersAccess(teamId);
+  if (!access) return { rows: [...out.values()], searched: false };
+  const b = readBudgets();
+  const wantSearch = !!o.youtube;
+  let left: { person: number; team: number } | undefined;
+  if (wantSearch) {
+    left = await searchesLeft(admin, teamId, userId);
+    if (left.person <= 0 || left.team <= 0) return { error: "Today's fresh YouTube searches are used up. Channels already collected still show, and links or @handles still work." };
+  }
+  const yt = new YouTube(access, spender(admin, { search: b.searches, units: b.units, stats: b.stats }, { search: wantSearch ? 1 : 0, units: 6, stats: 0 }));
+  try {
+    // A link, an @handle or an id: that channel. A name: tried as a handle too.
+    const handle = ref?.kind === "handle" ? ref.handle : /^[\p{L}\p{N} ._-]{3,40}$/u.test(q) ? `@${q.replace(/[\s]+/g, "")}` : null;
+    const looked = ref ? await (ref.kind === "id" ? yt.channels([ref.id]).then((x) => x[0] ?? null) : ref.kind === "handle" ? yt.channelByHandle(ref.handle) : yt.videos([ref.id]).then(async (v) => (v[0]?.snippet?.channelId ? (await yt.channels([v[0].snippet.channelId]))[0] ?? null : null))) : handle ? await yt.channelByHandle(handle) : null;
+    const rows = [looked].map((x) => (x ? channelRow(x) : null)).filter((x): x is NonNullable<typeof x> => !!x);
+    if (wantSearch) {
+      const ids = await yt.searchChannels(q, 10);
+      if (ids.length) for (const it of await yt.channels(ids.filter((id) => !out.has(id)))) {
+        const r = channelRow(it);
+        if (r) rows.push(r);
+      }
+      await admin.from("outlier_search_log").insert({ team_id: teamId, user_id: userId, key: `ch:${q.toLowerCase()}`.slice(0, 40), q, fresh: true });
+      if (left) left = { person: left.person - 1, team: left.team - 1 };
+    }
+    if (rows.length) {
+      const { error } = await admin.from("yt_channels").upsert(rows, { onConflict: "id" });
+      if (error) throw new Error(error.message);
+    }
+    // The one asked for exactly goes first.
+    const first = rows.map((r) => toFound({ id: r.id, title: r.title, handle: r.handle, avatar_url: r.avatar_url, subscribers: r.subscribers, country: r.country }, false));
+    const merged = new Map<string, FoundChannel>();
+    for (const r of first) merged.set(r.id, { ...r, stored: out.has(r.id) });
+    for (const [id, r] of out) if (!merged.has(id)) merged.set(id, r);
+    return { rows: [...merged.values()].slice(0, 20), searched: wantSearch, left };
+  } catch (e) {
+    if (e instanceof QuotaError) return out.size ? { rows: [...out.values()], searched: false } : { error: e.message };
+    if (e instanceof YtError) return out.size ? { rows: [...out.values()], searched: false } : { error: `YouTube said no: ${e.message}` };
+    throw e;
+  }
+}
+
+/**
+ * Channels become one of a niche's own (picked: they always count), then the
+ * ones never read are read. `source` "audience": picked from the viewers list.
+ */
+export async function addToNiche(teamId: string, nicheId: string, ids: string[], o: { userId: string; source?: "manual" | "audience" }): Promise<{ added: number } | { error: string }> {
+  const clean = [...new Set(ids.filter((x) => CHANNEL_ID.test(x)))].slice(0, 100);
+  if (!clean.length) return { error: "Pick a channel first." };
+  const admin = createAdminClient();
+  const { data } = await admin.from("outlier_niches").select("*").eq("id", nicheId).eq("team_id", teamId).maybeSingle();
+  if (!data) return { error: "That niche isn't this team's." };
+  const niche = { ...(data as Niche), crawl: ((data as Niche).crawl ?? {}) as Niche["crawl"] };
+  const access = await outliersAccess(teamId);
+  const b = readBudgets();
+  const yt = access ? new YouTube(access, spender(admin, { search: 0, units: b.units, stats: b.stats }, { search: 0, units: 4 + Math.ceil(clean.length / 50), stats: 0 })) : null;
+  const ctx = yt ? requestCtx(admin, yt, teamId, [niche], 15_000) : null;
+  // Their details first (so they show by name at once); without a way to read YouTube, just the ids.
+  if (ctx) {
+    try {
+      await ensureChannels(ctx, clean);
+    } catch (e) {
+      if (!(e instanceof QuotaError) && !(e instanceof YtError)) throw e;
+    }
+  }
+  try {
+    await addChannels(ctx ?? ({ admin } as never), niche, clean, o.source ?? "manual", o.userId);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't add them." };
+  }
+  return { added: clean.length };
 }

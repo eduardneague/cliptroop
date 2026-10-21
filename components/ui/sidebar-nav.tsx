@@ -44,7 +44,7 @@ export function SidebarNav({ developer = false }: { developer?: boolean }) {
   const pathname = usePathname();
   const groups = developer ? [...NAV_GROUPS, { label: "Developer", items: [DEVELOPER] }] : NAV_GROUPS;
   return (
-    <nav className="flex flex-col" aria-label="Main">
+    <nav className="flex flex-col select-none" aria-label="Main">
       {groups.map((g, gi) => (
         <div key={g.label ?? gi} className={gi ? "mt-4" : ""}>
           {g.label && <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{g.label}</div>}

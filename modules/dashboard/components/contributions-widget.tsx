@@ -8,6 +8,7 @@ import type { Done } from "../lib/queries";
 import { localDay } from "./tasks-widget";
 import { CountUp } from "@/components/ui/count-up";
 import { WordIcon } from "@/components/ui/icons";
+import { onScrollFree, scrollLocked } from "@/lib/hooks/use-scroll-lock";
 
 const LEVEL_MIX = [0, 30, 55, 78, 100];
 const level = (n: number) => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4);
@@ -21,6 +22,8 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
   const [open, setOpen] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // Squares fit the card both ways (8–16px); very narrow cards scroll instead.
+  // 1.29.1: not while a popup is open (a day's list): nothing behind it grows
+  // or shrinks; it measures again once the popup is gone.
   const [cell, setCell] = useState(10);
   useEffect(() => {
     const el = scroller.current;
@@ -31,9 +34,15 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
       setCell(Math.max(8, Math.min(16, byWidth, byHeight)));
     };
     fit();
-    const ro = new ResizeObserver(fit);
+    const ro = new ResizeObserver(() => {
+      if (!scrollLocked()) fit();
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    const off = onScrollFree(fit);
+    return () => {
+      ro.disconnect();
+      off();
+    };
   }, []);
   const step = cell + 3;
 

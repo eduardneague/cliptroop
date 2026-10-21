@@ -5,10 +5,11 @@ import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 import { TABS, readTab, type TabId } from "@/modules/outliers/lib/view";
 
 /*
- * Outliers' skeletons (1.27.0): the title, the niche row, the nine tabs as
- * real words, then the shape of the tab being opened (cards for For you and
- * Search, idea cards, a list with a side panel for Formats and Keywords, a
- * table for Channels, the lab, a wall of thumbnails, folders).
+ * Outliers' skeletons (1.27.0, 1.29.0): the title and its buttons, the bar
+ * with the niche picker, the kind switch and the tabs as real words, then
+ * the shape of the tab being opened (cards for For you and Search, idea
+ * cards, a list with a side panel for Formats and Keywords, a table for
+ * Channels, a list for Audience, the lab, a wall of thumbnails, folders).
  */
 
 function Card({ short = false }: { short?: boolean }) {
@@ -86,15 +87,16 @@ function Body({ tab, short }: { tab: TabId; short: boolean }) {
       return (
         <div>
           <Skeleton className="h-28 w-full rounded-2xl mb-5" />
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className={`rounded-2xl border border-line/10 bg-surface p-4 space-y-2.5 ${i >= 3 ? "hidden md:block" : ""}`}>
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-3/4" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-5/6" />
-                <Skeleton className="h-9 w-40 rounded-lg mt-3" />
+              <div key={i} className={`rounded-2xl border border-line/10 bg-surface overflow-hidden ${i >= 3 ? "hidden md:block" : ""}`}>
+                <div className="skeleton aspect-video" />
+                <div className="p-3.5 space-y-2">
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <Skeleton className="h-8 w-28 rounded-lg mt-3" />
+                </div>
               </div>
             ))}
           </div>
@@ -122,6 +124,17 @@ function Body({ tab, short }: { tab: TabId; short: boolean }) {
             </div>
           </div>
           <Skeleton className="hidden lg:block h-[32rem] rounded-2xl" />
+        </div>
+      );
+    case "audience":
+      return (
+        <div>
+          <Skeleton className="h-24 w-full rounded-2xl mb-5" />
+          <div className="grid gap-3 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className={`h-36 rounded-2xl ${i >= 2 ? "hidden lg:block" : ""}`} />
+            ))}
+          </div>
         </div>
       );
     case "channels":
@@ -213,18 +226,23 @@ export default function Loading() {
   const short = sp.get("kind") === "short";
   return (
     <SkeletonPage width="max-w-[1760px]" className="px-4 sm:px-8 xl:px-10 py-5 sm:py-8">
-      <div className="mb-5" aria-hidden>
-        <h1 className="font-display text-[34px] sm:text-[40px] leading-none font-semibold mb-2.5">Outliers</h1>
-        <Skeleton className="h-4 w-80 max-w-full" />
+      <div className="mb-4 flex items-start justify-between gap-4" aria-hidden>
+        <div className="min-w-0">
+          <h1 className="font-display text-[34px] sm:text-[40px] leading-none font-semibold mb-2.5">Outliers</h1>
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-10 w-10 sm:w-24 rounded-lg" />
+          <Skeleton className="h-10 w-10 rounded-lg" />
+          <Skeleton className="h-10 w-10 rounded-lg" />
+        </div>
       </div>
-      <div className="flex items-center gap-2 mb-3" aria-hidden>
-        <Skeleton className="h-10 md:h-9 flex-1 md:flex-none md:w-28 rounded-lg" />
-        <Skeleton className="hidden md:block h-9 w-24 rounded-lg" />
-        <Skeleton className="hidden md:block h-9 w-24 rounded-lg" />
-        <span className="hidden md:block flex-1" />
-        <Skeleton className="h-9 w-40 rounded-lg" />
+      <div className="flex items-center gap-2 pt-2.5" aria-hidden>
+        <Skeleton className="h-10 w-56 max-w-[60%] rounded-xl" />
+        <span className="flex-1" />
+        <Skeleton className="h-9 w-36 rounded-lg" />
       </div>
-      <div className="flex items-center gap-0.5 border-b border-line/15 overflow-hidden -mx-4 px-3 sm:mx-0 sm:px-0 mb-6" aria-hidden>
+      <div className="mt-1.5 flex items-center gap-0.5 border-b border-line/15 overflow-hidden -mx-4 px-3 sm:mx-0 sm:px-0 mb-6" aria-hidden>
         {TABS.map((t) => (
           <span key={t.id} className={`relative px-2.5 sm:px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap ${t.id === tab ? "text-ink" : "text-ink-faint"}`}>
             {t.label}

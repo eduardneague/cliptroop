@@ -30,18 +30,22 @@ export const heat = (score: number | null | undefined) => HEAT[band(score)];
 
 const MULT_TITLE = "Views ÷ the channel's usual views (the median of its videos of the same kind just before this one). Worked out by ClipTroop from YouTube's public counts.";
 
-/** The multiplier as a badge: solid in its heat colour from 2×, quiet below. `on`: over a picture. */
+/**
+ * The multiplier as a badge: solid in its heat colour from 2×, quiet below.
+ * `on`: over a picture (1.29.0: bigger and bolder everywhere, with a shadow
+ * so it reads on any thumbnail).
+ */
 export function Mult({ score, projected, size = "md", on = false, className = "" }: { score: number | null; projected?: number | null; size?: "sm" | "md" | "lg"; on?: boolean; className?: string }) {
   const b = band(score);
   const h = HEAT[b];
   const hot = b === "good" || b === "great" || b === "huge" || b === "viral";
   const heading = projected !== null && projected !== undefined && score !== null && projected > score * 1.15 && projected >= 2;
-  const sz = size === "lg" ? "h-8 px-2.5 text-[17px]" : size === "sm" ? "h-[22px] px-1.5 text-[12px]" : "h-6 px-2 text-[13.5px]";
+  const sz = size === "lg" ? "h-9 px-3 text-[20px]" : size === "sm" ? "h-6 px-1.5 text-[13.5px]" : "h-7 px-2 text-[16px]";
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <span
         title={`${BAND_LABEL[b]}. ${MULT_TITLE}`}
-        className={`mult inline-flex items-center rounded-md font-display font-semibold leading-none ${sz} ${on && !hot ? "bg-black/60 text-white backdrop-blur-sm" : ""}`}
+        className={`mult inline-flex items-center rounded-md font-display font-bold leading-none tracking-tight ${sz} ${on ? "shadow-[0_2px_8px_rgb(0_0_0/0.35)]" : ""} ${on && !hot ? "bg-black/65 text-white backdrop-blur-sm" : ""}`}
         style={hot ? { background: h.solid, color: "#fff" } : on ? undefined : { background: h.soft, color: h.text }}
       >
         {multText(score)}
@@ -49,7 +53,7 @@ export function Mult({ score, projected, size = "md", on = false, className = ""
       {heading && (
         <span
           title="Where it's heading: a video this young usually has only part of its views yet. An estimate, worked out by ClipTroop."
-          className={`mult inline-flex items-center gap-0.5 rounded-md px-1.5 font-display font-semibold leading-none ${size === "sm" ? "h-[22px] text-[11.5px]" : "h-6 text-[12.5px]"} ${on ? "bg-black/60 text-white backdrop-blur-sm" : "bg-surface-2 text-ink-soft"}`}
+          className={`mult inline-flex items-center gap-0.5 rounded-md px-1.5 font-display font-semibold leading-none ${size === "sm" ? "h-6 text-[12.5px]" : "h-7 text-[13.5px]"} ${on ? "bg-black/65 text-white backdrop-blur-sm shadow-[0_2px_8px_rgb(0_0_0/0.35)]" : "bg-surface-2 text-ink-soft"}`}
         >
           <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M2 6h7M6.5 3 9.5 6l-3 3" />
@@ -307,3 +311,105 @@ export const ICON_BTN = "inline-flex items-center justify-center rounded-lg bord
 /** Form fields (the app's own: New long video's). */
 export const FIELD = "w-full rounded-xl border border-line/15 bg-surface px-3.5 h-11 text-[14px] outline-none focus:ring-2 focus:ring-amber transition-shadow";
 export const LABEL = "block text-[12px] font-semibold text-ink-soft mb-1.5";
+
+/**
+ * A thumbnail's brightness or colourfulness (stored 0–255) as a percentage:
+ * brightness 0% is black and 100% white; colourfulness 0% is grey and 100%
+ * pure colour (1.29.0: they were shown 100 times too big).
+ */
+export const pct255 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round((Math.min(255, Math.max(0, v)) / 255) * 100));
+export const BRIGHTNESS_HELP = "How light the picture is overall: 0% is black, 100% is white. Most thumbnails sit between 30% and 60%.";
+export const COLOURFUL_HELP = "How vivid its colours are: 0% is black and white, 100% is pure colour. Most thumbnails sit between 25% and 55%.";
+
+/** Three dots (a card's menu). */
+export function DotsIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <circle cx="5.5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="18.5" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+/** An eye with a line through it (hide a channel). */
+export function EyeOffIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M3.5 4.5 20.5 19.5" />
+      <path d="M9.9 6.1A9.6 9.6 0 0 1 12 5.9c4.6 0 7.9 3.3 9.2 6.1-.5 1.1-1.3 2.3-2.4 3.4" />
+      <path d="M6.6 7.7C4.8 8.9 3.5 10.5 2.8 12c1.3 2.8 4.6 6.1 9.2 6.1 1.6 0 3-.4 4.3-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
+/** A gear (Outlier settings). */
+export function GearIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" />
+      <path d="M19.4 13.6c.1-.5.1-1.1.1-1.6s0-1.1-.1-1.6l2-1.6-2-3.4-2.4.9c-.8-.7-1.8-1.3-2.8-1.6L13.8 2h-3.6l-.4 2.7c-1 .3-2 .9-2.8 1.6l-2.4-.9-2 3.4 2 1.6c-.1.5-.1 1.1-.1 1.6s0 1.1.1 1.6l-2 1.6 2 3.4 2.4-.9c.8.7 1.8 1.3 2.8 1.6l.4 2.7h3.6l.4-2.7c1-.3 2-.9 2.8-1.6l2.4.9 2-3.4-2-1.6Z" />
+    </svg>
+  );
+}
+
+/** Two people (the Audience tab). */
+export function PeopleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3.2 19.5c.6-3.2 3-5.2 5.8-5.2s5.2 2 5.8 5.2" />
+      <path d="M15.6 5.6a3 3 0 0 1 0 5.8M17.6 14.6c1.7.6 2.9 2.2 3.2 4.9" />
+    </svg>
+  );
+}
+
+/** An on/off switch (1.29.0: a niche's "Only your channels", made for kids). */
+export function Toggle({ on, onChange, disabled = false, label, title }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string; title?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={`relative w-11 h-6 rounded-lg flex-shrink-0 transition-colors disabled:opacity-50 disabled:cursor-default ${on ? "bg-amber" : "bg-line/25"}`}
+    >
+      <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${on ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+    </button>
+  );
+}
+
+/** Why a channel found by a niche's keywords counts there or doesn't (1.29.0). */
+export const VERDICTS: Record<"ok" | "topic" | "lang" | "region" | "kids" | "unchecked", { label: string; help: string; tone: string }> = {
+  ok: { label: "Fits", help: "Its videos are about this niche, in its language, from where it takes creators.", tone: "bg-green/10 text-green" },
+  topic: { label: "Off topic", help: "Its videos aren't about this niche's keywords or channels.", tone: "bg-line/10 text-ink-soft" },
+  lang: { label: "Other language", help: "Most of its videos are in a language this niche doesn't take.", tone: "bg-line/10 text-ink-soft" },
+  region: { label: "Other country", help: "It's from a country this niche doesn't take creators from.", tone: "bg-line/10 text-ink-soft" },
+  kids: { label: "Made for kids", help: "Most of its videos are made for kids.", tone: "bg-line/10 text-ink-soft" },
+  unchecked: { label: "Checking", help: "Checked within the hour: until then it doesn't count.", tone: "bg-blue/10 text-blue" },
+};
+
+/** A channel's place in a niche, as a small label: one of yours, found and fits, or why not. */
+export function FitChip({ c, className = "" }: { c: { group: boolean; counted: boolean; verdict: string | null; hidden: boolean; pending: boolean; source?: string | null }; className?: string }) {
+  const base = `inline-flex items-center gap-1 rounded-md px-1.5 h-5 text-[11px] font-bold whitespace-nowrap ${className}`;
+  if (c.pending)
+    return (
+      <span className={`${base} bg-blue/10 text-blue`} title="Its videos are being read now. Scores show within a few minutes.">
+        <span className="w-2.5 h-2.5 rounded-full border-[1.5px] border-blue/30 border-t-blue animate-spin" aria-hidden />
+        Reading
+      </span>
+    );
+  if (c.hidden) return <span className={`${base} bg-line/10 text-ink-faint`} title="Taken out of this niche by your team.">Removed</span>;
+  if (c.group) return <span className={`${base} bg-amber/12 text-amber`} title={c.source === "audience" ? "One of this niche's own channels (from the channels your viewers watch). It always counts." : "One of this niche's own channels. It always counts."}>Yours</span>;
+  const v = VERDICTS[(c.verdict && c.verdict in VERDICTS ? c.verdict : "unchecked") as keyof typeof VERDICTS];
+  if (c.counted) return <span className={`${base} ${VERDICTS.ok.tone}`} title={`Found by the niche's keywords. ${VERDICTS.ok.help}`}>Found</span>;
+  return (
+    <span className={`${base} ${v.tone}`} title={v.help}>
+      {v.label}
+    </span>
+  );
+}

@@ -149,7 +149,7 @@ export function ProfileView({
             <ProfileAvatar url={person.avatarUrl} name={person.name} color={person.color} size={104} frame={shown.frame} tint={tint} />
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-[24px] sm:text-[30px] font-semibold leading-tight break-words">{person.name}</h1>
-              <p className="text-[12.5px] text-ink-faint">
+              <p className="text-[12.5px] text-ink-soft">
                 {person.username ? `@${person.username} · ` : ""}Joined {new Date(person.joined).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                 {isSelf && !shown.public && (
                   <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 h-5 text-[11px] font-semibold text-ink-soft align-middle">
@@ -158,7 +158,7 @@ export function ProfileView({
                   </span>
                 )}
               </p>
-              {person.bio && <p className="mt-2 text-[13.5px] text-ink-soft leading-relaxed max-w-xl break-words">{person.bio}</p>}
+              {person.bio && <p className="mt-2 text-[13.5px] text-ink/90 leading-relaxed max-w-xl break-words">{person.bio}</p>}
               {recent.length > 0 && (
                 <div className="mt-3 flex items-center gap-1.5" aria-label="Latest achievements">
                   {recent.map((a) => (
@@ -174,11 +174,11 @@ export function ProfileView({
                 <LevelBadge level={progress.level} size={46} />
                 <div className="min-w-0">
                   <div className="font-display text-[18px] font-semibold leading-tight">Level {progress.level}</div>
-                  <div className="text-[11.5px] text-ink-faint tabular-nums">{progress.left.toLocaleString("en-US")} XP to the next</div>
+                  <div className="text-[11.5px] text-ink-soft tabular-nums">{progress.left.toLocaleString("en-US")} XP to the next</div>
                 </div>
               </div>
               <XpBar share={progress.share} tint={tint} className="mt-3" />
-              <div className="mt-1 text-[11px] text-ink-faint tabular-nums">
+              <div className="mt-1 text-[11px] text-ink-soft tabular-nums">
                 {progress.into.toLocaleString("en-US")} / {progress.need.toLocaleString("en-US")} XP
               </div>
             </div>

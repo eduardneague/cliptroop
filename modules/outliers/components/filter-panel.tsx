@@ -99,6 +99,7 @@ export function FilterPanel({
             { value: "niche", label: "This niche" },
             { value: "tracked", label: "Tracked", disabled: !hasTracked, title: hasTracked ? "Only tracked channels" : "No tracked channels yet" },
             { value: "all", label: "Every niche" },
+            { value: "audience", label: "Your viewers watch", title: "Channels your viewers also watch (the Audience tab)" },
           ]}
         />
       </Group>

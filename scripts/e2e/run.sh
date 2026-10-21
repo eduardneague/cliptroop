@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# End-to-end runs of the live job, the TikTok morning copy (1.19.0) and
-# Outliers' collector (1.27.0): a
+# End-to-end runs of the live job, the TikTok morning copy (1.19.0),
+# Outliers' collector (1.27.0) and clearing notifications (1.29.1): a
 # throwaway Postgres database with every migration, PostgREST in front of it
 # (what Supabase runs), the app's own code, and fake platform APIs.
 #
@@ -80,6 +80,6 @@ echo "✓ PostgREST on :3001, proxy on :54399"
 # 3. The runs (the app's server-only modules load with the react-server condition).
 cd "$ROOT"
 # E2E_ONLY="outliers" (any of them, space separated) runs just those.
-for t in ${E2E_ONLY:-live tiktok-morning youtube-history outliers}; do
+for t in ${E2E_ONLY:-live tiktok-morning youtube-history outliers notifications}; do
   NODE_OPTIONS=--conditions=react-server npx tsx --tsconfig tsconfig.json "scripts/e2e/$t.e2e.ts"
 done

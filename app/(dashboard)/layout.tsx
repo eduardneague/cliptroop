@@ -24,7 +24,7 @@ import { Brand } from "@/components/ui/clip-logo";
 import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
 import { LogoutButton } from "@/components/ui/logout-button";
-import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { loadBell } from "@/lib/notification-select";
 import { cookies } from "next/headers";
 import { PushKeeper } from "@/components/pwa";
 import { PUSH_COOKIE } from "@/lib/push/guard";
@@ -77,12 +77,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       ...t,
       roles: t.currentTeam ? ((await getMembership(supabase, t.currentTeam.id).catch(() => null))?.roles ?? []) : [],
     })),
-    supabase
-      .from("notifications")
-      .select(NOTIFICATION_SELECT)
-      .eq("recipient_id", user!.id)
-      .order("created_at", { ascending: false })
-      .limit(25),
+    // The bell: the newest ones you haven't cleared (1.29.1).
+    loadBell(supabase, user!.id),
     // Clip's tour: on its own, so a database without 0069 just skips it.
     supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).

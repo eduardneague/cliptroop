@@ -9,13 +9,16 @@ import { createPortal } from "react-dom";
 import {
   markNotificationRead,
   markAllNotificationsRead,
+  clearNotification,
+  clearAllNotifications,
   respondToTeamInvite,
   respondToOwnershipTransfer,
   getNotificationHistory,
 } from "@/app/(dashboard)/notification-actions";
-import { BellIcon, HistoryIcon, TrophyIcon } from "./icons";
+import { BellIcon, CloseIcon, HistoryIcon, TrophyIcon } from "./icons";
 import { Dialog } from "./dialog";
 import { useToast } from "./toast-provider";
+import { useConfirm } from "./confirm-provider";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFor } from "@/lib/avatar";
 import { OutliersIcon, ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
@@ -556,6 +559,11 @@ function RichBody({ n }: { n: NotificationItem }) {
   }
 }
 
+/** Still waiting for your answer (an invite, an ownership request): Clear all leaves these. */
+function waitsForAnswer(n: NotificationItem) {
+  return Boolean(n.team_invite_id || n.ownership_transfer_id) && actionableStatus(n) === "pending";
+}
+
 /** One notification: who / what, when, and Accept / Decline when it asks for an answer. */
 function NotificationRow({
   n,
@@ -563,6 +571,7 @@ function NotificationRow({
   onRespond,
   responding,
   time,
+  onClear,
 }: {
   n: NotificationItem;
   onOpen: (n: NotificationItem) => void;
@@ -570,6 +579,8 @@ function NotificationRow({
   responding: boolean;
   /** Instead of "5m ago" (History shows the time of day under each date). */
   time?: string;
+  /** The bell: an X that takes it out of the list (1.29.1). Not on questions still waiting for an answer. */
+  onClear?: (n: NotificationItem) => void;
 }) {
   const actionable = Boolean(n.team_invite_id || n.ownership_transfer_id);
   const status = actionableStatus(n);
@@ -578,7 +589,7 @@ function NotificationRow({
   return (
     <div
       onClick={() => onOpen(n)}
-      className={`flex gap-2.5 px-4 py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
+      className={`group flex gap-2.5 pl-4 ${onClear && !isPendingAction ? "pr-2" : "pr-4"} py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
     >
       {visual ?? <span className={`w-2 h-2 rounded-[3px] mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
       <div className="min-w-0 flex-1">
@@ -615,6 +626,20 @@ function NotificationRow({
           <span className="inline-block mt-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{status}</span>
         )}
       </div>
+      {onClear && !isPendingAction && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear(n);
+          }}
+          aria-label="Clear this notification"
+          title="Clear"
+          className="-my-1 w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        >
+          <CloseIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -830,6 +855,11 @@ export function NotificationBell({
           }
           const id = (payload.new as { id?: string }).id;
           if (!id) return;
+          // Cleared (here, in another tab or on another device): out of the bell.
+          if ((payload.new as { cleared_at?: string | null }).cleared_at) {
+            setItems((cur) => cur.filter((n) => n.id !== id));
+            return;
+          }
           // Refetch just this one row (with its joined invite/transfer
           // status) — RLS guarantees it's really ours.
           const { data } = await supabase
@@ -878,6 +908,65 @@ export function NotificationBell({
     });
   }
 
+  // Clearing (1.29.1): the row folds away, then leaves the list; if saving
+  // fails it comes back where it was.
+  const confirm = useConfirm();
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
+  // Which fold each one is in (one timer per clear, however many it takes).
+  const folding = useRef(new Map<string, number>());
+  const LEAVE_MS = 200;
+  const unmark = (ids: Iterable<string>) =>
+    setLeaving((cur) => {
+      const next = new Set(cur);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  function putBack(gone: NotificationItem[], error: string) {
+    for (const n of gone) folding.current.delete(n.id);
+    unmark(gone.map((n) => n.id));
+    setItems((cur) => {
+      const have = new Set(cur.map((n) => n.id));
+      return [...cur, ...gone.filter((n) => !have.has(n.id))].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
+    });
+    toast.error(error);
+  }
+  function fold(gone: NotificationItem[]) {
+    const ids = gone.map((n) => n.id);
+    const token = window.setTimeout(() => {
+      // Only the ones still in this fold (one that came back stays).
+      const out = new Set(ids.filter((id) => folding.current.get(id) === token));
+      for (const id of out) folding.current.delete(id);
+      if (!out.size) return;
+      setItems((cur) => cur.filter((n) => !out.has(n.id)));
+      unmark(out);
+    }, LEAVE_MS);
+    for (const id of ids) folding.current.set(id, token);
+    setLeaving((cur) => new Set([...cur, ...ids]));
+    setReadIds((cur) => new Set([...cur, ...ids]));
+  }
+  function clearOne(n: NotificationItem) {
+    fold([n]);
+    void clearNotification(n.id).then((r) => {
+      if (r?.error) putBack([{ ...n, is_read: true }], r.error);
+    });
+  }
+  const clearable = items.filter((n) => !waitsForAnswer(n));
+  async function clearAll() {
+    const kept = items.length - clearable.length;
+    const ok = await confirm({
+      title: "Clear all notifications?",
+      description: `They leave this list. History still has the last 2 weeks.${kept ? ` ${kept === 1 ? "An invite that still needs your answer stays." : "Invites that still need your answer stay."}` : ""}`,
+      confirmLabel: "Clear all",
+      cancelLabel: "Keep them",
+      danger: true,
+    });
+    if (!ok) return;
+    const gone = clearable.map((n) => ({ ...n, is_read: true }));
+    fold(gone);
+    const r = await clearAllNotifications();
+    if (r?.error) putBack(gone, r.error);
+  }
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -891,6 +980,8 @@ export function NotificationBell({
     function onClickOutside(e: MouseEvent) {
       const target = e.target as Node;
       if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
+      // Answering "Clear all?" keeps the list open (1.29.1).
+      if (target instanceof Element && target.closest("[data-confirm]")) return;
       setOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
@@ -1006,23 +1097,40 @@ export function NotificationBell({
           <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {items.length === 0 ? (
               <div className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
-                Nothing yet.
+                You&rsquo;re all caught up.
               </div>
             ) : (
-              items.map((n) => {
-                return <NotificationRow key={n.id} n={n} onOpen={handleClick} onRespond={respond} responding={respondingId === n.id} />;
-              })
+              items.map((n) => (
+                <div key={n.id} className="notif-item border-b border-line/10 last:border-none" data-leaving={leaving.has(n.id) ? "" : undefined}>
+                  <div>
+                    <NotificationRow n={n} onOpen={handleClick} onRespond={respond} responding={respondingId === n.id} onClear={clearOne} />
+                  </div>
+                </div>
+              ))
             )}
           </div>
-          {!pushOn && (
-            <Link
-              href="/settings?tab=notifications"
-              onClick={() => setOpen(false)}
-              className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-line/10 text-[12px] font-semibold text-amber hover:bg-surface-2"
-            >
-              Get these on your phone too
-              <span aria-hidden>→</span>
-            </Link>
+          {(!pushOn || clearable.length > 0) && (
+            <div className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 border-t border-line/10">
+              {!pushOn && (
+                <Link
+                  href="/settings?tab=notifications"
+                  onClick={() => setOpen(false)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 h-8 text-[11.5px] font-semibold text-amber hover:bg-amber/10 min-w-0"
+                >
+                  <span className="truncate">Get these on your phone too</span>
+                  <span aria-hidden>→</span>
+                </Link>
+              )}
+              {clearable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void clearAll()}
+                  className="ml-auto flex-shrink-0 rounded-lg px-2 h-8 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           )}
         </div>
       </>,

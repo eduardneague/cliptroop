@@ -10,7 +10,7 @@ import { multText } from "../../lib/scores";
 import { hasColorFamily, similarThumbs } from "../../lib/similar";
 import type { OutlierVideo } from "../../lib/types";
 import type { Period, ThumbsData } from "../../lib/view";
-import { BTN, EmptyNote, FIELD, Mult, SectionHead, SourceNote, Thumb } from "../bits";
+import { BRIGHTNESS_HELP, BTN, COLOURFUL_HELP, EmptyNote, FIELD, Mult, pct255, SectionHead, SourceNote, Thumb } from "../bits";
 import { useOutliersNav, useOutliers } from "../context";
 import { useShellNav } from "../shell-nav";
 
@@ -160,19 +160,22 @@ function ColorFacts({ c, onPick, picked }: { c: NonNullable<ThumbsData["colors"]
       <dl className="mt-4 grid grid-cols-2 gap-2.5 text-[12px]">
         {(
           [
-            ["Brightness", c.lum],
-            ["Colourfulness", c.sat],
+            ["Brightness", c.lum, BRIGHTNESS_HELP],
+            ["Colourfulness", c.sat, COLOURFUL_HELP],
           ] as const
-        ).map(([label, v]) => (
-          <div key={label} className="rounded-xl bg-surface-2/60 px-3 py-2.5">
-            <dt className="text-ink-faint">{label}</dt>
+        ).map(([label, v, help]) => (
+          <div key={label} className="rounded-xl bg-surface-2/60 px-3 py-2.5" title={help}>
+            <dt className="text-ink-faint underline decoration-dotted decoration-line/40 underline-offset-2 cursor-help w-fit">{label}</dt>
             <dd className="mt-0.5">
-              <span className="font-display text-[18px] font-semibold tabular-nums">{v.out !== null ? `${Math.round(v.out * 100)}%` : "–"}</span>
-              <span className="text-ink-faint"> outliers · {v.all !== null ? `${Math.round(v.all * 100)}%` : "–"} all</span>
+              <span className="font-display text-[18px] font-semibold tabular-nums">{pct255(v.out) !== null ? `${pct255(v.out)}%` : "–"}</span>
+              <span className="text-ink-faint"> outliers · {pct255(v.all) !== null ? `${pct255(v.all)}%` : "–"} all</span>
             </dd>
           </div>
         ))}
       </dl>
+      <p className="mt-2.5 text-[11.5px] text-ink-faint leading-snug">
+        Brightness: how light the picture is (0% black, 100% white). Colourfulness: how vivid its colours are (0% grey, 100% pure colour). The middle thumbnail of the outliers, next to the middle one of all.
+      </p>
     </div>
   );
 }

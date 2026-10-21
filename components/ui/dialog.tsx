@@ -112,7 +112,7 @@ export function Dialog({
         <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4">{children}</div>
         {footer && (
           <div
-            className="px-5 py-3 border-t border-line/10 flex justify-end gap-2"
+            className="px-5 py-3 border-t border-line/10 flex flex-wrap justify-end gap-2"
             style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
           >
             {footer}
