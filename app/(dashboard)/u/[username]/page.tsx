@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { InviteToTeam, type InviteTeam } from "./invite-to-team";
 import { colorForId, initialsFor } from "@/lib/avatar";
-import Link from "next/link";
+import { LockIcon } from "@/components/ui/icons";
+import { readStats, isFrameId } from "@/lib/profile/progress";
+import { readProfileLayout } from "@/modules/profile/layout";
+import { ProfileView } from "@/modules/profile/components/profile-view";
+import { bgKind, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
+import { clampLuma } from "@/lib/wallpapers";
 
 export async function generateMetadata({
   params,
@@ -20,10 +25,12 @@ export async function generateMetadata({
 
 export default async function PublicProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
-  const { username } = await params;
+  const [{ username }, { edit }] = await Promise.all([params, searchParams]);
   const supabase = await createClient();
   const currentUser = await getCachedUser();
 
@@ -32,30 +39,23 @@ export default async function PublicProfilePage({
   if (!profile) notFound();
   // Opened by id but they have a username — use the nicer URL.
   if (profile.username && profile.id === username) {
-    redirect(`/u/${encodeURIComponent(profile.username)}`);
+    redirect(`/u/${encodeURIComponent(profile.username)}${edit === "1" ? "?edit=1" : ""}`);
   }
 
   const isSelf = profile.id === currentUser?.id;
 
-  const [{ data: visibleTeams }, { data: myMemberships }] = await Promise.all([
+  // Their page (hidden by the database when it's private and not yours), their numbers (null when private),
+  // their teams (as they let you see them), and your wallpapers when it's yours (1.28.0, 0093).
+  const [{ data: visibleTeams }, pageRes, statsRes, wallsRes] = await Promise.all([
     supabase.rpc("get_visible_teams", { target_user_id: profile.id }),
-    currentUser && !isSelf
-      ? supabase
-          .from("team_members")
-          .select("team_id")
-          .eq("user_id", currentUser.id)
-          .eq("status", "active")
-      : Promise.resolve({ data: [] as { team_id: string }[] }),
+    supabase.from("profile_pages").select("public, bio, layout, frame, bg_path, bg_luma").eq("user_id", profile.id).maybeSingle(),
+    supabase.rpc("profile_stats", { p_user: profile.id }),
+    isSelf ? supabase.from("profile_wallpapers").select("path, luma").eq("user_id", profile.id).order("created_at", { ascending: true }) : Promise.resolve({ data: [], error: null }),
   ]);
-
-  // get_visible_teams already includes any team the viewer genuinely
-  // shares with this person, regardless of their privacy toggle — so the
-  // intersection with the viewer's own teams is always accurate.
-  let commonTeams: { id: string; name: string; color: string; logo_url: string | null }[] = [];
-  if (currentUser && !isSelf) {
-    const myTeamIds = new Set((myMemberships ?? []).map((m) => m.team_id));
-    commonTeams = (visibleTeams ?? []).filter((t: { id: string }) => myTeamIds.has(t.id));
-  }
+  const ready = !pageRes.error && !statsRes.error;
+  const stats = ready ? readStats(statsRes.data) : null;
+  // profile_stats answers null only for a private profile that isn't yours.
+  const isPrivate = !isSelf && ready && statsRes.data === null;
 
   // Every team the viewer is master of, and where this person stands in each (1.27.5: shown even when they're
   // already in all of them, so the button is always where a master expects it).
@@ -85,119 +85,53 @@ export default async function PublicProfilePage({
 
   const name = profile.full_name || profile.username || "Unnamed member";
   const color = colorForId(profile.id);
-  const joined = new Date(profile.created_at).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
+  // (Keyed: it goes into the profile's row of buttons, next to its own.)
+  const invite = invitable.length > 0 ? <InviteToTeam key="invite" userId={profile.id} name={name} teams={invitable} /> : null;
 
-  // Distinguish "no teams" from "hidden" so the message is honest either way.
-  const teamsHiddenFromViewer =
-    !profile.teams_visible && !isSelf && (visibleTeams ?? []).length === 0;
-
-  return (
-    <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-2xl mx-auto space-y-6">
-      <div className="relative rounded-2xl border border-line/10 bg-surface p-6 sm:p-8">
-        {invitable.length > 0 && (
-          <div className="sm:absolute sm:right-6 sm:top-6 mb-4 sm:mb-0">
-            <InviteToTeam userId={profile.id} name={name} teams={invitable} />
-          </div>
-        )}
-        <div className="flex items-start gap-5 flex-wrap">
-          <span
-            className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 overflow-hidden"
-            style={{ background: color }}
-          >
+  // Private: only their name and picture.
+  if (isPrivate) {
+    return (
+      <div className="px-4 sm:px-10 py-8 sm:py-14 w-full max-w-md mx-auto">
+        <div className="rounded-2xl border border-line/10 bg-surface p-8 flex flex-col items-center text-center">
+          <span className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl overflow-hidden" style={{ background: color }}>
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img loading="lazy" decoding="async" src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+              <img decoding="async" src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
               initialsFor(name)
             )}
           </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="font-display text-2xl font-semibold">{name}</h1>
-            {profile.username && <p className="text-[13px] text-ink-faint mb-2">@{profile.username}</p>}
-            {profile.bio && (
-              <p className="text-[13.5px] text-ink-soft leading-relaxed max-w-md">{profile.bio}</p>
-            )}
-            <p className="text-[11.5px] text-ink-faint mt-3">Joined {joined}</p>
-          </div>
-          {isSelf && (
-            <Link
-              href="/settings"
-              className="text-[12px] font-semibold text-amber hover:brightness-110 flex-shrink-0"
-            >
-              Edit profile
-            </Link>
-          )}
+          <h1 className="mt-4 font-display text-2xl font-semibold">{name}</h1>
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-ink-faint">
+            <LockIcon className="w-3.5 h-3.5" />
+            This profile is private.
+          </p>
+          {invite && <div className="mt-5">{invite}</div>}
         </div>
       </div>
+    );
+  }
 
-      {!isSelf && currentUser && (
-        <div className="rounded-2xl border border-line/10 bg-surface p-6 sm:p-8">
-          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
-            Common teams
-          </h2>
-          {commonTeams.length === 0 ? (
-            <p className="text-[13px] text-ink-faint">No teams in common.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {commonTeams.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 rounded-lg border border-line/10 px-3.5 py-2.5"
-                >
-                  <span
-                    className="w-9 h-9 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-white text-[11px] font-bold"
-                    style={{ background: t.color }}
-                  >
-                    {t.logo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img loading="lazy" decoding="async" src={t.logo_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      t.name.slice(0, 2).toUpperCase()
-                    )}
-                  </span>
-                  <span className="text-[13.5px] font-semibold">{t.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+  // Distinguish "no teams" from "hidden" so the message is honest either way.
+  const teamsHidden = !profile.teams_visible && !isSelf && (visibleTeams ?? []).length === 0;
+  const row = pageRes.data as { public?: boolean; bio?: string | null; layout?: unknown; frame?: string; bg_path?: string | null; bg_luma?: number | null } | null;
+  const bgPath = row?.bg_path && isOwnBgPath(row.bg_path, profile.id) ? row.bg_path : null;
+  const url = (path: string) => supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl;
 
-      <div className="rounded-2xl border border-line/10 bg-surface p-6 sm:p-8">
-        <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
-          Teams
-        </h2>
-        {teamsHiddenFromViewer ? (
-          <p className="text-[13px] text-ink-faint">This person&rsquo;s teams are private.</p>
-        ) : (visibleTeams ?? []).length === 0 ? (
-          <p className="text-[13px] text-ink-faint">Not on any teams yet.</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {(visibleTeams ?? []).map((t: { id: string; name: string; color: string; logo_url: string | null }) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-3 rounded-lg border border-line/10 px-3.5 py-2.5"
-              >
-                <span
-                  className="w-9 h-9 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-white text-[11px] font-bold"
-                  style={{ background: t.color }}
-                >
-                  {t.logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img loading="lazy" decoding="async" src={t.logo_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    t.name.slice(0, 2).toUpperCase()
-                  )}
-                </span>
-                <span className="text-[13.5px] font-semibold">{t.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+  return (
+    <ProfileView
+      person={{ id: profile.id, name, username: profile.username, avatarUrl: profile.avatar_url, color, bio: row?.bio ?? (profile as { bio?: string | null }).bio ?? null, joined: profile.created_at }}
+      isSelf={isSelf}
+      page={{ public: row?.public !== false, layout: readProfileLayout(row?.layout ?? null), frame: isFrameId(row?.frame) ? row.frame : "none", bgPath }}
+      bg={bgPath ? { url: url(bgPath), video: bgKind(bgPath) === "video", luma: clampLuma(row?.bg_luma) } : null}
+      stats={stats}
+      teams={teamsHidden ? null : ((visibleTeams ?? []) as { id: string; name: string; color: string; logo_url: string | null }[])}
+      wallpapers={((wallsRes.data ?? []) as { path: string; luma: number | null }[])
+        .filter((w) => isOwnBgPath(w.path, profile.id))
+        .map((w) => ({ path: w.path, url: url(w.path), video: bgKind(w.path) === "video", luma: clampLuma(w.luma) }))}
+      actions={invite}
+      ready={ready}
+      startEditing={edit === "1"}
+    />
   );
 }

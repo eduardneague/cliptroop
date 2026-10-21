@@ -97,9 +97,10 @@ export default function RootLayout({
         <script
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
-            // Also applies the user's "Animations off" choice, colour theme and glass look (1.27.5) before first paint
+            // Also applies the user's "Animations off" choice, colour theme and glass look (1.27.5; its style, where,
+            // the side bar and how see-through in 1.28.0) before first paint
             // (not on the brand pages: home, sign-in, status, legal; see lib/public-pages.ts).
-            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var b=new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname);var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!b)d.dataset.palette=p;if(localStorage.getItem('vp-glass')==='on'&&!b)d.dataset.glass='on'}catch(e){}`,
+            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var b=new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname);var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!b)d.dataset.palette=p;var L=null;try{L=JSON.parse(localStorage.getItem('vp-look')||'null')}catch(e){}if(!b&&(L?L.on===true:localStorage.getItem('vp-glass')==='on')){d.dataset.glass='on';if(L){if(L.style==='liquid')d.dataset.glassStyle='liquid';if(L.scope==='everywhere')d.dataset.glassScope='everywhere';if(L.sidebar===true)d.dataset.glassSidebar='clear';if(typeof L.level==='number')d.style.setProperty('--glass-level',String(Math.max(0,Math.min(100,L.level))/100))}}}catch(e){}`,
           }}
         />
       </head>

@@ -782,3 +782,45 @@ export async function updateTasksVisibility(teamId: string, value: string) {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+/**
+ * Leave a team (1.28.0): anyone but its owner (who transfers it or deletes it
+ * first, 0093's leave_team). Its masters are told. What you made stays with
+ * the team; a master can invite you back.
+ */
+export async function leaveTeam(teamId: string): Promise<{ success?: true; error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { error: "That team isn't there any more." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  // Who to tell, while you can still see the team.
+  const [{ data: masters }, actor, team] = await Promise.all([
+    supabase.from("team_members").select("user_id, member_roles!inner(role)").eq("team_id", teamId).eq("status", "active").eq("member_roles.role", "master"),
+    actorMeta(supabase, user.id),
+    teamMeta(supabase, teamId),
+  ]);
+
+  const { error } = await supabase.rpc("leave_team", { p_team: teamId });
+  if (error) {
+    if (error.code === "P0001" || error.code === "P0002") return { error: error.message };
+    if (error.code === "PGRST202" || /leave_team/.test(error.message)) return { error: "This needs the latest database update (migration 0093)." };
+    return { error: "Couldn't leave. Try again." };
+  }
+
+  const tell = [...new Set((masters ?? []).map((m) => m.user_id as string | null).filter((id): id is string => !!id && id !== user.id))];
+  if (tell.length) {
+    await sendNotifications(
+      tell.map((recipient_id) => ({
+        recipient_id,
+        kind: "member_left",
+        metadata: { actor, team, href: "/team?tab=members" },
+        body: `${actor.name} left ${team.name}.`,
+      })),
+    );
+  }
+  revalidatePath("/", "layout");
+  return { success: true };
+}

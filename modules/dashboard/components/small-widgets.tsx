@@ -197,7 +197,9 @@ function DigitalClock({ now, h24, seconds }: { now: Date; h24: boolean; seconds:
   const width = (showS ? secX + (P + DW) * small : minX + P + DW) + 1.5;
   const dateLine = box.h >= 70;
   const maxH = box.h - (dateLine ? 34 : 4);
-  const scale = Math.max(0.5, Math.min(box.w / width, maxH / DH));
+  // 1.28.0: a clock, not a billboard: at most about 54 px tall digits and three quarters of the width, however big
+  // the widget is.
+  const scale = Math.max(0.5, Math.min((box.w * 0.76) / width, maxH / DH, 54 / DH));
   return (
     <div className="h-full flex flex-col items-center justify-center gap-1.5 text-center" role="img" aria-label={now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: !h24 })}>
       <div className="flex items-end gap-1.5">

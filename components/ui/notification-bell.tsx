@@ -363,6 +363,12 @@ function RichBody({ n }: { n: NotificationItem }) {
           You were removed from <b>{m.team?.name}</b>.
         </>
       );
+    case "member_left":
+      return (
+        <>
+          <b>{m.actor?.name}</b> left <b>{m.team?.name}</b>.
+        </>
+      );
     case "role_changed":
       return (
         <span className="inline">
@@ -972,7 +978,7 @@ export function NotificationBell({
           role="dialog"
           style={{ ["--bell-top" as string]: `${anchor.top}px`, ["--bell-right" as string]: `${anchor.right}px` }}
           aria-label="Notifications"
-          className="fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] rounded-2xl sm:rounded-xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
+          className="glass-pane fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] rounded-2xl sm:rounded-xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
         >
           <div className="flex items-center justify-between gap-2 pl-4 pr-2.5 py-2.5 border-b border-line/10">
             <span className="font-display font-semibold text-[13.5px]">

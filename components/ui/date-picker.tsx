@@ -114,7 +114,7 @@ export function DatePicker({
             // (Inside a dropdown, e.g. Analytics' custom range: picking a day doesn't close the dropdown.)
             data-floating-menu=""
             style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
-            className="fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_ease]"
+            className="glass-pane fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_ease]"
           >
             <MonthCalendar
               value={value}

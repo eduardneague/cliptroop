@@ -17,7 +17,7 @@ import { ObjectiveDetail } from "./objective-detail";
 import { ObjectiveTable } from "./objective-table";
 import { ScheduleDialog } from "./schedule-dialog";
 import { useNewObjective } from "./new-objective";
-import { Rings, useWhen, type Ring } from "./parts";
+import { fitRingText, type Ring, ringHole, Rings, useWhen } from "./parts";
 import { StreakCard } from "./streak";
 
 /*
@@ -230,14 +230,15 @@ export function ObjectivesView({
           <div className="flex items-start gap-4 sm:gap-6">
             <Rings rings={rings} size={148} stroke={rings.length > 4 ? 7 : undefined} gap={rings.length > 4 ? 2 : undefined} className="hidden sm:block">
               <div className="leading-none">
-                <div className="font-display text-[20px] font-semibold tabular-nums">
+                {/* Fits the middle, however many digits (1.28.0). */}
+                <div className="font-display font-semibold tabular-nums" style={{ fontSize: fitRingText(`${reachedNow}/${active.length}`, ringHole(148, rings.length, rings.length > 4 ? 7 : undefined, rings.length > 4 ? 2 : undefined), 20) }}>
                   {reachedNow}/{active.length}
                 </div>
                 {rings.length <= 4 && <div className="text-[10px] text-ink-faint mt-0.5">reached</div>}
               </div>
             </Rings>
             <Rings rings={rings.slice(0, 4)} size={92} minHole={24} className="sm:hidden mt-0.5">
-              <div className="font-display text-[15px] font-semibold tabular-nums leading-none">
+              <div className="font-display font-semibold tabular-nums leading-none" style={{ fontSize: fitRingText(`${reachedNow}/${active.length}`, ringHole(92, Math.min(4, rings.length)), 15) }}>
                 {reachedNow}/{active.length}
               </div>
             </Rings>

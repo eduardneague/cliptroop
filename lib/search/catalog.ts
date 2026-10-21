@@ -266,6 +266,7 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
     add({ id: "team.appearance", kind: "tab", title: "Team colours", trail: ["Team", "Appearance"], words: "appearance color look shorts long videos roles", icon: "fill", href: "/team?tab=appearance" });
     add({ id: "team.role-colors", kind: "setting", title: "Role colours", trail: ["Team", "Appearance"], words: "role color badge mentions", icon: "fill", href: "/team?tab=appearance#role-colors" });
     add({ id: "team.workspace", kind: "setting", title: "Team name and logo", trail: ["Team"], words: "rename name logo picture branding workspace image", icon: "image", href: "/team?tab=team#workspace" });
+    add({ id: "team.leave", kind: "setting", title: "Leave team", trail: ["Team", "Team"], words: "leave quit exit team membership", icon: "logout", href: "/team?tab=team#leave" });
   }
 
   // ---- Settings --------------------------------------------------------------
@@ -282,9 +283,11 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "settings.animations", kind: "setting", title: "Animations", trail: ["Settings", "Preferences"], words: "motion animation reduce reduced movement", icon: "star", href: "/settings?tab=preferences#animations" });
   add({ id: "settings.sounds", kind: "setting", title: "Sounds", trail: ["Settings", "Preferences"], words: "sound audio noise mute quiet", icon: "sound", href: "/settings?tab=preferences#sounds" });
   add({ id: "settings.colors", kind: "setting", title: "Colours", trail: ["Settings", "Preferences"], words: "palette theme accent paper color look", icon: "fill", href: "/settings?tab=preferences#colours" });
-  add({ id: "settings.glass", kind: "setting", title: "Glass", trail: ["Settings", "Preferences"], hint: "Frosted, see-through cards", words: "glass glassmorphism frosted blur transparent see through translucent look theme", icon: "fill", href: "/settings?tab=preferences#glass" });
-  add({ id: "settings.background", kind: "setting", title: "Dashboard background", trail: ["Settings", "Preferences"], hint: "A picture, GIF or video behind your dashboard", words: "background wallpaper picture image gif video animated steam profile dashboard custom", icon: "image", href: "/settings?tab=preferences#background" });
+  add({ id: "settings.glass", kind: "setting", title: "Glass", trail: ["Settings", "Preferences"], hint: "Simple or Liquid, everywhere, how see-through", words: "glass glassmorphism frosted blur transparent see through translucent look theme liquid ios apple sidebar intensity clear", icon: "fill", href: "/settings?tab=preferences#glass" });
+  add({ id: "settings.background", kind: "setting", title: "Wallpapers", trail: ["Settings", "Preferences"], hint: "Up to 3 pictures, GIFs or videos behind your dashboard", words: "background wallpaper wallpapers picture image gif video animated steam profile dashboard custom switch", icon: "image", href: "/settings?tab=preferences#background" });
+  add({ id: "settings.profile-page", kind: "setting", title: "Profile privacy", trail: ["Settings", "Profile"], hint: "Public or private, and customize your profile", words: "public private privacy profile level achievements showcases frame customize steam xp", icon: "eye", href: "/settings#profile-page" });
   add({ id: "settings.account", kind: "tab", title: "Account", trail: ["Settings"], words: "account email sign in", icon: "settings", href: "/settings?tab=account" });
+  add({ id: "settings.delete-account", kind: "setting", title: "Delete account", trail: ["Settings", "Account"], words: "delete remove close account deactivate erase data goodbye", icon: "trash", href: "/settings?tab=account#delete-account" });
 
   return out;
 }

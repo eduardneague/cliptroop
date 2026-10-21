@@ -72,8 +72,9 @@ export type Interaction =
   /**
    * `left` / `top` (1.27.5): pulled by its left or top edge (or a corner
    * there): that edge moves and the opposite one stays where it is.
+   * `over` (1.28.0): pulled past its biggest or smallest size (shown, not used here).
    */
-  | { kind: "resize"; id: string; w: number; h: number; left?: boolean; top?: boolean };
+  | { kind: "resize"; id: string; w: number; h: number; left?: boolean; top?: boolean; over?: boolean };
 
 /**
  * The board while one widget is moved or resized. `base` is the saved

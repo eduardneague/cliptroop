@@ -258,14 +258,20 @@ function answer(req, res, url, body) {
       // inserts are kept, updates change the rows they match.
       const writable = WRITABLE.has(t[1]);
       if (writable && req.method === "POST") {
-        const rows = [].concat(body ? JSON.parse(body) : []).map((r) => ({ created_at: new Date().toISOString(), ...r }));
+        const rows = [].concat(body ? JSON.parse(body) : []).map((r) => ({ id: require("crypto").randomUUID(), created_at: new Date().toISOString(), ...(t[1] === "profile_wallpapers" ? { user_id: F.user.id } : {}), ...r }));
         tableRows(F, t[1]).push(...rows);
-        return send(res, 201, rows);
+        return send(res, 201, String(req.headers["accept"] || "").includes("vnd.pgrst.object") ? rows[0] : rows);
       }
       if (writable && req.method === "PATCH") {
         const hit = applyFilters(tableRows(F, t[1]), url.searchParams);
         const patch = body ? JSON.parse(body) : {};
         for (const r of hit) Object.assign(r, patch);
+        return send(res, 200, hit);
+      }
+      if (writable && req.method === "DELETE") {
+        const rows = tableRows(F, t[1]);
+        const hit = applyFilters(rows, url.searchParams);
+        for (const r of hit) rows.splice(rows.indexOf(r), 1);
         return send(res, 200, hit);
       }
       // An update answers with the rows it matched (like "update … returning").

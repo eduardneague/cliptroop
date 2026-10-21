@@ -64,15 +64,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div
-          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-5"
-          onClick={() => close(false)}
-        >
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-5" onClick={() => close(false)}>
+          {/* The dimmer is a layer of its own (not the box's parent), so the glass look can blur the page through the box. */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-[fadein_.12s_ease]" aria-hidden />
           <div
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="confirm-title"
-            className="w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
+            className="glass-pane relative w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="confirm-title" className="font-display text-lg font-semibold mb-1.5">

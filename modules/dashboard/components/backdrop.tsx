@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { measureUrl } from "@/lib/wallpapers-measure";
+import { saveWallpaperLuma } from "@/app/(dashboard)/settings/wallpaper-actions";
 
 /**
  * Your dashboard's background (1.27.5): the picture, GIF or looping video
@@ -8,10 +10,26 @@ import { useEffect, useRef, useState } from "react";
  * choice so the words stay easy to read. Decorative: hidden from screen
  * readers. A video doesn't play when animations are off (Settings) or the
  * device asks for less motion; it shows its first frame instead.
+ *
+ * `measure` (1.28.0): a wallpaper saved before its brightness was measured
+ * (its id): measured once here and kept, so the greeting's colour matches it
+ * from then on (the wrapper's --bg-luma, globals.css).
  */
-export function DashboardBackdrop({ src, video, dim }: { src: string; video: boolean; dim: number }) {
+export function DashboardBackdrop({ src, video, dim, measure = null }: { src: string; video: boolean; dim: number; measure?: string | null }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [still, setStill] = useState(false);
+  useEffect(() => {
+    if (!measure) return;
+    let gone = false;
+    void measureUrl(src, video ? "video" : "image").then((luma) => {
+      if (gone || luma === null) return;
+      document.querySelector<HTMLElement>("[data-dash-bg]")?.style.setProperty("--bg-luma", String(luma / 100));
+      void saveWallpaperLuma(measure, luma);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [measure, src, video]);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const read = () => {

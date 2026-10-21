@@ -21,6 +21,7 @@ export const metadata: Metadata = { title: "Team" };
 import { RoleColorPicker } from "./role-color-picker";
 import { TransferOwnership } from "./transfer-ownership";
 import { DeleteTeamButton } from "./delete-team-button";
+import { LeaveTeamButton } from "./leave-team-button";
 import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
 import { KindColorsForm } from "./kind-colors-form";
@@ -221,7 +222,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       )}
 
       {tab === "defaults" && userIsMaster && (
-        <div className="grid gap-6 xl:grid-cols-2 items-start">
+        // 1.28.0: the cards flow down two columns and sit right under each other (a grid left gaps under the short ones).
+        <div className="xl:columns-2 gap-6 [&>section]:break-inside-avoid [&>section]:mb-6 [&>section:last-child]:mb-0">
         {userIsMaster && (
           <section id="short-defaults" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">
@@ -467,6 +469,15 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 teamName={currentTeam.name}
               />
             </div>
+          </section>
+        )}
+        {currentUser && team && currentUser.id !== team.owner_id && (
+          <section id="leave" className="rounded-xl border border-red/20 bg-red/5 p-6 scroll-mt-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-red mb-1">Leave team</h2>
+            <p className="text-[12px] text-ink-soft mb-4">
+              You lose access to this team&rsquo;s videos, scripts and notes. What you made stays with the team, and a master can invite you back.
+            </p>
+            <LeaveTeamButton teamId={currentTeam.id} teamName={currentTeam.name} then="/dashboard" />
           </section>
         )}
         </div>

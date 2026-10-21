@@ -394,13 +394,14 @@ function Tour({
         {spot && spot.side !== "center" && !asking && (
           <span
             aria-hidden
-            className="absolute w-3.5 h-3.5 rotate-45 bg-surface border-line/15"
+            // Only the half outside the bubble is drawn, so a see-through (glass) bubble doesn't show a darker diamond.
+            className="glass-tail absolute w-3.5 h-3.5 rotate-45 bg-surface border-line/15"
             style={
               spot.side === "below"
-                ? { top: -7.5, left: spot.tail - 7, borderTopWidth: 1, borderLeftWidth: 1 }
+                ? { top: -7.5, left: spot.tail - 7, borderTopWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 100% 0, 0 100%)" }
                 : spot.side === "above"
-                  ? { bottom: -7.5, left: spot.tail - 7, borderBottomWidth: 1, borderRightWidth: 1 }
-                  : { left: -7.5, top: spot.tail - 7, borderBottomWidth: 1, borderLeftWidth: 1 }
+                  ? { bottom: -7.5, left: spot.tail - 7, borderBottomWidth: 1, borderRightWidth: 1, clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }
+                  : { left: -7.5, top: spot.tail - 7, borderBottomWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 0 100%, 100% 100%)" }
             }
           />
         )}

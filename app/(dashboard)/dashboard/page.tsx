@@ -9,6 +9,8 @@ import { DashboardStudio } from "@/modules/dashboard/components/studio";
 import { listMeetings } from "@/modules/meetings/lib/queries";
 import { DashboardBackdrop } from "@/modules/dashboard/components/backdrop";
 import { bgKind, clampDim, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
+import { clampLuma } from "@/lib/wallpapers";
+import type { CSSProperties } from "react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -67,10 +69,19 @@ export default async function DashboardPage() {
     />
   );
   if (!bgPath) return studio;
+  // How bright it is behind the greeting (1.28.0, measured on upload): the words turn dark or white to match. Before 0093: unknown.
+  const { data: wall } = await supabase.from("profile_wallpapers").select("id, luma").eq("path", bgPath).maybeSingle();
+  const luma = clampLuma(wall?.luma);
+  const dim = clampDim(look?.dashboard_bg_dim);
   return (
-    // data-dash-bg: the widgets and the top bar turn frosted over it (globals.css).
-    <div data-dash-bg className="contents">
-      <DashboardBackdrop src={supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(bgPath).data.publicUrl} video={bgKind(bgPath) === "video"} dim={clampDim(look?.dashboard_bg_dim)} />
+    // data-dash-bg: the widgets and the top bar turn frosted over it; wall-tone: the words over it read (globals.css).
+    <div data-dash-bg className="contents wall-tone" style={{ ...(luma === null ? {} : { "--bg-luma": luma / 100 }), "--bg-dim": dim / 100 } as CSSProperties}>
+      <DashboardBackdrop
+        src={supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(bgPath).data.publicUrl}
+        video={bgKind(bgPath) === "video"}
+        dim={dim}
+        measure={wall && luma === null ? (wall.id as string) : null}
+      />
       {studio}
     </div>
   );

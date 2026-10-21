@@ -86,12 +86,30 @@ export type Ring = { key: string; color: string; value: number; target: number; 
  * gets a tick at the top. `children` sits in the middle, when the middle is
  * at least `minHole` px across (tiny rings show just the rings).
  */
+/** How thick the rings are and the gap between them (thick enough to read as rings, thin enough to leave the middle for the count). */
+function ringSizes(size: number, n: number, stroke?: number, gap?: number) {
+  const k = Math.max(1, n);
+  const sw = stroke ?? Math.max(5, Math.min(16, Math.round(size / (k * 2 + 7))));
+  const g = gap ?? Math.max(2, Math.round(sw * 0.25));
+  return { sw, g, hole: size - 2 * k * sw - 2 * (k - 1) * g };
+}
+
+/** The empty middle of a set of rings, in px (the same sums as <Rings>). */
+export const ringHole = (size: number, n: number, stroke?: number, gap?: number) => ringSizes(size, n, stroke, gap).hole;
+
+/**
+ * A font size for the words in the middle of the rings (1.28.0): as big as
+ * `base`, never wider than the hole ("10/12" used to run into the rings).
+ * Fraunces' figures are about 0.6 em wide, a slash or a dot about 0.36 em.
+ */
+export function fitRingText(text: string, hole: number, base: number, min = 9): number {
+  const em = [...text].reduce((s, ch) => s + (/[0-9]/.test(ch) ? 0.6 : /[./,:]/.test(ch) ? 0.36 : /[A-Za-z%$€£]/.test(ch) ? 0.62 : 0.4), 0);
+  return Math.max(min, Math.min(base, (hole * 0.76) / Math.max(1, em)));
+}
+
 export function Rings({ rings, size, stroke, gap, minHole = 30, children, className = "" }: { rings: Ring[]; size: number; stroke?: number; gap?: number; minHole?: number; children?: React.ReactNode; className?: string }) {
   const n = Math.max(1, rings.length);
-  // Thick enough to read as rings, thin enough to leave the middle for the count.
-  const sw = stroke ?? Math.max(5, Math.min(16, Math.round(size / (n * 2 + 7))));
-  const g = gap ?? Math.max(2, Math.round(sw * 0.25));
-  const hole = size - 2 * n * sw - 2 * (n - 1) * g;
+  const { sw, g, hole } = ringSizes(size, n, stroke, gap);
   const reachedBefore = useRef<Set<string> | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   // A ring that becomes reached while you're looking glows once.

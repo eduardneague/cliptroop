@@ -23,6 +23,30 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.28.0",
+    date: "2026-10-21",
+    title: "Profiles with levels, Liquid glass and wallpapers",
+    changes: [
+      { kind: "new", text: "Profiles like Steam's: every step you finish on a video gives XP (bigger steps more, a quarter more when it's done by its date), and XP brings levels, with a new badge colour every 10. 25 achievements to reach, a year of contributions, and your numbers." },
+      { kind: "new", text: "Customize profile: arrange showcases (numbers, contributions, achievements, what you do, about me, teams, a featured achievement, your level) by dragging and resizing them like dashboard widgets, pick a picture frame (new ones unlock as you level up) and put one of your wallpapers behind it." },
+      { kind: "new", text: "Profiles are public to everyone signed in, or private (others see only your name and picture): Settings → Profile, or while customizing. Your bio is private with it." },
+      { kind: "new", text: "Glass has two styles: Simple (as before) and Liquid, like iOS: clearer panes with bright edges, light that catches the rims as you move the pointer, a floating side bar and a floating tab bar on phones." },
+      { kind: "new", text: "Glass can go everywhere: every pop-up, menu, message and the What's new box. The side bar can be see-through too, and a slider sets how see-through it all is." },
+      { kind: "better", text: "On phones the bottom bar is see-through with glass on." },
+      { kind: "new", text: "Wallpapers: keep up to 3 pictures, GIFs or videos (25 MB each) and switch with one click. Replacing or removing one deletes the old file straight away, after asking." },
+      { kind: "new", text: "Uploading a wallpaper shows the picture with how far the upload has got, and can be cancelled." },
+      { kind: "new", text: "The greeting over a wallpaper turns dark or white, whichever reads best over that picture (the darkening and light or dark mode counted in), and the widgets get more frosted when the picture would fight their words." },
+      { kind: "new", text: "Leave a team (Team → Team → Leave team). Its masters are told; what you made stays." },
+      { kind: "new", text: "Delete your account (Settings → Account): once you've left your teams, with two confirmations, your email and your password. What you made on teams stays with them, without your name." },
+      { kind: "better", text: "Search shows a loading outline while it's still looking, instead of seeming empty." },
+      { kind: "better", text: "The phone's More menu is a list, each place with what it's for." },
+      { kind: "better", text: "Team → Defaults packs its cards into two columns with no gaps." },
+      { kind: "fixed", text: "Making a widget bigger from its right edge follows the pointer, shows its size, and grows to the left once it reaches the edge of the board." },
+      { kind: "fixed", text: "The digital clock's digits are a sensible size, and an objective's count (like 12/10) always fits inside its rings." },
+      { kind: "better", text: "The privacy policy covers profiles (levels, achievements, public or private) and deleting your account yourself." },
+    ],
+  },
+  {
     version: "1.27.5",
     date: "2026-10-21",
     title: "Scripts keep everything, glass, and a dashboard of your own",

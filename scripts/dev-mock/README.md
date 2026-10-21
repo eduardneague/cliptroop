@@ -23,6 +23,11 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_STRANGER=1 someone on none of the sample user's teams (/u/radu: Invite to team), MOCK_GLASS=1 the glass look,
 #    MOCK_DASH_BG=jpg|gif|webm|mp4 a dashboard background of that kind (MOCK_DASH_BG_FILE=/path/to/file serves it, else a
 #    drawn dusk; MOCK_DASH_BG_DIM=0..80); uploads (storage.upload) and copies are accepted, MOCK_UPLOAD_FAIL=1 refuses them,
+#    1.28.0: MOCK_GLASS_STYLE=liquid, MOCK_GLASS_SCOPE=everywhere, MOCK_GLASS_SIDEBAR=1, MOCK_GLASS_LEVEL=0..100 (with
+#    MOCK_GLASS=1); MOCK_WALLPAPERS=1..3 saved wallpapers and MOCK_WALL_LUMA=0..100|null how bright the one in use is (with
+#    MOCK_DASH_BG); MOCK_PROFILE_FRAME=glow|orbit|… edu's picture frame, MOCK_PROFILE_BG=1 his wallpaper behind his profile,
+#    MOCK_PRIVATE=maria|radu that profile is private; profile_stats and get_visible_teams answer from the fixtures;
+#    MOCK_WRITES=profile_wallpapers,profiles remembers adding, switching and removing wallpapers (deletes too),
 #    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),
 #    MOCK_NOTIFS=0 no notifications (otherwise 13 over the last 12 days, for the bell and its History),
 #    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),

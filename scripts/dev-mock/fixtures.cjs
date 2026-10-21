@@ -62,10 +62,11 @@ const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
 ] };
-// MOCK_GLASS=1: the glass look; MOCK_DASH_BG=jpg|gif|webm|mp4: a dashboard background of that kind (1.27.5; the file:
+// MOCK_GLASS=1: the glass look (1.28.0: MOCK_GLASS_STYLE=liquid, MOCK_GLASS_SCOPE=everywhere, MOCK_GLASS_SIDEBAR=1,
+// MOCK_GLASS_LEVEL=0..100); MOCK_DASH_BG=jpg|gif|webm|mp4: a dashboard background of that kind (1.27.5; the file:
 // MOCK_DASH_BG_FILE, else a drawn picture), MOCK_DASH_BG_DIM=0..80.
 const DASH_BG = process.env.MOCK_DASH_BG;
-const prof = (i) => ({ ...people[i], glass_ui: process.env.MOCK_GLASS === "1", dashboard_bg_on: !!DASH_BG, dashboard_bg_path: DASH_BG ? `${people[i].id}/1761000000000-dusk.${DASH_BG}` : null, dashboard_bg_dim: Number(process.env.MOCK_DASH_BG_DIM ?? 30), palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+const prof = (i) => ({ ...people[i], glass_ui: process.env.MOCK_GLASS === "1", glass_style: process.env.MOCK_GLASS_STYLE || "simple", glass_scope: process.env.MOCK_GLASS_SCOPE || "cards", glass_sidebar: process.env.MOCK_GLASS_SIDEBAR === "1", glass_level: Number(process.env.MOCK_GLASS_LEVEL ?? 50), dashboard_bg_on: !!DASH_BG, dashboard_bg_path: DASH_BG ? `${people[i].id}/1761000000000-dusk.${DASH_BG}` : null, dashboard_bg_dim: Number(process.env.MOCK_DASH_BG_DIM ?? 30), palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -78,7 +79,7 @@ const members = people.map((p, i) => ({
   profiles: prof(i),
   profile: prof(i),
   // The team itself (the profile page's Invite to team names it).
-  teams: { name: "Viverro Main", color: "#e8630d", logo_url: null },
+  teams: { id: TEAM, name: "Viverro Main", color: "#e8630d", logo_url: null },
 }));
 const team = {
   id: TEAM,
@@ -446,11 +447,50 @@ function sampleNotifications() {
   }));
 }
 
+// A profile's numbers (profile_stats' answer): a busy year for edu, less for the others.
+function sampleProfileStats(user) {
+  const i = U.indexOf(user);
+  // Radu (MOCK_STRANGER): public, nothing finished yet (MOCK_PRIVATE=radu: private).
+  if (i < 0) return user === "aaaaaaaa-0000-4000-8000-000000000021" && process.env.MOCK_PRIVATE !== "radu" ? { xp: 0, tasks: 0, on_time: 0, dated: 0, videos: 0, teams: 0, first_at: null, last_at: null, by: {}, ranks: {}, team_dates: {}, levels: {}, streak: { best: 0, current: 0, dates: {} }, days: {} } : null;
+  if (i === 1 && process.env.MOCK_PRIVATE === "maria" && ME !== 1) return null;
+  const scale = [1, 0.55, 0.3, 0.12][i];
+  const days = {};
+  const now = Date.now();
+  let seed = 7 + i * 13;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  for (let d = 0; d < 372; d++) {
+    const r = rnd();
+    const n = r < 0.45 * (1 - scale * 0.5) ? 0 : Math.max(1, Math.round(r * 6 * scale));
+    if (n && !(d > 0 && d < 4 && i > 0)) days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] = n;
+  }
+  for (let d = 0; d < 5; d++) days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] = days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] || 1 + (d % 2);
+  const at = (daysAgo) => new Date(now - daysAgo * 86400e3).toISOString();
+  const by = { script: Math.round(46 * scale), edit: Math.round(58 * scale), film: Math.round(6 * scale), research: Math.round(9 * scale), review: Math.round(41 * scale), package: Math.round(7 * scale), publish: Math.round(16 * scale), action: Math.round(12 * scale) };
+  const tasks = Object.values(by).reduce((a, b) => a + b, 0);
+  const ranks = { all: {} };
+  for (const r of [1, 5, 10, 25, 50, 100, 250]) if (tasks >= r) ranks.all[r] = at(360 - Math.min(355, r * 1.3));
+  for (const [c, n] of Object.entries(by)) { ranks[c] = {}; for (const r of [1, 5, 10, 25, 50]) if (n >= r) ranks[c][r] = at(340 - Math.min(330, r * 5 + c.length * 3)); }
+  const onTime = Math.round(tasks * 0.71);
+  ranks.ontime = {}; for (const r of [1, 5, 10, 25, 50, 100]) if (onTime >= r) ranks.ontime[r] = at(350 - Math.min(345, r * 2));
+  const xp = [5460, 2380, 905, 210][i];
+  const levelDates = {}; for (const [l, need] of [[5, 500], [10, 1000], [25, 4500], [50, 15000]]) if (xp >= need) levelDates[l] = at(300 - l * 6);
+  return {
+    xp, tasks, on_time: onTime, dated: Math.round(tasks * 0.9), videos: Math.round(tasks * 0.42), teams: i === 0 ? 2 : 1,
+    first_at: at(365), last_at: at(0), by, ranks, team_dates: i === 0 ? { 2: at(120) } : {}, levels: levelDates,
+    streak: { best: [19, 9, 4, 2][i], current: [5, 2, 1, 1][i], dates: i < 3 ? { 3: at(300), ...(i < 2 ? { 7: at(200) } : {}) } : {} },
+    days,
+  };
+}
+
 module.exports = {
   TEAM,
   U,
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
+    // Profiles (1.28.0): someone's numbers (MOCK_PRIVATE=maria: hers are private, so null for anyone else).
+    profile_stats: (b) => sampleProfileStats(b.p_user),
+    // Someone's teams as you may see them: the sample team for its members.
+    get_visible_teams: (b) => (U.includes(b.target_user_id) ? [{ id: TEAM, name: team.name, color: team.color, logo_url: team.logo_url ?? null }] : []),
     can_view_revenue: true,
     // Realtime (0083): views per hour and per video from the live counts.
     analytics_live_hours: (b) => LIVE.hours(b),
@@ -670,6 +710,21 @@ module.exports = {
       { id: "ca000000-0000-4000-8000-000000000002", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Book the bakery for filming", owner_id: U[0], done_at: at(-1, 15), created_by: U[1], team_id: TEAM, created_at: at(-2, 10), due_date: day(-1), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
     ],
     todos: [],
+    // Profile pages (1.28.0): MOCK_PROFILE_FRAME=orbit (edu's frame, default glow), MOCK_PRIVATE=maria (hers private),
+    // MOCK_PROFILE_BG=1 (edu's background: his wallpaper in use).
+    profile_pages: [
+      { user_id: U[0], public: true, bio: "Making videos about food, history and fake iPhones.", layout: null, frame: process.env.MOCK_PROFILE_FRAME || "glow", bg_path: process.env.MOCK_PROFILE_BG && DASH_BG ? `${U[0]}/1761000000000-dusk.${DASH_BG}` : null, bg_luma: Number(process.env.MOCK_WALL_LUMA ?? 22) },
+      { user_id: U[1], public: process.env.MOCK_PRIVATE !== "maria", bio: "Scripts and voice-overs.", layout: null, frame: "duo", bg_path: null, bg_luma: null },
+    ],
+    // Saved wallpapers (1.28.0): with MOCK_DASH_BG, the one in use plus MOCK_WALLPAPERS=2|3 in all (default 1);
+    // MOCK_WALL_LUMA=0..100 how bright the one in use is (default 22: a dusk; "null": not measured yet).
+    profile_wallpapers: DASH_BG
+      ? [
+          { id: "fd000000-0000-4000-8000-000000000001", user_id: U[0], path: `${U[0]}/1761000000000-dusk.${DASH_BG}`, luma: process.env.MOCK_WALL_LUMA === "null" ? null : Number(process.env.MOCK_WALL_LUMA ?? 22), created_at: "2026-10-01T10:00:00Z" },
+          { id: "fd000000-0000-4000-8000-000000000002", user_id: U[0], path: `${U[0]}/1761000000001-meadow.jpg`, luma: 78, created_at: "2026-10-02T10:00:00Z" },
+          { id: "fd000000-0000-4000-8000-000000000003", user_id: U[0], path: `${U[0]}/1761000000002-city.webm`, luma: 35, created_at: "2026-10-03T10:00:00Z" },
+        ].slice(0, Math.max(1, Math.min(3, Number(process.env.MOCK_WALLPAPERS || 1))))
+      : [],
     tasks: [
       { id: "ta000000-0000-4000-8000-000000000001", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000001", stage: "action", state: "active", due_date: day(2), team_id: TEAM, user_id: U[0], completed_at: null },
       { id: "ta000000-0000-4000-8000-000000000002", kind: "script", item_id: "dd000000-0000-4000-8000-000000000002", stage: "review", state: "active", due_date: null, team_id: TEAM, user_id: U[0], completed_at: null },

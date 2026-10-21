@@ -30,6 +30,13 @@ export default function DataDeletionPage() {
         Facebook (Settings → Business integrations) or TikTok (Settings → Security → Manage app permissions). {APP_NAME} then can&rsquo;t use the account any more.
       </p>
 
+      <H>Delete your account yourself</H>
+      <ol className="list-decimal pl-6 space-y-1.5">
+        <li>Leave every team you&rsquo;re on (Team → Team → Leave team). A team you own: transfer it to someone or delete it first.</li>
+        <li>Open Settings → Account → Delete account, confirm, then type your email and password.</li>
+        <li>Your profile, picture, wallpapers and settings are deleted at once. What you made on a team stays with it, without your name.</li>
+      </ol>
+
       <H>Delete statistics, your account or your team&rsquo;s data</H>
       <p>
         Write to {contact} from the email address of your {APP_NAME} account and say what should be deleted: the statistics copied from a connected account, your

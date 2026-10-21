@@ -67,15 +67,17 @@ export default function SetUpAccountPage() {
       const user = data.user;
       if (!user) return setMe(null);
       setMe({ id: user.id, email: user.email ?? "" });
-      const [{ data: p }, { count }] = await Promise.all([
+      const [{ data: p }, { count }, { data: page }] = await Promise.all([
         supabase.from("profiles").select("username, full_name, bio, avatar_url").eq("id", user.id).maybeSingle(),
         supabase.from("team_invites").select("id", { count: "exact", head: true }).eq("invited_user_id", user.id).eq("status", "pending"),
+        // The bio lives on the profile page since 1.28.0 (0093).
+        supabase.from("profile_pages").select("bio").eq("user_id", user.id).maybeSingle(),
       ]);
       if (!alive) return;
       if (p) {
         setUsername((p.username as string | null) ?? "");
         setFullName((p.full_name as string | null) ?? "");
-        setBio((p.bio as string | null) ?? "");
+        setBio(((page?.bio as string | null | undefined) ?? (p.bio as string | null)) ?? "");
         setAvatarUrl((p.avatar_url as string | null) ?? null);
       }
       setInvites(count ?? 0);

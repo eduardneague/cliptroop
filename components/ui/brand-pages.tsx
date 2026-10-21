@@ -16,8 +16,12 @@ export function BrandPages() {
   useEffect(() => {
     if (isBrandPage(pathname)) {
       delete document.documentElement.dataset.palette;
-      // The glass look too (1.27.5): GlassSync puts it back in the app.
-      delete document.documentElement.dataset.glass;
+      // The glass look too (1.27.5, 1.28.0): GlassSync puts it back in the app.
+      const d = document.documentElement.dataset;
+      delete d.glass;
+      delete d.glassStyle;
+      delete d.glassScope;
+      delete d.glassSidebar;
     }
   }, [pathname]);
   return null;

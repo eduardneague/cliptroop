@@ -565,7 +565,7 @@ export function GlobalSearch({
               role="dialog"
               aria-modal="true"
               aria-label="Search"
-              className="relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
+              className="glass-pane relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
               style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
             >
               {/* Input row */}
@@ -754,6 +754,9 @@ export function GlobalSearch({
                       );
                     })}
 
+                    {/* Still looking (1.28.0): rows shimmer where the results will be, instead of an empty box. */}
+                    {busy && <SearchSkeleton rows={items.length ? 3 : 6} more={items.length > 0} />}
+
                     {!typed && activeFilter === "all" && (recents.length > 0 || terms.length > 0) && <Tips onTry={tryText} />}
                     {!typed && activeFilter === "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">Everything in the app. Type to narrow it down.</p>}
                     {!typed && activeFilter !== "all" && activeFilter !== "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">{filterMeta.empty}</p>}
@@ -872,4 +875,22 @@ function ClearButton({ onClear }: { onClear: () => void }) {
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="font-mono text-[10px] font-semibold rounded border border-line/15 px-1 py-[1px] mr-1 text-ink-soft">{children}</kbd>;
+}
+
+/** Results on their way: a few shimmering rows the shape of real ones. */
+function SearchSkeleton({ rows, more }: { rows: number; more: boolean }) {
+  return (
+    <div role="status" aria-label="Searching" className="px-1 pt-1">
+      <div className="px-2.5 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{more ? "Looking for more" : "Searching"}</div>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3 px-2.5 py-2" aria-hidden>
+          <span className="skeleton w-8 h-8 rounded-lg flex-shrink-0" />
+          <span className="flex-1 min-w-0 space-y-1.5">
+            <span className="skeleton block h-3 rounded-md" style={{ width: `${[62, 48, 71, 55, 66, 40][i % 6]}%` }} />
+            <span className="skeleton block h-2.5 rounded-md" style={{ width: `${[34, 28, 40, 22, 31, 26][i % 6]}%` }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }

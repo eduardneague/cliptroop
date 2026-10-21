@@ -51,6 +51,8 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
   const [resetPending, setResetPending] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  // Just deleted their account (1.28.0, Settings → Account).
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -58,6 +60,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     // "Get a new reset link" (from an expired reset email) opens the reset form.
     if (params.get("reset") === "1") setMode("forgot");
+    setDeleted(params.get("deleted") === "1");
     setNext(params.get("next") ?? "");
   }, []);
 
@@ -200,6 +203,11 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  {deleted && !state?.error && (
+                    <p role="status" className="rounded-xl border border-line/15 bg-surface-2 px-3 py-2.5 text-[13.5px] text-ink-soft">
+                      Your account was deleted. Thanks for everything you made here.
+                    </p>
+                  )}
                   {state?.error && (
                     <p role="alert" className="flex items-start gap-2 rounded-xl border border-red/30 bg-red/[0.07] px-3 py-2.5 text-[13.5px] text-red font-medium">
                       <AlertIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />

@@ -307,6 +307,37 @@ frosts the widgets and the top bar; Settings → Preferences uploads it
 (`settings/dashboard-background.tsx`, `updateDashboardBackground` removes the
 file it replaces).
 
+**Glass choices, wallpapers and profiles (1.28.0, 0093).** The look is
+`lib/look.ts` (`Look`: on, style simple | liquid, scope cards | everywhere,
+sidebar, level 0–100), saved in `profiles.glass_*` and in localStorage
+`vp-look`, put on `<html>` as `data-glass`, `data-glass-style`,
+`data-glass-scope`, `data-glass-sidebar` and `--glass-level` (0–1). Every
+glass number in `globals.css` comes from `--glass-level`; add new glass rules
+there, never as inline styles. "Everywhere" blurs positioned pop-ups with a
+shadow, so anything `fixed` they open must be portaled to `<body>` (Select,
+DatePicker and AnchoredMenu already are). Wallpapers are rows of
+`profile_wallpapers` (3 per person, enforced by the database); the one in use
+is still `profiles.dashboard_bg_path`. Upload with `startUpload()`
+(`lib/upload/resumable.ts`: progress and cancel), measure the picture first
+(`measureFile()`) and save its `luma`, so words over it can pick dark or white
+in CSS (`.wall-tone` with `--bg-luma` and `--bg-dim`; `lib/wallpapers.ts`
+`wordsDark()` is the same rule for tests). Removing deletes the storage file
+first, then the row; the database moves "in use" and profile backgrounds
+along. Profiles: XP, levels and frames are decided in SQL (`vp_task_xp`,
+`vp_level_for`, `vp_frame_level`, `profile_stats`); `lib/profile/progress.ts`
+mirrors the numbers for display and tests, so change both together.
+`profile_pages` holds what a profile shows (bio, showcases, frame,
+background, public); its RLS hides a private page from everyone else and
+`profile_stats` answers null for it, so never read someone's profile data
+with the service key. Showcases use the dashboard's board
+(`modules/dashboard/components/grid-board.tsx`, `GridBoard`): a new showcase
+is an entry in `modules/profile/layout.ts` `SHOWCASES` plus a case in
+`modules/profile/components/showcases.tsx`. Leaving a team is `leave_team()`;
+deleting an account is `settings/account-actions.ts` (password checked again,
+no teams, then the person's storage folders and `auth.admin.deleteUser`;
+every foreign key to `profiles` cascades or sets null, except
+`teams.owner_id`, which is why owners transfer or delete their teams first).
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

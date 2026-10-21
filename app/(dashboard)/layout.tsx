@@ -16,6 +16,7 @@ import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
 import { GlassSync } from "@/components/ui/glass";
+import { getLook } from "@/lib/look-server";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
 import { TutorialHost } from "@/components/tutorial/tutorial";
@@ -86,8 +87,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
     supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
     isDeveloper(user),
-    // The glass look (1.27.5): on its own, so a database without 0092 just leaves this device's choice alone.
-    supabase.from("profiles").select("glass_ui").eq("id", user!.id).maybeSingle(),
+    // The glass look (1.27.5, 1.28.0): on its own, so a database without 0092 / 0093 just keeps this device's choice.
+    getLook(supabase, user!.id),
   ]);
   const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
@@ -115,7 +116,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         </Suspense>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
-        <GlassSync on={look.error || !look.data ? null : !!(look.data as { glass_ui?: boolean | null }).glass_ui} />
+        <GlassSync look={look} />
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
         {/* Keeps this device's push notifications working after logging in again. */}
         <PushKeeper userId={user!.id} deviceHash={(await cookies()).get(PUSH_COOKIE)?.value ?? null} />
