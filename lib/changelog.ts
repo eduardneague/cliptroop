@@ -23,6 +23,16 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.31.0",
+    date: "2026-10-23",
+    title: "Security: keys stay secret",
+    changes: [
+      { kind: "fixed", text: "GIF search in comments now only works for people signed in to ClipTroop, a few searches a second at most, so nobody else can use the app's GIF key." },
+      { kind: "better", text: "The sign-ins of your connected accounts, kept locked in the database, are now checked more strictly when they're opened: a changed one is always refused." },
+      { kind: "better", text: "Behind the scenes: no settings file or key file can end up in the code's history, every setting the app reads is described for whoever sets it up, and GitHub's automatic checks can only read the code." },
+    ],
+  },
+  {
     version: "1.30.1",
     date: "2026-10-23",
     title: "Remove a channel from the top, and rows that fit",

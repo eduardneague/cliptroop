@@ -564,6 +564,20 @@ tab a `data-label`), so the ones that don't fit go under More. Check a
 page with the harness sweep: no element with `overflow-x: auto` whose
 content is wider than it, at 1024 to 1920 wide.
 
+**Secrets (1.31.0).** A key or secret is read only on the server: in a
+route, a `"use server"` file, or a module that starts with
+`import "server-only"`, and never with a `NEXT_PUBLIC_` name (those are
+built into every browser). Never pass one to a browser component as a prop
+or in an action's answer; a page that needs to show it shows whether it's
+set. Every new setting gets a few lines in `.env.example` (no value).
+Tokens kept in the database are sealed with `encryptToken` and their
+columns stay out of the browser's grants. An endpoint that spends one of
+the app's own keys (Giphy, LanguageTool, YouTube) checks the signed-in
+person itself, not only through the middleware, and takes `overLimit`
+(`lib/rate-limit.ts`). In a GitHub workflow, never write `${{ … }}` inside
+a `run:` script: put it in `env:` and use the variable. `tests/secrets.test.ts`
+checks all of this, and scans the code for anything shaped like a key.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or
