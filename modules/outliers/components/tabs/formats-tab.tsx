@@ -83,7 +83,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
   const current = selected ? rows.find((r) => r.id === selected) ?? { id: selected, local: null, cross: null } : list[0] ?? null;
 
   if (!rows.length)
-    return <EmptyNote title="Formats show up once there are enough videos">Each format needs a few videos in the niche before it can be measured.</EmptyNote>;
+    return <EmptyNote title="Formats show up once there are enough videos" finding>Each format needs a few videos in the niche before it can be measured.</EmptyNote>;
 
   return (
     <div className="space-y-12">
@@ -166,7 +166,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
         </div>
 
         <aside className="hidden lg:block min-w-0">
-          <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
+          <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
         </aside>
       </div>
 

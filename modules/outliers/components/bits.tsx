@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { band, BAND_LABEL, multText, type Band } from "../lib/scores";
+import { createContext, useContext, useState, useSyncExternalStore } from "react";
+import { band, BAND_LABEL, multText } from "../lib/scores";
+import { HEAT, heat } from "../lib/heat";
 import { ago, compact, duration } from "../lib/filters";
 import { avatarAt, thumbUrl } from "../lib/ingest";
 import { FORMAT_BY_ID } from "../lib/formats";
@@ -12,28 +13,18 @@ import { OutliersIcon } from "@/components/ui/icons";
  * Outliers' small pieces (1.27.0): the multiplier in its heat colour, the
  * spike (a channel's videos as bars, this one towering or not), thumbnails
  * at the right size, channel pictures, times that never break hydration.
- *
- * Heat: about usual is quiet; 2–5× blue, 5–10× violet, 10–25× the app's
- * amber, 25× and up red. The same scale everywhere a score shows.
+ * The heat scale itself is in lib/heat.ts (1.29.9).
  */
 
-export const HEAT: Record<Band, { solid: string; soft: string; text: string }> = {
-  none: { solid: "rgb(var(--ink-faint))", soft: "rgb(var(--ink) / 0.06)", text: "rgb(var(--ink-faint))" },
-  below: { solid: "rgb(var(--ink-faint))", soft: "rgb(var(--ink) / 0.06)", text: "rgb(var(--ink-faint))" },
-  usual: { solid: "rgb(var(--ink-soft))", soft: "rgb(var(--ink) / 0.08)", text: "rgb(var(--ink-soft))" },
-  good: { solid: "rgb(var(--blue))", soft: "rgb(var(--blue) / 0.14)", text: "rgb(var(--blue))" },
-  great: { solid: "rgb(var(--violet))", soft: "rgb(var(--violet) / 0.14)", text: "rgb(var(--violet))" },
-  huge: { solid: "rgb(var(--amber))", soft: "rgb(var(--amber) / 0.15)", text: "rgb(var(--amber))" },
-  viral: { solid: "rgb(var(--red))", soft: "rgb(var(--red) / 0.14)", text: "rgb(var(--red))" },
-};
-export const heat = (score: number | null | undefined) => HEAT[band(score)];
+export { HEAT, heat, type Heat } from "../lib/heat";
 
 const MULT_TITLE = "Views ÷ the channel's usual views (the median of its videos of the same kind just before this one). Worked out by ClipTroop from YouTube's public counts.";
 
 /**
- * The multiplier as a badge: solid in its heat colour from 2×, quiet below.
- * `on`: over a picture (1.29.0: bigger and bolder everywhere, with a shadow
- * so it reads on any thumbnail).
+ * The multiplier as a badge: solid in its heat colour from 2× (yellow, then
+ * green; 25× and up with a glow), a light wash below that (red under its
+ * usual). `on`: over a picture (1.29.0: bigger and bolder everywhere, with a
+ * shadow so it reads on any thumbnail).
  */
 export function Mult({ score, projected, size = "md", on = false, className = "" }: { score: number | null; projected?: number | null; size?: "sm" | "md" | "lg"; on?: boolean; className?: string }) {
   const b = band(score);
@@ -41,12 +32,13 @@ export function Mult({ score, projected, size = "md", on = false, className = ""
   const hot = b === "good" || b === "great" || b === "huge" || b === "viral";
   const heading = projected !== null && projected !== undefined && score !== null && projected > score * 1.15 && projected >= 2;
   const sz = size === "lg" ? "h-9 px-3 text-[20px]" : size === "sm" ? "h-6 px-1.5 text-[13.5px]" : "h-7 px-2 text-[16px]";
+  const glow = b === "viral" ? `0 0 0 1.5px rgb(var(--m-green) / 0.45), 0 0 16px rgb(var(--m-green) / 0.4)${on ? ", 0 2px 8px rgb(0 0 0 / 0.35)" : ""}` : undefined;
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <span
         title={`${BAND_LABEL[b]}. ${MULT_TITLE}`}
         className={`mult inline-flex items-center rounded-md font-display font-bold leading-none tracking-tight ${sz} ${on ? "shadow-[0_2px_8px_rgb(0_0_0/0.35)]" : ""} ${on && !hot ? "bg-black/65 text-white backdrop-blur-sm" : ""}`}
-        style={hot ? { background: h.solid, color: "#fff" } : on ? undefined : { background: h.soft, color: h.text }}
+        style={hot ? { background: h.solid, color: h.on, boxShadow: glow } : on ? undefined : { background: h.soft, color: h.text }}
       >
         {multText(score)}
       </span>
@@ -289,8 +281,18 @@ export function Trend({ mom, n, className = "" }: { mom: number; n?: number; cla
   );
 }
 
-/** A quiet "nothing here" with what to do next. */
-export function EmptyNote({ title, children, action, className = "" }: { title: string; children?: React.ReactNode; action?: React.ReactNode; className?: string }) {
+/** The niche whose first channels and videos are being found right now (its name), else null (1.29.9). */
+export const FindingCtx = createContext<string | null>(null);
+
+/**
+ * A quiet "nothing here" with what to do next. `finding`: it's empty because
+ * the niche has no videos yet; while they're being found it says so instead
+ * (1.29.9: it said "No videos match" while a new niche filled in), with
+ * `findingAction` under it and, with `ghost`, faint cards to come.
+ */
+export function EmptyNote({ title, children, action, className = "", finding = false, findingAction, ghost = false }: { title: string; children?: React.ReactNode; action?: React.ReactNode; className?: string; finding?: boolean; findingAction?: React.ReactNode; ghost?: boolean }) {
+  const filling = useContext(FindingCtx);
+  if (finding && filling) return <FindingNote name={filling} action={findingAction} ghost={ghost} className={className} />;
   return (
     <div className={`rounded-2xl border border-dashed border-line/20 px-5 py-8 text-center ${className}`}>
       <div className="mx-auto mb-3 w-10 h-10 rounded-xl bg-surface-2 flex items-center justify-center text-ink-faint">
@@ -299,6 +301,37 @@ export function EmptyNote({ title, children, action, className = "" }: { title: 
       <p className="text-[14px] font-semibold">{title}</p>
       {children && <div className="mt-1 text-[12.5px] text-ink-soft max-w-md mx-auto">{children}</div>}
       {action && <div className="mt-4 flex justify-center gap-2 flex-wrap">{action}</div>}
+    </div>
+  );
+}
+
+/** Channels and videos on their way: a niche filling in (the page looks again by itself). */
+export function FindingNote({ name, action, ghost = false, className = "" }: { name: string; action?: React.ReactNode; ghost?: boolean; className?: string }) {
+  return (
+    <div data-finding-note className={className}>
+      <div className="rounded-2xl border border-blue/25 bg-blue/[0.045] px-5 py-9 text-center" role="status">
+        <div className="relative mx-auto mb-4 w-12 h-12" aria-hidden>
+          <span className="absolute inset-0 rounded-full border-2 border-blue/15 border-t-blue animate-spin" />
+          <span className="absolute inset-[7px] rounded-full bg-blue/10 text-blue flex items-center justify-center">
+            <OutliersIcon className="w-[18px] h-[18px]" />
+          </span>
+        </div>
+        <p className="text-[15px] font-semibold text-balance">Finding channels and videos for {name}…</p>
+        <p className="mt-1 text-[12.5px] text-ink-soft max-w-md mx-auto">This page updates by itself as they come in. It usually takes a few minutes.</p>
+        {action && <div className="mt-4 flex justify-center gap-2 flex-wrap">{action}</div>}
+      </div>
+      {ghost && (
+        <div className="mt-5 grid gap-x-4 gap-y-6 grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [mask-image:linear-gradient(to_bottom,black_30%,transparent)]" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => (
+            // Two rows at every width.
+            <div key={i} className={i >= 6 ? "hidden xl:block" : i >= 4 ? "hidden lg:block" : i >= 2 ? "hidden min-[480px]:block" : ""}>
+              <div className="skeleton aspect-video rounded-xl" />
+              <div className="skeleton mt-2.5 h-4 w-4/5 rounded-md" />
+              <div className="skeleton mt-1.5 h-3 w-1/2 rounded-md" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

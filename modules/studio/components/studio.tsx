@@ -737,7 +737,7 @@ export function Studio({ data }: { data: StudioData }) {
         </div>
         {status && <div className="px-3 pb-2">{status}</div>}
 
-        <ul ref={strip} className="flex gap-3 overflow-x-auto styled-scroll px-3 pt-1.5 pb-3">
+        <ul ref={strip} className="flex gap-3 overflow-x-auto overscroll-x-contain styled-scroll px-3 pt-1.5 pb-3">
           {variants.map((v, i) => {
             const w = warnings(v);
             const on = v.id === activeId;

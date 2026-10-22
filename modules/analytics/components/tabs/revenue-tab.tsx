@@ -173,7 +173,7 @@ export function RevenueTab({ r, compare, teamId }: { r: Revenue; compare: boolea
       <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard title="By month" sub="The last 12 months">
           {r.months.length ? (
-            <div className="overflow-x-auto -mx-1">
+            <div className="overflow-x-auto overscroll-x-contain -mx-1">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-faint text-left">

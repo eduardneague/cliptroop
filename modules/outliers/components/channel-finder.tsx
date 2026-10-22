@@ -100,7 +100,7 @@ export function ChannelFinder({
       {rows && (
         <div className="space-y-2">
           {rows.length ? (
-            <ul className="rounded-xl border border-line/10 divide-y divide-line/[0.07] max-h-[min(46vh,420px)] overflow-y-auto styled-scroll">
+            <ul className="rounded-xl border border-line/10 divide-y divide-line/[0.07] max-h-[min(46vh,420px)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
               {rows.map((c) => {
                 const there = have?.has(c.id) ?? false;
                 const on = picked.has(c.id);

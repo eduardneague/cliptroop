@@ -143,7 +143,7 @@ export function VideoTable({ teamId, platform, videos, currency, withMoney }: { 
         </span>
       </div>
       {list.length ? (
-        <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+        <div className="rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
           <table className="w-full min-w-[900px] text-[12px]">
             <thead>
               <tr className="bg-surface-2 text-[10.5px] text-ink-faint">

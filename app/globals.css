@@ -47,6 +47,18 @@
   --score-yellow: #e2b10f;
   --score-lime: #8cc23f;
   --score-green: #2fa652;
+  /* Outliers' multiplier (1.29.9): red under its usual, yellow 2–5×, green from 5× (deeper from 10×).
+     Its own colours, never the theme's (a multiplier in the accent read like a button). Each fill
+     comes with the number's colour on it (--m-on-*) and a colour for the number on the page (*-ink). */
+  --m-red: 220 38 38;
+  --m-red-ink: 185 28 28;
+  --m-yellow: 234 179 8;
+  --m-yellow-ink: 161 98 7;
+  --m-on-yellow: 66 50 0;
+  --m-green: 21 128 61;
+  --m-green-2: 22 101 52;
+  --m-green-ink: 21 128 61;
+  --m-on-green: 255 255 255;
   /* A chart's "N videos posted" chip (1.23.1): a fill and its number that read on each other. */
   --mark-short: 234 88 12;
   --mark-long: 2 132 199;
@@ -116,6 +128,16 @@
   --score-yellow: #f1c84b;
   --score-lime: #a3d45c;
   --score-green: #43bd66;
+  /* The multiplier on the dark surface: brighter fills with a dark number on them. */
+  --m-red: 248 113 113;
+  --m-red-ink: 248 113 113;
+  --m-yellow: 250 204 21;
+  --m-yellow-ink: 250 204 21;
+  --m-on-yellow: 66 50 0;
+  --m-green: 74 222 128;
+  --m-green-2: 34 197 94;
+  --m-green-ink: 74 222 128;
+  --m-on-green: 5 46 22;
   /* Light fills on the dark surface: a dark number on them (white couldn't be read). */
   --mark-short: 251 146 60;
   --mark-long: 56 189 248;
@@ -760,40 +782,63 @@ html.dark[data-glass] .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
 .wash-pick::-webkit-color-swatch { border: none; border-radius: 5px; }
 .wash-pick::-moz-color-swatch { border: none; border-radius: 5px; }
 
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+/* ---------------------------------------------------------------------------
+   Scroll bars (1.29.10): one look everywhere. A thin grey line (never the
+   theme's colour), a little wider and darker under the pointer, no arrow
+   buttons; in a rounded box or menu it keeps clear of the corners.
 
-.styled-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--amber) / 0.55) transparent;
-}
-.styled-scroll::-webkit-scrollbar {
-  width: 7px;
-}
-.styled-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.styled-scroll::-webkit-scrollbar-thumb {
-  background: rgb(var(--amber) / 0.45);
-  border-radius: 8px;
-}
-.styled-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--amber) / 0.75);
-}
+   Only where the system's scroll bars take room (Windows, Linux, a Mac set to
+   always show them): app/layout.tsx's first script measures and sets
+   <html data-bars="classic">. Phones and a Mac's own bars float over the
+   page and fade away; those stay as they are (in dark mode they're light,
+   from color-scheme).
 
-/* The side bar's scroll bar (1.29.1): only when you point at the bar, and
-   grey (the theme's colour down the edge of every page was loud). */
-.side-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
-.side-scroll:hover { scrollbar-color: rgb(var(--line) / 0.28) transparent; }
-.side-scroll::-webkit-scrollbar { width: 6px; }
-.side-scroll::-webkit-scrollbar-track { background: transparent; }
-.side-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
-.side-scroll:hover::-webkit-scrollbar-thumb { background: rgb(var(--line) / 0.28); }
+   Chrome draws them from the -webkit- rules below, but ignores those on any
+   box where scrollbar-width or scrollbar-color is set (scrollbar-color is
+   inherited too): Windows then draws its own bar, with arrow buttons and
+   square ends that don't fit a rounded box (what showed up all over the app
+   before). So those two are only ever set for Firefox.
+
+     (no class)       every scroll bar, the page's own too
+     .styled-scroll   a rounded box, a popup's body, a menu
+     .widget-scroll   a list inside a widget: its own lane, faint until pointed at
+     .side-scroll     the side bar: only while pointed at
+     .no-scrollbar    none (rows you swipe); a swipe past their end never
+                      turns into the browser's back / forward
+   ------------------------------------------------------------------------- */
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+html[data-bars="classic"]::-webkit-scrollbar, html[data-bars="classic"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-bars="classic"]::-webkit-scrollbar-track, html[data-bars="classic"] ::-webkit-scrollbar-track { background: transparent; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb, html[data-bars="classic"] ::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.2); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; min-height: 36px; min-width: 36px; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb:hover, html[data-bars="classic"] ::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.36); border-width: 2px; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb:active, html[data-bars="classic"] ::-webkit-scrollbar-thumb:active { background-color: rgb(var(--ink) / 0.46); border-width: 2px; }
+html[data-bars="classic"]::-webkit-scrollbar-button, html[data-bars="classic"] ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+html[data-bars="classic"]::-webkit-scrollbar-corner, html[data-bars="classic"] ::-webkit-scrollbar-corner { background: transparent; }
+html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:vertical { margin-top: 10px; margin-bottom: 10px; }
+html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:horizontal { margin-left: 10px; margin-right: 10px; }
+.widget-scroll { overflow-y: auto; scrollbar-gutter: stable; padding-right: 4px; }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar { width: 8px; }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.1); border-width: 2px; }
+html[data-bars="classic"] .widget-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.26); }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.4); }
+/* Chrome restyles a scroll bar only when its box's own style changes: this makes pointing at the box count. */
+html[data-bars="classic"] :is(.widget-scroll, .side-scroll):hover { --bar-hover: 1; }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar { width: 8px; }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb { background-color: transparent; border-width: 2px; }
+html[data-bars="classic"] .side-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.2); }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.36); }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-x: contain; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+@supports not selector(::-webkit-scrollbar) {
+  html { scrollbar-color: rgb(var(--ink) / 0.25) transparent; }
+  * { scrollbar-width: thin; }
+  .widget-scroll { scrollbar-color: rgb(var(--ink) / 0.14) transparent; }
+  .widget-scroll:hover { scrollbar-color: rgb(var(--ink) / 0.3) transparent; }
+  .side-scroll { scrollbar-color: transparent transparent; }
+  .side-scroll:hover { scrollbar-color: rgb(var(--ink) / 0.22) transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+}
 
 /* The bell (1.29.1): a cleared notification folds away before it leaves. */
 .notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s var(--ease-out), opacity 0.16s ease; }
@@ -1698,20 +1743,7 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 @container (min-width: 800px) { .stat-grid[data-n="7"] { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 @container (min-width: 910px) { .stat-grid[data-n="8"] { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 
-/* Lists that scroll inside a widget: a thin scrollbar in its own lane (it
-   never covers a date, a badge or an avatar), faint until you point at it. */
-.widget-scroll {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--line) / 0.2) transparent;
-  scrollbar-gutter: stable;
-  padding-right: 4px;
-}
-.widget-scroll:hover { scrollbar-color: rgb(var(--amber) / 0.55) transparent; }
-.widget-scroll::-webkit-scrollbar { width: 6px; }
-.widget-scroll::-webkit-scrollbar-track { background: transparent; }
-.widget-scroll::-webkit-scrollbar-thumb { background: rgb(var(--line) / 0.2); border-radius: 6px; }
-.widget-scroll:hover::-webkit-scrollbar-thumb { background: rgb(var(--amber) / 0.55); }
+/* Lists that scroll inside a widget: .widget-scroll, with the other scroll bars (1.29.10). */
 
 /* ---------------------------------------------------------------------------
    To-do list: checking things off should feel good.
@@ -2048,6 +2080,8 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 }
 /* The multiplier: tabular figures, a hair tighter. */
 .mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* A niche filling in (1.29.9): when the list itself says "Finding channels and videos…", the line at the top doesn't say it again. */
+.ol-page:has([data-finding-note]) .ol-finding-banner { display: none; }
 /* A thumbnail wall: pictures fill their tiles, the title rises on hover/focus. */
 .thumb-tile .thumb-caption { opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
 .thumb-tile:hover .thumb-caption, .thumb-tile:focus-visible .thumb-caption { opacity: 1; transform: none; }

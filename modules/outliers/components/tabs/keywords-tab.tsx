@@ -70,7 +70,7 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
   };
   const maxN = Math.max(1, ...data.keywords.map((k) => k.n));
 
-  if (!data.keywords.length) return <EmptyNote title="Keywords show up once there are enough videos">A keyword needs a few videos from at least two channels.</EmptyNote>;
+  if (!data.keywords.length) return <EmptyNote title="Keywords show up once there are enough videos" finding>A keyword needs a few videos from at least two channels.</EmptyNote>;
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-6">
@@ -185,7 +185,7 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
       </div>
 
       <aside className="hidden lg:block min-w-0">
-        <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <KeywordDetail k={current} data={data} onPick={pickKey} />}</div>
+        <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <KeywordDetail k={current} data={data} onPick={pickKey} />}</div>
       </aside>
 
       <Dialog open={sheet} onClose={() => setSheet(false)} title={current ? current.k : "Keyword"} width="sm:max-w-2xl">

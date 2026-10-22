@@ -171,7 +171,7 @@ export function TitlesTab({ data }: { data: TitlesData }) {
             )}
 
             {!model ? (
-              <EmptyNote title="The lab needs some of the niche's videos first" className="mt-6" />
+              <EmptyNote title="The lab needs some of the niche's videos first" className="mt-6" finding />
             ) : !enough ? (
               <p className="mt-6 text-[13px] text-ink-soft">Scoring needs at least 40 videos in this niche ({model.n} so far). Rewrites and similar titles work already.</p>
             ) : s ? (

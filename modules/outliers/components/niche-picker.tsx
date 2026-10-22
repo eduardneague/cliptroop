@@ -61,8 +61,9 @@ export function NichePicker({
         {current?.explore && <span className="flex-shrink-0 rounded-md bg-violet/12 text-violet px-1.5 h-5 inline-flex items-center text-[11px] font-bold">Explore</span>}
         <ChevronDownIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={anchor} width={580} align="left" label="Niches">
-        <div className="p-1.5 max-h-[min(72vh,640px)] overflow-y-auto styled-scroll">
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={anchor} width={580} align="left" maxHeight={640} label="Niches">
+        {/* One scroller (the menu's own, with its fine bar: 1.29.9), not a second one inside it. */}
+        <div className="p-1.5">
           <div className="flex items-center justify-between gap-2 px-3 pt-1.5 pb-1">
             <p className="text-[11.5px] font-semibold text-ink-faint">Your niches</p>
             {canManage && (

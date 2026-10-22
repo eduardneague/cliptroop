@@ -468,7 +468,7 @@ function DocRail({
   const add = (kind: "script" | "research") => setAdding(kind);
 
   return (
-    <nav className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] lg:overflow-y-auto px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
+    <nav className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] lg:overflow-y-auto lg:overflow-x-hidden px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
       <div className="flex lg:flex-col gap-3 lg:gap-5 p-1">
         {groups.map((g) => (
           <div key={g.kind} className="flex lg:flex-col gap-1 flex-shrink-0">
@@ -1144,7 +1144,7 @@ export function CommentsChat({
               ))}
             </div>
           </header>
-          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2.5">
+          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2.5">
             {!list.length && !sending && (
               <p className="text-[13px] text-ink-soft text-center px-6 py-10">
                 {comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet. Select text, then choose Comment or Editing idea.`}

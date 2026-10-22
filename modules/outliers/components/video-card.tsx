@@ -38,7 +38,7 @@ export function VideoCard({ v, eager = false, hideChannel = false }: { v: Outlie
       </div>
       <div className="mt-2.5 flex gap-2.5 min-w-0">
         {!hideChannel && (
-          <button type="button" onClick={() => openChannel(v.channelId)} aria-label={`Open ${v.channel.title}`} className="mt-0.5 rounded-full focus-visible:ring-2 focus-visible:ring-amber">
+          <button type="button" onClick={() => openChannel(v.channelId, v.channel)} aria-label={`Open ${v.channel.title}`} className="mt-0.5 rounded-full focus-visible:ring-2 focus-visible:ring-amber">
             <ChannelAvatar src={v.channel.avatar} title={v.channel.title} size={30} />
           </button>
         )}
@@ -50,7 +50,7 @@ export function VideoCard({ v, eager = false, hideChannel = false }: { v: Outlie
           </h3>
           {!hideChannel && (
             <div className="mt-0.5 text-[12px] text-ink-faint truncate">
-              <button type="button" onClick={() => openChannel(v.channelId)} className="hover:text-ink">
+              <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="hover:text-ink">
                 {v.channel.title}
               </button>
               {v.channel.subs !== null && <span> · {compact(v.channel.subs)} subs</span>}
@@ -89,7 +89,7 @@ export function ShortCard({ v, eager = false }: { v: OutlierVideo; eager?: boole
         </button>
       </h3>
       <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-[11.5px] text-ink-faint">
-        <button type="button" onClick={() => openChannel(v.channelId)} className="truncate hover:text-ink">
+        <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="truncate hover:text-ink">
           {v.channel.title}
         </button>
         <span aria-hidden>·</span>
@@ -117,7 +117,7 @@ export function VideoRow({ v, rank, compact: tight = false, className = "" }: { 
           {v.title}
         </button>
         <div className="mt-0.5 text-[12px] text-ink-faint truncate">
-          <button type="button" onClick={() => openChannel(v.channelId)} className="hover:text-ink">
+          <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="hover:text-ink">
             {v.channel.title}
           </button>
           {v.channel.subs !== null && <span> · {compact(v.channel.subs)} subs</span>}
@@ -144,7 +144,7 @@ export function VideoTable({ rows: all }: { rows: OutlierVideo[] }) {
   const rows = useVisible(all);
   const th = "px-3 py-2.5 text-left text-[11.5px] font-semibold text-ink-faint whitespace-nowrap";
   return (
-    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
       <table className="w-full text-[13px]">
         <thead className="border-b border-line/10">
           <tr>
@@ -175,7 +175,7 @@ export function VideoTable({ rows: all }: { rows: OutlierVideo[] }) {
                   </button>
                 </td>
                 <td className="px-3 py-2 hidden lg:table-cell max-w-[180px]">
-                  <button type="button" onClick={() => openChannel(v.channelId)} className="flex items-center gap-2 min-w-0 text-left hover:text-ink text-ink-soft">
+                  <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="flex items-center gap-2 min-w-0 text-left hover:text-ink text-ink-soft">
                     <ChannelAvatar src={v.channel.avatar} title={v.channel.title} size={22} />
                     <span className="truncate">{v.channel.title}</span>
                   </button>
@@ -296,11 +296,11 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
           </button>
         </h3>
         <div className="mt-auto pt-3 flex items-center gap-2.5 min-w-0">
-          <button type="button" onClick={() => openChannel(v.channelId)} aria-label={`Open ${v.channel.title}`} className="rounded-full">
+          <button type="button" onClick={() => openChannel(v.channelId, v.channel)} aria-label={`Open ${v.channel.title}`} className="rounded-full">
             <ChannelAvatar src={v.channel.avatar} title={v.channel.title} size={32} />
           </button>
           <div className="min-w-0 text-[12.5px]">
-            <button type="button" onClick={() => openChannel(v.channelId)} className="block font-semibold truncate hover:underline">
+            <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="block font-semibold truncate hover:underline">
               {v.channel.title}
             </button>
             <span className="block text-ink-faint truncate">

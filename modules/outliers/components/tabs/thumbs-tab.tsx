@@ -96,7 +96,7 @@ export function ThumbsTab({ data }: { data: ThumbsData }) {
               )}
             </>
           ) : (
-            <EmptyNote title={family ? "No outliers in that colour here" : "No outlier thumbnails yet"} />
+            <EmptyNote title={family ? "No outliers in that colour here" : "No outlier thumbnails yet"} finding={!family} />
           )}
         </section>
 

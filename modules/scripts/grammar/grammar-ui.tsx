@@ -278,7 +278,7 @@ function Goals({ g, onBack }: { g: Grammar; onBack: () => void }) {
     setWord("");
   };
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-5">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3.5 space-y-5">
       <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
         <ArrowLeftIcon className="w-3.5 h-3.5" />
         Back to the suggestions
@@ -509,7 +509,7 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
                 </button>
               )}
             </div>
-            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-1.5">
               {(all.length > 0 || names.length > 0) && (
                 <div className="rounded-xl bg-surface-2 px-3 py-2 mb-2 space-y-2">
                   {all.length > 0 && (

@@ -180,7 +180,7 @@ function AudienceCard({ c, on, onToggle, niches, items }: { c: AudienceChannel; 
             {on && <CheckIcon className="w-3.5 h-3.5" />}
           </button>
         )}
-        <button type="button" onClick={() => ctx.openChannel(c.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+        <button type="button" onClick={() => ctx.openChannel(c.id, c)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
           <ChannelAvatar src={c.avatar} title={c.title || "?"} size={42} />
           <span className="min-w-0">
             <span className="block text-[14px] font-semibold truncate hover:underline">{c.title || "A channel"}</span>

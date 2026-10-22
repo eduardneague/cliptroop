@@ -13,8 +13,8 @@ import { countryName, langName } from "../lib/regions";
 import type { ChannelDetail, ChannelRowData, OutlierVideo } from "../lib/types";
 import { ChannelAvatar, EyeOffIcon, FitChip, heat, Mult, NicheDot, PeopleIcon, SourceNote, Tile, TimeAgo, youtubeChannel } from "./bits";
 import { BarsChart, PostingHeat, ShareBar } from "./charts";
-import { useOutliers, useOutliersBlocked } from "./context";
-import { PanelSection, PanelShell } from "./panel";
+import { channelPreviews, useOutliers, useOutliersBlocked } from "./context";
+import { PanelContent, PanelSection } from "./panel";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
 import { VideoGrid, VideoRow } from "./video-card";
@@ -62,6 +62,9 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
   const error = state.id === id ? state.error : null;
   const c = d?.channel;
   const { blocked, hide, unhide } = useOutliersBlocked();
+  // Its name and picture from the button that opened it, while the rest loads (1.29.9: no "Opening…" between a video and its channel).
+  const pre = !d && !error ? channelPreviews.get(id) ?? null : null;
+  const who = c ? { id: c.id, title: c.title, avatar: c.avatar, handle: c.handle } : pre ? { id, title: pre.title, avatar: pre.avatar, handle: null } : null;
 
   // Still being read (or only a few videos in): it looks again a few times, until they're in.
   const [waited, setWaited] = useState<string | null>(null);
@@ -91,31 +94,28 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
   }, [id, reading]);
 
   return (
-    <PanelShell
-      label={c ? c.title : "Channel"}
-      onClose={ctx.closePanel}
-      onBack={ctx.trail.length ? ctx.panelBack : null}
-      backLabel="Back to the last one"
-      bodyKey={id}
+    <PanelContent
+      label={who ? who.title : "Channel"}
+      bodyKey={`c:${id}`}
       header={
-        c ? (
+        who ? (
           <>
-            <span className="text-[13.5px] font-semibold truncate min-w-0">{c.title}</span>
+            <span className="text-[13.5px] font-semibold truncate min-w-0">{who.title}</span>
             <span className="flex-1" />
             <div className="flex items-center gap-1.5">
-              <TrackButton channelId={c.id} />
-              <SaveButton channelId={c.id} menu />
-              {blocked.has(c.id) ? (
-                <button type="button" onClick={() => unhide(c.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red/30 bg-red/[0.06] px-3 h-9 text-[13px] font-semibold text-red hover:bg-red/10" title="Hidden: its videos don't show in Outliers. Click to show them again.">
+              <TrackButton channelId={who.id} />
+              <SaveButton channelId={who.id} menu />
+              {blocked.has(who.id) ? (
+                <button type="button" onClick={() => unhide(who.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red/30 bg-red/[0.06] px-3 h-9 text-[13px] font-semibold text-red hover:bg-red/10" title="Hidden: its videos don't show in Outliers. Click to show them again.">
                   <EyeOffIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">Hidden</span>
                 </button>
               ) : (
-                <button type="button" onClick={() => hide(c.id, c.title, c.avatar)} aria-label={`Hide ${c.title}`} title="Hide this channel: its videos never show in Outliers again" className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-red hover:border-red/40">
+                <button type="button" onClick={() => hide(who.id, who.title, who.avatar)} aria-label={`Hide ${who.title}`} title="Hide this channel: its videos never show in Outliers again" className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-red hover:border-red/40">
                   <EyeOffIcon className="w-4 h-4" />
                 </button>
               )}
-              <a href={youtubeChannel(c.id, c.handle)} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube" title="Open on YouTube" className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30">
+              <a href={youtubeChannel(who.id, who.handle)} target="_blank" rel="noopener noreferrer" aria-label="Open on YouTube" title="Open on YouTube" className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30">
                 <ExternalIcon className="w-4 h-4" />
               </a>
             </div>
@@ -131,14 +131,25 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
           <p className="mt-1 text-[13px] text-ink-soft">{error}</p>
         </div>
       ) : !d ? (
-        <div className="p-4 sm:p-6 space-y-4" aria-busy="true">
-          <div className="flex items-center gap-4">
-            <div className="skeleton w-16 h-16 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <div className="skeleton h-6 w-1/2 rounded-md" />
-              <div className="skeleton h-4 w-1/3 rounded-md" />
+        <div className="px-4 sm:px-6 py-5 space-y-7" aria-busy="true">
+          {pre ? (
+            // Where the loaded header will be, so nothing moves when it arrives.
+            <div className="flex items-start gap-4">
+              <ChannelAvatar src={pre.avatar} title={pre.title} size={68} />
+              <div className="flex-1 min-w-0">
+                <h2 className="font-display text-[23px] sm:text-[26px] leading-tight font-semibold">{pre.title}</h2>
+                <p className="mt-1 text-[12.5px] text-ink-soft">{pre.subs !== null ? `${compact(pre.subs)} subscribers` : "Opening its videos…"}</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="skeleton w-16 h-16 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <div className="skeleton h-6 w-1/2 rounded-md" />
+                <div className="skeleton h-4 w-1/3 rounded-md" />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="skeleton h-[72px] rounded-xl" />
@@ -149,7 +160,7 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
       ) : (
         <ChannelBody d={d} reading={reading} />
       )}
-    </PanelShell>
+    </PanelContent>
   );
 }
 
@@ -407,7 +418,7 @@ export function ChannelMini({ c }: { c: ChannelRowData }) {
   const rate = c.stored ? c.outliers / c.stored : null;
   return (
     <li>
-      <button type="button" onClick={() => openChannel(c.id)} className="w-full flex items-center gap-3 rounded-xl border border-line/10 bg-surface px-3 py-2.5 text-left hover:border-line/25">
+      <button type="button" onClick={() => openChannel(c.id, c)} className="w-full flex items-center gap-3 rounded-xl border border-line/10 bg-surface px-3 py-2.5 text-left hover:border-line/25">
         <ChannelAvatar src={c.avatar} title={c.title} size={36} />
         <span className="min-w-0 flex-1">
           <span className="block text-[13.5px] font-semibold truncate">{c.title}</span>

@@ -33,7 +33,7 @@ export function CardMenu({ v, overlay = false, className = "" }: { v: Pick<Outli
             role="menuitem"
             onClick={() => {
               setOpen(false);
-              openChannel(v.channelId);
+              openChannel(v.channelId, v.channel);
             }}
             className={row}
           >
@@ -89,7 +89,7 @@ export function ChannelMenu({ c, items = [], className = "" }: { c: { id: string
       </button>
       <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={anchor} width={280} label="More">
         <div className="p-1.5">
-          <button type="button" role="menuitem" onClick={pick(() => openChannel(c.id))} className={row}>
+          <button type="button" role="menuitem" onClick={pick(() => openChannel(c.id, c))} className={row}>
             <ChannelAvatar src={c.avatar} title={c.title} size={22} />
             <span className="flex-1 truncate">Open {c.title || "the channel"}</span>
           </button>

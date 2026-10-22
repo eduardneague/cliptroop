@@ -23,6 +23,29 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.10",
+    date: "2026-10-22",
+    title: "Scroll bars that fit",
+    changes: [
+      { kind: "fixed", text: "Scroll bars on Windows: no more arrow buttons or square, theme coloured bars poking out of rounded boxes. Every list, menu, window and page now has one thin grey bar that keeps clear of rounded corners and gets a little wider when you point at it." },
+      { kind: "fixed", text: "Lists that scroll up and down no longer also scroll sideways when something inside is a bit too wide." },
+      { kind: "better", text: "Swiping sideways on a table or a row of cards stops at its end instead of taking the browser back a page." },
+      { kind: "better", text: "On a Mac and on phones the system's own scroll bars stay, and in dark mode they're light so you can see them." },
+    ],
+  },
+  {
+    version: "1.29.9",
+    date: "2026-10-22",
+    title: "Outliers: a steadier panel and clearer numbers",
+    changes: [
+      { kind: "fixed", text: "In an idea, the arrow next to Start a video opens its menu on top of the idea again (it opened behind it). Esc closes just the menu." },
+      { kind: "better", text: "A niche that's still finding its first channels says Finding channels and videos, with a preview of the cards on their way, instead of No videos match. The page fills in by itself." },
+      { kind: "better", text: "The side panel stays open while you go from a video to its channel, to another video and back. Only what's inside changes, with a soft fade, instead of the panel closing and sliding in again. A channel's name and picture show at once while the rest loads." },
+      { kind: "better", text: "Multipliers have their own colours: red under the channel's usual, yellow from 2×, green from 5× (deeper from 10×, glowing from 25×). Never your theme's colour." },
+      { kind: "better", text: "Thin, rounded scroll bars without arrow buttons in the niche picker and every dropdown menu." },
+    ],
+  },
+  {
     version: "1.29.8",
     date: "2026-10-22",
     title: "Clip covers a change of look",

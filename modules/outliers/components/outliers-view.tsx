@@ -13,7 +13,7 @@ import { FIT_VERSION } from "../lib/fit";
 import type { BlockedChannel, ChannelDetail, Folder, Kind, NicheInfo, OutlierSettings, SaveRef, VideoDetail } from "../lib/types";
 import { TABS, type TabData, type TabId } from "../lib/view";
 import dynamic from "next/dynamic";
-import { BTN_MAIN, DiceIcon, GearIcon, ICON_BTN, OutliersIcon, TimeAgo } from "./bits";
+import { BTN_MAIN, DiceIcon, FindingCtx, GearIcon, ICON_BTN, OutliersIcon, TimeAgo } from "./bits";
 import { OutliersProvider, useOutliers } from "./context";
 import { NichePicker } from "./niche-picker";
 import { shallowParam, ShellNavCtx, type ShellNav, type ShellTarget } from "./shell-nav";
@@ -33,8 +33,7 @@ const CHUNKS = {
   titles: () => import("./tabs/titles-tab"),
   thumbnails: () => import("./tabs/thumbs-tab"),
   saved: () => import("./tabs/saved-tab"),
-  video: () => import("./video-panel"),
-  channel: () => import("./channel-panel"),
+  panels: () => import("./panels"),
   niche: () => import("./niche-dialog"),
   settings: () => import("./settings-dialog"),
 };
@@ -57,8 +56,8 @@ const AudienceTab = dynamic(() => CHUNKS.audience().then((m) => m.AudienceTab), 
 const TitlesTab = dynamic(() => CHUNKS.titles().then((m) => m.TitlesTab), { loading: TabLoading });
 const ThumbsTab = dynamic(() => CHUNKS.thumbnails().then((m) => m.ThumbsTab), { loading: TabLoading });
 const SavedTab = dynamic(() => CHUNKS.saved().then((m) => m.SavedTab), { loading: TabLoading });
-const VideoPanel = dynamic(() => CHUNKS.video().then((m) => m.VideoPanel));
-const ChannelPanel = dynamic(() => CHUNKS.channel().then((m) => m.ChannelPanel));
+// Both panels in one piece (1.29.9): the side panel stays open from a video to its channel and back.
+const Panels = dynamic(() => CHUNKS.panels().then((m) => m.Panels));
 const NicheDialog = dynamic(() => CHUNKS.niche().then((m) => m.NicheDialog));
 const SettingsDialog = dynamic(() => CHUNKS.settings().then((m) => m.SettingsDialog));
 
@@ -144,8 +143,7 @@ function Shell(props: OutliersViewProps) {
   useEffect(() => {
     const w = window as Window & { requestIdleCallback?: (f: () => void) => number; cancelIdleCallback?: (h: number) => void };
     const go = () => {
-      preload("video");
-      preload("channel");
+      preload("panels");
       preload("niche");
       preload("settings");
     };
@@ -232,6 +230,8 @@ function Shell(props: OutliersViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n?.id]);
   const watching = filling || collecting || checking || exploreKicked;
+  // A niche with next to nothing yet, being filled now: its empty lists say so ("Finding channels and videos…", 1.29.9).
+  const finding = n && (filling || exploreKicked || collecting) && (n.counts?.videos ?? 0) < 30 ? n.name : null;
   useEffect(() => {
     if (!watching) return;
     const looks = [15, 30, 50, 75, 105, 140, 190, 250].map((s) => window.setTimeout(() => router.refresh(), s * 1000));
@@ -306,7 +306,7 @@ function Shell(props: OutliersViewProps) {
 
   return (
     <ShellNavCtx.Provider value={navValue}>
-      <div ref={page} className="px-4 sm:px-8 xl:px-10 pt-5 sm:pt-8 pb-8 w-full max-w-[1760px] mx-auto" style={{ ["--ol-bar" as string]: "104px" }}>
+      <div ref={page} className="ol-page px-4 sm:px-8 xl:px-10 pt-5 sm:pt-8 pb-8 w-full max-w-[1760px] mx-auto" style={{ ["--ol-bar" as string]: "104px" }}>
         <header className="mb-4">
           <div className="flex items-start justify-between gap-x-6 gap-y-3 flex-wrap">
             <div className="min-w-0">
@@ -388,7 +388,8 @@ function Shell(props: OutliersViewProps) {
             </div>
           )}
           {(watching || checking) && (
-            <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-blue/25 bg-blue/[0.06] px-4 py-2.5 text-[13px] text-ink-soft" role="status">
+            // Not twice: a list that says it's finding them already (hidden then, see globals.css).
+            <div className={`mt-4 flex items-center gap-2.5 rounded-xl border border-blue/25 bg-blue/[0.06] px-4 py-2.5 text-[13px] text-ink-soft ${finding && !checking ? "ol-finding-banner" : ""}`} role="status">
               <span className="w-3.5 h-3.5 rounded-full border-2 border-blue/30 border-t-blue animate-spin flex-shrink-0" aria-hidden />
               {checking
                 ? `Checking which channels really belong in ${n?.name ?? "this niche"} (language, where they're from, what they post)… this page updates by itself.`
@@ -459,21 +460,22 @@ function Shell(props: OutliersViewProps) {
         </div>
 
         <div className={`transition-opacity duration-200 ${pending ? "opacity-50 pointer-events-none" : ""}`} aria-busy={busy || undefined}>
-          {data.tab === "home" && <HomeTab data={data} />}
-          {data.tab === "search" && <SearchTab data={data} />}
-          {data.tab === "ideas" && <IdeasTab data={data} />}
-          {data.tab === "formats" && <FormatsTab data={data} />}
-          {data.tab === "keywords" && <KeywordsTab data={data} />}
-          {data.tab === "channels" && <ChannelsTab data={data} onEditNiche={(x) => setNicheDialog({ open: true, niche: x })} />}
-          {data.tab === "audience" && <AudienceTab data={data} />}
-          {data.tab === "titles" && <TitlesTab data={data} />}
-          {data.tab === "thumbnails" && <ThumbsTab data={data} />}
-          {data.tab === "saved" && <SavedTab data={data} />}
+          <FindingCtx.Provider value={finding}>
+            {data.tab === "home" && <HomeTab data={data} />}
+            {data.tab === "search" && <SearchTab data={data} />}
+            {data.tab === "ideas" && <IdeasTab data={data} />}
+            {data.tab === "formats" && <FormatsTab data={data} />}
+            {data.tab === "keywords" && <KeywordsTab data={data} />}
+            {data.tab === "channels" && <ChannelsTab data={data} onEditNiche={(x) => setNicheDialog({ open: true, niche: x })} />}
+            {data.tab === "audience" && <AudienceTab data={data} />}
+            {data.tab === "titles" && <TitlesTab data={data} />}
+            {data.tab === "thumbnails" && <ThumbsTab data={data} />}
+            {data.tab === "saved" && <SavedTab data={data} />}
+          </FindingCtx.Provider>
         </div>
       </div>
 
-      {ctx.panel?.type === "video" && <VideoPanel id={ctx.panel.id} initial={props.initialVideo && props.initialVideo.video.id === ctx.panel.id ? props.initialVideo : null} />}
-      {ctx.panel?.type === "channel" && <ChannelPanel id={ctx.panel.id} initial={props.initialChannel && props.initialChannel.channel.id === ctx.panel.id ? props.initialChannel : null} />}
+      {ctx.panel && <Panels panel={ctx.panel} initialVideo={props.initialVideo} initialChannel={props.initialChannel} />}
 
       <NicheDialog teamId={ctx.teamId} open={nicheDialog.open} niche={nicheDialog.niche} onClose={() => setNicheDialog({ open: false, niche: null })} suggestions={props.suggest} kind={props.kind} teamLang={props.teamLang} />
       <SettingsDialog teamId={ctx.teamId} open={settings.open} tab={settings.tab} onClose={() => setSettings((s) => ({ ...s, open: false }))} settings={props.settings} canEdit={props.isMaster} />

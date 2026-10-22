@@ -141,7 +141,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
         className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-amber"
       />
       {(results.length > 0 || loading) && (
-        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 rounded-lg border border-line/10 bg-surface shadow-lg p-1 max-h-64 overflow-y-auto styled-scroll">
+        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 rounded-lg border border-line/10 bg-surface shadow-lg p-1 max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
           {loading && <div className="px-3 py-3 text-[12px] text-ink-faint">Searching…</div>}
           {!loading &&
             results.map((r, i) => {

@@ -26,11 +26,15 @@ export type Panel = { type: "video" | "channel"; id: string };
 export type OutliersNav = {
   /** `preview`: what the card already knows (the panel shows it at once while the rest loads). */
   openVideo: (id: string, preview?: OutlierVideo) => void;
-  openChannel: (id: string) => void;
+  openChannel: (id: string, preview?: ChannelPreview) => void;
 };
 
 /** What a card knew about a video when it was opened (the panel's first picture). */
 export const previews = new Map<string, OutlierVideo>();
+
+/** A channel's name and picture as the button that opened it knew them (1.29.9: its panel shows them at once). */
+export type ChannelPreview = { title: string; avatar: string | null; subs?: number | null };
+export const channelPreviews = new Map<string, { title: string; avatar: string | null; subs: number | null }>();
 
 /** Channels the team hid (1.29.0): they leave every list at once. */
 export type OutliersBlocked = {
@@ -194,7 +198,10 @@ export function OutliersProvider({
         if (preview) previews.set(id, preview);
         open({ type: "video", id });
       },
-      openChannel: (id) => open({ type: "channel", id }),
+      openChannel: (id, preview) => {
+        if (preview?.title) channelPreviews.set(id, { title: preview.title, avatar: preview.avatar, subs: preview.subs ?? null });
+        open({ type: "channel", id });
+      },
     }),
     [open]
   );

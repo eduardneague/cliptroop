@@ -132,7 +132,7 @@ export function TransferOwnership({
         </button>
 
         {open && (
-          <div className="absolute top-[calc(100%+6px)] left-0 right-0 min-w-[220px] rounded-lg border border-line/10 bg-surface shadow-lg p-1 z-40 max-h-64 overflow-y-auto styled-scroll">
+          <div className="absolute top-[calc(100%+6px)] left-0 right-0 min-w-[220px] rounded-lg border border-line/10 bg-surface shadow-lg p-1 z-40 max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {candidates.map((c) => (
               <button
                 key={c.userId}

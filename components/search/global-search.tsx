@@ -649,7 +649,7 @@ export function GlobalSearch({
               )}
 
               {/* Body */}
-              <div ref={listRef} id="global-search-results" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto overscroll-contain styled-scroll">
+              <div ref={listRef} id="global-search-results" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
                 {invitee ? (
                   <InvitePanel
                     person={invitee}

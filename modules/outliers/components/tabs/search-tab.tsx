@@ -163,7 +163,7 @@ export function SearchTab({ data }: { data: SearchData }) {
   return (
     <div className="lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)] 2xl:grid-cols-[19rem_minmax(0,1fr)] lg:gap-8">
       <aside className="hidden lg:block" aria-label="Filters">
-        <div className="sticky top-[calc(3.5rem+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-3.5rem-var(--ol-bar,104px)-1.5rem)] overflow-y-auto styled-scroll pr-2 -mr-2 pb-6">
+        <div className="sticky top-[calc(3.5rem+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-3.5rem-var(--ol-bar,104px)-1.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll pr-2 -mr-2 pb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[14px] font-semibold">Filters{n ? ` · ${n}` : ""}</h2>
             {n > 0 && (
@@ -300,6 +300,15 @@ export function SearchTab({ data }: { data: SearchData }) {
         ) : (
           <EmptyNote
             title="No videos match"
+            finding
+            ghost={layout !== "table"}
+            findingAction={
+              chips.length > 0 ? (
+                <button type="button" onClick={() => apply({ q: f.q })} className={BTN}>
+                  Clear the filters
+                </button>
+              ) : undefined
+            }
             action={
               <>
                 {chips.length > 0 && (

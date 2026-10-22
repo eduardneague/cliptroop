@@ -227,7 +227,7 @@ function PostedMark({ items, left, top, size, when, withDay }: { items: Mark[]; 
                 {kinds.length ? ` · ${kindCounts(items)}` : ""}
               </p>
             </div>
-            <ul className="max-h-[300px] overflow-y-auto py-1">
+            <ul className="max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll py-1">
               {items.slice(0, 40).map((m, k) => {
                 const tall = m.kind === "short" || m.kind === "post";
                 const inner = (

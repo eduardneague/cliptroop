@@ -320,7 +320,7 @@ export function NotesPanel({
             <ExpandIcon className="w-[15px] h-[15px]" />
           </button>
         </div>
-        <div ref={listRef} className="space-y-3 mb-3 pr-2 max-h-[360px] overflow-y-auto styled-scroll">
+        <div ref={listRef} className="space-y-3 mb-3 pr-2 max-h-[360px] overflow-y-auto overflow-x-hidden styled-scroll">
           {renderItems()}
         </div>
         {renderComposer()}
@@ -347,7 +347,7 @@ export function NotesPanel({
                 <CloseIcon className="w-5 h-5" />
               </button>
             </div>
-            <div ref={expandedListRef} className="flex-1 overflow-y-auto styled-scroll px-5 py-4 space-y-3">
+            <div ref={expandedListRef} className="flex-1 overflow-y-auto overflow-x-hidden styled-scroll px-5 py-4 space-y-3">
               {renderItems()}
             </div>
             <div className="px-5 py-4 border-t border-line/10 flex-shrink-0">

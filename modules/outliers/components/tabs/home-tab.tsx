@@ -48,6 +48,8 @@ export function HomeTab({ data }: { data: HomeData }) {
   if (nothing)
     return (
       <EmptyNote
+        finding
+        ghost
         title={ctx.niche?.phase === "new" || ctx.niche?.counts?.videos === 0 ? "Collecting the first videos…" : "No outliers here yet"}
         action={
           <Link href={nav.href({ tab: "search" })} className="text-[13px] font-semibold text-amber hover:underline">
@@ -358,7 +360,7 @@ export function ExampleThumbs({ ids, examples, max = 3 }: { ids: string[]; examp
         <button key={e.id} type="button" onClick={() => openVideo(e.id)} title={`${e.title} · ${multText(e.score)}`} className={`relative rounded-md overflow-hidden bg-surface-2 ring-1 ring-line/10 hover:ring-line/40 flex-shrink-0 ${e.kind === "short" ? "w-[38px] aspect-[9/16]" : "w-[68px] aspect-video"}`}>
           <Thumb id={e.id} kind={e.kind} sizes="70px" tint={e.tint} />
           {e.score !== null && (
-            <span className="absolute bottom-0.5 left-0.5 rounded-[3px] px-1 text-[10px] font-display font-semibold leading-[14px] text-white" style={{ background: e.score >= 2 ? heat(e.score).solid : "rgb(0 0 0 / 0.7)" }}>
+            <span className="absolute bottom-0.5 left-0.5 rounded-[3px] px-1 text-[10px] font-display font-semibold leading-[14px]" style={e.score >= 2 ? { background: heat(e.score).solid, color: heat(e.score).on } : { background: "rgb(0 0 0 / 0.7)", color: "#fff" }}>
               {multText(e.score)}
             </span>
           )}

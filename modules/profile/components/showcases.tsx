@@ -198,7 +198,7 @@ function ContributionsShowcase({ d }: { d: ShowcaseData }) {
           <span className="font-semibold text-ink tabular-nums">{s.streak.best}</span> best
         </span>
       </div>
-      <div ref={scroller} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden styled-scroll flex">
+      <div ref={scroller} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden overscroll-x-contain styled-scroll flex">
         <div className="relative mx-auto flex-shrink-0" style={{ width: 53 * step, height: 7 * step }} role="img" aria-label={`${year} finished steps in the last year`}>
           {weeks.map((col, w) =>
             col.map((day, k) => {
@@ -335,14 +335,14 @@ function AboutShowcase({ text, isSelf, onEdit }: { text: string; isSelf: boolean
     ) : (
       <Empty>Nothing here yet.</Empty>
     );
-  return <p className="text-[13.5px] text-ink-soft leading-relaxed whitespace-pre-line overflow-y-auto styled-scroll h-full">{text}</p>;
+  return <p className="text-[13.5px] text-ink-soft leading-relaxed whitespace-pre-line overflow-y-auto overflow-x-hidden styled-scroll h-full">{text}</p>;
 }
 
 function TeamsShowcase({ teams }: { teams: ShowcaseData["teams"] }) {
   if (teams === null) return <Empty>Their teams are private.</Empty>;
   if (!teams.length) return <Empty>Not on a team yet.</Empty>;
   return (
-    <div className="flex flex-wrap gap-2 content-start overflow-y-auto styled-scroll h-full">
+    <div className="flex flex-wrap gap-2 content-start overflow-y-auto overflow-x-hidden styled-scroll h-full">
       {teams.map((t) => (
         <span key={t.id} className="inline-flex items-center gap-2 rounded-lg border border-line/10 pl-1 pr-3 h-9">
           <span className="w-7 h-7 rounded-md overflow-hidden flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: t.color }}>

@@ -767,7 +767,7 @@ function NotesList({
   onDelete: (id: string) => Promise<void>;
 }) {
   return (
-    <ol ref={listRef} tabIndex={-1} className="motion-stagger flex-1 overflow-y-auto overscroll-contain styled-scroll p-2 space-y-1.5 outline-none">
+    <ol ref={listRef} tabIndex={-1} className="motion-stagger flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll p-2 space-y-1.5 outline-none">
       {threads.length === 0 && (
         <li className="px-3 py-8 text-center text-[13px] text-ink-soft">
           {totalThreads === 0 ? "No notes yet. Press C to add one." : "All notes are resolved."}

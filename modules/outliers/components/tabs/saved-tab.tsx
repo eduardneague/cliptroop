@@ -285,7 +285,7 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
           <VideoCard v={item.video} />
         )
       ) : item.kind === "channel" && item.channel ? (
-        <button type="button" onClick={() => ctx.openChannel(item.channel!.id)} className="flex items-center gap-3 text-left rounded-xl p-1 hover:bg-surface-2/60">
+        <button type="button" onClick={() => ctx.openChannel(item.channel!.id, item.channel!)} className="flex items-center gap-3 text-left rounded-xl p-1 hover:bg-surface-2/60">
           <ChannelAvatar src={item.channel.avatar} title={item.channel.title} size={52} />
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-semibold truncate">{item.channel.title}</span>

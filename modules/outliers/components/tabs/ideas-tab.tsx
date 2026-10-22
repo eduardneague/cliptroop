@@ -88,7 +88,7 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
 
   if (!d.local && !d.cross)
     return (
-      <EmptyNote title="Ideas need some videos first">
+      <EmptyNote title="Ideas need some videos first" finding>
         They&rsquo;re built from the formats and topics that win in your niche. Once ClipTroop has collected its videos (a few minutes for a new niche), they show up here.
       </EmptyNote>
     );
@@ -297,6 +297,7 @@ function NoIdeas({ locked, scope, hiddenCount, onClear, onEvery, onBringBack, on
   return (
     <EmptyNote
       title="Not enough to go on here yet"
+      finding
       action={
         scope !== "every" ? (
           <button type="button" onClick={onEvery} className={BTN}>

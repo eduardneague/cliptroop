@@ -490,6 +490,43 @@ the glass) stay instant and don't use it. Outside the app shell
 `Skeleton` component) everywhere, so they take the theme's tint; don't draw
 loading blocks with greys of their own.
 
+**Outliers' panel, menus and colours (1.29.9).** The video and channel
+panels share ONE `PanelFrame` (`modules/outliers/components/panel.tsx`,
+mounted by `Panels` in `panels.tsx` while `ctx.panel` is set): a panel's
+own component renders `PanelContent` (its label, the bar's middle and its
+body), never a shell of its own, so moving between a video and a channel
+changes what's inside without closing and re-opening anything (no replayed
+slide-in, no backdrop flash, no scroll lock churn). Give a new panel kind
+the same treatment, in the same `panels.tsx` chunk. A button that opens a
+channel passes what it knows (`openChannel(id, { title, avatar, subs })`)
+so the panel shows the name at once. `AnchoredMenu` sits
+above popups (z 125; `Dialog` is 110, `Select` and `DatePicker` 130),
+places itself with `placeMenu` (`lib/menu-place.ts`: under its button, or
+over it when there's no room below) and takes Escape before the popup
+behind it. A multiplier's colour comes only from `heat()` / `HEAT`
+(`modules/outliers/lib/heat.ts`): red, yellow, green, never `--amber`;
+put a number on a fill with `heat(x).on`, not white. An empty list that's
+empty because a niche has no videos yet passes `finding` to `EmptyNote`.
+
+**Scroll bars (1.29.10).** One look, drawn in `globals.css` (the
+"Scroll bars" block) only where the system's bars take room: the root
+layout's first script measures and sets `<html data-bars="classic">`
+(Windows, Linux, a Mac set to always show them); phones and a Mac's
+floating bars stay native (`color-scheme` makes them light in dark mode).
+Never set `scrollbar-width` or `scrollbar-color` outside the Firefox-only
+`@supports not selector(::-webkit-scrollbar)` block: Chrome ignores every
+`::-webkit-scrollbar` rule on a box that has either (inherited too) and
+Windows then draws its own bar with arrow buttons. Classes: nothing for a
+plain scroller, `.styled-scroll` for a rounded box, popup body or menu (the
+bar keeps clear of the corners), `.widget-scroll` for a list in a widget,
+`.side-scroll` for the side bar, `.no-scrollbar` for swipe rows. A
+scroller that only goes up and down gets `overflow-x-hidden` (otherwise a
+too wide child makes it scroll sideways), and a table or strip that
+scrolls sideways gets `overscroll-x-contain` (a swipe past its end stays
+there instead of going back a page). A bar that changes when its box is
+pointed at needs the box's own style to change too (`--bar-hover`), or
+Chrome doesn't repaint it.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

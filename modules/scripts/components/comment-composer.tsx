@@ -117,7 +117,7 @@ export function CommentComposer({
       </div>
       <div className="relative">
         {q && suggestions.length > 0 && (
-          <ul role="listbox" aria-label="Mention someone" className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-10 max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-line/15 bg-surface shadow-2xl p-1 animate-[modalin_.1s_var(--ease-out)]">
+          <ul role="listbox" aria-label="Mention someone" className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-10 max-h-60 overflow-y-auto overflow-x-hidden styled-scroll rounded-xl border border-line/15 bg-surface shadow-2xl p-1 animate-[modalin_.1s_var(--ease-out)]">
             {suggestions.map((s, i) => (
               <li key={s.key}>
                 <button

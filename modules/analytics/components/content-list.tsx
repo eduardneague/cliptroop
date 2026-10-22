@@ -144,7 +144,7 @@ export function ContentList({ items, platform, kind, empty, left }: { items: Con
           <p className="rounded-2xl border border-dashed border-line/20 py-10 px-6 text-center text-[13.5px] text-ink-soft">{kind !== "all" ? `No ${KIND_PLURAL[kind]} here.` : empty}</p>
         ) : view === "table" ? (
           // (relative: the hidden labels inside scroll with the table instead of widening the page.)
-          <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+          <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
             <table className={`w-full text-[13px] ${reach ? "min-w-[980px]" : "min-w-[820px]"}`}>
               <thead>
                 <tr className="bg-surface-2 text-[10.5px] text-ink-faint text-left">

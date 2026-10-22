@@ -327,7 +327,7 @@ export function LinkWindow({ href, onClose }: { href: string; onClose: () => voi
             )}
           </>
         ) : blocked ? (
-          <div className="absolute inset-0 overflow-y-auto p-5 sm:p-8 flex flex-col items-center justify-center text-center">
+          <div className="absolute inset-0 overflow-y-auto overflow-x-hidden p-5 sm:p-8 flex flex-col items-center justify-center text-center">
             {p?.image && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.image} alt="" className="w-full max-w-md max-h-64 object-cover rounded-xl mb-5 shadow" referrerPolicy="no-referrer" />

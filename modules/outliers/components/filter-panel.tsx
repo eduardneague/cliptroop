@@ -285,7 +285,7 @@ export function FilterPanel({
           </ul>
         )}
         {pickChannels ? (
-          <ul className="max-h-64 overflow-y-auto styled-scroll -mx-1 px-1 space-y-0.5">
+          <ul className="max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll -mx-1 px-1 space-y-0.5">
             {channels
               .filter((c) => !excluded.includes(c.id))
               .map((c) => (

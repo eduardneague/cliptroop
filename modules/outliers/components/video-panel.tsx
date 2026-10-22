@@ -17,7 +17,7 @@ import { BRIGHTNESS_HELP, ChannelAvatar, COLOURFUL_HELP, EyeOffIcon, FormatChip,
 import { BarsChart, ScoreDial, Swatches } from "./charts";
 import { previews, useOutliers, useOutliersBlocked } from "./context";
 import { IdeaCard, useIdeaMarks } from "./idea-card";
-import { PanelSection, PanelShell } from "./panel";
+import { PanelContent, PanelSection } from "./panel";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
 import { useNicheModel } from "./use-model";
@@ -94,16 +94,13 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
   const head = d ? { channelId: d.video.channelId, title: d.channel.title, avatar: d.channel.avatar, subs: d.channel.subs } : preview ? { channelId: preview.channelId, title: preview.channel.title, avatar: preview.channel.avatar, subs: preview.channel.subs } : null;
 
   return (
-    <PanelShell
+    <PanelContent
       label={v ? v.title : "Video"}
-      onClose={ctx.closePanel}
-      onBack={ctx.trail.length ? ctx.panelBack : null}
-      backLabel="Back to the last one"
-      bodyKey={id}
+      bodyKey={`v:${id}`}
       header={
         head ? (
           <>
-            <button type="button" onClick={() => ctx.openChannel(head.channelId)} className="flex items-center gap-2.5 min-w-0 rounded-lg pr-2 hover:bg-surface-2 py-1 pl-1 -ml-1">
+            <button type="button" onClick={() => ctx.openChannel(head.channelId, head)} className="flex items-center gap-2.5 min-w-0 rounded-lg pr-2 hover:bg-surface-2 py-1 pl-1 -ml-1">
               <ChannelAvatar src={head.avatar} title={head.title} size={32} />
               <span className="min-w-0 text-left">
                 <span className="block text-[13.5px] font-semibold truncate">{head.title}</span>
@@ -151,7 +148,7 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
       ) : (
         <VideoBody d={d} />
       )}
-    </PanelShell>
+    </PanelContent>
   );
 }
 

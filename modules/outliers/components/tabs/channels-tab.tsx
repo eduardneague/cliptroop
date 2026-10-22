@@ -293,7 +293,7 @@ export function ChannelsTab({ data, onEditNiche }: { data: ChannelsData; onEditN
           <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {extra.map((c) => (
               <li key={c.id} className="flex items-center gap-3 rounded-xl border border-line/10 bg-surface px-3 py-2.5">
-                <button type="button" onClick={() => ctx.openChannel(c.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+                <button type="button" onClick={() => ctx.openChannel(c.id, c)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
                   <ChannelAvatar src={c.avatar} title={c.title} size={38} />
                   <span className="min-w-0">
                     <span className="block text-[13.5px] font-semibold truncate hover:underline">{c.title}</span>
@@ -359,6 +359,7 @@ export function ChannelsTab({ data, onEditNiche }: { data: ChannelsData; onEditN
       ) : (
         <EmptyNote
           title={empty.title}
+          finding={data.only === "all" && !data.q}
           action={
             ctx.canManage && (data.only === "all" || data.only === "group") && !data.q ? (
               <button type="button" onClick={() => setAdding(true)} className={BTN_MAIN}>
@@ -401,7 +402,7 @@ function ChannelTable({ rows, showFit, itemsFor }: { rows: ChannelRowData[]; sho
   const th = "px-3 py-2.5 text-left text-[11.5px] font-semibold text-ink-faint whitespace-nowrap";
   const short = ctx.kind === "short";
   return (
-    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
       <table className="w-full text-[13px]">
         <thead className="border-b border-line/10">
           <tr>
@@ -423,7 +424,7 @@ function ChannelTable({ rows, showFit, itemsFor }: { rows: ChannelRowData[]; sho
           {rows.map((c) => (
             <tr key={c.id} className="hover:bg-surface-2/40">
               <td className="px-3 py-2 min-w-[220px]">
-                <button type="button" onClick={() => ctx.openChannel(c.id)} className="flex items-center gap-2.5 text-left min-w-0">
+                <button type="button" onClick={() => ctx.openChannel(c.id, c)} className="flex items-center gap-2.5 text-left min-w-0">
                   <ChannelAvatar src={c.avatar} title={c.title || "?"} size={34} />
                   <span className="min-w-0">
                     <span className="block font-semibold truncate max-w-[18rem] hover:underline">{c.title || "A channel"}</span>
@@ -482,7 +483,7 @@ function ChannelCards({ rows, showFit, itemsFor }: { rows: ChannelRowData[]; sho
       {rows.map((c) => (
         <li key={c.id} className="rounded-2xl border border-line/10 bg-surface p-4">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => ctx.openChannel(c.id)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+            <button type="button" onClick={() => ctx.openChannel(c.id, c)} className="flex items-center gap-3 min-w-0 flex-1 text-left">
               <ChannelAvatar src={c.avatar} title={c.title || "?"} size={44} />
               <span className="min-w-0">
                 <span className="block text-[14px] font-semibold truncate">{c.title || "A channel"}</span>
