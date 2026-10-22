@@ -60,13 +60,17 @@ export function ThumbsTab({ data }: { data: ThumbsData }) {
                 { value: "year", label: "Year" },
               ]}
             />
-            <div className="relative flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {/* The colours wrap when there's no room (1.30.1: nothing slides sideways, and the picked one's ring shows whole). */}
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Colour">
               <button type="button" aria-pressed={!family} onClick={() => setFamily(null)} className={`flex-shrink-0 rounded-lg border px-2.5 h-8 text-[12.5px] font-semibold ${!family ? "border-amber/60 bg-amber/12" : "border-line/15 text-ink-soft hover:text-ink"}`}>
                 Every colour
               </button>
-              {(families.length ? families.map((f) => f.id) : Object.keys(FAMILY_HEX)).map((id) => (
-                <button key={id} type="button" aria-pressed={family === id} aria-label={id} title={id} onClick={() => setFamily(family === id ? null : id)} className={`flex-shrink-0 w-8 h-8 rounded-lg ring-offset-2 ring-offset-paper border border-line/15 ${family === id ? "ring-2 ring-ink" : ""}`} style={{ background: FAMILY_HEX[id] }} />
-              ))}
+              {(families.length ? families.map((f) => f.id) : Object.keys(FAMILY_HEX)).map((id) => {
+                const name = id[0].toUpperCase() + id.slice(1);
+                return (
+                  <button key={id} type="button" aria-pressed={family === id} aria-label={name} title={name} onClick={() => setFamily(family === id ? null : id)} className={`flex-shrink-0 w-8 h-8 rounded-lg ring-offset-2 ring-offset-paper border border-line/15 transition-transform hover:scale-105 ${family === id ? "ring-2 ring-ink" : ""}`} style={{ background: FAMILY_HEX[id] }} />
+                );
+              })}
             </div>
           </div>
           {like && (

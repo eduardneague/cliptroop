@@ -547,6 +547,23 @@ leave it open. `AnchoredMenu` follows its button on scroll and closes when
 the button leaves the screen, so a menu can open from a row that scrolls
 sideways.
 
+**Taking a channel out of a niche, and rows that fit (1.30.1, 0102).**
+What a video's panel offers to take its channel out of is
+`VideoDetail.niches` (since 0102 exactly the niches it shows in); a
+channel's is `countsIn(d.niches)` (`modules/outliers/lib/membership.ts`).
+A change to a channel's niches goes through `changeNiche` and the shared
+caches in `modules/outliers/components/detail-cache.ts`: update the panel on
+screen and its cache entry, then `forgetChannel` (with the niche's id) so
+its other panels and that niche's list of channels are read again. `setChannelHidden` takes a channel with no row in the niche
+(hiding it writes a hidden row; the niche is checked to be the team's
+first). Rows of chips or buttons never slide sideways on a computer: they
+wrap from `sm` (`sm:flex-wrap sm:overflow-visible`) and swipe only on
+phones; a row of underlined tabs gets `<TabOverflow />` as its last child
+(`components/ui/tab-overflow.tsx`, its `<nav>` needs `relative` and each
+tab a `data-label`), so the ones that don't fit go under More. Check a
+page with the harness sweep: no element with `overflow-x: auto` whose
+content is wider than it, at 1024 to 1920 wide.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

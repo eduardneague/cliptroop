@@ -9,12 +9,15 @@ import { median } from "../lib/corpus";
 import { compact } from "../lib/filters";
 import { formatName } from "../lib/formats";
 import { multText } from "../lib/scores";
+import { changeNiche, countsIn, type ChannelNiche, type NicheChange } from "../lib/membership";
 import { countryName, langName } from "../lib/regions";
 import type { ChannelDetail, ChannelRowData, OutlierVideo } from "../lib/types";
 import { ChannelAvatar, EyeOffIcon, FitChip, heat, Mult, NicheDot, PeopleIcon, SourceNote, Tile, TimeAgo, youtubeChannel } from "./bits";
 import { BarsChart, PostingHeat, ShareBar } from "./charts";
 import { channelPreviews, useOutliers, useOutliersBlocked } from "./context";
+import { channelDetails as details, forgetChannel } from "./detail-cache";
 import { PanelContent, PanelSection } from "./panel";
+import { RemoveFromNiche } from "./remove-from-niche";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
 import { VideoGrid, VideoRow } from "./video-card";
@@ -27,8 +30,6 @@ import { VideoGrid, VideoRow } from "./video-card";
  * full is read when it opens; the panel looks again until its videos are
  * in (1.29.0). Hide it, and it never shows in Outliers again.
  */
-
-const details = new Map<string, ChannelDetail>();
 
 const yearsSince = (iso: string | null) => (iso ? Math.max(0, (Date.now() - Date.parse(iso)) / (365.25 * 86_400_000)) : null);
 
@@ -64,6 +65,22 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
   const { blocked, hide, unhide } = useOutliersBlocked();
   // Its name and picture from the button that opened it, while the rest loads (1.29.9: no "Opening…" between a video and its channel).
   const pre = !d && !error ? channelPreviews.get(id) ?? null : null;
+  // Taken out of a niche, put back, made one of a niche's own (at the top, or under "In your niches", 1.30.1):
+  // the panel changes in place (and stays so when it opens again); its videos' panels are read again.
+  // (From a toast's Undo, the panel may have moved on: what's kept about this channel changes all the same.)
+  const setNiches = (update: (list: ChannelNiche[]) => ChannelNiche[], nicheId?: string) => {
+    const now = details.get(id);
+    if (now) {
+      const detail = { ...now, niches: update(now.niches) };
+      details.set(id, detail);
+      setState((old) => (old.id === id ? { ...old, detail } : old));
+    }
+    forgetChannel(id, { channel: true }, nicheId);
+  };
+  const onNiche = (nicheId: string, change: NicheChange) => {
+    const info = ctx.niches.find((n) => n.id === nicheId);
+    if (info) setNiches((list) => changeNiche(list, info, change), nicheId);
+  };
   const who = c ? { id: c.id, title: c.title, avatar: c.avatar, handle: c.handle } : pre ? { id, title: pre.title, avatar: pre.avatar, handle: null } : null;
 
   // Still being read (or only a few videos in): it looks again a few times, until they're in.
@@ -105,6 +122,7 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
             <div className="flex items-center gap-1.5">
               <TrackButton channelId={who.id} />
               <SaveButton channelId={who.id} menu />
+              {d && <RemoveFromNiche channel={{ id: who.id, title: who.title }} nicheIds={countsIn(d.niches)} onChange={(nicheId, removed) => onNiche(nicheId, removed ? "out" : "back")} />}
               {blocked.has(who.id) ? (
                 <button type="button" onClick={() => unhide(who.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red/30 bg-red/[0.06] px-3 h-9 text-[13px] font-semibold text-red hover:bg-red/10" title="Hidden: its videos don't show in Outliers. Click to show them again.">
                   <EyeOffIcon className="w-4 h-4" />
@@ -158,21 +176,29 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
           <div className="skeleton h-48 rounded-2xl" />
         </div>
       ) : (
-        <ChannelBody d={d} reading={reading} />
+        <ChannelBody d={d} reading={reading} onNiche={onNiche} setNiches={setNiches} />
       )}
     </PanelContent>
   );
 }
 
-function ChannelBody({ d, reading }: { d: ChannelDetail; reading: boolean }) {
+function ChannelBody({
+  d,
+  reading,
+  onNiche,
+  setNiches,
+}: {
+  d: ChannelDetail;
+  reading: boolean;
+  onNiche: (nicheId: string, change: NicheChange) => void;
+  setNiches: (update: (list: ChannelNiche[]) => ChannelNiche[], nicheId?: string) => void;
+}) {
   const ctx = useOutliers();
   const toast = useToast();
   const c = d.channel;
-  const [added, setAdded] = useState<Set<string>>(new Set());
   const longs = d.videos.filter((v) => v.kind === "long");
   const shorts = d.videos.filter((v) => v.kind === "short");
   const [kind, setKind] = useState<"long" | "short">(() => (ctx.kind === "short" && shorts.length ? "short" : longs.length ? "long" : "short"));
-  const [hiddenIn, setHiddenIn] = useState<Set<string>>(() => new Set(d.niches.filter((n) => n.hidden).map((n) => n.id)));
   const vids = kind === "short" ? shorts : longs;
   const usual = kind === "short" ? c.shortMedian : c.longMedian;
   const scored = d.videos.filter((v) => v.score !== null);
@@ -205,44 +231,27 @@ function ChannelBody({ d, reading }: { d: ChannelDetail; reading: boolean }) {
   }, [d.videos]);
 
   const toggleNiche = async (nicheId: string, hide: boolean) => {
-    setHiddenIn((s) => {
-      const n = new Set(s);
-      if (hide) n.add(nicheId);
-      else n.delete(nicheId);
-      return n;
-    });
+    const before = d.niches;
+    onNiche(nicheId, hide ? "out" : "back");
     try {
       const r = await setChannelHidden(ctx.teamId, nicheId, c.id, hide);
       if (r.error !== undefined) throw new Error(r.error);
       toast.success(hide ? "Taken out of that niche" : "Back in that niche");
     } catch (e) {
-      setHiddenIn((s) => {
-        const n = new Set(s);
-        if (hide) n.delete(nicheId);
-        else n.add(nicheId);
-        return n;
-      });
+      setNiches(() => before, nicheId);
       toast.error(e instanceof Error && e.message ? e.message : "Couldn't change it. Try again.");
     }
   };
 
   const addTo = async (nicheId: string, name: string) => {
-    setAdded((s) => new Set(s).add(nicheId));
+    const before = d.niches;
+    onNiche(nicheId, "own");
     try {
       const r = await addChannelsToNiche(ctx.teamId, nicheId, [c.id]);
       if (r.error !== undefined) throw new Error(r.error);
-      setHiddenIn((s) => {
-        const n = new Set(s);
-        n.delete(nicheId);
-        return n;
-      });
       toast.success(`${c.title} is one of ${name}'s channels now`);
     } catch (e) {
-      setAdded((s) => {
-        const n = new Set(s);
-        n.delete(nicheId);
-        return n;
-      });
+      setNiches(() => before, nicheId);
       toast.error(e instanceof Error && e.message ? e.message : "Couldn't add it. Try again.");
     }
   };
@@ -358,14 +367,14 @@ function ChannelBody({ d, reading }: { d: ChannelDetail; reading: boolean }) {
           <ul className="rounded-2xl border border-line/10 bg-surface divide-y divide-line/[0.07]">
             {ctx.niches.map((info) => {
               const n = d.niches.find((x) => x.id === info.id) ?? null;
-              const off = hiddenIn.has(info.id);
-              const mine = added.has(info.id) || !!n?.group;
+              const off = !!n?.hidden;
+              const mine = !!n?.group;
               const btn = "rounded-lg border border-line/15 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 flex-shrink-0";
               return (
                 <li key={info.id} className="flex items-center gap-3 px-4 py-3">
                   <NicheDot color={info.color} />
                   <span className={`flex-1 min-w-0 truncate text-[13.5px] ${off ? "text-ink-faint line-through" : "font-semibold"}`}>{info.name}</span>
-                  {n || added.has(info.id) ? (
+                  {n ? (
                     <FitChip c={{ group: mine, counted: mine || !!n?.counted, verdict: n?.verdict ?? null, hidden: off, pending: false, source: n?.source ?? "manual" }} />
                   ) : (
                     <span className="text-[11.5px] text-ink-faint">Not in it</span>

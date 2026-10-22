@@ -5,6 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DownloadIcon, LockIcon } from "@/components/ui/icons";
+import { TabOverflow } from "@/components/ui/tab-overflow";
 import { useToast } from "@/components/ui/toast-provider";
 import { syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -344,7 +345,7 @@ export function AnalyticsView({
         )}
       </div>
 
-      <nav className="flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
+      <nav className="relative flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
         {TAB_ORDER.map((id) => {
           const on = id === (pending?.tab ?? data.tab);
           const locked = id === "revenue" && !revenueAllowed;
@@ -354,6 +355,7 @@ export function AnalyticsView({
               href={href({ tab: id })}
               scroll={false}
               aria-current={on ? "page" : undefined}
+              data-label={TAB_LABEL[id]}
               onClick={() => {
                 if (on) return;
                 setPending({ tab: id });
@@ -373,6 +375,7 @@ export function AnalyticsView({
             </Link>
           );
         })}
+        <TabOverflow />
       </nav>
 
       {/* One row of filters: they scope everything below. */}

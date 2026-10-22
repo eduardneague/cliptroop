@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EditIcon, RetryIcon } from "@/components/ui/icons";
+import { TabOverflow } from "@/components/ui/tab-overflow";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -438,6 +439,8 @@ function Shell(props: OutliersViewProps) {
                   href={href({ tab: t.id })}
                   scroll={false}
                   aria-current={on ? "page" : undefined}
+                  data-label={t.label}
+                  data-count={t.id === "saved" && props.saved > 0 ? props.saved : t.id === "audience" && props.audienceN > 0 ? props.audienceN : undefined}
                   onPointerEnter={() => t.id !== "home" && preload(t.id)}
                   onFocus={() => t.id !== "home" && preload(t.id)}
                   onTouchStart={() => t.id !== "home" && preload(t.id)}
@@ -447,7 +450,7 @@ function Shell(props: OutliersViewProps) {
                     setPending({ tab: t.id });
                     startNavProgress(href({ tab: t.id }));
                   }}
-                  className={`relative px-2.5 sm:px-3.5 h-11 inline-flex items-center gap-1.5 text-[14px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-soft hover:text-ink"}`}
+                  className={`relative px-2.5 sm:px-3 2xl:px-3.5 h-11 inline-flex items-center gap-1.5 text-[14px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-soft hover:text-ink"}`}
                 >
                   {t.label}
                   {t.id === "saved" && props.saved > 0 && <span className="text-[11.5px] tabular-nums text-ink-faint">{props.saved}</span>}
@@ -456,6 +459,7 @@ function Shell(props: OutliersViewProps) {
                 </Link>
               );
             })}
+            <TabOverflow />
           </nav>
         </div>
 

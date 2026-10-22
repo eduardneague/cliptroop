@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.30.1",
+    date: "2026-10-23",
+    title: "Remove a channel from the top, and rows that fit",
+    changes: [
+      { kind: "new", text: "When a video or channel you open is in one of your niches, a button at the top of its panel takes the channel out of that niche. It asks first, its videos stop showing there, and Undo puts it back. In more than one niche? It asks which. For masters and researchers." },
+      { kind: "better", text: "Changing a niche shows its channels as placeholders while they load, as many as it has, instead of them popping in. The next time you open it they're there at once." },
+      { kind: "new", text: "A niche with a lot of channels gets a search box over them, so you can find one quickly (to take it out, say)." },
+      { kind: "fixed", text: "Rows that slid sideways on a computer now fit: the Saved folders wrap and a new folder's name box fits its column, and the thumbnail colours wrap." },
+      { kind: "better", text: "On a smaller computer screen, the tabs of Outliers and Analytics that don't fit go under More at the end (it shows the tab you're on when that's one of them). On phones you still swipe them, and the tab you're on is brought into view." },
+    ],
+  },
+  {
     version: "1.30.0",
     date: "2026-10-22",
     title: "Search filters as a row of pills",

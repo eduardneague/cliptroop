@@ -16,8 +16,10 @@ import type { OutlierVideo, VideoDetail } from "../lib/types";
 import { BRIGHTNESS_HELP, ChannelAvatar, COLOURFUL_HELP, EyeOffIcon, FormatChip, heat, Mult, pct255, SourceNote, Thumb, Tile, TimeAgo, youtubeVideo } from "./bits";
 import { BarsChart, ScoreDial, Swatches } from "./charts";
 import { previews, useOutliers, useOutliersBlocked } from "./context";
+import { forgetChannel, videoDetails as details } from "./detail-cache";
 import { IdeaCard, useIdeaMarks } from "./idea-card";
 import { PanelContent, PanelSection } from "./panel";
+import { RemoveFromNiche } from "./remove-from-niche";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
 import { useNicheModel } from "./use-model";
@@ -30,8 +32,6 @@ import { VideoRow } from "./video-card";
  * and titles like it, its tags, title changes, and what it would have
  * earned at the team's own revenue per 1,000 views.
  */
-
-const details = new Map<string, VideoDetail>();
 
 const CATEGORY: Record<number, string> = {
   1: "Film & Animation",
@@ -92,6 +92,19 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
   const preview = !d && !error ? previews.get(id) ?? null : null;
   const { blocked, hide } = useOutliersBlocked();
   const head = d ? { channelId: d.video.channelId, title: d.channel.title, avatar: d.channel.avatar, subs: d.channel.subs } : preview ? { channelId: preview.channelId, title: preview.channel.title, avatar: preview.channel.avatar, subs: preview.channel.subs } : null;
+  // Its channel taken out of a niche at the top (1.30.1), or put back: this panel changes in place
+  // (and stays so when it opens again); the channel's own panel and its other videos' are read again.
+  // (From a toast's Undo, the panel may have moved on: what's kept about this video changes all the same.)
+  const onNiche = (channelId: string, nicheId: string, removed: boolean) => {
+    const now = details.get(id);
+    if (now) {
+      const rest = now.niches.filter((n) => n !== nicheId);
+      const detail = { ...now, niches: removed ? rest : [...rest, nicheId] };
+      details.set(id, detail);
+      setState((old) => (old.id === id ? { ...old, detail } : old));
+    }
+    forgetChannel(channelId, { video: id }, nicheId);
+  };
 
   return (
     <PanelContent
@@ -111,6 +124,9 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
             <div className="flex items-center gap-1.5">
               <TrackButton channelId={head.channelId} label={false} />
               {d && <SaveButton videoId={d.video.id} menu />}
+              {d && (
+                <RemoveFromNiche channel={{ id: head.channelId, title: head.title }} nicheIds={d.niches} onChange={(nicheId, removed) => onNiche(head.channelId, nicheId, removed)} />
+              )}
               {!blocked.has(head.channelId) && (
                 <button
                   type="button"

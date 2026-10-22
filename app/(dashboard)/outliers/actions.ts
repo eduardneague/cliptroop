@@ -493,7 +493,20 @@ export async function setChannelHidden(teamId: string, nicheId: string, channelI
   if (!user) return { error: "Your session expired. Sign in again." };
   if (!manager || !UUID.test(nicheId) || !CHANNEL.test(channelId)) return { error: "Only masters and researchers can change a niche's channels." };
   const { data, error } = await supabase.from("outlier_niche_channels").update({ hidden }).eq("niche_id", nicheId).eq("channel_id", channelId).eq("team_id", teamId).select("channel_id");
-  if (error || !(data ?? []).length) return { error: dbError(error, "Couldn't change it. Try again.") };
+  if (error) return { error: dbError(error, "Couldn't change it. Try again.") };
+  if (!(data ?? []).length) {
+    // Not on the niche's list (its videos came in by the niche's searches, 1.30.1): taking it out
+    // writes it down as taken out, so they stop showing there. Only for the team's own niche.
+    if (!hidden) return { error: "Couldn't change it. Try again." };
+    const admin = createAdminClient();
+    const { data: niche } = await admin.from("outlier_niches").select("id").eq("id", nicheId).eq("team_id", teamId).maybeSingle();
+    if (!niche) return { error: "That niche isn't this team's." };
+    const row = { niche_id: nicheId, team_id: teamId, channel_id: channelId, source: "search", hidden: true };
+    let { error: e } = await admin.from("outlier_niche_channels").upsert(row, { onConflict: "niche_id,channel_id", ignoreDuplicates: true });
+    // Added a moment ago by someone else: it keeps what it is, just taken out.
+    if (!e) ({ error: e } = await admin.from("outlier_niche_channels").update({ hidden: true }).eq("niche_id", nicheId).eq("channel_id", channelId).eq("team_id", teamId));
+    if (e) return { error: dbError(e, "Couldn't change it. Try again.") };
+  }
   refresh();
   return {};
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLatest } from "@/lib/hooks/use-scroll-lock";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
-import { CheckIcon, CloseIcon, PlusIcon } from "@/components/ui/icons";
+import { CheckIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -16,6 +16,7 @@ import { BTN, BTN_MAIN, ChannelAvatar, FIELD, LABEL, Toggle } from "./bits";
 import { ChannelFinder, type FoundChannel } from "./channel-finder";
 import { ChipsInput } from "./chips-input";
 import { useOutliers } from "./context";
+import { nicheChannels } from "./detail-cache";
 
 /*
  * Adding or changing a niche (1.27.0, 1.29.0): the channels it's about (they
@@ -26,10 +27,18 @@ import { useOutliers } from "./context";
  * they're from, and whether made-for-kids videos count. An explore niche
  * becomes the team's own with "Use as my niche": its channels and keywords
  * to start from.
+ *
+ * 1.30.1: its channels show as placeholders while they load (as many as it
+ * has), straight away the next time it's opened (then checked again: what
+ * you take out or add meanwhile stays), and a search box finds one among
+ * them all.
  */
 
 type Picked = { id: string; title: string; avatar: string | null };
 type LangMode = "team" | "any" | "pick";
+
+/** Placeholder chips' widths (they look like names of different lengths). */
+const SKELETON_W = [128, 96, 150, 112, 84, 138, 104, 160, 92, 120, 144, 100];
 
 /** A niche's own channels, all of them (60 at a time). */
 async function ownChannels(teamId: string, nicheId: string): Promise<Picked[] | null> {
@@ -81,6 +90,12 @@ export function NicheDialog({
   const [channels, setChannels] = useState<Picked[]>([]);
   // null: still loading the niche's channels (or they couldn't be read: then they're left as they are).
   const [loaded, setLoaded] = useState<boolean | null>(true);
+  // How many are on their way (the placeholders while they load).
+  const [expected, setExpected] = useState(0);
+  // What was taken out or added while they were still being read (kept when the fresh list lands).
+  const edits = useRef<{ out: Set<string>; added: Picked[] }>({ out: new Set(), added: [] });
+  const [find, setFind] = useState("");
+  const [all, setAll] = useState(false);
   const [finding, setFinding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,13 +109,24 @@ export function NicheDialog({
     const copying = !!niche?.explore;
     setError(null);
     setFinding(false);
+    setFind("");
+    setAll(false);
+    edits.current = { out: new Set(), added: [] };
     let live = true;
-    const loadFrom = (id: string) => {
+    const loadFrom = (id: string, n: number) => {
       setLoaded(null);
+      setExpected(n);
+      // Seen before: those at once (they're read again below; saving waits for that).
+      const seen = nicheChannels.get(id);
+      if (seen) setChannels(seen);
       ownChannels(teamId, id)
         .then((list) => {
           if (!live) return;
-          if (list) setChannels(list);
+          if (list) {
+            nicheChannels.set(id, list);
+            const { out, added } = edits.current;
+            setChannels([...list.filter((c) => !out.has(c.id)), ...added.filter((a) => !list.some((c) => c.id === a.id))]);
+          }
           setLoaded(!!list);
         })
         .catch(() => live && setLoaded(false));
@@ -119,7 +145,7 @@ export function NicheDialog({
       setKids(niche.kids);
       setOnlyGroup(niche.onlyGroup);
       setChannels([]);
-      if (niche.groupN > 0) loadFrom(niche.id);
+      if (niche.groupN > 0) loadFrom(niche.id, niche.groupN);
       else setLoaded(true);
     } else {
       // A copy of an explore niche: its channels and words to start from, in English like it.
@@ -137,7 +163,7 @@ export function NicheDialog({
       setKids(false);
       setOnlyGroup(false);
       setChannels([]);
-      if (copying && niche) loadFrom(niche.id);
+      if (copying && niche) loadFrom(niche.id, niche.groupN);
       else setLoaded(true);
     }
     return () => {
@@ -157,6 +183,7 @@ export function NicheDialog({
     const ex = ctx.explore.find((e) => e.slug === slug);
     if (ex && ex.groupN > 0) {
       setLoaded(null);
+      setExpected(ex.groupN);
       ownChannels(teamId, ex.id)
         .then((list) => {
           if (list) setChannels((old) => [...old, ...list.filter((c) => !old.some((o) => o.id === c.id))].slice(0, 200));
@@ -165,8 +192,22 @@ export function NicheDialog({
         .catch(() => setLoaded(true));
     }
   };
-  const pick = (c: FoundChannel) => setChannels((old) => (old.some((o) => o.id === c.id) ? old.filter((o) => o.id !== c.id) : [...old, { id: c.id, title: c.title, avatar: c.avatar }].slice(0, 200)));
-  const drop = (id: string) => setChannels((old) => old.filter((o) => o.id !== id));
+  const pick = (c: FoundChannel) => {
+    const e = edits.current;
+    if (channels.some((o) => o.id === c.id)) {
+      e.out.add(c.id);
+      e.added = e.added.filter((a) => a.id !== c.id);
+    } else {
+      e.out.delete(c.id);
+      e.added = [...e.added, { id: c.id, title: c.title, avatar: c.avatar }];
+    }
+    setChannels((old) => (old.some((o) => o.id === c.id) ? old.filter((o) => o.id !== c.id) : [...old, { id: c.id, title: c.title, avatar: c.avatar }].slice(0, 200)));
+  };
+  const drop = (id: string) => {
+    edits.current.out.add(id);
+    edits.current.added = edits.current.added.filter((a) => a.id !== id);
+    setChannels((old) => old.filter((o) => o.id !== id));
+  };
 
   const regions = preset === "custom" ? customRegions : REGION_PRESETS.find((p) => p.id === preset)?.regions ?? [];
   const submit = async () => {
@@ -198,6 +239,7 @@ export function NicheDialog({
       if (editing && niche) {
         const r = await updateNiche(teamId, niche.id, input);
         if (r.error !== undefined) return setError(r.error);
+        if (loaded) nicheChannels.set(niche.id, channels);
         toast.success("Niche saved. Its channels are checked again now.");
         onClose();
       } else {
@@ -239,7 +281,11 @@ export function NicheDialog({
   const toggleKind = (k: Kind) => setKinds((ks) => (ks.includes(k) ? (ks.length > 1 ? ks.filter((x) => x !== k) : ks) : [...ks, k]));
   const toggleLang = (l: string) => setLangs((ls) => (ls.includes(l) ? ls.filter((x) => x !== l) : [...ls, l].slice(0, 8)));
   const chip = (on: boolean) => `inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[13px] font-semibold transition-colors ${on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`;
-  const shown = channels.slice(0, 40);
+  // The channels shown: what the search box finds (all of them), or the first 40 (or all, when asked).
+  const q = find.trim().toLowerCase();
+  const matches = q ? channels.filter((c) => (c.title || "").toLowerCase().includes(q)) : channels;
+  const shown = q || all ? matches : matches.slice(0, 40);
+  const skeletons = loaded === null && !channels.length ? Math.max(1, Math.min(expected || 8, 24)) : 0;
 
   return (
     <Dialog
@@ -288,7 +334,7 @@ export function NicheDialog({
             <div className="min-w-0">
               <p className="text-[13.5px] font-semibold">
                 Channels it&rsquo;s about
-                {channels.length > 0 && <span className="ml-1.5 text-ink-faint tabular-nums">{channels.length}</span>}
+                {(channels.length > 0 || skeletons > 0) && <span className="ml-1.5 text-ink-faint tabular-nums">{channels.length || expected}</span>}
               </p>
               <p className="text-[12px] text-ink-soft">They always count. The best way to tell ClipTroop what you mean.</p>
             </div>
@@ -299,10 +345,47 @@ export function NicheDialog({
               </button>
             )}
           </div>
-          {loaded === null && <p className="text-[12.5px] text-ink-faint">Loading its channels…</p>}
           {loaded === false && <p className="text-[12.5px] text-ink-faint">Its channels couldn&rsquo;t be loaded, so they stay as they are.</p>}
+          {skeletons > 0 && (
+            // As many placeholders as it has channels (up to 24), until they're read.
+            <ul className="flex flex-wrap gap-1.5" aria-busy="true" aria-label="Loading its channels">
+              {Array.from({ length: skeletons }, (_, i) => (
+                <li key={i} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 pl-1 pr-2 h-8">
+                  <span className="skeleton w-[22px] h-[22px] rounded-full" />
+                  <span className="skeleton h-2.5 rounded-full" style={{ width: SKELETON_W[i % SKELETON_W.length] - 40 }} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {channels.length > 12 && (
+            <label className="relative block">
+              <span className="sr-only">Find one of its channels</span>
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
+              <input
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                onKeyDown={(e) => {
+                  // Clears the box, not the whole window.
+                  if (e.key === "Escape" && find) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFind("");
+                  }
+                }}
+                placeholder={`Find one of its ${channels.length} channels`}
+                className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-9 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {find && (
+                <button type="button" onClick={() => setFind("")} aria-label="Clear the search" className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
+                  <CloseIcon className="w-3 h-3" />
+                </button>
+              )}
+            </label>
+          )}
           {shown.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5">
+            <ul className="flex flex-wrap gap-1.5 animate-[fadein_.2s_ease]">
               {shown.map((c) => (
                 <li key={c.id} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-2 pl-1 pr-1 h-8 text-[12.5px] font-semibold">
                   <ChannelAvatar src={c.avatar} title={c.title || "?"} size={22} />
@@ -312,9 +395,16 @@ export function NicheDialog({
                   </button>
                 </li>
               ))}
-              {channels.length > shown.length && <li className="inline-flex items-center h-8 px-2 text-[12.5px] text-ink-faint">and {channels.length - shown.length} more</li>}
+              {!q && !all && matches.length > shown.length && (
+                <li>
+                  <button type="button" onClick={() => setAll(true)} className="inline-flex items-center h-8 px-2.5 rounded-lg text-[12.5px] font-semibold text-amber hover:bg-amber/10">
+                    Show all {matches.length}
+                  </button>
+                </li>
+              )}
             </ul>
           )}
+          {q && !matches.length && <p className="text-[12.5px] text-ink-faint">None of its channels is called &ldquo;{find.trim()}&rdquo;.</p>}
           {finding && (
             <div className="rounded-xl bg-surface-2/50 p-3">
               <ChannelFinder picked={new Set(channels.map((c) => c.id))} onPick={pick} autoFocus />

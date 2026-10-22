@@ -140,18 +140,19 @@ export function SavedTab({ data }: { data: SavedData }) {
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
       <nav aria-label="Folders" className="mb-5 lg:mb-0">
-        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 lg:sticky lg:top-[4.5rem]">
+        {/* Phones: a row to swipe through. Wider: the folders wrap (a column from lg), nothing slides sideways (1.30.1). */}
+        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 lg:sticky lg:top-[4.5rem]">
           {folderBtn(null, "Everything", null)}
           {saves.folders.map((f) => folderBtn(f.id, f.name, f.count, f.color))}
           {naming === "new" ? (
             <form
-              className="flex-shrink-0 flex items-center gap-1 lg:mt-1"
+              className="flex-shrink-0 flex items-center gap-1 lg:mt-1 lg:w-full"
               onSubmit={(e) => {
                 e.preventDefault();
                 make();
               }}
             >
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus maxLength={40} placeholder="Folder name" onBlur={() => !newName.trim() && setNaming(null)} className="w-40 lg:w-full rounded-lg border border-line/15 bg-surface px-2.5 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus maxLength={40} placeholder="Folder name" onBlur={() => !newName.trim() && setNaming(null)} className="w-40 lg:w-auto lg:flex-1 min-w-0 rounded-lg border border-line/15 bg-surface px-2.5 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
               <button type="submit" aria-label="Make the folder" className="w-9 h-9 rounded-lg bg-amber text-white flex items-center justify-center flex-shrink-0">
                 <CheckIcon className="w-4 h-4" />
               </button>
