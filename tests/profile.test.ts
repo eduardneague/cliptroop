@@ -1,5 +1,5 @@
 // Profiles (1.28.0): levels (the same numbers as 0093's vp_level_for / vp_level_floor), achievements, frames, the showcases' layout.
-import { achievementsFor, FRAMES, frameLevel, levelFloor, levelFor, levelProgress, levelTint, readStats, xpToNext, ACHIEVEMENTS } from "../lib/profile/progress";
+import { achievementsFor, FRAMES, frameLevel, levelFloor, levelFor, levelProgress, levelTint, readStats, xpToNext, ACHIEVEMENTS, LEVEL_TINTS } from "../lib/profile/progress";
 import { addShowcase, DEFAULT_PROFILE_LAYOUT, readProfileLayout, SHOWCASES, ABOUT_MAX } from "../modules/profile/layout";
 
 let fails = 0;
@@ -20,6 +20,10 @@ const p = levelProgress(5460);
 ok(p.level === 28 && p.into === 60 && p.need === 300 && p.left === 240 && Math.abs(p.share - 0.2) < 1e-9, "progress into level 28");
 ok(levelFor(-5) === 0 && levelFor(Number.NaN) === 0, "no XP → level 0");
 ok(levelTint(0) !== levelTint(10) && levelTint(10) === levelTint(19), "a new colour every 10 levels");
+// 1.29.5: the owner's order, grey to 9, yellow from 10, then on round the wheel; ten different ones, again from 100.
+ok(levelTint(0) === "#8b93a1" && levelTint(9) === "#8b93a1" && levelTint(10) === "#e2a300" && levelTint(19) === "#e2a300", "grey to 9, yellow from 10");
+ok(new Set(LEVEL_TINTS).size === 10 && LEVEL_TINTS.every((t) => /^#[0-9a-f]{6}$/.test(t)), "ten different colours");
+ok(levelTint(100) === levelTint(0) && levelTint(115) === levelTint(15) && levelTint(Number.NaN) === levelTint(0), "round again from 100");
 
 // Frames unlock in order, from "none" at 0.
 ok(FRAMES[0].id === "none" && FRAMES[0].level === 0, "no frame always");

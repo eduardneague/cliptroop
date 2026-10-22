@@ -1059,3 +1059,25 @@ export function ShuffleIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A painter's palette (1.29.5): a profile's colours. */
+export function PaletteIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.75-.8 1.75-1.7 0-.45-.17-.83-.44-1.13-.27-.3-.43-.68-.43-1.12 0-.94.76-1.7 1.7-1.7h2a3.9 3.9 0 0 0 3.9-3.9c0-4.1-3.8-7.45-8.48-7.45Z" />
+      <circle cx="7.6" cy="11.6" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.6" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+/** A photo camera (1.29.5): change a picture. (CameraIcon is a video camera.) */
+export function PhotoIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4.5 8.5a1.5 1.5 0 0 1 1.5-1.5h2.2l1.6-2.2h4.4l1.6 2.2H18a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 19H6a1.5 1.5 0 0 1-1.5-1.5Z" />
+      <circle cx="12" cy="12.8" r="3.3" />
+    </Svg>
+  );
+}

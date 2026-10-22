@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useBox } from "@/modules/dashboard/components/widget-box";
 import { Dialog } from "@/components/ui/dialog";
-import {
-  achievementsFor,
-  CATEGORY_LABEL,
-  FRAMES,
-  levelProgress,
-  levelTint,
-  STEP_CATEGORIES,
-  TIER_LABEL,
-  type AchievementState,
-  type ProfileStats,
-} from "@/lib/profile/progress";
+import { CheckIcon, ClockIcon, EditIcon, FlameIcon, StarIcon, TrophyIcon, VideoIcon } from "@/components/ui/icons";
+import { CATEGORY_LABEL, FRAMES, levelProgress, STEP_CATEGORIES, TIER_LABEL, type AchievementState, type ProfileStats } from "@/lib/profile/progress";
 import type { Showcase } from "../layout";
 import { AchievementBadge, LevelBadge, ProfileAvatar, shortDate, XpBar } from "./parts";
 
 /*
  * What a profile's showcases draw (1.28.0). Each fits the box it's given
  * (useBox), like the dashboard's widgets. Numbers come from profile_stats
- * (0093); null = none yet (the database before 0093).
+ * (0093); null = none yet (the database before 0093). Since 1.29.5 the
+ * bars and icons are in the profile's XP bar colour, and the achievements
+ * are worked out once for the whole page.
  */
 
 export type ShowcaseData = {
@@ -31,6 +24,14 @@ export type ShowcaseData = {
   isSelf: boolean;
   /** null: hidden from you (they keep their teams private). */
   teams: { id: string; name: string; color: string; logo_url: string | null }[] | null;
+  /** Every achievement, reached ones first (achievementsFor), worked out once for the page. */
+  achievements: AchievementState[];
+  /** The XP bar's colour, as CSS: the bars and icons here too. */
+  barTint: string;
+  /** The frame's colour at a level, as CSS (the next frame's preview). */
+  frameAt: (level: number) => string;
+  /** Yours: opens a showcase's own settings (About me's words). */
+  onEdit?: (id: string) => void;
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -49,7 +50,7 @@ export function renderShowcase(s: Showcase, d: ShowcaseData) {
     case "specialties":
       return <SpecialtiesShowcase d={d} />;
     case "about":
-      return <AboutShowcase text={typeof s.settings?.text === "string" ? s.settings.text : ""} isSelf={d.isSelf} />;
+      return <AboutShowcase text={typeof s.settings?.text === "string" ? s.settings.text : ""} isSelf={d.isSelf} onEdit={d.onEdit ? () => d.onEdit?.(s.id) : undefined} />;
     case "teams":
       return <TeamsShowcase teams={d.teams} />;
     case "featured":
@@ -61,7 +62,6 @@ function LevelShowcase({ d }: { d: ShowcaseData }) {
   const box = useBox();
   if (!d.stats) return <Empty>Levels come with the next database update.</Empty>;
   const p = levelProgress(d.stats.xp);
-  const tint = levelTint(p.level);
   const next = FRAMES.find((f) => f.level > p.level);
   const big = box.h >= 120;
   const tall = box.h >= 210;
@@ -75,7 +75,7 @@ function LevelShowcase({ d }: { d: ShowcaseData }) {
         </div>
       </div>
       <div>
-        <XpBar share={p.share} tint={tint} />
+        <XpBar share={p.share} tint={d.barTint} />
         <div className="mt-1 flex justify-between text-[11.5px] text-ink-soft tabular-nums">
           <span>
             {fmt(p.into)} / {fmt(p.need)} XP
@@ -85,7 +85,7 @@ function LevelShowcase({ d }: { d: ShowcaseData }) {
       </div>
       {next && big && (
         <div className="flex items-center gap-2 text-[11.5px] text-ink-soft">
-          <ProfileAvatar url={d.avatarUrl} name={d.name} color={d.color} size={22} frame={next.id} tint={levelTint(next.level)} />
+          <ProfileAvatar url={d.avatarUrl} name={d.name} color={d.color} size={22} frame={next.id} tint={d.frameAt(next.level)} />
           <span>
             Next frame: <span className="font-semibold text-ink">{next.name}</span> at level {next.level}
           </span>
@@ -103,21 +103,30 @@ function LevelShowcase({ d }: { d: ShowcaseData }) {
 function StatsShowcase({ d }: { d: ShowcaseData }) {
   const s = d.stats;
   if (!s) return <Empty>Numbers come with the next database update.</Empty>;
-  const reached = achievementsFor(s).filter((a) => a.unlocked).length;
+  const reached = d.achievements.filter((a) => a.unlocked).length;
+  // Each with its icon (1.29.5), in the XP bar's colour.
   const items = [
-    { label: "Steps finished", value: fmt(s.tasks) },
-    { label: "On time", value: s.dated ? `${Math.round((s.onTime / s.dated) * 100)}%` : "–" },
-    { label: "Videos worked on", value: fmt(s.videos) },
-    { label: "Best streak", value: s.streak.best ? `${s.streak.best} day${s.streak.best === 1 ? "" : "s"}` : "–" },
-    { label: "Achievements", value: `${reached}` },
-    { label: "XP", value: fmt(s.xp) },
+    { label: "Steps finished", value: fmt(s.tasks), Icon: CheckIcon },
+    { label: "On time", value: s.dated ? `${Math.round((s.onTime / s.dated) * 100)}%` : "–", Icon: ClockIcon },
+    { label: "Videos worked on", value: fmt(s.videos), Icon: VideoIcon },
+    { label: "Best streak", value: s.streak.best ? `${s.streak.best}` : "–", unit: s.streak.best ? (s.streak.best === 1 ? "day" : "days") : undefined, Icon: FlameIcon },
+    { label: "Achievements", value: `${reached}`, Icon: TrophyIcon },
+    { label: "XP", value: fmt(s.xp), Icon: StarIcon },
   ];
   return (
-    <div className="stat-cq h-full flex items-center">
+    <div className="stat-cq h-full flex items-center" style={{ "--pb": d.barTint } as CSSProperties}>
       <div className="stat-grid w-full" data-n={items.length}>
         {items.map((it) => (
           <div key={it.label} className="min-w-0">
-            <div className="font-display text-[22px] font-semibold leading-none tabular-nums truncate">{it.value}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="pf-stat-icon" aria-hidden>
+                <it.Icon className="w-3 h-3" strokeWidth={2.25} />
+              </span>
+              <span className="font-display text-[22px] font-semibold leading-none tabular-nums truncate">
+                {it.value}
+                {it.unit && <span className="ml-1 font-body text-[12.5px] font-semibold text-ink-soft">{it.unit}</span>}
+              </span>
+            </div>
             <div className="mt-1 text-[11.5px] text-ink-faint truncate">{it.label}</div>
           </div>
         ))}
@@ -206,7 +215,7 @@ function ContributionsShowcase({ d }: { d: ShowcaseData }) {
 function AchievementsShowcase({ d }: { d: ShowcaseData }) {
   const box = useBox();
   const [all, setAll] = useState(false);
-  const list = useMemo(() => (d.stats ? achievementsFor(d.stats) : []), [d.stats]);
+  const list = d.achievements;
   if (!d.stats) return <Empty>Achievements come with the next database update.</Empty>;
   const reached = list.filter((a) => a.unlocked).length;
   const size = box.w < 260 ? 36 : 44;
@@ -283,7 +292,7 @@ function SpecialtiesShowcase({ d }: { d: ShowcaseData }) {
     .slice(0, Math.max(1, Math.floor((box.h + 6) / 30)));
   if (!rows.length) return <Empty>{d.isSelf ? "Finish a step on a video and it shows here." : "Nothing finished yet."}</Empty>;
   const max = rows[0].n;
-  const tint = levelTint(levelProgress(d.stats.xp).level);
+  const tint = d.barTint;
   return (
     <ul className="flex flex-col gap-2 justify-center h-full">
       {rows.map(({ c, n }) => (
@@ -299,8 +308,19 @@ function SpecialtiesShowcase({ d }: { d: ShowcaseData }) {
   );
 }
 
-function AboutShowcase({ text, isSelf }: { text: string; isSelf: boolean }) {
-  if (!text.trim()) return <Empty>{isSelf ? "Write a few lines about yourself: Customize, then the gear on this card." : "Nothing here yet."}</Empty>;
+function AboutShowcase({ text, isSelf, onEdit }: { text: string; isSelf: boolean; onEdit?: () => void }) {
+  if (!text.trim())
+    return isSelf && onEdit ? (
+      <div className="h-full flex flex-col items-start justify-center gap-2">
+        <p className="text-[12.5px] text-ink-faint">Nothing here yet. Write a few lines about yourself.</p>
+        <button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/40">
+          <EditIcon className="w-3.5 h-3.5" />
+          Write about me
+        </button>
+      </div>
+    ) : (
+      <Empty>Nothing here yet.</Empty>
+    );
   return <p className="text-[13.5px] text-ink-soft leading-relaxed whitespace-pre-line overflow-y-auto styled-scroll h-full">{text}</p>;
 }
 
@@ -330,7 +350,7 @@ const TIER_ORDER = { legendary: 3, epic: 2, rare: 1, common: 0 } as const;
 
 function FeaturedShowcase({ d, id }: { d: ShowcaseData; id: string | null }) {
   const box = useBox();
-  const list = useMemo(() => (d.stats ? achievementsFor(d.stats).filter((a) => a.unlocked) : []), [d.stats]);
+  const list = useMemo(() => d.achievements.filter((a) => a.unlocked), [d.achievements]);
   if (!d.stats) return <Empty>Achievements come with the next database update.</Empty>;
   // The one picked, else the rarest reached.
   const a = list.find((x) => x.id === id) ?? [...list].sort((x, y) => TIER_ORDER[y.tier] - TIER_ORDER[x.tier] || (y.at ?? "").localeCompare(x.at ?? ""))[0];

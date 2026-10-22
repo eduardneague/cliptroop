@@ -23,6 +23,20 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.5",
+    date: "2026-10-22",
+    title: "Your profile in your colours",
+    changes: [
+      { kind: "better", text: "Level colours: grey up to level 9, yellow from 10, then on round the colour wheel (lime, green, cyan, blue, purple, pink, red, orange). A new one every 10 levels." },
+      { kind: "new", text: "Customize profile → Colours: your frame, your XP bar and the glow in your header can each be your level's colour, your theme's or any colour you like. The glow can be off. A small preview shows them together." },
+      { kind: "better", text: "The header's glow is one soft colour now (your level's to start), instead of your account colour and your level's (green and red for some)." },
+      { kind: "new", text: "Click your picture on your profile to change it." },
+      { kind: "fixed", text: "About me has its own Save, with or without Customize. Before, what you wrote could be lost." },
+      { kind: "new", text: "The Numbers showcase has an icon for each number, in your XP bar's colour." },
+      { kind: "fixed", text: "Visitors no longer see a settings gear on your About me and Featured achievement." },
+    ],
+  },
+  {
     version: "1.29.4",
     date: "2026-10-22",
     title: "Light wallpapers, on every page if you like",

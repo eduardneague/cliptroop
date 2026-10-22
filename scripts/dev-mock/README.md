@@ -26,6 +26,7 @@ screenshots. It never touches a real Supabase project.
 #    1.28.0: MOCK_GLASS_STYLE=liquid, MOCK_GLASS_SCOPE=everywhere, MOCK_GLASS_SIDEBAR=1, MOCK_GLASS_LEVEL=0..100 (with
 #    MOCK_GLASS=1); MOCK_WALLPAPERS=1..3 saved wallpapers and MOCK_WALL_LUMA=0..100|null how bright the one in use is (with
 #    MOCK_DASH_BG); MOCK_PROFILE_FRAME=glow|orbit|… edu's picture frame, MOCK_PROFILE_BG=1 his wallpaper behind his profile,
+#    1.29.5: MOCK_PROFILE_COLORS="theme,#30a46c,off" his frame, XP bar and glow colours (default the level's),
 #    MOCK_PRIVATE=maria|radu that profile is private; profile_stats and get_visible_teams answer from the fixtures;
 #    MOCK_WRITES=profile_wallpapers,profiles remembers adding, switching and removing wallpapers (deletes too),
 #    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),

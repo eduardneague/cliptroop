@@ -425,6 +425,27 @@ page with a wallpaper fades in instead of rising (`.motion-page >
 [data-dash-bg]`): the rise's transform made the fixed wallpaper fill only
 the page's box while it ran.
 
+**A profile's colours (1.29.5, 0099).** Levels have a colour each 10
+(`LEVEL_TINTS` in `lib/profile/progress.ts`: grey, yellow, lime, green,
+cyan, blue, purple, pink, red, orange); the level badge always wears it.
+The frame, the XP bar (and with it What I do's bars and the Numbers icons)
+and the header's glow each follow `profile_pages.frame_color` /
+`bar_color` / `glow_color`: 'level' (that colour), 'theme' (the viewer's
+`--amber`), '#rrggbb', and for the glow 'off' (`lib/profile/colors.ts`,
+pure, tested). `ProfileView` turns them into CSS once (`colorCss`) and
+passes strings down (`--pg` on `.prof-head`, the frame's `--pf`,
+`ShowcaseData.barTint` / `frameAt`), so changing one only changes CSS. Reads
+and writes go through `modules/profile/page-data.ts` with the person's own
+client (`readProfilePage` falls back to the columns before 0099; Save sends
+`colors` only when they changed; `saveProblem` checks a missing colour column
+before 0093's missing table, since PostgREST's message names the table too).
+`scripts/e2e/profiles.e2e.ts` runs it against PostgREST, a database without
+0099 included. Your own picture is a button (`useAvatarUpload`, shared with
+Settings: the compressor is imported only once a file is picked). About me
+saves from its own window (`AboutDialog`: while customizing it saves the
+draft and stays; otherwise just that showcase), and only the owner gets a
+showcase's gear.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

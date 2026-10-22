@@ -7,6 +7,8 @@ import { InviteToTeam, type InviteTeam } from "./invite-to-team";
 import { colorForId, initialsFor } from "@/lib/avatar";
 import { LockIcon } from "@/components/ui/icons";
 import { readStats, isFrameId } from "@/lib/profile/progress";
+import { readColors } from "@/lib/profile/colors";
+import { readProfilePage } from "@/modules/profile/page-data";
 import { readProfileLayout } from "@/modules/profile/layout";
 import { ProfileView } from "@/modules/profile/components/profile-view";
 import { bgKind, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
@@ -46,9 +48,10 @@ export default async function PublicProfilePage({
 
   // Their page (hidden by the database when it's private and not yours), their numbers (null when private),
   // their teams (as they let you see them), and your wallpapers when it's yours (1.28.0, 0093).
+  // The page's colours since 1.29.5 (readProfilePage: a database without 0099 answers without them).
   const [{ data: visibleTeams }, pageRes, statsRes, wallsRes] = await Promise.all([
     supabase.rpc("get_visible_teams", { target_user_id: profile.id }),
-    supabase.from("profile_pages").select("public, bio, layout, frame, bg_path, bg_luma").eq("user_id", profile.id).maybeSingle(),
+    readProfilePage(supabase, profile.id),
     supabase.rpc("profile_stats", { p_user: profile.id }),
     isSelf ? supabase.from("profile_wallpapers").select("path, luma").eq("user_id", profile.id).order("created_at", { ascending: true }) : Promise.resolve({ data: [], error: null }),
   ]);
@@ -114,7 +117,7 @@ export default async function PublicProfilePage({
 
   // Distinguish "no teams" from "hidden" so the message is honest either way.
   const teamsHidden = !profile.teams_visible && !isSelf && (visibleTeams ?? []).length === 0;
-  const row = pageRes.data as { public?: boolean; bio?: string | null; layout?: unknown; frame?: string; bg_path?: string | null; bg_luma?: number | null } | null;
+  const row = pageRes.data;
   const bgPath = row?.bg_path && isOwnBgPath(row.bg_path, profile.id) ? row.bg_path : null;
   const url = (path: string) => supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl;
 
@@ -122,7 +125,7 @@ export default async function PublicProfilePage({
     <ProfileView
       person={{ id: profile.id, name, username: profile.username, avatarUrl: profile.avatar_url, color, bio: row?.bio ?? (profile as { bio?: string | null }).bio ?? null, joined: profile.created_at }}
       isSelf={isSelf}
-      page={{ public: row?.public !== false, layout: readProfileLayout(row?.layout ?? null), frame: isFrameId(row?.frame) ? row.frame : "none", bgPath }}
+      page={{ public: row?.public !== false, layout: readProfileLayout(row?.layout ?? null), frame: isFrameId(row?.frame) ? row.frame : "none", bgPath, colors: readColors(row) }}
       bg={bgPath ? { url: url(bgPath), video: bgKind(bgPath) === "video", luma: clampLuma(row?.bg_luma) } : null}
       stats={stats}
       teams={teamsHidden ? null : ((visibleTeams ?? []) as { id: string; name: string; color: string; logo_url: string | null }[])}
@@ -131,6 +134,7 @@ export default async function PublicProfilePage({
         .map((w) => ({ path: w.path, url: url(w.path), video: bgKind(w.path) === "video", luma: clampLuma(w.luma) }))}
       actions={invite}
       ready={ready}
+      colorsReady={pageRes.colorsReady}
       startEditing={edit === "1"}
     />
   );

@@ -1312,8 +1312,10 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 }
 
 /*
-  Profiles (1.28.0). The header: a soft light of your colour and your
-  level's in its corner. Over a background picture it's frosted like the
+  Profiles (1.28.0). The header: a soft glow in its corner (1.29.5: one
+  colour, --pg, your level's by default, or the one you picked; off with
+  data-glow="off". It was your account's colour and your level's, green
+  and red for some). Over a background picture it's frosted like the
   showcases.
 */
 .prof-head::before {
@@ -1322,8 +1324,82 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--pc) 20%, transparent), transparent 62%),
-    radial-gradient(60% 120% at 100% 100%, color-mix(in srgb, var(--pt) 14%, transparent), transparent 60%);
+    radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--pg, transparent) 18%, transparent), transparent 62%),
+    radial-gradient(60% 120% at 100% 100%, color-mix(in srgb, var(--pg, transparent) 9%, transparent), transparent 60%);
+}
+.prof-head[data-glow="off"]::before { content: none; }
+
+/* Your own picture changes with a click (1.29.5): a camera over it when you point at it; on touch screens a small one in its corner, always. */
+.pf-change { position: relative; display: inline-flex; flex-shrink: 0; border-radius: 50%; cursor: pointer; }
+.pf-change:focus-visible { outline: 2px solid rgb(var(--amber)); outline-offset: 8px; }
+.pf-change-face {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+.pf-change:hover .pf-change-face,
+.pf-change:focus-visible .pf-change-face,
+.pf-change[data-busy] .pf-change-face { opacity: 1; }
+/* Initials step aside for the camera. */
+@media (hover: hover) {
+  .pf-change .pf-img { transition: color 0.16s var(--ease-out); }
+  .pf-change:is(:hover, :focus-visible, [data-busy]) .pf-img { color: transparent; }
+}
+.pf-spin { width: 24px; height: 24px; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; }
+@media (hover: none) {
+  .pf-change-face {
+    inset: auto;
+    right: -2px;
+    bottom: -2px;
+    width: 32px;
+    height: 32px;
+    opacity: 1;
+    background: rgb(var(--surface));
+    color: rgb(var(--ink));
+    box-shadow: 0 0 0 2px rgb(var(--surface)), 0 2px 8px rgb(0 0 0 / 0.22);
+  }
+  .pf-change-face svg, .pf-change-face .pf-spin { width: 16px; height: 16px; }
+}
+
+/* Colours to pick (1.29.5, Customize → Colours): round swatches, "your own" a rainbow until it's picked. */
+.pf-swatch {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  transition: transform 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+.pf-swatch:hover { transform: scale(1.1); }
+.pf-swatch[aria-checked="true"], .pf-swatch-own[data-on] { box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--ink) / 0.8); }
+.pf-swatch:focus-visible, .pf-swatch-own:focus-within { outline: 2px solid rgb(var(--amber)); outline-offset: 4px; }
+.pf-swatch-own { background: conic-gradient(#e5484d, #f76b15, #e2a300, #30a46c, #00a2c7, #3e63dd, #ab4aba, #e5484d); }
+.pf-swatch-own[data-on] { background: var(--c); }
+.pf-swatch-own input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.pf-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.pf-dot-off { background: linear-gradient(135deg, transparent calc(50% - 1px), rgb(var(--ink-faint)) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)); box-shadow: inset 0 0 0 1.5px rgb(var(--ink-faint)); }
+
+/* The Numbers showcase's icons (1.29.5), in the XP bar's colour (--pb). */
+.pf-stat-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pb, rgb(var(--amber)));
+  background: color-mix(in srgb, var(--pb, rgb(var(--amber))) 15%, transparent);
 }
 /* Over a background picture: solid, or glass like the showcases with the glass look on (1.29.2, the wallpaper rules). */
 

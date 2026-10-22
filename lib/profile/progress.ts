@@ -67,9 +67,14 @@ export function levelProgress(xp: number) {
   return { level, floor, next: floor + need, into, need, left: need - into, share: Math.min(1, into / need) };
 }
 
-/** A level's colour: a new one every 10 levels, like Steam's badges. */
-const TINTS = ["#8b93a1", "#e5484d", "#f76b15", "#e2a400", "#30a46c", "#0090ff", "#8e4ec6", "#d6409f", "#a07553", "#c9a227"];
-export const levelTint = (level: number): string => TINTS[Math.floor(Math.max(0, level) / 10) % 10];
+/**
+ * A level's colour, a new one every 10 levels, like Steam's badges (1.29.5:
+ * the owner's order, grey to 9, then yellow, then on round the colour wheel:
+ * lime, green, cyan, blue, purple, pink, red, orange). From 100 the badge is
+ * a hexagon and the colours go round again.
+ */
+export const LEVEL_TINTS = ["#8b93a1", "#e2a300", "#7cb342", "#30a46c", "#00a2c7", "#3e63dd", "#8e4ec6", "#d6409f", "#e5484d", "#f76b15"];
+export const levelTint = (level: number): string => LEVEL_TINTS[Math.floor(Math.max(0, Number.isFinite(level) ? level : 0) / 10) % 10];
 /** From level 100 the badge is a hexagon. */
 export const levelShape = (level: number): "circle" | "hexagon" => (level >= 100 ? "hexagon" : "circle");
 

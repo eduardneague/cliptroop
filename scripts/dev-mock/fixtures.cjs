@@ -711,10 +711,12 @@ module.exports = {
     ],
     todos: [],
     // Profile pages (1.28.0): MOCK_PROFILE_FRAME=orbit (edu's frame, default glow), MOCK_PRIVATE=maria (hers private),
-    // MOCK_PROFILE_BG=1 (edu's background: his wallpaper in use).
+    // MOCK_PROFILE_BG=1 (edu's background: his wallpaper in use). 1.29.5: MOCK_PROFILE_COLORS="theme,#30a46c,off"
+    // (edu's frame, XP bar and glow colours; default the level's).
     profile_pages: [
-      { user_id: U[0], public: true, bio: "Making videos about food, history and fake iPhones.", layout: null, frame: process.env.MOCK_PROFILE_FRAME || "glow", bg_path: process.env.MOCK_PROFILE_BG && DASH_BG ? `${U[0]}/1761000000000-dusk.${DASH_BG}` : null, bg_luma: Number(process.env.MOCK_WALL_LUMA ?? 22) },
-      { user_id: U[1], public: process.env.MOCK_PRIVATE !== "maria", bio: "Scripts and voice-overs.", layout: null, frame: "duo", bg_path: null, bg_luma: null },
+      { user_id: U[0], public: true, bio: "Making videos about food, history and fake iPhones.", layout: null, frame: process.env.MOCK_PROFILE_FRAME || "glow", bg_path: process.env.MOCK_PROFILE_BG && DASH_BG ? `${U[0]}/1761000000000-dusk.${DASH_BG}` : null, bg_luma: Number(process.env.MOCK_WALL_LUMA ?? 22),
+        ...(([frame_color = "level", bar_color = "level", glow_color = "level"]) => ({ frame_color, bar_color, glow_color }))((process.env.MOCK_PROFILE_COLORS || "").split(",").filter(Boolean)) },
+      { user_id: U[1], public: process.env.MOCK_PRIVATE !== "maria", bio: "Scripts and voice-overs.", layout: null, frame: "duo", bg_path: null, bg_luma: null, frame_color: "level", bar_color: "level", glow_color: "level" },
     ],
     // Saved wallpapers (1.28.0): with MOCK_DASH_BG, the one in use plus MOCK_WALLPAPERS=2|3 in all (default 1);
     // MOCK_WALL_LUMA=0..100 how bright the one in use is (default 22: a dusk; "null": not measured yet).

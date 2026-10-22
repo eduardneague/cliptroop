@@ -39,6 +39,13 @@ against it with fake YouTube, TikTok, Instagram and Facebook APIs:
   else's can't be cleared), Clear all (older ones too; an invite or an
   ownership request still waiting for an answer stays; History keeps
   everything), and how a database behind on migrations is recognised.
+- `profiles.e2e.ts` (1.29.5, 0099): a profile page's colours, signed in as
+  the person, through the code the profile route and its Save run
+  (`modules/profile/page-data.ts`): saved with the rest and kept when
+  something else is saved, what isn't allowed becoming the level's colour,
+  what a visitor reads (nothing of a private page), someone else's page left
+  alone, and a database without 0099 (the page still reads, colours say the
+  update is needed, the rest still saves).
 
 ```bash
 TEST_DB_URL=postgres://postgres:postgres@localhost:5432/postgres scripts/e2e/run.sh
@@ -49,4 +56,4 @@ v12.2.3 for Linux x64 from GitHub. Ports 3001 and 54399. It creates and drops
 a database called `vplanner_e2e`: never point `TEST_DB_URL` at staging or
 production (it refuses Supabase addresses). Not part of CI (CI has no
 PostgREST); run it after changing the live job, the morning copy, Outliers'
-collector, 0083, 0084, 0085, 0091 or 0094.
+collector, 0083, 0084, 0085, 0091, 0094, 0095 or 0099.
