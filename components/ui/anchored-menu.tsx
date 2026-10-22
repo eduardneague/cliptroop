@@ -13,7 +13,8 @@ import { placeMenu, type MenuPlace } from "@/lib/menu-place";
  * (a button at the bottom of a popup: the idea window's Start, 1.29.9), and
  * sits above popups, so one opened from inside a popup is never hidden
  * behind it. Closes on an outside tap, Escape (just the menu, not the popup
- * it came from), or when the page scrolls.
+ * it came from), or once its button scrolls off the screen (until then it
+ * follows it).
  */
 export function AnchoredMenu({
   open,
@@ -24,6 +25,7 @@ export function AnchoredMenu({
   maxHeight,
   children,
   label,
+  role = "menu",
 }: {
   open: boolean;
   onClose: () => void;
@@ -34,6 +36,8 @@ export function AnchoredMenu({
   maxHeight?: number;
   children: React.ReactNode;
   label?: string;
+  /** "dialog" for a box of choices that isn't a list of commands (Search's filter pills, 1.30.0). */
+  role?: "menu" | "dialog";
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<MenuPlace | null>(null);
@@ -81,10 +85,21 @@ export function AnchoredMenu({
       e.preventDefault();
       onClose();
     };
+    // Something around it scrolled: it follows its button while the button is on screen (1.30.0: a row of filter
+    // pills that slides sideways on a phone, the page moving a little), and closes once the button has gone.
+    let frame = 0;
     const onScroll = (e: Event) => {
       if (panel.current && e.target instanceof Node && panel.current.contains(e.target)) return;
       if (e.target instanceof Element && e.target.closest("[data-floating-menu]")) return;
-      onClose();
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const r = anchor.current?.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        if (!r || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw || (r.width === 0 && r.height === 0)) return onClose();
+        setPos(placeMenu({ anchor: r, vw, vh, width, align, natural: natural.current, maxHeight }));
+      });
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown, { passive: true });
@@ -95,14 +110,15 @@ export function AnchoredMenu({
       document.removeEventListener("touchstart", onDown);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("scroll", onScroll, true);
+      cancelAnimationFrame(frame);
     };
-  }, [open, onClose, anchor]);
+  }, [open, onClose, anchor, width, align, maxHeight]);
 
   if (!open || !pos || typeof document === "undefined") return null;
   return createPortal(
     <div
       ref={panel}
-      role="menu"
+      role={role}
       aria-label={label}
       className={`glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain animate-[modalin_.14s_var(--ease-out)] ${pos.up ? "origin-bottom" : "origin-top"}`}
       style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }}

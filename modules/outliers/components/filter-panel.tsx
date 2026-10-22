@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Select } from "@/components/ui/select";
 import { CloseIcon } from "@/components/ui/icons";
-import { Segmented } from "@/components/ui/segmented";
-import { CHANNEL_AGES, DAY_OPTIONS, DURATIONS, SCORE_STEPS, VIEW_STEPS, compact, type Filters } from "../lib/filters";
+import { CHANNEL_AGES, compact, type Filters } from "../lib/filters";
 import { FORMAT_BY_ID, TRAITS } from "../lib/formats";
-import { multText } from "../lib/scores";
 import { ChannelAvatar } from "./bits";
 import { ChipsInput } from "./chips-input";
 
 /*
- * Search's filters (1.27.0): every one a row of chips (one tap), in the
- * order people reach for them. The same panel sits beside the results on
- * computers and in a sheet on phones.
+ * Search's less used filters (1.27.0, as a column beside the results; 1.30.0:
+ * under the filter bar's More filters, filter-bar.tsx): every one a row of
+ * chips (one tap), in the order people reach for them. Where, × usual,
+ * Posted, Views, Channel size and Length are pills of their own.
  */
 
 export function Chip({ on, onClick, children, title }: { on: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
@@ -42,37 +40,22 @@ function Group({ title, children, hint }: { title: string; children: React.React
   );
 }
 
-const SUB_RANGES: { id: string; label: string; min?: number; max?: number }[] = [
-  { id: "s1", label: "Under 10K", max: 10_000 },
-  { id: "s2", label: "10K–100K", min: 10_000, max: 100_000 },
-  { id: "s3", label: "100K–1M", min: 100_000, max: 1_000_000 },
-  { id: "s4", label: "1M+", min: 1_000_000 },
-];
-const SHORT_LENGTHS: { id: string; label: string; min?: number; max?: number }[] = [
-  { id: "a", label: "Under 30 s", max: 30 },
-  { id: "b", label: "30–60 s", min: 30, max: 60 },
-  { id: "c", label: "Over 60 s", min: 61 },
-];
-const LANG_NAME: Record<string, string> = { en: "English", ro: "Romanian", es: "Spanish", pt: "Portuguese", de: "German", fr: "French", it: "Italian", nl: "Dutch", pl: "Polish", tr: "Turkish", ru: "Russian", hi: "Hindi", id: "Indonesian", ja: "Japanese", ko: "Korean", ar: "Arabic", vi: "Vietnamese", th: "Thai", uk: "Ukrainian" };
+export const LANG_NAME: Record<string, string> = { en: "English", ro: "Romanian", es: "Spanish", pt: "Portuguese", de: "German", fr: "French", it: "Italian", nl: "Dutch", pl: "Polish", tr: "Turkish", ru: "Russian", hi: "Hindi", id: "Indonesian", ja: "Japanese", ko: "Korean", ar: "Arabic", vi: "Vietnamese", th: "Thai", uk: "Ukrainian" };
 const TRAIT_CHIPS = ["number", "money", "question", "brackets", "caps", "first", "you", "vs", "superlative", "time", "year", "split", "negative", "curiosity", "emoji"];
 
-export function FilterPanel({
+export function MoreFilters({
   f,
   onChange,
-  kind,
   formatCounts,
   langs,
   channels = [],
-  hasTracked,
 }: {
   f: Filters;
   onChange: (f: Filters) => void;
-  kind: "long" | "short";
   formatCounts: { id: string; n: number }[];
   langs: [string, number][];
   /** Channels in the results now (to leave some out). */
   channels?: { id: string; title: string; avatar: string | null; n: number }[];
-  hasTracked: boolean;
 }) {
   const [moreFormats, setMoreFormats] = useState(false);
   const [pickChannels, setPickChannels] = useState(false);
@@ -82,106 +65,12 @@ export function FilterPanel({
     onChange(next);
   };
   const toggleIn = (list: string[] | undefined, x: string) => (list?.includes(x) ? list.filter((y) => y !== x) : [...(list ?? []), x]);
-  const lengths = kind === "short" ? SHORT_LENGTHS : DURATIONS.filter((d) => d.id !== "u1");
   const formats = [...formatCounts].sort((a, b) => b.n - a.n);
   const shownFormats = moreFormats ? formats : formats.slice(0, 14);
   const excluded = f.excludeChannels ?? [];
 
   return (
     <div className="divide-y divide-line/[0.08]">
-      <Group title="Where">
-        <Segmented
-          ariaLabel="Where to look"
-          size="sm"
-          value={f.scope ?? "niche"}
-          onChange={(v) => set({ scope: v === "niche" ? undefined : v })}
-          options={[
-            { value: "niche", label: "This niche" },
-            { value: "tracked", label: "Tracked", disabled: !hasTracked, title: hasTracked ? "Only tracked channels" : "No tracked channels yet" },
-            { value: "all", label: "Every niche" },
-            { value: "audience", label: "Your viewers watch", title: "Channels your viewers also watch (the Audience tab)" },
-          ]}
-        />
-      </Group>
-
-      <Group title="× its channel's usual" hint={f.minScore !== undefined || f.maxScore !== undefined ? `${f.minScore !== undefined ? multText(f.minScore) : "0×"} – ${f.maxScore !== undefined ? multText(f.maxScore) : "any"}` : undefined}>
-        <Chip on={f.minScore === undefined} onClick={() => set({ minScore: undefined })}>
-          Any
-        </Chip>
-        {SCORE_STEPS.filter((s) => s >= 1.5 && s <= 50).map((s) => (
-          <Chip key={s} on={f.minScore === s} onClick={() => set({ minScore: f.minScore === s ? undefined : s })}>
-            {multText(s)}+
-          </Chip>
-        ))}
-        <div className="w-full mt-1">
-          <Select
-            value={f.maxScore !== undefined ? String(f.maxScore) : null}
-            onChange={(v) => set({ maxScore: v ? Number(v) : undefined })}
-            emptyOption="No upper limit"
-            options={SCORE_STEPS.filter((s) => s >= 1.5).map((s) => ({ value: String(s), label: `Up to ${multText(s)}` }))}
-            ariaLabel="Up to"
-            variant="inline"
-          />
-        </div>
-      </Group>
-
-      <Group title="Posted">
-        {DAY_OPTIONS.map((d) => (
-          <Chip key={d.label} on={(f.days ?? null) === d.days} onClick={() => set({ days: d.days ?? undefined })}>
-            {d.label}
-          </Chip>
-        ))}
-      </Group>
-
-      <Group title="Views">
-        <Chip on={f.minViews === undefined} onClick={() => set({ minViews: undefined })}>
-          Any
-        </Chip>
-        {VIEW_STEPS.filter((v) => v >= 10_000).map((v) => (
-          <Chip key={v} on={f.minViews === v} onClick={() => set({ minViews: f.minViews === v ? undefined : v })}>
-            {compact(v)}+
-          </Chip>
-        ))}
-        <div className="w-full mt-1">
-          <Select
-            value={f.maxViews !== undefined ? String(f.maxViews) : null}
-            onChange={(v) => set({ maxViews: v ? Number(v) : undefined })}
-            emptyOption="No upper limit"
-            options={VIEW_STEPS.map((v) => ({ value: String(v), label: `Up to ${compact(v)}` }))}
-            ariaLabel="Views up to"
-            variant="inline"
-          />
-        </div>
-      </Group>
-
-      <Group title="Channel size">
-        <Chip on={f.minSubs === undefined && f.maxSubs === undefined} onClick={() => set({ minSubs: undefined, maxSubs: undefined })}>
-          Any
-        </Chip>
-        {SUB_RANGES.map((r) => {
-          const on = f.minSubs === r.min && f.maxSubs === r.max;
-          return (
-            <Chip key={r.id} on={on} onClick={() => set(on ? { minSubs: undefined, maxSubs: undefined } : { minSubs: r.min, maxSubs: r.max })}>
-              {r.label}
-            </Chip>
-          );
-        })}
-      </Group>
-
-      <Group title="Length">
-        <Chip on={f.minDur === undefined && f.maxDur === undefined} onClick={() => set({ minDur: undefined, maxDur: undefined })}>
-          Any
-        </Chip>
-        {lengths.map((d) => {
-          const on = f.minDur === d.min && f.maxDur === d.max;
-          return (
-            <Chip key={d.id} on={on} onClick={() => set(on ? { minDur: undefined, maxDur: undefined } : { minDur: d.min, maxDur: d.max })}>
-              {d.label}
-            </Chip>
-          );
-        })}
-      </Group>
-
       <Group title="Views per hour">
         {[undefined, 100, 1000, 10_000].map((v) => (
           <Chip key={String(v)} on={f.minVph === v} onClick={() => set({ minVph: v })}>
@@ -212,7 +101,7 @@ export function FilterPanel({
         </Chip>
         {CHANNEL_AGES.map((a) => (
           <Chip key={a.days} on={f.channelDays === a.days} onClick={() => set({ channelDays: f.channelDays === a.days ? undefined : a.days })}>
-            {a.label.replace("Started in the ", "")}
+            {a.label.replace(/^Started in the l/, "L")}
           </Chip>
         ))}
       </Group>

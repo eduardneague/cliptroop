@@ -535,6 +535,18 @@ and only offers a menu otherwise; the multi-pick flow (Select) is a mode,
 not checkboxes on every card. Channels added in this visit are kept in the
 tab (`inNiche`) until the page is read again.
 
+**Search's filter bar (1.30.0).** Search's filters are pills over the
+results (`FilterBar`, `modules/outliers/components/filter-bar.tsx`); what a
+pill says and clears, and what sits under More filters, is pure in
+`modules/outliers/lib/filter-bar.ts`. A new filter goes either into a pill
+(one that people use all the time: give `pillValue` and `clearPill` a case)
+or into `MoreFilters` (add its key to `MORE_KEYS` and a chip to
+`moreChips`, so it counts and can be removed). A pill's choices are an
+`AnchoredMenu` with `role="dialog"`; choices from a list close it, chips
+leave it open. `AnchoredMenu` follows its button on scroll and closes when
+the button leaves the screen, so a menu can open from a row that scrolls
+sideways.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

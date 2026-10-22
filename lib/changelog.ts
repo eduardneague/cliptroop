@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.30.0",
+    date: "2026-10-22",
+    title: "Search filters as a row of pills",
+    changes: [
+      { kind: "new", text: "Outliers → Search has its filters in one row of dropdowns over the results: Where, Outlier score, Posted, Views, Channel size and Length. Each opens its choices right under it; one that's set shows what it's set to, with an × to clear it, and Reset clears them all." },
+      { kind: "better", text: "The results get the whole width (more videos in a row), and the cut off Where switch is gone." },
+      { kind: "new", text: "More filters keeps the rest (views an hour, engagement, views per subscriber, channel age, language, format, what the title has, words and channels to leave out) in one window, and each one that's on shows as a small chip you can remove." },
+      { kind: "better", text: "The outlier score choices show the same colours as the multipliers." },
+      { kind: "better", text: "A menu that's open follows its button when the page moves, instead of closing (it closes once the button is off the screen)." },
+    ],
+  },
+  {
     version: "1.29.11",
     date: "2026-10-22",
     title: "A cleaner Audience tab",
