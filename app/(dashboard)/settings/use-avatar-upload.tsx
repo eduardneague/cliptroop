@@ -33,8 +33,12 @@ export function useAvatarUpload(userId: string, done?: (url: string) => void) {
     }
     setBusy(true);
     try {
-      const { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } = await import("@/lib/image/compress");
+      const { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } = await import("@/lib/image/compress");
       const file = await compressImage(original, IMAGE_PRESETS.avatar);
+      if (!isPictureType(file.type)) {
+        toast.error("Use a picture: PNG, JPG, WebP or GIF.");
+        return;
+      }
       const supabase = createClient();
       const path = `${userId}/avatar-${Date.now()}-${safeFileName(file.name)}`;
       const { error } = await supabase.storage.from("avatars").upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });

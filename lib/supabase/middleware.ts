@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isPublicPath } from "@/lib/public-paths";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -88,25 +89,7 @@ export async function updateSession(request: NextRequest) {
   const claims = claimsData?.claims;
   const user = claims?.sub ? { id: claims.sub as string, email: (claims.email as string | undefined) ?? null } : null;
 
-  const isPublicRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/api/auth") ||
-    // Where the sign-in emails lead (invites, password resets): signs you in.
-    request.nextUrl.pathname === "/welcome" ||
-    // Scheduled jobs (Supabase's timer). Each route checks CRON_SECRET itself.
-    request.nextUrl.pathname.startsWith("/api/cron/") ||
-    // Public pages the platform reviews require (the home page signs you in or sends you on).
-    request.nextUrl.pathname === "/" ||
-    request.nextUrl.pathname === "/privacy" ||
-    request.nextUrl.pathname === "/terms" ||
-    request.nextUrl.pathname === "/data-deletion" ||
-    // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
-    request.nextUrl.pathname === "/sitemap.xml" ||
-    // Status page + health check: public (details only for the alert people).
-    request.nextUrl.pathname === "/status" ||
-    request.nextUrl.pathname === "/api/health" ||
-    // The installed app's "you're offline" page (cached by the service worker).
-    request.nextUrl.pathname === "/offline.html";
+  const isPublicRoute = isPublicPath(request.nextUrl.pathname);
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

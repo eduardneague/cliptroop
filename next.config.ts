@@ -7,6 +7,13 @@ import { readFileSync } from "node:fs";
 const version = (JSON.parse(readFileSync("./package.json", "utf8")) as { version: string }).version;
 const channel = process.env.VERCEL_ENV === "production" ? "P" : process.env.VERCEL_ENV ? "E" : "D";
 const commit = (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7);
+const supabaseHost = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
+  } catch {
+    return "";
+  }
+})();
 
 const nextConfig: NextConfig = {
   // No "X-Powered-By: Next.js" on answers: nothing to tell about what runs the app.
@@ -39,13 +46,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 1.31.1: the image resizer (/_next/image) takes pictures from this app's own Supabase only, not
+  // from any *.supabase.co project (anyone's pictures, resized on this app's bill).
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "*.supabase.co",
-      },
-    ],
+    remotePatterns: supabaseHost ? [{ protocol: "https", hostname: supabaseHost }] : [],
   },
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Ago } from "@/components/ui/ago";
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, safeFileName, storedTypeFor, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CommentDeleteButton } from "./comment-delete-button";
@@ -184,7 +184,7 @@ export function NotesPanel({
         const path = `${projectId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
         const { error } = await supabase.storage
           .from("comment-attachments")
-          .upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type || undefined });
+          .upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: storedTypeFor(file.type) });
         if (error) {
           toast.error(`Couldn't upload ${file.name}.`);
           continue;

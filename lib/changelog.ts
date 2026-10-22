@@ -23,6 +23,17 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.31.1",
+    date: "2026-10-23",
+    title: "Security: nothing left open",
+    changes: [
+      { kind: "better", text: "Profile pictures, team logos, thumbnails and pictures in scripts now only take pictures (PNG, JPG, WebP, GIF and the like), 25 MB at most. An SVG you pick is turned into a PNG first." },
+      { kind: "better", text: "A web page or an SVG attached to a comment is kept as a plain download, so it can never open as a page." },
+      { kind: "fixed", text: "Only the pages meant to be public open without signing in, and a new page can never become public by having a similar name." },
+      { kind: "better", text: "Behind the scenes: the public health check can't be used to flood the app, and the picture resizer only works on this app's own pictures." },
+    ],
+  },
+  {
     version: "1.31.0",
     date: "2026-10-23",
     title: "Security: keys stay secret",

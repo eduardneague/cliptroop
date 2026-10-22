@@ -578,6 +578,20 @@ person itself, not only through the middleware, and takes `overLimit`
 a `run:` script: put it in `env:` and use the variable. `tests/secrets.test.ts`
 checks all of this, and scans the code for anything shaped like a key.
 
+**Public addresses and public files (1.31.1, 0103).** A page or API
+that should open without signing in goes into `lib/public-paths.ts` as an
+exact address (or a folder ending in `/`), never a prefix of a name.
+Anything that anyone can call and that does real work (like
+`/api/health`) answers from a short memo instead of working on every call.
+Public buckets take only what they're for: a picture bucket lists its
+types in `allowed_mime_types` (the same `PICTURE_TYPES` the app checks
+before uploading, never SVG or HTML) and has a size limit, and its files
+get random names. A file of any kind (comment attachments) goes up with
+`storedTypeFor(type)`, so a page, an SVG or a script is stored as a plain
+download. No `console.log` in the app (`console.warn` / `error` for what
+someone must look at), and an error screen shows the digest, never the
+error.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

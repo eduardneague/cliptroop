@@ -1,6 +1,6 @@
 "use client";
 
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -37,6 +37,11 @@ export function TeamLogoUploader({
     setBusy(true);
 
     const file = await compressImage(original, IMAGE_PRESETS.logo);
+    if (!isPictureType(file.type)) {
+      toast.error("Use a picture: PNG, JPG, WebP or GIF.");
+      setBusy(false);
+      return;
+    }
     const path = `${teamId}/logo-${Date.now()}-${safeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage
       .from("team-logos")

@@ -9,8 +9,10 @@
  * - Scales down to fit maxWidth × maxHeight (never scales UP).
  * - Encodes as WebP; if the browser can't encode WebP (older Safari),
  *   falls back to JPEG — or PNG when transparency must be kept.
- * - Animated GIFs and SVGs are returned untouched (re-encoding would
- *   break the animation / vector).
+ * - Animated GIFs are returned untouched (re-encoding would break the
+ *   animation).
+ * - SVGs become PNGs (1.31.1): an SVG can carry a script, and the picture
+ *   buckets only take pictures that can't (PICTURE_TYPES).
  * - If compressing somehow makes the file bigger, the original is kept.
  */
 export type CompressOptions = {
@@ -32,7 +34,23 @@ export const IMAGE_PRESETS = {
   background: { maxWidth: 3840, maxHeight: 2400, quality: 0.86 },
 } satisfies Record<string, CompressOptions>;
 
-const SKIP_TYPES = new Set(["image/gif", "image/svg+xml"]);
+const SKIP_TYPES = new Set(["image/gif"]);
+
+/**
+ * What the public picture buckets take (avatars, team-logos, thumbnails,
+ * script-images; migration 0103 sets the same list on them): pictures only,
+ * never an SVG (it can carry a script) or a web page.
+ */
+export const PICTURE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/avif", "image/heic", "image/heif", "image/bmp", "image/tiff"] as const;
+export const isPictureType = (type: string) => (PICTURE_TYPES as readonly string[]).includes(type.toLowerCase());
+
+/**
+ * Files that a browser would open as a page (and run) if opened straight
+ * from storage: a comment attachment of one of these types is kept as a
+ * plain download (application/octet-stream) instead (1.31.1).
+ */
+const ACTIVE_TYPES = new Set(["text/html", "application/xhtml+xml", "image/svg+xml", "text/xml", "application/xml", "text/javascript", "application/javascript", "application/x-javascript", "application/ecmascript", "text/ecmascript"]);
+export const storedTypeFor = (type: string) => (!type ? "application/octet-stream" : ACTIVE_TYPES.has(type.toLowerCase().split(";")[0].trim()) ? "application/octet-stream" : type);
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
   return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
@@ -52,7 +70,37 @@ export function safeFileName(name: string, ext?: string) {
   return extension ? `${base}.${extension}` : base;
 }
 
+/** An SVG drawn as a PNG (transparency kept), as big as the preset allows; null when it can't be drawn. */
+async function rasterizeSvg(file: File, opts: CompressOptions): Promise<File | null> {
+  if (typeof document === "undefined" || typeof Image === "undefined") return null;
+  const url = URL.createObjectURL(file);
+  try {
+    // As a picture, an SVG never runs its scripts.
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const w0 = img.naturalWidth || 512;
+    const h0 = img.naturalHeight || 512;
+    const scale = Math.min(opts.maxWidth / w0, opts.maxHeight / h0, 4);
+    const width = Math.max(1, Math.round(w0 * scale));
+    const height = Math.max(1, Math.round(h0 * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, width, height);
+    const blob = await canvasToBlob(canvas, "image/png", 1);
+    return blob ? new File([blob], safeFileName(file.name, "png"), { type: "image/png", lastModified: Date.now() }) : null;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function compressImage(file: File, opts: CompressOptions): Promise<File> {
+  if (file.type === "image/svg+xml") return (await rasterizeSvg(file, opts)) ?? file;
   if (!file.type.startsWith("image/") || SKIP_TYPES.has(file.type)) return file;
   if (typeof createImageBitmap !== "function") return file;
 

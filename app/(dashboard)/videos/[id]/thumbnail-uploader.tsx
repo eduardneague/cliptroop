@@ -2,7 +2,7 @@
 
 import { CloseIcon } from "@/components/ui/icons";
 
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -45,6 +45,11 @@ export function ThumbnailUploader({
       }
 
       const file = await compressImage(original, IMAGE_PRESETS.thumbnail);
+      if (!isPictureType(file.type)) {
+        toast.error(`${original.name}: Use a picture: PNG, JPG, WebP or GIF.`);
+        failed++;
+        continue;
+      }
       const path = `${projectId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("thumbnails")

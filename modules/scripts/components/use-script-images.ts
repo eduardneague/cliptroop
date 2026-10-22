@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { createClient } from "@/lib/supabase/client";
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { decodeDataImage, readyToSave, unkeepableSrc } from "../lib/paste-images";
 
 /**
@@ -82,6 +82,7 @@ export function useScriptImages(
       void (async () => {
         try {
           const file = await compressImage(original, IMAGE_PRESETS.attachment);
+          if (!isPictureType(file.type)) throw new Error("not a picture");
           const path = `${teamId}/${scriptId}/${crypto.randomUUID()}-${safeFileName(file.name || "pasted-image.png")}`;
           const bucket = createClient().storage.from("script-images");
           const { error } = await bucket.upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });

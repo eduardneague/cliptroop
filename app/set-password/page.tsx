@@ -1,6 +1,6 @@
 "use client";
 
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -133,7 +133,8 @@ export default function SetUpAccountPage() {
       try {
         const file = await compressImage(avatarFile, IMAGE_PRESETS.avatar);
         const path = `${me.id}/avatar-${Date.now()}-${safeFileName(file.name)}`;
-        const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });
+        // Only a picture the avatars take (1.31.1); anything else is skipped, the rest still saves.
+        const { error: upErr } = isPictureType(file.type) ? await supabase.storage.from("avatars").upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type }) : { error: new Error("not a picture") };
         if (!upErr) {
           const { data } = supabase.storage.from("avatars").getPublicUrl(path);
           await updateAvatar(data.publicUrl);
