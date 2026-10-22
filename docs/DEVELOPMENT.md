@@ -446,6 +446,50 @@ saves from its own window (`AboutDialog`: while customizing it saves the
 draft and stays; otherwise just that showcase), and only the owner gets a
 showcase's gear.
 
+**Achievement cards, more achievements (1.29.6, 0100).** A profile keeps
+ONE card for the whole page (`AchievementCards` in
+`modules/profile/components/achievements.tsx`, round `ProfileView`); a medal
+drawn with `interactive` only tells it "show me, here" (its rect), so a page
+of 50 medals costs 50 small handlers and one card. Leave `interactive` off
+where a medal sits inside a button (the featured picker). The card measures
+itself in a layout effect before it paints, so it never shows in the wrong
+place, and goes away on scroll, resize, Esc, blur or a tap elsewhere. Its
+animations are CSS only (`.pf-card*`; `--mp` is registered with `@property`
+so a locked medal's ring can fill). Every achievement has `text` (what to do)
+and `why` (what it means, in the card); ids are what a Featured showcase
+saves, so keep them. Counting stays in the database: `profile_stats` (0100)
+adds `more` (early, night, dawn, videos as `{ n, at }` via `vp_marks`) and a
+few more marks for streaks, levels and teams; night and dawn use the team's
+time zone (`vp_safe_tz`, once per team) and leave publishing out. The four
+new showcases (Streak, Next up, Milestones, Busiest days) only read the
+numbers already loaded.
+
+**Clip cheers your XP (1.29.7, 0101).** `XpCheers` (in the dashboard layout)
+listens to realtime UPDATEs on your own `tasks` rows (0101 adds the table
+to `supabase_realtime`; the filter is `user_id=eq.<you>`). A burst of rows
+is settled for 700 ms, then `my_progress()` gives your XP; the popup shows
+the difference from what this tab last saw (sessionStorage), never a number
+worked out in the browser, so whatever the database didn't count (a skipped
+step, one counted before) shows nothing. Only the visible tab cheers; the
+others just remember the new total. The pure part is `lib/profile/xp.ts`
+(`xpChange`, `mergeXp`). The runner game behind Clip's seven taps
+(`clip-runner.tsx`) is loaded with next/dynamic only when it's opened, draws
+on one canvas in world units, and runs its loop only while it moves (and
+not in a hidden tab); keep it that way so the dashboard pays nothing for it.
+
+**Clip's "new look" screen (1.29.8).** Anything that switches the colour
+theme, light or dark, or glass on / off / its style goes through
+`changeLook(what, apply)` (`lib/look-screen.ts`), never straight to the
+attributes on `<html>`: `LookScreenHost` (dashboard layout) puts Clip's
+solid screen up, applies the change once that screen has been drawn, and
+takes it away after the new look has been drawn (at least 750 ms). The
+restyle (every glass pane's blur at once) happens under it instead of as a
+visible stutter. Small changes (the see-through slider, the colours behind
+the glass) stay instant and don't use it. Outside the app shell
+`changeLook` just applies. Loading skeletons are `.skeleton` (or the
+`Skeleton` component) everywhere, so they take the theme's tint; don't draw
+loading blocks with greys of their own.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

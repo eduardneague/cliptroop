@@ -1,9 +1,10 @@
-// A profile page's colours (1.29.5, 0099) against a real Postgres + PostgREST,
-// through the same code the profile route and its Save run
-// (modules/profile/page-data.ts), signed in as the person: saving colours
-// with the rest, what a visitor reads, a private page, someone else's page,
-// colours that aren't allowed, and a database that doesn't have 0099 yet.
-// Run through scripts/e2e/run.sh.
+// A profile page's colours (1.29.5, 0099) and what its achievements count
+// (1.29.6, 0100) against a real Postgres + PostgREST, through the same code
+// the profile route and its Save run (modules/profile/page-data.ts,
+// lib/profile/progress.ts), signed in as the person: saving colours with the
+// rest, what a visitor reads, a private page, someone else's page, colours
+// that aren't allowed, steps at night and at dawn in the team's time zone,
+// and a database that doesn't have 0099 yet. Run through scripts/e2e/run.sh.
 import { createHmac } from "node:crypto";
 import { execSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
@@ -32,6 +33,7 @@ async function main() {
   const { readProfilePage, writeProfilePage, NEEDS_0099 } = await import("../../modules/profile/page-data");
   const { readColors } = await import("../../lib/profile/colors");
   const { DEFAULT_PROFILE_LAYOUT } = await import("../../modules/profile/layout");
+  const { readStats, achievementsFor } = await import("../../lib/profile/progress");
   const P = "00000000-0000-4000-8000-0000000000e1";
   const Q = "00000000-0000-4000-8000-0000000000e2";
   sql(`
@@ -74,6 +76,27 @@ async function main() {
     const own = await readProfilePage(p, P);
     ok(readColors(own.data).frame === "#e2a300", "you still get yours");
     await writeProfilePage(p, P, { public: true });
+  }
+
+  console.log("What the new achievements count (1.29.6, 0100)");
+  {
+    const TEAM = "10000000-0000-4000-8000-0000000000e1";
+    sql(`
+      insert into teams (id, name, slug, owner_id, timezone) values ('${TEAM}', 'Owls', 'owls-team', '${P}', 'Asia/Tokyo') on conflict do nothing;
+      insert into tasks (team_id, user_id, kind, item_id, stage, state, due_date, activated_at, completed_at) values
+        -- 17:30 UTC: 02:30 in Tokyo, three days before its date.
+        ('${TEAM}', '${P}', 'short', '20000000-0000-4000-8000-0000000000e1', 'script', 'done', date '2026-03-08', '2026-03-05 10:00Z', '2026-03-05 17:30Z'),
+        -- 21:30 UTC: 06:30 in Tokyo.
+        ('${TEAM}', '${P}', 'short', '20000000-0000-4000-8000-0000000000e2', 'editing', 'done', null, '2026-03-06 10:00Z', '2026-03-06 21:30Z');
+    `);
+    const mine = await p.rpc("profile_stats", { p_user: P });
+    const stats = readStats(mine.data);
+    ok(!mine.error && stats?.more.night?.n === 1 && stats.more.dawn?.n === 1 && stats.more.early?.n === 1, `night, dawn and early counted (${mine.error?.message ?? JSON.stringify(stats?.more)})`);
+    const got = achievementsFor(stats!);
+    ok(got.find((a) => a.id === "night-owl")?.unlocked === true && got.find((a) => a.id === "early-bird")?.unlocked === true, "Night owl and Early bird reached");
+    ok(got.find((a) => a.id === "night-owl")?.at?.startsWith("2026-03-05T17:30:00") === true, `dated by the step (${got.find((a) => a.id === "night-owl")?.at})`);
+    const theirs = await q.rpc("profile_stats", { p_user: P });
+    ok(!theirs.error && readStats(theirs.data)?.more.night?.n === 1, "a visitor sees them on a public profile");
   }
 
   console.log("A database without 0099");

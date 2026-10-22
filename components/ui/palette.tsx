@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { changeLook } from "@/lib/look-screen";
 import { setPalette } from "@/app/(dashboard)/settings/actions";
 import { useToast } from "./toast-provider";
 import { CheckIcon } from "./icons";
@@ -75,7 +76,8 @@ export function PaletteChoice({ value }: { value: string | null }) {
     if (id === current) return;
     const prev = current;
     setCurrent(id);
-    apply(id);
+    // Clip covers the switch while every pane takes the new colours (1.29.8).
+    changeLook("theme", () => apply(id));
     start(async () => {
       const res = await setPalette(id === "default" ? null : id);
       if (res?.error) {

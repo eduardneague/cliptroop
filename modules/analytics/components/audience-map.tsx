@@ -14,7 +14,7 @@ const Globe = dynamic(() => import("./globe").then((m) => m.Globe), {
   ssr: false,
   loading: () => (
     <div className="w-full flex justify-center py-4" aria-hidden>
-      <div className="w-[min(100%,220px)] aspect-square rounded-full bg-line/[0.06] animate-pulse" />
+      <div className="skeleton w-[min(100%,220px)] aspect-square rounded-full" />
     </div>
   ),
 });

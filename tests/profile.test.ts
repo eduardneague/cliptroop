@@ -56,6 +56,28 @@ ok(!get("all-rounder").unlocked && get("all-rounder").have === 3, "3 kinds of st
 ok(a.findIndex((x) => !x.unlocked) > a.findLastIndex((x) => x.unlocked), "reached ones first");
 ok(a[0].at === "2026-09-15T10:00:00Z", "newest reached first");
 
+// 1.29.6: more achievements, each with what it means; 0100's counts.
+ok(ACHIEVEMENTS.length === 55 && new Set(ACHIEVEMENTS.map((x) => x.id)).size === ACHIEVEMENTS.length, `55 achievements, ids unique (${ACHIEVEMENTS.length})`);
+ok(ACHIEVEMENTS.every((x) => /^[a-z0-9-]{1,40}$/.test(x.id)), "every id can be featured (the layout's check)");
+ok(ACHIEVEMENTS.every((x) => x.why.length > 20 && !/[\u2013\u2014]/.test(x.name + x.text + x.why)), "each says what it means, without dashes");
+ok(ACHIEVEMENTS.find((x) => x.id === "level-25")!.why.includes("4,500 XP") && ACHIEVEMENTS.find((x) => x.id === "centennial")!.why.includes("55,000 XP"), "levels say their XP");
+const before = achievementsFor(s);
+ok(!before.find((x) => x.id === "night-owl")!.unlocked && before.find((x) => x.id === "prolific")!.have === 7, "before 0100: no night yet; videos still counted (7 of 25)");
+const more = readStats({
+  xp: 100, tasks: 40, videos: 30, teams: 1, by: { script: 1, edit: 1, film: 1, research: 1, review: 1, package: 1, publish: 1, action: 1 },
+  ranks: Object.fromEntries(["script", "edit", "film", "research", "review", "package", "publish", "action"].map((c, i) => [c, { 1: `2026-0${i + 1}-01T10:00:00Z` }])),
+  streak: { best: 15, current: 0, dates: { 3: "2026-01-03", 7: "2026-01-07", 14: "2026-01-14" } },
+  more: { night: { n: 1, at: { 1: "2026-02-02T01:00:00Z" } }, early: { n: 12, at: { 1: "2026-01-01T10:00:00Z", 10: "2026-03-01T10:00:00Z" } }, videos: { n: 30, at: { 10: "2026-02-01T10:00:00Z", 25: "2026-05-01T10:00:00Z" } }, junk: { n: 5 }, dawn: "x" },
+})!;
+ok(!("junk" in more.more) && !("dawn" in more.more) && more.more.night?.n === 1, "0100's counts read and cleaned");
+const m = achievementsFor(more);
+const g = (id: string) => m.find((x) => x.id === id)!;
+ok(g("night-owl").unlocked && g("night-owl").at === "2026-02-02T01:00:00Z" && !g("early-bird").unlocked, "night owl, not early bird");
+ok(g("ahead-of-schedule").unlocked && g("ahead-of-schedule").at === "2026-03-01T10:00:00Z" && !g("always-early").unlocked && g("always-early").have === 12, "early: 10 reached, 12 of 50");
+ok(g("prolific").unlocked && g("prolific").at === "2026-05-01T10:00:00Z", "25 videos, dated");
+ok(g("two-weeks").unlocked && g("two-weeks").at === "2026-01-14" && !g("hundred-days").unlocked, "a 14 day streak");
+ok(g("jack-of-all-trades").unlocked && g("jack-of-all-trades").at === "2026-08-01T10:00:00Z", "every kind: dated by the 8th kind's first");
+
 // The showcases' layout.
 ok(readProfileLayout(null) === DEFAULT_PROFILE_LAYOUT && readProfileLayout({ v: 2, items: [] }) === DEFAULT_PROFILE_LAYOUT, "nothing saved → the default");
 const dirty = readProfileLayout({

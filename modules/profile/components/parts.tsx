@@ -2,14 +2,13 @@
 
 import type { CSSProperties } from "react";
 import { initialsFor } from "@/lib/avatar";
-import { levelShape, levelTint, TIER_LABEL, type AchievementIcon, type AchievementState, type FrameId } from "@/lib/profile/progress";
-import { AppsIcon, ArchiveIcon, BookIcon, CameraIcon, CheckIcon, ClockIcon, EyeIcon, FlameIcon, LockIcon, PostingIcon, ScissorsIcon, SearchIcon, StarIcon, TargetIcon, TrophyIcon, UsersIcon } from "@/components/ui/icons";
+import { levelShape, levelTint, type FrameId } from "@/lib/profile/progress";
 
 /*
  * The small pieces of a profile (1.28.0): the picture in its frame, the level
- * badge, the XP bar and achievement medallions. Frames and badges are drawn
- * in globals.css (.pf-*), in the level's colour; the moving ones stand still
- * when animations are off.
+ * badge and the XP bar (achievement medallions: achievements.tsx, 1.29.6).
+ * Frames and badges are drawn in globals.css (.pf-*); the moving ones stand
+ * still when animations are off.
  */
 
 /** Your picture, in the frame you picked (unlocked by your level). `tint`: the frame's colour (your level's). */
@@ -80,44 +79,6 @@ export function XpBar({ share, tint, className = "" }: { share: number; tint: st
   return (
     <span className={`block h-2 rounded-full bg-line/15 overflow-hidden ${className}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)}>
       <span className="pf-xp block h-full rounded-full" style={{ width: `${Math.max(2, share * 100)}%`, background: `linear-gradient(90deg, color-mix(in srgb, ${tint} 70%, white), ${tint})` }} />
-    </span>
-  );
-}
-
-const ICONS: Record<AchievementIcon, (p: { className?: string }) => React.ReactNode> = {
-  check: CheckIcon,
-  flame: FlameIcon,
-  trophy: TrophyIcon,
-  clock: ClockIcon,
-  book: BookIcon,
-  scissors: ScissorsIcon,
-  camera: CameraIcon,
-  search: SearchIcon,
-  eye: EyeIcon,
-  archive: ArchiveIcon,
-  posting: PostingIcon,
-  target: TargetIcon,
-  star: StarIcon,
-  users: UsersIcon,
-  apps: AppsIcon,
-};
-
-export const shortDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
-
-/** One achievement as a medallion: its tier's colours when reached; grey with how far along when not. */
-export function AchievementBadge({ a, size = 44 }: { a: AchievementState; size?: number }) {
-  const Icon = ICONS[a.icon];
-  const title = a.unlocked ? `${a.name}: ${a.text}. ${TIER_LABEL[a.tier]}, reached ${shortDate(a.at)}.` : `${a.name}: ${a.text}. ${a.have} of ${a.goal}.`;
-  return (
-    <span className="pf-medal" data-tier={a.tier} data-locked={a.unlocked ? undefined : ""} style={{ "--ms": `${size}px`, "--mp": `${(a.have / a.goal) * 360}deg` } as CSSProperties} title={title} role="img" aria-label={title}>
-      <span className="pf-medal-face">
-        <Icon className="w-[45%] h-[45%]" />
-      </span>
-      {!a.unlocked && (
-        <span className="pf-medal-lock" aria-hidden>
-          <LockIcon className="w-2.5 h-2.5" />
-        </span>
-      )}
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SunIcon, MoonIcon } from "./icons";
 import { sounds } from "@/lib/sounds";
 import { onThemeChange, setDark, storedDark } from "@/lib/theme";
+import { changeLook } from "@/lib/look-screen";
 
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState(false);
@@ -17,7 +18,9 @@ export function ThemeToggle() {
   }, []);
 
   function toggle() {
-    setDark(!isDark);
+    const next = !isDark;
+    // Clip covers the switch while every pane restyles (1.29.8).
+    changeLook(next ? "dark" : "light", () => setDark(next));
     sounds.tick();
   }
 

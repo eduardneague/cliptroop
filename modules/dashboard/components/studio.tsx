@@ -44,8 +44,8 @@ import type { Meeting } from "@/modules/meetings/lib/types";
 function WidgetSkeleton() {
   return (
     <div className="space-y-2 pt-0.5" aria-hidden>
-      <div className="h-3 w-2/3 rounded bg-surface-2/70" />
-      <div className="h-3 w-1/2 rounded bg-surface-2/50" />
+      <div className="skeleton h-3 w-2/3 rounded" />
+      <div className="skeleton h-3 w-1/2 rounded opacity-70" />
     </div>
   );
 }

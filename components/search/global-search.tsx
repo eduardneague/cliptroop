@@ -13,6 +13,7 @@ import { buildCatalog, prepared, SUGGESTED, type Entry } from "@/lib/search/cata
 import { rank } from "@/lib/search/match";
 import { localToday, parseDate } from "@/lib/search/dates";
 import { isDark, onThemeChange, setDark } from "@/lib/theme";
+import { changeLook } from "@/lib/look-screen";
 import { setSoundsEnabled, sounds, soundsEnabled } from "@/lib/sounds";
 import { flashWhenReady } from "@/lib/flash";
 import { minWidth } from "@/lib/breakpoints";
@@ -259,7 +260,7 @@ export function GlobalSearch({
       switch (e.run) {
         case "theme": {
           const next = !isDark();
-          setDark(next);
+          changeLook(next ? "dark" : "light", () => setDark(next));
           sounds.tick();
           toast.success(next ? "Dark mode on" : "Dark mode off");
           return;

@@ -831,9 +831,11 @@ html.dark[data-glass] .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
   0% { background-position: 150% 0; }
   70%, 100% { background-position: -50% 0; }
 }
+/* 1.29.8: in the colour theme's own tint (a touch of its accent), so Cherry's loading pages are a soft pink, Ocean's a
+   soft blue, Ink's plain grey; the wave a little more of it. Same in light and dark. */
 .skeleton {
-  background-color: rgb(var(--surface-2));
-  background-image: linear-gradient(100deg, transparent 38%, rgb(var(--ink) / 0.06) 50%, transparent 62%);
+  background-color: color-mix(in srgb, rgb(var(--amber)) 7%, rgb(var(--surface-2)));
+  background-image: linear-gradient(100deg, transparent 38%, color-mix(in srgb, rgb(var(--amber)) 9%, rgb(var(--ink) / 0.05)) 50%, transparent 62%);
   background-size: 200% 100%;
   background-repeat: no-repeat;
   background-attachment: fixed;
@@ -1552,6 +1554,132 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 .dark .pf-tier[data-tier="rare"] { color: #60a5fa; }
 .dark .pf-tier[data-tier="epic"] { color: #c084fc; }
 .dark .pf-tier[data-tier="legendary"] { color: #fbbf24; }
+
+/*
+  A medal's card (1.29.6, achievements.tsx): point at a medal, tap it or Tab
+  to it. One card for the page, fixed beside the medal with an arrow at it
+  (--ax). It rises in; the medal in it spins in with a shine sweeping across,
+  or, still locked, its ring fills to how far along you are (--mp is
+  registered so it can move). Everything stands still with animations off.
+*/
+@property --mp { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+.pf-medal-face { position: relative; overflow: hidden; }
+.pf-medal-hit { display: inline-flex; border-radius: 50%; cursor: pointer; outline: none; transition: transform 0.18s var(--ease-spring); }
+@media (hover: hover) { .pf-medal-hit:hover { transform: translateY(-2px) scale(1.07); } }
+.pf-medal-hit:focus-visible { box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--amber)); }
+.pf-card {
+  position: fixed;
+  z-index: 130;
+  width: min(284px, calc(100vw - 16px));
+  padding: 12px 14px 13px;
+  border-radius: 14px;
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line) / 0.14);
+  box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08);
+  pointer-events: none;
+  transform-origin: var(--ax, 50%) 100%;
+  animation: pf-card-in 0.2s var(--ease-out) both;
+}
+.pf-card[data-below] { transform-origin: var(--ax, 50%) 0; animation-name: pf-card-in-below; }
+.pf-card::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--ax, 50%) - 6px);
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: rgb(var(--surface));
+  border-right: 1px solid rgb(var(--line) / 0.14);
+  border-bottom: 1px solid rgb(var(--line) / 0.14);
+  transform: rotate(45deg);
+}
+.pf-card[data-below]::after { bottom: auto; top: -6px; border: 0; border-left: 1px solid rgb(var(--line) / 0.14); border-top: 1px solid rgb(var(--line) / 0.14); }
+@keyframes pf-card-in { from { opacity: 0; transform: translateY(6px) scale(0.94); } }
+@keyframes pf-card-in-below { from { opacity: 0; transform: translateY(-6px) scale(0.94); } }
+.pf-card-medal { display: inline-flex; flex-shrink: 0; }
+.pf-card .pf-medal { animation: pf-medal-pop 0.62s var(--ease-spring) 0.04s both; }
+.pf-card .pf-medal[data-locked] { animation: pf-medal-pop 0.62s var(--ease-spring) 0.04s both, pf-ring-fill 0.9s var(--ease-out) 0.18s both; }
+.pf-card .pf-medal:not([data-locked]) .pf-medal-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.65) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: pf-shine 0.9s var(--ease-out) 0.38s both;
+}
+.pf-card[data-tier="legendary"] .pf-medal:not([data-locked]) .pf-medal-face { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 0 18px color-mix(in srgb, var(--m1) 70%, transparent); }
+.pf-card-bar { background: rgb(var(--amber)); transform-origin: left; animation: pf-bar-grow 0.8s var(--ease-out) 0.18s both; }
+@keyframes pf-medal-pop {
+  from { opacity: 0; transform: scale(0.4) rotate(-30deg); }
+  60% { opacity: 1; transform: scale(1.1) rotate(6deg); }
+  to { transform: none; }
+}
+@keyframes pf-shine { to { transform: translateX(120%); } }
+@keyframes pf-ring-fill { from { --mp: 0deg; } }
+@keyframes pf-bar-grow { from { transform: scaleX(0); } }
+
+/* Streak (1.29.6): the flame, and the last two weeks (--pb: the XP bar's colour). */
+.pf-streak-flame { width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: rgb(var(--ink-faint)); background: rgb(var(--line) / 0.1); }
+.pf-streak-flame[data-on] { color: var(--pb); background: color-mix(in srgb, var(--pb) 16%, transparent); }
+.pf-streak-day { display: block; width: 100%; max-width: 24px; aspect-ratio: 1; border-radius: 5px; background: rgb(var(--line) / 0.12); }
+.pf-streak-day[data-on] { background: var(--pb); }
+.pf-streak-day[data-today] { box-shadow: 0 0 0 1.5px rgb(var(--surface)), 0 0 0 3px color-mix(in srgb, var(--pb) 55%, transparent); }
+
+/* Milestones (1.29.6): dates, then medals on a line. */
+.pf-timeline { position: relative; }
+.pf-timeline::before { content: ""; position: absolute; top: 13px; bottom: 13px; left: calc(4.4rem + 10px + 12px); width: 2px; border-radius: 1px; background: rgb(var(--line) / 0.15); }
+.pf-tl-row { position: relative; display: grid; grid-template-columns: 4.4rem 26px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 26px; }
+.pf-tl-row > :nth-child(2) { position: relative; z-index: 1; justify-self: center; }
+.pf-tl-date { font-size: 11.5px; color: rgb(var(--ink-faint)); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-tl-dot { width: 10px; height: 10px; border-radius: 50%; background: rgb(var(--surface)); box-shadow: inset 0 0 0 2px rgb(var(--ink-faint)); }
+
+/* Clip's XP (1.29.7, xp-cheers.tsx): "+40 XP" at the bottom (above the phone's tab bar), a spring in, the bar filling;
+   the level up card's badge spins in. */
+.xp-pop-wrap { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem); z-index: 205; display: flex; justify-content: center; padding: 0 12px; pointer-events: none; }
+@media (min-width: 768px) { .xp-pop-wrap { bottom: 1.5rem; } }
+.xp-pop {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 12px;
+  border-radius: 18px;
+  background: rgb(var(--surface));
+  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 0.42), 0 0 0 1px rgb(var(--line) / 0.12);
+  animation: xp-pop-in 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.xp-pop.is-out { animation: xp-pop-out 0.3s ease-in forwards; }
+@keyframes xp-pop-in { from { opacity: 0; transform: translateY(28px) scale(0.9); } }
+@keyframes xp-pop-out { to { opacity: 0; transform: translateY(18px) scale(0.96); } }
+.xp-pop-bar { transition: width 0.9s var(--ease-out) 0.15s; }
+.lv-up-badge { display: inline-flex; animation: lv-up-badge 0.8s cubic-bezier(0.3, 1.5, 0.5, 1) 0.2s both; }
+@keyframes lv-up-badge { from { opacity: 0; transform: scale(0.2) rotate(-40deg); } }
+
+/* Clip's "new look" screen (1.29.8, look-screen.tsx): solid paper over everything while a theme, light or dark, or glass
+   is put on (it fades in before the change and out after it). */
+.look-screen { position: fixed; inset: 0; z-index: 600; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(var(--paper)); animation: look-in 0.12s ease-out both; }
+.look-screen.is-out { animation: look-out 0.24s ease-in forwards; }
+@keyframes look-in { from { opacity: 0; } }
+@keyframes look-out { to { opacity: 0; } }
+.look-screen-card { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 22rem; }
+.look-screen-dots { display: flex; gap: 6px; margin-top: 14px; }
+.look-screen-dots span { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--amber)); animation: look-dot 1s ease-in-out infinite; }
+.look-screen-dots span:nth-child(2) { animation-delay: 0.15s; }
+.look-screen-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes look-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
+
+/* Clip's secret (1.29.7, the tasks widget's All done): a squish on every tap, a spin on the seventh. */
+.clip-tap { display: inline-flex; border-radius: 9999px; cursor: default; -webkit-tap-highlight-color: transparent; }
+.clip-tap:focus-visible { outline: 2px solid rgb(var(--amber)); outline-offset: 4px; }
+.clip-tap .clip-bump { display: inline-flex; animation: clip-bump 0.32s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.clip-tap[data-secret] .clip-bump { animation: clip-secret 0.9s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+@keyframes clip-bump { 40% { transform: scale(1.12, 0.88); } }
+@keyframes clip-secret { 30% { transform: translateY(-14%) scale(1.15) rotate(-12deg); } 70% { transform: translateY(-6%) scale(1.05) rotate(360deg); } to { transform: rotate(360deg); } }
+
+/* Busiest days (1.29.6): a bar a weekday, the busiest in full colour. */
+.pf-rhythm-bar { display: block; width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--pb) 35%, transparent); }
+.pf-rhythm-bar[data-top] { background: var(--pb); }
 
 /* A video's numbers in its header (1.21.0): all in one row when they fit,
    else rows of the same length (3 + 3, 3 + 2, 2 + 2), else pairs, so no

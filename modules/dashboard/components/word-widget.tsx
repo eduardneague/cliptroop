@@ -29,9 +29,9 @@ export function WordWidget() {
 
   if (state === null)
     return (
-      <div className="h-full flex flex-col gap-2 animate-pulse" aria-busy="true">
-        <div className="h-3.5 w-24 rounded bg-line/10" />
-        <div className="flex-1 rounded-lg bg-line/[0.06]" />
+      <div className="h-full flex flex-col gap-2" aria-busy="true">
+        <div className="skeleton h-3.5 w-24 rounded" />
+        <div className="skeleton flex-1 rounded-lg opacity-70" />
       </div>
     );
   if (state === "error") return <p className="h-full flex items-center justify-center text-center text-[12.5px] text-ink-soft">The daily word didn&rsquo;t load. Open it from here later.</p>;

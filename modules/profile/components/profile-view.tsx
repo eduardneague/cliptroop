@@ -13,7 +13,8 @@ import { achievementsFor, FRAMES, levelProgress, levelTint, type FrameId, type P
 import { colorCss, DEFAULT_COLORS, sameColors, type ProfileColors } from "@/lib/profile/colors";
 import { ABOUT_MAX, addShowcase, DEFAULT_PROFILE_LAYOUT, limitsFor, SHOWCASES, type ProfileLayout, type Showcase, type ShowcaseType } from "../layout";
 import { saveProfilePage } from "../actions";
-import { AchievementBadge, LevelBadge, ProfileAvatar, XpBar } from "./parts";
+import { LevelBadge, ProfileAvatar, XpBar } from "./parts";
+import { AchievementBadge, AchievementCards } from "./achievements";
 import { ColorRow, ColorsPreview } from "./colors";
 import { renderShowcase, type ShowcaseData } from "./showcases";
 
@@ -27,6 +28,7 @@ import { renderShowcase, type ShowcaseData } from "./showcases";
  * 1.29.5: your colours (frame, XP bar, glow; Customize → Colours), your
  * picture changes with a click on it, and About me (and the featured
  * achievement) save from their own window, with or without Customize.
+ * 1.29.6: every medal shows a card with what it means (AchievementCards).
  */
 
 export type PageLook = { public: boolean; layout: ProfileLayout; frame: FrameId; bgPath: string | null; colors: ProfileColors };
@@ -39,9 +41,9 @@ const NEEDS_0099 = "Colours need the latest database update (migration 0099).";
 
 function Skeleton() {
   return (
-    <div className="space-y-2 animate-pulse" aria-hidden>
-      <div className="h-3 w-1/3 rounded bg-line/15" />
-      <div className="h-3 w-2/3 rounded bg-line/10" />
+    <div className="space-y-2" aria-hidden>
+      <div className="skeleton h-3 w-1/3 rounded" />
+      <div className="skeleton h-3 w-2/3 rounded opacity-70" />
     </div>
   );
 }
@@ -125,6 +127,7 @@ export function ProfileView({
     barTint: barCss,
     frameAt,
     onEdit: canEdit ? setSettingsFor : undefined,
+    joined: person.joined,
   };
   // The gear on About me and Featured: yours only (it showed for visitors too, and did nothing).
   const showcaseMeta = (s: Showcase): GridCardMeta => {
@@ -193,335 +196,342 @@ export function ProfileView({
   const picture = <ProfileAvatar url={avatarUrl} name={person.name} color={person.color} size={104} frame={shown.frame} tint={frameCss} />;
 
   return (
-    <div data-dash-bg={bg ? "" : undefined} className={`px-3 sm:px-5 xl:px-6 py-4 sm:py-6 w-full max-w-[1120px] mx-auto ${bg ? "wall-tone" : ""}`} style={wrapStyle}>
-      {bg && <DashboardBackdrop src={bg.url} video={bg.video} dim={BG_DIM} luma={bg.luma} />}
+    <AchievementCards>
+      <div data-dash-bg={bg ? "" : undefined} className={`px-3 sm:px-5 xl:px-6 py-4 sm:py-6 w-full max-w-[1120px] mx-auto ${bg ? "wall-tone" : ""}`} style={wrapStyle}>
+        {bg && <DashboardBackdrop src={bg.url} video={bg.video} dim={BG_DIM} luma={bg.luma} />}
 
-      <section
-        className="prof-head prof-frost relative rounded-2xl border border-line/10 bg-surface p-5 sm:p-7 overflow-hidden"
-        data-glow={shown.colors.glow === "off" ? "off" : undefined}
-        style={{ "--pg": colorCss(shown.colors.glow, levelHex) } as CSSProperties}
-      >
-        <div className="relative flex flex-col md:flex-row md:items-center gap-5">
-          <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1">
-            {isSelf ? (
-              <button type="button" onClick={avatar.pick} disabled={avatar.busy} data-busy={avatar.busy ? "" : undefined} className="pf-change" aria-label="Change your picture" title="Change your picture">
-                {picture}
-                <span className="pf-change-face" aria-hidden>
-                  {avatar.busy ? <span className="pf-spin animate-spin" /> : <PhotoIcon className="w-7 h-7" />}
-                </span>
-              </button>
-            ) : (
-              picture
-            )}
-            {isSelf && avatar.field}
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-[24px] sm:text-[30px] font-semibold leading-tight break-words">{person.name}</h1>
-              <p className="text-[12.5px] text-ink-soft">
-                {person.username ? `@${person.username} · ` : ""}Joined {new Date(person.joined).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                {isSelf && !shown.public && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 h-5 text-[11px] font-semibold text-ink-soft align-middle">
-                    <LockIcon className="w-3 h-3" />
-                    Private
+        <section
+          className="prof-head prof-frost relative rounded-2xl border border-line/10 bg-surface p-5 sm:p-7 overflow-hidden"
+          data-glow={shown.colors.glow === "off" ? "off" : undefined}
+          style={{ "--pg": colorCss(shown.colors.glow, levelHex) } as CSSProperties}
+        >
+          <div className="relative flex flex-col md:flex-row md:items-center gap-5">
+            <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1">
+              {isSelf ? (
+                <button type="button" onClick={avatar.pick} disabled={avatar.busy} data-busy={avatar.busy ? "" : undefined} className="pf-change" aria-label="Change your picture" title="Change your picture">
+                  {picture}
+                  <span className="pf-change-face" aria-hidden>
+                    {avatar.busy ? <span className="pf-spin animate-spin" /> : <PhotoIcon className="w-7 h-7" />}
                   </span>
-                )}
-              </p>
-              {person.bio && <p className="mt-2 text-[13.5px] text-ink/90 leading-relaxed max-w-xl break-words">{person.bio}</p>}
-              {reached.length > 0 && (
-                <div className="mt-3 flex items-center gap-1.5" aria-label="Latest achievements">
-                  {reached.slice(0, 4).map((a) => (
-                    <AchievementBadge key={a.id} a={a} size={30} />
-                  ))}
-                </div>
+                </button>
+              ) : (
+                picture
               )}
+              {isSelf && avatar.field}
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-[24px] sm:text-[30px] font-semibold leading-tight break-words">{person.name}</h1>
+                <p className="text-[12.5px] text-ink-soft">
+                  {person.username ? `@${person.username} · ` : ""}Joined {new Date(person.joined).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  {isSelf && !shown.public && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 h-5 text-[11px] font-semibold text-ink-soft align-middle">
+                      <LockIcon className="w-3 h-3" />
+                      Private
+                    </span>
+                  )}
+                </p>
+                {person.bio && <p className="mt-2 text-[13.5px] text-ink/90 leading-relaxed max-w-xl break-words">{person.bio}</p>}
+                {reached.length > 0 && (
+                  <div className="mt-3 flex items-center gap-1.5" aria-label="Latest achievements">
+                    {reached.slice(0, 4).map((a) => (
+                      <AchievementBadge key={a.id} a={a} size={30} interactive />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          {progress && (
-            <div className="md:w-64 flex-shrink-0 rounded-xl border border-line/10 bg-surface-2/50 p-3.5">
-              <div className="flex items-center gap-3">
-                <LevelBadge level={progress.level} size={46} />
-                <div className="min-w-0">
-                  <div className="font-display text-[18px] font-semibold leading-tight">Level {progress.level}</div>
-                  <div className="text-[11.5px] text-ink-soft tabular-nums">{progress.left.toLocaleString("en-US")} XP to the next</div>
+            {progress && (
+              <div className="md:w-64 flex-shrink-0 rounded-xl border border-line/10 bg-surface-2/50 p-3.5">
+                <div className="flex items-center gap-3">
+                  <LevelBadge level={progress.level} size={46} />
+                  <div className="min-w-0">
+                    <div className="font-display text-[18px] font-semibold leading-tight">Level {progress.level}</div>
+                    <div className="text-[11.5px] text-ink-soft tabular-nums">{progress.left.toLocaleString("en-US")} XP to the next</div>
+                  </div>
+                </div>
+                <XpBar share={progress.share} tint={barCss} className="mt-3" />
+                <div className="mt-1 text-[11px] text-ink-soft tabular-nums">
+                  {progress.into.toLocaleString("en-US")} / {progress.need.toLocaleString("en-US")} XP
                 </div>
               </div>
-              <XpBar share={progress.share} tint={barCss} className="mt-3" />
-              <div className="mt-1 text-[11px] text-ink-soft tabular-nums">
-                {progress.into.toLocaleString("en-US")} / {progress.need.toLocaleString("en-US")} XP
-              </div>
+            )}
+          </div>
+          {(isSelf || actions) && !editing && (
+            <div className="relative mt-5 flex items-center gap-2 flex-wrap">
+              {isSelf && (
+                <button
+                  type="button"
+                  onClick={() => (ready ? setDraft(structuredClone(saved)) : toast.error("This needs the latest database update (migration 0093)."))}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 hover:bg-surface-2"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                  Customize profile
+                </button>
+              )}
+              {actions}
             </div>
           )}
-        </div>
-        {(isSelf || actions) && !editing && (
-          <div className="relative mt-5 flex items-center gap-2 flex-wrap">
-            {isSelf && (
-              <button
-                type="button"
-                onClick={() => (ready ? setDraft(structuredClone(saved)) : toast.error("This needs the latest database update (migration 0093)."))}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 hover:bg-surface-2"
-              >
-                <SettingsIcon className="w-4 h-4" />
-                Customize profile
-              </button>
-            )}
-            {actions}
-          </div>
-        )}
-      </section>
+        </section>
 
-      {editing && (
-        <div className="dash-tool mt-4 flex items-center gap-1.5 flex-wrap rounded-xl animate-[modalin_.2s_var(--ease-out)]" role="toolbar" aria-label="Customize profile">
-          <button type="button" onClick={() => setDialog("add")} disabled={!missing.length} className="inline-flex items-center gap-1.5 rounded-lg border border-amber/50 bg-amber/10 px-3 h-8 text-[12.5px] font-bold text-amber hover:bg-amber/15 disabled:opacity-50">
-            <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-            Add showcase
-          </button>
-          <button type="button" onClick={() => setDialog("frame")} className="rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
-            Frame
-          </button>
-          <button
-            type="button"
-            onClick={() => (colorsReady ? setDialog("colors") : toast.error(NEEDS_0099))}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink"
-          >
-            <PaletteIcon className="w-3.5 h-3.5" />
-            Colours
-          </button>
-          <button type="button" onClick={() => setDialog("bg")} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
-            <ImageIcon className="w-3.5 h-3.5" />
-            Background
-          </button>
-          <div role="radiogroup" aria-label="Who sees your profile" className="inline-flex rounded-lg border border-line/20 p-0.5">
-            {[true, false].map((v) => (
-              <button
-                key={String(v)}
-                type="button"
-                role="radio"
-                aria-checked={draft.public === v}
-                onClick={() => change((d) => ({ ...d, public: v }))}
-                className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${draft.public === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
-              >
-                {v ? "Public" : "Private"}
-              </button>
-            ))}
-          </div>
-          <span className="w-px h-5 bg-line/15 mx-0.5" />
-          <button type="button" onClick={() => change((d) => ({ ...d, layout: structuredClone(DEFAULT_PROFILE_LAYOUT) }))} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
-            Reset
-          </button>
-          <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
-            Cancel
-          </button>
-          <button type="button" onClick={() => void persist(draft)} disabled={saving} className="ml-auto rounded-lg bg-amber text-white font-bold px-4 h-8 text-[12.5px] disabled:opacity-60">
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <p className="basis-full text-[11.5px] text-ink-faint px-1">
-            {draft.public ? "Public: everyone signed in sees your profile." : "Private: others see only your name and picture."}
-          </p>
-        </div>
-      )}
-
-      <div className="mt-4">
-        <GridBoard
-          items={shown.layout.items}
-          fill
-          limits={limits}
-          editing={editing}
-          mounted={mounted}
-          fresh={fresh}
-          meta={showcaseMeta}
-          render={(s) => renderShowcase(s, data)}
-          skeleton={<Skeleton />}
-          onChange={(items) => change((d) => ({ ...d, layout: { v: 1, items } }))}
-          onSettings={setSettingsFor}
-          narrowAt={760}
-          cq="prof-cq"
-          hints={HINTS}
-        />
-        {!shown.layout.items.length && <p className="text-center text-[13px] text-ink-faint py-8">{editing ? "Add a showcase to fill your profile." : isSelf ? "Your profile is empty. Customize it to add showcases." : ""}</p>}
-      </div>
-
-      <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title="Add a showcase">
-        <div className="grid gap-2">
-          {missing.map((t) => (
-            <button key={t} type="button" onClick={() => add(t)} className="text-left rounded-xl border border-line/15 px-4 py-3 hover:border-amber/50 hover:bg-amber/5 transition-colors">
-              <span className="block text-[13.5px] font-semibold">{SHOWCASES[t].name}</span>
-              <span className="block text-[12px] text-ink-faint">{SHOWCASES[t].description}</span>
+        {editing && (
+          <div className="dash-tool mt-4 flex items-center gap-1.5 flex-wrap rounded-xl animate-[modalin_.2s_var(--ease-out)]" role="toolbar" aria-label="Customize profile">
+            <button type="button" onClick={() => setDialog("add")} disabled={!missing.length} className="inline-flex items-center gap-1.5 rounded-lg border border-amber/50 bg-amber/10 px-3 h-8 text-[12.5px] font-bold text-amber hover:bg-amber/15 disabled:opacity-50">
+              <PlusIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+              Add showcase
             </button>
-          ))}
-          {!missing.length && <p className="text-[13px] text-ink-faint">Every showcase is on your profile.</p>}
-        </div>
-      </Dialog>
-
-      <Dialog open={dialog === "frame"} onClose={() => setDialog(null)} title="Picture frame" description={`You're level ${level}. New frames unlock as you level up.`} width="sm:max-w-xl">
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5" role="radiogroup" aria-label="Picture frame">
-          {FRAMES.map((f) => {
-            const locked = f.level > level;
-            const on = draft?.frame === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                disabled={locked}
-                onClick={() => {
-                  change((d) => ({ ...d, frame: f.id }));
-                  setDialog(null);
-                }}
-                className={`relative flex flex-col items-center gap-2 rounded-xl border px-2 pt-4 pb-2.5 transition-colors ${on ? "border-amber ring-2 ring-amber/30" : "border-line/15 hover:border-line/35"} disabled:hover:border-line/15`}
-              >
-                <span className={locked ? "opacity-35 grayscale" : ""}>
-                  <ProfileAvatar url={avatarUrl} name={person.name} color={person.color} size={52} frame={f.id} tint={frameAt(Math.max(level, f.level))} />
-                </span>
-                <span className="text-[12px] font-semibold leading-tight text-center">{f.name}</span>
-                <span className="text-[10.5px] text-ink-faint inline-flex items-center gap-1">
-                  {locked ? (
-                    <>
-                      <LockIcon className="w-3 h-3" />
-                      Level {f.level}
-                    </>
-                  ) : on ? (
-                    <>
-                      <CheckIcon className="w-3 h-3" />
-                      On
-                    </>
-                  ) : f.level ? (
-                    `Level ${f.level}`
-                  ) : (
-                    "Always"
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {draft && colorsReady && (
-          <div className="mt-4 pt-4 border-t border-line/10">
-            <ColorRow label="Colour" value={draft.colors.frame} level={levelHex} onChange={(v) => setColor("frame", v)} />
-          </div>
-        )}
-      </Dialog>
-
-      <Dialog
-        open={dialog === "colors" && !!draft}
-        onClose={() => setDialog(null)}
-        title="Colours"
-        description="Your frame, your XP bar and the glow in your header. Everyone who visits sees them."
-        footer={
-          <>
+            <button type="button" onClick={() => setDialog("frame")} className="rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
+              Frame
+            </button>
             <button
               type="button"
-              onClick={() => change((d) => ({ ...d, colors: DEFAULT_COLORS }))}
-              disabled={!!draft && sameColors(draft.colors, DEFAULT_COLORS)}
-              className="mr-auto rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50"
+              onClick={() => (colorsReady ? setDialog("colors") : toast.error(NEEDS_0099))}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink"
             >
-              Back to level colours
+              <PaletteIcon className="w-3.5 h-3.5" />
+              Colours
             </button>
-            <button type="button" onClick={() => setDialog(null)} className="rounded-lg bg-amber text-white font-bold px-4 h-9 text-[13px]">
-              Done
+            <button type="button" onClick={() => setDialog("bg")} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
+              <ImageIcon className="w-3.5 h-3.5" />
+              Background
             </button>
-          </>
-        }
-      >
-        {draft && (
-          <div className="space-y-5">
-            <ColorsPreview person={{ name: person.name, avatarUrl, color: person.color }} level={level} share={progress?.share ?? 0} frame={draft.frame} colors={draft.colors} />
-            <ColorRow
-              label="Frame"
-              hint={draft.frame === "none" ? "You have no frame yet: pick one with Frame." : "The ring around your picture."}
-              value={draft.colors.frame}
-              level={levelHex}
-              onChange={(v) => setColor("frame", v)}
-            />
-            <ColorRow label="XP bar" hint="Also the bars and icons in your showcases." value={draft.colors.bar} level={levelHex} onChange={(v) => setColor("bar", v)} />
-            <ColorRow label="Glow" hint="The soft light in your header's corner." value={draft.colors.glow} level={levelHex} canBeOff onChange={(v) => setColor("glow", v)} />
-            <p className="text-[11.5px] text-ink-faint leading-snug">
-              Level: your level&rsquo;s colour, new every 10 levels. Theme: the colour theme of whoever is looking.
+            <div role="radiogroup" aria-label="Who sees your profile" className="inline-flex rounded-lg border border-line/20 p-0.5">
+              {[true, false].map((v) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={draft.public === v}
+                  onClick={() => change((d) => ({ ...d, public: v }))}
+                  className={`px-2.5 h-7 rounded-md text-[12px] font-semibold transition-colors ${draft.public === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+                >
+                  {v ? "Public" : "Private"}
+                </button>
+              ))}
+            </div>
+            <span className="w-px h-5 bg-line/15 mx-0.5" />
+            <button type="button" onClick={() => change((d) => ({ ...d, layout: structuredClone(DEFAULT_PROFILE_LAYOUT) }))} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
+              Reset
+            </button>
+            <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-2.5 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
+              Cancel
+            </button>
+            <button type="button" onClick={() => void persist(draft)} disabled={saving} className="ml-auto rounded-lg bg-amber text-white font-bold px-4 h-8 text-[12.5px] disabled:opacity-60">
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <p className="basis-full text-[11.5px] text-ink-faint px-1">
+              {draft.public ? "Public: everyone signed in sees your profile." : "Private: others see only your name and picture."}
             </p>
           </div>
         )}
-      </Dialog>
 
-      <Dialog open={dialog === "bg"} onClose={() => setDialog(null)} title="Profile background" description="One of your wallpapers, behind your profile for everyone who visits." width="sm:max-w-xl">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <button
-            type="button"
-            onClick={() => {
-              change((d) => ({ ...d, bgPath: null }));
-              setDialog(null);
-            }}
-            className={`aspect-video rounded-xl border-2 border-dashed text-[12.5px] font-semibold ${draft?.bgPath === null ? "border-amber text-ink" : "border-line/20 text-ink-soft hover:border-line/40"}`}
-          >
-            None
-          </button>
-          {wallpapers.map((w) => (
+        <div className="mt-4">
+          <GridBoard
+            items={shown.layout.items}
+            fill
+            limits={limits}
+            editing={editing}
+            mounted={mounted}
+            fresh={fresh}
+            meta={showcaseMeta}
+            render={(s) => renderShowcase(s, data)}
+            skeleton={<Skeleton />}
+            onChange={(items) => change((d) => ({ ...d, layout: { v: 1, items } }))}
+            onSettings={setSettingsFor}
+            narrowAt={760}
+            cq="prof-cq"
+            hints={HINTS}
+          />
+          {!shown.layout.items.length && <p className="text-center text-[13px] text-ink-faint py-8">{editing ? "Add a showcase to fill your profile." : isSelf ? "Your profile is empty. Customize it to add showcases." : ""}</p>}
+        </div>
+
+        <Dialog open={dialog === "add"} onClose={() => setDialog(null)} title="Add a showcase">
+          <div className="grid gap-2">
+            {[...missing]
+              .sort((a, b) => Number(!!SHOWCASES[b].isNew) - Number(!!SHOWCASES[a].isNew))
+              .map((t) => (
+              <button key={t} type="button" onClick={() => add(t)} className="text-left rounded-xl border border-line/15 px-4 py-3 hover:border-amber/50 hover:bg-amber/5 transition-colors">
+                <span className="block text-[13.5px] font-semibold">
+                  {SHOWCASES[t].name}
+                  {SHOWCASES[t].isNew && <span className="ml-1.5 align-[1px] rounded-md bg-amber text-white px-1.5 py-px text-[9.5px] font-bold uppercase tracking-wide">New</span>}
+                </span>
+                <span className="block text-[12px] text-ink-faint">{SHOWCASES[t].description}</span>
+              </button>
+            ))}
+            {!missing.length && <p className="text-[13px] text-ink-faint">Every showcase is on your profile.</p>}
+          </div>
+        </Dialog>
+
+        <Dialog open={dialog === "frame"} onClose={() => setDialog(null)} title="Picture frame" description={`You're level ${level}. New frames unlock as you level up.`} width="sm:max-w-xl">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5" role="radiogroup" aria-label="Picture frame">
+            {FRAMES.map((f) => {
+              const locked = f.level > level;
+              const on = draft?.frame === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={locked}
+                  onClick={() => {
+                    change((d) => ({ ...d, frame: f.id }));
+                    setDialog(null);
+                  }}
+                  className={`relative flex flex-col items-center gap-2 rounded-xl border px-2 pt-4 pb-2.5 transition-colors ${on ? "border-amber ring-2 ring-amber/30" : "border-line/15 hover:border-line/35"} disabled:hover:border-line/15`}
+                >
+                  <span className={locked ? "opacity-35 grayscale" : ""}>
+                    <ProfileAvatar url={avatarUrl} name={person.name} color={person.color} size={52} frame={f.id} tint={frameAt(Math.max(level, f.level))} />
+                  </span>
+                  <span className="text-[12px] font-semibold leading-tight text-center">{f.name}</span>
+                  <span className="text-[10.5px] text-ink-faint inline-flex items-center gap-1">
+                    {locked ? (
+                      <>
+                        <LockIcon className="w-3 h-3" />
+                        Level {f.level}
+                      </>
+                    ) : on ? (
+                      <>
+                        <CheckIcon className="w-3 h-3" />
+                        On
+                      </>
+                    ) : f.level ? (
+                      `Level ${f.level}`
+                    ) : (
+                      "Always"
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {draft && colorsReady && (
+            <div className="mt-4 pt-4 border-t border-line/10">
+              <ColorRow label="Colour" value={draft.colors.frame} level={levelHex} onChange={(v) => setColor("frame", v)} />
+            </div>
+          )}
+        </Dialog>
+
+        <Dialog
+          open={dialog === "colors" && !!draft}
+          onClose={() => setDialog(null)}
+          title="Colours"
+          description="Your frame, your XP bar and the glow in your header. Everyone who visits sees them."
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => change((d) => ({ ...d, colors: DEFAULT_COLORS }))}
+                disabled={!!draft && sameColors(draft.colors, DEFAULT_COLORS)}
+                className="mr-auto rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50"
+              >
+                Back to level colours
+              </button>
+              <button type="button" onClick={() => setDialog(null)} className="rounded-lg bg-amber text-white font-bold px-4 h-9 text-[13px]">
+                Done
+              </button>
+            </>
+          }
+        >
+          {draft && (
+            <div className="space-y-5">
+              <ColorsPreview person={{ name: person.name, avatarUrl, color: person.color }} level={level} share={progress?.share ?? 0} frame={draft.frame} colors={draft.colors} />
+              <ColorRow
+                label="Frame"
+                hint={draft.frame === "none" ? "You have no frame yet: pick one with Frame." : "The ring around your picture."}
+                value={draft.colors.frame}
+                level={levelHex}
+                onChange={(v) => setColor("frame", v)}
+              />
+              <ColorRow label="XP bar" hint="Also the bars and icons in your showcases." value={draft.colors.bar} level={levelHex} onChange={(v) => setColor("bar", v)} />
+              <ColorRow label="Glow" hint="The soft light in your header's corner." value={draft.colors.glow} level={levelHex} canBeOff onChange={(v) => setColor("glow", v)} />
+              <p className="text-[11.5px] text-ink-faint leading-snug">
+                Level: your level&rsquo;s colour, new every 10 levels. Theme: the colour theme of whoever is looking.
+              </p>
+            </div>
+          )}
+        </Dialog>
+
+        <Dialog open={dialog === "bg"} onClose={() => setDialog(null)} title="Profile background" description="One of your wallpapers, behind your profile for everyone who visits." width="sm:max-w-xl">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <button
-              key={w.path}
               type="button"
               onClick={() => {
-                change((d) => ({ ...d, bgPath: w.path }));
+                change((d) => ({ ...d, bgPath: null }));
                 setDialog(null);
               }}
-              aria-label="Use this wallpaper"
-              className={`relative aspect-video rounded-xl overflow-hidden ${draft?.bgPath === w.path ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : "ring-1 ring-line/15 hover:ring-line/35"}`}
+              className={`aspect-video rounded-xl border-2 border-dashed text-[12.5px] font-semibold ${draft?.bgPath === null ? "border-amber text-ink" : "border-line/20 text-ink-soft hover:border-line/40"}`}
             >
-              {w.video ? (
-                <video src={w.url} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={w.url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-              )}
+              None
             </button>
-          ))}
-        </div>
-        <p className="mt-3 text-[12px] text-ink-faint">
-          {wallpapers.length ? "Add or change wallpapers in " : "You haven't saved any wallpapers yet. Add some in "}
-          <Link href="/settings?tab=preferences#background" className="font-semibold text-amber hover:brightness-110">
-            Settings
-          </Link>
-          .
-        </p>
-      </Dialog>
-
-      <AboutDialog
-        open={editingItem?.type === "about"}
-        initial={typeof editingItem?.settings?.text === "string" ? editingItem.settings.text : ""}
-        saving={saving}
-        onClose={() => setSettingsFor(null)}
-        onSave={(text) => editingItem && void saveSettings(editingItem.id, { text }, "About me saved")}
-      />
-
-      <Dialog open={editingItem?.type === "featured"} onClose={() => setSettingsFor(null)} title={SHOWCASES.featured.name} description="The one achievement to show big. Without one picked, your rarest.">
-        <div className="grid gap-1.5">
-          {reached.map((a) => {
-            const on = editingItem?.settings?.id === a.id;
-            return (
+            {wallpapers.map((w) => (
               <button
-                key={a.id}
+                key={w.path}
                 type="button"
-                disabled={saving}
                 onClick={() => {
-                  if (!editingItem) return;
-                  // Customizing: it goes with the rest when you save. Otherwise saved right away.
-                  if (draft) {
-                    updateSettings(editingItem.id, { id: a.id });
-                    setSettingsFor(null);
-                  } else void saveSettings(editingItem.id, { id: a.id }, "Featured achievement saved");
+                  change((d) => ({ ...d, bgPath: w.path }));
+                  setDialog(null);
                 }}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left disabled:opacity-60 ${on ? "border-amber bg-amber/5" : "border-line/15 hover:border-line/35"}`}
+                aria-label="Use this wallpaper"
+                className={`relative aspect-video rounded-xl overflow-hidden ${draft?.bgPath === w.path ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : "ring-1 ring-line/15 hover:ring-line/35"}`}
               >
-                <AchievementBadge a={a} size={34} />
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-semibold">{a.name}</span>
-                  <span className="block text-[11.5px] text-ink-faint">{a.text}</span>
-                </span>
-                {on && <CheckIcon className="w-4 h-4 text-amber ml-auto" />}
+                {w.video ? (
+                  <video src={w.url} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={w.url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                )}
               </button>
-            );
-          })}
-          {!reached.length && <p className="text-[13px] text-ink-faint">Reach an achievement first, then pick it here.</p>}
-        </div>
-      </Dialog>
-    </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[12px] text-ink-faint">
+            {wallpapers.length ? "Add or change wallpapers in " : "You haven't saved any wallpapers yet. Add some in "}
+            <Link href="/settings?tab=preferences#background" className="font-semibold text-amber hover:brightness-110">
+              Settings
+            </Link>
+            .
+          </p>
+        </Dialog>
+
+        <AboutDialog
+          open={editingItem?.type === "about"}
+          initial={typeof editingItem?.settings?.text === "string" ? editingItem.settings.text : ""}
+          saving={saving}
+          onClose={() => setSettingsFor(null)}
+          onSave={(text) => editingItem && void saveSettings(editingItem.id, { text }, "About me saved")}
+        />
+
+        <Dialog open={editingItem?.type === "featured"} onClose={() => setSettingsFor(null)} title={SHOWCASES.featured.name} description="The one achievement to show big. Without one picked, your rarest.">
+          <div className="grid gap-1.5">
+            {reached.map((a) => {
+              const on = editingItem?.settings?.id === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    if (!editingItem) return;
+                    // Customizing: it goes with the rest when you save. Otherwise saved right away.
+                    if (draft) {
+                      updateSettings(editingItem.id, { id: a.id });
+                      setSettingsFor(null);
+                    } else void saveSettings(editingItem.id, { id: a.id }, "Featured achievement saved");
+                  }}
+                  className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-left disabled:opacity-60 ${on ? "border-amber bg-amber/5" : "border-line/15 hover:border-line/35"}`}
+                >
+                  <AchievementBadge a={a} size={34} />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold">{a.name}</span>
+                    <span className="block text-[11.5px] text-ink-faint">{a.text}</span>
+                  </span>
+                  {on && <CheckIcon className="w-4 h-4 text-amber ml-auto" />}
+                </button>
+              );
+            })}
+            {!reached.length && <p className="text-[13px] text-ink-faint">Reach an achievement first, then pick it here.</p>}
+          </div>
+        </Dialog>
+      </div>
+    </AchievementCards>
   );
 }
 

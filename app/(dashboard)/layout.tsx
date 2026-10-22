@@ -35,6 +35,8 @@ import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
 import { ConfettiHost } from "@/components/ui/confetti";
 import { ObjectiveCelebrations } from "@/modules/objectives/components/celebrations";
+import { XpCheers } from "@/modules/profile/components/xp-cheers";
+import { LookScreenHost } from "@/components/ui/look-screen";
 import { HashFlash } from "@/components/ui/hash-flash";
 
 // Every route under here reads the session and shows per-user data —
@@ -197,7 +199,11 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         <TutorialHost pending={tourPending} />
         {/* Objectives (1.14.0): confetti and Clip for everyone looking when the team reaches one. */}
         <ConfettiHost />
+        {/* 1.29.8: Clip covers a new colour theme, light or dark, or glass look while it's put on. */}
+        <LookScreenHost />
         <ObjectiveCelebrations teamId={currentTeam?.id ?? null} />
+        {/* 1.29.7: Clip's "+40 XP" when one of your steps is done, and his level up card. */}
+        <XpCheers userId={user!.id} profileHref={`/u/${encodeURIComponent(profile?.username ?? user!.id)}`} />
       </ConfirmProvider>
     </ToastProvider>
   );

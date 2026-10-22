@@ -473,12 +473,22 @@ function sampleProfileStats(user) {
   const onTime = Math.round(tasks * 0.71);
   ranks.ontime = {}; for (const r of [1, 5, 10, 25, 50, 100]) if (onTime >= r) ranks.ontime[r] = at(350 - Math.min(345, r * 2));
   const xp = [5460, 2380, 905, 210][i];
-  const levelDates = {}; for (const [l, need] of [[5, 500], [10, 1000], [25, 4500], [50, 15000]]) if (xp >= need) levelDates[l] = at(300 - l * 6);
+  const levelDates = {}; for (const [l, need] of [[5, 500], [10, 1000], [20, 3000], [25, 4500], [50, 15000]]) if (xp >= need) levelDates[l] = at(300 - l * 6);
+  const videos = Math.round(tasks * 0.42);
+  // 1.29.6 (0100): steps finished early, at night and at dawn; videos worked on, dated. MOCK_STATS_OLD=1: a database before 0100.
+  const marks = (n, list, from) => ({ n, at: Object.fromEntries(list.filter((m) => m <= n).map((m, k) => [m, at(from - k * 40)])) });
+  const more = process.env.MOCK_STATS_OLD ? undefined : {
+    early: marks(Math.round(tasks * 0.2), [1, 10, 50], 330),
+    night: marks(i === 0 ? 3 : 0, [1], 150),
+    dawn: marks(i < 2 ? 1 : 0, [1], 90),
+    videos: marks(videos, [10, 25, 50, 100], 300),
+  };
   return {
-    xp, tasks, on_time: onTime, dated: Math.round(tasks * 0.9), videos: Math.round(tasks * 0.42), teams: i === 0 ? 2 : 1,
+    xp, tasks, on_time: onTime, dated: Math.round(tasks * 0.9), videos, teams: i === 0 ? 2 : 1,
     first_at: at(365), last_at: at(0), by, ranks, team_dates: i === 0 ? { 2: at(120) } : {}, levels: levelDates,
-    streak: { best: [19, 9, 4, 2][i], current: [5, 2, 1, 1][i], dates: i < 3 ? { 3: at(300), ...(i < 2 ? { 7: at(200) } : {}) } : {} },
+    streak: { best: [19, 9, 4, 2][i], current: [5, 2, 1, 1][i], dates: i < 3 ? { 3: at(300), ...(i < 2 ? { 7: at(200) } : {}), ...(i === 0 ? { 14: at(150) } : {}) } : {} },
     days,
+    ...(more ? { more } : {}),
   };
 }
 
@@ -489,6 +499,8 @@ module.exports = {
   rpc: {
     // Profiles (1.28.0): someone's numbers (MOCK_PRIVATE=maria: hers are private, so null for anyone else).
     profile_stats: (b) => sampleProfileStats(b.p_user),
+    // Clip's XP cheers (1.29.7): your XP and XP bar colour (MOCK_PROFILE_COLORS' second).
+    my_progress: () => ({ xp: sampleProfileStats(U[ME])?.xp ?? 0, bar: (process.env.MOCK_PROFILE_COLORS || "").split(",")[1] || "level" }),
     // Someone's teams as you may see them: the sample team for its members.
     get_visible_teams: (b) => (U.includes(b.target_user_id) ? [{ id: TEAM, name: team.name, color: team.color, logo_url: team.logo_url ?? null }] : []),
     can_view_revenue: true,

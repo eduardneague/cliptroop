@@ -23,6 +23,35 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.8",
+    date: "2026-10-22",
+    title: "Clip covers a change of look",
+    changes: [
+      { kind: "better", text: "Switching the colour theme, light or dark, or the glass look (on, off or its style) now shows Clip for a moment while every page takes the new look, instead of a stutter or a flash." },
+      { kind: "better", text: "Loading placeholders take your colour theme's tint: soft pink with Cherry, soft blue with Ocean, plain grey with Ink, in light and dark mode." },
+    ],
+  },
+  {
+    version: "1.29.7",
+    date: "2026-10-22",
+    title: "Clip cheers your XP",
+    changes: [
+      { kind: "new", text: "The moment one of your steps is done, Clip pops up at the bottom with the XP you got and your bar filling up." },
+      { kind: "new", text: "A new level brings Clip's level up card: confetti in your level's colour, a fanfare, and any frame you unlocked or the new colour you reached." },
+      { kind: "new", text: "A secret: when My tasks says All done for today, tap Clip seven times quickly." },
+    ],
+  },
+  {
+    version: "1.29.6",
+    date: "2026-10-22",
+    title: "Achievements you can read, and four new showcases",
+    changes: [
+      { kind: "new", text: "Point at any achievement on a profile (or tap it on a phone) for a card with what it is, what it means and how far along you are. The medal spins in with a shine, or its ring fills up when it's still locked." },
+      { kind: "new", text: "30 more achievements, 55 in all: your first script, edit, take and video sent out, up to a thousand steps, 14 and 100 day streaks, levels 5, 20 and 100, steps finished early, Night owl and Early bird, every kind of step, three teams and a hundred videos." },
+      { kind: "new", text: "Four new showcases: Streak (your days in a row and the last two weeks), Next up (the achievements you're closest to), Milestones (what you reached and when) and Busiest days (the days of the week you finish the most on)." },
+    ],
+  },
+  {
     version: "1.29.5",
     date: "2026-10-22",
     title: "Your profile in your colours",

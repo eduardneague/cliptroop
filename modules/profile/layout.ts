@@ -7,11 +7,12 @@
 import { COLS, compact, firstFit, type Box, type Limits } from "@/modules/dashboard/grid";
 import type { Stack } from "@/modules/dashboard/layout";
 
-export type ShowcaseType = "level" | "stats" | "contributions" | "achievements" | "specialties" | "about" | "teams" | "featured";
+export type ShowcaseType = "level" | "stats" | "contributions" | "achievements" | "specialties" | "about" | "teams" | "featured" | "streak" | "goals" | "timeline" | "rhythm";
 export type Showcase = { id: string; type: ShowcaseType; x: number; y: number; w: number; h: number; fixed?: boolean; settings?: Record<string, unknown> };
 export type ProfileLayout = { v: 1; items: Showcase[] };
 
-type Meta = { name: string; description: string; w: number; h: number; limits: Limits; stack: Stack; hasSettings?: boolean };
+/** `isNew`: a "New" badge in Add a showcase (for a release or two). */
+type Meta = { name: string; description: string; w: number; h: number; limits: Limits; stack: Stack; hasSettings?: boolean; isNew?: boolean };
 
 /** Every showcase once per profile. w/h = size when added. */
 export const SHOWCASES: Record<ShowcaseType, Meta> = {
@@ -23,6 +24,11 @@ export const SHOWCASES: Record<ShowcaseType, Meta> = {
   about: { name: "About me", description: "A few lines in your own words.", w: 6, h: 3, limits: { minW: 3, minH: 2, maxW: 12, maxH: 6 }, stack: { min: 3, max: 5, phone: 3 }, hasSettings: true },
   teams: { name: "Teams", description: "The teams you're on (when you show them).", w: 6, h: 3, limits: { minW: 3, minH: 2, maxW: 12, maxH: 5 }, stack: { min: 3, max: 4, phone: 3 } },
   featured: { name: "Featured achievement", description: "One achievement, big: the one you pick, or your rarest.", w: 4, h: 3, limits: { minW: 3, minH: 3, maxW: 6, maxH: 5 }, stack: { min: 3, max: 5, phone: 4 }, hasSettings: true },
+  // 1.29.6: from the same numbers, nothing more to load.
+  streak: { name: "Streak", description: "Days in a row with a finished step, your best, and the last two weeks.", w: 4, h: 3, limits: { minW: 3, minH: 2, maxW: 6, maxH: 4 }, stack: { min: 3, max: 4, phone: 3 }, isNew: true },
+  goals: { name: "Next up", description: "The achievements you're closest to, and how far along you are.", w: 5, h: 3, limits: { minW: 3, minH: 2, maxW: 8, maxH: 6 }, stack: { min: 3, max: 5, phone: 4 }, isNew: true },
+  timeline: { name: "Milestones", description: "What you've reached and when, newest first.", w: 5, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 8 }, stack: { min: 4, max: 6, phone: 5 }, isNew: true },
+  rhythm: { name: "Busiest days", description: "The days of the week you finish the most on, over the last year.", w: 4, h: 3, limits: { minW: 3, minH: 3, maxW: 8, maxH: 5 }, stack: { min: 3, max: 4, phone: 3 }, isNew: true },
 };
 
 export const ABOUT_MAX = 1000;

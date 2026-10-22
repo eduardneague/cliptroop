@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { setLook } from "@/app/(dashboard)/settings/actions";
 import { DEFAULT_LOOK, LOOK_KEY, OLD_GLASS_KEY, WASH_VARS, lookAttributes, readLook, type GlassScope, type GlassStyle, type Look } from "@/lib/look";
+import { changeLook } from "@/lib/look-screen";
 import { BLENDS, THEME_WASHES, hexToRgb, type WashId } from "@/lib/washes";
 import { useToast } from "./toast-provider";
 
@@ -280,7 +281,9 @@ export function GlassSettings({ initial }: { initial: Look }) {
     const next = { ...look, ...patch };
     if (next.wash !== "none") lastWash.current = next.wash;
     setLookState(next);
-    applyLook(next);
+    // Glass on or off, or another style, restyles every pane: Clip covers it (1.29.8). The rest is light enough to show at once.
+    if ("on" in patch || "style" in patch) changeLook("glass", () => applyLook(next));
+    else applyLook(next);
     const keys = Object.keys(patch);
     if (keys.every((k) => k === "level" || k === "washColors" || (k === "wash" && patch.wash === "custom" && patch.washColors))) {
       pendingPatch.current = { ...pendingPatch.current, ...patch };

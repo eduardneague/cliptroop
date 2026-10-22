@@ -27,6 +27,8 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_GLASS=1); MOCK_WALLPAPERS=1..3 saved wallpapers and MOCK_WALL_LUMA=0..100|null how bright the one in use is (with
 #    MOCK_DASH_BG); MOCK_PROFILE_FRAME=glow|orbit|… edu's picture frame, MOCK_PROFILE_BG=1 his wallpaper behind his profile,
 #    1.29.5: MOCK_PROFILE_COLORS="theme,#30a46c,off" his frame, XP bar and glow colours (default the level's),
+#    1.29.6: MOCK_STATS_OLD=1 profile_stats as before 0100 (no early, night, dawn or dated videos),
+#    1.29.7: my_progress answers edu's XP (no realtime here, so Clip's "+XP" doesn't pop up in the mock),
 #    MOCK_PRIVATE=maria|radu that profile is private; profile_stats and get_visible_teams answer from the fixtures;
 #    MOCK_WRITES=profile_wallpapers,profiles remembers adding, switching and removing wallpapers (deletes too),
 #    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),

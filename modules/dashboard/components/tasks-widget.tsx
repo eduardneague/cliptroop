@@ -2,11 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { CheckIcon } from "@/components/ui/icons";
 import { Mascot } from "@/components/ui/mascot";
+import { MASCOT_NAME } from "@/lib/brand";
+import { sounds } from "@/lib/sounds";
 import { useBox } from "./widget-box";
 import type { Done, Task, TeamPersonLite, TeamTask, TeamTasks } from "../lib/queries";
+
+// Clip's runner (1.29.7): loaded only once the secret is found.
+const ClipRunner = dynamic(() => import("./clip-runner"), { ssr: false, loading: () => <div className="h-full min-h-[150px]" aria-hidden /> });
+/** Seven taps on Clip, each within this long of the last, open the runner. */
+const SECRET_TAPS = 7;
+const SECRET_GAP = 800;
 
 export const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (day: string, n: number) => {
@@ -169,10 +178,53 @@ function AllDone({ overdue, onOverdue }: { overdue: number; onOverdue: () => voi
       </div>
     );
   }
+  return <AllDoneToday room={room} box={box} roomRef={ref} />;
+}
+
+/**
+ * Today is clear: Clip celebrates. His secret (1.29.7): tap him seven times
+ * quickly and he spins, chimes, and the card becomes his runner game.
+ */
+function AllDoneToday({ room, box, roomRef }: { room: { w: number; h: number } | null; box: { w: number; h: number }; roomRef: React.RefObject<HTMLDivElement | null> }) {
+  const [taps, setTaps] = useState(0);
+  const [secret, setSecret] = useState(false);
+  const [game, setGame] = useState(false);
+  const last = useRef(0);
+  useEffect(() => {
+    if (!secret) return;
+    const t = setTimeout(() => setGame(true), 900);
+    return () => clearTimeout(t);
+  }, [secret]);
   const size = clipSize(room, box, 60);
+  if (game)
+    return (
+      <ClipRunner
+        onClose={() => {
+          setGame(false);
+          setSecret(false);
+          setTaps(0);
+        }}
+      />
+    );
+  const tap = () => {
+    if (secret) return;
+    const now = performance.now();
+    const n = now - last.current < SECRET_GAP ? taps + 1 : 1;
+    last.current = now;
+    setTaps(n);
+    if (n >= SECRET_TAPS) {
+      setSecret(true);
+      sounds.secret();
+    }
+  };
   return (
-    <div ref={ref} className="h-full min-h-[160px] flex flex-col items-center justify-center text-center px-3 animate-[fadein_.3s_ease]">
-      <Mascot mood="celebrate" size={size} />
+    <div ref={roomRef} className="h-full min-h-[160px] flex flex-col items-center justify-center text-center px-3 animate-[fadein_.3s_ease]">
+      <button type="button" onClick={tap} aria-label={MASCOT_NAME} className="clip-tap" data-secret={secret ? "" : undefined}>
+        {/* A new key every tap: the squish (and his celebration) plays again. */}
+        <span key={taps} className={taps ? "clip-bump" : "inline-flex"}>
+          <Mascot mood="celebrate" size={size} />
+        </span>
+      </button>
       <p className={`font-display font-semibold leading-tight mt-1.5 ${size >= 150 ? "text-[20px]" : "text-[17px]"}`}>All done for today!</p>
       <p className="text-[12.5px] text-ink-soft mt-0.5">You&rsquo;ve completed all your tasks for today.</p>
     </div>
