@@ -257,8 +257,8 @@ export function DashboardBackground({
         <div className="min-w-0">
           <div className="text-[13.5px] font-semibold">Dashboard background</div>
           <div className="text-[11.5px] text-ink-faint">
-            Pictures, GIFs or short videos behind your dashboard, like a profile background. Keep up to {WALLPAPER_MAX} and switch with a click. Only you see them; the widgets turn
-            frosted so they show through.
+            Pictures, GIFs or short videos behind your dashboard, like a profile background. Keep up to {WALLPAPER_MAX} and switch with a click. Only you see them. With glass on
+            (above), the widgets let them show through; with glass off they stay solid.
           </div>
         </div>
         <div role="radiogroup" aria-label="Dashboard background" className="inline-flex rounded-lg border border-line/15 p-0.5 flex-shrink-0">

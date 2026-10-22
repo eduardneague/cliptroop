@@ -2,16 +2,19 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { setLook } from "@/app/(dashboard)/settings/actions";
-import { DEFAULT_LOOK, LOOK_KEY, OLD_GLASS_KEY, lookAttributes, readLook, type GlassScope, type GlassStyle, type Look } from "@/lib/look";
+import { DEFAULT_LOOK, LOOK_KEY, OLD_GLASS_KEY, WASH_VARS, lookAttributes, readLook, type GlassScope, type GlassStyle, type Look } from "@/lib/look";
+import { BLENDS, THEME_WASHES, hexToRgb, type WashId } from "@/lib/washes";
 import { useToast } from "./toast-provider";
 
 /*
  * The glass look (1.27.5; styles, where it goes, the side bar and how
- * see-through it is in 1.28.0): saved on the account (profiles.glass_*,
- * migrations 0092 / 0093) and kept on the device ("vp-look") so it's on
- * screen before the page paints (the script in app/layout.tsx). <html>
- * carries data-glass, data-glass-style, data-glass-scope,
- * data-glass-sidebar and --glass-level; the CSS is in globals.css.
+ * see-through it is in 1.28.0; the colours behind it in 1.29.2): saved on
+ * the account (profiles.glass_*, migrations 0092 / 0093 / 0096) and kept on
+ * the device ("vp-look") so it's on screen before the page paints (the
+ * script in app/layout.tsx; "paint" in the saved value is what that script
+ * puts on <html>). <html> carries data-glass, data-glass-style,
+ * data-glass-scope, data-glass-sidebar, data-glass-wash, data-glass-opaque,
+ * --glass-level and the wash's colours; the CSS is in globals.css.
  */
 
 const EVENT = "vp-look-change";
@@ -29,7 +32,7 @@ function deviceLook(): Look {
 function applyLook(l: Look) {
   const root = document.documentElement;
   const a = lookAttributes(l);
-  const set = (k: "glass" | "glassStyle" | "glassScope" | "glassSidebar", v: string | undefined) => {
+  const set = (k: "glass" | "glassStyle" | "glassScope" | "glassSidebar" | "glassWash" | "glassOpaque", v: string | undefined) => {
     if (v) root.dataset[k] = v;
     else delete root.dataset[k];
   };
@@ -37,9 +40,16 @@ function applyLook(l: Look) {
   set("glassStyle", a.glassStyle);
   set("glassScope", a.glassScope);
   set("glassSidebar", a.glassSidebar);
+  set("glassWash", a.glassWash);
+  set("glassOpaque", a.glassOpaque);
   root.style.setProperty("--glass-level", a.level);
+  for (const k of WASH_VARS) {
+    const v = a.vars?.[k];
+    if (v) root.style.setProperty(k, v);
+    else root.style.removeProperty(k);
+  }
   try {
-    localStorage.setItem(LOOK_KEY, JSON.stringify(l));
+    localStorage.setItem(LOOK_KEY, JSON.stringify({ ...l, paint: { wash: a.glassWash ?? null, vars: a.vars ?? null } }));
     localStorage.removeItem(OLD_GLASS_KEY);
   } catch {
     /* private mode: the attributes still apply for this visit */
@@ -47,11 +57,19 @@ function applyLook(l: Look) {
   window.dispatchEvent(new CustomEvent<Look>(EVENT, { detail: l }));
 }
 
+/** The account's look, with this device's colours behind the glass when the account can't keep them yet (before 0096). */
+function withDeviceWash(l: Look): Look {
+  const { washStored, ...rest } = l;
+  if (washStored !== false) return rest;
+  const d = deviceLook();
+  return { ...rest, wash: d.wash, washColors: d.washColors };
+}
+
 /** Keeps this device on the account's look (chosen on another device, say); null = not known (the database before 0092). */
 export function GlassSync({ look }: { look: Look | null }) {
   const key = look ? JSON.stringify(look) : "";
   useEffect(() => {
-    applyLook(look ?? deviceLook());
+    applyLook(look ? withDeviceWash(look) : deviceLook());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return <LiquidLight />;
@@ -146,19 +164,89 @@ function StyleCard({ style, on, onPick }: { style: GlassStyle; on: boolean; onPi
   );
 }
 
-/** Settings → Preferences → Glass: on or off, and (when on) its style, where it goes, the side bar and how see-through. */
+/** One wash in the picker: a little picture of its colours over the paper. */
+function WashSwatch({ id, name, on, onPick, style, three, none }: { id: string; name: string; on: boolean; onPick: () => void; style?: React.CSSProperties; three?: boolean; none?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      data-wash={id}
+      onClick={onPick}
+      className={`group text-left rounded-xl border p-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${on ? "border-amber ring-2 ring-amber/30" : "border-line/15 hover:border-line/30"}`}
+    >
+      <span className="wash-swatch block h-10 rounded-lg border border-line/10" data-three={three ? "" : undefined} data-none={none ? "" : undefined} style={style} aria-hidden />
+      <span className="mt-1 px-0.5 block text-[11px] font-semibold truncate">{name}</span>
+    </button>
+  );
+}
+
+/**
+ * The colours behind the glass (1.29.2): your theme's, another theme's, a
+ * blend, your own three, or none. Picking one shows it at once; your own
+ * colours are saved once you stop changing them.
+ */
+function WashPicker({ look, change }: { look: Look; change: (patch: Partial<Look>, done?: string) => void }) {
+  const [colors, setColors] = useState(look.washColors);
+  useEffect(() => setColors(look.washColors), [look.washColors]);
+  const pick = (wash: WashId) => look.wash !== wash && change({ wash });
+  const three = (c: readonly string[]) => ({ "--w1": hexToRgb(c[0]), "--w2": hexToRgb(c[1]), "--w3": hexToRgb(c[2]) }) as React.CSSProperties;
+  return (
+    <div role="radiogroup" aria-label="Colours behind the glass" className="mt-3 grid gap-2 grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))]">
+      <WashSwatch id="theme" name="Your theme" on={look.wash === "theme"} onPick={() => pick("theme")} />
+      {THEME_WASHES.map((w) => (
+        <WashSwatch key={w.id} id={w.id} name={w.name} on={look.wash === w.id} onPick={() => pick(w.id)} style={{ "--wl": w.light, "--wd": w.dark } as React.CSSProperties} />
+      ))}
+      {BLENDS.map((b) => (
+        <WashSwatch key={b.id} id={b.id} name={b.name} on={look.wash === b.id} onPick={() => pick(b.id)} three style={three(b.colors)} />
+      ))}
+      <div className={`col-span-2 rounded-xl border p-1.5 ${look.wash === "custom" ? "border-amber ring-2 ring-amber/30" : "border-line/15"}`}>
+        <button type="button" role="radio" aria-checked={look.wash === "custom"} onClick={() => pick("custom")} className="block w-full text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber">
+          <span className="wash-swatch block h-10 rounded-lg border border-line/10" data-three="" style={three(colors)} aria-hidden />
+        </button>
+        <span className="mt-1 flex items-center gap-1.5 px-0.5">
+          <span className="text-[11px] font-semibold flex-1 truncate">Your own</span>
+          {colors.map((c, i) => (
+            <input
+              key={i}
+              type="color"
+              value={c}
+              aria-label={`Colour ${i + 1}`}
+              onChange={(e) => {
+                const next = colors.map((x, k) => (k === i ? e.target.value.toLowerCase() : x)) as Look["washColors"];
+                setColors(next);
+                change({ wash: "custom", washColors: next });
+              }}
+              className="wash-pick w-6 h-6 rounded-md border border-line/20 bg-transparent cursor-pointer"
+            />
+          ))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Settings → Preferences → Glass: on or off, and (when on) its style, where it goes, the side bar, how see-through and the colours behind it. */
 export function GlassSettings({ initial }: { initial: Look }) {
   const toast = useToast();
   const [look, setLookState] = useState<Look>(initial);
+  // Before 0096 the colours live on this device only: show the ones it has.
+  useEffect(() => {
+    if (initial.washStored === false) setLookState(withDeviceWash(initial));
+  }, [initial]);
   const [, start] = useTransition();
-  const levelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The slider and your own colours: saved once they stop changing.
+  const later = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatch = useRef<Partial<Look>>({});
+  // Off and back on brings back the colours you had.
+  const lastWash = useRef<WashId>(initial.wash === "none" ? "theme" : initial.wash);
   // Changed somewhere else (another tab): follow it.
   useEffect(() => {
     const follow = (e: Event) => setLookState((e as CustomEvent<Look>).detail);
     window.addEventListener(EVENT, follow);
     return () => {
       window.removeEventListener(EVENT, follow);
-      if (levelTimer.current) clearTimeout(levelTimer.current);
+      if (later.current) clearTimeout(later.current);
     };
   }, []);
 
@@ -174,24 +262,31 @@ export function GlassSettings({ initial }: { initial: Look }) {
 
   function change(patch: Partial<Look>, done?: string) {
     const next = { ...look, ...patch };
+    if (next.wash !== "none") lastWash.current = next.wash;
     setLookState(next);
     applyLook(next);
-    if (patch.level !== undefined && Object.keys(patch).length === 1) {
-      // The slider: saved once it stops moving.
-      if (levelTimer.current) clearTimeout(levelTimer.current);
-      levelTimer.current = setTimeout(() => save({ level: patch.level }), 500);
+    const keys = Object.keys(patch);
+    if (keys.every((k) => k === "level" || k === "washColors" || (k === "wash" && patch.wash === "custom" && patch.washColors))) {
+      pendingPatch.current = { ...pendingPatch.current, ...patch };
+      if (later.current) clearTimeout(later.current);
+      later.current = setTimeout(() => {
+        const p = pendingPatch.current;
+        pendingPatch.current = {};
+        save(p);
+      }, 500);
       return;
     }
     save(patch, done);
   }
 
-  const row = "flex items-center justify-between gap-4 mt-4 pt-4 border-t border-line/10";
+  // Phones: the words above the choice (side by side they squeezed to a word a line).
+  const row = "flex flex-col items-start sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mt-4 pt-4 border-t border-line/10";
   return (
     <div>
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[13.5px] font-semibold">Glass</div>
-          <div className="text-[11.5px] text-ink-faint">See-through cards and bars over a soft wash of your colours, across the whole app. Works with every colour theme, light and dark.</div>
+          <div className="text-[11.5px] text-ink-faint">See-through cards and bars across the whole app, over your wallpaper or a soft wash of colour. Off, everything is solid.</div>
         </div>
         <Segments label="Glass" value={look.on ? "on" : "off"} options={[{ v: "off", label: "Off" }, { v: "on", label: "On" }]} onChange={(v) => change({ on: v === "on" }, v === "on" ? "Glass on" : "Glass off")} />
       </div>
@@ -224,10 +319,26 @@ export function GlassSettings({ initial }: { initial: Look }) {
             </span>
             <input type="range" min={0} max={100} step={5} value={look.level} onChange={(e) => change({ level: Number(e.target.value) })} className="w-full accent-[rgb(var(--amber))]" aria-describedby="glass-level-hint" />
             <span id="glass-level-hint" className="flex justify-between text-[11px] text-ink-faint">
-              <span>Frosted</span>
-              <span>Clear</span>
+              <span>Solid</span>
+              <span>Nearly clear</span>
             </span>
+            <span className="block mt-1 text-[11px] text-ink-faint">Over a wallpaper that would make the words hard to read, the panes keep just enough colour for them.</span>
           </label>
+          <div className="mt-4 pt-4 border-t border-line/10">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[12.5px] font-semibold">Colours behind the glass</div>
+                <div className="text-[11.5px] text-ink-faint">A soft wash the glass shows. Your theme&rsquo;s, any other theme&rsquo;s, a blend or your own three. Wallpapers show instead where you have one.</div>
+              </div>
+              <Segments
+                label="Colours behind the glass"
+                value={look.wash === "none" ? "off" : "on"}
+                options={[{ v: "off", label: "Off" }, { v: "on", label: "On" }]}
+                onChange={(v) => change({ wash: v === "off" ? "none" : lastWash.current })}
+              />
+            </div>
+            {look.wash !== "none" && <WashPicker look={look} change={change} />}
+          </div>
         </div>
       )}
     </div>

@@ -74,12 +74,13 @@ export default async function DashboardPage() {
   const luma = clampLuma(wall?.luma);
   const dim = clampDim(look?.dashboard_bg_dim);
   return (
-    // data-dash-bg: the widgets and the top bar turn frosted over it; wall-tone: the words over it read (globals.css).
+    // data-dash-bg: with the glass look the widgets and bars turn see-through over it (solid without); wall-tone: the words over it read (globals.css).
     <div data-dash-bg className="contents wall-tone" style={{ ...(luma === null ? {} : { "--bg-luma": luma / 100 }), "--bg-dim": dim / 100 } as CSSProperties}>
       <DashboardBackdrop
         src={supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(bgPath).data.publicUrl}
         video={bgKind(bgPath) === "video"}
         dim={dim}
+        luma={luma}
         measure={wall && luma === null ? (wall.id as string) : null}
       />
       {studio}

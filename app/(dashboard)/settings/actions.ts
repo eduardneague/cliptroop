@@ -145,13 +145,23 @@ export async function setLook(patch: Partial<Look>): Promise<{ success?: true; e
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
-  const { error } = await supabase.from("profiles").update(lookColumns(clean)).eq("id", user.id);
+  const cols = lookColumns(clean);
+  const missing = (e: { code?: string; message?: string }) => /glass_/.test(e.message ?? "") || e.code === "PGRST204" || e.code === "42703";
+  let { error } = await supabase.from("profiles").update(cols).eq("id", user.id);
+  // Before 0096 the colours behind the glass have no columns: the rest is still saved, the colours stay on this device.
+  let wash = false;
+  if (error && missing(error) && ("glass_wash" in cols || "glass_wash_colors" in cols)) {
+    wash = true;
+    const rest = Object.fromEntries(Object.entries(cols).filter(([k]) => k !== "glass_wash" && k !== "glass_wash_colors"));
+    error = Object.keys(rest).length ? (await supabase.from("profiles").update(rest).eq("id", user.id)).error : null;
+  }
   if (error) {
     // Before 0093 (or 0092) the columns don't exist: it stays on this device, and says so.
-    if (/glass_/.test(error.message) || error.code === "PGRST204" || error.code === "42703") return { error: "Saved on this device only (the database needs migration 0093).", deviceOnly: true };
+    if (missing(error)) return { error: "Saved on this device only (the database needs migration 0093).", deviceOnly: true };
     return { error: "Couldn't save that setting. Try again." };
   }
   revalidatePath("/", "layout");
+  if (wash) return { error: "The colours are saved on this device only (the database needs migration 0096).", deviceOnly: true };
   return { success: true };
 }
 

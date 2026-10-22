@@ -141,7 +141,7 @@ export function ProfileView({
 
   return (
     <div data-dash-bg={bg ? "" : undefined} className={`px-3 sm:px-5 xl:px-6 py-4 sm:py-6 w-full max-w-[1120px] mx-auto ${bg ? "wall-tone" : ""}`} style={wrapStyle}>
-      {bg && <DashboardBackdrop src={bg.url} video={bg.video} dim={BG_DIM} />}
+      {bg && <DashboardBackdrop src={bg.url} video={bg.video} dim={BG_DIM} luma={bg.luma} />}
 
       <section className="prof-head prof-frost relative rounded-2xl border border-line/10 bg-surface p-5 sm:p-7 overflow-hidden" style={{ "--pc": person.color, "--pt": tint } as CSSProperties}>
         <div className="relative flex flex-col md:flex-row md:items-center gap-5">

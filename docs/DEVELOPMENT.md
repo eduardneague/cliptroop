@@ -347,6 +347,33 @@ no teams, then the person's storage folders and `auth.admin.deleteUser`;
 every foreign key to `profiles` cascades or sets null, except
 `teams.owner_id`, which is why owners transfer or delete their teams first).
 
+**Glass on or off, the slider, the colours behind it (1.29.2, 0096).** Off
+means nothing is see-through anywhere: no `[data-dash-bg]` rule frosts
+anything without `html[data-glass]`, and the bars (`[data-shell]` header,
+subbar, bottom nav; the phone top bar over a wallpaper) are solid paper /
+surface with no `backdrop-filter`. The slider: `--glass-tint` is 1 at level 0
+(and `data-glass-opaque` sets `--glass-blur: none`, so no blur is worked out
+at all; any `var(--glass-blur) …` list then falls back to none), about 0.56
+(Simple) / 0.46 (Liquid) at 50 like before, 0.04 / 0.03 at 100. The wash
+(`lib/washes.ts`): `Look.wash` is "theme" (stored as null), "none", a theme's
+id (`THEME_WASHES`: its accent in light and dark, the same numbers as
+`components/ui/palette.tsx`; `tests/look.test.ts` doesn't import that client
+file, keep them in step by hand), a blend's id (`BLENDS`) or "custom" with
+`washColors` (three `#rrggbb`). `lookAttributes()` turns it into
+`data-glass-wash` ("one" → `--wash-light` / `--wash-dark`, "three" →
+`--wash-1…3`, "none" hides `body::before`); `--wash-base` feeds the wash's
+gradients. localStorage `vp-look` also keeps `paint` (what the first-paint
+script puts on `<html>`; it checks every name and value). Before 0096
+`getLook()` marks the look `washStored: false` and this device's colours are
+used; `setLook` saves the rest. Over a wallpaper with glass on, the picture's
+brightness is on `<html>` too (DashboardBackdrop's `<style>`, from its `luma`
+prop), so the bars can read it: `--wall-lift` dims (dark mode) or lifts
+(light mode) the backdrop of every pane by as much as the picture is too
+bright or too dark for the words, `--wall-floor` keeps a little of the pane
+over very dark (light mode) or very bright (dark mode) pictures, and
+`--ink-soft` / `--ink-faint` are a step stronger on those panes. A picture
+that suits the words changes nothing (as clear as the slider).
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

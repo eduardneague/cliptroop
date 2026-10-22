@@ -14,20 +14,28 @@ import { saveWallpaperLuma } from "@/app/(dashboard)/settings/wallpaper-actions"
  * `measure` (1.28.0): a wallpaper saved before its brightness was measured
  * (its id): measured once here and kept, so the greeting's colour matches it
  * from then on (the wrapper's --bg-luma, globals.css).
+ *
+ * `luma` (1.29.2): how bright it is (0–100, null = not known). It and the
+ * darkening go on <html> too (a style tag, there from the first paint), so
+ * the bars around the page, which aren't inside it, read over it as well
+ * (--wall-need, globals.css). Gone with the page.
  */
-export function DashboardBackdrop({ src, video, dim, measure = null }: { src: string; video: boolean; dim: number; measure?: string | null }) {
+export function DashboardBackdrop({ src, video, dim, luma = null, measure = null }: { src: string; video: boolean; dim: number; luma?: number | null; measure?: string | null }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [still, setStill] = useState(false);
+  const d = Math.max(0, Math.min(80, dim));
   useEffect(() => {
     if (!measure) return;
     let gone = false;
-    void measureUrl(src, video ? "video" : "image").then((luma) => {
-      if (gone || luma === null) return;
-      document.querySelector<HTMLElement>("[data-dash-bg]")?.style.setProperty("--bg-luma", String(luma / 100));
-      void saveWallpaperLuma(measure, luma);
+    void measureUrl(src, video ? "video" : "image").then((l) => {
+      if (gone || l === null) return;
+      document.querySelector<HTMLElement>("[data-dash-bg]")?.style.setProperty("--bg-luma", String(l / 100));
+      document.documentElement.style.setProperty("--bg-luma", String(l / 100));
+      void saveWallpaperLuma(measure, l);
     });
     return () => {
       gone = true;
+      document.documentElement.style.removeProperty("--bg-luma");
     };
   }, [measure, src, video]);
   useEffect(() => {
@@ -53,6 +61,8 @@ export function DashboardBackdrop({ src, video, dim, measure = null }: { src: st
   }, [still]);
 
   return (
+    <>
+    <style>{`html{${luma === null ? "" : `--bg-luma:${Math.max(0, Math.min(100, luma)) / 100};`}--bg-dim:${d / 100}}`}</style>
     <div aria-hidden className="dash-backdrop fixed inset-0 -z-10 pointer-events-none overflow-hidden">
       {video ? (
         <video ref={ref} src={src} muted loop playsInline autoPlay={!still} preload="auto" className="absolute inset-0 w-full h-full object-cover" />
@@ -60,7 +70,8 @@ export function DashboardBackdrop({ src, video, dim, measure = null }: { src: st
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" decoding="async" fetchPriority="high" className="absolute inset-0 w-full h-full object-cover" />
       )}
-      <div className="absolute inset-0" style={{ background: `rgb(var(--paper) / ${Math.max(0, Math.min(80, dim)) / 100})` }} />
+      <div className="absolute inset-0" style={{ background: `rgb(var(--paper) / ${d / 100})` }} />
     </div>
+    </>
   );
 }

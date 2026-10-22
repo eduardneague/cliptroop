@@ -218,11 +218,19 @@ body {
     data-glass-style="liquid"      Liquid (absent = Simple, 1.27.5's)
     data-glass-scope="everywhere"  every pop-up and floating box too (absent = cards and bars)
     data-glass-sidebar="clear"     the side bar as see-through as the cards (absent = nearly solid)
-    --glass-level                  0 (frosted) … 1 (clear), the Settings slider (inline; 0.5 by default)
+    data-glass-wash="none|one|three"  the colours behind it (absent = the theme's own; 1.29.2)
+    data-glass-opaque="on"         the slider at 0: solid, no blur worked out at all (1.29.2)
+    --glass-level                  0 (solid) … 1 (nearly clear), the Settings slider (inline; 0.5 by default)
+    --wash-light / --wash-dark     "one": a theme's accent, light and dark mode (inline)
+    --wash-1 / --wash-2 / --wash-3 "three": a blend's or your own colours (inline)
+
+  Off (1.29.2): nothing is see-through anywhere. The bars are solid (they
+  used to let a little through), and wallpapers show around solid cards.
 
   - The wash: the paper with three soft fields of colour (the theme's own,
     and two hues beside it where the browser can work them out; meetings'
-    violet and long videos' blue otherwise), fixed behind the page.
+    violet and long videos' blue otherwise), fixed behind the page. Since
+    1.29.2 any theme's (--wash-base), three colours of their own, or none.
   - Cards (bg-surface) let it through by --glass-tint; insets and hovers
     (bg-surface-2) are a brighter pane on top; things that float over the
     page stay readable (--glass-float, or --glass-pop when glass goes
@@ -238,19 +246,29 @@ body {
     falls), rounder corners, a floating side bar and a floating tab bar on
     phones.
 */
+/*
+  The slider (1.29.2): 0 is solid, 1 nearly clear (0.04 of the pane left),
+  the middle as before (a gentle curve: 0.56 at 0.5). Floating boxes keep
+  more of themselves; the blur grows as the panes clear.
+*/
 html[data-glass] {
   --glass-level: 0.5;
-  --glass-tint: calc(0.86 - var(--glass-level) * 0.6);
-  --glass-float: calc(0.98 - var(--glass-level) * 0.06);
-  --glass-pop: calc(0.92 - var(--glass-level) * 0.34);
+  --glass-tint: calc(1 - var(--glass-level) * (0.8 + 0.16 * var(--glass-level)));
+  --glass-float: calc(1 - var(--glass-level) * 0.1);
+  --glass-pop: calc(1 - var(--glass-level) * 0.5);
   --glass-raise: 255 255 255 / 0.7;
   --glass-edge: 255 255 255 / 0.62;
   --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 14px 34px -22px rgb(var(--ink) / 0.4);
-  --glass-blur: blur(calc(10px + var(--glass-level) * 16px)) saturate(1.6);
+  --glass-blur: blur(calc(8px + var(--glass-level) * 20px)) saturate(1.6);
+  --wash-base: var(--amber);
   background: rgb(var(--paper));
 }
+/* Solid: nothing to blur (an invalid filter list falls back to none, so the blur rules below drop out too). */
+html[data-glass][data-glass-opaque] { --glass-blur: none; }
+/* Another theme's colours behind the glass (light and dark mode have their own). */
+html[data-glass][data-glass-wash="one"]:not(.dark) { --wash-base: var(--wash-light); }
+html.dark[data-glass][data-glass-wash="one"] { --wash-base: var(--wash-dark); }
 html.dark[data-glass] {
-  --glass-tint: calc(0.84 - var(--glass-level) * 0.6);
   --glass-raise: 255 255 255 / 0.075;
   --glass-edge: 255 255 255 / 0.12;
   --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 40px -22px rgb(0 0 0 / 0.75);
@@ -263,7 +281,7 @@ html[data-glass] body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--amber) / 0.3), transparent 62%),
+    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-base) / 0.3), transparent 62%),
     radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--violet) / 0.2), transparent 60%),
     radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--long) / 0.2), transparent 62%),
     rgb(var(--paper));
@@ -271,12 +289,22 @@ html[data-glass] body::before {
 @supports (color: hsl(from red h s l)) {
   html[data-glass] body::before {
     background:
-      radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--amber) / 0.32), transparent 62%),
-      radial-gradient(56vmax 50vmax at 102% 14%, hsl(from rgb(var(--amber)) calc(h - 36) s calc(l + 6) / 0.26), transparent 60%),
-      radial-gradient(64vmax 56vmax at 72% 104%, hsl(from rgb(var(--amber)) calc(h + 26) s calc(l + 10) / 0.22), transparent 62%),
+      radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-base) / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, hsl(from rgb(var(--wash-base)) calc(h - 36) s calc(l + 6) / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, hsl(from rgb(var(--wash-base)) calc(h + 26) s calc(l + 10) / 0.22), transparent 62%),
       rgb(var(--paper));
   }
 }
+/* Three colours of their own (a blend, or yours). */
+html[data-glass][data-glass-wash="three"] body::before {
+  background:
+    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-1) / 0.32), transparent 62%),
+    radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--wash-2) / 0.26), transparent 60%),
+    radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--wash-3) / 0.22), transparent 62%),
+    rgb(var(--paper));
+}
+/* No colours: the glass over the plain paper (no layer at all). */
+html[data-glass][data-glass-wash="none"] body::before { display: none; }
 html[data-glass] .bg-surface { --tw-bg-opacity: var(--glass-tint); }
 /* Insets, hovers and picked options: a brighter pane on the card (glass on glass), so they still stand out. */
 html[data-glass] .bg-surface-2,
@@ -294,7 +322,7 @@ html[data-glass] .glass-pane {
 }
 html[data-glass] [data-shell="header"],
 html[data-glass] [data-shell="topbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.75)); }
-html[data-glass] [data-shell="sidebar"] { --tw-bg-opacity: 0.9; border-color: rgb(var(--glass-edge)); }
+html[data-glass] [data-shell="sidebar"] { --tw-bg-opacity: max(0.9, var(--glass-tint)); border-color: rgb(var(--glass-edge)); }
 html[data-glass][data-glass-sidebar] [data-shell="sidebar"] { --tw-bg-opacity: calc(var(--glass-tint) * 0.85); }
 html[data-glass] [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9)); border-color: rgb(var(--glass-edge)); }
 html[data-glass] .glass-pane { --tw-bg-opacity: var(--glass-float); }
@@ -328,9 +356,10 @@ html[data-glass] .bg-surface.glass-tail { --tw-bg-opacity: inherit; }
   tab bar on phones.
 */
 html[data-glass-style="liquid"] {
-  --glass-tint: calc(0.74 - var(--glass-level) * 0.56);
-  --glass-pop: calc(0.86 - var(--glass-level) * 0.36);
-  --glass-blur: blur(calc(12px + var(--glass-level) * 16px)) saturate(2) brightness(1.04);
+  /* 1.29.2: solid at 0, 0.46 in the middle (as before), 0.03 at the end. */
+  --glass-tint: calc(1 - var(--glass-level) * (1.19 - 0.22 * var(--glass-level)));
+  --glass-pop: calc(1 - var(--glass-level) * 0.64);
+  --glass-blur: blur(calc(10px + var(--glass-level) * 20px)) saturate(2) brightness(1.04);
   --glass-edge: 255 255 255 / 0.55;
   --liquid-rim:
     inset 0 1px 0.5px rgb(255 255 255 / 0.95),
@@ -345,7 +374,6 @@ html[data-glass-style="liquid"] {
   --liquid-glint: rgb(255 255 255 / 1);
 }
 html.dark[data-glass-style="liquid"] {
-  --glass-tint: calc(0.7 - var(--glass-level) * 0.5);
   --glass-edge: 255 255 255 / 0.12;
   --liquid-rim:
     inset 0 1px 0.5px rgb(255 255 255 / 0.3),
@@ -506,32 +534,49 @@ html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]
 .dark .glass-sample-bar { border-color: rgb(255 255 255 / 0.12); }
 
 /*
-  A dashboard background (1.27.5, Settings → Preferences → Dashboard
-  background): the picture, GIF or video sits behind the page
-  (DashboardBackdrop); the widgets and the top bar turn frosted over it,
-  with or without the glass look.
-*/
-/*
+  A wallpaper (1.27.5 on the dashboard, 1.28.0 on profiles; Settings →
+  Preferences → Dashboard background): the picture, GIF or video sits behind
+  the page (DashboardBackdrop). 1.29.2: only the glass look makes things
+  see-through over it. With glass off the widgets, the bars and a profile
+  stay solid, and the picture shows around them.
+
   Words over a wallpaper (1.28.0): dark or white, whichever reads best over
-  the picture. A box sets --bg-luma (how bright the picture's top is, 0–1,
-  measured on upload; left out when unknown) and --bg-dim (the darkening,
-  0–0.8); the paper's own brightness (light or dark mode) is mixed in like
-  the darkening layer mixes it. Above 0.52 (sRGB luma, about L* 56: a
-  little over WCAG's crossover, as white reads well on mid tones), dark
-  words (lib/wallpapers.ts WORDS_SPLIT).
-  --words-dark is 1 for dark words, 0 for white; --mismatch is 1 when the
-  theme's own words (cards) would be hard to read over it.
+  the picture. The page sets --bg-luma (how bright the picture's top is,
+  0–1, measured on upload; left out when unknown) and --bg-dim (the
+  darkening, 0–0.8) on <html> (DashboardBackdrop's style) and on its own
+  box; the paper's own brightness (light or dark mode) is mixed in like the
+  darkening layer mixes it. Above 0.52 (sRGB luma, about L* 56: a little
+  over WCAG's crossover, as white reads well on mid tones), dark words
+  (lib/wallpapers.ts WORDS_SPLIT). --words-dark is 1 for dark words, 0 for
+  white.
+
+  Glass over it (1.29.2): the panes keep the words readable whatever the
+  picture, however see-through the slider says. The picture behind them is
+  dimmed (dark mode: light words want a dark backdrop, --wall-lift < 1) or
+  lifted (light mode: dark words want a light one, --wall-lift > 1) by just
+  as much as it's too bright or too dark, and a very dark picture in light
+  mode keeps a little of the pane's own white (--wall-floor; dark mode a
+  little of its dark over a very bright one). Over a picture that already
+  suits the words nothing changes: the panes are exactly as clear as the
+  slider. The secondary words on them are a step stronger.
 */
+html:has([data-dash-bg]),
 .wall-tone {
   --paper-luma: 0.96;
   --bg-eff: calc(var(--bg-luma, var(--paper-luma)) * (1 - var(--bg-dim, 0.3)) + var(--paper-luma) * var(--bg-dim, 0.3));
   --words-dark: clamp(0, calc((var(--bg-eff) - 0.52) * 1000), 1);
   --words: calc(255 - 237 * var(--words-dark));
   --halo: calc(255 * var(--words-dark));
-  --mismatch: calc(1 - var(--words-dark));
+  --wall-lift: clamp(1, calc(0.74 / var(--bg-eff)), 2.2);
+  --wall-floor: clamp(0, calc((0.62 - var(--bg-eff)) * 1.3), 0.45);
 }
+html.dark:has([data-dash-bg]),
 .dark .wall-tone,
-.dark.wall-tone { --paper-luma: 0.08; --mismatch: var(--words-dark); }
+.dark.wall-tone {
+  --paper-luma: 0.08;
+  --wall-lift: clamp(0.35, calc(0.26 / var(--bg-eff)), 1);
+  --wall-floor: clamp(0, calc((var(--bg-eff) - 0.3) * 0.8), 0.3);
+}
 .wall-words,
 .wall-tone .dash-greeting h1 {
   color: rgb(var(--words) var(--words) var(--words));
@@ -541,63 +586,93 @@ html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]
   color: rgb(var(--words) var(--words) var(--words) / 0.86);
   text-shadow: 0 1px 12px rgb(var(--halo) var(--halo) var(--halo) / 0.55), 0 0 2px rgb(var(--halo) var(--halo) var(--halo) / 0.3);
 }
-
-[data-dash-bg] .dash-item {
-  /* Frosted, and more so when the picture would fight the cards' words. */
-  --tw-bg-opacity: max(0.6, calc(0.5 + 0.24 * var(--mismatch, 0)));
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
-  border-color: rgb(255 255 255 / 0.45);
-}
-.dark [data-dash-bg] .dash-item { --tw-bg-opacity: max(0.55, calc(0.48 + 0.26 * var(--mismatch, 0))); border-color: rgb(255 255 255 / 0.09); }
-html[data-glass] [data-dash-bg] .dash-item {
-  --tw-bg-opacity: max(var(--glass-tint), calc(0.34 + 0.3 * var(--mismatch, 0)));
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-}
-html:has([data-dash-bg]) [data-shell="header"],
-html:has([data-dash-bg]) [data-shell="topbar"] {
-  background-color: rgb(var(--paper) / 0.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
-  backdrop-filter: blur(14px) saturate(1.4);
-}
 /* (The glass look's wash isn't needed under it. The body stays see-through: with the glass look on, the page's
    own background is on <html>, and a painted body would hide the picture.) */
 html:has([data-dash-bg]) body::before { display: none; }
-/*
-  Light mode over a wallpaper (1.29.1): the side bar and the top and bottom
-  bars stay a light frost you can read, whatever the picture (a dark one
-  turned them a murky grey). The picture behind them is lifted as well as
-  blurred, and a see-through side bar keeps enough of its pane.
-*/
-html:not(.dark):has([data-dash-bg]) [data-shell="header"],
-html:not(.dark):has([data-dash-bg]) [data-shell="topbar"] {
-  background-color: rgb(var(--paper) / 0.62);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4) brightness(1.3);
-  backdrop-filter: blur(16px) saturate(1.4) brightness(1.3);
+
+/* Glass on: the cards over the picture (dashboard widgets, a profile's showcases and header)… */
+html[data-glass] [data-dash-bg] :is(.dash-item, .prof-frost) {
+  --tw-bg-opacity: max(var(--glass-tint), var(--wall-floor));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
 }
-html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="sidebar"],
-html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="bottom-nav"] {
-  -webkit-backdrop-filter: var(--glass-blur) brightness(1.3);
-  backdrop-filter: var(--glass-blur) brightness(1.3);
+/* …and the bars around it (they aren't inside the page's box: <html> has the picture's numbers). */
+html[data-glass]:has([data-dash-bg]) :is([data-shell="header"], [data-shell="topbar"]) {
+  background-color: rgb(var(--paper) / max(calc(var(--glass-tint) * 0.75), var(--wall-floor)));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
 }
-html[data-glass][data-glass-sidebar]:not(.dark):has([data-dash-bg]) [data-shell="sidebar"] { --tw-bg-opacity: max(0.7, calc(var(--glass-tint) * 0.85)); }
-html[data-glass]:not(.dark):has([data-dash-bg]) [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / max(0.72, calc(var(--glass-tint) * 0.9))); }
-/* The Customize button (and the toolbar while customizing) on a frosted pane of its own. */
-[data-dash-bg] .dash-tool {
-  background: rgb(var(--surface) / 0.7);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  backdrop-filter: blur(12px) saturate(1.4);
+html[data-glass]:has([data-dash-bg]) :is([data-shell="sidebar"], [data-shell="bottom-nav"]) {
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+html[data-glass][data-glass-sidebar]:has([data-dash-bg]) [data-shell="sidebar"] { --tw-bg-opacity: max(calc(var(--glass-tint) * 0.85), var(--wall-floor)); }
+html[data-glass]:has([data-dash-bg]) [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor))); }
+/* The secondary words a step stronger on glass over a picture (they're made for solid cards). */
+html[data-glass]:not(.dark):has([data-dash-bg]) :is([data-shell], [data-dash-bg] .dash-item, [data-dash-bg] .prof-frost) { --ink-soft: 54 50 43; --ink-faint: 86 81 71; }
+html.dark[data-glass]:has([data-dash-bg]) :is([data-shell], [data-dash-bg] .dash-item, [data-dash-bg] .prof-frost) { --ink-soft: 224 218 206; --ink-faint: 192 184 170; }
+
+/* Glass off: the bars are solid everywhere (a wallpaper never shows through them); so is the mobile bar over a wallpaper. */
+html:not([data-glass]) :is([data-shell="header"], [data-shell="subbar"]) {
+  background-color: rgb(var(--paper));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html:not([data-glass]) [data-shell="bottom-nav"] {
+  background-color: rgb(var(--surface));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html:not([data-glass]):has([data-dash-bg]) [data-shell="topbar"] { background-color: rgb(var(--paper)); }
+
+/* The Customize button (and the toolbar while customizing) on a pane of its own over the picture: solid, or glass. */
+[data-dash-bg] .dash-tool { background: rgb(var(--surface)); }
+html[data-glass] [data-dash-bg] .dash-tool {
+  background: rgb(var(--surface) / max(0.7, var(--glass-tint)));
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 [data-dash-bg] div.dash-tool { padding: 4px; }
-/* Settings' little preview of it: frosted cards like the widgets. */
-.dash-bg-sample {
+/* Settings' little preview of it: the cards solid, or frosted with glass on. */
+.dash-bg-sample { background: rgb(var(--surface)); border: 1px solid rgb(var(--line) / 0.12); }
+html[data-glass] .dash-bg-sample {
   background: rgb(var(--surface) / 0.55);
-  border: 1px solid rgb(255 255 255 / 0.45);
+  border-color: rgb(255 255 255 / 0.45);
   -webkit-backdrop-filter: blur(8px) saturate(1.4);
   backdrop-filter: blur(8px) saturate(1.4);
 }
-.dark .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
+html.dark[data-glass] .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
+
+/* The colours behind the glass, drawn small in Settings (1.29.2): a theme's (--wl / --wd), three of their own (--w1…3). */
+.wash-swatch {
+  --wb: var(--wl, var(--amber));
+  background:
+    radial-gradient(90% 130% at 0% 0%, rgb(var(--wb) / 0.62), transparent 70%),
+    radial-gradient(80% 120% at 100% 10%, rgb(var(--violet) / 0.42), transparent 66%),
+    radial-gradient(90% 130% at 70% 115%, rgb(var(--long) / 0.42), transparent 66%),
+    rgb(var(--paper));
+}
+.dark .wash-swatch { --wb: var(--wd, var(--amber)); }
+@supports (color: hsl(from red h s l)) {
+  .wash-swatch {
+    background:
+      radial-gradient(90% 130% at 0% 0%, rgb(var(--wb) / 0.62), transparent 70%),
+      radial-gradient(80% 120% at 100% 10%, hsl(from rgb(var(--wb)) calc(h - 36) s calc(l + 6) / 0.52), transparent 66%),
+      radial-gradient(90% 130% at 70% 115%, hsl(from rgb(var(--wb)) calc(h + 26) s calc(l + 10) / 0.46), transparent 66%),
+      rgb(var(--paper));
+  }
+}
+.wash-swatch[data-three] {
+  background:
+    radial-gradient(90% 130% at 0% 0%, rgb(var(--w1) / 0.62), transparent 70%),
+    radial-gradient(80% 120% at 100% 10%, rgb(var(--w2) / 0.52), transparent 66%),
+    radial-gradient(90% 130% at 70% 115%, rgb(var(--w3) / 0.46), transparent 66%),
+    rgb(var(--paper));
+}
+.wash-pick { -webkit-appearance: none; appearance: none; padding: 0; }
+.wash-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.wash-pick::-webkit-color-swatch { border: none; border-radius: 5px; }
+.wash-pick::-moz-color-swatch { border: none; border-radius: 5px; }
 
 .no-scrollbar {
   scrollbar-width: none;
@@ -1161,11 +1236,7 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
     radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--pc) 20%, transparent), transparent 62%),
     radial-gradient(60% 120% at 100% 100%, color-mix(in srgb, var(--pt) 14%, transparent), transparent 60%);
 }
-[data-dash-bg] .prof-frost {
-  --tw-bg-opacity: max(0.72, calc(0.62 + 0.24 * var(--mismatch, 0)));
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
-}
+/* Over a background picture: solid, or glass like the showcases with the glass look on (1.29.2, the wallpaper rules). */
 
 /* The picture in its frame: --s its size, --pf the frame's colour. Moving frames stand still when animations are off (the rules further down). */
 .pf-avatar { position: relative; display: inline-flex; width: var(--s); height: var(--s); flex-shrink: 0; }

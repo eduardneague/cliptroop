@@ -23,6 +23,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.2",
+    date: "2026-10-21",
+    title: "Glass on means glass, off means solid",
+    changes: [
+      { kind: "better", text: "Glass off now means solid everywhere: the widgets over your wallpaper, your profile and the bars at the top and bottom no longer let anything through." },
+      { kind: "better", text: "The see-through slider goes from fully solid at 0 to nearly clear at 100." },
+      { kind: "new", text: "Pick the colours behind the glass: your theme's, any other theme's (Ink's greys under Cherry's buttons, say), a blend like Sunset or Aurora, or your own three. Or turn them off and keep the glass." },
+      { kind: "fixed", text: "Words stay readable on glass over any wallpaper, in light and dark mode. The picture behind each pane is dimmed or lifted just enough, so one that already suits the words stays as clear as you set it." },
+      { kind: "better", text: "Settings → Preferences → Glass fits phones: each choice sits under its name." },
+    ],
+  },
+  {
     version: "1.29.1",
     date: "2026-10-21",
     title: "Clear your notifications, and small fixes",

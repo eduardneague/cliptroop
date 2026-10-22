@@ -1,24 +1,38 @@
+import { DEFAULT_CUSTOM, cleanColors, isWash, washVars, type WashId } from "./washes";
+
 /**
- * The glass look's choices (1.27.5, more in 1.28.0), shared by the account
- * (profiles.glass_* columns, migrations 0092 / 0093), this device (localStorage
- * "vp-look", read by the first-paint script in app/layout.tsx) and the
- * Settings controls. Pure: no React, no database.
+ * The glass look's choices (1.27.5, more in 1.28.0 and 1.29.2), shared by
+ * the account (profiles.glass_* columns, migrations 0092 / 0093 / 0096), this
+ * device (localStorage "vp-look", read by the first-paint script in
+ * app/layout.tsx) and the Settings controls. Pure: no React, no database.
  *
- *  - on:      glass at all (off by default)
+ *  - on:      glass at all (off by default). Off means nothing is
+ *             see-through anywhere, wallpapers and profiles included (1.29.2).
  *  - style:   "simple" (1.27.5's frosted panes) or "liquid" (like iOS 26's
  *             Liquid Glass: bright rims, a sheen that follows the pointer,
  *             floating bars)
  *  - scope:   "cards" (cards, bars and the main pop-ups) or "everywhere"
  *             (every pop-up, menu, toast and floating box too)
  *  - sidebar: the side bar as see-through as the cards (else nearly solid)
- *  - level:   how see-through, 0–100 (50 by default)
+ *  - level:   how see-through, 0 (solid) … 100 (nearly clear); 50 by default
+ *  - wash, washColors: the colours behind the glass (lib/washes.ts, 1.29.2)
  */
 
 export type GlassStyle = "simple" | "liquid";
 export type GlassScope = "cards" | "everywhere";
-export type Look = { on: boolean; style: GlassStyle; scope: GlassScope; sidebar: boolean; level: number };
+export type Look = {
+  on: boolean;
+  style: GlassStyle;
+  scope: GlassScope;
+  sidebar: boolean;
+  level: number;
+  wash: WashId;
+  washColors: [string, string, string];
+  /** False when the account can't keep the colours yet (a database before 0096): this device's own are used. */
+  washStored?: false;
+};
 
-export const DEFAULT_LOOK: Look = { on: false, style: "simple", scope: "cards", sidebar: false, level: 50 };
+export const DEFAULT_LOOK: Look = { on: false, style: "simple", scope: "cards", sidebar: false, level: 50, wash: "theme", washColors: DEFAULT_CUSTOM };
 export const LOOK_KEY = "vp-look";
 /** 1.27.5 kept only "on" here; still read when there's no "vp-look" yet. */
 export const OLD_GLASS_KEY = "vp-glass";
@@ -35,12 +49,16 @@ export function readLook(raw: unknown): Look {
   const scope = r.scope ?? r.glass_scope;
   const sidebar = r.sidebar ?? r.glass_sidebar;
   const level = r.level ?? r.glass_level;
+  const wash = r.wash ?? r.glass_wash;
+  const colors = r.washColors ?? r.glass_wash_colors;
   return {
     on: on === true,
     style: isGlassStyle(style) ? style : DEFAULT_LOOK.style,
     scope: isGlassScope(scope) ? scope : DEFAULT_LOOK.scope,
     sidebar: sidebar === true,
     level: clampLevel(level),
+    wash: isWash(wash) ? wash : DEFAULT_LOOK.wash,
+    washColors: cleanColors(colors),
   };
 }
 
@@ -53,10 +71,12 @@ export function cleanLookPatch(patch: unknown): Partial<Look> {
   if (isGlassScope(p.scope)) out.scope = p.scope;
   if (typeof p.sidebar === "boolean") out.sidebar = p.sidebar;
   if (typeof p.level === "number" && Number.isFinite(p.level)) out.level = clampLevel(p.level);
+  if (isWash(p.wash)) out.wash = p.wash;
+  if (Array.isArray(p.washColors)) out.washColors = cleanColors(p.washColors);
   return out;
 }
 
-/** The database columns for a change. */
+/** The database columns for a change ("theme", the default wash, is stored as null). */
 export function lookColumns(p: Partial<Look>): Record<string, unknown> {
   const c: Record<string, unknown> = {};
   if (p.on !== undefined) c.glass_ui = p.on;
@@ -64,17 +84,45 @@ export function lookColumns(p: Partial<Look>): Record<string, unknown> {
   if (p.scope !== undefined) c.glass_scope = p.scope;
   if (p.sidebar !== undefined) c.glass_sidebar = p.sidebar;
   if (p.level !== undefined) c.glass_level = p.level;
+  if (p.wash !== undefined) c.glass_wash = p.wash === "theme" ? null : p.wash;
+  if (p.washColors !== undefined) c.glass_wash_colors = p.washColors;
   return c;
 }
 
-/** What goes on <html>: data attributes (absent = the default) and the see-through level as a 0–1 number. */
-export function lookAttributes(l: Look): { glass?: "on"; glassStyle?: "liquid"; glassScope?: "everywhere"; glassSidebar?: "clear"; level: string } {
+/** The CSS variables a wash sets on <html> (all of them, so a change clears the old ones). */
+export const WASH_VARS = ["--wash-light", "--wash-dark", "--wash-1", "--wash-2", "--wash-3"] as const;
+
+export type LookAttributes = {
+  glass?: "on";
+  glassStyle?: "liquid";
+  glassScope?: "everywhere";
+  glassSidebar?: "clear";
+  /** The colours behind the glass, when they aren't the theme's own. */
+  glassWash?: "none" | "one" | "three";
+  /** Solid (the slider at 0): no blur is worked out at all. */
+  glassOpaque?: "on";
+  /** --glass-level, 0–1. */
+  level: string;
+  /** The wash's colours ("r g b"), when it has its own. */
+  vars?: Partial<Record<(typeof WASH_VARS)[number], string>>;
+};
+
+/** What goes on <html>: data attributes (absent = the default), the see-through level as a 0–1 number and the wash's colours. */
+export function lookAttributes(l: Look): LookAttributes {
   if (!l.on) return { level: String(l.level / 100) };
+  const w = washVars(l.wash, l.washColors);
   return {
     glass: "on",
     ...(l.style === "liquid" ? { glassStyle: "liquid" as const } : {}),
     ...(l.scope === "everywhere" ? { glassScope: "everywhere" as const } : {}),
     ...(l.sidebar ? { glassSidebar: "clear" as const } : {}),
+    ...(w.kind === "none" ? { glassWash: "none" as const } : w.kind === "one" ? { glassWash: "one" as const } : w.kind === "three" ? { glassWash: "three" as const } : {}),
+    ...(l.level === 0 ? { glassOpaque: "on" as const } : {}),
     level: String(l.level / 100),
+    ...(w.kind === "one"
+      ? { vars: { "--wash-light": w.light, "--wash-dark": w.dark } }
+      : w.kind === "three"
+        ? { vars: { "--wash-1": w.colors[0], "--wash-2": w.colors[1], "--wash-3": w.colors[2] } }
+        : {}),
   };
 }
