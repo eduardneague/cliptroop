@@ -2082,6 +2082,13 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 .mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 /* A niche filling in (1.29.9): when the list itself says "Finding channels and videos…", the line at the top doesn't say it again. */
 .ol-page:has([data-finding-note]) .ol-finding-banner { display: none; }
+/* Audience (1.29.11): each card's bar grows once; Add's plus turns when pointed at; a niche it was just added to pops in. */
+@keyframes aud-grow { from { transform: scaleX(0); } to { transform: none; } }
+.aud-bar { transform-origin: 0 50%; animation: aud-grow 0.7s var(--ease-out) both; }
+.aud-plus { transition: transform 0.22s var(--ease-out); }
+.aud-add:hover .aud-plus { transform: rotate(90deg); }
+@keyframes aud-pop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }
+.aud-pop { animation: aud-pop 0.34s var(--ease-out) both; }
 /* A thumbnail wall: pictures fill their tiles, the title rises on hover/focus. */
 .thumb-tile .thumb-caption { opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
 .thumb-tile:hover .thumb-caption, .thumb-tile:focus-visible .thumb-caption { opacity: 1; transform: none; }

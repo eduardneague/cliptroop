@@ -527,6 +527,14 @@ there instead of going back a page). A bar that changes when its box is
 pointed at needs the box's own style to change too (`--bar-hover`), or
 Chrome doesn't repaint it.
 
+**Outliers' Audience tab (1.29.11).** Its list logic is pure in
+`modules/outliers/lib/audience.ts` (`audienceMatches`, `audienceList`):
+search and sort there, never in the component. A card's Add goes straight
+to `ctx.niche` when it's one of the team's (or to the team's only niche)
+and only offers a menu otherwise; the multi-pick flow (Select) is a mode,
+not checkboxes on every card. Channels added in this visit are kept in the
+tab (`inNiche`) until the page is read again.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

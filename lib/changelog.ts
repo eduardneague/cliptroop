@@ -23,6 +23,17 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.11",
+    date: "2026-10-22",
+    title: "A cleaner Audience tab",
+    changes: [
+      { kind: "better", text: "Outliers → Audience has cleaner cards: the views each channel sent you, big, with a bar against the top one, how many of your videos it sits next to, its usual views, and its videos that sent you viewers as proper thumbnails. Its place in the list shows on its picture." },
+      { kind: "new", text: "An Add button on every card puts the channel straight into the niche you're looking at (the arrow next to it picks another niche), and the card then shows the niche it's in. No more ticks." },
+      { kind: "new", text: "A search box to find a channel in the list by its name, @handle, country or language, and a sort: most viewers sent, next to most of yours, or biggest." },
+      { kind: "better", text: "To make a niche of several channels, press Select, tap them, and use the bar at the bottom." },
+    ],
+  },
+  {
     version: "1.29.10",
     date: "2026-10-22",
     title: "Scroll bars that fit",
