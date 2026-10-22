@@ -4,11 +4,12 @@ import { useEffect, useRef, useState, useTransition, type CSSProperties } from "
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { compressImage, IMAGE_PRESETS } from "@/lib/image/compress";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { CheckIcon, CloseIcon, PlusIcon, RetryIcon, TrashIcon } from "@/components/ui/icons";
-import { bgFileProblem, bgKind, bgPathFor, clampDim, DASH_BG_ACCEPT, DASH_BG_BUCKET, DASH_BG_MAX_DIM, isAnimatedPng } from "@/lib/dashboard-bg";
+import { bgFileProblem, bgKind, bgPathFor, clampDim, DASH_BG_ACCEPT, DASH_BG_BUCKET, DASH_BG_MAX_DIM } from "@/lib/dashboard-bg";
+import { planFor, sizeLabel, WALL_MAX_BYTES, WALL_MAX_SECONDS } from "@/lib/wallpaper-plan";
+import { ConvertError, prepareWallpaper } from "@/lib/wallpaper-convert";
 import { WALLPAPER_MAX } from "@/lib/wallpapers";
 import { measureFile } from "@/lib/wallpapers-measure";
 import { startUpload, UploadError } from "@/lib/upload/resumable";
@@ -22,17 +23,26 @@ import { addWallpaper, pickWallpaper, removeWallpaper, replaceWallpaper } from "
  * Uploading shows its progress; replacing or removing one deletes the old
  * file for good, after a confirmation. The words over each are shown in the
  * colour the dashboard will use (dark or white, whichever reads best).
+ *
+ * 1.29.4: every file is made small in the browser first (2 MB at most:
+ * pictures as WebP, videos and moving GIFs as a WebM of up to 30 seconds;
+ * lib/wallpaper-convert.ts), with its own progress. A wallpaper saved before
+ * that and bigger than 2 MB can be made lighter in one click. And it can go
+ * behind every page, not only the dashboard.
  */
 
-export type WallpaperItem = { id: string; path: string; url: string; luma: number | null };
+/** `size`: the stored file's bytes, when known (Settings lists them). */
+export type WallpaperItem = { id: string; path: string; url: string; luma: number | null; size?: number | null };
 
 type Job = {
   /** The wallpaper being replaced, or "new". */
   slot: string;
-  phase: "preparing" | "uploading" | "saving";
+  phase: "converting" | "uploading" | "saving";
   share: number;
   preview: string;
   video: boolean;
+  /** Made into a video (it plays for a while: the label says so). */
+  recording?: boolean;
   cancel?: () => void;
 };
 
@@ -47,6 +57,8 @@ export function DashboardBackground({
   current: initialCurrent,
   dim: initialDim,
   wallpapers: initialWallpapers,
+  everywhere: initialEverywhere = false,
+  everywhereReady = true,
 }: {
   userId: string;
   /** Migration 0092 is in (the background itself). */
@@ -58,6 +70,10 @@ export function DashboardBackground({
   current: string | null;
   dim: number;
   wallpapers: WallpaperItem[];
+  /** Behind every page (1.29.4). */
+  everywhere?: boolean;
+  /** Migration 0098 is in. */
+  everywhereReady?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -68,6 +84,7 @@ export function DashboardBackground({
   const [current, setCurrent] = useState<string | null>(initialCurrent);
   const [on, setOn] = useState(initialOn);
   const [dim, setDim] = useState(initialDim);
+  const [everywhere, setEverywhere] = useState(initialEverywhere);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState<{ id: string; kind: "use" | "remove" } | null>(null);
   const [, start] = useTransition();
@@ -83,16 +100,16 @@ export function DashboardBackground({
     input.current?.click();
   }
 
-  async function picked(original: File | undefined) {
-    const target = replacing.current;
+  async function picked(original: File | undefined, lighten: WallpaperItem | null = null) {
+    const target = lighten ?? replacing.current;
     replacing.current = null;
     if (!original) return;
-    const problem = bgFileProblem(original);
-    if (problem) {
-      toast.error(problem);
+    const plan = planFor(original.type, original.size, new Uint8Array());
+    if (plan.action === "refuse") {
+      toast.error(plan.problem);
       return;
     }
-    if (target) {
+    if (target && !lighten) {
       const ok = await confirm({
         title: "Replace this wallpaper?",
         description: `“${original.name}” takes its place. The old file is deleted for good as soon as the new one is up.`,
@@ -100,25 +117,27 @@ export function DashboardBackground({
         danger: true,
       });
       if (!ok) return;
-    } else if (full) {
+    } else if (!target && full) {
       toast.error(`You can keep ${WALLPAPER_MAX} wallpapers. Remove or replace one first.`);
       return;
     }
-    const video = original.type.startsWith("video/");
+    const moving = original.type.startsWith("video/") || original.type === "image/gif";
     const preview = URL.createObjectURL(original);
-    setJob({ slot: target?.id ?? "new", phase: "preparing", share: 0, preview, video });
+    const stop = new AbortController();
+    setJob({ slot: target?.id ?? "new", phase: "converting", share: 0, preview, video: original.type.startsWith("video/"), recording: moving, cancel: () => stop.abort() });
     const supabase = createClient();
     let path: string | null = null;
     let uploaded = false;
     try {
-      // Photos are made a sensible size (sharp on a big screen); GIFs, videos and anything that moves stay as they are.
-      let f: File = original;
-      if (original.type === "image/jpeg" || (original.type === "image/png" && !isAnimatedPng(new Uint8Array(await original.slice(0, 64 * 1024).arrayBuffer())))) {
-        f = await compressImage(original, IMAGE_PRESETS.background);
-      }
-      const luma = await measureFile(f, video ? "video" : "image");
+      // Always made small first (1.29.4): a WebP picture or a WebM video, 2 MB at most.
+      const ready = await prepareWallpaper(original, ({ share }) => setJob((j) => (j ? { ...j, share } : j)), stop.signal);
+      const f = ready.file;
+      const problem = bgFileProblem(f);
+      if (problem) throw new Error(problem);
+      const luma = await measureFile(f, ready.video ? "video" : "image");
       path = bgPathFor(userId, f.name, f.type);
       if (!path) throw new UploadError("type", "type");
+      setJob((j) => (j ? { ...j, phase: "uploading", share: 0, cancel: undefined } : j));
       const upload = await startUpload({
         bucket: DASH_BG_BUCKET,
         path,
@@ -131,28 +150,34 @@ export function DashboardBackground({
       uploaded = true;
       setJob((j) => (j ? { ...j, phase: "saving", share: 1, cancel: undefined } : j));
       const url = supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl;
+      const note = ready.trimmed ? ` It keeps the first ${WALL_MAX_SECONDS} seconds.` : "";
       if (target) {
         const r = await replaceWallpaper(target.id, path, luma);
         if (r.error) throw new Error(r.error);
-        setItems((list) => list.map((w) => (w.id === target.id ? { ...w, path: path!, url, luma } : w)));
-        toast.success("Wallpaper replaced");
+        setItems((list) => list.map((w) => (w.id === target.id ? { ...w, path: path!, url, luma, size: f.size } : w)));
+        toast.success(lighten ? `Made lighter: ${sizeLabel(lighten.size ?? original.size)} to ${sizeLabel(f.size)}.` : `Wallpaper replaced (${sizeLabel(f.size)}).${note}`);
       } else {
         const r = await addWallpaper(path, luma);
         if (r.error || !r.id) throw new Error(r.error ?? "Couldn't save. Try again.");
-        setItems((list) => [...list, { id: r.id!, path: path!, url, luma }]);
-        toast.success("Wallpaper added");
+        setItems((list) => [...list, { id: r.id!, path: path!, url, luma, size: f.size }]);
+        toast.success(`Wallpaper added (${sizeLabel(f.size)}).${note}`);
       }
-      setCurrent(path);
-      setOn(true);
+      // Making one lighter keeps whatever was showing; anything else puts the new one up.
+      if (!lighten || target?.path === current) {
+        setCurrent(path);
+        if (!lighten) setOn(true);
+      }
       refresh();
     } catch (e) {
       // Not saved: don't leave the file behind.
       if (uploaded && path) await supabase.storage.from(DASH_BG_BUCKET).remove([path]).then(() => null, () => null);
-      if (e instanceof UploadError) {
+      if (e instanceof ConvertError) {
+        if (e.kind !== "cancelled") toast.error(e.message);
+      } else if (e instanceof UploadError) {
         if (e.kind !== "cancelled") {
           toast.error(
             e.kind === "too-large"
-              ? "Keep it under 25 MB."
+              ? "Keep it under 2 MB."
               : e.kind === "type"
                 ? "Pick a picture, a GIF or a video."
                 : e.kind === "bucket"
@@ -171,6 +196,33 @@ export function DashboardBackground({
       URL.revokeObjectURL(preview);
       setJob(null);
     }
+  }
+
+  /** A wallpaper from before 1.29.4, bigger than 2 MB: the same picture or video, made small, in its place. */
+  async function makeLighter(w: WallpaperItem) {
+    if (locked) return;
+    try {
+      const res = await fetch(w.url);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const name = w.path.split("/").pop() ?? "wallpaper";
+      await picked(new File([blob], name, { type: blob.type || (bgKind(w.path) === "video" ? "video/mp4" : "image/jpeg") }), w);
+    } catch {
+      toast.error("Couldn't fetch it to make it lighter. Check your connection and try again.");
+    }
+  }
+
+  async function changeEverywhere(next: boolean) {
+    if (next === everywhere || locked) return;
+    setEverywhere(next);
+    const r = await updateDashboardBackground({ everywhere: next });
+    if (r.error) {
+      setEverywhere(!next);
+      toast.error(r.error);
+      return;
+    }
+    toast.success(next ? "Your wallpaper is on every page" : "Your wallpaper is on the dashboard only");
+    refresh();
   }
 
   async function switchTo(w: WallpaperItem) {
@@ -255,8 +307,8 @@ export function DashboardBackground({
     <div>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-[13.5px] font-semibold">Dashboard background</div>
-          <div className="text-[11.5px] text-ink-faint">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Wallpaper</h2>
+          <div className="mt-1 text-[11.5px] text-ink-faint">
             Pictures, GIFs or short videos behind your dashboard, like a profile background. Keep up to {WALLPAPER_MAX} and switch with a click. Only you see them. With glass on
             (above), the widgets let them show through; with glass off they stay solid.
           </div>
@@ -354,7 +406,10 @@ export function DashboardBackground({
                     </button>
                   )}
                   <div className="mt-1.5 flex items-center gap-1">
-                    <span className="text-[11px] text-ink-faint truncate flex-1 min-w-0">{video ? "Video" : /\.gif$/i.test(w.path) ? "GIF" : "Picture"}</span>
+                    <span className="text-[11px] text-ink-faint truncate flex-1 min-w-0">
+                      {video ? "Video" : /\.gif$/i.test(w.path) ? "GIF" : "Picture"}
+                      {w.size ? ` · ${sizeLabel(w.size)}` : ""}
+                    </span>
                     <button
                       type="button"
                       onClick={() => choose(w)}
@@ -374,6 +429,18 @@ export function DashboardBackground({
                       <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  {/* Saved before 1.29.4 and big: one click makes it small (the same picture or video). */}
+                  {!uploading && (w.size ?? 0) > WALL_MAX_BYTES && (
+                    <button
+                      type="button"
+                      onClick={() => void makeLighter(w)}
+                      disabled={locked}
+                      className="mt-1 w-full rounded-lg border border-amber/40 bg-amber/10 px-2 h-8 text-[12px] font-semibold text-amber hover:bg-amber/15 disabled:opacity-50"
+                      title="It's big, so pages wait for it. This makes the same one small."
+                    >
+                      Make it lighter
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -381,7 +448,7 @@ export function DashboardBackground({
 
           <div className="mt-3 flex items-center gap-3 flex-wrap">
             <p className="text-[12px] text-ink-soft flex-1 min-w-[14rem]">
-              JPG, PNG, WebP, AVIF, GIF, MP4 or WebM, up to 25 MB each. Videos play muted, on a loop. The greeting over it turns dark or white, whichever reads best.
+              JPG, PNG, WebP, AVIF, GIF, MP4, MOV or WebM. Each is made small before it&rsquo;s uploaded, 2 MB at most, so pages never wait for it: pictures become WebP, videos and GIFs a WebM of up to {WALL_MAX_SECONDS} seconds (keep this tab open while it&rsquo;s made). Videos play muted, on a loop. The greeting over it turns dark or white, whichever reads best.
             </p>
             {on && current && (
               <Link href="/dashboard" className="text-[12.5px] font-semibold text-amber hover:brightness-110">
@@ -410,6 +477,34 @@ export function DashboardBackground({
               </span>
             </label>
           )}
+          {items.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-line/10 flex flex-col items-start sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+              <div>
+                <div className="text-[12.5px] font-semibold">On every page</div>
+                <div className="text-[11.5px] text-ink-faint">
+                  {everywhereReady
+                    ? "Behind the whole app, not just the dashboard. Other pages show it darker, so their words stay easy to read."
+                    : "This needs the latest database update (migration 0098)."}
+                </div>
+              </div>
+              <div role="radiogroup" aria-label="On every page" className="inline-flex rounded-lg border border-line/15 p-0.5 flex-shrink-0">
+                {[false, true].map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    role="radio"
+                    aria-checked={everywhere === v}
+                    data-sound="none"
+                    disabled={locked || !everywhereReady || (v && !on)}
+                    onClick={() => void changeEverywhere(v)}
+                    className={`px-3 h-8 rounded-md text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${everywhere === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+                  >
+                    {v ? "On" : "Off"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
       <input ref={input} type="file" accept={DASH_BG_ACCEPT} className="hidden" onChange={(e) => void picked(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
@@ -420,7 +515,14 @@ export function DashboardBackground({
 /** A wallpaper on its way up: the file itself, dimmed, with how far it's got. */
 function UploadTile({ job }: { job: Job }) {
   const pct = Math.round(job.share * 100);
-  const label = job.phase === "preparing" ? "Getting it ready…" : job.phase === "saving" ? "Saving…" : `Uploading ${pct}%`;
+  const label =
+    job.phase === "converting"
+      ? job.recording
+        ? `Making a small video ${pct}%`
+        : "Making it smaller…"
+      : job.phase === "saving"
+        ? "Saving…"
+        : `Uploading ${pct}%`;
   return (
     <div className="relative w-full aspect-video rounded-xl overflow-hidden ring-2 ring-amber/60 ring-offset-2 ring-offset-surface" role="status" aria-live="polite" aria-label={label}>
       {job.video ? (
@@ -433,7 +535,7 @@ function UploadTile({ job }: { job: Job }) {
       <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-white">
         <span className="text-[12.5px] font-semibold tabular-nums drop-shadow">{label}</span>
         <span className="w-full max-w-[11rem] h-1.5 rounded-full bg-white/25 overflow-hidden">
-          {job.phase === "uploading" ? (
+          {job.phase === "uploading" || (job.phase === "converting" && job.recording) ? (
             <span className="block h-full rounded-full bg-white transition-[width] duration-200 ease-out" style={{ width: `${Math.max(3, pct)}%` }} />
           ) : (
             <span className="block h-full w-1/3 rounded-full bg-white animate-[splash-slide_1.1s_ease-in-out_infinite]" />
@@ -444,7 +546,7 @@ function UploadTile({ job }: { job: Job }) {
         <button
           type="button"
           onClick={job.cancel}
-          aria-label="Cancel the upload"
+          aria-label={job.phase === "converting" ? "Stop making it small" : "Cancel the upload"}
           className="absolute right-1.5 top-1.5 w-7 h-7 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center"
         >
           <CloseIcon className="w-3.5 h-3.5" />

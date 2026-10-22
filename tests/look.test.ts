@@ -69,6 +69,11 @@ ok(
   "your own three colours",
 );
 
+// 1.29.3: Halo, a third style.
+ok(readLook({ glass_style: "halo" }).style === "halo" && same(cleanLookPatch({ style: "halo" }), { style: "halo" }), "Halo is read and kept");
+ok(same(lookAttributes({ ...DEFAULT_LOOK, on: true, style: "halo" }), { glass: "on", glassStyle: "halo", level: "0.5" }), "Halo on <html>");
+ok(same(lookColumns({ style: "halo" }), { glass_style: "halo" }), "Halo's column");
+
 // The washes themselves.
 ok(hexToRgb("#e8630d") === "232 99 13" && hexToRgb("#000000") === "0 0 0", "hex → r g b");
 ok(same(cleanColors(["#ABCDEF"]), ["#abcdef", DEFAULT_CUSTOM[1], DEFAULT_CUSTOM[2]]), "cleanColors fills the gaps");

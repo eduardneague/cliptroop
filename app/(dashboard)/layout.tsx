@@ -16,7 +16,8 @@ import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
 import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
 import { GlassSync } from "@/components/ui/glass";
-import { getLook } from "@/lib/look-server";
+import { getEverywhereBackground, getLook } from "@/lib/look-server";
+import { EverywhereBackdrop } from "@/modules/dashboard/components/backdrop";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
 import { TutorialHost } from "@/components/tutorial/tutorial";
@@ -66,7 +67,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // Everything the shell needs in ONE round trip: profile (with the colour
   // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer, look] = await Promise.all([
+  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer, look, everywhere] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
@@ -85,6 +86,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
     isDeveloper(user),
     // The glass look (1.27.5, 1.28.0): on its own, so a database without 0092 / 0093 just keeps this device's choice.
     getLook(supabase, user!.id),
+    // Your wallpaper behind every page (1.29.4; null unless you chose that, or before 0098).
+    getEverywhereBackground(supabase, user!.id),
   ]);
   const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
@@ -176,7 +179,17 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
               userAvatarUrl={resolvedAvatar}
               userColor={resolvedColor}
             />
-            <main className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+            <main className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+              {everywhere ? (
+                // data-dash-bg: glass over it, and the bars, read the picture (globals.css); drawn once, it stays put between pages.
+                <div data-dash-bg className="contents wall-tone">
+                  <EverywhereBackdrop bg={everywhere} />
+                  {children}
+                </div>
+              ) : (
+                children
+              )}
+            </main>
             <MobileBottomNav developer={developer} />
           </div>
         </div>

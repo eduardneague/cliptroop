@@ -86,7 +86,7 @@ export function PaletteChoice({ value }: { value: string | null }) {
     });
   }
   return (
-    <div role="radiogroup" aria-label="Colour theme" className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div role="radiogroup" aria-label="Colour theme" className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-6">
       {PALETTES.map((p) => {
         const on = p.id === current;
         return (

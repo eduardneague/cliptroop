@@ -75,10 +75,16 @@ export function GlassSync({ look }: { look: Look | null }) {
   return <LiquidLight />;
 }
 
+/** What can catch Liquid's light: widgets, the main pop-ups, the phone tab bar (the CSS draws it on these). */
+const LIT = ".dash-item, .glass-pane, [data-shell='bottom-nav']";
+
 /**
- * Liquid's light (1.28.0): the bright spot on the glass follows the pointer,
- * like light catching real glass as it moves. One listener for the page,
- * a frame at a time, nothing when the look isn't Liquid or motion is off.
+ * Liquid's light (1.28.0; 1.29.3: on the pane you point at only). The rim of
+ * the widget, pop-up or tab bar under the pointer lights up where the
+ * pointer is (--mx / --my on that pane, in its own coordinates), in your
+ * colours (globals.css). One listener for the page, a frame at a time, one
+ * pane touched; nothing when the look isn't Liquid, on touch, or when
+ * motion is off.
  */
 function LiquidLight() {
   useEffect(() => {
@@ -87,14 +93,19 @@ function LiquidLight() {
     let frame = 0;
     let x = 0;
     let y = 0;
+    let pane: HTMLElement | null = null;
     const paint = () => {
       frame = 0;
-      root.style.setProperty("--lx", `${Math.round(x)}px`);
-      root.style.setProperty("--ly", `${Math.round(y)}px`);
+      if (!pane) return;
+      const r = pane.getBoundingClientRect();
+      pane.style.setProperty("--mx", `${Math.round(x - r.left)}px`);
+      pane.style.setProperty("--my", `${Math.round(y - r.top)}px`);
     };
     const onMove = (e: PointerEvent) => {
       if (root.dataset.glassStyle !== "liquid" || e.pointerType === "touch") return;
       if (root.dataset.motion === "off" || (root.dataset.motion !== "on" && reduce.matches)) return;
+      pane = e.target instanceof Element ? (e.target.closest(LIT) as HTMLElement | null) : null;
+      if (!pane) return;
       x = e.clientX;
       y = e.clientY;
       if (!frame) frame = requestAnimationFrame(paint);
@@ -142,9 +153,14 @@ function Segments<T extends string>({ value, options, onChange, label, disabled 
   );
 }
 
-/** The two styles side by side, each drawn small: a few cards over a colour wash. */
+const STYLES: Record<GlassStyle, { name: string; note: string }> = {
+  simple: { name: "Simple", note: "Soft frosted cards and bars" },
+  liquid: { name: "Liquid", note: "Clear like iOS, a light on the edge you point at, floating bars" },
+  halo: { name: "Halo", note: "Soft glass, your colours glowing round the edges" },
+};
+
+/** The three styles side by side, each drawn small: a few cards over a colour wash. */
 function StyleCard({ style, on, onPick }: { style: GlassStyle; on: boolean; onPick: () => void }) {
-  const liquid = style === "liquid";
   return (
     <button
       type="button"
@@ -153,13 +169,13 @@ function StyleCard({ style, on, onPick }: { style: GlassStyle; on: boolean; onPi
       onClick={onPick}
       className={`group text-left rounded-xl border p-2 transition-all ${on ? "border-amber ring-2 ring-amber/30" : "border-line/15 hover:border-line/30"}`}
     >
-      <span className="glass-sample relative block h-20 rounded-lg overflow-hidden" data-sample={style} aria-hidden>
+      <span className="glass-sample relative block h-16 sm:h-20 rounded-lg overflow-hidden" data-sample={style} aria-hidden>
         <span className="glass-sample-card absolute left-2.5 top-2.5 w-[46%] h-[42%]" />
         <span className="glass-sample-card absolute right-2.5 top-2.5 w-[38%] h-[70%]" />
         <span className="glass-sample-bar absolute left-2.5 bottom-2 w-[52%] h-[22%]" />
       </span>
-      <span className="mt-2 px-0.5 block text-[13px] font-semibold">{liquid ? "Liquid" : "Simple"}</span>
-      <span className="block px-0.5 text-[11.5px] text-ink-faint">{liquid ? "Like iOS: bright edges, light that follows the pointer, floating bars" : "Soft frosted cards and bars"}</span>
+      <span className="mt-2 px-0.5 block text-[13px] font-semibold">{STYLES[style].name}</span>
+      <span className="hidden sm:block px-0.5 text-[11.5px] text-ink-faint">{STYLES[style].note}</span>
     </button>
   );
 }
@@ -283,19 +299,19 @@ export function GlassSettings({ initial }: { initial: Look }) {
   const row = "flex flex-col items-start sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mt-4 pt-4 border-t border-line/10";
   return (
     <div>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[13.5px] font-semibold">Glass</div>
-          <div className="text-[11.5px] text-ink-faint">See-through cards and bars across the whole app, over your wallpaper or a soft wash of colour. Off, everything is solid.</div>
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Glass</h2>
+          <div className="mt-1 text-[11.5px] text-ink-faint">See-through cards and bars across the whole app, over your wallpaper or a soft wash of colour. Off, everything is solid.</div>
         </div>
         <Segments label="Glass" value={look.on ? "on" : "off"} options={[{ v: "off", label: "Off" }, { v: "on", label: "On" }]} onChange={(v) => change({ on: v === "on" }, v === "on" ? "Glass on" : "Glass off")} />
       </div>
       {look.on && (
         <div className="mt-4 pl-0 sm:pl-4 sm:border-l-2 sm:border-amber/30 animate-[fadein_.2s_ease]">
           <div className="text-[12.5px] font-semibold mb-2">Style</div>
-          <div role="radiogroup" aria-label="Glass style" className="grid grid-cols-2 gap-3 max-w-md">
-            {(["simple", "liquid"] as const).map((s) => (
-              <StyleCard key={s} style={s} on={look.style === s} onPick={() => look.style !== s && change({ style: s }, s === "liquid" ? "Liquid glass" : "Simple glass")} />
+          <div role="radiogroup" aria-label="Glass style" className="grid grid-cols-3 gap-2 sm:gap-3">
+            {(["simple", "liquid", "halo"] as const).map((s) => (
+              <StyleCard key={s} style={s} on={look.style === s} onPick={() => look.style !== s && change({ style: s }, `${STYLES[s].name} glass`)} />
             ))}
           </div>
           <div className={row}>

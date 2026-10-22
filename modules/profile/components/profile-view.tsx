@@ -97,12 +97,14 @@ export function ProfileView({
   const recent = useMemo(() => (stats ? achievementsFor(stats).filter((a) => a.unlocked).slice(0, 4) : []), [stats]);
   const limits = useMemo(() => limitsFor(shown.layout.items), [shown.layout.items]);
   const data: ShowcaseData = { stats, name: person.name, avatarUrl: person.avatarUrl, color: person.color, isSelf, teams };
-  // The background: while editing, the one picked (from your wallpapers).
+  // The background: while editing, the one picked (from your wallpapers). Once saved, the one saved, from
+  // the moment Save is pressed (1.29.4: it went back to the old one until the page had reloaded, a flash).
   const bg = useMemo(() => {
-    if (!draft) return savedBg;
-    const w = draft.bgPath ? wallpapers.find((x) => x.path === draft.bgPath) : null;
-    return w ? { url: w.url, video: w.video, luma: w.luma } : null;
-  }, [draft, savedBg, wallpapers]);
+    const path = (draft ?? saved).bgPath;
+    if (!draft && path === page.bgPath) return savedBg;
+    const w = path ? wallpapers.find((x) => x.path === path) : null;
+    return w ? { url: w.url, video: w.video, luma: w.luma } : path === page.bgPath ? savedBg : null;
+  }, [draft, saved, page.bgPath, savedBg, wallpapers]);
   const editingItem = shown.layout.items.find((s) => s.id === settingsFor) ?? null;
   const onBoard = new Set(shown.layout.items.map((s) => s.type));
   const missing = (Object.keys(SHOWCASES) as ShowcaseType[]).filter((t) => !onBoard.has(t));

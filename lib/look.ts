@@ -8,9 +8,10 @@ import { DEFAULT_CUSTOM, cleanColors, isWash, washVars, type WashId } from "./wa
  *
  *  - on:      glass at all (off by default). Off means nothing is
  *             see-through anywhere, wallpapers and profiles included (1.29.2).
- *  - style:   "simple" (1.27.5's frosted panes) or "liquid" (like iOS 26's
- *             Liquid Glass: bright rims, a sheen that follows the pointer,
- *             floating bars)
+ *  - style:   "simple" (1.27.5's frosted panes), "liquid" (like iOS 26's
+ *             Liquid Glass: clear panes, a light on the rim you point at,
+ *             floating bars) or "halo" (1.29.3: soft glass with the colours
+ *             behind it glowing round the edges)
  *  - scope:   "cards" (cards, bars and the main pop-ups) or "everywhere"
  *             (every pop-up, menu, toast and floating box too)
  *  - sidebar: the side bar as see-through as the cards (else nearly solid)
@@ -18,7 +19,7 @@ import { DEFAULT_CUSTOM, cleanColors, isWash, washVars, type WashId } from "./wa
  *  - wash, washColors: the colours behind the glass (lib/washes.ts, 1.29.2)
  */
 
-export type GlassStyle = "simple" | "liquid";
+export type GlassStyle = "simple" | "liquid" | "halo";
 export type GlassScope = "cards" | "everywhere";
 export type Look = {
   on: boolean;
@@ -37,7 +38,7 @@ export const LOOK_KEY = "vp-look";
 /** 1.27.5 kept only "on" here; still read when there's no "vp-look" yet. */
 export const OLD_GLASS_KEY = "vp-glass";
 
-export const isGlassStyle = (v: unknown): v is GlassStyle => v === "simple" || v === "liquid";
+export const isGlassStyle = (v: unknown): v is GlassStyle => v === "simple" || v === "liquid" || v === "halo";
 export const isGlassScope = (v: unknown): v is GlassScope => v === "cards" || v === "everywhere";
 export const clampLevel = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : DEFAULT_LOOK.level);
 
@@ -94,7 +95,7 @@ export const WASH_VARS = ["--wash-light", "--wash-dark", "--wash-1", "--wash-2",
 
 export type LookAttributes = {
   glass?: "on";
-  glassStyle?: "liquid";
+  glassStyle?: "liquid" | "halo";
   glassScope?: "everywhere";
   glassSidebar?: "clear";
   /** The colours behind the glass, when they aren't the theme's own. */
@@ -113,7 +114,7 @@ export function lookAttributes(l: Look): LookAttributes {
   const w = washVars(l.wash, l.washColors);
   return {
     glass: "on",
-    ...(l.style === "liquid" ? { glassStyle: "liquid" as const } : {}),
+    ...(l.style === "liquid" ? { glassStyle: "liquid" as const } : l.style === "halo" ? { glassStyle: "halo" as const } : {}),
     ...(l.scope === "everywhere" ? { glassScope: "everywhere" as const } : {}),
     ...(l.sidebar ? { glassSidebar: "clear" as const } : {}),
     ...(w.kind === "none" ? { glassWash: "none" as const } : w.kind === "one" ? { glassWash: "one" as const } : w.kind === "three" ? { glassWash: "three" as const } : {}),

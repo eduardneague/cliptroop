@@ -1,7 +1,8 @@
 /**
  * Saved wallpapers for your dashboard (1.28.0): up to three pictures, GIFs
  * or short videos (profile_wallpapers, migration 0093; the files are in the
- * "dashboard-backgrounds" bucket, your own folder, 25 MB each), one of them
+ * "dashboard-backgrounds" bucket, your own folder; 2 MB each since 1.29.4,
+ * made small before upload: lib/wallpaper-plan.ts), one of them
  * in use (profiles.dashboard_bg_path, 0092). Each keeps how bright its top
  * part is (luma, 0–100), measured on upload, so the greeting over it can be
  * dark or white: whichever reads best over the picture, with the darkening

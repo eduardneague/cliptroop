@@ -45,7 +45,7 @@ export default async function DashboardPage() {
   const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
   const t = new Date();
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings, teamTasks, { data: look }] = await Promise.all([
+  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings, teamTasks, { data: look }, { data: every }] = await Promise.all([
     listMyTasks(currentTeam.id),
     listDone(since, currentTeam.id),
     listTodos(),
@@ -57,6 +57,8 @@ export default async function DashboardPage() {
     listTeamTasks(currentTeam.id),
     // Your background (1.27.5): its own query, so a database before 0092 just shows none.
     supabase.from("profiles").select("dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim").eq("id", user?.id ?? "").maybeSingle(),
+    // On every page (1.29.4, 0098): then the layout draws it, not this page.
+    supabase.from("profiles").select("dashboard_bg_everywhere").eq("id", user?.id ?? "").maybeSingle(),
   ]);
   const name = ((profile?.full_name as string | null) || (profile?.username as string | null) || "there").split(" ")[0];
   const bgPath = look?.dashboard_bg_on && user && isOwnBgPath(look.dashboard_bg_path, user.id) ? look.dashboard_bg_path : null;
@@ -68,7 +70,7 @@ export default async function DashboardPage() {
       data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts, meetings, teamTasks }}
     />
   );
-  if (!bgPath) return studio;
+  if (!bgPath || (every as { dashboard_bg_everywhere?: boolean } | null)?.dashboard_bg_everywhere) return studio;
   // How bright it is behind the greeting (1.28.0, measured on upload): the words turn dark or white to match. Before 0093: unknown.
   const { data: wall } = await supabase.from("profile_wallpapers").select("id, luma").eq("path", bgPath).maybeSingle();
   const luma = clampLuma(wall?.luma);

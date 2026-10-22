@@ -110,15 +110,15 @@ begin
 end;
 $$;
 
--- 5. The bucket: public, 25 MB, pictures and videos only.
+-- 5. The bucket: public, pictures and videos only; 2 MB at most since 0098 (25 MB in 0092).
 do $$
 begin
   if not exists (
     select 1 from storage.buckets
-     where id = 'dashboard-backgrounds' and public and file_size_limit = 26214400
+     where id = 'dashboard-backgrounds' and public and file_size_limit = 2097152
        and allowed_mime_types @> array['image/gif', 'video/mp4'] and not (allowed_mime_types @> array['text/html'])
   ) then
-    raise exception '5: the dashboard-backgrounds bucket should be public, 25 MB, pictures and videos';
+    raise exception '5: the dashboard-backgrounds bucket should be public, 2 MB, pictures and videos';
   end if;
 end;
 $$;

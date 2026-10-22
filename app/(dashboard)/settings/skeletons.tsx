@@ -91,53 +91,66 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
     );
   }
   if (tab === "preferences") {
-    const rows = [
-      ["Appearance", "Switch between light and dark mode", "h-9 w-9"],
-      ["Animations", "Soft motion when pages, lists and popups open. “Match device” turns them off if your device asks for less motion.", "h-9 w-56"],
-      ["Sounds", "Quiet little sounds when you check things off, save, get a notification or drag something.", "h-9 w-24"],
-    ];
+    // 1.29.3: the four groups, as the tab draws them.
+    const card = "rounded-xl border border-line/10 bg-surface p-6";
+    const row = (title: string, text: string, size: string, first = false) => (
+      <div className={`flex items-center justify-between gap-4 ${first ? "" : "mt-5 pt-5 border-t border-line/10"}`}>
+        <div>
+          <div className="text-[13.5px] font-semibold">{title}</div>
+          <div className="text-[11.5px] text-ink-faint">{text}</div>
+        </div>
+        <Skeleton className={`${size} rounded-lg flex-shrink-0`} />
+      </div>
+    );
     return (
-      <section className="rounded-xl border border-line/10 bg-surface p-6" aria-hidden>
-        <h2 className={`${H2} mb-4`}>Preferences</h2>
-        {rows.map(([title, text, size], i) => (
-          <div key={title} className={`flex items-center justify-between gap-4 ${i ? "mt-5 pt-5 border-t border-line/10" : ""}`}>
-            <div>
-              <div className="text-[13.5px] font-semibold">{title}</div>
-              <div className="text-[11.5px] text-ink-faint">{text}</div>
+      <div className="space-y-6" aria-hidden>
+        <div className="flex items-center gap-2">
+          {["Mode and colours", "Glass", "Wallpaper", "Motion and sound"].map((l) => (
+            <span key={l} className="whitespace-nowrap rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[12.5px] font-semibold text-ink-soft">
+              {l}
+            </span>
+          ))}
+        </div>
+        <section className={card}>
+          <h2 className={`${H2} mb-4`}>Mode and colours</h2>
+          {row("Light or dark", "Switch between light and dark mode.", "h-9 w-9", true)}
+          <div className="mt-5 pt-5 border-t border-line/10">
+            <div className="text-[13.5px] font-semibold">Colour theme</div>
+            <div className="text-[11.5px] text-ink-faint mb-3">
+              The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.
             </div>
-            <Skeleton className={`${size} rounded-lg flex-shrink-0`} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-24 rounded-xl" />
+              ))}
+            </div>
           </div>
-        ))}
-        <div className="mt-5 pt-5 border-t border-line/10">
-          <div className="text-[13.5px] font-semibold">Colours</div>
-          <div className="text-[11.5px] text-ink-faint mb-3">
-            The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-16 rounded-xl" />
-            ))}
-          </div>
-        </div>
-        {/* 1.27.5: the glass look and the dashboard background. */}
-        <div className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10">
-          <div>
-            <div className="text-[13.5px] font-semibold">Glass</div>
-            <div className="text-[11.5px] text-ink-faint">Frosted, see-through cards and bars over a soft wash of your colours, across the whole app. Works with every colour theme, light and dark.</div>
-          </div>
-          <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
-        </div>
-        <div className="mt-5 pt-5 border-t border-line/10">
+        </section>
+        <section className={card}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[13.5px] font-semibold">Dashboard background</div>
-              <div className="text-[11.5px] text-ink-faint">A picture, a GIF or a short video behind your dashboard, like a profile background. Only you see it; the widgets turn frosted so it shows through.</div>
+              <h2 className={H2}>Glass</h2>
+              <div className="mt-1 text-[11.5px] text-ink-faint">See-through cards and bars across the whole app, over your wallpaper or a soft wash of colour. Off, everything is solid.</div>
+            </div>
+            <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
+          </div>
+        </section>
+        <section className={card}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className={H2}>Wallpaper</h2>
+              <div className="mt-1 text-[11.5px] text-ink-faint">Pictures, GIFs or short videos behind your dashboard, like a profile background.</div>
             </div>
             <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
           </div>
           <Skeleton className="mt-3 aspect-video w-full max-w-[17rem] rounded-xl" />
-        </div>
-      </section>
+        </section>
+        <section className={card}>
+          <h2 className={`${H2} mb-4`}>Motion and sound</h2>
+          {row("Animations", "Soft motion when pages, lists and popups open. “Match device” turns them off if your device asks for less motion.", "h-9 w-56", true)}
+          {row("Sounds", "Quiet little sounds when you check things off, save, get a notification or drag something.", "h-9 w-24")}
+        </section>
+      </div>
     );
   }
   if (tab === "account") {

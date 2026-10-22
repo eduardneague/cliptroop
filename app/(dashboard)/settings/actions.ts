@@ -158,6 +158,8 @@ export async function setLook(patch: Partial<Look>): Promise<{ success?: true; e
   if (error) {
     // Before 0093 (or 0092) the columns don't exist: it stays on this device, and says so.
     if (missing(error)) return { error: "Saved on this device only (the database needs migration 0093).", deviceOnly: true };
+    // Halo before 0097: the database only knows Simple and Liquid yet.
+    if (error.code === "23514" && clean.style === "halo") return { error: "Halo is on this device only until the database update (migration 0097).", deviceOnly: true };
     return { error: "Couldn't save that setting. Try again." };
   }
   revalidatePath("/", "layout");
@@ -174,15 +176,17 @@ export async function setLook(patch: Partial<Look>): Promise<{ success?: true; e
  * The dashboard background on or off, and how much it's darkened (1.27.5).
  * Which picture: saved wallpapers (wallpaper-actions.ts, 1.28.0).
  */
-export async function updateDashboardBackground(patch: { on?: boolean; dim?: number }): Promise<{ success?: true; error?: string }> {
+export async function updateDashboardBackground(patch: { on?: boolean; dim?: number; everywhere?: boolean }): Promise<{ success?: true; error?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
-  const row: { dashboard_bg_on?: boolean; dashboard_bg_dim?: number } = {};
+  const row: { dashboard_bg_on?: boolean; dashboard_bg_dim?: number; dashboard_bg_everywhere?: boolean } = {};
   if (patch.on !== undefined) row.dashboard_bg_on = !!patch.on;
   if (patch.dim !== undefined) row.dashboard_bg_dim = clampDim(patch.dim);
+  // 1.29.4: behind every page, not only the dashboard.
+  if (patch.everywhere !== undefined) row.dashboard_bg_everywhere = !!patch.everywhere;
   if (!Object.keys(row).length) return { success: true };
   if (row.dashboard_bg_on) {
     // On needs a picture.
@@ -191,9 +195,12 @@ export async function updateDashboardBackground(patch: { on?: boolean; dim?: num
   }
   const { error } = await supabase.from("profiles").update(row).eq("id", user.id);
   if (error) {
+    if (/dashboard_bg_everywhere/.test(error.message) || (error.code === "PGRST204" && row.dashboard_bg_everywhere !== undefined)) return { error: "This needs the latest database update (migration 0098)." };
     if (/dashboard_bg/.test(error.message) || error.code === "PGRST204") return { error: "This needs the latest database update (migration 0092)." };
     return { error: "Couldn't save. Try again." };
   }
+  // Every page draws it now (the layout), or stops drawing it.
+  if (row.dashboard_bg_everywhere !== undefined) revalidatePath("/", "layout");
   revalidatePath("/dashboard");
   revalidatePath("/settings");
   return { success: true };

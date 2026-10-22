@@ -1,5 +1,5 @@
--- Checks for 0096: the colours behind the glass. Run by
--- scripts/db/test-from-scratch.sh; each check raises on failure.
+-- Checks for 0096 (the colours behind the glass) and 0097 (the Halo style).
+-- Run by scripts/db/test-from-scratch.sh; each check raises on failure.
 \set ON_ERROR_STOP 1
 set client_min_messages = warning;
 
@@ -75,6 +75,31 @@ begin
   end if;
   if (select glass_wash from profiles where id = '00000000-0000-4000-8000-0000000096a2') is not null then
     raise exception '3: someone else''s colours must not change';
+  end if;
+end;
+$$;
+
+-- 4. 0097: Halo is a style; unknown ones still aren't; signed in, you can pick it.
+do $$
+begin
+  update profiles set glass_style = 'halo' where id = '00000000-0000-4000-8000-0000000096a1';
+  update profiles set glass_style = 'simple' where id = '00000000-0000-4000-8000-0000000096a1';
+  begin
+    update profiles set glass_style = 'chrome' where id = '00000000-0000-4000-8000-0000000096a1';
+    raise exception '4: an unknown style should still be refused';
+  exception when check_violation then null;
+  end;
+end;
+$$;
+begin;
+  select pg_temp.as_user('00000000-0000-4000-8000-0000000096a1');
+  set local role authenticated;
+  update profiles set glass_style = 'halo' where id = '00000000-0000-4000-8000-0000000096a1';
+commit;
+do $$
+begin
+  if (select glass_style from profiles where id = '00000000-0000-4000-8000-0000000096a1') <> 'halo' then
+    raise exception '4: you should be able to pick Halo';
   end if;
 end;
 $$;

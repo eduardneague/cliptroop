@@ -47,7 +47,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const user = await getCachedUser();
 
-  const [{ data: profile }, { data: memberships }, { data: paletteRow }, look, walls, pageRes] = await Promise.all([
+  const [{ data: profile }, { data: memberships }, { data: paletteRow }, look, walls, pageRes, every, files] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, full_name, email, bio, avatar_url, teams_visible, animations_enabled, sounds_enabled")
@@ -71,15 +71,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       : Promise.resolve({ data: null, error: null }),
     // Your profile page (1.28.0): the bio lives there now, and whether it's public.
     tab === "profile" ? supabase.from("profile_pages").select("public, bio").eq("user_id", user!.id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    // Your wallpaper on every page (1.29.4): its own query, so a database before 0098 just hides the choice.
+    tab === "preferences"
+      ? supabase.from("profiles").select("dashboard_bg_everywhere").eq("id", user!.id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    // How big each wallpaper file is (1.29.4: ones over 2 MB, from before, can be made lighter).
+    tab === "preferences" ? supabase.storage.from(DASH_BG_BUCKET).list(user!.id, { limit: 100 }) : Promise.resolve({ data: null, error: null }),
   ]);
   const pageRow = pageRes.data as { public?: boolean; bio?: string | null } | null;
   const glassLook = tab === "preferences" ? ((await getLook(supabase, user!.id)) ?? DEFAULT_LOOK) : DEFAULT_LOOK;
   const lookReady = !look.error;
   const lookRow = (look.data ?? null) as { dashboard_bg_on?: boolean; dashboard_bg_path?: string | null; dashboard_bg_dim?: number } | null;
   const bgPath = lookRow?.dashboard_bg_path && isOwnBgPath(lookRow.dashboard_bg_path, user!.id) ? lookRow.dashboard_bg_path : null;
+  const sizes = new Map<string, number | null>(
+    ((files.data ?? []) as { name: string; metadata?: { size?: number } | null }[]).map((f) => [`${user!.id}/${f.name}`, typeof f.metadata?.size === "number" ? f.metadata.size : null]),
+  );
   const wallpapers: WallpaperItem[] = ((walls.data ?? []) as { id: string; path: string; luma: number | null }[])
     .filter((w) => isOwnBgPath(w.path, user!.id))
-    .map((w) => ({ id: w.id, path: w.path, url: supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(w.path).data.publicUrl, luma: clampLuma(w.luma) }));
+    .map((w) => ({ id: w.id, path: w.path, url: supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(w.path).data.publicUrl, luma: clampLuma(w.luma), size: sizes.get(w.path) ?? null }));
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
   // Account tab: the report form (with what you sent before), and for the
   // developer the Developer and App setup pages. One round.
@@ -282,41 +291,42 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
       )}
       {tab === "preferences" && (
-        <div>
-        <section className="rounded-xl border border-line/10 bg-surface p-6">
-          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">
-            Preferences
-          </h2>
-          <div id="appearance" className="flex items-center justify-between rounded-lg scroll-mt-24">
-            <div>
-              <div className="text-[13.5px] font-semibold">Appearance</div>
-              <div className="text-[11.5px] text-ink-faint">Switch between light and dark mode</div>
+        // 1.29.3: in four groups (mode and colours, glass, wallpaper, motion and sound), with a way to jump to each.
+        <div className="space-y-6">
+          <nav aria-label="Preferences" className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+            {[
+              ["#look", "Mode and colours"],
+              ["#glass", "Glass"],
+              ["#background", "Wallpaper"],
+              ["#motion", "Motion and sound"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="whitespace-nowrap rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 transition-colors">
+                {label}
+              </a>
+            ))}
+          </nav>
+
+          <section id="look" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">Mode and colours</h2>
+            <div id="appearance" className="flex items-center justify-between gap-4 rounded-lg scroll-mt-24">
+              <div>
+                <div className="text-[13.5px] font-semibold">Light or dark</div>
+                <div className="text-[11.5px] text-ink-faint">Switch between light and dark mode.</div>
+              </div>
+              <ThemeToggle />
             </div>
-            <ThemeToggle />
-          </div>
-          <div id="animations" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
-            <div>
-              <div className="text-[13.5px] font-semibold">Animations</div>
-              <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. &ldquo;Match device&rdquo; turns them off if your device asks for less motion.</div>
+            <div id="colours" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+              <div className="text-[13.5px] font-semibold">Colour theme</div>
+              <div className="text-[11.5px] text-ink-faint mb-3">The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.</div>
+              <PaletteChoice value={palette} />
             </div>
-            <AnimationsChoice pref={(profile?.animations_enabled as boolean | null) ?? null} />
-          </div>
-          <div id="sounds" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
-            <div>
-              <div className="text-[13.5px] font-semibold">Sounds</div>
-              <div className="text-[11.5px] text-ink-faint">Quiet little sounds when you check things off, save, get a notification or drag something.</div>
-            </div>
-            <SoundsChoice on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
-          </div>
-          <div id="colours" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
-            <div className="text-[13.5px] font-semibold">Colours</div>
-            <div className="text-[11.5px] text-ink-faint mb-3">The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.</div>
-            <PaletteChoice value={palette} />
-          </div>
-          <div id="glass" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+          </section>
+
+          <section id="glass" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
             <GlassSettings initial={glassLook} />
-          </div>
-          <div id="background" className="mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+          </section>
+
+          <section id="background" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
             <DashboardBackground
               userId={user!.id}
               ready={lookReady}
@@ -325,10 +335,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               current={bgPath}
               dim={clampDim(lookRow?.dashboard_bg_dim)}
               wallpapers={wallpapers}
+              everywhere={!!(every.data as { dashboard_bg_everywhere?: boolean } | null)?.dashboard_bg_everywhere}
+              everywhereReady={!every.error}
             />
-          </div>
-        </section>
+          </section>
 
+          <section id="motion" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">Motion and sound</h2>
+            <div id="animations" className="flex flex-col items-start sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 rounded-lg scroll-mt-24">
+              <div>
+                <div className="text-[13.5px] font-semibold">Animations</div>
+                <div className="text-[11.5px] text-ink-faint">Soft motion when pages, lists and popups open. &ldquo;Match device&rdquo; turns them off if your device asks for less motion.</div>
+              </div>
+              <AnimationsChoice pref={(profile?.animations_enabled as boolean | null) ?? null} />
+            </div>
+            <div id="sounds" className="flex items-center justify-between gap-4 mt-5 pt-5 border-t border-line/10 rounded-lg scroll-mt-24">
+              <div>
+                <div className="text-[13.5px] font-semibold">Sounds</div>
+                <div className="text-[11.5px] text-ink-faint">Quiet little sounds when you check things off, save, get a notification or drag something.</div>
+              </div>
+              <SoundsChoice on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+            </div>
+          </section>
         </div>
       )}
       {tab === "account" && (

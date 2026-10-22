@@ -374,6 +374,57 @@ over very dark (light mode) or very bright (dark mode) pictures, and
 `--ink-soft` / `--ink-faint` are a step stronger on those panes. A picture
 that suits the words changes nothing (as clear as the slider).
 
+**Liquid reworked, Halo, Preferences (1.29.3, 0097).** Liquid has no sheen
+and no white glow along the top any more: `--liquid-rim` is a hairline of
+light on the top edge and a faint one round the rest, `--glass-edge` is
+faint, shadows are soft, and the top bar's fade carries only a little paper
+(`--glass-tint`-based). The pointer's light is per pane: `LiquidLight`
+(`components/ui/glass.tsx`) finds the pane under the pointer (`.dash-item`,
+`.glass-pane`, the phone tab bar) and sets `--mx` / `--my` on it; the CSS
+draws a rim (`::after`, ring mask) and a faint light under the words
+(`::before`, `z-index: -1`) only on `:hover`, in `--glint-rgb` (the wash's
+first colour). Nothing on touch. Halo (`glass_style = 'halo'`, 0097): a ring
+(`::before`, ring mask) in `--halo-a / b / c` (the wash's colours: the base
+and its two neighbours, or a blend's / your own three), a glow of
+`--halo-a`, brighter on hover; ordinary cards get a tinted border and glow.
+A scroll container can't carry these pseudo-element rings (they'd scroll
+with it), so the side bar and scrolling menus get a border or shadow
+instead. All `.glass-pane` pop-ups (dialogs, the search palette, the bell,
+menus) follow the slider (`--glass-pop`) in both scopes. At level 0
+(`data-glass-opaque`) the bars are solid too. Settings → Preferences is in
+four sections (`#look` with `#appearance` and `#colours`, `#glass`,
+`#background`, `#motion` with `#animations` and `#sounds`); the search
+catalog and HashFlash use those ids, keep them.
+
+**Small wallpapers, on every page (1.29.4, 0098).** Every wallpaper is made
+small in the browser before it's uploaded (`lib/wallpaper-convert.ts`
+`prepareWallpaper`; the pure rules and tests in `lib/wallpaper-plan.ts`):
+pictures are drawn into a canvas and saved as WebP at the first size
+(2560×1600 down to 1280×800) and quality that fit in 2 MB (`WALL_MAX_BYTES`);
+videos and anything that moves (GIF, APNG, animated WebP / AVIF, found by
+their bytes) are played into a canvas and recorded as WebM with
+`MediaRecorder` at `bitrateFor(seconds)` (a long one at 1280×720), keeping
+the first 30 seconds; it takes as long as the video plays, so the tile shows
+its progress and can be stopped. A recording has no length in its header:
+`webmWithDuration` writes the Duration into its Info. A WebM already under
+2 MB stays as it is; a small moving GIF stays a GIF where the browser can't
+record. The bucket takes 2 MB at most (0098), so nothing bigger gets in
+another way. Settings lists each file's size (storage `list`), and one from
+before over 2 MB gets "Make it lighter" (fetches it, runs the same steps,
+replaces it). `profiles.dashboard_bg_everywhere`: the layout reads it with
+`getEverywhereBackground()` and draws `EverywhereBackdrop` (`data-global-bg`)
+once, inside a `[data-dash-bg]` wrapper round every page, so it never
+remounts between pages; the dashboard then skips its own. Other pages darken
+it to at least `EVERYWHERE_DIM` (70 %) so words made for the paper read over
+it; ordinary cards there keep at least 0.8 of their pane with glass on (no
+blur of their own). A page with its own (`data-own-bg`, a profile's) hides
+the global one. `DashboardBackdrop` keeps the old picture until a new one
+has loaded and fades it in (no flash when switching or saving a profile);
+the profile keeps the saved background from the moment Save is pressed. A
+page with a wallpaper fades in instead of rising (`.motion-page >
+[data-dash-bg]`): the rise's transform made the fixed wallpaper fill only
+the page's box while it ran.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

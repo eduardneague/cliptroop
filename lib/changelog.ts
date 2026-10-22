@@ -23,6 +23,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.29.4",
+    date: "2026-10-22",
+    title: "Light wallpapers, on every page if you like",
+    changes: [
+      { kind: "better", text: "Every wallpaper is made small before it's uploaded, 2 MB at most, so your dashboard and profile never wait for it: pictures become WebP, videos and GIFs a WebM video of up to 30 seconds. MOV videos work too." },
+      { kind: "new", text: "Wallpapers you added before that and are over 2 MB show their size and a Make it lighter button: the same picture or video, small." },
+      { kind: "new", text: "On every page: your wallpaper behind the whole app, not just the dashboard (Settings → Preferences → Wallpaper). Other pages show it darker so their words stay easy to read, and it stays put as you move around." },
+      { kind: "fixed", text: "Saving your profile no longer flashes the old background, and switching wallpapers fades from one to the other." },
+      { kind: "fixed", text: "A profile's background fills the whole screen from the first moment (it could sit in a box while the page appeared)." },
+    ],
+  },
+  {
+    version: "1.29.3",
+    date: "2026-10-22",
+    title: "Liquid glass reworked, a third style, a tidier Preferences",
+    changes: [
+      { kind: "better", text: "Liquid glass blends into what's behind it: no white band along the top and no bright sheen, just a hairline of light on each edge and soft shadows." },
+      { kind: "better", text: "The light that follows the pointer only shows on the widget or pop-up you point at, right where you point, in your colours instead of white." },
+      { kind: "new", text: "A third glass style, Halo: soft glass with your colours glowing round the edges. It uses the colours behind the glass, so it works with your theme, a blend or your own three." },
+      { kind: "better", text: "The search window (Ctrl K), the bell and other pop-ups follow the see-through slider too." },
+      { kind: "fixed", text: "With the slider at 0, the top and bottom bars are solid too." },
+      { kind: "better", text: "Settings → Preferences is in four groups (mode and colours, glass, wallpaper, motion and sound) with a row at the top to jump to each. The colour themes take less room." },
+    ],
+  },
+  {
     version: "1.29.2",
     date: "2026-10-21",
     title: "Glass on means glass, off means solid",

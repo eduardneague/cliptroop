@@ -14,7 +14,7 @@ const YOU = "bbbbbbbb-0000-4000-8000-000000000002";
 
 ok(bgExtension("image/gif") === "gif" && bgExtension("video/webm") === "webm" && bgExtension("IMAGE/JPEG") === "jpg", "pictures, GIFs and videos have an extension");
 ok(bgExtension("image/svg+xml") === null && bgExtension("text/html") === null && bgExtension("video/quicktime") === null, "nothing else (an SVG could carry a script; QuickTime doesn't play everywhere)");
-ok(DASH_BG_ACCEPT.split(",").length === 7 && DASH_BG_ACCEPT.includes("image/gif"), "the file picker asks for the same seven");
+ok(DASH_BG_ACCEPT.split(",").length === 8 && DASH_BG_ACCEPT.includes("image/gif"), "the file picker asks for the seven it stores, and MOV (1.29.4: made a WebM before it's stored)");
 ok(bgKind(`${ME}/1-dusk.webm`) === "video" && bgKind(`${ME}/1-dusk.MP4`) === "video" && bgKind(`${ME}/1-dusk.gif`) === "image", "a video by its name, everything else a picture");
 
 const p = bgPathFor(ME, "My Summer Wallpaper (4K).GIF", "image/gif", 1761000000000);
@@ -26,7 +26,9 @@ ok(!isOwnBgPath(`${ME}/../${YOU}/x.png`, ME) && !isOwnBgPath(`${ME}/sub/x.png`, 
 ok(isOwnBgPath(`${ME.toUpperCase().toLowerCase()}/a.jpeg`, ME) && isOwnBgPath(`${ME}/a.avif`, ME), "jpeg and avif too");
 
 ok(clampDim(55) === 55 && clampDim(-3) === 0 && clampDim(95) === 80 && clampDim(32.6) === 33 && clampDim("40") === 30 && clampDim(NaN) === 30, "darkened 0–80 %, else the default");
-ok(bgFileProblem({ type: "image/gif", size: 24 * 1024 * 1024 }) === null, "a 24 MB GIF is fine");
+ok(bgFileProblem({ type: "image/gif", size: 1.9 * 1024 * 1024 }) === null, "a 1.9 MB GIF can be stored");
+ok(!!bgFileProblem({ type: "video/webm", size: 2 * 1024 * 1024 + 1 }), "over 2 MB can't (1.29.4: it's made smaller first)");
+ok(DASH_BG_ACCEPT.includes("video/quicktime"), "the picker takes MOV too (it's made a WebM)");
 ok(!!bgFileProblem({ type: "image/gif", size: DASH_BG_MAX_BYTES + 1 }) && !!bgFileProblem({ type: "application/pdf", size: 10 }), "too big, or not a picture or video: says why");
 
 const enc = (s: string) => new TextEncoder().encode(s);
