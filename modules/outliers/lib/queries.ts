@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/avatar";
 import { forKind, mergeFormats, exampleIds, type Insights, type KindInsights } from "./insights";
 import type { TemplateStat } from "./skeleton";
-import type { AudienceData, BlockedChannel, ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, Verdict, VideoDetail, VideoPage } from "./types";
+import type { AudienceData, AudiencePair, BlockedChannel, ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, Verdict, VideoDetail, VideoPage } from "./types";
 
 /*
  * Reading Outliers for the pages (1.27.0), as the person: the database
@@ -265,7 +265,7 @@ export async function getVideoDetail(teamId: string, id: string): Promise<VideoD
   const v = d.video as Row;
   const c = (d.channel ?? {}) as Row;
   const base = toVideo({ ...v, ch_title: c.title, ch_handle: c.handle, ch_avatar: c.avatar_url, ch_subs: c.subscribers, ch_usual: v.kind === "short" ? c.short_median : c.long_median, ch_published_at: c.published_at });
-  const rpm = await teamRpm(supabase, teamId, String(v.kind));
+  const [rpm, own] = await Promise.all([teamRpm(supabase, teamId, String(v.kind)), ownNumbers(supabase, teamId, id)]);
   return {
     video: {
       ...base,
@@ -291,8 +291,39 @@ export async function getVideoDetail(teamId: string, id: string): Promise<VideoD
     tracked: d.tracked === true,
     blocked: d.blocked === true,
     niches: (d.niches as string[] | undefined) ?? [],
-    earnings: rpm && base.views !== null ? { ...rpm, estimate: Math.round((base.views / 1000) * rpm.rpm) } : null,
+    // Your own video: what it really earned is on its Analytics page, so no estimate here.
+    earnings: !own && rpm && base.views !== null ? { ...rpm, estimate: Math.round((base.views / 1000) * rpm.rpm) } : null,
+    own,
   };
+}
+
+/**
+ * One of the team's own videos (1.31.8): its row in the team's analytics (YouTube Analytics), with engaged views,
+ * which YouTube gives only to a channel's owner. Null for anyone else's video (or before 0079, or on any error).
+ */
+async function ownNumbers(supabase: Supa, teamId: string, videoId: string): Promise<VideoDetail["own"]> {
+  try {
+    const { data, error } = await supabase.from("analytics_content").select("views, engaged_views, avg_view_pct").eq("team_id", teamId).eq("platform", "youtube").eq("external_id", videoId).maybeSingle();
+    if (error || !data) return null;
+    const r = data as Row;
+    return { views: num(r.views), engaged: num(r.engaged_views), avgPct: num(r.avg_view_pct) };
+  } catch {
+    return null;
+  }
+}
+
+/** Which of a channel's videos sent viewers to which of the team's (1.31.8; [] before 0106 or until the next daily read). */
+function audiencePairs(v: unknown): AudiencePair[] {
+  if (!Array.isArray(v)) return [];
+  const out: AudiencePair[] = [];
+  for (const p of v as Row[]) {
+    const ours = str(p?.ours);
+    const from = str(p?.from);
+    const views = num(p?.views);
+    if (!ours || !from || views === null) continue;
+    out.push({ ours, oursTitle: str(p.ours_title), oursThumb: str(p.ours_thumb), from, fromTitle: str(p.from_title), views });
+  }
+  return out.sort((a, b) => b.views - a.views);
 }
 
 export async function getChannelDetail(teamId: string, id: string): Promise<ChannelDetail | null> {
@@ -331,7 +362,7 @@ export async function getChannelDetail(teamId: string, id: string): Promise<Chan
     saves: ((d.saves as Row[] | undefined) ?? []).map((s) => ({ id: String(s.id), folderId: str(s.folder_id) })),
     niches,
     similar,
-    audience: d.audience ? { views: num((d.audience as Row).views) ?? 0, videos: num((d.audience as Row).videos) ?? 0, ours: num((d.audience as Row).ours) ?? 0 } : null,
+    audience: d.audience ? { views: num((d.audience as Row).views) ?? 0, videos: num((d.audience as Row).videos) ?? 0, ours: num((d.audience as Row).ours) ?? 0, pairs: audiencePairs((d.audience as Row).pairs) } : null,
     pending: !c.scanned_at,
   };
 }

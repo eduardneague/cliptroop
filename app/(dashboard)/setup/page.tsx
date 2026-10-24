@@ -365,6 +365,33 @@ export default async function SetupPage() {
           timer reached the app. &ldquo;No rows returned&rdquo; means the timer was never set up on this project: tell Claude.
         </Where>
       </Section>
+
+      <Section
+        n={9}
+        title="Supabase: password rules"
+        intro={
+          <p>
+            The app checks every new password (at least 8 characters, not a common one, not the person&rsquo;s email or name). Supabase should check too, so going around the
+            app gets nowhere. Same project → Authentication → <b>Sign In / Providers</b> → <b>Email</b>.
+          </p>
+        }
+      >
+        <Open href={sb("auth/providers")} label={`Open Sign In / Providers (${projectWord})`} />
+        <Where>
+          <b>Minimum password length</b>: 8. <b>Password requirements</b>: leave &ldquo;No required characters&rdquo; (they make passwords harder to remember, not harder to
+          guess). <b>Secure password change</b>: on (only a sign-in from the last 24 hours can change a password; the app signs you in again when you change yours in
+          Settings, and a reset link is a fresh sign-in). If it&rsquo;s there, <b>Require current password when updating</b>: on. On the Pro plan, <b>Prevent use of leaked
+          passwords</b>: on. Save.
+        </Where>
+        <Where>
+          Authentication → <b>Emails</b>: if there&rsquo;s a <b>Password changed</b> notification, turn it on, so someone whose password was changed hears about it (and
+          can reset it if it wasn&rsquo;t them).
+        </Where>
+        <Where>
+          A new password signs out every other device signed in to that account: the app&rsquo;s own actions stop there at once, the rest when that device&rsquo;s
+          sign-in token runs out (an hour at most, Supabase&rsquo;s default).
+        </Where>
+      </Section>
     </div>
   );
 }

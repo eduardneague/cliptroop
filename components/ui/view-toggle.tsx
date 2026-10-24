@@ -42,7 +42,7 @@ export function ViewToggle({
               e.preventDefault();
               if (value === mode) return;
               try {
-                document.cookie = `${cookie}=${mode}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+                document.cookie = `${cookie}=${mode}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${location.protocol === "https:" ? "; secure" : ""}`;
               } catch {
                 /* no cookies: the address still says which */
               }

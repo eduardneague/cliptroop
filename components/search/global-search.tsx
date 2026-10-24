@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { signOut, switchTeam } from "@/app/(dashboard)/actions";
+import { LOGOUT_CONFIRM } from "@/components/ui/logout-button";
 import { syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
 import { setSounds } from "@/app/(dashboard)/settings/actions";
 import { profileHref } from "@/lib/profile-link";
@@ -303,12 +304,7 @@ export function GlobalSearch({
           });
           return;
         case "logout":
-          void confirm({
-            title: "Log out?",
-            description: "You'll need your email and password to sign back in. Notifications on this device stop until you do.",
-            confirmLabel: "Log out",
-            cancelLabel: "Stay signed in",
-          }).then((ok) => {
+          void confirm(LOGOUT_CONFIRM).then((ok) => {
             if (ok) startTransition(() => signOut());
           });
           return;

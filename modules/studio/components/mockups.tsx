@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 /** One video on the fake page (yours or a placeholder). */
 export type MockCard = {
@@ -189,12 +190,9 @@ function Thumb({ c, p, radius, width }: { c: MockCard; p: Pal; radius: number; w
 }
 
 function Avatar({ c, size }: { c: MockCard; size: number }) {
-  return c.avatar ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={c.avatar} alt="" loading="lazy" style={{ width: size, height: size, borderRadius: size, objectFit: "cover", flexShrink: 0 }} />
-  ) : (
-    <span style={{ width: size, height: size, borderRadius: size, background: c.mine ? "#e8630d" : "#9ca3af", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: size * 0.42, fontFamily: font }}>
-      {c.channel.slice(0, 1).toUpperCase()}
+  return (
+    <span style={{ width: size, height: size, borderRadius: size, background: c.mine ? "#e8630d" : "#9ca3af", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: size * 0.42, fontFamily: font, overflow: "hidden" }}>
+      <AvatarImg src={c.avatar} fallback={c.channel.slice(0, 1).toUpperCase()} />
     </span>
   );
 }

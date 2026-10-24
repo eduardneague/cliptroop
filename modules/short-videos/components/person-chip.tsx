@@ -1,4 +1,5 @@
 import { initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function PersonAvatar({
   name,
@@ -16,12 +17,7 @@ export function PersonAvatar({
       className={`${className} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
       style={{ background: color }}
     >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img loading="lazy" decoding="async" src={avatarUrl} alt="" className="w-full h-full object-cover" />
-      ) : (
-        initialsFor(name)
-      )}
+      <AvatarImg src={avatarUrl} fallback={initialsFor(name)} />
     </span>
   );
 }

@@ -13,6 +13,7 @@ import { readProfileLayout } from "@/modules/profile/layout";
 import { ProfileView } from "@/modules/profile/components/profile-view";
 import { bgKind, DASH_BG_BUCKET, isOwnBgPath } from "@/lib/dashboard-bg";
 import { clampLuma } from "@/lib/wallpapers";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export async function generateMetadata({
   params,
@@ -97,12 +98,7 @@ export default async function PublicProfilePage({
       <div className="px-4 sm:px-10 py-8 sm:py-14 w-full max-w-md mx-auto">
         <div className="rounded-2xl border border-line/10 bg-surface p-8 flex flex-col items-center text-center">
           <span className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl overflow-hidden" style={{ background: color }}>
-            {profile.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img decoding="async" src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initialsFor(name)
-            )}
+            <AvatarImg src={profile.avatar_url} fallback={initialsFor(name)} />
           </span>
           <h1 className="mt-4 font-display text-2xl font-semibold">{name}</h1>
           <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-ink-faint">

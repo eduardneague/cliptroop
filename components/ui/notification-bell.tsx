@@ -29,6 +29,7 @@ import { periodPhrase } from "@/modules/objectives/lib/periods";
 import { emptyOverlay, leaveDelays, putBack, rowWithOverlay, withOverlay } from "@/lib/notification-optimism";
 import { useSwipeAway } from "./use-swipe-away";
 import { motionReduced } from "./count-up";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 const PLATFORM_NAMES: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 
@@ -194,12 +195,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
           className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden"
           style={{ background: "#888" }}
         >
-          {m.actor.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img loading="lazy" decoding="async" src={m.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            initialsFor(m.actor.name)
-          )}
+          <AvatarImg src={m.actor.avatarUrl} fallback={initialsFor(m.actor.name)} />
         </span>
         {TypeIcon && (
           <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-[5px] bg-surface ring-1 ring-line/20 flex items-center justify-center ${n.short_id ? "text-short" : "text-long"}`}>
@@ -226,12 +222,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
         className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
         style={{ background: m.team.color }}
       >
-        {m.team.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={m.team.logoUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          m.team.name.slice(0, 2).toUpperCase()
-        )}
+        <AvatarImg src={m.team.logoUrl} fallback={m.team.name.slice(0, 2).toUpperCase()} />
       </span>
     );
   }
@@ -864,8 +855,8 @@ function BellCard({
   );
 }
 
-/** How long a card takes to slide out and close its gap (styles: .notif-item in globals.css). */
-const LEAVE_MS = 440;
+/** How long a card takes to slide out and close its gap (styles: .notif-item in globals.css; 1.31.9: quicker). */
+const LEAVE_MS = 320;
 /** How long a new card takes to come in. */
 const ENTER_MS = 460;
 /** After the server agreed, what you did is kept on top of the list a little longer (a fresh list may already be on its way). */

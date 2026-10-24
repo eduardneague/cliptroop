@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { MentionTarget } from "@/lib/mentions";
 import type { RoleId } from "@/lib/permissions/roles";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export type AttachmentDisplay = {
   id: string;
@@ -226,12 +227,7 @@ export function NotesPanel({
               className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5 overflow-hidden"
               style={{ background: c.avatarColor }}
             >
-              {c.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img loading="lazy" decoding="async" src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                initialsFor(c.name)
-              )}
+              <AvatarImg src={c.avatarUrl} fallback={initialsFor(c.name)} />
             </span>
             <div className="text-[12.5px] min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">

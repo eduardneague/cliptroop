@@ -141,7 +141,7 @@ export function SavedTab({ data }: { data: SavedData }) {
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
       <nav aria-label="Folders" className="mb-5 lg:mb-0">
         {/* Phones: a row to swipe through. Wider: the folders wrap (a column from lg), nothing slides sideways (1.30.1). */}
-        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 lg:sticky lg:top-[4.5rem]">
+        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 lg:sticky lg:top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)]">
           {folderBtn(null, "Everything", null)}
           {saves.folders.map((f) => folderBtn(f.id, f.name, f.count, f.color))}
           {naming === "new" ? (

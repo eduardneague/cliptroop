@@ -6,6 +6,7 @@ import { loadWord } from "@/modules/word/actions";
 import type { WordState } from "@/modules/word/lib/state";
 import { MAX_TRIES, WORD_LENGTH } from "@/lib/word/score";
 import { useBox } from "./widget-box";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 const TILE = { correct: "word-correct", present: "word-present", absent: "word-absent" } as const;
 
@@ -70,16 +71,11 @@ export function WordWidget() {
       <div className="flex items-center gap-2 min-w-0">
         {others.length > 0 && (
           <span className="flex -space-x-1.5 flex-shrink-0" aria-hidden>
-            {others.slice(0, 4).map((m) =>
-              m.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={m.userId} src={m.avatarUrl} alt="" className={`w-5 h-5 rounded-full object-cover ring-2 ring-surface ${m.finished ? "" : "opacity-40"}`} />
-              ) : (
-                <span key={m.userId} className={`w-5 h-5 rounded-full ring-2 ring-surface flex items-center justify-center text-[9px] font-bold text-white ${m.finished ? "" : "opacity-40"}`} style={{ background: m.color }}>
-                  {m.name.slice(0, 1).toUpperCase()}
-                </span>
-              )
-            )}
+            {others.slice(0, 4).map((m) => (
+              <span key={m.userId} className={`w-5 h-5 rounded-full ring-2 ring-surface flex items-center justify-center text-[9px] font-bold text-white overflow-hidden ${m.finished ? "" : "opacity-40"}`} style={{ background: m.color }}>
+                <AvatarImg src={m.avatarUrl} fallback={m.name.slice(0, 1).toUpperCase()} />
+              </span>
+            ))}
           </span>
         )}
         <span className="text-[11.5px] text-ink-soft truncate flex-1">{others.length ? (narrow ? `${finished}/${others.length} done` : `${finished} of ${others.length} teammates done`) : "Counts as a contribution"}</span>

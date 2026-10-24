@@ -112,9 +112,12 @@ ok(/overLimit\("giphy", user\.id,/.test(giphy) && /AbortSignal\.timeout\(/.test(
 ok(!/console\.(log|error|warn)\([^)]*endpoint/.test(giphy), "GIF search: the address with the key is never logged");
 const grammar = read("app/api/grammar/route.ts");
 ok(/if \(!user\) return json\(\{ error: "Sign in first\." \}, 401\);/.test(grammar), "writing suggestions: signed in only");
+// 1.31.12: one shared check (lib/cron-auth.ts) instead of a copy in each route.
+const cronAuth = read("lib/cron-auth.ts");
+ok(/secret\.length < 16/.test(cronAuth) && /timingSafeEqual/.test(cronAuth), "CRON_SECRET required (16+ characters), compared in constant time");
 for (const f of ["app/api/cron/posting/route.ts", "app/api/cron/analytics/route.ts", "app/api/cron/cleanup-media/route.ts"]) {
   const s = read(f);
-  ok(/secret\.length < 16/.test(s) && /timingSafeEqual/.test(s), `${f}: CRON_SECRET required (16+ characters), compared in constant time`);
+  ok(/if \(!cronAuthorized\(request\.headers\.get\("authorization"\), process\.env\.CRON_SECRET\)\)/.test(s), `${f}: checks CRON_SECRET first`);
 }
 
 // --- GitHub's checks ------------------------------------------------------------------------------------------------

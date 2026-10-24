@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import type { Database } from "@/types/database";
+import { sessionCookieOptions } from "./cookie-options";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -17,11 +18,14 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
  */
 export const createClient = cache(async function createClient() {
   const cookieStore = await cookies();
+  // Secure cookies on https (1.31.11): Vercel says which in x-forwarded-proto.
+  const proto = (await headers()).get("x-forwarded-proto");
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: sessionCookieOptions(proto),
       cookies: {
         getAll() {
           return cookieStore.getAll();

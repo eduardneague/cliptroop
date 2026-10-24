@@ -17,6 +17,7 @@ import { LevelBadge, ProfileAvatar, XpBar } from "./parts";
 import { AchievementBadge, AchievementCards } from "./achievements";
 import { ColorRow, ColorsPreview } from "./colors";
 import { renderShowcase, type ShowcaseData } from "./showcases";
+import { stillSrc } from "@/lib/video-still";
 
 /**
  * A profile (1.28.0), like a Steam profile: your picture in a frame your
@@ -474,7 +475,7 @@ export function ProfileView({
                 className={`relative aspect-video rounded-xl overflow-hidden ${draft?.bgPath === w.path ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : "ring-1 ring-line/15 hover:ring-line/35"}`}
               >
                 {w.video ? (
-                  <video src={w.url} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
+                  <video src={stillSrc(w.url)} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={w.url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />

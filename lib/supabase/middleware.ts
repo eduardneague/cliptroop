@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isPublicPath } from "@/lib/public-paths";
+import { sessionCookieOptions } from "./cookie-options";
+import { crossSiteWrite } from "@/lib/request-guard";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -56,12 +58,26 @@ export function canonicalRedirect(request: NextRequest): NextResponse | null {
 export async function updateSession(request: NextRequest) {
   const moved = canonicalRedirect(request);
   if (moved) return moved;
+  // Another site's page making a signed-in browser change something here (1.31.13, lib/request-guard.ts).
+  if (
+    crossSiteWrite({
+      method: request.method,
+      path: request.nextUrl.pathname,
+      host: request.headers.get("host") ?? request.nextUrl.host,
+      origin: request.headers.get("origin"),
+      fetchSite: request.headers.get("sec-fetch-site"),
+    })
+  ) {
+    return NextResponse.json({ error: "That request didn't come from this app." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+  }
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Secure on https (1.31.11).
+      cookieOptions: sessionCookieOptions(request.nextUrl.protocol),
       cookies: {
         getAll() {
           return request.cookies.getAll();

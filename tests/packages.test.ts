@@ -1,7 +1,7 @@
 // 1.31.2: packages. Every package the app lists is really used; every package comes from npm's own registry with a
 // checksum; only the known few run an install script (a new one has to be looked at first); the versions in
-// package.json and the lock agree; Dependabot keeps them up to date (into staging), and CI flags a known high or
-// critical vulnerability in what the app ships.
+// package.json and the lock agree; Dependabot keeps them up to date (into staging), and the vulnerability gate
+// (1.31.7, scripts/audit.mjs) stops CI and every build on a known one.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -71,7 +71,8 @@ const dependabot = read(".github/dependabot.yml");
 ok(/package-ecosystem: npm[\s\S]*?target-branch: staging/.test(dependabot) && /package-ecosystem: github-actions[\s\S]*?target-branch: staging/.test(dependabot), "Dependabot: packages and actions, into staging");
 ok(/update-types: \["version-update:semver-major"\]/.test(dependabot), "Dependabot: big jumps are done by hand");
 const ci = read(".github/workflows/ci.yml");
-ok(/run: npm audit --omit=dev --audit-level=high/.test(ci), "CI: a known high or critical vulnerability in what the app ships shows as a red ✗");
+// 1.31.7: the vulnerability gate (tests/audit.test.ts checks its rules): CI runs it, and so does every build.
+ok(/run: node scripts\/audit\.mjs/.test(ci), "CI: a known vulnerability shows as a red ✗ (the vulnerability gate)");
 
 if (fails) {
   console.log(`${fails} failed`);

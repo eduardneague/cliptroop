@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EditIcon, RetryIcon } from "@/components/ui/icons";
@@ -15,7 +15,9 @@ import type { BlockedChannel, ChannelDetail, Folder, Kind, NicheInfo, OutlierSet
 import { TABS, type TabData, type TabId } from "../lib/view";
 import dynamic from "next/dynamic";
 import { BTN_MAIN, DiceIcon, FindingCtx, GearIcon, ICON_BTN, OutliersIcon, TimeAgo } from "./bits";
-import { OutliersProvider, useOutliers } from "./context";
+import { channelPreviews, OutliersProvider, previews, useOutliers } from "./context";
+import { PanelFrame } from "./panel";
+import { PanelLoading } from "./panel-preview";
 import { NichePicker } from "./niche-picker";
 import { shallowParam, ShellNavCtx, type ShellNav, type ShellTarget } from "./shell-nav";
 import type { SettingsTab } from "./settings-dialog";
@@ -39,6 +41,10 @@ const CHUNKS = {
   settings: () => import("./settings-dialog"),
 };
 const preload = (k: keyof typeof CHUNKS) => void CHUNKS[k]().catch(() => {});
+/** Straight to the top of the page (not smoothly: a new tab is a new page). */
+const toTop = () => {
+  if (window.scrollY > 0) window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+};
 function TabLoading() {
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" aria-hidden>
@@ -57,8 +63,11 @@ const AudienceTab = dynamic(() => CHUNKS.audience().then((m) => m.AudienceTab), 
 const TitlesTab = dynamic(() => CHUNKS.titles().then((m) => m.TitlesTab), { loading: TabLoading });
 const ThumbsTab = dynamic(() => CHUNKS.thumbnails().then((m) => m.ThumbsTab), { loading: TabLoading });
 const SavedTab = dynamic(() => CHUNKS.saved().then((m) => m.SavedTab), { loading: TabLoading });
-// Both panels in one piece (1.29.9): the side panel stays open from a video to its channel and back.
-const Panels = dynamic(() => CHUNKS.panels().then((m) => m.Panels));
+// Both panels in one piece (1.29.9): the side panel stays open from a video to its channel and back. 1.31.8: only
+// what's inside comes in that piece; the frame is here and opens at once, with what the card knew (PanelLoading)
+// until it arrives. (Before, with nothing to show meanwhile, the whole page went back to its loading screen on the
+// first click.)
+const PanelBody = lazy(() => CHUNKS.panels().then((m) => ({ default: m.PanelBody })));
 const NicheDialog = dynamic(() => CHUNKS.niche().then((m) => m.NicheDialog));
 const SettingsDialog = dynamic(() => CHUNKS.settings().then((m) => m.SettingsDialog));
 
@@ -128,6 +137,12 @@ type NicheDialogState = { open: boolean; niche: NicheInfo | null };
 
 function Shell(props: OutliersViewProps) {
   const ctx = useOutliers();
+  // Opened from a link (?v= / ?c=): what the server read is the panel's first picture while its code arrives.
+  if (props.initialVideo && !previews.has(props.initialVideo.video.id)) previews.set(props.initialVideo.video.id, props.initialVideo.video);
+  if (props.initialChannel && !channelPreviews.has(props.initialChannel.channel.id)) {
+    const c = props.initialChannel.channel;
+    channelPreviews.set(c.id, { title: c.title, avatar: c.avatar, subs: c.subs });
+  }
   const router = useRouter();
   const toast = useToast();
   const { data } = props;
@@ -171,7 +186,8 @@ function Shell(props: OutliersViewProps) {
     const t = window.setTimeout(() => setPending(null), 15_000);
     return () => window.clearTimeout(t);
   }, [pending]);
-  // The bar's height, for what sticks under it (Search's filters, Saved's folders).
+  // The bar's height, for what sticks under it (Formats' and Keywords' details, Saved's folders, Thumbnails' side;
+  // 1.31.9: they stuck at a fixed 4.5rem, under the bar, and their tops hid behind it).
   useLayoutEffect(() => {
     const el = bar.current;
     const root = page.current;
@@ -201,7 +217,11 @@ function Shell(props: OutliersViewProps) {
   const go = useCallback(
     (t: ShellTarget, opts?: { replace?: boolean }) => {
       const h = href(t);
-      if (t.tab || t.niche !== undefined || t.kind) setPending({ ...(t.tab ? { tab: t.tab } : {}), ...(t.niche !== undefined ? { niche: t.niche } : {}), ...(t.kind ? { kind: t.kind } : {}) });
+      if (t.tab || t.niche !== undefined || t.kind) {
+        setPending({ ...(t.tab ? { tab: t.tab } : {}), ...(t.niche !== undefined ? { niche: t.niche } : {}), ...(t.kind ? { kind: t.kind } : {}) });
+        // Another tab, niche or kind is another page: it starts at the top (1.31.8).
+        toTop();
+      }
       startNavProgress(h);
       startNav(() => (opts?.replace ? router.replace(h, { scroll: false }) : router.push(h, { scroll: false })));
     },
@@ -402,7 +422,7 @@ function Shell(props: OutliersViewProps) {
         </header>
 
         {/* Stays at the top while the page scrolls (phones and computers). */}
-        <div ref={bar} data-shell="subbar" className="ol-bar sticky top-14 z-[15] -mx-4 px-4 sm:-mx-8 sm:px-8 xl:-mx-10 xl:px-10 pt-2.5 bg-paper/90 backdrop-blur-md mb-6">
+        <div ref={bar} data-shell="subbar" className="ol-bar sticky top-[var(--shell-top,3.5rem)] z-[15] -mx-4 px-4 sm:-mx-8 sm:px-8 xl:-mx-10 xl:px-10 pt-2.5 bg-paper/90 backdrop-blur-md mb-6">
           <div className="flex items-center gap-2 min-w-0">
             <div className="min-w-0 flex items-center gap-1.5 flex-1">
               <NichePicker
@@ -448,6 +468,8 @@ function Shell(props: OutliersViewProps) {
                     if (on) return;
                     if (t.id !== "home") preload(t.id);
                     setPending({ tab: t.id });
+                    // Each tab starts at the top (1.31.8; it used to keep the last tab's scroll).
+                    toTop();
                     startNavProgress(href({ tab: t.id }));
                   }}
                   className={`relative px-2.5 sm:px-3 2xl:px-3.5 h-11 inline-flex items-center gap-1.5 text-[14px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-soft hover:text-ink"}`}
@@ -479,7 +501,13 @@ function Shell(props: OutliersViewProps) {
         </div>
       </div>
 
-      {ctx.panel && <Panels panel={ctx.panel} initialVideo={props.initialVideo} initialChannel={props.initialChannel} />}
+      {ctx.panel && (
+        <PanelFrame onClose={ctx.closePanel} onBack={ctx.trail.length ? ctx.panelBack : null} backLabel="Back to the last one">
+          <Suspense fallback={<PanelLoading panel={ctx.panel} />}>
+            <PanelBody panel={ctx.panel} initialVideo={props.initialVideo} initialChannel={props.initialChannel} />
+          </Suspense>
+        </PanelFrame>
+      )}
 
       <NicheDialog teamId={ctx.teamId} open={nicheDialog.open} niche={nicheDialog.niche} onClose={() => setNicheDialog({ open: false, niche: null })} suggestions={props.suggest} kind={props.kind} teamLang={props.teamLang} />
       <SettingsDialog teamId={ctx.teamId} open={settings.open} tab={settings.tab} onClose={() => setSettings((s) => ({ ...s, open: false }))} settings={props.settings} canEdit={props.isMaster} />

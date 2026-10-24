@@ -9,6 +9,7 @@ import type { Showcase } from "../layout";
 import { LevelBadge, ProfileAvatar, XpBar } from "./parts";
 import { AchievementBadge } from "./achievements";
 import { APP_NAME } from "@/lib/brand";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 /*
  * What a profile's showcases draw (1.28.0). Each fits the box it's given
@@ -346,12 +347,7 @@ function TeamsShowcase({ teams }: { teams: ShowcaseData["teams"] }) {
       {teams.map((t) => (
         <span key={t.id} className="inline-flex items-center gap-2 rounded-lg border border-line/10 pl-1 pr-3 h-9">
           <span className="w-7 h-7 rounded-md overflow-hidden flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: t.color }}>
-            {t.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={t.logo_url} alt="" loading="lazy" className="w-full h-full object-cover" />
-            ) : (
-              t.name.slice(0, 2).toUpperCase()
-            )}
+            <AvatarImg src={t.logo_url} fallback={t.name.slice(0, 2).toUpperCase()} />
           </span>
           <span className="text-[13px] font-semibold truncate max-w-[12rem]">{t.name}</span>
         </span>

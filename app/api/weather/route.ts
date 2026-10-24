@@ -12,6 +12,9 @@
  *   ?q=London              cities for the widget's settings
  */
 
+import { overLimit } from "@/lib/rate-limit";
+import { clientAddress } from "@/lib/auth/sign-in-rules";
+
 const HEADERS = { "Cache-Control": "private, max-age=300" };
 const fail = (error: string, status = 502) => Response.json({ error }, { status, headers: { "Cache-Control": "private, no-store" } });
 
@@ -44,6 +47,8 @@ const num = (v: string | null, min: number, max: number) => {
 
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
+  // Asked through the app (1.31.13): a widget asks every 15 minutes, a settings box a few times a minute.
+  if (overLimit("weather", clientAddress((n) => req.headers.get(n)), 60, 60_000)) return fail("Too many weather checks at once. Wait a moment.", 429);
 
   // Cities, for the settings.
   if (q.has("q")) {

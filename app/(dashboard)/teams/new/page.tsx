@@ -9,7 +9,7 @@ export default function NewTeamPage() {
   const [state, formAction, pending] = useActionState(createTeam, undefined);
 
   return (
-    <div className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <Link
           href="/dashboard"

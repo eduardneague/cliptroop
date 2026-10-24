@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { nextForLinkType, SWAP_KEY, swapDecision, tokenClaims } from "@/lib/auth/link-swap";
 
 /**
  * A dashboard-triggered Supabase invite puts the session token in a URL
@@ -40,18 +41,25 @@ export function AuthHashHandler() {
     if (!access_token || !refresh_token) return;
 
     const supabase = createClient();
-    supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+    void (async () => {
+      // Someone else signed in on this browser (1.31.11): the link never swaps accounts quietly. Its sign-in waits
+      // (this tab only, a few minutes) for the welcome page to ask which one to keep.
+      const { data } = await supabase.auth.getUser();
+      const claims = tokenClaims(access_token);
+      if (swapDecision(data.user, claims?.sub) === "ask") {
+        window.history.replaceState(null, "", window.location.pathname);
+        try {
+          sessionStorage.setItem(SWAP_KEY, JSON.stringify({ access_token, refresh_token, type, email: claims?.email ?? null, at: Date.now() }));
+        } catch {}
+        router.push("/welcome?swap=1");
+        return;
+      }
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
       // Always strip the token out of the visible URL/history, even on
       // failure — it's a live credential and shouldn't linger there.
       window.history.replaceState(null, "", window.location.pathname);
-      if (error) {
-        router.push("/login");
-      } else if (type === "recovery") {
-        router.push("/reset-password");
-      } else {
-        router.push("/set-password");
-      }
-    });
+      router.push(error ? "/login" : nextForLinkType(type));
+    })();
   }, [router]);
 
   return null;

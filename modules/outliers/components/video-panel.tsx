@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalIcon, PlayIcon } from "@/components/ui/icons";
+import { ExternalIcon } from "@/components/ui/icons";
 import { LineChart } from "@/modules/analytics/components/charts";
 import { loadVideoDetail, loadVideos, similarOutliers } from "@/app/(dashboard)/outliers/actions";
 import { compact, duration } from "../lib/filters";
 import { traitsOf } from "../lib/formats";
 import { ideasFromVideo } from "../lib/ideas";
 import { modelInsights } from "../lib/insights";
-import { BAND_LABEL, band, multText } from "../lib/scores";
+import { BAND_LABEL, band, multText, usualsDiffer, usualThen } from "../lib/scores";
 import { similarThumbs } from "../lib/similar";
 import { scoreTitle } from "../lib/titles";
 import type { OutlierVideo, VideoDetail } from "../lib/types";
@@ -19,6 +19,7 @@ import { previews, useOutliers, useOutliersBlocked } from "./context";
 import { forgetChannel, videoDetails as details } from "./detail-cache";
 import { IdeaCard, useIdeaMarks } from "./idea-card";
 import { PanelContent, PanelSection } from "./panel";
+import { Player, VideoPreviewBody, VideoSkeleton } from "./panel-preview";
 import { RemoveFromNiche } from "./remove-from-niche";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
@@ -160,7 +161,7 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
           </a>
         </div>
       ) : !d || !v ? (
-        preview ? <PreviewBody v={preview} /> : <PanelSkeleton />
+        preview ? <VideoPreviewBody v={preview} /> : <VideoSkeleton />
       ) : (
         <VideoBody d={d} />
       )}
@@ -168,82 +169,28 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
   );
 }
 
-/** The panel's first picture, from what the card knew: the video, its title and headline numbers. */
-function PreviewBody({ v }: { v: OutlierVideo }) {
-  const short = v.kind === "short";
-  const h = heat(v.score);
+/**
+ * How its × is worked out, in one line under the numbers (1.31.8): the video's views ÷ the median views of the
+ * channel's videos just before it. When the channel's usual has moved a lot since (it grew, or slowed), both are
+ * said, so "14M views, usual 5.6M, 3.3×" isn't a puzzle: 14M ÷ 4.2M (its usual then) = 3.3×.
+ */
+function ScoreNote({ v, short, then, now, own }: { v: VideoDetail["video"]; short: boolean; then: number | null; now: number | null; own: boolean }) {
+  if (!then || !v.views || v.score === null) return null;
+  const kind = short ? "Shorts" : "videos";
   return (
-    <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-7" aria-busy="true">
-      <div className={short ? "grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)] items-start" : "space-y-4"}>
-        <Player id={v.id} short={short} title={v.title} />
-        <div className="min-w-0 space-y-4">
-          <div>
-            <h2 className="font-display text-[21px] sm:text-[24px] leading-[1.18] font-semibold text-balance">{v.title}</h2>
-            <p className="mt-1.5 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
-              <TimeAgo iso={v.publishedAt} />
-              {v.durationS ? <span>· {duration(v.durationS)}</span> : null}
-              {short && <span>· Short</span>}
-            </p>
-          </div>
-          <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
-            <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }}>
-              <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
-              <div className="mt-1 font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
-                {multText(v.score)}
-              </div>
-              <div className="mt-1 text-[11.5px] text-ink-soft truncate">{BAND_LABEL[band(v.score)]}</div>
-            </div>
-            <Tile label="Views" value={compact(v.views)} sub={v.channel.usual ? `usual ${compact(v.channel.usual)}` : undefined} />
-            <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} />
-            <Tile label="Likes" value={compact(v.likes)} />
-          </div>
-        </div>
-      </div>
-      <div className="skeleton h-44 w-full rounded-2xl" />
-    </div>
-  );
-}
-
-function PanelSkeleton() {
-  return (
-    <div className="p-4 sm:p-6 space-y-4" aria-busy="true">
-      <div className="skeleton w-full aspect-video rounded-2xl" />
-      <div className="skeleton h-6 w-3/4 rounded-md" />
-      <div className="skeleton h-4 w-1/2 rounded-md" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-[72px] rounded-xl" />
-        ))}
-      </div>
-      <div className="skeleton h-44 w-full rounded-2xl" />
-    </div>
-  );
-}
-
-function Player({ id, short, title }: { id: string; short: boolean; title: string }) {
-  const [play, setPlay] = useState(false);
-  useEffect(() => setPlay(false), [id]);
-  return (
-    <div className={`relative overflow-hidden rounded-2xl bg-black ring-1 ring-line/10 ${short ? "aspect-[9/16] w-full max-w-[300px] mx-auto sm:mx-0" : "aspect-video w-full"}`}>
-      {play ? (
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-          className="absolute inset-0 w-full h-full"
-        />
-      ) : (
-        <button type="button" onClick={() => setPlay(true)} className="group/play absolute inset-0" aria-label={`Play “${title}”`}>
-          <Thumb id={id} kind={short ? "short" : "long"} eager sizes="(min-width: 900px) 800px, 100vw" />
-          <span className="absolute inset-0 bg-black/10 group-hover/play:bg-black/25 transition-colors" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-11 rounded-xl bg-[#ff0033] flex items-center justify-center shadow-lg transition-transform group-hover/play:scale-105">
-            <PlayIcon className="w-6 h-6 text-white" />
-          </span>
-        </button>
-      )}
-    </div>
+    <p className="rounded-xl bg-surface-2/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-soft">
+      <span className="font-semibold text-ink">
+        {multText(v.score)} = {compact(v.views)} views ÷ {compact(then)}
+      </span>
+      , the median views of the {kind} the channel posted just before it (up to 30).
+      {usualsDiffer(then, now) && now ? (
+        <>
+          {" "}
+          Its {kind} {now > then ? "get more now" : "get fewer now"}: about {compact(now)} each.
+        </>
+      ) : null}
+      {own ? " Engaged views come from your own YouTube Analytics." : " YouTube shares engaged views only with a channel's owner, so ClipTroop has them for your own videos only."}
+    </p>
   );
 }
 
@@ -251,8 +198,13 @@ function VideoBody({ d }: { d: VideoDetail }) {
   const ctx = useOutliers();
   const v = d.video;
   const short = v.kind === "short";
-  const usual = v.channel.usual ?? (short ? d.channel.shortMedian : d.channel.longMedian);
+  // Its usual now, and the usual its × is measured against (the channel's videos just before it: 1.31.8).
+  const usualNow = v.channel.usual ?? (short ? d.channel.shortMedian : d.channel.longMedian);
+  const then = usualThen(v);
+  const usual = then ?? usualNow;
   const eng = v.views ? (((v.likes ?? 0) + (v.comments ?? 0)) / v.views) * 100 : null;
+  const engaged = d.own?.engaged ?? null;
+  const engagedPct = engaged !== null && d.own?.views ? (engaged / d.own.views) * 100 : null;
   const vps = v.views && d.channel.subs ? v.views / d.channel.subs : null;
   const h = heat(v.score);
   const model = useNicheModel(ctx.teamId, ctx.nicheId, short ? "short" : "long");
@@ -285,24 +237,34 @@ function VideoBody({ d }: { d: VideoDetail }) {
                   {multText(v.score)}
                 </span>
               </div>
-              <div className="mt-1 text-[11.5px] text-ink-soft truncate">{v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : BAND_LABEL[band(v.score)]}</div>
+              <div className="mt-1 text-[11.5px] text-ink-soft truncate">
+                {v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : then && v.views ? `${compact(v.views)} ÷ ${compact(then)}` : BAND_LABEL[band(v.score)]}
+              </div>
             </div>
-            <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} />
+            <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} title={then ? "Its usual: the median views of the channel's videos just before this one" : undefined} />
             <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} sub={v.statsAt ? <>counted <TimeAgo iso={v.statsAt} /></> : undefined} />
             <Tile label="Engagement" value={eng === null ? "–" : `${eng.toFixed(1)}%`} sub="likes + comments per view" title="(Likes + comments) ÷ views" />
             <Tile label="Likes" value={compact(v.likes)} />
             <Tile label="Comments" value={compact(v.comments)} />
             <Tile label="Views per subscriber" value={vps === null ? "–" : vps >= 10 ? Math.round(vps).toString() : vps.toFixed(2)} sub={d.channel.subs ? `${compact(d.channel.subs)} subscribers` : "subscribers hidden"} />
-            {d.earnings ? (
+            {d.own ? (
+              <Tile
+                label="Engaged views"
+                value={compact(engaged)}
+                sub={engagedPct !== null ? `${engagedPct >= 99.5 ? Math.round(engagedPct) : engagedPct.toFixed(1)}% of its views` : "from your YouTube Analytics"}
+                title="Your own video: views where people kept watching past the first moment (YouTube gives these to a channel's owner only)"
+              />
+            ) : d.earnings ? (
               <Tile label="Would have earned" value={money(d.earnings.estimate, d.earnings.currency)} sub={`at your ${money(d.earnings.rpm, d.earnings.currency)} per 1,000 views`} title="Its views at your team's own revenue per 1,000 views over the last 90 days. An estimate." />
             ) : (
               <Tile label="Posted" value={<span className="text-[18px]"><TimeAgo iso={v.publishedAt} /></span>} sub={new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} />
             )}
           </div>
+          <ScoreNote v={v} short={short} then={then} now={usualNow} own={!!d.own} />
         </div>
       </div>
 
-      <PanelSection title="Next to the channel's other videos" sub={`Each bar is one of its ${short ? "Shorts" : "videos"}, oldest on the left; this one is outlined. The dashed line is its usual.`}>
+      <PanelSection title="Next to the channel's other videos" sub={`Each bar is one of its ${short ? "Shorts" : "videos"} around this one, oldest on the left; this one is outlined. The dashed line is the usual it's measured against.`}>
         <div className="rounded-2xl border border-line/10 bg-surface p-4 pt-8">
           <BarsChart bars={bars} usual={usual} focus={v.id} onPick={(pid) => pid !== v.id && ctx.openVideo(pid)} label={`${v.title} against the channel's other videos`} />
         </div>

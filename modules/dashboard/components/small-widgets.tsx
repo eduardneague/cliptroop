@@ -10,14 +10,12 @@ import { MonthCalendar, warmPlannedDays } from "@/components/ui/month-calendar";
 import type { TeamCard } from "../lib/queries";
 import { useBox } from "./widget-box";
 import { localDay } from "./tasks-widget";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 function Face({ m, className = "w-5 h-5 text-[9px]" }: { m: TeamCard["members"][number]; className?: string }) {
-  return m.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={m.avatarUrl} alt={m.name} title={m.name} className={`${className} rounded-full object-cover ring-2 ring-surface`} />
-  ) : (
-    <span title={m.name} className={`${className} rounded-full ring-2 ring-surface flex items-center justify-center font-bold text-white`} style={{ background: m.color }}>
-      {m.name.slice(0, 1).toUpperCase()}
+  return (
+    <span title={m.name} className={`${className} rounded-full ring-2 ring-surface flex items-center justify-center font-bold text-white overflow-hidden`} style={{ background: m.color }}>
+      <AvatarImg src={m.avatarUrl} alt={m.name} fallback={m.name.slice(0, 1).toUpperCase()} />
     </span>
   );
 }
@@ -73,14 +71,16 @@ export function TeamsWidget({ teams, currentTeamId }: { teams: TeamCard[]; curre
             onKeyDown={(e) => e.key === "Enter" && !current && go(t.id)}
             className={`flex items-center gap-2 rounded-md px-1 py-1 transition-colors ${current ? "bg-amber/[0.07]" : "hover:bg-surface-2/70 cursor-pointer"}`}
           >
-            {t.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={t.logoUrl} alt="" className="w-6 h-6 rounded-md object-cover flex-shrink-0" />
-            ) : (
-              <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: t.color }}>
-                {t.name.slice(0, 1).toUpperCase()}
-              </span>
-            )}
+            <span className="w-6 h-6 rounded-md flex-shrink-0 overflow-hidden flex">
+              <AvatarImg
+                src={t.logoUrl}
+                fallback={
+                  <span className="w-full h-full flex items-center justify-center text-white text-[10px] font-bold" style={{ background: t.color }}>
+                    {t.name.slice(0, 1).toUpperCase()}
+                  </span>
+                }
+              />
+            </span>
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block text-[12.5px] font-semibold truncate">{t.name}</span>
               <button type="button" onClick={(e) => { e.stopPropagation(); setMembers(t); }} className="block max-w-full truncate text-[10.5px] text-ink-faint hover:text-ink">

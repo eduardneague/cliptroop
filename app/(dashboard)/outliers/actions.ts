@@ -1,5 +1,6 @@
 "use server";
 
+import { overLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -397,6 +398,8 @@ export async function addChannel(teamId: string, input: string, o: { nicheId?: s
   const { user, manager } = await who(teamId);
   if (!user) return { error: "Your session expired. Sign in again." };
   if (!manager) return { error: "Only masters and researchers can add channels." };
+  // Each one asks YouTube (1.31.13): plenty for building a niche, not for emptying the team's daily quota.
+  if (overLimit("outliers-add", user.id, 60, 60 * 60_000)) return { error: "That's a lot of channels in an hour. Wait a bit, then add more." };
   try {
     const r = await addChannelByRef(teamId, input.slice(0, 300), { nicheId: o.nicheId && UUID.test(o.nicheId) ? o.nicheId : null, track: !!o.track, userId: user.id });
     if ("error" in r) return { error: r.error };

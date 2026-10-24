@@ -8,6 +8,7 @@ import { AlertIcon } from "@/components/ui/icons";
 import { switchTeam } from "@/app/(dashboard)/actions";
 import { LeaveTeamButton } from "@/app/(dashboard)/team/leave-team-button";
 import { deleteAccount } from "./account-actions";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export type AccountTeam = { id: string; name: string; color: string; logo_url: string | null; owner: boolean };
 
@@ -74,12 +75,7 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
             {teams.map((t) => (
               <li key={t.id} className="flex items-center gap-3 py-2.5 flex-wrap">
                 <span className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style={{ background: t.color }}>
-                  {t.logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={t.logo_url} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  ) : (
-                    t.name.slice(0, 2).toUpperCase()
-                  )}
+                  <AvatarImg src={t.logo_url} fallback={t.name.slice(0, 2).toUpperCase()} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13.5px] font-semibold truncate">{t.name}</span>

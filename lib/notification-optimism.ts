@@ -72,3 +72,26 @@ export function swipeOutcome(o: { dx: number; width: number; velocity: number; l
 export function leaveDelays(n: number, step = 40, max = 8): number[] {
   return Array.from({ length: Math.max(0, n) }, (_, i) => Math.min(i, max) * step);
 }
+
+/**
+ * How a swipe up (or down) on a toast ends (1.31.9: on a phone they sit at the top, and a flick up sends one away,
+ * like a phone's own notifications): far enough (two fifths of its height, 24 px at least) or a flick that way
+ * sends it; anything else springs back. A pull the other way never does.
+ */
+export function liftOutcome(o: { dy: number; height: number; velocity: number; dir: "up" | "down" }): "away" | "back" {
+  if (!(o.height > 0)) return "back";
+  const s = o.dir === "up" ? -1 : 1;
+  const d = o.dy * s;
+  const v = o.velocity * s;
+  if (d >= Math.max(24, o.height * 0.4)) return "away";
+  if (v >= 0.45 && d >= 12) return "away";
+  return "back";
+}
+
+/** How long a toast stays by itself (1.31.9: shorter; one with Undo long enough to use it). Pointing at it waits. */
+export function toastDuration(o: { kind: "success" | "error"; action?: boolean; given?: number }): number {
+  if (o.given !== undefined && Number.isFinite(o.given) && o.given > 0) return o.given;
+  if (o.action) return 6500;
+  return o.kind === "error" ? 5500 : 3500;
+}
+

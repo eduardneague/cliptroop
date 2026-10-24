@@ -23,6 +23,81 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.31.13",
+    date: "2026-10-24",
+    title: "Security: the app's own addresses",
+    changes: [
+      { kind: "better", text: "Another website can't make your signed-in browser change anything in the app: such requests are turned away before they reach it." },
+      { kind: "better", text: "Things that cost something each time (link previews, video thumbnails, the weather, adding channels in Outliers, invites, bug reports) have a sensible limit per person, so a stuck page or a script can't run up the bill or flood anyone." },
+    ],
+  },
+  {
+    version: "1.31.12",
+    date: "2026-10-24",
+    title: "Security: who can do what",
+    changes: [
+      { kind: "better", text: "Every action in the app and every address it answers was checked: each one makes sure who's asking is signed in, on the team and in a role that may do it (or leaves it to the database's own rules, which do). A new one without a check can't be added any more: the app's own tests stop it." },
+      { kind: "better", text: "Switching team only switches to a team you're an active member of, and the scheduled jobs all use one well-tested check for their secret." },
+    ],
+  },
+  {
+    version: "1.31.11",
+    date: "2026-10-24",
+    title: "Security: signed in where you mean to be",
+    changes: [
+      { kind: "better", text: "Log out signs out the device you're on. Your phone stays signed in when you log out on your computer (it used to sign out everything)." },
+      { kind: "new", text: "Sign out everywhere else, in Settings → Account: every other phone, computer and browser signed in to your account is signed out and stops getting your notifications. For a lost phone or a shared computer." },
+      { kind: "fixed", text: "Opening an invite or reset link meant for another account no longer quietly switches you into it: you're asked whether to continue as that account or stay as you." },
+      { kind: "better", text: "Devices signed out by a new password stop getting your notifications too, and the app's cookies only ever travel over a secure connection." },
+    ],
+  },
+  {
+    version: "1.31.10",
+    date: "2026-10-24",
+    title: "Security: passwords",
+    changes: [
+      { kind: "new", text: "Change your password in Settings → Account, with your current one. Forgot it? The same place emails you a reset link." },
+      { kind: "better", text: "One set of rules wherever you choose a password, ticked off as you type: at least 8 characters, not one people use a lot (or a run like 12345678), and not your email or your name. No rules about capitals or symbols: a few unrelated words make a strong password." },
+      { kind: "better", text: "A reset link says whose password you're choosing, and once it's saved, every other device signed in to your account is signed out (it tells you so)." },
+      { kind: "fixed", text: "Someone signed in on your computer can no longer choose a new password without knowing the current one: the reset and setup pages only do that for a sign-in that came from the email's link." },
+    ],
+  },
+  {
+    version: "1.31.9",
+    date: "2026-10-24",
+    title: "Phones and glass",
+    changes: [
+      { kind: "better", text: "With the glass look on a computer, the top bar floats: a pane of glass of its own beside the side bar, lined up with the page (where \"Good morning\" starts) instead of running into the side bar. What scrolls up under it blurs softly away." },
+      { kind: "better", text: "Messages at the top of a phone (like \"Flampok is out of Competition Tech\") sit in the middle, have an × to close them, and go with a swipe up or to the side. On a computer, swipe one down or to the side. They also go by themselves sooner." },
+      { kind: "fixed", text: "Profile pictures that stayed a plain coloured circle on some phones load now. A picture that really can't load is tried once more, then shows the person's initials." },
+      { kind: "fixed", text: "Video wallpapers and their previews show a picture on iPhones instead of an empty box." },
+      { kind: "fixed", text: "Objectives on a phone stays centred: the row of Today, This week, This month and the rest slides on its own instead of pushing the page off to the side." },
+      { kind: "fixed", text: "The side panes in Outliers (Formats, Keywords, Saved, Thumbnails) stay below its bar as you scroll; their tops used to hide behind it." },
+      { kind: "better", text: "A notification you remove is out of the way a little quicker." },
+    ],
+  },
+  {
+    version: "1.31.8",
+    date: "2026-10-24",
+    title: "Outliers, clearer",
+    changes: [
+      { kind: "fixed", text: "A video opens at once the first time you click it in Outliers: its panel slides in with the video, title and numbers you already saw on its card. The page used to go back to its loading screen first." },
+      { kind: "fixed", text: "Every tab in Outliers starts at the top of the page, and so does picking another niche or switching between long videos and Shorts." },
+      { kind: "better", text: "The × now shows what it's measured against: a video's views ÷ the usual views of the channel's videos just before it. The usual under its views and on each card is that same number (14M ÷ 4.2M = 3.3×), and when the channel's videos get many more or fewer views now, the panel says that too." },
+      { kind: "new", text: "Your own videos show their engaged views in Outliers (views where people kept watching). YouTube shares engaged views only with a channel's owner, so other channels' videos can't have them." },
+      { kind: "new", text: "\"Your viewers watch it\" on a channel now lists which of your videos its videos sent viewers to, how many views each got, and from which of its videos. Yours opens in Analytics, theirs in the panel. It fits on a phone too." },
+    ],
+  },
+  {
+    version: "1.31.7",
+    date: "2026-10-24",
+    title: "Security: nothing known gets through",
+    changes: [
+      { kind: "fixed", text: "The framework the app is built with carried its own old copy of a styling tool with four known security problems. It now uses the app's up-to-date copy, so GitHub's security check is green again." },
+      { kind: "better", text: "A version of the app with a known security problem in one of its packages can't be built or go live any more: the check runs before every build, on the servers too, and says exactly what to update." },
+    ],
+  },
+  {
     version: "1.31.6",
     date: "2026-10-23",
     title: "Security: signing in",

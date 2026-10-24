@@ -166,7 +166,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
         </div>
 
         <aside className="hidden lg:block min-w-0">
-          <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
+          <div className="sticky top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-var(--shell-top,3.5rem)-var(--ol-bar,104px)-1.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
         </aside>
       </div>
 

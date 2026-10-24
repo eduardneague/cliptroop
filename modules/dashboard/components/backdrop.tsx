@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { measureUrl } from "@/lib/wallpapers-measure";
 import { saveWallpaperLuma } from "@/app/(dashboard)/settings/wallpaper-actions";
+import { stillSrc } from "@/lib/video-still";
 
 /**
  * Your dashboard's background (1.27.5): the picture, GIF or looping video
@@ -96,7 +97,7 @@ export function DashboardBackdrop({
         const cls = `absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${l.ready ? "opacity-100" : "opacity-0"}`;
         const last = i === layers.length - 1;
         return l.video ? (
-          <video key={l.src} ref={last ? ref : undefined} src={l.src} muted loop playsInline autoPlay={!still} preload="auto" onLoadedData={() => shown(l.src)} onError={() => shown(l.src)} className={cls} />
+          <video key={l.src} ref={last ? ref : undefined} src={stillSrc(l.src)} muted loop playsInline autoPlay={!still} preload="auto" onLoadedData={() => shown(l.src)} onError={() => shown(l.src)} className={cls} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img key={l.src} src={l.src} alt="" decoding="async" fetchPriority="high" onLoad={() => shown(l.src)} onError={() => shown(l.src)} className={cls} />

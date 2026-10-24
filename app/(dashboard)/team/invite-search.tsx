@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { ROLES } from "@/lib/permissions/roles";
 import type { RoleId } from "@/lib/permissions/roles";
 import { colorForId, displayName, initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function InviteSearch({ teamId }: { teamId: string }) {
   const [query, setQuery] = useState("");
@@ -86,12 +87,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
             className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
             style={{ background: colorForId(selected.id) }}
           >
-            {selected.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img loading="lazy" decoding="async" src={selected.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              initialsFor(name)
-            )}
+            <AvatarImg src={selected.avatarUrl} fallback={initialsFor(name)} />
           </span>
           <span className="text-[13px] font-semibold flex-1">{name}</span>
           <button
@@ -160,12 +156,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
                     className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
                     style={{ background: colorForId(r.id) }}
                   >
-                    {r.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img loading="lazy" decoding="async" src={r.avatarUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      initialsFor(name)
-                    )}
+                    <AvatarImg src={r.avatarUrl} fallback={initialsFor(name)} />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-[13px] font-semibold truncate">{name}</span>

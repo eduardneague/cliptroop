@@ -104,7 +104,7 @@ ok(/closest\("button, a, input, textarea, select, \[data-no-swipe\]"\)/.test(swi
 ok(/if \(Math\.abs\(dy\) > 10 && Math\.abs\(dy\) >= Math\.abs\(dx\)\)/.test(swipe), "up and down first: the list scrolls");
 ok(/setPointerCapture\(e\.pointerId\)/.test(swipe), "the card keeps the finger once it moves");
 ok(/Math\.sign\(dx\) \* Math\.min\(40, Math\.abs\(dx\) \/ 4\)/.test(swipe), "one that can't go only gives a little");
-ok(/const velocity = e\.timeStamp - d\.lastT > 120 \? 0 : d\.vx;/.test(swipe), "a pause before letting go isn't a flick");
+ok(/const still = e\.timeStamp - d\.lastT > 120;/.test(swipe) && /const velocity = still \? 0 : d\.vx;/.test(swipe), "a pause before letting go isn't a flick");
 ok(/onDragStart\(e: React\.DragEvent<HTMLElement>\) \{\s+e\.preventDefault\(\);/.test(swipe), "a picture inside isn't dragged off instead");
 ok(/onClickCapture[\s\S]{0,120}swallow\.current = false;\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);/.test(swipe), "a swipe isn't also a click");
 
@@ -117,11 +117,12 @@ ok(/useSwipeAway\(\{/.test(toasts) && /aria-label="Dismiss"/.test(toasts), "swip
 
 // --- The look --------------------------------------------------------------------------------------------------------------
 const css = read("app/globals.css");
-ok(/\.notif-item \{ display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0\.28s var\(--ease-out\) calc\(var\(--leave-delay, 0ms\) \+ 0\.14s\); \}/.test(css), "the gap closes after the card has slid out");
+ok(/\.notif-item \{ display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0\.22s var\(--ease-out\) calc\(var\(--leave-delay, 0ms\) \+ 0\.08s\); \}/.test(css), "the gap closes after the card has slid out (1.31.9: quicker)");
 ok(/\.notif-item\[data-leaving\] \{ grid-template-rows: 0fr; pointer-events: none; \}/.test(css), "the ones under it move up into its place");
 ok(/@keyframes notif-open \{ from \{ grid-template-rows: 0fr; \} to \{ grid-template-rows: 1fr; \} \}/.test(css) && /\.notif-item\[data-entering\] \{ animation: notif-open/.test(css), "a new one opens its place");
 ok(/\.notif-clip \{ min-height: 0; overflow: hidden; \}/.test(css), "the slot can close all the way");
-ok(/\.notif-card \{[^}]*touch-action: pan-y;/.test(css) && /\.toast-card \{[^}]*touch-action: pan-y;/.test(css), "a finger sideways is a swipe, up and down still scrolls");
+ok(/\.notif-card \{[^}]*touch-action: pan-y;/.test(css), "a finger sideways is a swipe, up and down still scrolls the list");
+ok(/\.toast-card \{[^}]*touch-action: none;/.test(css), "a toast takes the finger itself (1.31.9: it can be swiped up and away too)");
 ok(/\.toast-item\[data-leaving\] \{ grid-template-rows: 0fr; \}/.test(css), "a toast's place closes too");
 ok(/html\[data-glass\] \.notif-panel \{ background-color: rgb\(var\(--surface\) \/ var\(--glass-tint\)\); \}/.test(css), "the bell is as clear as the cards (set as the colour: the floating boxes' rule is more specific)");
 ok(/html\[data-glass\]:has\(\[data-dash-bg\]\) \.notif-panel \{\s+background-color: rgb\(var\(--surface\) \/ max\(var\(--glass-tint\), var\(--wall-floor\)\)\);/.test(css), "over a wallpaper it keeps the words readable");

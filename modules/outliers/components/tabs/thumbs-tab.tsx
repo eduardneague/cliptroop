@@ -104,7 +104,7 @@ export function ThumbsTab({ data }: { data: ThumbsData }) {
           )}
         </section>
 
-        <aside className="min-w-0 space-y-4 xl:sticky xl:top-[4.5rem] xl:self-start">
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)] xl:self-start">
           {data.colors ? <ColorFacts c={data.colors} onPick={setFamily} picked={family} /> : <EmptyNote title="Colours show up once thumbnails are read" />}
         </aside>
       </div>

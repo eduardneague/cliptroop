@@ -10,6 +10,7 @@ import { channelProfile, FIT_VERSION, fitOf, keywordHit, namedBy, nicheLangs, ni
 import { detectFormats, FORMAT_VERSION, traitBits } from "./formats";
 import { channelRow, playlistsOf, thumbUrl, VIDEO_ID, videoRow, type VideoRow } from "./ingest";
 import { buildInsights } from "./insights";
+import { audienceRows, AudienceReads } from "./audience-pairs";
 import { channelNumbers, multText, projectedScore } from "./scores";
 import { dueSearches, keywordStems } from "./plan";
 import { shortCrop, thumbNumbers } from "./thumb-math";
@@ -321,7 +322,8 @@ async function teamLang(ctx: Ctx) {
 // ---------------------------------------------------------------------------
 
 /** Columns added later (a database without them yet still takes the rest). */
-const NEWER_COLUMNS: Record<string, string[]> = { yt_videos: ["lang_region"] };
+// Columns a database without the newest migration doesn't have yet: saved without them then.
+const NEWER_COLUMNS: Record<string, string[]> = { yt_videos: ["lang_region"], outlier_audience: ["pairs"] };
 
 async function upsertRows(admin: Admin, table: string, rows: Record<string, unknown>[], onConflict: string) {
   for (let i = 0; i < rows.length; i += 400) {
@@ -1014,17 +1016,11 @@ async function buildAudience(ctx: Ctx) {
   };
   if (!accs.length) return save("no-youtube");
   const own = new Set(accs.map((a) => a.external_id));
-  // Suggesting video → views it sent, and which of the team's videos it was next to.
-  const sent = new Map<string, { views: number; ours: Set<string> }>();
-  const add = (id: string, views: number | null, ours?: string) => {
-    if (!VIDEO_ID.test(id)) return;
-    const e = sent.get(id) ?? { views: 0, ours: new Set<string>() };
-    if (ours) {
-      e.views += views ?? 0;
-      e.ours.add(ours);
-    } else e.views = Math.max(e.views, views ?? 0);
-    sent.set(id, e);
-  };
+  // What each suggesting video sent (1.31.8): to which of the team's videos (a pair), or to the channel as a whole
+  // when YouTube didn't say which. The same pair can come from more than one place (the video's own copy since it
+  // was posted, the last 90 days straight from YouTube): its biggest count is the one kept, never their sum.
+  const reads = new AudienceReads();
+  const add = (id: string, views: number | null, ours?: string) => reads.add(id, views, ours);
   const { data: kept } = await ctx.admin.from("analytics_breakdowns").select("external_id, key, views").eq("team_id", team).eq("platform", "youtube").eq("dimension", "suggested_by").limit(5000);
   for (const r of (kept ?? []) as { external_id: string; key: string; views: number | null }[]) add(String(r.key).split("|")[0], num(r.views), r.external_id || undefined);
   let note: string | null = null;
@@ -1039,10 +1035,11 @@ async function buildAudience(ctx: Ctx) {
       answered++;
       for (const x of r.rows) add(String(x.insightTrafficSourceDetail ?? ""), num(x.views), v.external_id);
     }
-    if ((mine ?? []).length && !answered && !sent.size) note = "no-analytics";
+    if ((mine ?? []).length && !answered && reads.empty) note = "no-analytics";
   } catch {
-    if (!sent.size) note = "no-analytics";
+    if (reads.empty) note = "no-analytics";
   }
+  const sent = reads.bySource();
   if (!sent.size) return save(note ?? "nothing-yet");
   // Their channels (videos not collected yet are read: 1 unit per 50).
   const ids = [...sent.keys()];
@@ -1059,23 +1056,12 @@ async function buildAudience(ctx: Ctx) {
       if (!(e instanceof QuotaError)) throw e;
     }
   }
-  const byChannel = new Map<string, { views: number; videos: Set<string>; ours: Set<string>; top: [string, number][] }>();
-  for (const [vid, e] of sent) {
-    const cid = chanOf.get(vid);
-    if (!cid || own.has(cid)) continue;
-    const c = byChannel.get(cid) ?? { views: 0, videos: new Set<string>(), ours: new Set<string>(), top: [] };
-    c.views += e.views;
-    c.videos.add(vid);
-    for (const o of e.ours) c.ours.add(o);
-    c.top.push([vid, e.views]);
-    byChannel.set(cid, c);
-  }
-  const rows = [...byChannel.entries()]
-    .map(([channel_id, c]) => ({ team_id: team, channel_id, views: Math.round(c.views), videos: c.videos.size, ours: c.ours.size, top: c.top.sort((a, b) => b[1] - a[1]).slice(0, 3).map((x) => x[0]), updated_at: new Date().toISOString() }))
-    .sort((a, b) => b.views - a.views)
+  const rows = audienceRows(sent, chanOf, own)
+    .map((r) => ({ team_id: team, ...r, updated_at: new Date().toISOString() }))
     .slice(0, 300);
   if (rows.length) {
     await ensureChannels(ctx, rows.slice(0, 150).map((r) => r.channel_id)).catch(() => new Set<string>());
+    // (Before 0106 the pairs are left out: NEWER_COLUMNS.)
     await upsertRows(ctx.admin, "outlier_audience", rows, "team_id,channel_id");
   }
   // Channels that dropped out of the list go.

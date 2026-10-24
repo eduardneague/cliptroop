@@ -1,6 +1,7 @@
 # Automatic checks on every update: a push to any branch, and every pull
-# request. A red ✗ next to the commit means something below failed; Vercel
-# still deploys, so look before merging staging into main.
+# request. A red ✗ next to the commit means something below failed. Vercel
+# still deploys after most of them, so look before merging staging into main;
+# a known vulnerability stops the build itself, on Vercel too (1.31.7).
 name: CI
 
 on:
@@ -45,9 +46,11 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
   audit:
-    # 1.31.2: a red ✗ here means a package the app ships has a known high or critical
-    # vulnerability: update it (npm install <package>@<fixed version>) or merge Dependabot's fix.
-    name: Known vulnerabilities in what the app ships
+    # 1.31.7: the vulnerability gate (scripts/audit.mjs), the same check `npm run build` runs first on Vercel, so a
+    # version with a known vulnerability never deploys. Red ✗ = a package has a known problem: what the app ships
+    # from moderate up, the build tools from high up. The log says which and how to fix it
+    # (docs/DEVELOPMENT.md → Vulnerability gate).
+    name: Known vulnerabilities (the build stops on them)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -57,8 +60,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: npm audit (high and critical, the app's own packages)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Vulnerability gate (npm audit, both kinds of package)
+        run: node scripts/audit.mjs
 
   migrations:
     name: Migrations apply from scratch

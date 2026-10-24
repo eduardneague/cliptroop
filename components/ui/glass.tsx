@@ -76,8 +76,8 @@ export function GlassSync({ look }: { look: Look | null }) {
   return <LiquidLight />;
 }
 
-/** What can catch Liquid's light: widgets, the main pop-ups, the phone tab bar (the CSS draws it on these). */
-const LIT = ".dash-item, .glass-pane, [data-shell='bottom-nav']";
+/** What can catch Liquid's light: widgets, the main pop-ups, the phone tab bar, the floating top bar (1.31.9; the CSS draws it on these). */
+const LIT = ".dash-item, .glass-pane, [data-shell='bottom-nav'], [data-shell='header']";
 
 /**
  * Liquid's light (1.28.0; 1.29.3: on the pane you point at only). The rim of

@@ -5,6 +5,7 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
 import { BottomNavItems } from "./sidebar-nav";
 import type { TeamSummary } from "@/lib/teams";
 import { initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function MobileTopBar({
   teams,
@@ -31,12 +32,7 @@ export function MobileTopBar({
         className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 overflow-hidden"
         style={{ background: userColor }}
       >
-        {userAvatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={userAvatarUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initialsFor(userDisplayName)
-        )}
+        <AvatarImg src={userAvatarUrl} fallback={initialsFor(userDisplayName)} />
       </Link>
     </div>
   );

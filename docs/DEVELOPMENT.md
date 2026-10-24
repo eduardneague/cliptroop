@@ -21,8 +21,9 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
 - `staging` deploys to staging.cliptroop.com, `main` to app.cliptroop.com.
   Merge with a pull request staging → main, "Create a merge commit" (never
   squash), and never delete `staging`.
-- Every push runs **CI**: type check, lint, `npm test`, a production build,
-  and every migration on an empty database, followed by the access checks in
+- Every push runs **CI**: type check, lint, `npm test`, the vulnerability
+  gate, a production build (which runs the gate first too, as Vercel's
+  does), and every migration on an empty database, followed by the access checks in
   `supabase/tests/*.test.sql` (plain SQL that signs in as different people
   and raises when someone can read or write what they shouldn't; start with
   `objectives.test.sql`). Run it yourself with `npm run db:test` and a
@@ -57,9 +58,58 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
   in `lib/notify.ts`.
 - **Never trust a teamId from the browser for a privileged action.** Derive
   the team from the row being acted on (see `requireProjectMaster`).
+- **Every server action and API route checks who's asking (1.31.12)**:
+  `auth.getUser()` (actions that decide something), `getMembership()` /
+  `requireMaster()` / `requireSocialManager()` / `requireProjectMaster()`
+  for a team or a role, `requireDeveloper()` / `isDeveloper()` for the
+  developer's pages, `teamForRequest()` in Analytics' routes,
+  `cronAuthorized(header, process.env.CRON_SECRET)` (`lib/cron-auth.ts`)
+  for scheduled jobs. One that leaves it to the database (RLS, or a
+  database function that checks the role) is listed in
+  `tests/access.test.ts` with the reason, and may not use the service key;
+  the test fails for a new action or route with neither.
+- **The app's own addresses (1.31.13):** a write (POST, PUT, PATCH,
+  DELETE) to `/api/*` from another site is turned away by the middleware
+  (`crossSiteWrite`, `lib/request-guard.ts`: Origin, else
+  Sec-Fetch-Site), except `/api/cron/*` (the timer's secret) and
+  `/api/auth/*`. No route sends CORS headers. Anything that costs per call
+  (reads another site, asks a platform, sends a notification or an email)
+  takes `overLimit(bucket, user.id, max, windowMs)` (`lib/rate-limit.ts`,
+  per server instance) and answers 429. There are no inbound webhooks: a
+  new one verifies the sender's signature (constant time) before reading
+  the body, and goes in `tests/api.test.ts`' list of routes that take
+  writes.
 - **Database triggers enforce the invariants:** only a Master changes a
   project's stage; projects never change team; the owner can't be removed
   and is always Master; only the owner grants or removes Master.
+- **Passwords (1.31.10):** chosen in three places only: `/set-password`
+  (an invite's first step), `/reset-password` (a reset link) and Settings →
+  Account → Password (`changePassword` in `settings/account-actions.ts`).
+  All three use `lib/auth/password-rules.ts` (`checkPassword`: 8 characters
+  or more, 72 bytes at most, not common or a run, not the person's email
+  or name; `passwordSaveError` for Supabase's answers) and
+  `<NewPasswordFields>` (`components/ui/new-password.tsx`, the checklist).
+  Only a session that came from an email link (the token's `amr`:
+  `fromEmailLink`) chooses one without the current password; changing it
+  in Settings checks the current one with the sign-in limits (0105) and
+  signs in again first (a fresh session, which Supabase's "Secure password
+  change" wants). Supabase signs out every other session on any password
+  change (they stop when their access token runs out, up to an hour).
+  `tests/password-rules.test.ts` fails if a fourth place calls
+  `updateUser({ password })`.
+- **Sessions (1.31.11):** Log out is this device only (`signOutHere()` in
+  `app/(dashboard)/actions.ts`: `signOut({ scope: "local" })`; supabase-js
+  signs every device out by default, so never call `auth.signOut()` bare).
+  Settings → Account → Sign out everywhere else is `signOutElsewhere()`
+  (`scope: "others"`). A device signed out from elsewhere, or by a new
+  password, also stops getting notifications (`forgetOtherDevices`,
+  `lib/push/devices.ts`). Every cookie the app sets is `Secure` on https:
+  the Supabase clients take `cookieOptions: sessionCookieOptions(protocol)`
+  (`lib/supabase/cookie-options.ts`); a new cookie does the same. An
+  email's link never swaps the signed-in account without asking: `/welcome`
+  verifies on a side client when someone is signed in and asks "Continue as
+  … / Stay as …" (`lib/auth/link-swap.ts`); old-style `#access_token` links
+  are handed to `/welcome?swap=1` by `AuthHashHandler`.
 
 ## Timers and daily jobs
 
@@ -187,6 +237,33 @@ the page is live, or React throws that part away (production error #418).
   `<Segmented>` (`components/ui/segmented.tsx`: a radio group, arrow keys,
   optional counts). On phones put it in a `-mx-4 px-4 overflow-x-auto
   no-scrollbar sm:mx-0 sm:px-0` row so it scrolls instead of overflowing.
+  (1.31.9: Objectives' six cadences didn't, and the page went wider than a
+  phone and off centre. The layout's `<main>` is `overflow-x-clip` now, so a
+  page can't scroll sideways, but a row that's cut off is still a bug.)
+- **Pictures of people, team logos and account pictures (1.31.9):**
+  `<AvatarImg src={url} fallback={initials} />`
+  (`components/ui/avatar-img.tsx`) inside the coloured circle, never
+  `{url ? <img …/> : initials}`. It loads eagerly (lazy pictures never
+  started on some iPhones and the circle stayed a plain colour), sends no
+  referrer, retries once past the cache and then shows the fallback.
+  `tests/phone-glass.test.ts` fails on a bare `<img>` whose src is an
+  avatar, logo or picture without its own `onError`.
+- **A video shown as a picture** (a tile, a preview, a paused wallpaper):
+  `src={stillSrc(url)}` (`lib/video-still.ts`, adds `#t=0.1`) with
+  `preload="metadata"`: an iPhone draws nothing for a video that hasn't
+  played.
+- **What sticks under the top bar** sticks at `var(--shell-top,3.5rem)`, not
+  `top-14` / 56px: with the glass look on a computer the bar floats (1.31.9,
+  10 px down, 52 px tall) and `--shell-top` is 72px. Inside Outliers, what
+  sticks under its own bar adds `var(--ol-bar)` (its measured height):
+  `top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)]`.
+  `[data-shell="edge"]` (layout) blurs what scrolls under the floating bar;
+  a new sticky bar of a page's own gets `data-shell="subbar"` and z-index 15
+  (above the edge, z 14; under the top bar, z 20).
+- **Toasts** (`useToast()`): their time comes from `toastDuration()`
+  (3.5 s, an error 5.5 s, with an action 6.5 s); pass `duration` only for a
+  reason. They go with their ×, a swipe sideways, up on a phone (they sit
+  at the top) or down on a computer.
 - **Popups:** lock the page with `useScrollLock(open)` or `lockScroll()`
   (`lib/hooks/use-scroll-lock.ts`). The locks are counted, so popups can
   close in any order; never set `document.body.style.overflow` yourself.
@@ -492,7 +569,7 @@ loading blocks with greys of their own.
 
 **Outliers' panel, menus and colours (1.29.9).** The video and channel
 panels share ONE `PanelFrame` (`modules/outliers/components/panel.tsx`,
-mounted by `Panels` in `panels.tsx` while `ctx.panel` is set): a panel's
+mounted by the page itself while `ctx.panel` is set, 1.31.8): a panel's
 own component renders `PanelContent` (its label, the bar's middle and its
 body), never a shell of its own, so moving between a video and a channel
 changes what's inside without closing and re-opening anything (no replayed
@@ -507,6 +584,26 @@ behind it. A multiplier's colour comes only from `heat()` / `HEAT`
 (`modules/outliers/lib/heat.ts`): red, yellow, green, never `--amber`;
 put a number on a fill with `heat(x).on`, not white. An empty list that's
 empty because a niche has no videos yet passes `finding` to `EmptyNote`.
+
+**Outliers: the panel opens at once, and the usual (1.31.8, 0106).** The
+frame is in the page's own code (`outliers-view.tsx`); only what's inside
+(`PanelBody` in `panels.tsx`) is a lazy piece, behind
+`<Suspense fallback={<PanelLoading panel={…} />}>`
+(`panel-preview.tsx`, which the panels also use while their numbers load,
+so nothing jumps). General rule: a `dynamic()` (or `lazy()`) component that
+first renders after a click needs a `loading` (or its own `<Suspense>`):
+without one it suspends up to the route's loading.tsx and the whole page
+flashes its loading screen. Wherever a usual sits next to a ×, it's
+`usualThen(v)` (`lib/scores.ts`: views ÷ score, the median of the channel's
+videos just before it, which the score keeps as the views move), never
+`channel.usual` / `longMedian` (the channel's usual now); say both only
+when `usualsDiffer`. Engaged views exist only for the team's own videos
+(`VideoDetail.own`, from `analytics_content`). A tab, niche or kind change
+calls `toTop()`. "Your viewers watch it" comes from
+`outlier_audience.pairs` (0106, ≤ 12 `{ours, from, views}`), which
+`buildAudience` fills through `AudienceReads` / `audienceRows`
+(`lib/audience-pairs.ts`: a pair seen in two reads counts once, at its
+bigger number).
 
 **Scroll bars (1.29.10).** One look, drawn in `globals.css` (the
 "Scroll bars" block) only where the system's bars take room: the root
@@ -598,9 +695,34 @@ it: `tests/packages.test.ts` fails on a listed package nothing uses, on a
 lock that doesn't match package.json, and on any new package that runs an
 install script (look at what it runs, then add it to the reviewed list).
 Dependabot opens one pull request a week into staging with the small
-updates; a major version is a change of its own, by hand. CI's audit job
-turning red means a package the app ships has a known high or critical
-problem: update it before the next release.
+updates; a major version is a change of its own, by hand.
+
+**Vulnerability gate (1.31.7).** `npm run build` runs `scripts/audit.mjs`
+before Next builds anything, on your computer, in CI and on Vercel, so a
+version with a known vulnerability never builds and never deploys (CI's
+"Known vulnerabilities" job runs the same check, so the red ✗ says why). It
+asks npm twice: what the app ships (`--omit=dev`) stops the build from
+**moderate** up, the build tools (devDependencies only) from **high** up;
+the rest is printed. When it stops a build:
+1. Read the log: the package, where it sits (`postcss (inside next)`), the
+   advisory and what would fix it.
+2. A fixed version within range: `npm install <package>@<version>` (or
+   `npm update`), push package.json and package-lock.json together.
+3. Only a new major version fixes it (npm says "isSemVerMajor"): first look
+   for a newer release of the package that holds it; otherwise make
+   everything use a fixed copy with `overrides` in package.json, as 1.31.7
+   did for PostCSS inside Next.js 15 (`"overrides": { "postcss": "$postcss" }`
+   with postcss itself at the fixed version in devDependencies). Never
+   `npm audit fix --force` (it jumps or even downgrades majors).
+4. No fix exists and it can't reach the app: a waiver in
+   `security/audit-waivers.json` (`id` = the GHSA, `package`, a `reason`,
+   `until` at most 90 days ahead). After the date it lets nothing through;
+   one npm no longer reports is pointed out so it can go.
+If npm can't be reached the build stops too (nothing unchecked goes out);
+during a real npm outage, `AUDIT_UNREACHABLE=allow` in Vercel's settings lets
+one deploy through unchecked; take it out right after. The rules are pure
+(`scripts/audit-rules.mjs`) and `tests/audit.test.ts` checks them, the
+wiring, and that the lock holds one PostCSS of 8.5.10 or newer.
 
 **Pictures (1.31.3, 0104).** Anywhere a picture can be picked, check it
 with `pictureTooBig(file)` (5 MB) or `pictureTooBig(file, "thumbnail")`

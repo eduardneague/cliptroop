@@ -16,6 +16,7 @@ import { measureFile } from "@/lib/wallpapers-measure";
 import { startUpload, UploadError } from "@/lib/upload/resumable";
 import { updateDashboardBackground } from "./actions";
 import { addWallpaper, pickWallpaper, removeWallpaper, replaceWallpaper } from "./wallpaper-actions";
+import { stillSrc } from "@/lib/video-still";
 
 /**
  * Settings → Preferences → Dashboard background (1.27.5; saved wallpapers in
@@ -389,10 +390,10 @@ export function DashboardBackground({
                       style={toneStyle(w.luma, dim)}
                     >
                       {video ? (
-                        <video src={w.url} muted loop playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" onMouseEnter={(e) => void e.currentTarget.play().catch(() => null)} onMouseLeave={(e) => e.currentTarget.pause()} />
+                        <video src={stillSrc(w.url)} muted loop playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" onMouseEnter={(e) => void e.currentTarget.play().catch(() => null)} onMouseLeave={(e) => e.currentTarget.pause()} />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={w.url} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                        <img src={w.url} alt="" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
                       )}
                       <span className="absolute inset-0" style={{ background: `rgb(var(--paper) / ${dim / 100})` }} aria-hidden />
                       {/* The words in the colour the dashboard will use over it. */}
@@ -533,7 +534,7 @@ function UploadTile({ job }: { job: Job }) {
   return (
     <div className="relative w-full aspect-video rounded-xl overflow-hidden ring-2 ring-amber/60 ring-offset-2 ring-offset-surface" role="status" aria-live="polite" aria-label={label}>
       {job.video ? (
-        <video src={job.preview} muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+        <video src={stillSrc(job.preview)} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={job.preview} alt="" className="absolute inset-0 w-full h-full object-cover" />

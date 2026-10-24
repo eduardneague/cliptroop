@@ -7,6 +7,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { SettingsIcon } from "./icons";
 import { WhatsNewButton } from "./whats-new";
 import { Brand } from "./clip-logo";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function Sidebar({
   teams,
@@ -52,12 +53,7 @@ export function Sidebar({
               className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 overflow-hidden"
               style={{ background: userColor }}
             >
-              {userAvatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img loading="lazy" decoding="async" src={userAvatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                initialsFor(userDisplayName)
-              )}
+              <AvatarImg src={userAvatarUrl} fallback={initialsFor(userDisplayName)} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-semibold truncate">

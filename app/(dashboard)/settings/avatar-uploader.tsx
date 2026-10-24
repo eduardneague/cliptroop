@@ -2,6 +2,7 @@
 
 import { initialsFor } from "@/lib/avatar";
 import { useAvatarUpload } from "./use-avatar-upload";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function AvatarUploader({
   userId,
@@ -22,12 +23,7 @@ export function AvatarUploader({
         className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0 overflow-hidden"
         style={{ background: color }}
       >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={avatarUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initialsFor(displayName)
-        )}
+        <AvatarImg src={avatarUrl} fallback={initialsFor(displayName)} />
       </div>
       <button
         onClick={pick}

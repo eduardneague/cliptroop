@@ -7,6 +7,7 @@ import { requestOwnershipTransfer, cancelOwnershipTransfer } from "./actions";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { colorForId, initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 type Candidate = { userId: string; name: string; avatarUrl: string | null };
 
@@ -116,12 +117,7 @@ export function TransferOwnership({
                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
                 style={{ background: colorForId(selected.userId) }}
               >
-                {selected.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img loading="lazy" decoding="async" src={selected.avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  initialsFor(selected.name)
-                )}
+                <AvatarImg src={selected.avatarUrl} fallback={initialsFor(selected.name)} />
               </span>
               <span className="font-semibold flex-1 truncate">{selected.name}</span>
             </>
@@ -147,12 +143,7 @@ export function TransferOwnership({
                   className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
                   style={{ background: colorForId(c.userId) }}
                 >
-                  {c.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img loading="lazy" decoding="async" src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    initialsFor(c.name)
-                  )}
+                  <AvatarImg src={c.avatarUrl} fallback={initialsFor(c.name)} />
                 </span>
                 <span className="text-[13px] font-medium truncate">{c.name}</span>
               </button>

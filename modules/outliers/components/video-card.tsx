@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { compact, duration } from "../lib/filters";
-import { multText } from "../lib/scores";
+import { multText, usualThen } from "../lib/scores";
 import type { OutlierVideo } from "../lib/types";
 import { ChannelAvatar, DurationChip, heat, Mult, Spike, Thumb, TimeAgo } from "./bits";
 import { CardMenu } from "./card-menu";
@@ -270,6 +270,8 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
   const { openVideo, openChannel } = useOutliersNav();
   const short = v.kind === "short";
   const h = heat(v.score);
+  // The usual its × is measured against (1.31.8), so the line under it adds up.
+  const usual = usualThen(v) ?? v.channel.usual;
   return (
     <article className={`group relative grid rounded-2xl border border-line/10 bg-surface overflow-hidden min-w-0 h-full ${short ? "grid-cols-[minmax(0,42%)_minmax(0,1fr)]" : "sm:grid-rows-[auto_1fr]"}`}>
       <div className="relative">
@@ -305,7 +307,7 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
             </button>
             <span className="block text-ink-faint truncate">
               <span className="tabular-nums font-semibold text-ink-soft">{compact(v.views)}</span> views
-              {v.channel.usual ? <> vs {compact(v.channel.usual)} usual</> : null} · <TimeAgo iso={v.publishedAt} />
+              {usual ? <> vs {compact(usual)} usual</> : null} · <TimeAgo iso={v.publishedAt} />
             </span>
           </div>
         </div>

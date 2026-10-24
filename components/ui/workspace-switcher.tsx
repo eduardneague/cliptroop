@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { switchTeam } from "../../app/(dashboard)/actions";
 import type { TeamSummary } from "@/lib/teams";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 function initials(name: string) {
   return name
@@ -19,20 +20,16 @@ function initials(name: string) {
 function TeamAvatar({ team, size }: { team: TeamSummary; size: "sm" | "md" }) {
   const dim = size === "sm" ? "w-5 h-5" : "w-7 h-7";
   const text = size === "sm" ? "text-[9px]" : "text-[11px]";
-  if (team.logoUrl) {
-    return (
-      <span className={`${dim} rounded-md overflow-hidden flex-shrink-0`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img loading="lazy" decoding="async" src={team.logoUrl} alt="" className="w-full h-full object-cover" />
-      </span>
-    );
-  }
-  return (
-    <span
-      className={`${dim} rounded-md flex items-center justify-center ${text} font-bold text-white flex-shrink-0`}
-      style={{ background: team.color }}
-    >
+  // The logo as it is (a see-through one stays see-through); the team's colour and initials without one, or when
+  // it can't load (1.31.9: it used to stay an empty square).
+  const plain = (
+    <span className={`w-full h-full flex items-center justify-center ${text} font-bold text-white`} style={{ background: team.color }}>
       {initials(team.name)}
+    </span>
+  );
+  return (
+    <span className={`${dim} rounded-md flex-shrink-0 overflow-hidden flex`}>
+      <AvatarImg src={team.logoUrl} fallback={plain} />
     </span>
   );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { overLimit } from "@/lib/rate-limit";
 import { APP_NAME } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -50,6 +51,8 @@ export async function inviteExistingUser(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Session expired." };
+  // Each one is a notification (and a phone notification) to someone (1.31.13): a team's worth, not a flood.
+  if (overLimit("invite", user.id, 30, 60 * 60_000)) return { error: "That's a lot of invites in an hour. Wait a bit, then try again." };
 
   // Clear out any of THEIR pending invites to THIS team that have gone
   // stale (past the 1-hour window) — this is what makes re-inviting

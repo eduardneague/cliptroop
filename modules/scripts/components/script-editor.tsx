@@ -97,6 +97,8 @@ const WIDTH_KEY = "vp:script-width";
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 /** The app's own bar at the top of every page (h-14). */
 const APP_BAR = 56;
+/** Where the header sticks on a computer: under the app's bar, which floats a little lower with the glass look (1.31.9, --shell-top). */
+const UNDER_BAR = `var(--shell-top, ${APP_BAR}px)`;
 type Width = "normal" | "wide" | "full";
 /** How wide the long page gets (1.23.0): Normal, Wide or the whole width. */
 const STRIP_W: Record<Width, string> = { normal: "max-w-3xl", wide: "max-w-[1080px]", full: "max-w-none" };
@@ -842,7 +844,7 @@ export function ScriptEditor({
       const tool = toolRef.current?.offsetHeight ?? 0;
       const phone = !mq.matches;
       setHead((x) => (x.h === h && x.tool === tool && x.phone === phone ? x : { h, tool, phone }));
-      document.documentElement.style.setProperty("--script-head-bottom", `${APP_BAR + (phone ? tool : h)}px`);
+      document.documentElement.style.setProperty("--script-head-bottom", phone ? `${APP_BAR + tool}px` : `calc(${UNDER_BAR} + ${h}px)`);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -860,7 +862,7 @@ export function ScriptEditor({
     ? hasTools
       ? { top: APP_BAR - Math.max(0, head.h - head.tool), zIndex: 15 }
       : { position: "static" }
-    : { top: APP_BAR, zIndex: 15 };
+    : { top: UNDER_BAR, zIndex: 15 };
 
   const statusText: Record<Status, string> = {
     saved: "Saved",

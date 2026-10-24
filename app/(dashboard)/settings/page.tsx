@@ -19,6 +19,8 @@ import { AvatarUploader } from "./avatar-uploader";
 import { ProfileForm } from "./profile-form";
 import { ProfilePrivacy } from "./profile-privacy";
 import { DeleteAccount, type AccountTeam } from "./delete-account";
+import { PasswordSection } from "./password-section";
+import { SignOutElsewhere } from "./sign-out-elsewhere";
 import { TeamsVisibilityToggle } from "./teams-visibility-toggle";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { LogoutButton } from "@/components/ui/logout-button";
@@ -38,6 +40,7 @@ import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
 import { ReplayTutorialButton } from "@/components/tutorial/tutorial";
 import { Mascot } from "@/components/ui/mascot";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -243,12 +246,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-white text-[11px] font-bold"
                     style={{ background: team.color }}
                   >
-                    {team.logo_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img loading="lazy" decoding="async" src={team.logo_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      team.name.slice(0, 2).toUpperCase()
-                    )}
+                    <AvatarImg src={team.logo_url} fallback={team.name.slice(0, 2).toUpperCase()} />
                   </span>
                   <span className="text-[13.5px] font-semibold flex-1">{team.name}</span>
                   <span className="text-[11px] text-ink-faint">
@@ -414,10 +412,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </Link>
             </>
           )}
-          <LogoutButton className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors">
-            Log out
-          </LogoutButton>
+          {/* 1.31.11: Log out is this device only; the other devices have their own button. */}
+          <div id="sessions" className="grid gap-2 sm:grid-cols-2 scroll-mt-24">
+            <LogoutButton className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors">
+              Log out
+            </LogoutButton>
+            <SignOutElsewhere className="w-full rounded-lg border border-line/20 font-semibold py-2.5 text-sm hover:border-line/40 hover:bg-surface-2 transition-colors disabled:opacity-60" />
+          </div>
+          <p className="text-[12px] text-ink-faint">Log out signs out this device. Lost a phone, or signed in on someone else&rsquo;s computer? Sign out everywhere else.</p>
         </section>
+      )}
+      {tab === "account" && (
+        <PasswordSection
+          // The sign-in's own email (what a reset link goes to), the profile's copy only without it.
+          email={user?.email ?? profile?.email ?? ""}
+          names={[profile?.full_name as string | null | undefined, profile?.username as string | null | undefined].filter((n): n is string => !!n)}
+        />
       )}
       {tab === "account" && <DeleteAccount email={profile?.email ?? user?.email ?? ""} teams={accountTeams} />}
       </div>

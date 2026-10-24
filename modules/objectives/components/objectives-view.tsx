@@ -337,14 +337,18 @@ export function ObjectivesView({
       </div>
 
       {/* One toolbar above everything it filters. */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap" role="toolbar" aria-label="Filter objectives">
+      <div className="flex items-center gap-2 mb-4 flex-wrap min-w-0" role="toolbar" aria-label="Filter objectives">
         {cadences.length > 1 && (
-          <Segmented
-            ariaLabel="Cadence"
-            value={cadence}
-            onChange={setCadence}
-            options={[{ value: "all" as const, label: "All" }, ...cadences.map((k) => ({ value: k, label: cap(THIS[k]) }))]}
-          />
+          // Six of them are wider than a phone (1.31.9): the row slides on its own there instead of making the whole
+          // page wider than the screen (it went off to the side and everything moved off centre).
+          <div className="max-w-full min-w-0 overflow-x-auto overscroll-x-contain no-scrollbar sm:overflow-visible">
+            <Segmented
+              ariaLabel="Cadence"
+              value={cadence}
+              onChange={setCadence}
+              options={[{ value: "all" as const, label: "All" }, ...cadences.map((k) => ({ value: k, label: cap(THIS[k]) }))]}
+            />
+          </div>
         )}
         <Segmented
           ariaLabel="How it's going"

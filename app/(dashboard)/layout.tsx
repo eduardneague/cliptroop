@@ -135,6 +135,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             developer={developer}
           />
           <div className="flex-1 min-w-0 flex flex-col">
+            {/* Under the floating top bar (glass on a computer, 1.31.9; globals.css): what scrolls up under it blurs softly away. */}
+            <div data-shell="edge" aria-hidden />
             {/* Three columns on desktop so the search bar sits in the true
                 middle of the top bar: [brand] [search] [actions]. On phones:
                 brand on the left, search icon + actions on the right. */}
@@ -181,7 +183,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
               userAvatarUrl={resolvedAvatar}
               userColor={resolvedColor}
             />
-            <main className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+            {/* overflow-x-clip (1.31.9): nothing in a page can make it wider than the screen and slide sideways on a phone. */}
+            <main className="flex-1 min-w-0 overflow-x-clip pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
               {everywhere ? (
                 // data-dash-bg: glass over it, and the bars, read the picture (globals.css); drawn once, it stays put between pages.
                 <div data-dash-bg className="contents wall-tone">

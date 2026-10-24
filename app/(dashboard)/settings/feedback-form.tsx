@@ -23,6 +23,7 @@ import {
   type FeedbackKind,
 } from "@/lib/feedback";
 import { submitFeedback } from "./feedback-actions";
+import { stillSrc } from "@/lib/video-still";
 
 type Item = { id: string; file: File; url: string; video: boolean; type: string; sent: number; state: "ready" | "uploading" | "uploaded" | "failed"; path?: string; broken?: boolean };
 export type SentReport = { id: string; kind: FeedbackKind; message: string; status: "new" | "done"; createdAt: string; files: number };
@@ -475,7 +476,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                         {it.broken ? (
                           <span className="absolute inset-0 grid place-items-center text-ink-faint">{it.video ? <PlayIcon className="w-6 h-6" /> : <ImageIcon className="w-6 h-6" />}</span>
                         ) : it.video ? (
-                          <video src={it.url} muted playsInline preload="metadata" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
+                          <video src={stillSrc(it.url)} muted playsInline preload="metadata" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={it.url} alt="" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />

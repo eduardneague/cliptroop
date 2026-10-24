@@ -761,6 +761,119 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="topb
 html[data-glass][data-glass-opaque] [data-shell="bottom-nav"] { background-color: rgb(var(--surface)); }
 html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subbar"])::before { display: none; }
 
+/*
+  The top bar floats (1.31.9). With the glass look on a computer (from md,
+  where the side bar is), the top bar is a pane of its own like the side
+  bar: off the side bar's edge, lined up with the page's own edges (the
+  dashboard's "Good morning" and its widgets: 20 px, 24 px from xl), 10 px
+  from the top like Liquid's floating side bar, rounded, and real glass
+  (blur, the cards' tint, a rim of light; Liquid's light follows the
+  pointer on it). It used to run edge to edge from the side bar. What
+  sticks under it starts below it: --shell-top (Outliers' bar). Phones keep
+  their bars; solid glass (the slider at 0) keeps the plain bar.
+
+  What scrolls up under it blurs softly away instead of showing sharp
+  around it (iOS 26's scroll edge): [data-shell="edge"], a band over the
+  top of the page (the layout puts it just before the top bar), under a
+  page's own bar (Outliers', z 15) and the top bar (z 20). Its blur fades
+  out before the page's first words (they start below --shell-top), and it
+  comes in as the page scrolls where the browser can tie it to scrolling
+  (elsewhere it's there from the start, over the empty top only).
+*/
+[data-shell="edge"] { display: none; }
+@media (min-width: 900px) {
+  html[data-glass]:not([data-glass-opaque]) { --shell-top: 72px; }
+  html[data-glass]:not([data-glass-opaque]) [data-shell="edge"] {
+    display: block;
+    position: sticky;
+    top: 0;
+    height: 0;
+    z-index: 14;
+    pointer-events: none;
+    /* Not glass itself ([data-shell] are): a blur here would keep its band's blur from seeing the page. */
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: calc(var(--shell-top) + 10px);
+    background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.4)), rgb(var(--paper) / 0));
+    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    backdrop-filter: blur(10px) saturate(1.4);
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+  }
+  /* A page with its own bar under it (Outliers): blurred right down to that bar, which goes on from there. */
+  html[data-glass]:not([data-glass-opaque]):has([data-shell="subbar"]) [data-shell="edge"]::before {
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
+  }
+  @supports (animation-timeline: scroll()) {
+    html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]::before {
+      animation: shell-edge-in auto linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 48px;
+    }
+  }
+  html[data-glass]:not([data-glass-opaque]) [data-shell="header"] {
+    top: 10px;
+    height: 52px;
+    margin: 10px 20px 0;
+    padding-left: 14px;
+    padding-right: 10px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 18px;
+    background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9));
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+  }
+  /* Liquid's soft band of blur under a bar that touched the edges isn't needed under a floating one. */
+  html[data-glass]:not([data-glass-opaque]) [data-shell="header"]::before { display: none; }
+  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"] {
+    border-radius: 20px;
+    box-shadow: var(--liquid-rim), var(--liquid-drop);
+  }
+  /* Liquid's light, where the pointer is, on its rim (LiquidLight sets --mx / --my). */
+  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0px), rgb(var(--glint-rgb)), rgb(var(--glint-rgb) / 0) 72%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]:hover::after { opacity: 1; }
+  html[data-glass-style="halo"]:not([data-glass-opaque]) [data-shell="header"] {
+    border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
+    box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+  }
+  /* Over a wallpaper: the same floor and lift as the other bars, so its words stay readable. */
+  html[data-glass]:not([data-glass-opaque]):has([data-dash-bg]) [data-shell="header"] {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor)));
+    -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+    backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  }
+}
+@media (min-width: 1400px) {
+  html[data-glass]:not([data-glass-opaque]) [data-shell="header"] { margin-left: 24px; margin-right: 24px; }
+}
+@media (min-width: 900px) and (hover: none) {
+  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]::after { display: none; }
+}
+@keyframes shell-edge-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* The Customize button (and the toolbar while customizing) on a pane of its own over the picture: solid, or glass. */
 [data-dash-bg] .dash-tool { background: rgb(var(--surface)); }
 html[data-glass] [data-dash-bg] .dash-tool {
@@ -879,7 +992,8 @@ html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { backgrou
   loses its amber light. The timings match LEAVE_MS and ENTER_MS in
   components/ui/notification-bell.tsx.
 */
-.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s var(--ease-out) calc(var(--leave-delay, 0ms) + 0.14s); }
+/* 1.31.9: quicker (out in 0.2 s, the gap closed by 0.32 s). */
+.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.22s var(--ease-out) calc(var(--leave-delay, 0ms) + 0.08s); }
 .notif-clip { min-height: 0; overflow: hidden; }
 /* Up and down only: sideways it slides out to the bell's own edge. */
 @supports (overflow: clip) { .notif-clip { overflow-x: visible; overflow-y: clip; } }
@@ -916,7 +1030,7 @@ html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { backgrou
 .notif-item[data-leaving] .notif-card {
   transform: translateX(110%) scale(0.97);
   opacity: 0;
-  transition: transform 0.26s cubic-bezier(0.55, 0, 0.75, 0.25) var(--leave-delay, 0ms), opacity 0.22s ease var(--leave-delay, 0ms);
+  transition: transform 0.2s cubic-bezier(0.55, 0, 0.75, 0.25) var(--leave-delay, 0ms), opacity 0.16s ease var(--leave-delay, 0ms);
 }
 .notif-item[data-entering] { animation: notif-open 0.42s var(--ease-out) both; }
 .notif-item[data-entering] .notif-card { animation: notif-in 0.46s var(--ease-out) both; }
@@ -933,7 +1047,8 @@ html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { backgrou
 .toast-clip { min-height: 0; overflow: hidden; }
 @supports (overflow: clip) { .toast-clip { overflow-x: visible; overflow-y: clip; } }
 .toast-gap { padding: 4px 0 12px; }
-.toast-card { touch-action: pan-y; transition: transform 0.34s var(--ease-spring), opacity 0.2s ease; }
+/* 1.31.9: a finger on a toast only moves the toast (sideways, or up and away on a phone), never the page under it. */
+.toast-card { touch-action: none; transition: transform 0.34s var(--ease-spring), opacity 0.2s ease; }
 .toast-card[data-dragging] { transition: none; cursor: grabbing; }
 .toast-item[data-leaving] { grid-template-rows: 0fr; }
 .toast-item[data-leaving] .toast-card { transform: translateX(115%); opacity: 0; transition: transform 0.26s cubic-bezier(0.55, 0, 0.75, 0.25), opacity 0.2s ease; }

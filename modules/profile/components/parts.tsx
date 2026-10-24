@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { initialsFor } from "@/lib/avatar";
 import { levelShape, levelTint, type FrameId } from "@/lib/profile/progress";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 /*
  * The small pieces of a profile (1.28.0): the picture in its frame, the level
@@ -17,12 +18,7 @@ export function ProfileAvatar({ url, name, color, size, frame = "none", tint }: 
     <span className="pf-avatar" data-frame={frame} style={{ "--s": `${size}px`, "--pf": tint } as CSSProperties}>
       {frame !== "none" && <span className="pf-ring" aria-hidden />}
       <span className="pf-img" style={{ background: color, fontSize: size * 0.32 }}>
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt="" decoding="async" className="w-full h-full object-cover" />
-        ) : (
-          initialsFor(name)
-        )}
+        <AvatarImg src={url} fallback={initialsFor(name)} />
       </span>
       {frame === "laurel" && <Laurel />}
       {frame === "crown" && <Crown />}

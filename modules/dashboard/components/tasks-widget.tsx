@@ -10,6 +10,7 @@ import { MASCOT_NAME } from "@/lib/brand";
 import { sounds } from "@/lib/sounds";
 import { useBox } from "./widget-box";
 import type { Done, Task, TeamPersonLite, TeamTask, TeamTasks } from "../lib/queries";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 // Clip's runner (1.29.7): loaded only once the secret is found.
 const ClipRunner = dynamic(() => import("./clip-runner"), { ssr: false, loading: () => <div className="h-full min-h-[150px]" aria-hidden /> });
@@ -245,12 +246,9 @@ function NothingOverdue() {
 
 /** A person's picture (or initial) in their colour. */
 function Face({ p, size = 20 }: { p: TeamPersonLite; size?: number }) {
-  return p.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={p.avatarUrl} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size }} />
-  ) : (
-    <span className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ width: size, height: size, background: p.color, fontSize: size * 0.45 }} aria-hidden>
-      {p.name.slice(0, 1).toUpperCase()}
+  return (
+    <span className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden" style={{ width: size, height: size, background: p.color, fontSize: size * 0.45 }} aria-hidden>
+      <AvatarImg src={p.avatarUrl} fallback={p.name.slice(0, 1).toUpperCase()} />
     </span>
   );
 }

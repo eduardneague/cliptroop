@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { initialsFor } from "@/lib/avatar";
 import { profileHref } from "@/lib/profile-link";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 /**
  * Avatar + name, both linking to the person's profile. Used for every
@@ -30,12 +31,7 @@ export function MemberAvatarLink({
       }`}
       style={{ background: color }}
     >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img loading="lazy" decoding="async" src={avatarUrl} alt="" className="w-full h-full object-cover" />
-      ) : (
-        initialsFor(name)
-      )}
+      <AvatarImg src={avatarUrl} fallback={initialsFor(name)} />
     </span>
   );
   return href ? (

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTeamLogo } from "./actions";
 import { useToast } from "@/components/ui/toast-provider";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function TeamLogoUploader({
   teamId,
@@ -70,12 +71,7 @@ export function TeamLogoUploader({
         className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-xl flex-shrink-0 overflow-hidden"
         style={{ background: color }}
       >
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={logoUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initials
-        )}
+        <AvatarImg src={logoUrl} fallback={initials} />
       </div>
       <button
         onClick={() => inputRef.current?.click()}

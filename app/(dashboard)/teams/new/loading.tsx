@@ -3,7 +3,7 @@ import { Skeleton, SkeletonBack } from "@/components/ui/skeleton";
 /** New team: the small centered form. */
 export default function Loading() {
   return (
-    <div role="status" aria-label="Loading" aria-busy="true" className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
+    <div role="status" aria-label="Loading" aria-busy="true" className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6">
       <span className="sr-only">Loading…</span>
       <div className="w-full max-w-md" aria-hidden>
         <SkeletonBack className="mb-6" />

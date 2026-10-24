@@ -10,6 +10,7 @@ import { useConfirm } from "@/components/ui/confirm-provider";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { CheckIcon, ChevronDownIcon, CopyIcon } from "@/components/ui/icons";
 import type { SocialSetup } from "@/lib/social/setup";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
 export type AccountView = {
@@ -236,12 +237,10 @@ export function ConnectedAccounts({
 
               {a ? (
                 <div className="flex items-center gap-2.5 min-w-0">
-                  {a.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-                  ) : (
-                    <span className="w-9 h-9 rounded-full bg-surface-2 flex-shrink-0" />
-                  )}
+                  {/* An account's picture from its platform (TikTok's and Instagram's links expire after a while): its first letter then. */}
+                  <span className="w-9 h-9 rounded-full bg-surface-2 flex-shrink-0 overflow-hidden flex items-center justify-center text-[13px] font-bold text-ink-soft" aria-hidden>
+                    <AvatarImg src={a.avatarUrl} fallback={(a.displayName ?? a.username ?? "").replace(/^@/, "").slice(0, 1).toUpperCase()} />
+                  </span>
                   <div className="min-w-0">
                     <div className="text-[13.5px] font-semibold truncate">{a.displayName ?? a.username ?? "Connected account"}</div>
                     <div className="text-[12px] text-ink-soft truncate">
@@ -477,12 +476,9 @@ function FacebookPagePicker({ teamId, current }: { teamId: string; current: stri
             }}
             className="w-full flex items-center gap-2 px-2.5 py-2 text-left text-[12.5px] hover:bg-surface-2 disabled:cursor-default"
           >
-            {pg.picture ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={pg.picture} alt="" className="w-6 h-6 rounded-full object-cover" />
-            ) : (
-              <span className="w-6 h-6 rounded-full bg-surface-2" />
-            )}
+            <span className="w-6 h-6 rounded-full bg-surface-2 flex-shrink-0 overflow-hidden" aria-hidden>
+              <AvatarImg src={pg.picture} />
+            </span>
             <span className="flex-1 truncate font-semibold">{pg.name}</span>
             {pg.current ? <CheckIcon className="w-4 h-4 text-green" /> : saving === pg.id ? <span className="text-ink-faint">Switching…</span> : null}
           </button>

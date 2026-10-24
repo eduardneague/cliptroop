@@ -14,12 +14,20 @@ import { Brand } from "@/components/ui/clip-logo";
 import { Mascot } from "@/components/ui/mascot";
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "@/components/ui/icons";
 import { InstallApp, PushSettings } from "@/components/pwa";
+import { NewPasswordFields, newPasswordState } from "@/components/ui/new-password";
+import { fromEmailLink, passwordSaveError } from "@/lib/auth/password-rules";
 
 /*
  * First visit after an invite (or "Confirm signup"): four short steps.
  *   1 Password   2 About you   3 Your phone (optional)   4 All set
  * The password is saved before moving on, so closing the page halfway
  * never locks anyone out (they sign in and fix the rest in Settings).
+ *
+ * 1.31.10: the password follows the same rules as everywhere else
+ * (lib/auth/password-rules.ts, a checklist as you type). Only a sign-in
+ * that came from the email's link chooses it here; someone who signed in
+ * with a password (and came back to this page) starts at About you, since
+ * changing a password takes the current one (Settings → Account).
  */
 
 type Step = "password" | "profile" | "phone" | "done";
@@ -41,13 +49,12 @@ export default function SetUpAccountPage() {
   const router = useRouter();
   const supabase = useRef(createClient()).current;
   const [step, setStep] = useState<Step>("password");
-  const [me, setMe] = useState<{ id: string; email: string } | null | undefined>(undefined);
+  const [me, setMe] = useState<{ id: string; email: string; link: boolean } | null | undefined>(undefined);
   const [invites, setInvites] = useState(0);
 
   // Password
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [show, setShow] = useState(false);
   // Profile
   const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
@@ -67,7 +74,12 @@ export default function SetUpAccountPage() {
       if (!alive) return;
       const user = data.user;
       if (!user) return setMe(null);
-      setMe({ id: user.id, email: user.email ?? "" });
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (!alive) return;
+      const link = fromEmailLink(aal?.currentAuthenticationMethods);
+      setMe({ id: user.id, email: user.email ?? "", link });
+      // Signed in with a password already: it's chosen (a new one is Settings' job).
+      if (!link) setStep((s) => (s === "password" ? "profile" : s));
       const [{ data: p }, { count }, { data: page }] = await Promise.all([
         supabase.from("profiles").select("username, full_name, bio, avatar_url").eq("id", user.id).maybeSingle(),
         supabase.from("team_invites").select("id", { count: "exact", head: true }).eq("invited_user_id", user.id).eq("status", "pending"),
@@ -94,25 +106,21 @@ export default function SetUpAccountPage() {
     window.scrollTo({ top: 0 });
   };
 
-  const longEnough = password.length >= 8;
-  const matches = password.length > 0 && password === confirm;
+  // Their email and names are off limits in a password.
+  const about = { email: me?.email ?? null, names: [fullName, username] };
 
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!longEnough) return setError("Your password needs at least 8 characters.");
-    if (!matches) return setError("The two passwords don't match yet.");
+    const state = newPasswordState(password, confirm, about);
+    if (!state.ready) return setError(state.error);
     setPending(true);
     const { error: err } = await supabase.auth.updateUser({ password });
     setPending(false);
     // Same as before (came back to this page): that's fine, carry on.
     if (err && !/same_password|should be different/i.test(`${err.code ?? ""} ${err.message}`)) {
       sounds.error();
-      return setError(
-        /weak|pwned|leaked/i.test(err.message)
-          ? "That password is too easy to guess (it's been in a data leak). Try a longer one."
-          : "Couldn't save your password. Try again, or ask for a fresh invite."
-      );
+      return setError(passwordSaveError(err));
     }
     sounds.advance();
     goTo("profile");
@@ -208,50 +216,24 @@ export default function SetUpAccountPage() {
           <p className="text-[14px] text-ink-soft mb-6">
             You&rsquo;ll sign in with {me?.email ? <b className="text-ink font-semibold break-all">{me.email}</b> : "your email"} and this password.
           </p>
-          <div className="space-y-4">
-            <div>
-              <label className={label} htmlFor="pw">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="pw"
-                  type={show ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                  autoFocus
-                  className={`${input} pr-20`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow((v) => !v)}
-                  className="absolute right-1.5 top-1.5 h-8 rounded-lg px-2.5 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-                >
-                  {show ? "Hide" : "Show"}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className={label} htmlFor="pw2">
-                Type it again
-              </label>
-              <input id="pw2" type={show ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" className={input} />
-            </div>
-            <ul className="space-y-1.5 text-[13px]">
-              {[
-                [longEnough, "At least 8 characters"],
-                [matches, "Both are the same"],
-              ].map(([ok, text]) => (
-                <li key={text as string} className={`flex items-center gap-2 ${ok ? "text-green" : "text-ink-faint"}`}>
-                  <span className={`w-[18px] h-[18px] rounded-md flex items-center justify-center ${ok ? "bg-green text-white" : "border border-line/30"}`}>
-                    {ok ? <CheckIcon className="w-3 h-3" /> : null}
-                  </span>
-                  {text as string}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <NewPasswordFields
+            value={password}
+            confirm={confirm}
+            onValue={(v) => {
+            setPassword(v);
+            setError(null);
+          }}
+            onConfirm={(v) => {
+            setConfirm(v);
+            setError(null);
+          }}
+            about={about}
+            inputClass={input}
+            labelClass={label}
+            label="Password"
+            id="pw"
+            autoFocus
+          />
           {error && <p className="mt-4 text-[13.5px] text-red font-medium">{error}</p>}
           <div className="mt-7 flex justify-end">
             <button type="submit" disabled={pending || !me} className={`${primary} w-full sm:w-auto`}>

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
+import { overLimit } from "@/lib/rate-limit";
 import { reportError } from "@/lib/errors";
 import { isNetworkNoise } from "@/lib/network-noise";
 
@@ -10,17 +11,13 @@ import { isNetworkNoise } from "@/lib/network-noise";
  */
 export const dynamic = "force-dynamic";
 
-const recent = new Map<string, number[]>();
-
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (origin && new URL(origin).host !== request.nextUrl.host) return NextResponse.json({ ok: false }, { status: 403 });
   const user = await getCachedUser();
   if (!user) return NextResponse.json({ ok: false }, { status: 401 });
-  const now = Date.now();
-  const mine = (recent.get(user.id) ?? []).filter((t) => now - t < 60_000);
-  if (mine.length >= 10) return NextResponse.json({ ok: false }, { status: 429 });
-  recent.set(user.id, [...mine, now]);
+  // Ten a minute per person (1.31.13: the shared limiter, which also forgets old keys).
+  if (overLimit("errors", user.id, 10, 60_000)) return NextResponse.json({ ok: false }, { status: 429 });
 
   const text = await request.text();
   if (text.length > 12_000) return NextResponse.json({ ok: false }, { status: 413 });

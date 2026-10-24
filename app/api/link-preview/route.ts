@@ -3,6 +3,7 @@ import { request as httpsRequest } from "node:https";
 import { lookup, type LookupAddress } from "node:dns";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { frameAllowed, isLocalHost, isPrivateAddress, parsePreview, type LinkPreview } from "@/lib/link-preview";
+import { overLimit } from "@/lib/rate-limit";
 
 /*
  * GET /api/link-preview?url= (1.23.0): what a link in a script leads to
@@ -114,6 +115,8 @@ function allowed(u: URL) {
 export async function GET(req: Request) {
   const user = await getCachedUser();
   if (!user) return json({ error: "Sign in first." }, 401);
+  // Each one reads another site (1.31.13): a script's links, not a crawler.
+  if (overLimit("link-preview", user.id, 60, 60_000)) return json({ error: "Too many links at once. Wait a moment." }, 429);
   const raw = new URL(req.url).searchParams.get("url") ?? "";
   let url: URL;
   try {

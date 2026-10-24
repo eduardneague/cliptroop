@@ -11,6 +11,7 @@ import type { Pipeline, PostToday, UpcomingLong, UpcomingShort } from "../lib/qu
 import { DueChip, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
 import { CountUp } from "@/components/ui/count-up";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 const dayLabel = (d: string, today: string) => {
   const t = new Date(`${today}T00:00:00`);
@@ -45,15 +46,11 @@ export function UpcomingShortsWidget({ items }: { items: UpcomingShort[] }) {
                   {dayLabel(s.date, today)} · {s.stage}
                 </span>
               </span>
-              {s.editor &&
-                (s.editor.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.editor.avatarUrl} alt={s.editor.name} title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0" style={{ background: s.editor.color }}>
-                    {s.editor.name.slice(0, 1).toUpperCase()}
-                  </span>
-                ))}
+              {s.editor && (
+                <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 overflow-hidden" style={{ background: s.editor.color }}>
+                  <AvatarImg src={s.editor.avatarUrl} alt={s.editor.name} fallback={s.editor.name.slice(0, 1).toUpperCase()} />
+                </span>
+              )}
             </Link>
           </li>
         );

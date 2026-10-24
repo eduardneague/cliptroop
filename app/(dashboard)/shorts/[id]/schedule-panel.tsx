@@ -31,6 +31,7 @@ import {
   type CreatorInfo,
   type ScheduleEntry,
 } from "./schedule-actions";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
@@ -624,10 +625,7 @@ function SchedulePanelLive({
                   {p === "facebook" && (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
-                        {acc.avatarUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={acc.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
-                        )}
+                        <AvatarImg src={acc.avatarUrl} className="w-6 h-6 rounded-full object-cover" />
                         <span>
                           Posting to <b className="text-ink">{acc.name}</b> as a Reel
                         </span>
@@ -941,10 +939,7 @@ function TikTokFields({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
-        {creator.avatarUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={creator.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
-        )}
+        <AvatarImg src={creator.avatarUrl} className="w-6 h-6 rounded-full object-cover" />
         Posting to <b className="text-ink">{creator.nickname}</b>
       </div>
       {tooLong && <p className="text-[12.5px] text-red">This account can post videos up to {creator.maxDurationSec} seconds.</p>}

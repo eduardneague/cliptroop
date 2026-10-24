@@ -162,7 +162,15 @@ export type VideoDetail = {
   niches: string[];
   /** What it would have earned at the team's own revenue per 1,000 views (only for people who see revenue). */
   earnings: { rpm: number; currency: string; estimate: number } | null;
+  /**
+   * One of the team's own videos (1.31.8): its numbers from the team's YouTube Analytics, the only place engaged
+   * views exist (YouTube gives them to a channel's owner only). Null for everyone else's videos.
+   */
+  own: { views: number | null; engaged: number | null; avgPct: number | null } | null;
 };
+
+/** A video of the team's that a channel's video sent viewers to (1.31.8): which of theirs, and how many views. */
+export type AudiencePair = { ours: string; oursTitle: string | null; oursThumb: string | null; from: string; fromTitle: string | null; views: number };
 
 export type ChannelDetail = {
   channel: VideoDetail["channel"];
@@ -172,8 +180,8 @@ export type ChannelDetail = {
   saves: { id: string; folderId: string | null }[];
   niches: { id: string; name: string; team: boolean; source: string; relevance: number | null; hidden: boolean; verdict: Verdict | null; group: boolean; counted: boolean }[];
   similar: ChannelRowData[];
-  /** How much the team's viewers watch it (null: not in that list). */
-  audience: { views: number; videos: number; ours: number } | null;
+  /** How much the team's viewers watch it (null: not in that list); `pairs` (1.31.8): which of its videos sent viewers to which of the team's. */
+  audience: { views: number; videos: number; ours: number; pairs: AudiencePair[] } | null;
   /** Its videos aren't read yet (they're being read now). */
   pending: boolean;
 };

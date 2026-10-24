@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ExternalIcon, PlusIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
@@ -8,15 +9,17 @@ import { addChannelsToNiche, loadChannelDetail, setChannelHidden } from "@/app/(
 import { median } from "../lib/corpus";
 import { compact } from "../lib/filters";
 import { formatName } from "../lib/formats";
+import { thumbUrl } from "../lib/ingest";
 import { multText } from "../lib/scores";
 import { changeNiche, countsIn, type ChannelNiche, type NicheChange } from "../lib/membership";
 import { countryName, langName } from "../lib/regions";
 import type { ChannelDetail, ChannelRowData, OutlierVideo } from "../lib/types";
-import { ChannelAvatar, EyeOffIcon, FitChip, heat, Mult, NicheDot, PeopleIcon, SourceNote, Tile, TimeAgo, youtubeChannel } from "./bits";
+import { ChannelAvatar, EyeOffIcon, FitChip, heat, Mult, NicheDot, PeopleIcon, SourceNote, Tile, TimeAgo, youtubeChannel, youtubeVideo } from "./bits";
 import { BarsChart, PostingHeat, ShareBar } from "./charts";
 import { channelPreviews, useOutliers, useOutliersBlocked } from "./context";
 import { channelDetails as details, forgetChannel } from "./detail-cache";
 import { PanelContent, PanelSection } from "./panel";
+import { ChannelLoadingBody } from "./panel-preview";
 import { RemoveFromNiche } from "./remove-from-niche";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
@@ -149,32 +152,7 @@ export function ChannelPanel({ id, initial }: { id: string; initial: ChannelDeta
           <p className="mt-1 text-[13px] text-ink-soft">{error}</p>
         </div>
       ) : !d ? (
-        <div className="px-4 sm:px-6 py-5 space-y-7" aria-busy="true">
-          {pre ? (
-            // Where the loaded header will be, so nothing moves when it arrives.
-            <div className="flex items-start gap-4">
-              <ChannelAvatar src={pre.avatar} title={pre.title} size={68} />
-              <div className="flex-1 min-w-0">
-                <h2 className="font-display text-[23px] sm:text-[26px] leading-tight font-semibold">{pre.title}</h2>
-                <p className="mt-1 text-[12.5px] text-ink-soft">{pre.subs !== null ? `${compact(pre.subs)} subscribers` : "Opening its videos…"}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="skeleton w-16 h-16 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <div className="skeleton h-6 w-1/2 rounded-md" />
-                <div className="skeleton h-4 w-1/3 rounded-md" />
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="skeleton h-[72px] rounded-xl" />
-            ))}
-          </div>
-          <div className="skeleton h-48 rounded-2xl" />
-        </div>
+        <ChannelLoadingBody pre={pre} />
       ) : (
         <ChannelBody d={d} reading={reading} onNiche={onNiche} setNiches={setNiches} />
       )}
@@ -266,9 +244,10 @@ function ChannelBody({
           Reading its videos{d.videos.length ? ` (${d.videos.length} so far)` : ""}. Scores fill in within a minute or two.
         </div>
       )}
-      <div className="flex items-start gap-4">
+      {/* A grid (1.31.8): "Your viewers watch it" spans the whole panel on a phone, and lines up with the name from sm. */}
+      <div className="grid grid-cols-[68px_minmax(0,1fr)] gap-x-4 items-start">
         <ChannelAvatar src={c.avatar} title={c.title} size={68} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <h2 className="font-display text-[23px] sm:text-[26px] leading-tight font-semibold">{c.title}</h2>
           <p className="mt-1 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
             {c.handle && <span>{c.handle}</span>}
@@ -283,13 +262,12 @@ function ChannelBody({
             )}
           </p>
           {c.description && <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft line-clamp-3">{c.description}</p>}
-          {d.audience && (
-            <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-violet/10 text-violet px-2.5 h-7 text-[12px] font-semibold">
-              <PeopleIcon className="w-3.5 h-3.5" />
-              Your viewers watch it: {d.audience.views ? `${compact(d.audience.views)} views sent to` : "next to"} {d.audience.ours} of your videos
-            </p>
-          )}
         </div>
+        {d.audience && (
+          <div className="col-span-2 sm:col-span-1 sm:col-start-2 min-w-0">
+            <AudienceNote a={d.audience} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -438,5 +416,65 @@ export function ChannelMini({ c }: { c: ChannelRowData }) {
         {c.best !== null && <Mult score={c.best} size="sm" />}
       </button>
     </li>
+  );
+}
+
+/**
+ * "Your viewers watch it" (1.29.0; 1.31.8): how many views this channel's videos sent to the team's, and which:
+ * each of the team's videos with the views it got and the channel's video they came from (most first; three, then
+ * Show all). Yours opens on its Analytics page, theirs in this panel. A box that wraps, so a phone shows it whole.
+ */
+function AudienceNote({ a }: { a: NonNullable<ChannelDetail["audience"]> }) {
+  const ctx = useOutliers();
+  const [all, setAll] = useState(false);
+  const shown = all ? a.pairs : a.pairs.slice(0, 3);
+  return (
+    <div className="mt-2.5 rounded-xl border border-violet/20 bg-violet/[0.07] px-3 py-2.5 text-[12.5px]">
+      <p className="flex items-start gap-1.5 font-semibold text-violet leading-snug">
+        <PeopleIcon className="w-3.5 h-3.5 mt-[2px] flex-shrink-0" />
+        <span className="min-w-0">
+          Your viewers watch it: {a.views ? `${compact(a.views)} views sent to` : "next to"} {a.ours} of your videos
+        </span>
+      </p>
+      {shown.length > 0 && (
+        <ul className="mt-2 space-y-2" aria-label="Your videos it sent viewers to">
+          {shown.map((p) => (
+            <li key={`${p.from}|${p.ours}`} className="flex items-center gap-2.5 min-w-0">
+              <Link href={`/analytics/video/youtube/${p.ours}`} onClick={() => ctx.leavePanel()} className="relative flex-shrink-0 w-[72px] aspect-video rounded-md overflow-hidden bg-surface-2 ring-1 ring-line/10" aria-label={`Open ${p.oursTitle ?? "your video"} in Analytics`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.oursThumb ?? thumbUrl(p.ours, "mq")} alt="" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+              </Link>
+              <div className="min-w-0 flex-1 leading-snug">
+                <Link href={`/analytics/video/youtube/${p.ours}`} onClick={() => ctx.leavePanel()} className="block font-semibold text-ink truncate hover:underline" title={p.oursTitle ?? undefined}>
+                  {p.oursTitle ?? "One of your videos"}
+                </Link>
+                <span className="block text-ink-soft line-clamp-2 break-words">
+                  <span className="tabular-nums font-semibold">{compact(p.views)}</span> views from{" "}
+                  {/* A link, so a long title wraps with the words around it; a plain click opens it in this panel. */}
+                  <a
+                    href={youtubeVideo(p.from)}
+                    onClick={(e) => {
+                      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                      e.preventDefault();
+                      ctx.openVideo(p.from);
+                    }}
+                    className="font-semibold text-ink hover:underline"
+                    title={p.fromTitle ?? undefined}
+                  >
+                    {p.fromTitle ?? "one of its videos"}
+                  </a>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {a.pairs.length > 3 && (
+        <button type="button" onClick={() => setAll((x) => !x)} className="mt-2 text-[12px] font-semibold text-violet hover:underline" aria-expanded={all}>
+          {all ? "Show fewer" : `Show all ${a.pairs.length}`}
+        </button>
+      )}
+      {!a.pairs.length && a.ours > 0 && <p className="mt-1 pl-5 text-[11.5px] text-ink-faint">Which of your videos shows here after ClipTroop&rsquo;s next read of your YouTube Analytics (once a day).</p>}
+    </div>
   );
 }

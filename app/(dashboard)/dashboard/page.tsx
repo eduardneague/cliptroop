@@ -20,7 +20,7 @@ export default async function DashboardPage() {
 
   if (!currentTeam) {
     return (
-      <div className="min-h-[calc(100vh-57px)] flex items-center justify-center p-6">
+      <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6">
         <div className="max-w-md text-center">
           <h1 className="font-display text-3xl font-semibold mb-3">
             Start your first team
