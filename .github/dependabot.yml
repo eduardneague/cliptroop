@@ -1,0 +1,33 @@
+# Dependabot (1.31.2): keeps the app's packages and GitHub's own actions up
+# to date. Its pull requests go into staging, never main: check the staging
+# deploy, then merge staging into main as usual.
+#   - Every Monday: one pull request with the week's small updates (minor and
+#     patch, grouped). Big jumps (a new major version) are done by hand: they
+#     change how the app is built.
+#   - Security fixes come as soon as GitHub knows of them, once "Dependabot
+#     security updates" is on (repo → Settings → Code security). Those go to
+#     the default branch.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: staging
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    labels: [dependencies]
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: staging
+    schedule:
+      interval: monthly
+    labels: [dependencies]

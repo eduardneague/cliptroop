@@ -566,7 +566,7 @@ export function GlobalSearch({
               role="dialog"
               aria-modal="true"
               aria-label="Search"
-              className="glass-pane relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
+              className="glass-pane glass-lift relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
               style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
             >
               {/* Input row */}

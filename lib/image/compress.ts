@@ -13,7 +13,9 @@
  *   animation).
  * - SVGs become PNGs (1.31.1): an SVG can carry a script, and the picture
  *   buckets only take pictures that can't (PICTURE_TYPES).
- * - If compressing somehow makes the file bigger, the original is kept.
+ * - If compressing somehow makes the file bigger, the original is kept
+ *   (never a JPEG: see below).
+ * - What anyone may pick: lib/image/limits.ts (5 MB, a thumbnail 15 MB).
  */
 export type CompressOptions = {
   maxWidth: number;
@@ -21,17 +23,23 @@ export type CompressOptions = {
   quality?: number;
   /** Keep transparency (logos). Photos don't need it. */
   preserveAlpha?: boolean;
+  /** Shown cropped to a square (avatars, logos): the SHORT side gets to the size, not the long one (1.31.3). */
+  cover?: boolean;
 };
 
+/*
+ * 1.31.3: as small as each picture can be without looking worse where it's
+ * shown (the biggest it's ever shown, for a sharp phone screen):
+ */
 export const IMAGE_PRESETS = {
-  /** YouTube thumbnails are 1280×720; keep headroom for crisp previews. */
-  thumbnail: { maxWidth: 1920, maxHeight: 1080, quality: 0.88 },
-  avatar: { maxWidth: 512, maxHeight: 512, quality: 0.85 },
-  logo: { maxWidth: 512, maxHeight: 512, quality: 0.9, preserveAlpha: true },
-  /** Images attached to notes — readable, not archival. */
-  attachment: { maxWidth: 2400, maxHeight: 2400, quality: 0.85 },
-  /** A dashboard background (1.27.5): sharp on a big screen. */
-  background: { maxWidth: 3840, maxHeight: 2400, quality: 0.86 },
+  /** YouTube shows a thumbnail at 1280×720 at most (a Short's cover: 720×1280). */
+  thumbnail: { maxWidth: 1280, maxHeight: 1280, quality: 0.86 },
+  /** Shown at 104 px at most (a profile), three times that on a sharp phone. */
+  avatar: { maxWidth: 320, maxHeight: 320, quality: 0.82, cover: true },
+  /** Shown at 64 px at most (Team). */
+  logo: { maxWidth: 256, maxHeight: 256, quality: 0.86, preserveAlpha: true, cover: true },
+  /** Pictures in comments, scripts and feedback: screenshots stay readable. */
+  attachment: { maxWidth: 1920, maxHeight: 1920, quality: 0.8 },
 } satisfies Record<string, CompressOptions>;
 
 const SKIP_TYPES = new Set(["image/gif"]);
@@ -111,7 +119,7 @@ export async function compressImage(file: File, opts: CompressOptions): Promise<
     return file; // format the browser can't decode (e.g. HEIC on desktop) — upload as-is
   }
 
-  const scale = Math.min(1, opts.maxWidth / bitmap.width, opts.maxHeight / bitmap.height);
+  const scale = opts.cover ? Math.min(1, Math.max(opts.maxWidth / bitmap.width, opts.maxHeight / bitmap.height)) : Math.min(1, opts.maxWidth / bitmap.width, opts.maxHeight / bitmap.height);
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -136,8 +144,9 @@ export async function compressImage(file: File, opts: CompressOptions): Promise<
   }
   if (!blob) return file;
 
-  // Nothing gained (already small and not resized) — keep the original.
-  if (blob.size >= file.size && scale === 1) return file;
+  // Nothing gained (already small and not resized): keep the original. Never for a JPEG, though: a phone
+  // photo carries where it was taken (and more) in its hidden data, which only the copy drawn here leaves out.
+  if (blob.size >= file.size && scale === 1 && file.type !== "image/jpeg") return file;
 
   const ext = blob.type === "image/webp" ? "webp" : blob.type === "image/png" ? "png" : "jpg";
   return new File([blob], safeFileName(file.name, ext), { type: blob.type, lastModified: Date.now() });

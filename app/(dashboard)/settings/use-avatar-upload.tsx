@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast-provider";
+import { pictureTooBig } from "@/lib/image/limits";
 import { updateAvatar } from "./actions";
 
 /**
@@ -27,8 +28,9 @@ export function useAvatarUpload(userId: string, done?: (url: string) => void) {
       toast.error("Only image files are allowed.");
       return;
     }
-    if (original.size > 25 * 1024 * 1024) {
-      toast.error("Keep it under 25 MB.");
+    const tooBig = pictureTooBig(original);
+    if (tooBig) {
+      toast.error(tooBig);
       return;
     }
     setBusy(true);

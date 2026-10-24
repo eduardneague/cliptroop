@@ -30,6 +30,7 @@ import { Select } from "@/components/ui/select";
 import { addPackageTitle, deletePackageTitle, deleteVariant, importLibrary, registerVariant, renameVariant, toggleWinner } from "@/app/(dashboard)/videos/[id]/studio/actions";
 import { FocusFrame, HomeMock, MobileMock, ScaleFrame, SearchMock, TabletMock, TvMock, UpNextMock, VIEW_SIZE, type MockCard, type MockTheme, type MockView } from "./mockups";
 import { belowWidth } from "@/lib/breakpoints";
+import { pictureTooBig } from "@/lib/image/limits";
 
 const VIEWS: { id: MockView; label: string }[] = [
   { id: "home", label: "Home" },
@@ -348,16 +349,26 @@ export function Studio({ data }: { data: StudioData }) {
     const list = [...files].filter((f) => f.type.startsWith("image/"));
     if (!list.length) return toast.error("Pick image files (JPG or PNG).");
     for (const file of list) {
+      // Thumbnails up to 15 MB (1.31.3).
+      const tooBig = pictureTooBig(file, "thumbnail");
+      if (tooBig) {
+        toast.error(tooBig);
+        continue;
+      }
       const tmp = `up-${Math.random().toString(36).slice(2)}`;
       setUploads((u) => [...u, { id: tmp, name: file.name, state: "uploading" }]);
+      // Its own size and weight (the checks against YouTube's limits are about the file you made)...
       const { w, h } = await readSize(file);
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      // ...and a copy made small goes up (what every list and mockup loads, 1.31.3).
+      const { compressImage, IMAGE_PRESETS } = await import("@/lib/image/compress");
+      const small = await compressImage(file, IMAGE_PRESETS.thumbnail);
+      const ext = small === file ? (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg" : small.type === "image/webp" ? "webp" : small.type === "image/png" ? "png" : "jpg";
       const path = `${project.teamId}/${project.id}/${crypto.randomUUID()}.${ext}`;
       // Show it immediately while it uploads.
       const localUrl = URL.createObjectURL(file);
       setVariants((vs) => [...vs, { id: tmp, title: data.defaultTitle, url: localUrl, path, width: w, height: h, size: file.size, winner: false }]);
       setActiveId((a) => a ?? tmp);
-      const { error } = await supabase.storage.from("package-thumbs").upload(path, file, { contentType: file.type, cacheControl: "31536000" });
+      const { error } = await supabase.storage.from("package-thumbs").upload(path, small, { contentType: small.type || file.type, cacheControl: "31536000" });
       if (error) {
         setUploads((u) => u.map((x) => (x.id === tmp ? { ...x, state: "error" } : x)));
         setVariants((vs) => vs.filter((v) => v.id !== tmp));

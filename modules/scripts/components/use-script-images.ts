@@ -5,6 +5,7 @@ import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { pictureTooBig } from "@/lib/image/limits";
 import { decodeDataImage, readyToSave, unkeepableSrc } from "../lib/paste-images";
 
 /**
@@ -24,8 +25,6 @@ export function blockRange(editor: Editor, pos?: number) {
   if (top.type.name === "paragraph" && top.content.size === 0) return { from: start, to: end };
   return { from: end, to: end };
 }
-
-const MAX = 25 * 1024 * 1024;
 
 /**
  * Pictures going into a script (1.27.5, lib/paste-images.ts): each shows
@@ -71,8 +70,9 @@ export function useScriptImages(
   const start = useCallback(
     (original: File): string | null => {
       if (!original.type.startsWith("image/")) return null;
-      if (original.size > MAX) {
-        errRef.current(`${original.name || "That picture"} is too big (25 MB max).`);
+      const tooBig = pictureTooBig(original);
+      if (tooBig) {
+        errRef.current(tooBig);
         return null;
       }
       const url = URL.createObjectURL(original);

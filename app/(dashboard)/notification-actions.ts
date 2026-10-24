@@ -44,24 +44,28 @@ export async function getNotificationHistory(
 
 /**
  * The bell updates itself instantly on the client (optimistic), so these
- * don't re-render the page — they just persist the change.
+ * don't re-render the page — they just persist the change. 1.31.4: they say
+ * when it didn't work, so the bell can take it back.
  */
-export async function markNotificationRead(id: string) {
+export async function markNotificationRead(id: string): Promise<{ error?: string }> {
+  if (typeof id !== "string" || !id) return { error: "Nothing to mark." };
   const supabase = await createClient();
-  await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+  const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+  return error ? { error: "Couldn't mark it read. Try again." } : {};
 }
 
-export async function markAllNotificationsRead() {
+export async function markAllNotificationsRead(): Promise<{ error?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
     .eq("recipient_id", user.id)
     .eq("is_read", false);
+  return error ? { error: "Couldn't mark them read. Try again." } : {};
 }
 
 /**

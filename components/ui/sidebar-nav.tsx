@@ -118,7 +118,7 @@ function MoreSheet({ onClose, pathname, items }: { onClose: () => void; pathname
   return createPortal(
     <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="More">
       <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
-      <div className="glass-pane absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-t-3xl border-t border-line/15 bg-surface shadow-2xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[sheetup_.28s_var(--ease-out)]">
+      <div className="glass-pane glass-lift absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-t-3xl border-t border-line/15 bg-surface shadow-2xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[sheetup_.28s_var(--ease-out)]">
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-[3px] bg-line/25" aria-hidden />
         <div className="flex items-center gap-2 px-1 mb-3">
           <ClipLogo size={26} />

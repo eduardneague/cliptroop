@@ -592,6 +592,52 @@ download. No `console.log` in the app (`console.warn` / `error` for what
 someone must look at), and an error screen shows the digest, never the
 error.
 
+**Packages (1.31.2).** Add a package only when nothing in the app or the
+platform does the job, and remove it in the same change that stops using
+it: `tests/packages.test.ts` fails on a listed package nothing uses, on a
+lock that doesn't match package.json, and on any new package that runs an
+install script (look at what it runs, then add it to the reviewed list).
+Dependabot opens one pull request a week into staging with the small
+updates; a major version is a change of its own, by hand. CI's audit job
+turning red means a package the app ships has a known high or critical
+problem: update it before the next release.
+
+**Pictures (1.31.3, 0104).** Anywhere a picture can be picked, check it
+with `pictureTooBig(file)` (5 MB) or `pictureTooBig(file, "thumbnail")`
+(15 MB) from `lib/image/limits.ts` before anything else, then
+`compressImage(file, IMAGE_PRESETS.x)` before it goes up. A preset is the
+biggest the picture is ever shown, three times over for a sharp phone, and
+`cover` when it's shown cropped to a square. Keep the original's own
+numbers only where they mean something about the file someone made (Thumbnail
+Studio's YouTube checks). A new public bucket for pictures gets the same
+size limit and `PICTURE_TYPES`.
+
+**Notifications and toasts (1.31.4).** Anything someone does in the bell
+shows at once: put it in the overlay (`lib/notification-optimism.ts`) and
+on the list, call the server, then `settle` on success or take it back
+exactly as it was, with a toast, on failure. Every list that arrives (the
+layout's, a refresh, a realtime refetch) goes through `withOverlay` /
+`rowWithOverlay` first. A card leaves by `startLeave` (it slides out, then
+its slot closes; never remove it from the list straight away) and arrives
+by `enter`. Something else that can be swiped away uses `useSwipeAway`
+with `touch-action: pan-y` on the card. A server action the bell calls
+returns `{ error?: string }` instead of throwing.
+
+**Glass pop-ups (1.31.5).** A new pop-up gets the glass look with
+`glass-pane` on its `bg-surface` box (the rule is `.bg-surface.glass-pane`,
+so it outranks the one that keeps other floating boxes nearly solid), and
+`glass-lift` too when it sits over a dimmed page. A new rule that sets
+`--tw-bg-opacity` on floating `bg-surface` boxes must not be more specific
+than that: `tests/glass-popups.test.ts` checks.
+
+**Sign-in limits (1.31.6, 0105).** Anything that checks a password
+(signing in, deleting an account, changing it) gets `signInKeysFor(email)`,
+asks `signInWait(keys)` first and stops while it's above 0 (`waitText`),
+then tells `noteSignIn(keys, ok)` how it went: counted as wrong only when
+`signInOutcome(error)` says "wrong", never when Supabase is busy or
+unreachable. The limits let everyone through when they can't be read:
+never make signing in depend on them.
+
 **Long video review (1.25.0, 0089).** `long_video_versions` and
 `long_video_comments` mirror the shorts' tables (0038), keyed by
 `project_id`. `modules/review/` serves both: `ReviewKind` ("short" or

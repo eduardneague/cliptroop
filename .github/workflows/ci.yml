@@ -44,6 +44,22 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ci-service
           NEXT_TELEMETRY_DISABLED: "1"
 
+  audit:
+    # 1.31.2: a red ✗ here means a package the app ships has a known high or critical
+    # vulnerability: update it (npm install <package>@<fixed version>) or merge Dependabot's fix.
+    name: Known vulnerabilities in what the app ships
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm audit (high and critical, the app's own packages)
+        run: npm audit --omit=dev --audit-level=high
+
   migrations:
     name: Migrations apply from scratch
     runs-on: ubuntu-24.04

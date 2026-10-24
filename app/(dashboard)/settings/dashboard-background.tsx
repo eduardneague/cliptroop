@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/ui/confirm-provider";
 import { CheckIcon, CloseIcon, PlusIcon, RetryIcon, TrashIcon } from "@/components/ui/icons";
 import { bgFileProblem, bgKind, bgPathFor, clampDim, DASH_BG_ACCEPT, DASH_BG_BUCKET, DASH_BG_MAX_DIM } from "@/lib/dashboard-bg";
 import { planFor, sizeLabel, WALL_MAX_BYTES, WALL_MAX_SECONDS } from "@/lib/wallpaper-plan";
+import { pictureTooBig } from "@/lib/image/limits";
 import { ConvertError, prepareWallpaper } from "@/lib/wallpaper-convert";
 import { WALLPAPER_MAX } from "@/lib/wallpapers";
 import { measureFile } from "@/lib/wallpapers-measure";
@@ -107,6 +108,12 @@ export function DashboardBackground({
     const plan = planFor(original.type, original.size, new Uint8Array());
     if (plan.action === "refuse") {
       toast.error(plan.problem);
+      return;
+    }
+    // A picture you pick: up to 5 MB, like every picture (1.31.3). Not one already here being made lighter.
+    const tooBig = !lighten && plan.action === "image" ? pictureTooBig(original) : null;
+    if (tooBig) {
+      toast.error(tooBig);
       return;
     }
     if (target && !lighten) {
@@ -448,7 +455,7 @@ export function DashboardBackground({
 
           <div className="mt-3 flex items-center gap-3 flex-wrap">
             <p className="text-[12px] text-ink-soft flex-1 min-w-[14rem]">
-              JPG, PNG, WebP, AVIF, GIF, MP4, MOV or WebM. Each is made small before it&rsquo;s uploaded, 2 MB at most, so pages never wait for it: pictures become WebP, videos and GIFs a WebM of up to {WALL_MAX_SECONDS} seconds (keep this tab open while it&rsquo;s made). Videos play muted, on a loop. The greeting over it turns dark or white, whichever reads best.
+              JPG, PNG, WebP, AVIF, GIF, MP4, MOV or WebM (pictures up to 5 MB). Each is made small before it&rsquo;s uploaded, 2 MB at most, so pages never wait for it: pictures become WebP, videos and GIFs a WebM of up to {WALL_MAX_SECONDS} seconds (keep this tab open while it&rsquo;s made). Videos play muted, on a loop. The greeting over it turns dark or white, whichever reads best.
             </p>
             {on && current && (
               <Link href="/dashboard" className="text-[12.5px] font-semibold text-amber hover:brightness-110">

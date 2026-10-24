@@ -23,6 +23,57 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.31.6",
+    date: "2026-10-23",
+    title: "Security: signing in",
+    changes: [
+      { kind: "better", text: "After too many wrong passwords, signing in waits a few minutes before it checks another one, so nobody can guess their way into an account. The right password clears the count, and Reset your password is right there while you wait." },
+      { kind: "better", text: "Deleting your account checks your password with the same limits." },
+      { kind: "fixed", text: "When signing in can't reach the server, it says so instead of saying your password is wrong. Spaces around your email don't matter anymore." },
+    ],
+  },
+  {
+    version: "1.31.5",
+    date: "2026-10-23",
+    title: "Glass pop-ups",
+    changes: [
+      { kind: "fixed", text: "With the glass look on, dialogs, menus, Search, the date and list pickers and the phone's menu now follow the glass slider like the rest of the app. They stayed nearly solid unless glass was set to go everywhere." },
+      { kind: "better", text: "In light mode a dialog over the dimmed page is light glass, not grey. Over a wallpaper they all keep their words readable." },
+    ],
+  },
+  {
+    version: "1.31.4",
+    date: "2026-10-23",
+    title: "Notifications at once",
+    changes: [
+      { kind: "better", text: "Notifications answer at once, like a like on a video: opening one, Mark all read, clearing one, Clear all, Accept and Decline show straight away while the app catches up. If something doesn't go through, it comes back exactly as it was and you're told." },
+      { kind: "new", text: "A notification you clear slides out and the ones under it move up into its place. Clear all sends them out one after the other, and a new one slides in at the top." },
+      { kind: "new", text: "Swipe a notification sideways to clear it (an invite still waiting for your answer stays put). With a keyboard: Tab to one, Enter opens it, Delete clears it." },
+      { kind: "better", text: "With the glass look on, the bell is glass like the rest of the app: you see the page through it, and each notification is a brighter pane of its own. Unread ones glow softly." },
+      { kind: "better", text: "The little messages that pop up (like Saved) are glass too. They wait while you point at them, slide out when they go while the others glide into place, and can be swiped away or closed with their X." },
+    ],
+  },
+  {
+    version: "1.31.3",
+    date: "2026-10-23",
+    title: "Smaller pictures",
+    changes: [
+      { kind: "better", text: "Any picture you add can be up to 5 MB (a thumbnail up to 15 MB), and each is made much smaller before it goes up: a 5 MB phone photo becomes a profile picture of about 15 KB, and a thumbnail is sized like YouTube shows it. Pages with pictures load faster." },
+      { kind: "better", text: "Thumbnail Studio, pictures in reports and pictures in drawings are made small too, and Thumbnail Studio still checks the file you made against YouTube's limits." },
+      { kind: "better", text: "A photo's hidden details (like where it was taken) never go up with it." },
+    ],
+  },
+  {
+    version: "1.31.2",
+    date: "2026-10-23",
+    title: "Security: packages",
+    changes: [
+      { kind: "fixed", text: "The framework the app runs on is updated to its latest safe version (Next.js 15.5.28), which closes a way to slow the app down with crafted requests." },
+      { kind: "better", text: "Behind the scenes: every package the app uses was checked. None is unused, and every one comes from npm's official registry with a checksum." },
+      { kind: "better", text: "Updates now come by themselves: one bundle of small updates a week into staging, security fixes as soon as they're out, and GitHub flags any package with a known serious problem." },
+    ],
+  },
+  {
     version: "1.31.1",
     date: "2026-10-23",
     title: "Security: nothing left open",

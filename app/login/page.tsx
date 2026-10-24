@@ -211,7 +211,27 @@ export default function LoginPage() {
                   {state?.error && (
                     <p role="alert" className="flex items-start gap-2 rounded-xl border border-red/30 bg-red/[0.07] px-3 py-2.5 text-[13.5px] text-red font-medium">
                       <AlertIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      {state.error}
+                      <span>
+                        {state.error}
+                        {/* Too many wrong tries: a new password is the way in meanwhile. */}
+                        {state.wait && (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMode("forgot");
+                                setResetEmail((r) => r || email);
+                                setResetSent(false);
+                                setResetError(null);
+                              }}
+                              className="font-bold underline underline-offset-2 hover:no-underline"
+                            >
+                              Reset your password
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </p>
                   )}
 

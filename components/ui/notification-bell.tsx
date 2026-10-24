@@ -3,7 +3,7 @@
 import { notificationUrl } from "@/lib/notification-url";
 import Link from "next/link";
 import { Ago } from "@/components/ui/ago";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
@@ -26,6 +26,9 @@ import { NOTIFICATION_SELECT } from "@/lib/notification-select";
 import { sounds } from "@/lib/sounds";
 import { startNavProgress } from "@/components/ui/nav-progress";
 import { periodPhrase } from "@/modules/objectives/lib/periods";
+import { emptyOverlay, leaveDelays, putBack, rowWithOverlay, withOverlay } from "@/lib/notification-optimism";
+import { useSwipeAway } from "./use-swipe-away";
+import { motionReduced } from "./count-up";
 
 const PLATFORM_NAMES: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 
@@ -572,6 +575,7 @@ function NotificationRow({
   responding,
   time,
   onClear,
+  swipe,
 }: {
   n: NotificationItem;
   onOpen: (n: NotificationItem) => void;
@@ -581,18 +585,44 @@ function NotificationRow({
   time?: string;
   /** The bell: an X that takes it out of the list (1.29.1). Not on questions still waiting for an answer. */
   onClear?: (n: NotificationItem) => void;
+  /** The bell (1.31.4): a card of its own, swiped away with this (History's rows have none). */
+  swipe?: ReturnType<typeof useSwipeAway>;
 }) {
   const actionable = Boolean(n.team_invite_id || n.ownership_transfer_id);
   const status = actionableStatus(n);
   const isPendingAction = actionable && status === "pending";
   const visual = <LeadingVisual n={n} />;
+  // A card's words are its button (the card holds the X, and a button can't hold another):
+  // Enter or Space opens it, Delete clears it. The card shows their focus.
+  const keys = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (!actionable && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onOpen(n);
+    } else if ((e.key === "Delete" || e.key === "Backspace") && onClear && !isPendingAction) {
+      e.preventDefault();
+      onClear(n);
+    }
+  };
   return (
     <div
       onClick={() => onOpen(n)}
-      className={`group flex gap-2.5 pl-4 ${onClear && !isPendingAction ? "pr-2" : "pr-4"} py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`}
+      {...(swipe
+        ? {
+            ...swipe,
+            "data-card-id": n.id,
+            "data-unread": n.is_read ? undefined : "",
+            className: `notif-card group flex gap-2.5 pl-3.5 ${onClear && !isPendingAction ? "pr-1.5" : "pr-3.5"} py-3 ${actionable ? "" : "cursor-pointer"}`,
+          }
+        : {
+            className: `group flex gap-2.5 pl-4 ${onClear && !isPendingAction ? "pr-2" : "pr-4"} py-3 border-b border-line/10 last:border-none transition-colors ${actionable ? "" : "hover:bg-surface-2 cursor-pointer"}`,
+          })}
     >
       {visual ?? <span className={`w-2 h-2 rounded-[3px] mt-1.5 flex-shrink-0 ${n.is_read ? "bg-transparent" : "bg-amber"}`} />}
-      <div className="min-w-0 flex-1">
+      <div
+        className="notif-main min-w-0 flex-1 focus-visible:outline-none"
+        {...(swipe && !actionable ? { role: "button", tabIndex: 0, onKeyDown: keys } : {})}
+      >
         <span className="block text-[12.5px] leading-snug text-ink">
           <RichBody n={n} />
           {visual && !n.is_read && <span className="inline-block w-1.5 h-1.5 rounded-[2px] bg-amber ml-1.5 align-middle" />}
@@ -635,7 +665,7 @@ function NotificationRow({
           }}
           aria-label="Clear this notification"
           title="Clear"
-          className="-my-1 w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          className="notif-x -my-1 w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         >
           <CloseIcon className="w-3.5 h-3.5" />
         </button>
@@ -782,6 +812,65 @@ function HistoryDialog({
   );
 }
 
+/**
+ * One notification in the bell (1.31.4): a card of its own (glass with the
+ * glass look). Its X, a swipe either way or Delete clears it: it slides out
+ * and the ones under it move up into its place. A new one slides in at the
+ * top. One still waiting for your answer gives a little and springs back.
+ */
+function BellCard({
+  n,
+  leaving,
+  entering,
+  delay,
+  onOpen,
+  onRespond,
+  responding,
+  onClear,
+}: {
+  n: NotificationItem;
+  leaving: boolean;
+  entering: boolean;
+  /** "Clear all": how long after the first this one leaves. */
+  delay: number;
+  onOpen: (n: NotificationItem) => void;
+  onRespond: (n: NotificationItem, accept: boolean) => void;
+  responding: boolean;
+  onClear: (n: NotificationItem) => void;
+}) {
+  const swipe = useSwipeAway({
+    locked: waitsForAnswer(n),
+    disabled: leaving,
+    onSwipe: (dir, el) => {
+      // On out the way it was swiped, from where it is now.
+      el.style.transform = `translateX(${dir * 112}%) scale(0.97)`;
+      el.style.opacity = "0";
+      onClear(n);
+    },
+  });
+  return (
+    <div
+      className="notif-item"
+      data-leaving={leaving ? "" : undefined}
+      data-entering={entering ? "" : undefined}
+      style={delay ? ({ ["--leave-delay" as string]: `${delay}ms` } as React.CSSProperties) : undefined}
+    >
+      <div className="notif-clip">
+        <div className="notif-gap">
+          <NotificationRow n={n} onOpen={onOpen} onRespond={onRespond} responding={responding} onClear={onClear} swipe={swipe} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** How long a card takes to slide out and close its gap (styles: .notif-item in globals.css). */
+const LEAVE_MS = 440;
+/** How long a new card takes to come in. */
+const ENTER_MS = 460;
+/** After the server agreed, what you did is kept on top of the list a little longer (a fresh list may already be on its way). */
+const SETTLE_MS = 10_000;
+
 export function NotificationBell({
   notifications,
   userId,
@@ -790,7 +879,6 @@ export function NotificationBell({
   userId: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [, startTransition] = useTransition();
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   // Read from anywhere this visit (bell or History), so both lists agree.
@@ -833,12 +921,45 @@ export function NotificationBell({
   // the initial 25; after that, realtime events patch exactly the row
   // that changed — instead of re-rendering the whole page on every
   // notification (which is what router.refresh() used to do).
-  const [items, setItems] = useState<NotificationItem[]>(notifications);
+  //
+  // 1.31.4: everything you do shows at once; what the server hasn't
+  // confirmed yet (read, cleared, answered) is kept in `overlay`, so a
+  // fresh list arriving meanwhile can't undo it, and taken back if the
+  // server says no (lib/notification-optimism.ts).
+  const overlay = useRef(emptyOverlay());
+  const [items, setItems] = useState<NotificationItem[]>(() => withOverlay(notifications, overlay.current));
   useEffect(() => {
-    setItems(notifications);
+    setItems(withOverlay(notifications, overlay.current));
   }, [notifications]);
+  // Sliding out (their ids), and just come in (for their entrance).
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
+  const [entering, setEntering] = useState<Set<string>>(() => new Set());
+  const [delays, setDelays] = useState<Map<string, number>>(() => new Map());
+  const leaveTimers = useRef(new Map<string, number>());
+  const leavingRef = useRef(leaving);
+  leavingRef.current = leaving;
+  // The list as last drawn (for what a later answer from the server needs to know).
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const unreadCount = items.filter((n) => !n.is_read).length;
+
+  const without = (set: Set<string>, ids: Iterable<string>) => {
+    const next = new Set(set);
+    for (const id of ids) next.delete(id);
+    return next;
+  };
+  /** A new card's entrance (once). */
+  const enter = useCallback((ids: string[]) => {
+    if (!ids.length || motionReduced()) return;
+    setEntering((cur) => new Set([...cur, ...ids]));
+    window.setTimeout(() => setEntering((cur) => without(cur, ids)), ENTER_MS + 40);
+  }, []);
+  /** Kept on top of fresh lists a little longer, then the server's word is enough. */
+  const settle = (kind: "read" | "gone" | "answered", ids: string[]) =>
+    window.setTimeout(() => {
+      for (const id of ids) (kind === "answered" ? overlay.current.answered : overlay.current[kind]).delete(id);
+    }, SETTLE_MS);
 
   useEffect(() => {
     const supabase = createClient();
@@ -848,16 +969,20 @@ export function NotificationBell({
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
         async (payload) => {
+          // Gone (deleted, or cleared here, in another tab or on another device): out of the bell.
+          // One sliding out already leaves by itself.
+          const drop = (id: string) => {
+            if (!leavingRef.current.has(id)) setItems((cur) => cur.filter((n) => n.id !== id));
+          };
           if (payload.eventType === "DELETE") {
             const oldId = (payload.old as { id?: string }).id;
-            if (oldId) setItems((cur) => cur.filter((n) => n.id !== oldId));
+            if (oldId) drop(oldId);
             return;
           }
           const id = (payload.new as { id?: string }).id;
           if (!id) return;
-          // Cleared (here, in another tab or on another device): out of the bell.
           if ((payload.new as { cleared_at?: string | null }).cleared_at) {
-            setItems((cur) => cur.filter((n) => n.id !== id));
+            drop(id);
             return;
           }
           // Refetch just this one row (with its joined invite/transfer
@@ -868,91 +993,148 @@ export function NotificationBell({
             .eq("id", id)
             .maybeSingle();
           if (!data) return;
-          const row = data as unknown as NotificationItem;
+          const fresh = data as unknown as NotificationItem;
           // These change which teams/permissions you have — re-render the
           // page so the switcher and current screen reflect it right away.
           if (
             payload.eventType === "INSERT" &&
-            ["team_disbanded", "kicked", "role_changed", "ownership_response"].includes(row.kind ?? "")
+            ["team_disbanded", "kicked", "role_changed", "ownership_response"].includes(fresh.kind ?? "")
           ) {
             router.refresh();
           }
-          if (payload.eventType === "INSERT") sounds.notify();
-          setItems((cur) => {
-            if (payload.eventType === "INSERT") {
-              return [row, ...cur.filter((n) => n.id !== id)].slice(0, 50);
-            }
-            return cur.map((n) => (n.id === id ? row : n));
-          });
+          const row = rowWithOverlay(fresh, overlay.current);
+          if (!row) return;
+          if (payload.eventType === "INSERT") {
+            sounds.notify();
+            const isNew = !itemsRef.current.some((n) => n.id === id);
+            setItems((cur) => [row, ...cur.filter((n) => n.id !== id)].slice(0, 50));
+            if (isNew) enter([id]);
+            return;
+          }
+          setItems((cur) => cur.map((n) => (n.id === id ? row : n)));
         }
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, router]);
+  }, [userId, router, enter]);
 
+  // --- Read ---------------------------------------------------------------------------------------------------------
   function markReadLocally(id: string) {
+    if (overlay.current.read.has(id)) return;
+    overlay.current.read.add(id);
     setItems((cur) => cur.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
     setReadIds((cur) => new Set(cur).add(id));
-    startTransition(() => {
-      markNotificationRead(id);
-    });
+    void markNotificationRead(id)
+      .then((r) => {
+        if (r?.error) throw new Error(r.error);
+        settle("read", [id]);
+      })
+      .catch(() => {
+        // Taken back, quietly: it's still there to open.
+        overlay.current.read.delete(id);
+        setItems((cur) => cur.map((n) => (n.id === id ? { ...n, is_read: false } : n)));
+        setReadIds((cur) => without(cur, [id]));
+      });
   }
 
   function markAllReadLocally() {
-    setItems((cur) => cur.map((n) => ({ ...n, is_read: true })));
-    setReadIds((cur) => new Set([...cur, ...items.map((n) => n.id)]));
-    startTransition(() => {
-      markAllNotificationsRead();
-    });
+    const ids = items.filter((n) => !n.is_read).map((n) => n.id);
+    if (!ids.length) return;
+    for (const id of ids) overlay.current.read.add(id);
+    const set = new Set(ids);
+    setItems((cur) => cur.map((n) => (set.has(n.id) ? { ...n, is_read: true } : n)));
+    setReadIds((cur) => new Set([...cur, ...ids]));
+    void markAllNotificationsRead()
+      .then((r) => {
+        if (r?.error) throw new Error(r.error);
+        settle("read", ids);
+      })
+      .catch((e) => {
+        for (const id of ids) overlay.current.read.delete(id);
+        setItems((cur) => cur.map((n) => (set.has(n.id) ? { ...n, is_read: false } : n)));
+        setReadIds((cur) => without(cur, ids));
+        toast.error(e instanceof Error && e.message ? e.message : "Couldn't mark them read. Try again.");
+      });
   }
 
-  // Clearing (1.29.1): the row folds away, then leaves the list; if saving
-  // fails it comes back where it was.
+  // --- Clear --------------------------------------------------------------------------------------------------------
+  // A card slides out, then its gap closes (the ones under it move up), then it leaves the list. If the server says
+  // no, it comes back where it was (sliding back in, or arriving again if it had already left).
   const confirm = useConfirm();
-  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
-  // Which fold each one is in (one timer per clear, however many it takes).
-  const folding = useRef(new Map<string, number>());
-  const LEAVE_MS = 200;
-  const unmark = (ids: Iterable<string>) =>
-    setLeaving((cur) => {
-      const next = new Set(cur);
+  function startLeave(rows: NotificationItem[], stagger = false) {
+    const ids = rows.map((n) => n.id);
+    const gap = stagger ? leaveDelays(ids.length) : ids.map(() => 0);
+    const quick = motionReduced();
+    setItems((cur) => {
+      const set = new Set(ids);
+      return cur.map((n) => (set.has(n.id) && !n.is_read ? { ...n, is_read: true } : n));
+    });
+    setReadIds((cur) => new Set([...cur, ...ids]));
+    if (stagger) setDelays((cur) => new Map([...cur, ...ids.map((id, i) => [id, gap[i]] as [string, number])]));
+    setLeaving((cur) => new Set([...cur, ...ids]));
+    ids.forEach((id, i) => {
+      window.clearTimeout(leaveTimers.current.get(id));
+      const t = window.setTimeout(
+        () => {
+          leaveTimers.current.delete(id);
+          setItems((cur) => cur.filter((n) => n.id !== id));
+          setLeaving((cur) => without(cur, [id]));
+          setDelays((cur) => {
+            if (!cur.has(id)) return cur;
+            const next = new Map(cur);
+            next.delete(id);
+            return next;
+          });
+        },
+        quick ? 0 : LEAVE_MS + gap[i]
+      );
+      leaveTimers.current.set(id, t);
+    });
+  }
+  function comeBack(rows: NotificationItem[], error: string) {
+    const ids = rows.map((n) => n.id);
+    for (const id of ids) {
+      overlay.current.gone.delete(id);
+      window.clearTimeout(leaveTimers.current.get(id));
+      leaveTimers.current.delete(id);
+      // A swiped card was moved by its own style: hand it back to the list's.
+      const card = panelRef.current?.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
+      if (card) {
+        card.style.transform = "";
+        card.style.opacity = "";
+      }
+    }
+    const have = new Set(itemsRef.current.map((n) => n.id));
+    const gone = ids.filter((id) => !have.has(id));
+    // Exactly as they were: one that was unread is unread again (nothing changed on the server).
+    const byId = new Map(rows.map((n) => [n.id, n]));
+    setItems((cur) => putBack(cur.map((n) => byId.get(n.id) ?? n), rows));
+    setReadIds((cur) => without(cur, rows.filter((n) => !n.is_read).map((n) => n.id)));
+    setLeaving((cur) => without(cur, ids));
+    setDelays((cur) => {
+      const next = new Map(cur);
       for (const id of ids) next.delete(id);
       return next;
     });
-  function putBack(gone: NotificationItem[], error: string) {
-    for (const n of gone) folding.current.delete(n.id);
-    unmark(gone.map((n) => n.id));
-    setItems((cur) => {
-      const have = new Set(cur.map((n) => n.id));
-      return [...cur, ...gone.filter((n) => !have.has(n.id))].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
-    });
+    enter(gone);
     toast.error(error);
   }
-  function fold(gone: NotificationItem[]) {
-    const ids = gone.map((n) => n.id);
-    const token = window.setTimeout(() => {
-      // Only the ones still in this fold (one that came back stays).
-      const out = new Set(ids.filter((id) => folding.current.get(id) === token));
-      for (const id of out) folding.current.delete(id);
-      if (!out.size) return;
-      setItems((cur) => cur.filter((n) => !out.has(n.id)));
-      unmark(out);
-    }, LEAVE_MS);
-    for (const id of ids) folding.current.set(id, token);
-    setLeaving((cur) => new Set([...cur, ...ids]));
-    setReadIds((cur) => new Set([...cur, ...ids]));
-  }
   function clearOne(n: NotificationItem) {
-    fold([n]);
-    void clearNotification(n.id).then((r) => {
-      if (r?.error) putBack([{ ...n, is_read: true }], r.error);
-    });
+    if (overlay.current.gone.has(n.id) || waitsForAnswer(n)) return;
+    overlay.current.gone.add(n.id);
+    startLeave([n]);
+    void clearNotification(n.id)
+      .then((r) => {
+        if (r?.error) throw new Error(r.error);
+        settle("gone", [n.id]);
+      })
+      .catch((e) => comeBack([n], e instanceof Error && e.message ? e.message : "Couldn't clear it. Try again."));
   }
-  const clearable = items.filter((n) => !waitsForAnswer(n));
+  const clearable = items.filter((n) => !waitsForAnswer(n) && !leaving.has(n.id));
   async function clearAll() {
-    const kept = items.length - clearable.length;
+    const kept = items.filter(waitsForAnswer).length;
     const ok = await confirm({
       title: "Clear all notifications?",
       description: `They leave this list. History still has the last 2 weeks.${kept ? ` ${kept === 1 ? "An invite that still needs your answer stays." : "Invites that still need your answer stay."}` : ""}`,
@@ -961,11 +1143,19 @@ export function NotificationBell({
       danger: true,
     });
     if (!ok) return;
-    const gone = clearable.map((n) => ({ ...n, is_read: true }));
-    fold(gone);
-    const r = await clearAllNotifications();
-    if (r?.error) putBack(gone, r.error);
+    const gone = clearable;
+    if (!gone.length) return;
+    for (const n of gone) overlay.current.gone.add(n.id);
+    // One after the other, top to bottom.
+    startLeave(gone, true);
+    const r = await clearAllNotifications().catch(() => ({ error: "Couldn't clear them. Check your connection and try again." }));
+    if (r?.error) comeBack(gone, r.error);
+    else settle("gone", gone.map((n) => n.id));
   }
+  useEffect(() => {
+    const timers = leaveTimers.current;
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -1005,31 +1195,45 @@ export function NotificationBell({
     }
   }
 
+  // --- Accept / Decline: answered at once (1.31.4), taken back if the server says no -------------------------------
   async function respond(n: NotificationItem, accept: boolean) {
+    if (respondingId) return;
+    const before = items.find((x) => x.id === n.id) ?? n;
+    const readBefore = overlay.current.read.has(n.id);
+    overlay.current.answered.set(n.id, accept ? "accepted" : "declined");
+    overlay.current.read.add(n.id);
+    setItems((cur) => cur.map((x) => (x.id === n.id ? rowWithOverlay(x, overlay.current) ?? x : x)));
+    setReadIds((cur) => new Set(cur).add(n.id));
     setRespondingId(n.id);
-    const result = n.team_invite_id
-      ? await respondToTeamInvite(n.team_invite_id, accept)
+    const result = await (n.team_invite_id
+      ? respondToTeamInvite(n.team_invite_id, accept)
       : n.ownership_transfer_id
-      ? await respondToOwnershipTransfer(n.ownership_transfer_id, accept)
-      : { error: "Nothing to respond to." };
+      ? respondToOwnershipTransfer(n.ownership_transfer_id, accept)
+      : Promise.resolve({ error: "Nothing to respond to." })
+    ).catch(() => ({ error: "Couldn't send your answer. Check your connection and try again." }));
     setRespondingId(null);
     if (result?.error) {
+      overlay.current.answered.delete(n.id);
+      if (!readBefore) overlay.current.read.delete(n.id);
+      setItems((cur) => cur.map((x) => (x.id === n.id ? before : x)));
+      if (!before.is_read) setReadIds((cur) => without(cur, [n.id]));
       toast.error(result.error);
-    } else {
-      toast.success(
-        n.ownership_transfer_id
-          ? accept
-            ? "You're now the owner"
-            : "Ownership request declined"
-          : accept
-          ? "You joined the team"
-          : "Invite declined"
-      );
-      markReadLocally(n.id);
-      // Team membership may have changed (joined a team / became owner),
-      // so this one genuinely needs a fresh server render.
-      router.refresh();
+      return;
     }
+    settle("answered", [n.id]);
+    settle("read", [n.id]);
+    toast.success(
+      n.ownership_transfer_id
+        ? accept
+          ? "You're now the owner"
+          : "Ownership request declined"
+        : accept
+        ? "You joined the team"
+        : "Invite declined"
+    );
+    // Team membership may have changed (joined a team / became owner),
+    // so this one genuinely needs a fresh server render.
+    router.refresh();
   }
 
   return (
@@ -1043,11 +1247,12 @@ export function NotificationBell({
           setOpen((o) => !o);
         }}
         className="relative w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-2 hover:text-ink transition-colors"
-        aria-label="Notifications"
+        aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
       >
         <BellIcon className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-md bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
+          // A new count pops in (1.31.4).
+          <span key={unreadCount} className="bell-badge absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-[3px] rounded-md bg-red text-white text-[9.5px] font-bold flex items-center justify-center leading-none">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -1069,7 +1274,7 @@ export function NotificationBell({
           role="dialog"
           style={{ ["--bell-top" as string]: `${anchor.top}px`, ["--bell-right" as string]: `${anchor.right}px` }}
           aria-label="Notifications"
-          className="glass-pane fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[360px] sm:max-w-[calc(100vw-2rem)] rounded-2xl sm:rounded-xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
+          className="notif-panel glass-pane fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[380px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
         >
           <div className="flex items-center justify-between gap-2 pl-4 pr-2.5 py-2.5 border-b border-line/10">
             <span className="font-display font-semibold text-[13.5px]">
@@ -1094,19 +1299,30 @@ export function NotificationBell({
               </button>
             </span>
           </div>
-          <div className="max-h-[min(70dvh,480px)] sm:max-h-[420px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
+          <div className="max-h-[min(70dvh,480px)] sm:max-h-[440px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
             {items.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[12.5px] text-ink-faint">
-                You&rsquo;re all caught up.
+              <div className="notif-empty px-4 py-10 text-center">
+                <span className="mx-auto mb-2.5 w-10 h-10 rounded-full bg-surface-2 text-ink-soft flex items-center justify-center" aria-hidden>
+                  <BellIcon className="w-[18px] h-[18px]" />
+                </span>
+                <p className="text-[12.5px] font-semibold text-ink-soft">You&rsquo;re all caught up.</p>
               </div>
             ) : (
-              items.map((n) => (
-                <div key={n.id} className="notif-item border-b border-line/10 last:border-none" data-leaving={leaving.has(n.id) ? "" : undefined}>
-                  <div>
-                    <NotificationRow n={n} onOpen={handleClick} onRespond={respond} responding={respondingId === n.id} onClear={clearOne} />
-                  </div>
-                </div>
-              ))
+              <div className="px-2 pt-2 pb-0.5">
+                {items.map((n) => (
+                  <BellCard
+                    key={n.id}
+                    n={n}
+                    leaving={leaving.has(n.id)}
+                    entering={entering.has(n.id)}
+                    delay={delays.get(n.id) ?? 0}
+                    onOpen={handleClick}
+                    onRespond={respond}
+                    responding={respondingId === n.id}
+                    onClear={clearOne}
+                  />
+                ))}
+              </div>
             )}
           </div>
           {(!pushOn || clearable.length > 0) && (

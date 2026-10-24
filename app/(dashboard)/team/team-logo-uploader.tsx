@@ -1,6 +1,7 @@
 "use client";
 
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { pictureTooBig } from "@/lib/image/limits";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -30,8 +31,9 @@ export function TeamLogoUploader({
       toast.error("Only image files are allowed.");
       return;
     }
-    if (original.size > 25 * 1024 * 1024) {
-      toast.error("Keep it under 25MB.");
+    const tooBig = pictureTooBig(original);
+    if (tooBig) {
+      toast.error(tooBig);
       return;
     }
     setBusy(true);

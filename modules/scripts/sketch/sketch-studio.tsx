@@ -44,6 +44,7 @@ import {
   type StrokeEl,
   type TextEl,
 } from "./engine";
+import { pictureTooBig } from "@/lib/image/limits";
 
 /**
  * Sketch Studio: a quick drawing board for editing ideas. Pen, marker,
@@ -417,7 +418,9 @@ export function SketchStudio({ initial, onCancel, onConfirm, title = "Sketch you
 
   async function insertImage(file: File) {
     if (!file.type.startsWith("image/")) return;
-    const src = await downscale(file, 1400);
+    const tooBig = pictureTooBig(file);
+    if (tooBig) return toast.error(tooBig);
+    const src = await downscale(file, 1200);
     if (!src) return toast.error("Couldn't read that image.");
     const img = new Image();
     img.onload = () => {
@@ -1173,7 +1176,11 @@ function createdEl(d: { sx: number; sy: number; x: number; y: number }, tool: To
   return { id: uid(), t: s.shape, x: r.x, y: r.y, w: Math.max(4, r.w), h: Math.max(4, r.h), rot: 0, color: s.color, fill: s.fill, size: s.size, dash: s.dash };
 }
 
-/** Big photos are shrunk before going into the drawing. */
+/**
+ * Pictures are made small before going into the drawing (they're kept inside
+ * it): 1200 px at most, as WebP (1.31.3; transparency kept), else JPEG, or
+ * PNG for a see-through one where WebP can't be made.
+ */
 async function downscale(file: File, max: number): Promise<string | null> {
   try {
     const url = URL.createObjectURL(file);
@@ -1185,11 +1192,13 @@ async function downscale(file: File, max: number): Promise<string | null> {
     });
     const k = Math.min(1, max / Math.max(img.width, img.height));
     const c = document.createElement("canvas");
-    c.width = Math.round(img.width * k);
-    c.height = Math.round(img.height * k);
+    c.width = Math.max(1, Math.round(img.width * k));
+    c.height = Math.max(1, Math.round(img.height * k));
     c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
     URL.revokeObjectURL(url);
-    return c.toDataURL(file.type === "image/png" ? "image/png" : "image/jpeg", 0.86);
+    const webp = c.toDataURL("image/webp", 0.82);
+    if (webp.startsWith("data:image/webp")) return webp;
+    return c.toDataURL(file.type === "image/png" || file.type === "image/gif" ? "image/png" : "image/jpeg", 0.82);
   } catch {
     return null;
   }

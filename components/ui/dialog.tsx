@@ -92,7 +92,7 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         // Phones: a floating card with breathing room on every side (never flush to the edges).
-        className={`glass-pane relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-2xl border border-line/15 shadow-2xl outline-none animate-[modalin_.14s_ease]`}
+        className={`glass-pane glass-lift relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-2xl border border-line/15 shadow-2xl outline-none animate-[modalin_.14s_ease]`}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3 border-b border-line/10">
           <div className="flex-1 min-w-0">

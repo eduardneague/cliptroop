@@ -7,6 +7,7 @@ import type { RoleId } from "@/lib/permissions/roles";
 import { useToast } from "./toast-provider";
 import { ArrowRightIcon, CloseIcon, ChevronRightIcon, SmileIcon, PaperclipIcon, GifIcon } from "./icons";
 import { sounds } from "@/lib/sounds";
+import { pictureTooBig } from "@/lib/image/limits";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -289,8 +290,10 @@ export function MentionInput({
     if (!list) return;
     const accepted: File[] = [];
     Array.from(list).forEach((f) => {
-      if (f.size > MAX_FILE_BYTES) {
-        toast.error(`${f.name} is over 25MB. Skipped.`);
+      // Pictures up to 5 MB (made small before they go up, 1.31.3); any other file up to 25 MB.
+      const tooBig = f.type.startsWith("image/") ? pictureTooBig(f) : f.size > MAX_FILE_BYTES ? `${f.name} is over 25 MB.` : null;
+      if (tooBig) {
+        toast.error(`${tooBig} Skipped.`);
         return;
       }
       accepted.push(f);
@@ -437,7 +440,7 @@ export function MentionInput({
                 className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
               >
                 <PaperclipIcon className="w-4 h-4 text-ink-soft" /> Attach file
-                <span className="text-ink-faint text-[10.5px] ml-auto">≤25MB</span>
+                <span className="text-ink-faint text-[10.5px] ml-auto" title="Pictures up to 5 MB, other files up to 25 MB">≤25 MB</span>
               </button>
               <button
                 type="button"

@@ -347,8 +347,29 @@ html[data-glass] [data-shell="topbar"] { background-color: rgb(var(--surface) / 
 html[data-glass] [data-shell="sidebar"] { --tw-bg-opacity: max(0.9, var(--glass-tint)); border-color: rgb(var(--glass-edge)); }
 html[data-glass][data-glass-sidebar] [data-shell="sidebar"] { --tw-bg-opacity: calc(var(--glass-tint) * 0.85); }
 html[data-glass] [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9)); border-color: rgb(var(--glass-edge)); }
-/* The main pop-ups (dialogs, the search palette, the bell, menus) follow the slider (1.29.3; they were nearly solid). */
-html[data-glass] .glass-pane { --tw-bg-opacity: var(--glass-pop); }
+/*
+  The main pop-ups (dialogs, the search palette, the bell, menus, pickers)
+  follow the slider (1.29.3; they were nearly solid). 1.31.5: as specific as
+  the floating boxes' rule above and after it, so it wins (it didn't, so
+  they stayed nearly solid unless glass went everywhere). Over a wallpaper
+  they keep the floor and the lift the bars have.
+*/
+html[data-glass] .bg-surface.glass-pane { --tw-bg-opacity: var(--glass-pop); }
+html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane {
+  --tw-bg-opacity: max(var(--glass-pop), var(--wall-floor));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+/*
+  Over a dimmed page (dialogs, "Are you sure?", the search palette, the
+  phone's menu): in light mode the glass shows the page about as bright as
+  it was (the dimming is for around it), so the box is light glass, not
+  grey. Dark mode keeps the dimming.
+*/
+html[data-glass]:not(.dark) .bg-surface.glass-pane.glass-lift {
+  -webkit-backdrop-filter: var(--glass-blur) brightness(calc(var(--wall-lift, 1) * 1.8));
+  backdrop-filter: var(--glass-blur) brightness(calc(var(--wall-lift, 1) * 1.8));
+}
 html[data-glass] .dash-board .dash-item:not(.is-lifted):not(.is-resizing) { box-shadow: var(--glass-shadow); }
 
 /*
@@ -362,11 +383,18 @@ html[data-glass-scope="everywhere"] .bg-surface:is(.fixed, .absolute):is(.shadow
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }
-html[data-glass-scope="everywhere"] .glass-toast.bg-ink {
-  background-color: rgb(var(--ink) / calc(0.92 - var(--glass-level) * 0.3));
+/* Toasts are glass whenever the glass look is on (1.31.4; only with "everywhere" before). */
+html[data-glass] .glass-toast.bg-ink {
+  background-color: rgb(var(--ink) / calc(0.9 - var(--glass-level) * 0.3));
   -webkit-backdrop-filter: blur(16px) saturate(1.6);
   backdrop-filter: blur(16px) saturate(1.6);
 }
+html[data-glass] .glass-toast.bg-red {
+  background-color: rgb(var(--red) / 0.9);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+html[data-glass-style="liquid"] .glass-toast { box-shadow: var(--liquid-rim), var(--liquid-drop); }
 /* A pointer on a pop-up (the tour's bubble) is exactly as see-through as the pop-up. */
 html[data-glass] .bg-surface.glass-tail { --tw-bg-opacity: inherit; }
 
@@ -842,10 +870,96 @@ html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { backgrou
   .no-scrollbar { scrollbar-width: none; }
 }
 
-/* The bell (1.29.1): a cleared notification folds away before it leaves. */
-.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.2s var(--ease-out), opacity 0.16s ease; }
-.notif-item > div { min-height: 0; overflow: hidden; }
-.notif-item[data-leaving] { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+/*
+  The bell (1.31.4; a fold since 1.29.1): each notification is a card of its
+  own, a pane of glass with the glass look. Cleared (its X, a swipe, Delete,
+  Clear all), it slides out (a swipe: the way it went), then its gap closes
+  and the ones under it move up into its place; Clear all takes them one
+  after another (--leave-delay). A new one slides in at the top. Read, it
+  loses its amber light. The timings match LEAVE_MS and ENTER_MS in
+  components/ui/notification-bell.tsx.
+*/
+.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.28s var(--ease-out) calc(var(--leave-delay, 0ms) + 0.14s); }
+.notif-clip { min-height: 0; overflow: hidden; }
+/* Up and down only: sideways it slides out to the bell's own edge. */
+@supports (overflow: clip) { .notif-clip { overflow-x: visible; overflow-y: clip; } }
+.notif-gap { padding-bottom: 6px; }
+.notif-card {
+  position: relative;
+  border-radius: 14px;
+  background-color: rgb(var(--surface-2) / 0.72);
+  border: 1px solid rgb(var(--line) / 0.07);
+  transition: transform 0.34s var(--ease-spring), opacity 0.22s ease, background-color 0.15s ease;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.notif-card:hover { background-color: rgb(var(--surface-2)); }
+.notif-card > * { position: relative; }
+.notif-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(var(--amber) / 0.14), rgb(var(--amber) / 0) 62%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.notif-card[data-unread]::before { opacity: 1; }
+.notif-card[data-dragging] { transition: none; cursor: grabbing; }
+.notif-card img { -webkit-user-drag: none; }
+/* Its words have the focus (they're its button): the card shows it, and its X. */
+.notif-card:has(.notif-main:focus-visible) { outline: 2px solid rgb(var(--amber)); outline-offset: -1px; }
+.notif-card:has(.notif-main:focus-visible) .notif-x { opacity: 1; }
+.notif-item[data-leaving] { grid-template-rows: 0fr; pointer-events: none; }
+.notif-item[data-leaving] .notif-card {
+  transform: translateX(110%) scale(0.97);
+  opacity: 0;
+  transition: transform 0.26s cubic-bezier(0.55, 0, 0.75, 0.25) var(--leave-delay, 0ms), opacity 0.22s ease var(--leave-delay, 0ms);
+}
+.notif-item[data-entering] { animation: notif-open 0.42s var(--ease-out) both; }
+.notif-item[data-entering] .notif-card { animation: notif-in 0.46s var(--ease-out) both; }
+@keyframes notif-open { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+@keyframes notif-in { from { opacity: 0; transform: translateY(-12px) scale(0.97); } to { opacity: 1; transform: none; } }
+.notif-empty { animation: rise-in 0.4s var(--ease-out) both; }
+/*
+  Toasts (1.31.4): one that goes slides out (up, on a phone, where they sit
+  at the top; a swipe: the way it went), then the others glide into its
+  place. Timings match LEAVE_MS in components/ui/toast-provider.tsx.
+*/
+.toast-item { display: grid; grid-template-rows: 1fr; justify-items: stretch; transition: grid-template-rows 0.26s var(--ease-out) 0.12s; animation: notif-open 0.26s var(--ease-out) backwards; }
+@media (min-width: 640px) { .toast-item { justify-items: end; } }
+.toast-clip { min-height: 0; overflow: hidden; }
+@supports (overflow: clip) { .toast-clip { overflow-x: visible; overflow-y: clip; } }
+.toast-gap { padding: 4px 0 12px; }
+.toast-card { touch-action: pan-y; transition: transform 0.34s var(--ease-spring), opacity 0.2s ease; }
+.toast-card[data-dragging] { transition: none; cursor: grabbing; }
+.toast-item[data-leaving] { grid-template-rows: 0fr; }
+.toast-item[data-leaving] .toast-card { transform: translateX(115%); opacity: 0; transition: transform 0.26s cubic-bezier(0.55, 0, 0.75, 0.25), opacity 0.2s ease; }
+@media (max-width: 639px) { .toast-item[data-leaving] .toast-card { transform: translateY(-110%) scale(0.96); } }
+
+/* The count on the bell pops in when it changes. */
+.bell-badge { animation: badge-pop 0.34s var(--ease-spring); }
+@keyframes badge-pop { from { transform: scale(0.55); } to { transform: none; } }
+/*
+  Glass: the bell is as clear as the cards on the page (its notifications
+  are panes of their own on it and keep the words readable), each card a
+  brighter pane lit along its top. Set as the colour itself: the rule that
+  keeps floating boxes nearly solid is more specific than a class. Over a
+  wallpaper it keeps the floor and the lift the bars have.
+*/
+html[data-glass] .notif-panel { background-color: rgb(var(--surface) / var(--glass-tint)); }
+html[data-glass]:has([data-dash-bg]) .notif-panel {
+  background-color: rgb(var(--surface) / max(var(--glass-tint), var(--wall-floor)));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+html[data-glass] .notif-card { background-color: rgb(255 255 255 / 0.5); border-color: rgb(var(--glass-edge)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
+html[data-glass] .notif-card:hover { background-color: rgb(255 255 255 / 0.68); }
+html.dark[data-glass] .notif-card { background-color: rgb(255 255 255 / 0.07); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+html.dark[data-glass] .notif-card:hover { background-color: rgb(255 255 255 / 0.1); }
+html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
 
 @keyframes toastin {
   0% { opacity: 0; transform: translateY(14px) scale(0.96); }

@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PUSH_COOKIE } from "@/lib/push/guard";
 import { CURRENT_TEAM_COOKIE } from "@/lib/teams";
+import { noteSignIn, signInKeysFor, signInWait } from "@/lib/auth/sign-in-limits";
+import { signInOutcome, waitText } from "@/lib/auth/sign-in-rules";
 
 /*
  * Deleting your account (1.28.0, Settings → Account). Only from your own
@@ -45,15 +47,32 @@ export async function deleteAccount(input: { email: string; password: string }):
   if (email !== user.email.toLowerCase()) return { error: "That isn't your account's email." };
   if (!password) return { error: "Type your password." };
 
+  // Too many wrong tries (1.31.6, 0105): the same limits as signing in, so a
+  // session someone got hold of can't be used to guess the password here.
+  const keys = await signInKeysFor(user.email);
+  const wait = await signInWait(keys);
+  if (wait > 0) return { error: waitText(wait) };
+
   // Your password, checked again (a separate client that keeps no session).
   const check = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { data: signedIn, error: signInError } = await check.auth.signInWithPassword({ email: user.email, password });
   if (signInError || signedIn.user?.id !== user.id) {
-    const tooMany = signInError?.status === 429 || /rate limit|too many/i.test(signInError?.message ?? "");
-    return { error: tooMany ? "Too many tries. Wait a few minutes and try again." : "That password isn't right." };
+    const outcome = signInOutcome(signInError);
+    if (outcome === "wrong") await noteSignIn(keys, false);
+    return {
+      error:
+        outcome === "busy"
+          ? "Too many tries. Wait a few minutes and try again."
+          : outcome === "down"
+            ? "Couldn't check your password right now. Try again in a minute."
+            : "That password isn't right.",
+    };
   }
+  await noteSignIn(keys, true);
+  // The check's own session isn't kept (it would stay on the account's list of sign-ins).
+  await check.auth.signOut({ scope: "local" }).catch(() => null);
 
   // On no team at all (checked with the service key: nothing hidden).
   const admin = createAdminClient();

@@ -72,7 +72,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="confirm-title"
-            className="glass-pane relative w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
+            className="glass-pane glass-lift relative w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="confirm-title" className="font-display text-lg font-semibold mb-1.5">

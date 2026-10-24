@@ -1,6 +1,7 @@
 "use client";
 
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { pictureTooBig } from "@/lib/image/limits";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -119,6 +120,9 @@ export default function SetUpAccountPage() {
 
   function pickAvatar(file: File | undefined) {
     if (!file) return;
+    const tooBig = pictureTooBig(file);
+    if (tooBig) return setError(tooBig);
+    setError(null);
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   }
