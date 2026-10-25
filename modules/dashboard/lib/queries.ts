@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { studioThumb } from "@/lib/picture-size";
 
 export type TaskKind = "short" | "long";
 /** What a task row looks like: a short, a long video, or a meeting action item. */
@@ -92,17 +93,17 @@ async function itemsFor(supabase: Awaited<ReturnType<typeof createClient>>, shor
     shortIds.length ? supabase.from("short_videos").select("id, entry_number, title, stage").in("id", shortIds) : Promise.resolve({ data: [] }),
     longIds.length ? supabase.from("long_video_projects").select("id, entry_number, title, stage").in("id", longIds) : Promise.resolve({ data: [] }),
     withThumbs && longIds.length
-      ? supabase.from("package_entries").select("project_id, thumbnail_storage_path, position").in("project_id", longIds).eq("is_winner", true).order("position")
+      ? supabase.from("package_entries").select("id, project_id, position").in("project_id", longIds).eq("is_winner", true).not("thumbnail_storage_path", "is", null).order("position")
       : Promise.resolve({ data: [] }),
   ]);
   const info = new Map<string, ItemInfo>();
   for (const s of shorts ?? []) info.set(s.id as string, { number: s.entry_number as number, title: s.title as string, stage: s.stage as string });
   for (const l of longs ?? []) info.set(l.id as string, { number: l.entry_number as number, title: l.title as string, stage: l.stage as string });
-  const paths = new Map<string, string>();
-  for (const w of winners ?? []) if (w.thumbnail_storage_path && !paths.has(w.project_id as string)) paths.set(w.project_id as string, w.thumbnail_storage_path as string);
-  const { data: signed } = paths.size ? await supabase.storage.from("package-thumbs").createSignedUrls([...paths.values()], 3600) : { data: [] };
-  const url = new Map((signed ?? []).filter((x) => x.path && x.signedUrl).map((x) => [x.path as string, x.signedUrl as string]));
-  const thumb = (id: string) => (paths.has(id) ? url.get(paths.get(id)!) ?? null : null);
+  // The winning thumbnail at an address that never changes, 160 px wide (1.32.3; the widgets show it 46 to 52 px):
+  // no signed link made on every visit (one more trip to storage, and a new address the browser downloads again).
+  const winner = new Map<string, string>();
+  for (const w of (winners ?? []) as { id: string; project_id: string }[]) if (!winner.has(w.project_id)) winner.set(w.project_id, w.id);
+  const thumb = (id: string) => (winner.has(id) ? studioThumb(winner.get(id)!, 160) : null);
   return { info, thumb };
 }
 

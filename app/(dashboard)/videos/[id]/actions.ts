@@ -11,6 +11,7 @@ import type { PipelineStage, RoleId } from "@/lib/permissions/roles";
 import { getMembership, canActOnStage } from "@/lib/permissions/membership";
 import { isMaster, ROLES, PIPELINE_STAGES, roleAllowsStage } from "@/lib/permissions/roles";
 import { displayName } from "@/lib/avatar";
+import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 
 /**
@@ -170,8 +171,11 @@ export async function updateTypeTheme(
   theme: string,
   subtheme: string
 ) {
-  if (videoType.length === 0) return { error: "Pick at least one type." };
-  if (!theme.trim()) return { error: "Theme can't be empty." };
+  if (!Array.isArray(videoType) || videoType.length === 0) return { error: "Pick at least one type." };
+  if (typeof theme !== "string" || !theme.trim()) return { error: "Theme can't be empty." };
+  if (typeof subtheme !== "string") return { error: "Couldn't save. Try again." };
+  const long = tooLong(theme.trim(), FORM_LIMITS.theme, "the theme") ?? tooLong(subtheme.trim(), FORM_LIMITS.theme, "the sub-theme");
+  if (long) return { error: long };
 
   const supabase = await createClient();
   const {
@@ -250,6 +254,9 @@ export async function updateExpectedDate(
 
 const EDITABLE_FIELDS = ["hook", "notes", "budget_notes"] as const;
 type EditableField = (typeof EDITABLE_FIELDS)[number];
+// The same as the database's limits (1.31.15, lib/form-limits.ts).
+const FIELD_MAX: Record<EditableField, number> = { hook: FORM_LIMITS.hook, notes: FORM_LIMITS.notes, budget_notes: FORM_LIMITS.budgetNotes };
+const FIELD_NAME: Record<EditableField, string> = { hook: "the hook", notes: "the notes", budget_notes: "the budget notes" };
 
 /**
  * Inline-edit for the free-text Ideate fields. Same access rule as the
@@ -265,6 +272,9 @@ export async function updateIdeateField(
   value: string
 ) {
   if (!EDITABLE_FIELDS.includes(field)) return { error: "Not editable." };
+  if (typeof value !== "string") return { error: "Couldn't save. Try again." };
+  const long = tooLong(value, FIELD_MAX[field], FIELD_NAME[field]);
+  if (long) return { error: long };
 
   const supabase = await createClient();
   const {

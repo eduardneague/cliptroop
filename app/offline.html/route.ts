@@ -37,5 +37,13 @@ button{font:inherit;font-weight:600;border:0;border-radius:12px;background:#E863
 <p>${name} needs the internet to show your team&rsquo;s latest work. It&rsquo;ll be right here as soon as you&rsquo;re back online.</p>
 <button type="button" onclick="location.reload()">Try again</button></main>
 <script>addEventListener("online",function(){location.reload()})</script></body></html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+      // Its own policy (1.31.16; pages get the middleware's): nothing from anywhere, only its inline style,
+      // its reload button and its one script. It never shows anyone's text.
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    },
+  });
 }

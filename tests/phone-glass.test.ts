@@ -99,7 +99,7 @@ for (const f of [
   "modules/short-videos/components/person-chip.tsx",
   "components/ui/member-identity.tsx",
   "components/search/visuals.tsx",
-  "components/ui/notification-bell.tsx",
+  "components/ui/notification-cards.tsx",
   "components/ui/sidebar.tsx",
   "components/ui/mobile-nav.tsx",
   "components/ui/workspace-switcher.tsx",

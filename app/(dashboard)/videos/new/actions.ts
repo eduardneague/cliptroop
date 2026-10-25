@@ -6,6 +6,7 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { queueObjectivesSync } from "@/modules/objectives/lib/sync";
+import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
 
 export type CreateProjectState = { error?: string } | undefined;
 
@@ -51,6 +52,15 @@ export async function createProject(
 
   if (!theme) return { error: "Pick a theme." };
   if (videoType.length === 0) return { error: "Pick at least one type." };
+  // The same limits as the database's (1.31.15, lib/form-limits.ts).
+  if (titles.some((t) => t.length > FORM_LIMITS.videoTitle)) return { error: "YouTube titles can be up to 100 characters." };
+  const long =
+    tooLong(theme, FORM_LIMITS.theme, "the theme") ??
+    tooLong(subtheme, FORM_LIMITS.theme, "the sub-theme") ??
+    tooLong(hook, FORM_LIMITS.hook, "the hook") ??
+    tooLong(notes, FORM_LIMITS.notes, "the notes") ??
+    tooLong(budgetNotes, FORM_LIMITS.budgetNotes, "the budget notes");
+  if (long) return { error: long };
 
   const mainTitle = titles[pickedIndex] ?? titles[0];
 

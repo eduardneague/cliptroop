@@ -139,7 +139,7 @@ for (const dir of ["app", "components", "modules"]) {
 ok(panes.length >= 9, `all the pop-ups are found (${panes.length})`);
 
 // --- Over a dimmed page: light glass, not grey ------------------------------------------------------------------------------------
-const lifted = ["components/ui/dialog.tsx", "components/ui/confirm-provider.tsx", "components/search/global-search.tsx", "components/ui/sidebar-nav.tsx"];
+const lifted = ["components/ui/dialog.tsx", "components/ui/confirm-provider.tsx", "components/search/search-palette.tsx", "components/search/global-search.tsx", "components/ui/sidebar-nav.tsx"];
 for (const f of lifted) ok(/glass-pane glass-lift /.test(read(f)), `${f}: over a dimmed page`);
 const lift = find("html[data-glass]:not(.dark) .bg-surface.glass-pane.glass-lift", "brightness(calc(var(--wall-lift, 1) * 1.8))");
 const wall = find("html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane", "backdrop-filter");

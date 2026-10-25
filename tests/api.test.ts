@@ -51,9 +51,10 @@ const walk = (d: string) => {
 for (const d of ["app", "lib", "modules", "components"]) walk(join(root, d));
 for (const f of [...files, "middleware.ts", "next.config.ts"]) ok(!/Access-Control-Allow-(Origin|Credentials)/i.test(read(f)), `${f}: no CORS headers`);
 
-// The routes that take writes: the timer, and four of the app's own (each also checks the origin or the person).
+// The routes that take writes: the timer, and five of the app's own (each also checks the origin or the person;
+// 1.32.4: /api/vitals, real visitors' speed, tests/web-vitals.test.ts).
 const writers = files.filter((f) => /(^|\/)route\.ts$/.test(f) && /export (async function|const) (POST|PUT|PATCH|DELETE)\b/.test(read(f))).sort();
-ok(JSON.stringify(writers) === JSON.stringify(["app/api/cron/posting/route.ts", "app/api/errors/route.ts", "app/api/grammar/route.ts", "app/api/push/subscribe/route.ts", "app/api/push/test/route.ts"]), `routes that take writes (${writers.join(", ")})`);
+ok(JSON.stringify(writers) === JSON.stringify(["app/api/cron/posting/route.ts", "app/api/errors/route.ts", "app/api/grammar/route.ts", "app/api/push/subscribe/route.ts", "app/api/push/test/route.ts", "app/api/vitals/route.ts"]), `routes that take writes (${writers.join(", ")})`);
 ok(!files.some((f) => /webhook/i.test(f)), "no inbound webhooks: the timer is the only machine that calls in");
 
 // --- Limits per person ----------------------------------------------------------------------------------------------------
@@ -63,6 +64,9 @@ const limited: [string, RegExp][] = [
   ["app/api/weather/route.ts", /overLimit\("weather", clientAddress\(/],
   ["app/api/grammar/route.ts", /overLimit\("grammar", user, 90, 60_000\)/],
   ["app/api/errors/route.ts", /overLimit\("errors", user\.id, 10, 60_000\)/],
+  ["app/api/vitals/route.ts", /overLimit\("vitals", user\.id, 30, 60_000\)/],
+  ["app/api/package-thumb/[entry]/route.ts", /overLimit\("picture", user\.id, 600, 60_000\)/],
+  ["app/api/project-thumb/[id]/route.ts", /overLimit\("picture", user\.id, 600, 60_000\)/],
   ["app/api/giphy/search/route.ts", /overLimit\("giphy", user\.id, 40, 60_000\)/],
   ["app/(dashboard)/team/actions.ts", /overLimit\("invite", user\.id, 30, 60 \* 60_000\)/],
   ["app/(dashboard)/outliers/actions.ts", /overLimit\("outliers-add", user\.id, 60, 60 \* 60_000\)/],

@@ -47,7 +47,9 @@
 @keyframes ld-fade { from { opacity: 0; } }
 
 /* Scenes ------------------------------------------------------------------- */
-.ld-scene-mark { font-family: var(--font-display); font-style: italic; }
+/* Fraunces' italic is its own family (app/layout.tsx, 1.32.3: not preloaded on every page). */
+.ld-italic,
+.ld-scene-mark { font-family: var(--font-display-italic), var(--font-display); font-style: italic; }
 .ld-a { animation-play-state: paused !important; }
 [data-ld-play][data-on] .ld-a { animation-play-state: running !important; }
 

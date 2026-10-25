@@ -13,6 +13,7 @@ import { OverviewTab } from "./overview";
 import { UsageTab } from "./usage";
 import { ProblemsTab } from "./problems";
 import { StatusTab } from "./status-tab";
+import { SpeedTab } from "./speed";
 
 export const metadata: Metadata = { title: "Developer" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export const dynamic = "force-dynamic";
  * (DEVELOPER_EMAILS, matched against the signed-in email; lib/errors.ts).
  * Everyone else gets a 404. Tabs: Overview (a dashboard of the rest),
  * Usage (database, storage, every team and person), Problems (reports and
- * errors), Status (every check in full). Only the open tab is loaded.
+ * errors), Status (every check in full), Speed (real visitors' Web Vitals,
+ * 1.32.4). Only the open tab is loaded.
  */
 export default async function DeveloperPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await getCachedUser();
@@ -60,6 +62,7 @@ export default async function DeveloperPage({ searchParams }: { searchParams: Pr
             {tab === "usage" && <UsageTab />}
             {tab === "problems" && <ProblemsTab />}
             {tab === "status" && <StatusTab />}
+            {tab === "speed" && <SpeedTab />}
           </PendingSwap>
         </div>
       </PendingNav>

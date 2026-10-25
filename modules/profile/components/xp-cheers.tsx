@@ -9,7 +9,8 @@ import { CloseIcon } from "@/components/ui/icons";
 import { useCountUp } from "@/components/ui/count-up";
 import { cheer } from "@/components/ui/confetti";
 import { sounds } from "@/lib/sounds";
-import { levelTint } from "@/lib/profile/progress";
+import { whenIdle } from "@/lib/idle";
+import { levelTint } from "@/lib/profile/levels";
 import { colorCss } from "@/lib/profile/colors";
 import { mergeXp, xpChange, type XpChange } from "@/lib/profile/xp";
 import { LevelBadge } from "./parts";
@@ -30,16 +31,6 @@ import { LevelBadge } from "./parts";
 
 type Progress = { xp: number; bar: string };
 type Pop = { change: XpChange; bar: string; key: number };
-
-const idle = (f: () => void) => {
-  const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
-  if (w.requestIdleCallback) {
-    const h = w.requestIdleCallback(f, { timeout: 4000 });
-    return () => w.cancelIdleCallback?.(h);
-  }
-  const t = window.setTimeout(f, 1500);
-  return () => clearTimeout(t);
-};
 
 export function XpCheers({ userId, profileHref }: { userId: string; profileHref: string | null }) {
   const [pop, setPop] = useState<Pop | null>(null);
@@ -70,7 +61,7 @@ export function XpCheers({ userId, profileHref }: { userId: string; profileHref:
     // Where this tab starts from: what it saw last, else asked once when the page has nothing else to do.
     const stopIdle =
       base === null
-        ? idle(() => {
+        ? whenIdle(() => {
             void read().then((p) => {
               if (!gone && p && base === null) remember(p.xp);
             });

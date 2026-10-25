@@ -15,6 +15,8 @@ export function InviteSearch({ teamId }: { teamId: string }) {
   const [results, setResults] = useState<InviteCandidate[]>([]);
   const [highlighted, setHighlighted] = useState(0);
   const [selected, setSelected] = useState<InviteCandidate | null>(null);
+  // The whole email typed to find them (their only name when they haven't set one).
+  const [typedEmail, setTypedEmail] = useState<string | null>(null);
   const [roles, setRoles] = useState<RoleId[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -40,6 +42,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
 
   function pick(candidate: InviteCandidate) {
     setSelected(candidate);
+    setTypedEmail(query.includes("@") ? query.trim() : null);
     setResults([]);
     setQuery("");
   }
@@ -72,14 +75,14 @@ export function InviteSearch({ teamId }: { teamId: string }) {
     if (result?.error) {
       toast.error(result.error);
     } else {
-      toast.success(`Invite sent to ${displayName(selected.username, selected.fullName, null)}`);
+      toast.success(`Invite sent to ${displayName(selected.username, selected.fullName, typedEmail)}`);
       setSelected(null);
       setRoles([]);
     }
   }
 
   if (selected) {
-    const name = displayName(selected.username, selected.fullName, null);
+    const name = displayName(selected.username, selected.fullName, typedEmail);
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2.5 rounded-lg border border-amber/30 bg-amber/5 px-3 py-2">
@@ -133,7 +136,7 @@ export function InviteSearch({ teamId }: { teamId: string }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Search by username or email…"
+        placeholder="Name, username or their whole email…"
         className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-amber"
       />
       {(results.length > 0 || loading) && (
@@ -141,7 +144,8 @@ export function InviteSearch({ teamId }: { teamId: string }) {
           {loading && <div className="px-3 py-3 text-[12px] text-ink-faint">Searching…</div>}
           {!loading &&
             results.map((r, i) => {
-              const name = displayName(r.username, r.fullName, null);
+              // Found by the whole email you typed (1.31.14: emails never come back): that email's name part.
+              const name = displayName(r.username, r.fullName, query.includes("@") ? query.trim() : null);
               return (
                 <button
                   key={r.id}
@@ -170,8 +174,8 @@ export function InviteSearch({ teamId }: { teamId: string }) {
         </div>
       )}
       <p className="text-[11px] text-ink-faint mt-1.5">
-        Only finds people who already have a {APP_NAME} account. New accounts are created
-        separately, by invite.
+        Only finds people who already have a {APP_NAME} account. An email finds someone only when
+        it&rsquo;s typed in full. New accounts are created separately, by invite.
       </p>
     </div>
   );

@@ -27,6 +27,71 @@ export async function getLook(supabase: SupabaseClient, userId: string): Promise
 
 export type EverywhereBackground = { url: string; video: boolean; dim: number; luma: number | null };
 
+/** Every profile column the app's frame (the dashboard layout) reads. */
+const SHELL_COLUMNS =
+  "username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette, tutorial_done_at, " +
+  "glass_ui, glass_style, glass_scope, glass_sidebar, glass_level, glass_wash, glass_wash_colors, " +
+  "dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim, dashboard_bg_everywhere";
+
+export type ShellProfile = {
+  username: string | null;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  animations_enabled: boolean | null;
+  sounds_enabled: boolean | null;
+  palette: string | null;
+  tourPending: boolean;
+  look: Look;
+  /** The wallpaper's choice (where it goes); `everywhereFrom` turns it into the picture. */
+  bg: { on: boolean; path: string | null; dim: number | null; everywhere: boolean };
+};
+
+/**
+ * Your profile as the app's frame needs it, in ONE read (1.32.1: it used to
+ * be four reads of the same row, side by side: the name and picture, Clip's
+ * tour, the glass look, the wallpaper). null when the database is older
+ * than one of those columns (before 0098): then the frame reads them one
+ * by one, as before.
+ */
+export async function getShellProfile(supabase: SupabaseClient, userId: string): Promise<ShellProfile | null | undefined> {
+  const { data, error } = await supabase.from("profiles").select(SHELL_COLUMNS).eq("id", userId).maybeSingle();
+  if (error) return null;
+  if (!data) return undefined;
+  const r = data as unknown as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === "string" ? v : null);
+  return {
+    username: text(r.username),
+    full_name: text(r.full_name),
+    email: text(r.email),
+    avatar_url: text(r.avatar_url),
+    animations_enabled: typeof r.animations_enabled === "boolean" ? r.animations_enabled : null,
+    sounds_enabled: typeof r.sounds_enabled === "boolean" ? r.sounds_enabled : null,
+    palette: text(r.palette),
+    tourPending: !r.tutorial_done_at,
+    look: readLook(r),
+    bg: { on: r.dashboard_bg_on === true, path: text(r.dashboard_bg_path), dim: typeof r.dashboard_bg_dim === "number" ? r.dashboard_bg_dim : null, everywhere: r.dashboard_bg_everywhere === true },
+  };
+}
+
+/** The wallpaper behind every page from the profile's choice and your wallpapers (for its brightness); null when it's off or only on the dashboard. */
+export function everywhereFrom(
+  supabase: SupabaseClient,
+  userId: string,
+  bg: ShellProfile["bg"],
+  walls: { path: string; luma: number | null }[] | null
+): EverywhereBackground | null {
+  if (!bg.on || !bg.everywhere || !isOwnBgPath(bg.path, userId)) return null;
+  const path = bg.path as string;
+  const wall = (walls ?? []).find((w) => w.path === path);
+  return {
+    url: supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl,
+    video: bgKind(path) === "video",
+    dim: clampDim(bg.dim),
+    luma: clampLuma(wall?.luma),
+  };
+}
+
 /**
  * Your wallpaper when it goes behind every page (1.29.4, Settings →
  * Preferences → Wallpaper → On every page): null when it's off, only on the
@@ -40,13 +105,11 @@ export async function getEverywhereBackground(supabase: SupabaseClient, userId: 
     supabase.from("profile_wallpapers").select("path, luma").eq("user_id", userId),
   ]);
   const row = look.data as { dashboard_bg_on?: boolean; dashboard_bg_path?: string | null; dashboard_bg_dim?: number; dashboard_bg_everywhere?: boolean } | null;
-  if (look.error || !row?.dashboard_bg_on || !row.dashboard_bg_everywhere || !isOwnBgPath(row.dashboard_bg_path, userId)) return null;
-  const path = row.dashboard_bg_path;
-  const wall = ((walls.data ?? []) as { path: string; luma: number | null }[]).find((w) => w.path === path);
-  return {
-    url: supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl,
-    video: bgKind(path) === "video",
-    dim: clampDim(row.dashboard_bg_dim),
-    luma: clampLuma(wall?.luma),
-  };
+  if (look.error || !row) return null;
+  return everywhereFrom(
+    supabase,
+    userId,
+    { on: row.dashboard_bg_on === true, path: row.dashboard_bg_path ?? null, dim: row.dashboard_bg_dim ?? null, everywhere: row.dashboard_bg_everywhere === true },
+    (walls.data ?? []) as { path: string; luma: number | null }[]
+  );
 }

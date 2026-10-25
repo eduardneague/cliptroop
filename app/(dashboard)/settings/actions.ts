@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isOwnStorageUrl } from "@/lib/storage-url";
 import { clampDim, isOwnBgPath } from "@/lib/dashboard-bg";
 import { cleanLookPatch, lookColumns, type Look } from "@/lib/look";
+import { FORM_LIMITS } from "@/lib/form-limits";
 
 export type UpdateProfileState = { error?: string; success?: boolean } | undefined;
 
@@ -27,6 +28,7 @@ export async function updateProfile(
   }
 
   if (bio.length > 300) return { error: "Keep the bio under 300 characters." };
+  if (fullName.length > FORM_LIMITS.fullName) return { error: "Keep your name under 100 characters." };
 
   const { error } = await supabase
     .from("profiles")

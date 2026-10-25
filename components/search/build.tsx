@@ -16,6 +16,7 @@ import { Highlight } from "./highlight";
 import { ActionTile, DocThumb, GoalTile, MeetingTile, PersonAvatar, ProjectThumb, ShortThumb, TeamBadge } from "./visuals";
 import type { Item, SectionId } from "./sections";
 import type { PersonResult, RecentItem, SearchResponse, SearchTeamRef } from "./types";
+import { studioThumb } from "@/lib/picture-size";
 
 /**
  * Turns everything found into rows of the search window (1.26.0): videos,
@@ -99,8 +100,9 @@ export function resultItems(
   // ---- Long videos -----------------------------------------------------------
   data.projects.forEach((p) => {
     const href = `/videos/${p.id}`;
-    // The thumbnail that won in Thumbnail Studio (1.25.0), else the first sketch from Ideate.
-    const thumb = p.winner_id ? `/api/package-thumb/${p.winner_id}` : p.thumbnail_path ? THUMB_BASE + p.thumbnail_path : null;
+    // The thumbnail that won in Thumbnail Studio (1.25.0; 160 px wide since 1.32.3, it's shown 40), else the first
+    // sketch from Ideate.
+    const thumb = p.winner_id ? studioThumb(p.winner_id, 160) : p.thumbnail_path ? THUMB_BASE + p.thumbnail_path : null;
     const c = stageColor(p.stage);
     list.push({
       key: `project-${p.id}`,

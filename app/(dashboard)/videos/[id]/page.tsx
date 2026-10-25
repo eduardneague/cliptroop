@@ -39,6 +39,7 @@ import { listNotes, listVersions, type ReviewNote, type VideoVersion } from "@/m
 import { VideoCard } from "@/modules/review/components/video-card";
 import { LongVideoFile } from "./video-file";
 import { DEFAULT_LONG_MEDIA_KEEP_DAYS, readKeep } from "@/lib/media-keep";
+import { studioThumb } from "@/lib/picture-size";
 
 // The steps ARE the tabs.
 const TABS: PipelineStage[] = STAGE_ORDER;
@@ -136,7 +137,7 @@ export default async function ProjectDetailPage({
     getLongScript(id),
     listTeamPeople(teamId),
     // Package: the Studio's winner (or first variation) for the summary card.
-    supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
+    supabase.from("package_entries").select("id, title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
     videoTab ? listVersions(id, "long") : Promise.resolve([] as VideoVersion[]),
     tab === "edit" || tab === "review" ? listNotes(id, "long") : Promise.resolve([] as ReviewNote[]),
     // Its own query: long_media_keep_days arrives with 0089.
@@ -160,9 +161,9 @@ export default async function ProjectDetailPage({
   const winner = winners[0] ?? null;
   // Up to 3 winners (A/B test); otherwise the first variation.
   const cardRows = winners.length ? winners : (packageRows ?? []).slice(0, 1);
-  const cardPaths = cardRows.map((r) => r.thumbnail_storage_path as string | null).filter((x): x is string => !!x);
-  const { data: cardSigned } = cardPaths.length ? await supabase.storage.from("package-thumbs").createSignedUrls(cardPaths, 3600) : { data: [] };
-  const cardUrls = (cardSigned ?? []).map((d) => d.signedUrl).filter(Boolean) as string[];
+  // At addresses that never change, 640 px wide (1.32.3): the card shows them 96 to 160 px wide (the whole width on a
+  // phone); no signed links made on every visit.
+  const cardUrls = cardRows.filter((r) => !!r.thumbnail_storage_path).map((r) => studioThumb(r.id as string, 640));
 
   const userIsMaster = isMaster(membership?.roles ?? []);
   const myRoles = membership?.roles ?? [];

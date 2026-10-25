@@ -7,6 +7,9 @@ import { authEmails } from "@/lib/auth-emails";
 import { APP_DOMAIN, APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { CopyField, EmailPreview } from "./setup-client";
+import { readSignUpState } from "@/lib/auth/sign-up-settings";
+import { measureServerSpeed } from "@/lib/server-speed";
+import { distanceOf, SUPABASE_REGIONS, VERCEL_REGIONS } from "@/lib/regions";
 
 export const metadata: Metadata = { title: "App setup" };
 export const dynamic = "force-dynamic";
@@ -90,7 +93,8 @@ function Where({ children }: { children: React.ReactNode }) {
 export default async function SetupPage() {
   const user = await getCachedUser();
   if (!(await isDeveloper(user))) notFound();
-  const setup = await getSocialSetup();
+  const [setup, signUp, speed] = await Promise.all([getSocialSetup(), readSignUpState(), measureServerSpeed()]);
+  const distance = distanceOf(speed.databaseMs);
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
   const staging = setup.env === "preview";
@@ -390,6 +394,98 @@ export default async function SetupPage() {
         <Where>
           A new password signs out every other device signed in to that account: the app&rsquo;s own actions stop there at once, the rest when that device&rsquo;s
           sign-in token runs out (an hour at most, Supabase&rsquo;s default).
+        </Where>
+      </Section>
+
+      <Section
+        n={10}
+        title="Supabase: who can make an account"
+        intro={
+          <p>
+            Accounts are made by invitation (Authentication → Users → <b>Invite user</b>). Supabase also takes a sign-up from anyone who has the app&rsquo;s public key
+            (every browser that opens the app has it) unless sign-ups are off, and that account could then make teams of its own. Same project → Authentication →{" "}
+            <b>Sign In / Providers</b>.
+          </p>
+        }
+      >
+        <Open href={sb("auth/providers")} label={`Open Sign In / Providers (${projectWord})`} />
+        <ul className="text-[13px] space-y-1.5" aria-label="What Supabase says now">
+          {signUp ? (
+            <>
+              <li className={signUp.open ? "text-red font-semibold" : "text-green"}>
+                {signUp.open ? "✗ Anyone can make an account: turn off Allow new users to sign up." : "✓ Only the people you invite can make an account."}
+              </li>
+              <li className={signUp.noEmailCheck ? "text-red font-semibold" : "text-green"}>
+                {signUp.noEmailCheck ? "✗ A new account works without its email being checked: turn on Confirm email." : "✓ A new account has to open its email first."}
+              </li>
+              <li className={signUp.anonymous ? "text-red font-semibold" : "text-green"}>
+                {signUp.anonymous ? "✗ Anonymous sign-ins are on: turn them off." : "✓ No anonymous sign-ins."}
+              </li>
+            </>
+          ) : (
+            <li className="text-ink-soft">Couldn&rsquo;t ask Supabase just now (it&rsquo;s read again each time this page opens).</li>
+          )}
+        </ul>
+        <Where>
+          <b>User Signups</b>: <b>Allow new users to sign up</b> off, <b>Allow anonymous sign-ins</b> off, <b>Confirm email</b> on. Save. Inviting from Authentication →
+          Users keeps working (it isn&rsquo;t a sign-up): invite yourself a test address afterwards to be sure. Turn sign-ups back on only when the app has its own sign-up
+          page.
+        </Where>
+      </Section>
+
+      <Section
+        n={11}
+        title="Speed: the server next to the database"
+        intro={
+          <p>
+            Every page asks the database a few things in turn. With the app&rsquo;s server in the same city as the database each question takes a few milliseconds; with an
+            ocean between them, about 90 ms each, a third of a second on every page.
+          </p>
+        }
+      >
+        <ul className="text-[13px] space-y-1.5" aria-label="Measured just now">
+          <li>
+            This page ran in{" "}
+            <b>{speed.region ? `${VERCEL_REGIONS[speed.region] ?? speed.region} (${speed.region})` : "your computer (not on Vercel)"}</b>.
+          </li>
+          <li className={distance === "far" ? "text-red font-semibold" : distance === "near" ? "text-gold font-semibold" : distance ? "text-green" : "text-ink-soft"}>
+            {speed.databaseMs === null
+              ? "Couldn't time the database just now."
+              : distance === "same-city"
+                ? `✓ The database answers in ${speed.databaseMs} ms: the same city.`
+                : distance === "near"
+                  ? `The database answers in ${speed.databaseMs} ms: close, not the same city.`
+                  : `✗ The database answers in ${speed.databaseMs} ms: far away. Move the server next to it (below).`}
+          </li>
+          <li className={speed.keys === "shared" ? "text-red font-semibold" : speed.keys === "own" ? "text-green" : "text-ink-soft"}>
+            {speed.keys === "own"
+              ? "✓ Sign-ins are checked by the app itself (JWT signing keys)."
+              : speed.keys === "shared"
+                ? "✗ Every page first asks Supabase who you are (the old shared JWT secret): switch to signing keys (below)."
+                : "Couldn't ask how sign-ins are checked just now."}
+          </li>
+        </ul>
+        <Open href={sb("settings/general")} label={`Open Project Settings (${projectWord})`} />
+        <Where>
+          <b>The server&rsquo;s city</b>: Supabase → the project → Project Settings → General: its <b>Region</b>. Then Vercel → the project → Settings → <b>Functions</b> →{" "}
+          <b>Function Region</b>: the same city (below), Save, then Deployments → the newest → ⋯ → Redeploy. Both copies (production and staging) use the project&rsquo;s
+          setting, so check both Supabase projects are in the same region.
+        </Where>
+        <details className="text-[12.5px] text-ink-soft">
+          <summary className="cursor-pointer font-semibold text-ink">Supabase region → Vercel region</summary>
+          <ul className="mt-2 grid sm:grid-cols-2 gap-x-4 gap-y-1">
+            {SUPABASE_REGIONS.map((r) => (
+              <li key={r.id}>
+                {r.name} <span className="text-ink-faint">({r.id})</span> → <b>{VERCEL_REGIONS[r.vercel]}</b> ({r.vercel})
+              </li>
+            ))}
+          </ul>
+        </details>
+        <Open href={sb("settings/jwt")} label={`Open JWT Keys (${projectWord})`} />
+        <Where>
+          <b>Sign-ins checked by the app</b>: Supabase → Project Settings → <b>JWT Keys</b> → <b>Migrate JWT secret</b> (it keeps the old secret, so nobody is signed out,
+          and makes a new signing key ready), then <b>Rotate keys</b> to start using the new one. The app&rsquo;s keys (anon and service role) keep working. Afterwards every
+          page checks your sign-in itself instead of asking Supabase first; this card shows ✓ once it&rsquo;s done.
         </Where>
       </Section>
     </div>

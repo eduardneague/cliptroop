@@ -45,20 +45,18 @@ export default async function DashboardPage() {
   const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
   const t = new Date();
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-  const [tasks, done, todos, teamCards, { data: profile }, upcoming, posts, meetings, teamTasks, { data: look }, { data: every }] = await Promise.all([
+  const [tasks, done, todos, teamCards, { profile, look, every }, upcoming, posts, meetings, teamTasks, { data: walls }] = await Promise.all([
     listMyTasks(currentTeam.id),
     listDone(since, currentTeam.id),
     listTodos(),
     listTeamCards(teams.map((t) => t.id)),
-    supabase.from("profiles").select("username, full_name, dashboard_layout").eq("id", user?.id ?? "").maybeSingle(),
+    dashboardProfile(supabase, user?.id ?? ""),
     listUpcoming(currentTeam.id, today),
     listPostsAroundToday(currentTeam.id),
     listMeetings(currentTeam.id, { from: new Date(Date.now() - 12 * 3_600_000).toISOString(), limit: 5 }),
     listTeamTasks(currentTeam.id),
-    // Your background (1.27.5): its own query, so a database before 0092 just shows none.
-    supabase.from("profiles").select("dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim").eq("id", user?.id ?? "").maybeSingle(),
-    // On every page (1.29.4, 0098): then the layout draws it, not this page.
-    supabase.from("profiles").select("dashboard_bg_everywhere").eq("id", user?.id ?? "").maybeSingle(),
+    // Your wallpapers (how bright each is), alongside the rest instead of after it (1.32.1).
+    supabase.from("profile_wallpapers").select("id, path, luma").eq("user_id", user?.id ?? ""),
   ]);
   const name = ((profile?.full_name as string | null) || (profile?.username as string | null) || "there").split(" ")[0];
   const bgPath = look?.dashboard_bg_on && user && isOwnBgPath(look.dashboard_bg_path, user.id) ? look.dashboard_bg_path : null;
@@ -72,7 +70,7 @@ export default async function DashboardPage() {
   );
   if (!bgPath || (every as { dashboard_bg_everywhere?: boolean } | null)?.dashboard_bg_everywhere) return studio;
   // How bright it is behind the greeting (1.28.0, measured on upload): the words turn dark or white to match. Before 0093: unknown.
-  const { data: wall } = await supabase.from("profile_wallpapers").select("id, luma").eq("path", bgPath).maybeSingle();
+  const wall = ((walls ?? []) as { id: string; path: string; luma: number | null }[]).find((w) => w.path === bgPath);
   const luma = clampLuma(wall?.luma);
   const dim = clampDim(look?.dashboard_bg_dim);
   return (
@@ -88,4 +86,34 @@ export default async function DashboardPage() {
       {studio}
     </div>
   );
+}
+
+type DashboardProfile = {
+  username?: string | null;
+  full_name?: string | null;
+  dashboard_layout?: unknown;
+  dashboard_bg_on?: boolean;
+  dashboard_bg_path?: string | null;
+  dashboard_bg_dim?: number;
+  dashboard_bg_everywhere?: boolean;
+} | null;
+
+/**
+ * Your name, your dashboard's layout and your background in ONE read (1.32.1: three reads of the same row before).
+ * A database before 0098 answers that with an error: then each on its own, as before (the background from 0092,
+ * "on every page" from 0098: without them, none).
+ */
+async function dashboardProfile(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<{ profile: DashboardProfile; look: DashboardProfile; every: DashboardProfile }> {
+  const one = await supabase
+    .from("profiles")
+    .select("username, full_name, dashboard_layout, dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim, dashboard_bg_everywhere")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!one.error) return { profile: one.data, look: one.data, every: one.data };
+  const [p, l, e] = await Promise.all([
+    supabase.from("profiles").select("username, full_name, dashboard_layout").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("dashboard_bg_on, dashboard_bg_path, dashboard_bg_dim").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("dashboard_bg_everywhere").eq("id", userId).maybeSingle(),
+  ]);
+  return { profile: p.data as DashboardProfile, look: l.data as DashboardProfile, every: e.data as DashboardProfile };
 }

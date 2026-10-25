@@ -1,12 +1,14 @@
 "use client";
 
 import { APP_NAME } from "@/lib/brand";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Dialog } from "./dialog";
 import { Mascot } from "./mascot";
 import { CloseIcon } from "./icons";
-import { CHANGELOG, KIND_LABEL, isFeatureUpdate, type ChangeKind, type Release } from "@/lib/changelog";
+import { Skeleton, SkeletonLines } from "./skeleton";
+import { LaterBoundary, LaterFailed } from "./later-boundary";
+import { isFeatureUpdateIn, type ReleaseHeadline } from "@/lib/changelog-meta";
 import { APP_VERSION } from "@/lib/version";
 import { sounds } from "@/lib/sounds";
 
@@ -18,7 +20,11 @@ import { sounds } from "@/lib/sounds";
  *    here" (once per device per update).
  *  - <WhatsNewButton/> opens it from anywhere (sidebar, Settings, Team),
  *    with an amber dot until this device has looked at the current version.
- *  - The content is lib/changelog.ts.
+ *  - The content is lib/changelog.ts. 1.32.2: it's over 100 KB of text, so
+ *    it isn't part of the page: whats-new-notes.tsx brings it when the window
+ *    opens (or when you point at a button, or the card shows). What the
+ *    frame needs on every page (this version's headline, whether there's a
+ *    card to show) comes from the server (whatsNewFacts in the layout).
  *
  * Remembered per device in localStorage (it's only "have I seen this").
  */
@@ -43,7 +49,10 @@ const write = (k: string, v: string) => {
   }
 };
 
-const current = CHANGELOG.find((r) => r.version === APP_VERSION) ?? null;
+const loadNotes = () => import("./whats-new-notes");
+const WhatsNewNotes = lazy(loadNotes);
+/** Bring the notes ahead of opening them (pointing at a button, the update card showing). */
+const warmNotes = () => void loadNotes().catch(() => null);
 
 export function openWhatsNew() {
   window.dispatchEvent(new Event(OPEN_EVENT));
@@ -53,7 +62,8 @@ export function openWhatsNew() {
 function useUnseen() {
   const [unseen, setUnseen] = useState(false);
   useEffect(() => {
-    const check = () => setUnseen(!!current && read(SEEN) !== APP_VERSION);
+    // (Every version has its notes: tests/bundle.test.ts checks the newest is package.json's.)
+    const check = () => setUnseen(read(SEEN) !== APP_VERSION);
     check();
     window.addEventListener(SEEN_EVENT, check);
     window.addEventListener("storage", check);
@@ -76,23 +86,24 @@ const short = (v: string) => {
   const [a, b, c] = v.split(".");
   return c && c !== "0" ? `${a}.${b}.${c}` : `${a}.${b ?? 0}`;
 };
-const niceDate = (d?: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null);
-
-const KIND_STYLE: Record<ChangeKind, string> = {
-  new: "bg-amber/12 text-amber",
-  better: "bg-blue/12 text-blue",
-  fixed: "bg-green/12 text-green",
-};
+export const niceDate = (d?: string) => (d ? new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null);
 
 /** Clip's tour is starting: no "is here" card on top of it (the sidebar dot stays). */
 export function quietWhatsNewCard() {
   write(TOLD, APP_VERSION);
 }
 
-/** `hold`: Clip's tour is about to start, so no update card this time. */
-export function WhatsNewHost({ hold = false }: { hold?: boolean }) {
+/**
+ * `hold`: Clip's tour is about to start, so no update card this time.
+ * `current` and `newVersions`: from the server (whatsNewFacts): the version
+ * you're on, and the versions of its series that brought something new.
+ */
+export function WhatsNewHost({ hold = false, current, newVersions }: { hold?: boolean; current: ReleaseHeadline | null; newVersions: readonly string[] }) {
   const [open, setOpen] = useState(false);
   const [card, setCard] = useState(false);
+  // What they hold, not the objects: the frame drawing again (router.refresh) doesn't start the card over.
+  const knownVersion = current?.version ?? null;
+  const newKey = newVersions.join(",");
 
   useEffect(() => {
     const onOpen = () => {
@@ -104,17 +115,18 @@ export function WhatsNewHost({ hold = false }: { hold?: boolean }) {
     // After a feature update (not for small fixes), once per device.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const last = read(TOLD) ?? read(SEEN);
-    if (!hold && current && last !== APP_VERSION && isFeatureUpdate(last, APP_VERSION)) {
+    if (!hold && knownVersion && last !== APP_VERSION && isFeatureUpdateIn(last, APP_VERSION, newKey ? newKey.split(",") : [])) {
       timer = setTimeout(() => {
         setCard(true);
         sounds.pop();
+        warmNotes();
       }, 1400);
     }
     return () => {
       window.removeEventListener(OPEN_EVENT, onOpen);
       if (timer) clearTimeout(timer);
     };
-  }, [hold]);
+  }, [hold, knownVersion, newKey]);
 
   const dismissCard = () => {
     write(TOLD, APP_VERSION);
@@ -125,13 +137,19 @@ export function WhatsNewHost({ hold = false }: { hold?: boolean }) {
     <>
       {card && current && <UpdateCard release={current} onOpen={openWhatsNew} onClose={dismissCard} />}
       <Dialog open={open} onClose={() => setOpen(false)} title="What's new" description={`You're on ${APP_NAME} ${APP_VERSION}.`} width="sm:max-w-2xl">
-        {open && <Notes />}
+        {open && (
+          <LaterBoundary name="What's new" fallback={({ load }) => <LaterFailed load={load} what="The notes" />}>
+            <Suspense fallback={<NotesLoading current={current} />}>
+              <WhatsNewNotes />
+            </Suspense>
+          </LaterBoundary>
+        )}
       </Dialog>
     </>
   );
 }
 
-function UpdateCard({ release, onOpen, onClose }: { release: Release; onOpen: () => void; onClose: () => void }) {
+function UpdateCard({ release, onOpen, onClose }: { release: ReleaseHeadline; onOpen: () => void; onClose: () => void }) {
   return createPortal(
     <div
       role="status"
@@ -153,58 +171,34 @@ function UpdateCard({ release, onOpen, onClose }: { release: Release; onOpen: ()
   );
 }
 
-/** The changelog: the latest update open, earlier ones folded. */
-function Notes() {
-  const [latest, ...earlier] = CHANGELOG;
-  const [showAll, setShowAll] = useState(false);
-  if (!latest) return <p className="text-[13px] text-ink-soft">No notes yet.</p>;
+/** The newest update's banner, at the top of the notes: also shown while they load (from what the frame knows). */
+export function WhatsNewLatest({ release }: { release: ReleaseHeadline }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 rounded-2xl bg-amber/[0.07] border border-amber/20 px-4 py-3">
-        <Mascot mood="celebrate" size={76} className="flex-shrink-0 -my-2" />
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-amber">Latest · {latest.version}</p>
-          <p className="font-display text-[19px] font-semibold leading-tight mt-0.5">{latest.title}</p>
-          {latest.date && <p className="text-[12px] text-ink-soft mt-0.5">{niceDate(latest.date)}</p>}
-        </div>
+    <div className="flex items-center gap-4 rounded-2xl bg-amber/[0.07] border border-amber/20 px-4 py-3">
+      <Mascot mood="celebrate" size={76} className="flex-shrink-0 -my-2" />
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-amber">Latest · {release.version}</p>
+        <p className="font-display text-[19px] font-semibold leading-tight mt-0.5">{release.title}</p>
+        {release.date && <p className="text-[12px] text-ink-soft mt-0.5">{niceDate(release.date)}</p>}
       </div>
-      <ChangeList release={latest} />
-      {earlier.length > 0 && (
-        <div className="border-t border-line/10 pt-4">
-          {!showAll ? (
-            <button type="button" onClick={() => setShowAll(true)} className="text-[13px] font-semibold text-ink-soft hover:text-ink">
-              Earlier updates ({earlier.length})
-            </button>
-          ) : (
-            <div className="space-y-6 animate-[fadein_.2s_ease]">
-              {earlier.map((r) => (
-                <section key={r.version}>
-                  <div className="flex items-baseline gap-2 flex-wrap mb-2.5">
-                    <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold tabular-nums">{r.version}</span>
-                    <h3 className="text-[14.5px] font-semibold">{r.title}</h3>
-                    {r.date && <span className="text-[12px] text-ink-faint">{niceDate(r.date)}</span>}
-                  </div>
-                  <ChangeList release={r} />
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-function ChangeList({ release }: { release: Release }) {
+/** While the notes arrive (a moment, the first time): the banner and the list's shape. */
+function NotesLoading({ current }: { current: ReleaseHeadline | null }) {
   return (
-    <ul className="space-y-2.5">
-      {release.changes.map((c, i) => (
-        <li key={i} className="flex items-start gap-2.5">
-          <span className={`mt-[1px] flex-shrink-0 w-[52px] text-center rounded-md px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ${KIND_STYLE[c.kind]}`}>{KIND_LABEL[c.kind]}</span>
-          <span className="text-[13.5px] leading-relaxed text-ink">{c.text}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-6" aria-busy="true">
+      {current ? <WhatsNewLatest release={current} /> : <Skeleton className="h-[86px] rounded-2xl" />}
+      <div className="space-y-3">
+        {[3, 2, 2].map((lines, i) => (
+          <div key={i} className="flex items-start gap-2.5">
+            <Skeleton className="w-[52px] h-[18px] flex-shrink-0" />
+            <SkeletonLines lines={lines} className="flex-1 pt-0.5" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -220,6 +214,8 @@ export function WhatsNewButton({ variant = "link", className = "" }: { variant?:
       <button
         type="button"
         onClick={openWhatsNew}
+        onPointerEnter={warmNotes}
+        onFocus={warmNotes}
         className={`w-full flex items-center gap-2 rounded-lg px-2 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors ${className}`}
       >
         <SparkIcon className="w-4 h-4 text-amber" />
@@ -232,7 +228,7 @@ export function WhatsNewButton({ variant = "link", className = "" }: { variant?:
       </button>
     );
   return (
-    <button type="button" onClick={openWhatsNew} className={`relative inline-flex items-center gap-1.5 font-semibold text-amber hover:brightness-110 ${className}`}>
+    <button type="button" onClick={openWhatsNew} onPointerEnter={warmNotes} onFocus={warmNotes} className={`relative inline-flex items-center gap-1.5 font-semibold text-amber hover:brightness-110 ${className}`}>
       <SparkIcon className="w-3.5 h-3.5" />
       What&rsquo;s new
       {unseen && <span className="w-1.5 h-1.5 rounded-[2px] bg-amber" aria-label="New update" />}

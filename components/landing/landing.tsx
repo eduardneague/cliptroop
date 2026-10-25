@@ -252,7 +252,7 @@ export function Landing() {
 
         {/* Everything else, as end credits. */}
         <section id="more" className="scroll-mt-16 max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
-          <h2 className="text-center font-display italic text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">Also starring</h2>
+          <h2 className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">Also starring</h2>
           <dl className="mt-10 space-y-5 sm:space-y-4">
             {CREDITS.map((c) => (
               <div key={c.part} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">

@@ -5,6 +5,7 @@ import Image from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
+import { pictureSrc } from "../lib/paste-images";
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -25,8 +26,10 @@ function GripIcon({ className }: { className?: string }) {
 
 type Align = "left" | "center" | "right";
 
-/** Download a (cross-origin) image as a file. */
-export async function downloadImage(src: string, name = "script-image") {
+/** Download a (cross-origin) image as a file. Only a picture's web address (1.31.15: never javascript: or the like). */
+export async function downloadImage(raw: string, name = "script-image") {
+  const src = pictureSrc(raw);
+  if (!src) return;
   try {
     const res = await fetch(src);
     const blob = await res.blob();
@@ -40,12 +43,14 @@ export async function downloadImage(src: string, name = "script-image") {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   } catch {
-    window.open(src, "_blank", "noopener");
+    if (/^https?:\/\//i.test(src)) window.open(src, "_blank", "noopener");
   }
 }
 
 function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPos }: ReactNodeViewProps) {
-  const { src, alt, align, width } = node.attrs as { src: string; alt: string | null; align: Align; width: number | null };
+  const { src: raw, alt, align, width } = node.attrs as { src: string; alt: string | null; align: Align; width: number | null };
+  // Only a web address or this device's upload is shown (1.31.15); anything else stays a blank frame.
+  const src = pictureSrc(raw) ?? "";
   const [viewing, setViewing] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const editable = editor.isEditable;
@@ -116,7 +121,7 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          src={src || undefined}
           alt={alt ?? ""}
           draggable={false}
           loading="lazy"
@@ -180,12 +185,16 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
               <span className="w-px h-5 bg-white/20 mx-0.5" />
             </>
           )}
-          <button type="button" title="View full size" aria-label="View full size" className={btn} onClick={() => setViewing(true)}>
-            <ExpandIcon className="w-4 h-4" />
-          </button>
-          <button type="button" title="Download" aria-label="Download image" className={btn} onClick={() => downloadImage(src)}>
-            <DownloadIcon className="w-4 h-4" />
-          </button>
+          {src && (
+            <>
+              <button type="button" title="View full size" aria-label="View full size" className={btn} onClick={() => setViewing(true)}>
+                <ExpandIcon className="w-4 h-4" />
+              </button>
+              <button type="button" title="Download" aria-label="Download image" className={btn} onClick={() => downloadImage(src)}>
+                <DownloadIcon className="w-4 h-4" />
+              </button>
+            </>
+          )}
           {editable && (
             <button type="button" title="Remove" aria-label="Remove image" className={`${btn} hover:!bg-red/70`} onClick={() => deleteNode()}>
               <TrashIcon className="w-4 h-4" />
@@ -202,7 +211,7 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           />
         )}
       </div>
-      {viewing && <ImageLightbox url={src} alt={alt ?? ""} onClose={() => setViewing(false)} />}
+      {viewing && src && <ImageLightbox url={src} alt={alt ?? ""} onClose={() => setViewing(false)} />}
     </NodeViewWrapper>
   );
 }

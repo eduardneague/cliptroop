@@ -12,11 +12,12 @@ import { ToastProvider } from "@/components/ui/toast-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { GlobalSearch } from "@/components/search/global-search";
-import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
+import { APP_CHANNEL, APP_VERSION, APP_VERSION_LABEL } from "@/lib/version";
+import { whatsNewFacts } from "@/lib/changelog";
 import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
 import { GlassSync } from "@/components/ui/glass";
-import { getEverywhereBackground, getLook } from "@/lib/look-server";
+import { everywhereFrom, getEverywhereBackground, getLook, getShellProfile } from "@/lib/look-server";
 import { EverywhereBackdrop } from "@/modules/dashboard/components/backdrop";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
@@ -34,10 +35,11 @@ import { AppSplash } from "@/components/ui/app-splash";
 import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
 import { ConfettiHost } from "@/components/ui/confetti";
-import { ObjectiveCelebrations } from "@/modules/objectives/components/celebrations";
-import { XpCheers } from "@/modules/profile/components/xp-cheers";
+import { ObjectiveCelebrationsHost } from "@/modules/objectives/components/celebrations-host";
+import { XpCheersHost } from "@/modules/profile/components/xp-cheers-host";
 import { LookScreenHost } from "@/components/ui/look-screen";
 import { HashFlash } from "@/components/ui/hash-flash";
+import { WebVitals } from "@/components/web-vitals";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -67,14 +69,11 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   // into the catch-all 404 route. Never assume; send them to login.
   if (!user) redirect("/login");
 
-  // Everything the shell needs in ONE round trip: profile (with the colour
-  // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer, look, everywhere] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
-      .eq("id", user!.id)
-      .single(),
+  // Everything the shell needs in ONE round trip: your profile (name, picture, colour theme, Clip's tour,
+  // the glass look and the wallpaper, in one read since 1.32.1), teams (with their colours), the latest
+  // notifications and your wallpapers (how bright each is).
+  const [shell, { teams, currentTeam, roles }, { data: notifications }, developer, { data: walls }] = await Promise.all([
+    getShellProfile(supabase, user!.id),
     // Your roles in the team you're in: the search bar offers what you can do (1.26.0).
     getTeamsAndCurrent(supabase).then(async (t) => ({
       ...t,
@@ -82,16 +81,16 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
     })),
     // The bell: the newest ones you haven't cleared (1.29.1).
     loadBell(supabase, user!.id),
-    // Clip's tour: on its own, so a database without 0069 just skips it.
-    supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
     isDeveloper(user),
-    // The glass look (1.27.5, 1.28.0): on its own, so a database without 0092 / 0093 just keeps this device's choice.
-    getLook(supabase, user!.id),
-    // Your wallpaper behind every page (1.29.4; null unless you chose that, or before 0098).
-    getEverywhereBackground(supabase, user!.id),
+    supabase.from("profile_wallpapers").select("path, luma").eq("user_id", user!.id),
   ]);
-  const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
+  // A database older than one of those columns (before 0098): each part on its own, as before.
+  const legacy = shell === null ? await legacyShell(supabase, user!.id) : null;
+  const profile = shell ?? legacy?.profile ?? null;
+  const tourPending = shell ? shell.tourPending : !!legacy?.tourPending;
+  const look = shell ? shell.look : (legacy?.look ?? null);
+  const everywhere = shell ? everywhereFrom(supabase, user!.id, shell.bg, (walls ?? []) as { path: string; luma: number | null }[]) : (legacy?.everywhere ?? null);
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
   const paletteRow = profile ? { palette: (profile as { palette?: string | null }).palette ?? null } : null;
 
@@ -111,6 +110,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       <ConfirmProvider>
         {/* A thin bar the moment you click a link, until the page is there. */}
         <NavProgress />
+        {/* Real visitors' speed (1.32.4): this load's Web Vitals, sent when the page is hidden (Developer → Speed). */}
+        <WebVitals />
         {/* "…#sounds" in the address: that part of the page scrolls into view and glows (1.26.0). */}
         <Suspense fallback={null}>
           <HashFlash />
@@ -198,16 +199,29 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             <MobileBottomNav developer={developer} />
           </div>
         </div>
-        <WhatsNewHost hold={tourPending} />
+        {/* The notes themselves load when the window opens: the frame gets this version's headline and whether there's news (1.32.2). */}
+        <WhatsNewHost hold={tourPending} {...whatsNewFacts(APP_VERSION)} />
         <TutorialHost pending={tourPending} />
         {/* Objectives (1.14.0): confetti and Clip for everyone looking when the team reaches one. */}
         <ConfettiHost />
         {/* 1.29.8: Clip covers a new colour theme, light or dark, or glass look while it's put on. */}
         <LookScreenHost />
-        <ObjectiveCelebrations teamId={currentTeam?.id ?? null} />
+        <ObjectiveCelebrationsHost teamId={currentTeam?.id ?? null} />
         {/* 1.29.7: Clip's "+40 XP" when one of your steps is done, and his level up card. */}
-        <XpCheers userId={user!.id} profileHref={`/u/${encodeURIComponent(profile?.username ?? user!.id)}`} />
+        <XpCheersHost userId={user!.id} profileHref={`/u/${encodeURIComponent(profile?.username ?? user!.id)}`} />
       </ConfirmProvider>
     </ToastProvider>
   );
+}
+
+/** Before 0098: the frame's parts read one by one, each skipped when its migration hasn't run (0069 the tour, 0092 / 0093 the look). */
+async function legacyShell(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const [{ data: profile }, tour, look, everywhere] = await Promise.all([
+    supabase.from("profiles").select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("tutorial_done_at").eq("id", userId).maybeSingle(),
+    getLook(supabase, userId),
+    getEverywhereBackground(supabase, userId),
+  ]);
+  const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
+  return { profile, tourPending, look, everywhere };
 }

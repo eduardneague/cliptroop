@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isPublicPath } from "@/lib/public-paths";
 import { sessionCookieOptions } from "./cookie-options";
 import { crossSiteWrite } from "@/lib/request-guard";
+import { buildCsp, cspHeaderName, newNonce, wantsCsp } from "@/lib/csp";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -16,6 +17,16 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
  */
 export const VERIFIED_USER_ID_HEADER = "x-vp-verified-user-id";
 export const VERIFIED_USER_EMAIL_HEADER = "x-vp-verified-user-email";
+/** The page's nonce for the root layout (1.31.16). Set only here, like the two above. */
+export const NONCE_HEADER = "x-nonce";
+
+const hostOf = (url: string | undefined) => {
+  try {
+    return url ? new URL(url).host : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * On its own domain: pages opened on the old *.vercel.app address move to
@@ -136,9 +147,23 @@ export async function updateSession(request: NextRequest) {
     requestHeaders.set(VERIFIED_USER_ID_HEADER, user.id);
     requestHeaders.set(VERIFIED_USER_EMAIL_HEADER, encodeURIComponent(user.email ?? ""));
   }
+  // The page's Content Security Policy with a fresh nonce (1.31.16, lib/csp.ts): Next.js reads it from
+  // the request to put the nonce on its scripts, the root layout reads x-nonce. Never a browser's own copy.
+  requestHeaders.delete(NONCE_HEADER);
+  requestHeaders.delete("content-security-policy");
+  requestHeaders.delete("content-security-policy-report-only");
+  const cspName = wantsCsp(request.nextUrl.pathname) ? cspHeaderName(process.env.CSP_MODE) : null;
+  let csp: string | null = null;
+  if (cspName) {
+    const nonce = newNonce();
+    csp = buildCsp({ nonce, dev: process.env.NODE_ENV === "development", preview: process.env.VERCEL_ENV === "preview", supabaseHost: hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL) });
+    requestHeaders.set(NONCE_HEADER, nonce);
+    requestHeaders.set(cspName, csp);
+  }
   const forwarded = NextResponse.next({ request: { headers: requestHeaders } });
   response.cookies.getAll().forEach((c) => forwarded.cookies.set(c));
   response = forwarded;
+  if (cspName && csp) response.headers.set(cspName, csp);
 
   // Documented Supabase gotcha on platforms like Vercel: if a response
   // carrying a refreshed session cookie gets cached by the edge

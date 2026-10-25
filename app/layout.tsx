@@ -1,6 +1,7 @@
 import { APP_NAME, APP_DESCRIPTION, APP_SHORT_NAME, APP_TAGLINE } from "@/lib/brand";
 import { PwaRegister } from "@/components/pwa";
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
 import { BRAND_PAGES_RE, facebookMeta, OG_IMAGE, siteUrl } from "@/lib/public-pages";
@@ -23,7 +24,16 @@ const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["500", "600", "700"],
-  style: ["normal", "italic"],
+});
+
+// Its italic only says a few words on the home page (landing.css .ld-italic): a family of its own that isn't
+// preloaded (1.32.3). In one call with the upright one, every page of the app preloaded it too.
+const frauncesItalic = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display-italic",
+  weight: ["500", "600"],
+  style: "italic",
+  preload: false,
 });
 
 const inter = Inter({
@@ -84,17 +94,24 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // This page's nonce (1.31.16, the middleware's Content Security Policy): Next.js puts it on its own
+  // scripts; the first-paint script below takes it too. Reading it makes every page render per visit,
+  // which a nonce needs (a page built ahead would carry an old one).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${fraunces.variable} ${frauncesItalic.variable} ${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script
+          nonce={nonce}
+          // The browser hides a nonce once the page has it, so the copy React sees differs: expected.
+          suppressHydrationWarning
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
             // Also applies the user's "Animations off" choice, colour theme and glass look (1.27.5; its style, where,

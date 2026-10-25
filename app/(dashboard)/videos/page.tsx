@@ -24,6 +24,7 @@ import { FilterChip } from "@/components/ui/filter-chip";
 import { VideoMenu } from "@/modules/long-videos/components/video-menu";
 import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modules/long-videos/components/list-skeletons";
 import type { Metadata } from "next";
+import { sketchThumb, studioThumb, type PictureWidth } from "@/lib/picture-size";
 
 export const metadata: Metadata = { title: "Long videos" };
 
@@ -51,7 +52,7 @@ export default async function VideosPage({
   let query = supabase
     .from("long_video_projects")
     .select(
-      "id, entry_number, title, stage, expected_date, theme, subtheme, video_type, project_thumbnails(storage_path, position)"
+      "id, entry_number, title, stage, expected_date, theme, subtheme, video_type, project_thumbnails(id, storage_path, position)"
     )
     .eq("team_id", currentTeam.id)
     // Posting order: earliest expected date first, undated at the end —
@@ -81,14 +82,15 @@ export default async function VideosPage({
       .not("thumbnail_storage_path", "is", null)
       .order("position"),
   ]);
-  const thumbnailBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
   const winnerOf = new Map<string, string>();
   for (const w of winnerRows ?? []) if (!winnerOf.has(w.project_id as string)) winnerOf.set(w.project_id as string, w.id as string);
-  const coverOf = (p: { id: string; project_thumbnails?: { storage_path: string; position: number }[] | null }) => {
+  // A copy as wide as it's shown (1.32.3): 160 px for the table's 56 px, 640 for a card (up to 300 px). The pictures
+  // are kept up to 1280 px wide.
+  const coverOf = (p: { id: string; project_thumbnails?: { id: string; storage_path: string; position: number }[] | null }, w: PictureWidth) => {
     const winner = winnerOf.get(p.id);
-    if (winner) return `/api/package-thumb/${winner}`;
+    if (winner) return studioThumb(winner, w);
     const first = [...(p.project_thumbnails ?? [])].sort((a, b) => a.position - b.position)[0];
-    return first ? thumbnailBase + first.storage_path : null;
+    return first ? sketchThumb(first.id, w) : null;
   };
   const createRoles = membership?.roles ?? [];
   const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
@@ -202,7 +204,7 @@ export default async function VideosPage({
             <span />
           </div>
           {projects.map((p) => {
-            const cover = coverOf(p);
+            const cover = coverOf(p, 160);
             const c = stageColor(p.stage as PipelineStage);
             const themeColor = colorForId(p.theme || "theme");
             return (
@@ -254,7 +256,7 @@ export default async function VideosPage({
       ) : (
         <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
           {projects.map((p) => {
-            const cover = coverOf(p);
+            const cover = coverOf(p, 640);
             const c = stageColor(p.stage as PipelineStage);
             return (
               <div

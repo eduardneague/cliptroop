@@ -83,6 +83,25 @@ export function decodeDataImage(src: string, maxBytes = 25 * 1024 * 1024): { typ
 /** A picture address that can't be kept: the device's own files, another page's blob: links. */
 export const unkeepableSrc = (src: string) => /^\s*(file:|blob:|about:|cid:|webkit-fake-url:)/i.test(src);
 
+/**
+ * A picture's address as the script may use it (1.31.15): a web address
+ * (https, http) or a picture still uploading from this device (blob:).
+ * Anything else (javascript:, data:, a page's own relative address, …) is
+ * null: it isn't shown, opened or downloaded.
+ */
+export function pictureSrc(src: unknown): string | null {
+  if (typeof src !== "string") return null;
+  const s = src.trim();
+  if (!s || s.length > 4096) return null;
+  if (/^blob:https?:\/\//i.test(s)) return s;
+  try {
+    const u = new URL(s);
+    return u.protocol === "https:" || u.protocol === "http:" ? s : null;
+  } catch {
+    return null;
+  }
+}
+
 type Json = { type: string; attrs?: Record<string, unknown>; content?: Json[]; [k: string]: unknown };
 
 /**

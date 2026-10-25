@@ -64,7 +64,7 @@ const settings = read("app/(dashboard)/settings/page.tsx");
 ok(/<div id="sessions"/.test(settings) && /<SignOutElsewhere/.test(settings) && /<LogoutButton/.test(settings), "Settings → Account: Log out and Sign out everywhere else side by side");
 ok(/id: "settings\.sign-out-elsewhere"/.test(read("lib/search/catalog.ts")), "search finds it");
 const logout = read("components/ui/logout-button.tsx");
-ok(/Your other devices stay signed in\./.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(read("components/search/global-search.tsx")), "\"Log out?\" says it's this device, wherever it's asked");
+ok(/Your other devices stay signed in\./.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(read("components/search/search-palette.tsx")), "\"Log out?\" says it's this device, wherever it's asked");
 
 // --- An email's link -----------------------------------------------------------------------------------------------------------------
 const welcome = read("app/welcome/welcome-card.tsx");

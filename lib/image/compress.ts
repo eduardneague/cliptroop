@@ -53,12 +53,34 @@ export const PICTURE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/web
 export const isPictureType = (type: string) => (PICTURE_TYPES as readonly string[]).includes(type.toLowerCase());
 
 /**
- * Files that a browser would open as a page (and run) if opened straight
- * from storage: a comment attachment of one of these types is kept as a
- * plain download (application/octet-stream) instead (1.31.1).
+ * What a comment attachment is stored as (1.31.14; migration 0107 gives the
+ * comment-attachments bucket the same list, so it refuses anything else):
+ * pictures (never an SVG), videos, sound, fonts, PDFs, text, documents,
+ * spreadsheets, slides, design files and archives, each as itself; anything
+ * else, a web page, an SVG or a script included, as a plain download
+ * (application/octet-stream), which a browser saves instead of opening.
+ * "video/*" covers every video type, and so on.
  */
-const ACTIVE_TYPES = new Set(["text/html", "application/xhtml+xml", "image/svg+xml", "text/xml", "application/xml", "text/javascript", "application/javascript", "application/x-javascript", "application/ecmascript", "text/ecmascript"]);
-export const storedTypeFor = (type: string) => (!type ? "application/octet-stream" : ACTIVE_TYPES.has(type.toLowerCase().split(";")[0].trim()) ? "application/octet-stream" : type);
+export const ATTACHMENT_TYPES = [
+  ...PICTURE_TYPES,
+  "video/*", "audio/*", "font/*",
+  "application/pdf", "text/plain", "text/csv", "text/markdown", "text/rtf", "application/rtf", "application/json", "text/vtt", "application/x-subrip",
+  "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text", "application/vnd.oasis.opendocument.spreadsheet", "application/vnd.oasis.opendocument.presentation",
+  "application/vnd.apple.pages", "application/vnd.apple.numbers", "application/vnd.apple.keynote",
+  "application/postscript", "application/illustrator", "application/x-photoshop", "image/vnd.adobe.photoshop",
+  "application/zip", "application/x-zip-compressed", "application/x-7z-compressed", "application/vnd.rar", "application/x-rar-compressed",
+  "application/gzip", "application/x-gzip", "application/x-tar",
+  "application/octet-stream",
+] as const;
+const attachmentKind = (t: string) => (ATTACHMENT_TYPES as readonly string[]).some((a) => a === t || (a.endsWith("/*") && t.startsWith(a.slice(0, -1)) && t.length > a.length - 1));
+export const storedTypeFor = (type: string) => {
+  const t = (type || "").toLowerCase().split(";")[0].trim();
+  return t && attachmentKind(t) ? t : "application/octet-stream";
+};
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
   return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));

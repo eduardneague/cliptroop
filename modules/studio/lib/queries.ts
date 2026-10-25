@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
+import { studioThumb } from "@/lib/picture-size";
 
 export type Variant = {
   id: string;
@@ -68,9 +69,10 @@ export const getStudioData = cache(async function getStudioData(projectId: strin
     const { data } = await supabase.storage.from(bucket).createSignedUrls(paths, HOUR);
     return new Map((data ?? []).filter((d) => d.signedUrl && d.path).map((d) => [d.path as string, d.signedUrl as string]));
   };
-  const variantPaths = (entries ?? []).map((e) => e.thumbnail_storage_path as string | null).filter((p): p is string => !!p);
+  // Your variations at addresses that never change (1.32.3: /api/package-thumb, as kept): the browser keeps them
+  // between visits instead of downloading each again with a new signed link.
   const libPaths = (lib ?? []).flatMap((v) => [v.thumb_path as string, v.channel_avatar_path as string | null]).filter((p): p is string => !!p);
-  const [variantUrls, libUrls] = await Promise.all([sign("package-thumbs", variantPaths), sign("mockup-library", libPaths)]);
+  const libUrls = await sign("mockup-library", libPaths);
 
   const roles = membership?.roles ?? [];
   const canEdit = isMaster(roles) || roles.includes("packager");
@@ -84,7 +86,7 @@ export const getStudioData = cache(async function getStudioData(projectId: strin
       id: e.id as string,
       title: e.title as string,
       path: (e.thumbnail_storage_path as string | null) ?? null,
-      url: e.thumbnail_storage_path ? variantUrls.get(e.thumbnail_storage_path as string) ?? null : null,
+      url: e.thumbnail_storage_path ? studioThumb(e.id as string) : null,
       width: (e.width as number | null) ?? null,
       height: (e.height as number | null) ?? null,
       size: e.size_bytes === null ? null : Number(e.size_bytes),

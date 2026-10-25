@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { COLOR_PRESETS, colorCss, colorName, isColorHex, type ProfileColor, type ProfileColors } from "@/lib/profile/colors";
-import { levelTint, type FrameId } from "@/lib/profile/progress";
+import { levelTint, type FrameId } from "@/lib/profile/levels";
 import { LevelBadge, ProfileAvatar, XpBar } from "./parts";
 
 /*

@@ -5,7 +5,7 @@
  * his level up card show it (modules/profile/components/xp-cheers.tsx).
  * Pure: no React, no database.
  */
-import { FRAMES, levelFor, levelProgress, levelTint, type FrameId } from "./progress";
+import { FRAMES, levelFor, levelProgress, levelTint, type FrameId } from "./levels";
 
 /** The level colours' names, in LEVEL_TINTS' order (a new one every 10 levels). */
 export const LEVEL_TINT_NAMES = ["grey", "yellow", "lime", "green", "cyan", "blue", "purple", "pink", "red", "orange"];

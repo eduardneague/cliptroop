@@ -80,7 +80,8 @@ ok(Math.max(...leaveDelays(30)) === 320 && leaveDelays(30).length === 30, "a lon
 ok(leaveDelays(0).length === 0, "nothing to clear");
 
 // --- The bell --------------------------------------------------------------------------------------------------------------
-const bell = read("components/ui/notification-bell.tsx");
+// The bell owns the list (notification-bell.tsx); its cards and History load later (notification-cards.tsx, 1.32.2).
+const bell = `${read("components/ui/notification-bell.tsx")}\n${read("components/ui/notification-cards.tsx")}`;
 ok(/useState<NotificationItem\[\]>\(\(\) => withOverlay\(notifications, overlay\.current\)\)/.test(bell) && /setItems\(withOverlay\(notifications, overlay\.current\)\);/.test(bell), "a list from the server keeps what you did");
 ok(/const row = rowWithOverlay\(fresh, overlay\.current\);\s+if \(!row\) return;/.test(bell), "and so does a live update");
 ok(/if \(!leavingRef\.current\.has\(id\)\) setItems/.test(bell), "one sliding out finishes (a live update doesn't cut it short)");

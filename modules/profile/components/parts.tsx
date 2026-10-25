@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { initialsFor } from "@/lib/avatar";
-import { levelShape, levelTint, type FrameId } from "@/lib/profile/progress";
+import { levelShape, levelTint, type FrameId } from "@/lib/profile/levels";
 import { AvatarImg } from "@/components/ui/avatar-img";
 
 /*

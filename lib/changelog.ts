@@ -9,19 +9,94 @@
  * Write for the team, not for developers: what they can now do, in plain
  * words. `kind`: "new" = a new thing, "better" = something improved,
  * "fixed" = a bug that's gone.
+ *
+ * 1.32.2: the list is over 100 KB of text, so only the server and the What's
+ * new window load it. The types and the version rules are in
+ * lib/changelog-meta.ts; a page's frame gets what it needs from
+ * whatsNewFacts() below, worked out on the server.
  */
-export type ChangeKind = "new" | "better" | "fixed";
-export type Change = { kind: ChangeKind; text: string };
-export type Release = {
-  version: string;
-  /** YYYY-MM-DD (left out when unknown). */
-  date?: string;
-  /** A few words: the headline of this update. */
-  title: string;
-  changes: Change[];
-};
+import { compareVersions, isFeatureUpdateIn, seriesOf, type Release, type ReleaseHeadline } from "./changelog-meta";
+
+export { compareVersions, KIND_LABEL } from "./changelog-meta";
+export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-meta";
 
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.32.4",
+    date: "2026-10-25",
+    title: "Speed: measured where it counts",
+    changes: [
+      { kind: "better", text: "The app now measures how fast it really is for the people using it: each time a page is opened, the browser notes what Google looks at (how long until the page is on screen, how quickly it answers a tap, whether things jump around), and the developers see the last 7 days for phones and computers, and the pages opened most." },
+      { kind: "better", text: "Nothing about who: only the page (not which video or person), phone or computer, the connection's speed and the app's version, kept for 30 days." },
+    ],
+  },
+  {
+    version: "1.32.3",
+    date: "2026-10-25",
+    title: "Speed: pictures and fonts",
+    changes: [
+      { kind: "better", text: "Thumbnail Studio's pictures on the dashboard, the calendar, a video's page, the long videos list and search now come at the size they're shown (a small copy, not the full 1280 px picture), from an address that doesn't change: your browser keeps them instead of downloading them again on every visit. Ideate's sketches on the long videos list too." },
+      { kind: "better", text: "The dashboard and the calendar open a little quicker: they no longer ask the storage for a fresh link to every picture first." },
+      { kind: "better", text: "The headline font's italic, which only the home page uses, no longer loads ahead on every page." },
+    ],
+  },
+  {
+    version: "1.32.2",
+    date: "2026-10-25",
+    title: "Speed: less to download",
+    changes: [
+      { kind: "better", text: "Every page downloads less than a third of the code it used to for the app around it: the search window, the bell's cards and history, What's new's notes, Clip's tour and the celebrations now arrive once the page has settled, or the moment you point at them, instead of with every page. Pages open and respond sooner, most of all on a phone." },
+      { kind: "better", text: "Open one of those before its code has arrived and it shows at once, in its own shape, then fills in. If it can't arrive (no connection), only that part says so, with Reload: the rest of the page keeps working." },
+    ],
+  },
+  {
+    version: "1.32.1",
+    date: "2026-10-25",
+    title: "Speed: the server next to the database",
+    changes: [
+      { kind: "better", text: "Opening the app and the dashboard asks the database fewer questions: your profile is read once instead of four times, and your wallpaper's brightness comes with everything else instead of after it." },
+      { kind: "new", text: "App setup measures how far the app's server is from its database and how sign-ins are checked, with the two settings that make every page quicker when they're off." },
+    ],
+  },
+  {
+    version: "1.32.0",
+    date: "2026-10-25",
+    title: "Speed: the database asks once",
+    changes: [
+      { kind: "better", text: "Revenue, other income, money projections and the connected accounts' history load much faster: the database checks who may see them once per page instead of once for every row (on a few years of numbers, about 15 to 20 times faster)." },
+      { kind: "better", text: "Deleting a team or an account no longer has to read some Outliers tables from end to end." },
+    ],
+  },
+  {
+    version: "1.31.16",
+    date: "2026-10-25",
+    title: "Security: what a page may run",
+    changes: [
+      { kind: "better", text: "Every page now tells the browser exactly what it may run: only the app's own scripts, each page's with a new secret every time. A script someone managed to slip into a page wouldn't run, and nothing can load plugins, post a form to another site or show the app inside another site." },
+      { kind: "better", text: "Another site's window can't reach into the app's, and the browser features the app doesn't use (camera, microphone, USB, Bluetooth and the like) stay off." },
+    ],
+  },
+  {
+    version: "1.31.15",
+    date: "2026-10-25",
+    title: "Security: forms and what's shown",
+    changes: [
+      { kind: "fixed", text: "A picture in a script only ever comes from a web address: one that pointed anywhere else isn't shown, and its Download and Full size buttons can't open it." },
+      { kind: "better", text: "Analytics exports open safely in Excel, Numbers and Sheets: a title or search term that starts like a formula stays plain text." },
+      { kind: "better", text: "Every text box has a limit the app checks itself, with a message (a long video's hook, notes, budget and theme too), and the database keeps a limit on everything people can write, however it gets there. A new username follows the Settings rule everywhere." },
+    ],
+  },
+  {
+    version: "1.31.14",
+    date: "2026-10-25",
+    title: "Security: the database's own locks",
+    changes: [
+      { kind: "better", text: "Your email address and settings are only visible to you, your teams (and people who used to be on them) and the people with an invite between you. Anyone signed in can still open your profile page and find you by name or username to invite you, but an email only finds someone when it's typed in full, and it's never shown." },
+      { kind: "better", text: "Someone who isn't signed in can't reach anything in the database at all, and signed-in people only reach what the database's own rules allow, even through its own functions." },
+      { kind: "better", text: "Comment attachments are stored as pictures, videos, documents and the like, or as plain downloads: never as a page that could run in your browser. Videos for review take only the kinds the app uploads." },
+      { kind: "fixed", text: "A long video's default people (Team → Defaults) can only be active members of the same team, like the shorts' defaults." },
+    ],
+  },
   {
     version: "1.31.13",
     date: "2026-10-24",
@@ -1117,10 +1192,8 @@ export const CHANGELOG: Release[] = [
   },
 ];
 
-export const KIND_LABEL: Record<ChangeKind, string> = { new: "New", better: "Better", fixed: "Fixed" };
-
-/** "1.2.3" → [1, 2, 3] (anything odd counts as 0). */
-const parts = (v: string) => v.split(".").map((n) => Number.parseInt(n, 10) || 0);
+/** The versions that brought something new. */
+const withNew = (list: Release[]) => list.filter((r) => r.changes.some((c) => c.kind === "new")).map((r) => r.version);
 
 /**
  * A feature release or milestone happened between `from` and `to` (not just
@@ -1128,17 +1201,19 @@ const parts = (v: string) => v.split(".").map((n) => Number.parseInt(n, 10) || 0
  * something new (e.g. 1.7.5).
  */
 export function isFeatureUpdate(from: string | null, to: string) {
-  if (!from) return true;
-  const [a1, a2] = parts(from);
-  const [b1, b2] = parts(to);
-  if (b1 > a1 || (b1 === a1 && b2 > a2)) return true;
-  return CHANGELOG.some((r) => compareVersions(r.version, from) > 0 && compareVersions(r.version, to) <= 0 && r.changes.some((c) => c.kind === "new"));
+  return isFeatureUpdateIn(from, to, withNew(CHANGELOG));
 }
 
-/** -1 / 0 / 1, like a sort comparator. */
-export function compareVersions(a: string, b: string) {
-  const x = parts(a);
-  const y = parts(b);
-  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0) ? -1 : 1;
-  return 0;
+/**
+ * What the app's frame needs on every page, from the server (so the list
+ * itself never goes to the browser with it): the version you're on (the
+ * update card's words) and the versions of its series that brought something
+ * new (whether there's a card to show).
+ */
+export function whatsNewFacts(version: string): { current: ReleaseHeadline | null; newVersions: string[] } {
+  const r = CHANGELOG.find((x) => x.version === version);
+  return {
+    current: r ? { version: r.version, title: r.title, ...(r.date ? { date: r.date } : {}) } : null,
+    newVersions: withNew(CHANGELOG.filter((x) => seriesOf(x.version) === seriesOf(version) && compareVersions(x.version, version) <= 0)),
+  };
 }

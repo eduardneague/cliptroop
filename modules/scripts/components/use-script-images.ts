@@ -6,7 +6,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import { createClient } from "@/lib/supabase/client";
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { pictureTooBig } from "@/lib/image/limits";
-import { decodeDataImage, readyToSave, unkeepableSrc } from "../lib/paste-images";
+import { decodeDataImage, pictureSrc, readyToSave, unkeepableSrc } from "../lib/paste-images";
 
 /**
  * Where a block (like an image) can go near `pos`: right after the
@@ -151,7 +151,8 @@ export function useScriptImages(
           if (url) img.setAttribute("src", url);
           else img.remove();
           changed = true;
-        } else if (unkeepableSrc(src) && !blobs.current.has(src.trim())) {
+        } else if (!pictureSrc(src) || (unkeepableSrc(src) && !blobs.current.has(src.trim()))) {
+          // Not a web address (javascript:, a relative one, …), or one that can't be kept: left out (1.31.15).
           img.remove();
           changed = true;
         }

@@ -81,7 +81,53 @@ no database at all, use the stand-in Supabase in `scripts/dev-mock/`.
   writes.
 - **Database triggers enforce the invariants:** only a Master changes a
   project's stage; projects never change team; the owner can't be removed
-  and is always Master; only the owner grants or removes Master.
+  and is always Master; only the owner grants or removes Master; a team's
+  default people (shorts and long videos) are active members of that team.
+- **The database's own locks (1.31.14, 0107):** someone who isn't signed
+  in (anon) has no rights on any table, sequence or function in `public`.
+  Postgres still gives every NEW function to everyone, so each migration
+  ends a function with `revoke all on function f(…) from public, anon;`
+  and `grant execute … to authenticated` (and/or `service_role`) as it
+  needs; a trigger function or a helper only other definer functions call
+  needs no grant at all. Signed-in people never get TRUNCATE, TRIGGER or
+  REFERENCES; a table with no row rules (the server's only) gets
+  `revoke all on … from anon, authenticated`. Views read past RLS, so
+  there are none (use a function that checks). A SECURITY DEFINER
+  function always has `set search_path = public`. No rule is `using
+  (true)`. `supabase/tests/database-locks.test.sql` fails for any of these,
+  on every table and function, new ones included.
+- **Forms and what's shown (1.31.15):** text people type is checked on
+  the server (type and length, with a message: `tooLong` and
+  `FORM_LIMITS` in `lib/form-limits.ts`), and every text column a
+  signed-in person can write has a CHECK limit in the database (0108;
+  `supabase/tests/form-limits.test.sql` fails for a new one without).
+  React escapes text and blocks `javascript:` in `href` / `src`; raw HTML
+  (`dangerouslySetInnerHTML`, `innerHTML =`, `document.write`) and
+  addresses opened in code (`window.open`, `location.assign` …) are only
+  in the files `tests/forms.test.ts` lists, each with why it's safe: a
+  new one escapes what it shows (`escapeHtml`) and opens only a web
+  address (`webUrl`, `pictureSrc`) or the app's own page. Spreadsheet
+  exports go through `csvText` (`lib/csv.ts`), which keeps a would-be
+  formula as text.
+- **What a page may run (1.31.16):** every page carries a Content
+  Security Policy with a new nonce (`lib/csp.ts`, sent by the middleware;
+  Next.js puts the nonce on its own scripts). A `<script>` of the app's own
+  takes `nonce={(await headers()).get("x-nonce")}`; a library loaded by the
+  app's code (`document.createElement("script")`) is fine ('strict-dynamic'),
+  but nothing from another site is put straight into a page. A new kind of
+  source (another site's script, a websocket elsewhere) goes into
+  `buildCsp` and `tests/headers.test.ts`. No page is built ahead of time
+  (`force-static`, `revalidate`): its scripts would carry an old nonce. HTML
+  written by hand in a route sets its own `Content-Security-Policy`.
+  Emergency only: `CSP_MODE=report-only` (or `off`) in Vercel, redeploy.
+- **Profiles (1.31.14):** the `profiles` table shows you your own row,
+  everyone on (and who was on, `team_past_members`) a team you're on, the
+  people with a live invite to a team you're a Master of, and whoever
+  invited you (`visible_profile_ids()`). For anyone else use
+  `profile_card(handle)` (a profile page's card, no email or settings),
+  `people_to_invite(team, term)` (Team → Invite people) or `search_people`
+  (inside `global_search`). An email is never sent to someone who can't see
+  that profile, and finds someone only when typed in full.
 - **Passwords (1.31.10):** chosen in three places only: `/set-password`
   (an invite's first step), `/reset-password` (a reset link) and Settings →
   Account → Password (`changePassword` in `settings/account-actions.ts`).
@@ -157,8 +203,13 @@ the page is live, or React throws that part away (production error #418).
   per-row function: `team_id in (select my_team_ids())`,
   `project_id in (select my_project_ids())`,
   `recipient_id = (select auth.uid())`, masters with
-  `team_id in (select my_master_team_ids())`. The `(select …)` wrapper makes
-  Postgres evaluate it once per query instead of once per row.
+  `team_id in (select my_master_team_ids())`, money with
+  `team_id in (select revenue_team_ids())`, a role with
+  `team_id in (select my_role_team_ids('publisher'))` (0109). The
+  `(select …)` wrapper makes Postgres evaluate it once per query instead of
+  once per row; `supabase/tests/reads-once.test.sql` fails for a read rule
+  that calls `can_*` / `is_*` / `has_team_role` / a bare `auth.uid()`, and
+  for a foreign key without an index.
 - Never write a single `FOR ALL` policy: split into insert / update /
   delete so reads don't pay for write checks.
 - Select only the columns a screen needs; filter child rows in the query.
@@ -174,6 +225,16 @@ the page is live, or React throws that part away (production error #418).
   `cache()` (`modules/long-videos/lib/queries.ts`, `lib/supabase/get-user.ts`).
 - `getCachedUser()` reuses the identity middleware already verified.
   Security-sensitive server ACTIONS still call `supabase.auth.getUser()`.
+- One row, one read: the frame's profile columns come from
+  `getShellProfile()` (lib/look-server.ts); a new column the dashboard
+  layout needs goes into its `SHELL_COLUMNS`, not a read of its own.
+- Speed depends most on where things run (1.32.1, App setup card 11): the
+  server's region next to the database's, and sign-ins checked with JWT
+  signing keys (then `getClaims()` in the middleware asks nobody).
+- Real visitors' speed is on Developer → Speed (1.32.4): the 75th
+  percentile of LCP, INP, CLS, FCP and TTFB over 7 days, phones and
+  computers, per page. Look there before and after a change meant to make
+  something quicker; a page that's slow there is the one to work on.
 
 **Client**
 - Call server actions through `useAction()` (`lib/hooks/use-action.ts`):
@@ -191,6 +252,16 @@ the page is live, or React throws that part away (production error #418).
   nested page with its own `loading.tsx` gets a line in its parent's.
 - Images: upload through `compressImage()` with an `IMAGE_PRESETS` entry
   and `UPLOAD_CACHE_CONTROL`; render with `loading="lazy" decoding="async"`.
+- A picture kept large and shown small comes from a route with `?w=`
+  (`lib/picture-size.ts`: `studioThumb(entry, w)`, `sketchThumb(id, w)`;
+  160 for list rows, 640 for cards and details; `resizePicture()` makes the
+  copy). Never a signed link for a picture a page shows on every visit: it's
+  a new address each time (downloaded again) and one more trip to storage
+  per render. Private pictures go through a route at an address that never
+  changes, `private, max-age=2592000, immutable` (1.32.3).
+- Fonts: every file of one `next/font` call is preloaded on every page. A
+  style or font only a few pages use gets a call of its own with
+  `preload: false` (Fraunces' italic, `--font-display-italic`).
 - Code that only one tab, dialog or widget needs is loaded with
   `next/dynamic` from a `"use client"` file (in a server component it does
   NOT split: both sides end up in the page's chunk). Examples:
@@ -202,6 +273,23 @@ the page is live, or React throws that part away (production error #418).
   hydrates; Customize fetches the rest for the library). Each renders inside
   `WidgetBoundary`, so one failing widget shows its own Try again instead of
   taking the dashboard down.
+- **The frame is on every page** (the dashboard layout and the client
+  components it draws: sidebar, header, bell, search, What's new, the tour,
+  the celebrations), so it stays light (1.32.2). What only shows when opened
+  lives in a file of its own, `lazy(() => import(…))`-loaded from the light
+  part inside a `LaterBoundary` (components/ui/later-boundary.tsx: its code
+  not arriving, or breaking, never takes the page down), warmed with
+  `whenIdle()` (lib/idle.ts) and when pointed at, with a fallback in the real
+  thing's shape: `global-search.tsx` → `search-palette.tsx`,
+  `notification-bell.tsx` → `notification-cards.tsx`, `whats-new.tsx` →
+  `whats-new-notes.tsx`, `tutorial.tsx` → `tour.tsx`. Listeners that aren't
+  needed for the first paint start once idle (`celebrations-host.tsx`,
+  `xp-cheers-host.tsx`, `useIdle()`). What the frame needs from a big module
+  is worked out on the server and passed down (`whatsNewFacts()`), and small
+  helpers live apart from big lists (`lib/changelog-meta.ts`,
+  `lib/profile/levels.ts`): a client component never imports
+  `lib/changelog.ts`. `tests/bundle.test.ts` walks the frame's imports and
+  fails when one of those comes back, or the frame passes its budget.
 
 ## UI conventions
 
@@ -684,8 +772,11 @@ Public buckets take only what they're for: a picture bucket lists its
 types in `allowed_mime_types` (the same `PICTURE_TYPES` the app checks
 before uploading, never SVG or HTML) and has a size limit, and its files
 get random names. A file of any kind (comment attachments) goes up with
-`storedTypeFor(type)`, so a page, an SVG or a script is stored as a plain
-download. No `console.log` in the app (`console.warn` / `error` for what
+`storedTypeFor(type)`: a kind on `ATTACHMENT_TYPES` as itself, anything
+else (a page, an SVG, a script) as a plain download; the bucket takes the
+same list (0107, `tests/database.test.ts` compares them). Drawings and
+other uploads the server prepares go through a signed upload link, not a
+storage rule. No `console.log` in the app (`console.warn` / `error` for what
 someone must look at), and an error screen shows the digest, never the
 error.
 
