@@ -26,7 +26,7 @@ const fraunces = Fraunces({
   weight: ["500", "600", "700"],
 });
 
-// Its italic only says a few words on the home page (landing.css .ld-italic): a family of its own that isn't
+// Its italic only says a few words on the website (landing.css .ld-italic): a family of its own that isn't
 // preloaded (1.32.3). In one call with the upright one, every page of the app preloaded it too.
 const frauncesItalic = Fraunces({
   subsets: ["latin"],

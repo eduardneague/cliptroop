@@ -27,9 +27,9 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 // --- Public addresses ------------------------------------------------------------------------------------------------
-for (const p of ["/", "/login", "/welcome", "/privacy", "/terms", "/data-deletion", "/sitemap.xml", "/status", "/api/health", "/offline.html", "/api/auth/callback", "/api/cron/posting", "/api/cron/analytics"])
+for (const p of ["/", "/login", "/welcome", "/privacy", "/terms", "/data-deletion", "/features", "/platforms", "/pricing", "/security", "/changelog", "/about", "/contact", "/sitemap.xml", "/status", "/api/health", "/offline.html", "/api/auth/callback", "/api/cron/posting", "/api/cron/analytics"])
   ok(isPublicPath(p), `${p} opens without signing in`);
-for (const p of ["/dashboard", "/login-history", "/loginx", "/api/authors", "/api/auth", "/api/cronjob", "/api/cron", "/statusx", "/status/details", "/privacy-team", "/api/health/deep", "/welcome/back", "/developer", "/setup", "/api/giphy/search", "/api/link-preview", "/api/errors", "/u/someone", "/outliers"])
+for (const p of ["/dashboard", "/login-history", "/loginx", "/api/authors", "/api/auth", "/api/cronjob", "/api/cron", "/statusx", "/status/details", "/privacy-team", "/api/health/deep", "/welcome/back", "/pricing-admin", "/features/new", "/aboutx", "/contact/list", "/developer", "/setup", "/api/giphy/search", "/api/link-preview", "/api/errors", "/u/someone", "/outliers"])
   ok(!isPublicPath(p), `${p} needs a sign-in`);
 const mw = read("lib/supabase/middleware.ts");
 ok(/const isPublicRoute = isPublicPath\(request\.nextUrl\.pathname\);/.test(mw), "the middleware uses that list");

@@ -11,8 +11,8 @@ const ok = (c: boolean, m: string) => {
   }
 };
 
-for (const p of ["/", "/login", "/login/", "/status", "/privacy", "/terms", "/data-deletion", "/welcome", "/set-password", "/reset-password"]) ok(isBrandPage(p), `${p} wears the brand colours`);
-for (const p of ["/dashboard", "/settings", "/statusx", "/shorts/1", "/developer", "/team"]) ok(!isBrandPage(p), `${p} follows the colour theme`);
+for (const p of ["/", "/login", "/login/", "/status", "/privacy", "/terms", "/data-deletion", "/welcome", "/set-password", "/reset-password", "/features", "/platforms", "/pricing", "/security", "/changelog", "/about", "/contact"]) ok(isBrandPage(p), `${p} wears the brand colours`);
+for (const p of ["/dashboard", "/settings", "/statusx", "/shorts/1", "/developer", "/team", "/pricingx", "/aboutme"]) ok(!isBrandPage(p), `${p} follows the colour theme`);
 ok(BRAND_PAGES_RE.startsWith("^/"), "the pattern is anchored (the first-paint script uses it)");
 
 const env = process.env as Record<string, string | undefined>;

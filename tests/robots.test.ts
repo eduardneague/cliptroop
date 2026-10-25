@@ -32,11 +32,15 @@ function allowed(path: string) {
   const d = disallow.filter((p) => matches(p, path)).reduce((m, p) => Math.max(m, p.length), -1);
   return a >= d;
 }
-for (const p of ["/", "/privacy", "/terms", "/data-deletion", "/og-image.png"]) ok(allowed(p), `${p} is readable by robots`);
+for (const p of ["/", "/privacy", "/terms", "/data-deletion", "/og-image.png", "/features", "/platforms", "/pricing", "/security", "/changelog", "/changelog?all=1", "/about", "/contact"]) ok(allowed(p), `${p} is readable by robots`);
 for (const p of ["/dashboard", "/login", "/welcome", "/shorts/123", "/api/health", "/setup"]) ok(!allowed(p), `${p} stays closed`);
 ok(r.sitemap === "https://app.cliptroop.com/sitemap.xml", "sitemap address (no double slash)");
 const urls = sitemap().map((x) => x.url);
-ok(urls.join() === "https://app.cliptroop.com/,https://app.cliptroop.com/privacy,https://app.cliptroop.com/terms,https://app.cliptroop.com/data-deletion", "sitemap lists the public pages");
+ok(
+  urls.join() ===
+    ["", "features", "platforms", "pricing", "security", "changelog", "about", "contact", "privacy", "terms", "data-deletion"].map((p) => `https://app.cliptroop.com/${p}`).join(),
+  `sitemap lists the public pages, the home page and the website's first (${urls.join(" ")})`
+);
 
 if (fails) process.exit(1);
 console.log("robots ok");

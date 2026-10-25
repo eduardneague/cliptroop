@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { APP_NAME, CONTACT_EMAIL, MASCOT_NAME } from "@/lib/brand";
-import { Brand } from "@/components/ui/clip-logo";
+import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { Mascot } from "@/components/ui/mascot";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { ClipOnView, HeaderScroll, Play, Timecode } from "./landing-client";
+import { askHref, btn, btnQuiet, SitePage, textLink } from "@/components/site/site-chrome";
+import { ClipOnView, Play, Timecode } from "./landing-client";
 import { MeasureVignette, PhoneVignette, PipelineVignette, PlanVignette, PostVignette, ReviewVignette, ScriptVignette } from "./vignettes";
 import "./landing.css";
 
@@ -11,6 +10,8 @@ import "./landing.css";
  * The public home page: what new people and the platforms' reviewers see.
  * A slate claps shut (the one big moment on load), then the production in
  * six scenes, each with a small live demo, then the rest as end credits.
+ * Since 1.33.0 it's the front of the website: the same header and footer as
+ * Features, Platforms, Pricing and the rest (components/site).
  */
 
 const SCENES = [
@@ -61,42 +62,11 @@ const SCENES = [
 const CREDITS = [
   { part: "Meetings", name: "Agenda, notes and action items that land in each person's tasks" },
   { part: "Your dashboard", name: "Widgets you arrange: today's tasks, the calendar, the weather, your numbers" },
-  { part: "Thumbnail studio", name: "Thumbnail ideas side by side, so the team can pick the winner" },
+  { part: "Thumbnail Studio", name: "Thumbnail ideas side by side, so the team can pick the winner" },
   { part: "Roles", name: "Masters, scripters, editors and schedulers each see what's theirs" },
   { part: "Search", name: "Any video, script or person, with Ctrl K" },
   { part: "Status", name: "A public page that says whether everything is running" },
 ];
-
-const btn = "inline-flex items-center justify-center rounded-xl font-semibold transition-[filter,background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
-
-function Header() {
-  return (
-    <header data-ld-header className="ld-header sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-2">
-        <Link href="/" aria-label={`${APP_NAME} home`} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber">
-          <Brand />
-        </Link>
-        <nav aria-label="On this page" className="hidden md:flex items-center gap-1 ml-6 text-[14px] text-ink-soft">
-          <a href="#how" className="rounded-lg px-3 h-9 inline-flex items-center hover:text-ink hover:bg-surface/70">
-            How it works
-          </a>
-          <a href="#more" className="rounded-lg px-3 h-9 inline-flex items-center hover:text-ink hover:bg-surface/70">
-            Everything else
-          </a>
-          <Link href="/status" className="rounded-lg px-3 h-9 inline-flex items-center hover:text-ink hover:bg-surface/70">
-            Status
-          </Link>
-        </nav>
-        <span className="flex-1" />
-        <ThemeToggle />
-        <Link href="/login" className={`${btn} bg-amber text-white px-4 h-10 text-[14px] hover:brightness-110`}>
-          Sign in
-        </Link>
-      </div>
-      <HeaderScroll />
-    </header>
-  );
-}
 
 /** The slate: claps shut on load, then Clip pops up beside it. */
 /** The hero's clapperboard (also used for the README and link-preview art). */
@@ -171,7 +141,7 @@ function Hero() {
             <Link href="/login" className={`${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`}>
               Sign in
             </Link>
-            <a href="#how" className={`${btn} border border-line/20 px-5 h-12 text-[15px] hover:border-line/40 hover:bg-surface`}>
+            <a href="#how" className={btnQuiet}>
               See how it works
             </a>
           </div>
@@ -211,140 +181,129 @@ function Scene({ n, scene, flip }: { n: number; scene: (typeof SCENES)[number]; 
 
 export function Landing() {
   return (
-    <div className="ld min-h-dvh bg-paper text-ink">
-      <a href="#how" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2">
-        Skip to how it works
-      </a>
-      <Header />
-      <main>
-        <Hero />
+    <SitePage>
+      <Hero />
 
-        {/* The production, in order. */}
-        <section id="how" className="scroll-mt-16 relative">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="max-w-[40rem] mb-14 sm:mb-20">
-              <h2 className="font-display text-[36px] sm:text-[52px] font-semibold leading-[1.02] tracking-[-0.02em]">One video, start to finish</h2>
-              <p className="mt-4 text-[17px] leading-relaxed text-ink-soft">
-                Six scenes, the way video teams already work. Each person sees their part, and the next person knows the moment it&rsquo;s their turn.
-              </p>
-            </div>
-            <div className="space-y-24 sm:space-y-32">
-              {SCENES.map((s, i) => (
-                <Scene key={s.id} n={i + 1} scene={s} flip={i % 2 === 1} />
-              ))}
-            </div>
+      {/* The production, in order. */}
+      <section id="how" className="scroll-mt-16 relative">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="max-w-[40rem] mb-14 sm:mb-20">
+            <h2 className="font-display text-[36px] sm:text-[52px] font-semibold leading-[1.02] tracking-[-0.02em]">One video, start to finish</h2>
+            <p className="mt-4 text-[17px] leading-relaxed text-ink-soft">
+              Six scenes, the way video teams already work. Each person sees their part, and the next person knows the moment it&rsquo;s their turn.
+            </p>
           </div>
-        </section>
-
-        {/* The phone. */}
-        <section className="mt-28 sm:mt-36 bg-[rgb(43_33_24)] text-[rgb(246_240_228)] overflow-hidden">
-          <Play className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-24 grid gap-14 lg:grid-cols-[1fr_auto] items-center">
-            <div className="max-w-[34rem]">
-              <h2 className="font-display text-[34px] sm:text-[48px] font-semibold leading-[1.04] tracking-[-0.02em]">Your turn comes to you</h2>
-              <p className="mt-4 text-[17px] leading-relaxed text-[rgb(246_240_228/0.75)]">
-                When a script is handed to you, a cut needs your review or a short goes live, you hear about it right away, in the app and on your phone. Add {APP_NAME} to your home screen on iPhone or Android: no app store, nothing to update.
-              </p>
-              <div className="mt-8 h-[7px] w-24 rounded-[3px] ld-stripes" aria-hidden />
-            </div>
-            <PhoneVignette />
-          </Play>
-        </section>
-
-        {/* Everything else, as end credits. */}
-        <section id="more" className="scroll-mt-16 max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
-          <h2 className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">Also starring</h2>
-          <dl className="mt-10 space-y-5 sm:space-y-4">
-            {CREDITS.map((c) => (
-              <div key={c.part} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">
-                <dt className="sm:text-right font-display text-[20px] sm:text-[22px] font-semibold">{c.part}</dt>
-                <span className="hidden sm:block ld-leader h-3" aria-hidden />
-                <dd className="text-[15px] text-ink-soft leading-relaxed">{c.name}</dd>
-              </div>
+          <div className="space-y-24 sm:space-y-32">
+            {SCENES.map((s, i) => (
+              <Scene key={s.id} n={i + 1} scene={s} flip={i % 2 === 1} />
             ))}
-          </dl>
-        </section>
-
-        {/* Trust. */}
-        <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
-          <div className="rounded-[26px] border border-line/10 bg-surface px-6 sm:px-10 py-8 sm:py-10 grid gap-6 md:grid-cols-[1fr_1fr]">
-            <div>
-              <h2 className="font-display text-[26px] font-semibold leading-tight">Your accounts stay yours</h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-                {APP_NAME} only posts what your team approves, to the accounts your team connects, and reads their numbers to show them back to you. Sign-ins are encrypted and never leave our server. Disconnect any account at any time.
-              </p>
-            </div>
-            <div className="text-[15px] leading-relaxed text-ink-soft md:border-l md:border-line/10 md:pl-8 space-y-3">
-              <p>
-                Read the{" "}
-                <Link href="/privacy" className="text-ink underline underline-offset-2 hover:text-amber">
-                  privacy policy
-                </Link>
-                , the{" "}
-                <Link href="/terms" className="text-ink underline underline-offset-2 hover:text-amber">
-                  terms
-                </Link>{" "}
-                and how to{" "}
-                <Link href="/data-deletion" className="text-ink underline underline-offset-2 hover:text-amber">
-                  delete your data
-                </Link>
-                .
-              </p>
-              <p>
-                Is everything running? The{" "}
-                <Link href="/status" className="text-ink underline underline-offset-2 hover:text-amber">
-                  status page
-                </Link>{" "}
-                shows the last three days, hour by hour.
-              </p>
-            </div>
           </div>
-        </section>
-
-        {/* That's a wrap. */}
-        <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 pb-24 text-center">
-          <ClipOnView size={150} />
-          <h2 className="mt-4 font-display text-[40px] sm:text-[60px] font-semibold leading-[1] tracking-[-0.025em]">That&rsquo;s a wrap.</h2>
-          <p className="mt-4 text-[17px] text-ink-soft">
-            {MASCOT_NAME} will show you around the first time you sign in.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center items-center gap-3">
-            <Link href="/login" className={`${btn} bg-amber text-white px-7 h-12 text-[15px] hover:brightness-110`}>
-              Sign in
-            </Link>
-            {CONTACT_EMAIL ? (
-              <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} for our team`)}`} className={`${btn} border border-line/20 px-5 h-12 text-[15px] hover:border-line/40 hover:bg-surface`}>
-                Ask about an account
-              </a>
-            ) : null}
-          </div>
-          <p className="mt-4 text-[13px] text-ink-faint">No account yet? Your team&rsquo;s owner can invite you.</p>
-        </section>
-      </main>
-
-      <footer className="border-t border-line/10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 flex flex-wrap items-center justify-between gap-4 text-[13px] text-ink-faint">
-          <span className="inline-flex items-center gap-3">
-            <Brand />
-            <span>
-              © {new Date().getFullYear()} {APP_NAME}
-            </span>
-          </span>
-          <nav aria-label="Legal and status" className="flex flex-wrap gap-x-5 gap-y-2">
-            <Link href="/privacy" className="hover:text-ink">
-              Privacy
-            </Link>
-            <Link href="/terms" className="hover:text-ink">
-              Terms
-            </Link>
-            <Link href="/data-deletion" className="hover:text-ink">
-              Data deletion
-            </Link>
-            <Link href="/status" className="hover:text-ink">
-              Status
-            </Link>
-          </nav>
         </div>
-      </footer>
-    </div>
+      </section>
+
+      {/* The phone. */}
+      <section className="mt-28 sm:mt-36 bg-[rgb(43_33_24)] text-[rgb(246_240_228)] overflow-hidden">
+        <Play className="max-w-6xl mx-auto px-4 sm:px-6 py-20 sm:py-24 grid gap-14 lg:grid-cols-[1fr_auto] items-center">
+          <div className="max-w-[34rem]">
+            <h2 className="font-display text-[34px] sm:text-[48px] font-semibold leading-[1.04] tracking-[-0.02em]">Your turn comes to you</h2>
+            <p className="mt-4 text-[17px] leading-relaxed text-[rgb(246_240_228/0.75)]">
+              When a script is handed to you, a cut needs your review or a short goes live, you hear about it right away, in the app and on your phone. Add {APP_NAME} to your home screen on iPhone or Android: no app store, nothing to update.
+            </p>
+            <div className="mt-8 h-[7px] w-24 rounded-[3px] ld-stripes" aria-hidden />
+          </div>
+          <PhoneVignette />
+        </Play>
+      </section>
+
+      {/* Everything else, as end credits. */}
+      <section id="more" className="scroll-mt-16 max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+        <h2 className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">Also starring</h2>
+        <dl className="mt-10 space-y-5 sm:space-y-4">
+          {CREDITS.map((c) => (
+            <div key={c.part} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">
+              <dt className="sm:text-right font-display text-[20px] sm:text-[22px] font-semibold">{c.part}</dt>
+              <span className="hidden sm:block ld-leader h-3" aria-hidden />
+              <dd className="text-[15px] text-ink-soft leading-relaxed">{c.name}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-10 text-center text-[15px]">
+          <Link href="/features" className={textLink}>
+            Every feature, scene by scene
+          </Link>
+        </p>
+      </section>
+
+      {/* Trust. */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
+        <div className="rounded-[26px] border border-line/10 bg-surface px-6 sm:px-10 py-8 sm:py-10 grid gap-6 md:grid-cols-[1fr_1fr]">
+          <div>
+            <h2 className="font-display text-[26px] font-semibold leading-tight">Your accounts stay yours</h2>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
+              {APP_NAME} only posts what your team approves, to the accounts your team connects, and reads their numbers to show them back to you. Sign-ins are encrypted and never leave our server. Disconnect any account at any time.
+            </p>
+          </div>
+          <div className="text-[15px] leading-relaxed text-ink-soft md:border-l md:border-line/10 md:pl-8 space-y-3">
+            <p>
+              What it asks each platform for, and why:{" "}
+              <Link href="/platforms" className={textLink}>
+                Platforms
+              </Link>
+              . How your team&rsquo;s work is kept safe:{" "}
+              <Link href="/security" className={textLink}>
+                Security
+              </Link>
+              .
+            </p>
+            <p>
+              Read the{" "}
+              <Link href="/privacy" className={textLink}>
+                privacy policy
+              </Link>
+              , the{" "}
+              <Link href="/terms" className={textLink}>
+                terms
+              </Link>{" "}
+              and how to{" "}
+              <Link href="/data-deletion" className={textLink}>
+                delete your data
+              </Link>
+              .
+            </p>
+            <p>
+              Is everything running? The{" "}
+              <Link href="/status" className={textLink}>
+                status page
+              </Link>{" "}
+              shows the last three days, hour by hour.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* That's a wrap. */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 text-center">
+        <ClipOnView size={150} />
+        <h2 className="mt-4 font-display text-[40px] sm:text-[60px] font-semibold leading-[1] tracking-[-0.025em]">That&rsquo;s a wrap.</h2>
+        <p className="mt-4 text-[17px] text-ink-soft">
+          {MASCOT_NAME} will show you around the first time you sign in.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center items-center gap-3">
+          <Link href="/login" className={`${btn} bg-amber text-white px-7 h-12 text-[15px] hover:brightness-110`}>
+            Sign in
+          </Link>
+          <a href={askHref()} className={btnQuiet}>
+            Ask about an account
+          </a>
+        </div>
+        <p className="mt-4 text-[13px] text-ink-faint">
+          No account yet? Your team&rsquo;s owner can invite you, or see{" "}
+          <Link href="/pricing" className={textLink}>
+            the plans
+          </Link>
+          .
+        </p>
+      </section>
+    </SitePage>
   );
 }

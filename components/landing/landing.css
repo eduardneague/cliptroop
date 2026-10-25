@@ -18,6 +18,8 @@
 /* The clapper stripes (amber on ink), as on Clip. */
 .ld-stripes { background: repeating-linear-gradient(-58deg, rgb(var(--amber)) 0 13px, rgb(var(--ld-ink)) 13px 26px); }
 .ld-stripes-thin { background: repeating-linear-gradient(-58deg, rgb(var(--amber)) 0 6px, transparent 6px 12px); }
+/* On the dark slate (the website's dark bands, 1.33.0): amber and chalk, or the ink stripes would vanish into it. */
+.ld-stripes-light { background: repeating-linear-gradient(-58deg, rgb(var(--amber)) 0 13px, rgb(var(--ld-chalk)) 13px 26px); }
 
 /* Hero: the slate ------------------------------------------------------------ */
 .ld-slate { position: relative; transform-origin: 50% 100%; animation: ld-slate-hit 0.5s 0.95s ease-out both; }
@@ -127,3 +129,20 @@ html[data-motion="off"] .ld *, html[data-motion="off"] .ld *::before { animation
 @media (prefers-reduced-motion: reduce) {
   html:not([data-motion="on"]) .ld *, html:not([data-motion="on"]) .ld *::before { animation: none !important; }
 }
+
+/* The website's pages (1.33.0, components/site) ------------------------------ */
+/* The phone menu: a <details>; its button turns into a close button while it's open. */
+.site-menu > summary .site-menu-close,
+.site-menu[open] > summary .site-menu-open { display: none; }
+.site-menu[open] > summary .site-menu-close { display: block; }
+.site-menu[open] > summary { color: rgb(var(--ink)); border-color: rgb(var(--line) / 0.3); }
+
+/* Pricing: monthly or yearly, two radio buttons and no script. */
+.billing .price-yearly,
+.billing:has(#billing-yearly:checked) .price-monthly { display: none; }
+.billing:has(#billing-yearly:checked) .price-yearly { display: inline; }
+.billing-option { color: rgb(var(--ink-soft)); transition: background-color 0.15s, color 0.15s; }
+#billing-monthly:checked + .billing-option,
+#billing-yearly:checked + .billing-option { background: rgb(var(--amber)); color: #fff; }
+#billing-monthly:focus-visible + .billing-option,
+#billing-yearly:focus-visible + .billing-option { outline: 2px solid rgb(var(--amber)); outline-offset: 2px; }

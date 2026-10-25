@@ -19,6 +19,14 @@ const EXACT = new Set([
   "/privacy",
   "/terms",
   "/data-deletion",
+  // The website around the app (1.33.0): what it does, the platforms, the price.
+  "/features",
+  "/platforms",
+  "/pricing",
+  "/security",
+  "/changelog",
+  "/about",
+  "/contact",
   // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
   "/sitemap.xml",
   // Status page and health check: public (details only for developers).

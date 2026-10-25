@@ -33,6 +33,8 @@ export const APP_DESCRIPTION =
 
 /** Who runs it (legal pages). Set NEXT_PUBLIC_COMPANY_NAME once there's a company. */
 export const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || `the ${APP_NAME} team`;
+/** NEXT_PUBLIC_COMPANY_NAME is set (the website says who runs the app only then: "run by the ClipTroop team" says nothing). */
+export const COMPANY_NAME_SET = !!process.env.NEXT_PUBLIC_COMPANY_NAME;
 
 /** Where people write to (legal pages, data deletion). Set NEXT_PUBLIC_CONTACT_EMAIL in Vercel. */
 export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "";

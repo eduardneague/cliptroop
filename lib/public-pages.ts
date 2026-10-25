@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import { APP_DESCRIPTION, APP_DOMAIN, APP_NAME, APP_TAGLINE } from "./brand";
 
-/** Pages anyone (and the platforms' robots) can read without signing in. */
-export const PUBLIC_PAGES = ["/privacy", "/terms", "/data-deletion"] as const;
+/** Pages anyone (and the platforms' robots) can read without signing in (the home page aside): the website (1.33.0) and the legal pages. */
+export const PUBLIC_PAGES = ["/features", "/platforms", "/pricing", "/security", "/changelog", "/about", "/contact", "/privacy", "/terms", "/data-deletion"] as const;
 
 /**
  * Pages that always wear the brand colours, never a person's colour theme
- * (Settings → Preferences): the home page, sign-in and the password /
- * invite pages, the status page and the legal pages. Light and dark still
+ * (Settings → Preferences): the home page and the website's pages, sign-in
+ * and the password / invite pages, the status page and the legal pages. Light and dark still
  * follow the person's choice. A string, so the root layout's first-paint
  * script can use it too.
  */
-export const BRAND_PAGES_RE = "^/(login|reset-password|set-password|welcome|status|privacy|terms|data-deletion)?(/|$)";
+export const BRAND_PAGES_RE = "^/(login|reset-password|set-password|welcome|status|privacy|terms|data-deletion|features|platforms|pricing|security|changelog|about|contact)?(/|$)";
 export const isBrandPage = (path: string) => new RegExp(BRAND_PAGES_RE).test(path);
 
 /** The site's public address (for robots.txt and the sitemap). */

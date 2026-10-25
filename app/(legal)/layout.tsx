@@ -1,21 +1,10 @@
-import Link from "next/link";
-import { Brand } from "@/components/ui/clip-logo";
+import { SitePage } from "@/components/site/site-chrome";
 
-/** Public pages (no sign-in): privacy policy, terms, data deletion. */
+/** Public pages (no sign-in): privacy policy, terms, data deletion. Since 1.33.0 they wear the website's header and footer. */
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-paper text-ink">
-      <header className="max-w-3xl mx-auto px-5 pt-8 pb-4 flex items-center justify-between gap-4 flex-wrap">
-        <Link href="/" aria-label="Home">
-          <Brand />
-        </Link>
-        <nav className="flex gap-4 text-[13px] text-ink-soft">
-          <Link href="/privacy" className="hover:text-ink">Privacy</Link>
-          <Link href="/terms" className="hover:text-ink">Terms</Link>
-          <Link href="/data-deletion" className="hover:text-ink">Data deletion</Link>
-        </nav>
-      </header>
-      <main className="max-w-3xl mx-auto px-5 pb-16 legal">{children}</main>
-    </div>
+    <SitePage>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 legal">{children}</div>
+    </SitePage>
   );
 }

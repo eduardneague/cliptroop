@@ -22,6 +22,17 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.33.0",
+    date: "2026-10-25",
+    title: "The ClipTroop website",
+    changes: [
+      { kind: "new", text: "ClipTroop has a website around the app, for teams who'd like to use it and for the platforms' reviewers: Features (everything it does, in the order a video is made), Platforms (what it asks YouTube, TikTok, Instagram and Facebook for, every permission and why), Pricing, Security, the Changelog, About and Contact. Anyone can read it without signing in." },
+      { kind: "new", text: "Pricing: three plans, Crew, Studio and Network, monthly or yearly, with every feature in each and the usual questions answered. An account still starts with a message: ClipTroop is invite only for now." },
+      { kind: "new", text: "Security says in plain words what keeps your team's work and connected accounts safe, and how to report a problem. Security researchers' tools find the same at /.well-known/security.txt." },
+      { kind: "better", text: "The home page, the privacy policy, the terms and data deletion share the website's header and footer, with a menu on phones." },
+    ],
+  },
+  {
     version: "1.32.5",
     date: "2026-10-25",
     title: "Speed: long lists",

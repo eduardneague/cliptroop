@@ -434,6 +434,25 @@ the base styles are the finished frame, so animations off still reads.
 `public/og-image.png` + `publicMetadata()` in `lib/public-pages.ts`. Tab icon: `icons` in `app/layout.tsx` (keep every
 entry listed: a config `icons` replaces the automatic one).
 
+**The website (1.33.0).** Features, Platforms, Pricing, Security, Changelog,
+About and Contact are server pages in `app/(site)/<page>/page.tsx`, each
+inside `<SitePage current="/<page>">` (`components/site/site-chrome.tsx`:
+the header and footer the home page and the legal pages share, `PageHead`,
+`SiteSection`, `FactList`, `SiteCta`, `askHref()`). A new page needs all of:
+`EXACT` in `lib/public-paths.ts`, `PUBLIC_PAGES` (sitemap, robots) and
+`BRAND_PAGES_RE` in `lib/public-pages.ts`, `publicMetadata("/<page>", …)`
+with `robots: { index: true, follow: true }`, and a link in `SITE_NAV` or
+`SITE_FOOTER`; `tests/website.test.ts` fails without any of them. The words
+live beside the code that makes them true: `lib/site/platforms.ts` lists
+exactly the permissions `lib/social/providers.ts` asks for (add a scope
+there and the test asks for its line here, with what it's for), and
+`lib/site/plans.ts` is the owner's prices. The look is the home page's:
+one dark slate band per page (stripes on it are `ld-stripes-light`), no
+all-caps labels, no arrows on links, no script of a page's own (the phone
+menu is a `<details>`, monthly / yearly is CSS). Every claim on Security
+must be something the app does today: change the page with the feature.
+`/.well-known/security.txt` comes from `lib/security-txt.ts`.
+
 **Clip's tour.** `components/tutorial/tutorial.tsx`: starts once per person
 on `/dashboard` (`profiles.tutorial_done_at`, 0069); Settings → Account →
 "Show me around again" or `/dashboard?tour=1` replays it. Steps point at
