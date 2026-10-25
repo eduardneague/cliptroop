@@ -12,6 +12,7 @@ import { getMembership, canActOnStage } from "@/lib/permissions/membership";
 import { isMaster, ROLES, PIPELINE_STAGES, roleAllowsStage } from "@/lib/permissions/roles";
 import { displayName } from "@/lib/avatar";
 import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
+import { cleanName } from "@/lib/names";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 
 /**
@@ -757,6 +758,38 @@ export async function setLongPlatforms(projectId: string, platforms: string[]): 
   if (error || !data?.length) return { error: "Only the master can change the platforms." };
   refreshLong(projectId, "any");
   return {};
+}
+
+/**
+ * A long video's name (1.33.1), from its heading or its Settings: masters, and whoever can work on the step it's at
+ * (the database's own rule for changing a video). The main title picked among its title ideas is the same name, so
+ * it changes with it (the header and the lists always show that one).
+ */
+export async function renameLongVideo(projectId: string, title: string): Promise<StepResult & { title?: string }> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const next = cleanName(title);
+  if (!next) return { error: "Give the video a name." };
+  const long = tooLong(next, FORM_LIMITS.videoTitle, "the name");
+  if (long) return { error: long };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expired." };
+  const { data: project } = await supabase.from("long_video_projects").select("id, team_id, stage, title").eq("id", projectId).maybeSingle();
+  if (!project) return { error: "Video not found." };
+  const membership = await getMembership(supabase, project.team_id);
+  if (!isMaster(membership?.roles ?? []) && !canActOnStage(membership, project.stage as PipelineStage)) return { error: "Only the master, or whoever is working on this step, can rename it." };
+  if (project.title === next) return { title: next };
+  const { data, error } = await supabase
+    .from("long_video_projects")
+    .update({ title: next, updated_at: new Date().toISOString(), updated_by: user.id })
+    .eq("id", projectId)
+    .select("id");
+  if (error || !data?.length) return { error: "Couldn't rename it. Try again." };
+  await supabase.from("project_titles").update({ title: next }).eq("project_id", projectId).eq("is_picked", true);
+  refreshLong(projectId, "any");
+  return { title: next };
 }
 
 /** Package: the final YouTube description. */

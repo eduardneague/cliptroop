@@ -126,25 +126,32 @@ ok(/role="toolbar" aria-label="Filter objectives"/.test(objectives) && /<div cla
 
 // --- The floating top bar ------------------------------------------------------------------------------------------------------------
 const media = css.slice(css.indexOf("The top bar floats (1.31.9)"));
-ok(/html\[data-glass\]:not\(\[data-glass-opaque\]\) \{ --shell-top: 72px; \}/.test(media), "what sticks under it starts at 72 px (10 + 52 + 10)");
-const bar = rule(media, `html[data-glass]:not([data-glass-opaque]) [data-shell="header"]`);
+ok(/html\[data-glass\] \{ --shell-top: 72px; \}/.test(media), "what sticks under it starts at 72 px (10 + 52 + 10)");
+const bar = rule(media, `html[data-glass] [data-shell="header"]`);
 ok(!!bar && /top: 10px; height: 52px; margin: 10px 20px 0;/.test(bar), "10 px from the top, 20 px in from the side bar (where the page's words start)");
 ok(!!bar && /border-radius: 18px;/.test(bar) && /backdrop-filter: var\(--glass-blur\);/.test(bar) && /box-shadow: var\(--glass-shadow\);/.test(bar), "rounded, blurred, with the panes' shadow");
-ok(/html\[data-glass-style="liquid"\]:not\(\[data-glass-opaque\]\) \[data-shell="header"\] \{\s*border-radius: 20px;\s*box-shadow: var\(--liquid-rim\), var\(--liquid-drop\);/.test(media), "Liquid: rounder, with its rim of light");
-ok(/@media \(min-width: 1400px\) \{\s*html\[data-glass\]:not\(\[data-glass-opaque\]\) \[data-shell="header"\] \{ margin-left: 24px; margin-right: 24px; \}/.test(media), "24 px in on wide screens, like the page");
+ok(/html\[data-glass-style="liquid"\] \[data-shell="header"\] \{\s*border-radius: 20px;\s*box-shadow: var\(--liquid-rim\), var\(--liquid-drop\);/.test(media), "Liquid: rounder, with its rim of light");
+ok(/@media \(min-width: 1400px\) \{\s*html\[data-glass\] \[data-shell="header"\] \{ margin-left: 24px; margin-right: 24px; \}/.test(media), "24 px in on wide screens, like the page");
 ok(media.indexOf("@media (min-width: 900px) {") >= 0 && media.indexOf("@media (min-width: 900px) {") < media.indexOf("--shell-top: 72px"), "only from where the side bar shows (phones keep their bars)");
-ok(/\[data-glass-opaque\]/.test(bar ? `html[data-glass]:not([data-glass-opaque]) [data-shell="header"]` : ""), "glass at 0 (solid) keeps the plain bar");
+// 1.34.1: at solid glass it still floats (beside Liquid's floating side bar it fell back to the plain bar), as a solid pane.
+const solid = rule(media, `html[data-glass][data-glass-opaque] [data-shell="header"]`);
+ok(!!solid && /background-color: rgb\(var\(--surface\)\);/.test(solid) && /backdrop-filter: none;/.test(solid), "glass at 0 (solid): the same floating pane, solid");
 ok(/'\[data-shell='header'\]'|\[data-shell='header'\]/.test(read("components/ui/glass.tsx")), "Liquid's light follows the pointer on it");
 
-// The edge: a soft blur over the top of the page, under the bars.
+// The edge: a soft blur over the top of the page, under the bars. 1.34.1: at solid glass too, now that the bar floats there
+// (what scrolled under it showed sharp around it and between it and Outliers' bar).
 ok(/\[data-shell="edge"\] \{ display: none; \}/.test(css), "the edge is nothing without the floating bar");
-const edge = rule(media, `html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]`);
+ok(!/:not\(\[data-glass-opaque\]\)[^{,]*\[data-shell="edge"\]/.test(css), "the edge works at every glass level, solid too");
+const edge = rule(media, `html[data-glass] [data-shell="edge"]`);
 ok(!!edge && /position: sticky; top: 0; height: 0; z-index: 14;/.test(edge), "it stays at the top, under a page's own bar (15) and the top bar (20)");
 ok(!!edge && /pointer-events: none;/.test(edge), "and never takes a click");
 ok(!!edge && /backdrop-filter: none;/.test(edge), "it isn't glass itself, or its band couldn't blur the page");
-const band = rule(media, `html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]::before`);
-ok(!!band && /height: calc\(var\(--shell-top\) \+ 10px\);/.test(band) && /mask-image: linear-gradient\(#000 calc\(100% - 26px\), transparent\);/.test(band), "its blur fades out before the page's first words");
-ok(/:has\(\[data-shell="subbar"\]\) \[data-shell="edge"\]::before \{\s*-webkit-mask-image: linear-gradient\(#000 calc\(100% - 10px\), transparent\);/.test(media), "over Outliers it goes right down to Outliers' bar");
+const band = rule(media, `html[data-glass] [data-shell="edge"]::before`);
+ok(!!band && /height: calc\(var\(--shell-top\) \+ 10px\);/.test(band) && /--edge-down: linear-gradient\(#000 calc\(100% - 26px\), transparent\);/.test(band), "its blur fades out before the page's first words");
+ok(/:has\(\[data-shell="subbar"\]\) \[data-shell="edge"\]::before \{\s*--edge-down: linear-gradient\(#000 calc\(100% - 10px\), transparent\);/.test(media), "over Outliers it goes right down to Outliers' bar");
+// 1.34.1: no hard edge beside the side bar (the owner's "weird thing in the middle"), and only a blur (saturate lit the colours up into a block).
+ok(!!band && /--edge-in: linear-gradient\(90deg, transparent, #000 28px/.test(band) && /mask-image: var\(--edge-down\), var\(--edge-in\);/.test(band) && /mask-composite: intersect;/.test(band) && /-webkit-mask-composite: source-in;/.test(band), "it fades in from the page's left edge");
+ok(!!band && /backdrop-filter: blur\(10px\);/.test(band) && !/saturate/.test(band), "it only blurs");
 ok(/@supports \(animation-timeline: scroll\(\)\)/.test(media) && /animation-timeline: scroll\(root block\);/.test(media) && /animation-range: 0 48px;/.test(media) && /@keyframes shell-edge-in/.test(css), "and comes in as the page scrolls, where the browser can do that");
 const edgeAt = layout.indexOf(`<div data-shell="edge" aria-hidden />`);
 ok(edgeAt > 0 && edgeAt < layout.indexOf(`<header data-shell="header"`), "the layout puts it just before the top bar");

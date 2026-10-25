@@ -5,6 +5,7 @@ import { buildMentionCatalog, findMentions, type MentionTarget } from "@/lib/men
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { rankPeople, rankRoles, ROLE_LABEL, type MentionPerson } from "../lib/mention-people";
+import { Leaves } from "@/components/ui/leaves";
 
 export const KIND_COLOR = { comment: "rgb(var(--amber))", edit_idea: "rgb(59 130 246)" } as const;
 
@@ -101,7 +102,7 @@ export function CommentComposer({
   const canSend = !!text.trim() || !!sketchUrl;
   const box = (
     <div
-      className={`space-y-2 ${sheet ? "p-3.5 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]" : "w-[300px] rounded-xl border bg-surface shadow-2xl p-2.5"} animate-[modalin_.14s_var(--ease-out)]`}
+      className={`space-y-2 ${sheet ? "p-3.5 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]" : "pop-menu origin-top-left w-[300px] rounded-xl border bg-surface shadow-2xl p-2.5"}`}
       style={sheet ? undefined : { borderColor: `color-mix(in srgb, ${color} 55%, transparent)`, background: `color-mix(in srgb, ${color} 6%, rgb(var(--surface)))` }}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -117,43 +118,45 @@ export function CommentComposer({
       </div>
       <div className="relative">
         {q && suggestions.length > 0 && (
-          <ul role="listbox" aria-label="Mention someone" className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-10 max-h-60 overflow-y-auto overflow-x-hidden styled-scroll rounded-xl border border-line/15 bg-surface shadow-2xl p-1 animate-[modalin_.1s_var(--ease-out)]">
-            {suggestions.map((s, i) => (
-              <li key={s.key}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={i === hi}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    pick(s);
-                  }}
-                  onMouseEnter={() => setHi(i)}
-                  className={`w-full flex items-center gap-2 rounded-lg px-2 h-10 text-left ${i === hi ? "bg-surface-2" : ""}`}
-                >
-                  {s.person ? (
-                    <PersonAvatar name={s.person.name} avatarUrl={s.person.avatarUrl} color={s.person.color} className="w-6 h-6 text-[10px]" />
-                  ) : (
-                    <span className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white" style={{ background: s.all ? "rgb(var(--red))" : roleColors[s.role ?? ""] ?? "rgb(var(--ink-faint))" }}>
-                      @
+          <Leaves>
+            <ul role="listbox" aria-label="Mention someone" className="absolute left-0 right-0 bottom-[calc(100%+6px)] z-10 max-h-60 overflow-y-auto overflow-x-hidden styled-scroll rounded-xl border border-line/15 bg-surface shadow-2xl p-1 pop-menu origin-bottom">
+              {suggestions.map((s, i) => (
+                <li key={s.key}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={i === hi}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pick(s);
+                    }}
+                    onMouseEnter={() => setHi(i)}
+                    className={`w-full flex items-center gap-2 rounded-lg px-2 h-10 text-left ${i === hi ? "bg-surface-2" : ""}`}
+                  >
+                    {s.person ? (
+                      <PersonAvatar name={s.person.name} avatarUrl={s.person.avatarUrl} color={s.person.color} className="w-6 h-6 text-[10px]" />
+                    ) : (
+                      <span className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white" style={{ background: s.all ? "rgb(var(--red))" : roleColors[s.role ?? ""] ?? "rgb(var(--ink-faint))" }}>
+                        @
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-semibold truncate">{s.all ? "Everyone" : s.label}</span>
+                      <span className="block text-[11px] text-ink-faint truncate">
+                        {s.person
+                          ? s.person.onVideo.length
+                            ? `On this video: ${s.person.onVideo.join(", ")}`
+                            : s.person.roles.map((r) => ROLE_LABEL[r]).join(", ")
+                          : s.all
+                            ? "The whole team"
+                            : `Everyone who is a ${s.label.toLowerCase()}`}
+                      </span>
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold truncate">{s.all ? "Everyone" : s.label}</span>
-                    <span className="block text-[11px] text-ink-faint truncate">
-                      {s.person
-                        ? s.person.onVideo.length
-                          ? `On this video: ${s.person.onVideo.join(", ")}`
-                          : s.person.roles.map((r) => ROLE_LABEL[r]).join(", ")
-                        : s.all
-                          ? "The whole team"
-                          : `Everyone who is a ${s.label.toLowerCase()}`}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Leaves>
         )}
         <textarea
           ref={ta}

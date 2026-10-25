@@ -11,6 +11,7 @@ import { LaterBoundary, LaterFailed } from "./later-boundary";
 import { isFeatureUpdateIn, type ReleaseHeadline } from "@/lib/changelog-meta";
 import { APP_VERSION } from "@/lib/version";
 import { sounds } from "@/lib/sounds";
+import { Leaves } from "./leaves";
 
 /*
  * What's new — the patch notes, without a page.
@@ -151,22 +152,24 @@ export function WhatsNewHost({ hold = false, current, newVersions }: { hold?: bo
 
 function UpdateCard({ release, onOpen, onClose }: { release: ReleaseHeadline; onOpen: () => void; onClose: () => void }) {
   return createPortal(
-    <div
-      role="status"
-      className="fixed z-[90] left-3 right-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:left-[252px] md:right-auto md:bottom-5 md:w-[360px] rounded-2xl border border-line/15 bg-surface shadow-[0_18px_50px_-18px_rgb(0_0_0/0.45)] p-3.5 pr-10 flex items-center gap-3 animate-[whats-new-in_.5s_var(--ease-spring)_both]"
-    >
-      <Mascot mood="celebrate" size={58} className="flex-shrink-0 -my-1" />
-      <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-semibold leading-snug">{APP_NAME} {short(release.version)} is here</p>
-        <p className="text-[12px] text-ink-soft leading-snug mt-0.5 line-clamp-2">{release.title}</p>
-        <button type="button" data-sound="none" onClick={onOpen} className="mt-2 rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] hover:brightness-110">
-          See what&rsquo;s new
+    <Leaves>
+      <div
+        role="status"
+        className="fixed z-[90] left-3 right-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:left-[252px] md:right-auto md:bottom-5 md:w-[360px] rounded-2xl border border-line/15 bg-surface shadow-[0_18px_50px_-18px_rgb(0_0_0/0.45)] p-3.5 pr-10 flex items-center gap-3 pop-card"
+      >
+        <Mascot mood="celebrate" size={58} className="flex-shrink-0 -my-1" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[13.5px] font-semibold leading-snug">{APP_NAME} {short(release.version)} is here</p>
+          <p className="text-[12px] text-ink-soft leading-snug mt-0.5 line-clamp-2">{release.title}</p>
+          <button type="button" data-sound="none" onClick={onOpen} className="mt-2 rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] hover:brightness-110">
+            See what&rsquo;s new
+          </button>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Dismiss" className="absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
+          <CloseIcon className="w-3.5 h-3.5" />
         </button>
       </div>
-      <button type="button" onClick={onClose} aria-label="Dismiss" className="absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
-        <CloseIcon className="w-3.5 h-3.5" />
-      </button>
-    </div>,
+    </Leaves>,
     document.body
   );
 }

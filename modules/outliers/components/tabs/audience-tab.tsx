@@ -18,6 +18,7 @@ import { ChannelMenu, type MenuItem } from "../card-menu";
 import { useOutliers, useOutliersBlocked } from "../context";
 import { useShellNav } from "../shell-nav";
 import { TrackButton } from "../track-button";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * Audience (1.29.0): the channels the team's viewers also watch, worked out
@@ -270,18 +271,20 @@ export function AudienceTab({ data }: { data: AudienceTabData }) {
       <SourceNote className="mt-8" />
 
       {selecting && picked.size > 0 && (
-        <div className="fixed inset-x-0 z-[30] flex justify-center px-3 pointer-events-none bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] md:bottom-6">
-          <div className="pointer-events-auto glass-pane rounded-2xl border border-line/15 bg-surface shadow-[0_18px_50px_-18px_rgb(0_0_0/0.55)] px-2.5 py-2 flex items-center gap-2 flex-wrap justify-center animate-[modalin_.16s_var(--ease-out)]" role="region" aria-label="Picked channels">
-            <span className="text-[13px] font-semibold px-1.5 tabular-nums">{picked.size} picked</span>
-            {own.length > 0 && <AddToNiche niches={own} onPick={(n) => void addPicked(n, ids)} />}
-            <button type="button" onClick={() => setMaking(ids)} className={BTN_MAIN}>
-              Make a niche of {picked.size === 1 ? "it" : "these"}
-            </button>
-            <button type="button" onClick={() => setPicked(new Set())} className={BTN}>
-              Clear
-            </button>
+        <Leaves>
+          <div className="fixed inset-x-0 z-[30] flex justify-center px-3 pointer-events-none bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] md:bottom-6">
+            <div className="pointer-events-auto glass-pane rounded-2xl border border-line/15 bg-surface shadow-[0_18px_50px_-18px_rgb(0_0_0/0.55)] px-2.5 py-2 flex items-center gap-2 flex-wrap justify-center pop-modal" role="region" aria-label="Picked channels">
+              <span className="text-[13px] font-semibold px-1.5 tabular-nums">{picked.size} picked</span>
+              {own.length > 0 && <AddToNiche niches={own} onPick={(n) => void addPicked(n, ids)} />}
+              <button type="button" onClick={() => setMaking(ids)} className={BTN_MAIN}>
+                Make a niche of {picked.size === 1 ? "it" : "these"}
+              </button>
+              <button type="button" onClick={() => setPicked(new Set())} className={BTN}>
+                Clear
+              </button>
+            </div>
           </div>
-        </div>
+        </Leaves>
       )}
       <MakeNicheDialog
         open={making !== null}

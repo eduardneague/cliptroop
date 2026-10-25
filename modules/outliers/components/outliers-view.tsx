@@ -477,7 +477,7 @@ function Shell(props: OutliersViewProps) {
                   {t.label}
                   {t.id === "saved" && props.saved > 0 && <span className="text-[11.5px] tabular-nums text-ink-faint">{props.saved}</span>}
                   {t.id === "audience" && props.audienceN > 0 && <span className="text-[11.5px] tabular-nums text-ink-faint">{props.audienceN}</span>}
-                  <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+                  <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
                 </Link>
               );
             })}

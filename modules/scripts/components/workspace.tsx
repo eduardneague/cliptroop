@@ -36,6 +36,7 @@ import type { ScriptFlow } from "../lib/flow";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import { FlowStrip, type FlowPermissions } from "./script-flow";
 import { PendingLink, PendingNav, usePendingNav } from "@/components/ui/pending-nav";
+import { Leaves } from "@/components/ui/leaves";
 
 type Owner = { short: string } | { long: string };
 
@@ -280,68 +281,70 @@ function Workspace({
         if (!c) return null;
         const color = colorOf(c);
         return (
-          <div className="rounded-xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_var(--ease-out)]" style={{ boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent), 0 20px 50px -20px rgb(0 0 0 / .5)` }}>
-            <div className="flex items-center gap-2 mb-1.5">
-              <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-5 h-5 text-[9px]" />
-              <span className="text-[12.5px] font-semibold text-ink">{c.author?.name ?? "Someone"}</span>
-              <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
-                {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
-              </span>
-              <span className="ml-auto text-[11px] text-ink-faint"><Ago iso={c.createdAt} /></span>
-            </div>
-            <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
-            <div className="flex items-center gap-1 mt-2 -mb-1">
-              {canComment && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!c.resolved && !(await confirmResolve(confirm, c))) return;
-                  const r = await resolveComment(c.id, !c.resolved);
-                  if (r.error) toast.error(r.error);
-                  else {
-                    close();
-                    router.refresh();
-                  }
-                }}
-                className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-              >
-                {c.resolved ? "Reopen" : "Resolve"}
-              </button>
-              )}
-              {mayDelete(c) && (
+          <Leaves>
+            <div className="pop-menu rounded-xl border border-line/15 bg-surface shadow-2xl p-3" style={{ boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent), 0 20px 50px -20px rgb(0 0 0 / .5)` }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-5 h-5 text-[9px]" />
+                <span className="text-[12.5px] font-semibold text-ink">{c.author?.name ?? "Someone"}</span>
+                <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
+                  {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
+                </span>
+                <span className="ml-auto text-[11px] text-ink-faint"><Ago iso={c.createdAt} /></span>
+              </div>
+              <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
+              <div className="flex items-center gap-1 mt-2 -mb-1">
+                {canComment && (
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!(await confirmDelete(confirm, c))) return;
-                    const r = await deleteComment(c.id);
+                    if (!c.resolved && !(await confirmResolve(confirm, c))) return;
+                    const r = await resolveComment(c.id, !c.resolved);
                     if (r.error) toast.error(r.error);
                     else {
                       close();
                       router.refresh();
                     }
                   }}
-                  className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
+                  className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
                 >
-                  Delete
+                  {c.resolved ? "Reopen" : "Resolve"}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  close();
-                  setActive(c.id);
-                  setChatOpen(true);
-                }}
-                className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-              >
-                All comments
-              </button>
-              <span className="flex-1" />
-              <button type="button" onClick={close} aria-label="Close" className="w-7 h-7 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-                <CloseIcon className="w-3.5 h-3.5" />
-              </button>
+                )}
+                {mayDelete(c) && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!(await confirmDelete(confirm, c))) return;
+                      const r = await deleteComment(c.id);
+                      if (r.error) toast.error(r.error);
+                      else {
+                        close();
+                        router.refresh();
+                      }
+                    }}
+                    className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
+                  >
+                    Delete
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    setActive(c.id);
+                    setChatOpen(true);
+                  }}
+                  className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+                >
+                  All comments
+                </button>
+                <span className="flex-1" />
+                <button type="button" onClick={close} aria-label="Close" className="w-7 h-7 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                  <CloseIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
+          </Leaves>
         );
       }}
       rightPanel={
@@ -654,34 +657,36 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
         <ChevronDownIcon className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-60 rounded-xl border border-line/15 bg-surface shadow-2xl p-1.5 animate-[modalin_.12s_var(--ease-out)]">
-          <div className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Show next to this one</div>
-          {docs.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onPick(d.id);
-              }}
-              className={`w-full text-left flex items-center gap-2 rounded-lg px-2.5 h-9 text-[13px] ${d.id === active ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
-            >
-              <span className="truncate">{d.kind === "research" ? "Research · " : ""}{d.name}</span>
-            </button>
-          ))}
-          {active && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onClose();
-              }}
-              className="w-full text-left rounded-lg px-2.5 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 border-t border-line/10 mt-1"
-            >
-              Close side by side
-            </button>
-          )}
-        </div>
+        <Leaves>
+          <div className="pop-menu origin-top-right absolute right-0 top-[calc(100%+6px)] z-40 w-60 rounded-xl border border-line/15 bg-surface shadow-2xl p-1.5">
+            <div className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Show next to this one</div>
+            {docs.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(d.id);
+                }}
+                className={`w-full text-left flex items-center gap-2 rounded-lg px-2.5 h-9 text-[13px] ${d.id === active ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
+              >
+                <span className="truncate">{d.kind === "research" ? "Research · " : ""}{d.name}</span>
+              </button>
+            ))}
+            {active && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onClose();
+                }}
+                className="w-full text-left rounded-lg px-2.5 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 border-t border-line/10 mt-1"
+              >
+                Close side by side
+              </button>
+            )}
+          </div>
+        </Leaves>
       )}
     </div>
   );
@@ -1096,158 +1101,162 @@ export function CommentsChat({
         </button>
       )}
       {open && big && (
-        <div className="no-print fixed inset-0 z-[39] bg-black/55 animate-[fadein_.15s_ease]" onClick={() => setBig(false)} aria-hidden />
+        <Leaves>
+          <div className="pop-dim no-print fixed inset-0 z-[39] bg-black/55" onClick={() => setBig(false)} aria-hidden />
+        </Leaves>
       )}
       {open && (
-        <section
-          key={big ? "big" : "small"}
-          className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col ${big ? "animate-[modalin_.22s_var(--ease-out)]" : "animate-[modalin_.18s_var(--ease-out)]"} ${
-            big
-              ? "inset-2 sm:inset-6 lg:inset-x-[max(1.5rem,calc(50vw-28rem))] lg:inset-y-8 rounded-2xl"
-              : "inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[400px] lg:h-[min(620px,calc(100dvh-9rem))]"
-          }`}
-          aria-label="Comments"
-        >
-          <header className="px-4 pt-3.5 pb-2.5 border-b border-line/10 space-y-2.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-[15px] font-bold">Comments</h2>
-              <span className="text-[12.5px] text-ink-soft whitespace-nowrap">{openCount} open</span>
-              {/* Each document has its own comments: say which one these are. */}
-              <span className="min-w-0 truncate rounded-md bg-surface-2 px-1.5 h-5 inline-flex items-center text-[11px] font-semibold text-ink-soft" title={`Comments on ${docName} of #${number} only`}>
-                {docName} · #{number}
-              </span>
-              <span className="flex-1" />
-              <button type="button" onClick={() => setBig((b) => !b)} aria-label={big ? "Smaller" : "Bigger"} title={big ? "Smaller" : "Big view"} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-                <ExpandIcon className="w-4 h-4" />
-              </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close comments" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-                <CloseIcon className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Show">
-              {([
-                ["all", "All", null],
-                ["comment", "Comments", TYPE_COLOR.comment],
-                ["edit_idea", "Editing ideas", TYPE_COLOR.edit_idea],
-              ] as const).map(([k, label, dot]) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="radio"
-                  aria-checked={filter === k}
-                  onClick={() => setFilter(k)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
-                >
-                  {dot && <span className="w-2 h-2 rounded-[3px]" style={{ background: dot }} />}
-                  {label}
+        <Leaves>
+          <section
+            key={big ? "big" : "small"}
+            className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col pop-modal ${
+              big
+                ? "inset-2 sm:inset-6 lg:inset-x-[max(1.5rem,calc(50vw-28rem))] lg:inset-y-8 rounded-2xl"
+                : "inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[400px] lg:h-[min(620px,calc(100dvh-9rem))]"
+            }`}
+            aria-label="Comments"
+          >
+            <header className="px-4 pt-3.5 pb-2.5 border-b border-line/10 space-y-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-[15px] font-bold">Comments</h2>
+                <span className="text-[12.5px] text-ink-soft whitespace-nowrap">{openCount} open</span>
+                {/* Each document has its own comments: say which one these are. */}
+                <span className="min-w-0 truncate rounded-md bg-surface-2 px-1.5 h-5 inline-flex items-center text-[11px] font-semibold text-ink-soft" title={`Comments on ${docName} of #${number} only`}>
+                  {docName} · #{number}
+                </span>
+                <span className="flex-1" />
+                <button type="button" onClick={() => setBig((b) => !b)} aria-label={big ? "Smaller" : "Bigger"} title={big ? "Smaller" : "Big view"} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                  <ExpandIcon className="w-4 h-4" />
                 </button>
-              ))}
-            </div>
-          </header>
-          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2.5">
-            {!list.length && !sending && (
-              <p className="text-[13px] text-ink-soft text-center px-6 py-10">
-                {comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet. Select text, then choose Comment or Editing idea.`}
-              </p>
-            )}
-            {here.map(card)}
-            {sending && (
-              <article
-                aria-busy="true"
-                aria-label={sending.kind === "edit_idea" ? "Posting your editing idea" : "Posting your comment"}
-                className="rounded-xl border border-line/10 p-3 animate-[rise-in_.3s_var(--ease-out)]"
-                style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 5%, transparent)`, boxShadow: `inset 2px 0 0 color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 65%, transparent)` }}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  {meAs ? <PersonAvatar name={meAs.name} avatarUrl={meAs.avatarUrl} color={meAs.color} className="w-6 h-6 text-[10px]" /> : <SkeletonCircle className="w-6 h-6" />}
-                  {meAs ? <span className="text-[12.5px] font-semibold text-ink truncate">{meAs.name}</span> : <Skeleton className="h-3 w-20" />}
-                  <span
-                    className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold flex-shrink-0"
-                    style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 14%, transparent)`, color: TYPE_COLOR[sending.kind] }}
-                  >
-                    {sending.kind === "edit_idea" ? "Editing idea" : "Comment"}
-                  </span>
-                  <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-faint whitespace-nowrap">
-                    <span className="w-3 h-3 rounded-full border-2 border-ink-faint/30 border-t-amber animate-spin" aria-hidden />
-                    Posting…
-                  </span>
-                </div>
-                <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 55%, transparent)` }}>
-                  “{sending.quote}”
-                </div>
-                {sending.body && sending.body !== "Sketch" && <p className="text-[13.5px] text-ink/70 whitespace-pre-wrap break-words">{sending.body}</p>}
-                {sending.sketchUrl && <Skeleton className="mt-1.5 h-20 w-full rounded-lg" />}
-                <div className="flex items-center gap-1.5 mt-2" aria-hidden>
-                  <Skeleton className="h-5 w-14 rounded-md" />
-                  <Skeleton className="h-5 w-12 rounded-md" />
-                </div>
-              </article>
-            )}
-            {gone.length > 0 && (
-              <div className={here.length ? "pt-2" : ""}>
-                <div className="rounded-xl border border-dashed border-line/20 px-3 py-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setGoneShown(!showGone)}
-                    aria-expanded={showGone}
-                    className="w-full flex items-center gap-2 text-left text-[12.5px] font-semibold text-ink-soft hover:text-ink"
-                  >
-                    <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${showGone ? "" : "-rotate-90"}`} />
-                    <span className="flex-1">On text that changed since · {gone.length}</span>
-                  </button>
-                  <p className="mt-1 text-[11.5px] text-ink-faint leading-snug">
-                    Left on earlier words of this {docName} that were rewritten or deleted since. Nothing here comes from another script or video.
-                  </p>
-                  {canComment && goneOpenIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => void resolveGone()}
-                      disabled={resolvingGone}
-                      className="mt-2 rounded-md border border-line/20 px-2.5 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 disabled:opacity-60"
-                    >
-                      {resolvingGone ? "Resolving…" : goneOpenIds.length === 1 ? "Resolve it" : `Resolve all ${goneOpenIds.length}`}
-                    </button>
-                  )}
-                </div>
-                {showGone && <div className="mt-2.5 space-y-2.5 animate-[fadein_.2s_ease]">{gone.map(card)}</div>}
+                <button type="button" onClick={() => setOpen(false)} aria-label="Close comments" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                  <CloseIcon className="w-4 h-4" />
+                </button>
               </div>
-            )}
-          </div>
-          <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
-            <span className="flex-1 min-w-[8rem]">{canComment ? "Select text, then Enter to add." : "Only this video's scripters and its Review and Staging people can comment."}</span>
-            {comments.some((c) => c.kind === "edit_idea") && (
-              <span className="inline-flex items-center gap-1">
-                <span className="font-semibold">Export ideas</span>
-                {(["docx", "pdf"] as const).map((f) => (
+              <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Show">
+                {([
+                  ["all", "All", null],
+                  ["comment", "Comments", TYPE_COLOR.comment],
+                  ["edit_idea", "Editing ideas", TYPE_COLOR.edit_idea],
+                ] as const).map(([k, label, dot]) => (
                   <button
-                    key={f}
+                    key={k}
                     type="button"
-                    onClick={async () => {
-                      // Editing ideas in the order they appear in the script.
-                      const ideas = comments
-                        .filter((c) => c.kind === "edit_idea" && !c.resolved)
-                        .map((c) => ({ c, at: ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
-                        .sort((a, b) => a.at - b.at)
-                        .map(({ c }) => ({ quote: c.quote, idea: c.sketch && c.body.trim() === "Sketch" ? "" : c.body, sketch: c.sketch?.url ?? null }));
-                      if (!ideas.length) return toast.error("No open editing ideas to export.");
-                      const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
-                      if (f === "docx") await exportIdeasDocx(ideas, exportTitle, `${exportTitle} - editing ideas`.replace(/[\\/:*?"<>|]+/g, ""));
-                      else if (!exportIdeasPdf(ideas, exportTitle)) toast.error("Allow pop-ups to print the PDF.");
-                    }}
-                    className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
+                    role="radio"
+                    aria-checked={filter === k}
+                    onClick={() => setFilter(k)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
                   >
-                    {f === "docx" ? "Word" : "PDF"}
+                    {dot && <span className="w-2 h-2 rounded-[3px]" style={{ background: dot }} />}
+                    {label}
                   </button>
                 ))}
-              </span>
-            )}
-            {comments.some((c) => c.resolved) && (
-              <button type="button" onClick={() => setShowResolved((v) => !v)} className="font-semibold hover:text-ink">
-                {showResolved ? "Hide resolved" : `Show resolved (${comments.filter((c) => c.resolved).length})`}
-              </button>
-            )}
-          </footer>
-        </section>
+              </div>
+            </header>
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2.5">
+              {!list.length && !sending && (
+                <p className="text-[13px] text-ink-soft text-center px-6 py-10">
+                  {comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet. Select text, then choose Comment or Editing idea.`}
+                </p>
+              )}
+              {here.map(card)}
+              {sending && (
+                <article
+                  aria-busy="true"
+                  aria-label={sending.kind === "edit_idea" ? "Posting your editing idea" : "Posting your comment"}
+                  className="rounded-xl border border-line/10 p-3 animate-[rise-in_.3s_var(--ease-out)]"
+                  style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 5%, transparent)`, boxShadow: `inset 2px 0 0 color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 65%, transparent)` }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {meAs ? <PersonAvatar name={meAs.name} avatarUrl={meAs.avatarUrl} color={meAs.color} className="w-6 h-6 text-[10px]" /> : <SkeletonCircle className="w-6 h-6" />}
+                    {meAs ? <span className="text-[12.5px] font-semibold text-ink truncate">{meAs.name}</span> : <Skeleton className="h-3 w-20" />}
+                    <span
+                      className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold flex-shrink-0"
+                      style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 14%, transparent)`, color: TYPE_COLOR[sending.kind] }}
+                    >
+                      {sending.kind === "edit_idea" ? "Editing idea" : "Comment"}
+                    </span>
+                    <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-faint whitespace-nowrap">
+                      <span className="w-3 h-3 rounded-full border-2 border-ink-faint/30 border-t-amber animate-spin" aria-hidden />
+                      Posting…
+                    </span>
+                  </div>
+                  <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 55%, transparent)` }}>
+                    “{sending.quote}”
+                  </div>
+                  {sending.body && sending.body !== "Sketch" && <p className="text-[13.5px] text-ink/70 whitespace-pre-wrap break-words">{sending.body}</p>}
+                  {sending.sketchUrl && <Skeleton className="mt-1.5 h-20 w-full rounded-lg" />}
+                  <div className="flex items-center gap-1.5 mt-2" aria-hidden>
+                    <Skeleton className="h-5 w-14 rounded-md" />
+                    <Skeleton className="h-5 w-12 rounded-md" />
+                  </div>
+                </article>
+              )}
+              {gone.length > 0 && (
+                <div className={here.length ? "pt-2" : ""}>
+                  <div className="rounded-xl border border-dashed border-line/20 px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setGoneShown(!showGone)}
+                      aria-expanded={showGone}
+                      className="w-full flex items-center gap-2 text-left text-[12.5px] font-semibold text-ink-soft hover:text-ink"
+                    >
+                      <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${showGone ? "" : "-rotate-90"}`} />
+                      <span className="flex-1">On text that changed since · {gone.length}</span>
+                    </button>
+                    <p className="mt-1 text-[11.5px] text-ink-faint leading-snug">
+                      Left on earlier words of this {docName} that were rewritten or deleted since. Nothing here comes from another script or video.
+                    </p>
+                    {canComment && goneOpenIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void resolveGone()}
+                        disabled={resolvingGone}
+                        className="mt-2 rounded-md border border-line/20 px-2.5 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 disabled:opacity-60"
+                      >
+                        {resolvingGone ? "Resolving…" : goneOpenIds.length === 1 ? "Resolve it" : `Resolve all ${goneOpenIds.length}`}
+                      </button>
+                    )}
+                  </div>
+                  {showGone && <div className="mt-2.5 space-y-2.5 animate-[fadein_.2s_ease]">{gone.map(card)}</div>}
+                </div>
+              )}
+            </div>
+            <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
+              <span className="flex-1 min-w-[8rem]">{canComment ? "Select text, then Enter to add." : "Only this video's scripters and its Review and Staging people can comment."}</span>
+              {comments.some((c) => c.kind === "edit_idea") && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="font-semibold">Export ideas</span>
+                  {(["docx", "pdf"] as const).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={async () => {
+                        // Editing ideas in the order they appear in the script.
+                        const ideas = comments
+                          .filter((c) => c.kind === "edit_idea" && !c.resolved)
+                          .map((c) => ({ c, at: ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
+                          .sort((a, b) => a.at - b.at)
+                          .map(({ c }) => ({ quote: c.quote, idea: c.sketch && c.body.trim() === "Sketch" ? "" : c.body, sketch: c.sketch?.url ?? null }));
+                        if (!ideas.length) return toast.error("No open editing ideas to export.");
+                        const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
+                        if (f === "docx") await exportIdeasDocx(ideas, exportTitle, `${exportTitle} - editing ideas`.replace(/[\\/:*?"<>|]+/g, ""));
+                        else if (!exportIdeasPdf(ideas, exportTitle)) toast.error("Allow pop-ups to print the PDF.");
+                      }}
+                      className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
+                    >
+                      {f === "docx" ? "Word" : "PDF"}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {comments.some((c) => c.resolved) && (
+                <button type="button" onClick={() => setShowResolved((v) => !v)} className="font-semibold hover:text-ink">
+                  {showResolved ? "Hide resolved" : `Show resolved (${comments.filter((c) => c.resolved).length})`}
+                </button>
+              )}
+            </footer>
+          </section>
+        </Leaves>
       )}
     </>
   );

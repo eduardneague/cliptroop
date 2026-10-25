@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { MonthCalendar, warmPlannedDays, type DayInfo } from "./month-calendar";
 import { CalendarIcon, CloseIcon } from "./icons";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
+import { Leaves } from "./leaves";
 
 export type { DayInfo };
 
@@ -107,35 +108,37 @@ export function DatePicker({
 
       {open &&
         createPortal(
-          <div
-            ref={pop}
-            role="dialog"
-            aria-label={ariaLabel}
-            // (Inside a dropdown, e.g. Analytics' custom range: picking a day doesn't close the dropdown.)
-            data-floating-menu=""
-            style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
-            className="glass-pane fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_ease]"
-          >
-            <MonthCalendar
-              value={value}
-              autoFocus
-              dayInfo={dayInfo}
-              onPick={(d) => {
-                onChange(d);
-                close();
-              }}
-              onEscape={() => close()}
-              onClear={
-                onClear
-                  ? () => {
-                      onClear();
-                      close();
-                    }
-                  : undefined
-              }
-              clearLabel={clearLabel}
-            />
-          </div>,
+          <Leaves>
+            <div
+              ref={pop}
+              role="dialog"
+              aria-label={ariaLabel}
+              // (Inside a dropdown, e.g. Analytics' custom range: picking a day doesn't close the dropdown.)
+              data-floating-menu=""
+              style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
+              className={`pop-menu glass-pane fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 ${pos.up ? "origin-bottom" : "origin-top"}`}
+            >
+              <MonthCalendar
+                value={value}
+                autoFocus
+                dayInfo={dayInfo}
+                onPick={(d) => {
+                  onChange(d);
+                  close();
+                }}
+                onEscape={() => close()}
+                onClear={
+                  onClear
+                    ? () => {
+                        onClear();
+                        close();
+                      }
+                    : undefined
+                }
+                clearLabel={clearLabel}
+              />
+            </div>
+          </Leaves>,
           document.body
         )}
     </>

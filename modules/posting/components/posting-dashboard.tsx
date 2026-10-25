@@ -214,7 +214,7 @@ export function PostingDashboard({
               {t.count !== undefined && t.count > 0 && (
                 <span className={`rounded-md px-1.5 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${t.danger ? "bg-red text-white" : "bg-surface-2 text-ink-soft"}`}>{t.count}</span>
               )}
-              <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+              <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
             </a>
           );
         })}

@@ -22,6 +22,37 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.34.1",
+    date: "2026-10-25",
+    title: "Glass bars that hold together",
+    changes: [
+      { kind: "better", text: "Outliers' bar (the niche, Long videos or Shorts, and its tabs) is now glass like the top bar: on a computer it floats under it as a pane of its own, and its words stay easy to read over bright thumbnails, in light mode too." },
+      { kind: "fixed", text: "With the glass slider at 0, the top bar stays a floating pane (solid now) instead of going back to the old full-width bar." },
+      { kind: "fixed", text: "The odd lighter patch in the middle of the page under the floating top bar is gone: what scrolls under it now blurs and fades evenly." },
+      { kind: "fixed", text: "Every row of tabs shows its orange underline under the tab you're on again, like a video's Analytics, where it had gone missing." },
+    ],
+  },
+  {
+    version: "1.34.0",
+    date: "2026-10-25",
+    title: "Pop-ups that leave the way they came",
+    changes: [
+      { kind: "new", text: "Everything that pops up now leaves the way it came in, played backwards: windows and prompts, the search window, menus, dropdowns and date pickers, the bell, pictures shown big, Outliers' side panel, the phone's sheets, Clip's tour and more. The dimmed page behind a window fades back with it." },
+      { kind: "better", text: "The moment you close a pop-up, nothing in it can be pressed any more, even while it's still on its way out, so a quick second click never lands on a button that's leaving." },
+      { kind: "new", text: "On a phone, the tab bar's marker slides to the tab you press straight away, stretching a little on the way, and the tab's icon gives a small hop. With Liquid glass it's the soft pill that glides across." },
+    ],
+  },
+  {
+    version: "1.33.1",
+    date: "2026-10-25",
+    title: "Rename a video anywhere",
+    changes: [
+      { kind: "new", text: "Click a video's name at the top of its page to rename it right there: Save or Enter keeps the new name, Cancel or Esc puts the old one back, and a message tells you it's saved. Long videos too, for the master and whoever is working on the step it's at." },
+      { kind: "fixed", text: "A short's and a long video's Settings now start with its name: change it and press Save name (or Enter). A name still being typed when you close Settings is saved too." },
+      { kind: "better", text: "A long video's main title idea changes with its name, so the two always match." },
+    ],
+  },
+  {
     version: "1.33.0",
     date: "2026-10-25",
     title: "The ClipTroop website",

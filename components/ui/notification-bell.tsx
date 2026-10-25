@@ -25,6 +25,7 @@ import { waitsForAnswer } from "@/lib/notification-status";
 import { motionReduced } from "./count-up";
 import { whenIdle } from "@/lib/idle";
 import { LaterBoundary, LaterFailed } from "./later-boundary";
+import { Leaves } from "./leaves";
 
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
@@ -517,10 +518,11 @@ export function NotificationBell({
 
       {open &&
         createPortal(
-          <>
+          // It leaves the way it came in, the dimmed page too (1.34.0).
+          <Leaves>
             {/* Mobile: dimmed backdrop, tap anywhere outside to close. */}
             <div
-          className="sm:hidden fixed inset-0 z-[59] bg-black/40 backdrop-blur-[1px] animate-[fadein_.15s_ease]"
+          className="pop-dim sm:hidden fixed inset-0 z-[59] bg-black/40 backdrop-blur-[1px]"
           onClick={() => setOpen(false)}
           aria-hidden
         />
@@ -531,7 +533,7 @@ export function NotificationBell({
           role="dialog"
           style={{ ["--bell-top" as string]: `${anchor.top}px`, ["--bell-right" as string]: `${anchor.right}px` }}
           aria-label="Notifications"
-          className="notif-panel glass-pane fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[380px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] animate-[modalin_.14s_ease]"
+          className="notif-panel glass-pane fixed left-3 right-3 top-[calc(3.75rem+env(safe-area-inset-top))] mx-auto max-w-[440px] sm:left-auto sm:right-[var(--bell-right)] sm:top-[var(--bell-top)] sm:mx-0 sm:w-[380px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-line/10 bg-surface shadow-2xl overflow-hidden z-[60] pop-menu origin-top sm:origin-top-right"
         >
           <div className="flex items-center justify-between gap-2 pl-4 pr-2.5 py-2.5 border-b border-line/10">
             <span className="font-display font-semibold text-[13.5px]">
@@ -611,7 +613,7 @@ export function NotificationBell({
             </div>
           )}
         </div>
-      </>,
+          </Leaves>,
           document.body
         )}
       {historyUsed && (

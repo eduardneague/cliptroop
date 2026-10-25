@@ -15,6 +15,7 @@ import { CheckIcon, ArrowLeftIcon } from "@/components/ui/icons";
 import { AdvanceStageButton, RegressStageButton } from "./advance-button";
 import { AssigneeRow, ScriptersRow } from "./assignee-row";
 import { LongVideoSettings } from "./settings-dialog";
+import { LongTitle } from "./long-title";
 import { TitleList } from "./title-list";
 import { ThumbnailUploader } from "./thumbnail-uploader";
 import { InlineEditable } from "./inline-editable";
@@ -275,19 +276,20 @@ export default async function ProjectDetailPage({
         Long videos
       </Link>
 
-      {/* Title row: number + title, delete tucked away on the right */}
+      {/* Title row: number + title (click it to rename, 1.33.1), delete tucked away on the right */}
       <div className="flex items-start gap-3 mb-1.5">
-        <h1 className="flex-1 min-w-0 font-display text-[26px] sm:text-3xl font-semibold leading-tight">
-          <span className="font-mono text-[15px] sm:text-[17px] font-semibold text-ink-faint align-middle mr-2 tabular-nums">
-            #{project.entry_number}
-          </span>
-          {project.title}
-        </h1>
+        <LongTitle
+          projectId={id}
+          number={project.entry_number}
+          title={project.title}
+          canEdit={userIsMaster || canActOnStage(membership, project.stage as PipelineStage)}
+        />
         {userIsMaster && (
           <div className="flex-shrink-0 pt-0.5 flex items-center gap-1">
             <LongVideoSettings
               projectId={id}
               teamId={teamId}
+              title={project.title}
               videoType={project.video_type ?? []}
               theme={project.theme ?? ""}
               subtheme={project.subtheme}

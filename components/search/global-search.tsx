@@ -142,13 +142,13 @@ function PaletteStandIn({ onClose, busy = false, children }: { onClose: () => vo
   }, [onClose]);
   return createPortal(
     <div className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4">
-      <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-[fadein_.12s_ease]" onClick={onClose} aria-hidden />
+      <div className="pop-dim absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Search"
         aria-busy={busy || undefined}
-        className="glass-pane glass-lift relative w-full h-full sm:h-auto sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
+        className="glass-pane glass-lift relative w-full h-full sm:h-auto sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden pop-modal"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
         <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0">

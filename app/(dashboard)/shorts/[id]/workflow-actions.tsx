@@ -9,6 +9,7 @@ import { ArrowRightIcon, CheckIcon, ChevronDownIcon } from "@/components/ui/icon
 import { MarkDoneButton } from "@/modules/short-videos/components/mark-done-button";
 import { SHORT_STAGE_LABELS, type ShortStage } from "@/modules/short-videos/lib/constants";
 import type { ShortPermissions } from "@/modules/short-videos/lib/permissions";
+import { Leaves } from "@/components/ui/leaves";
 
 /**
  * The one obvious next step for YOU on this short — Send to editing,
@@ -150,29 +151,31 @@ function MoveToMenu({ id, stage }: { id: string; stage: ShortStage }) {
         <ChevronDownIcon className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label="Move to stage"
-          className="absolute left-0 top-[calc(100%+4px)] z-30 w-52 rounded-xl border border-line/15 bg-surface shadow-xl p-1 animate-[modalin_.12s_ease]"
-        >
-          {MOVABLE.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="menuitem"
-              disabled={s === stage}
-              onClick={() => pick(s)}
-              className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-[13px] text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              {SHORT_STAGE_LABELS[s]}
-              {s === stage && <span className="text-[11px] text-ink-faint">current</span>}
-            </button>
-          ))}
-          <p className="px-3 pt-1.5 pb-1 text-[10.5px] text-ink-faint border-t border-line/10 mt-1">
-            &ldquo;Posted&rdquo; is automatic once every platform is marked.
-          </p>
-        </div>
+        <Leaves>
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label="Move to stage"
+            className="pop-menu origin-top-left absolute left-0 top-[calc(100%+4px)] z-30 w-52 rounded-xl border border-line/15 bg-surface shadow-xl p-1"
+          >
+            {MOVABLE.map((s) => (
+              <button
+                key={s}
+                type="button"
+                role="menuitem"
+                disabled={s === stage}
+                onClick={() => pick(s)}
+                className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-[13px] text-left hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                {SHORT_STAGE_LABELS[s]}
+                {s === stage && <span className="text-[11px] text-ink-faint">current</span>}
+              </button>
+            ))}
+            <p className="px-3 pt-1.5 pb-1 text-[10.5px] text-ink-faint border-t border-line/10 mt-1">
+              &ldquo;Posted&rdquo; is automatic once every platform is marked.
+            </p>
+          </div>
+        </Leaves>
       )}
     </div>
   );

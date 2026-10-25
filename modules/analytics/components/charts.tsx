@@ -7,6 +7,7 @@ import { ChevronLeftIcon, ChevronRightIcon, LIVE_ICON_PATH, SHORTS_ICON_PATH, VI
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { KIND_LABEL, KIND_PLURAL, type VideoKind } from "../lib/kinds";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * Small SVG charts for Analytics (no chart library). Rules followed:
@@ -209,67 +210,69 @@ function PostedMark({ items, left, top, size, when, withDay }: { items: Mark[]; 
       {open &&
         pos &&
         createPortal(
-          <div
-            ref={pop}
-            role="dialog"
-            aria-label={label}
-            onPointerEnter={(e) => e.pointerType === "mouse" && cancel()}
-            onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
-            className="fixed z-[140] w-[320px] max-w-[calc(100vw-16px)] rounded-xl border border-line/15 bg-surface shadow-2xl animate-[fadein_.12s_ease]"
-            style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
-          >
-            <div className="px-3.5 pt-3 pb-2 border-b border-line/10">
-              <p className="text-[13px] font-semibold">
-                {items.length} video{items.length === 1 ? "" : "s"} posted
-              </p>
-              <p className="text-[11.5px] text-ink-faint mt-0.5">
-                {when}
-                {kinds.length ? ` · ${kindCounts(items)}` : ""}
-              </p>
-            </div>
-            <ul className="max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll py-1">
-              {items.slice(0, 40).map((m, k) => {
-                const tall = m.kind === "short" || m.kind === "post";
-                const inner = (
-                  <>
-                    <span className={`relative rounded-md overflow-hidden bg-surface-2 flex-shrink-0 ${tall ? "w-7 h-10" : "w-14 h-8"}`}>
-                      {m.thumbnail ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={m.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <MarkIcon kind={m.kind} className="w-4 h-4" />
-                        </span>
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-semibold leading-snug line-clamp-2">{m.title || "Untitled"}</span>
-                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-faint min-w-0">
-                        <MarkIcon kind={m.kind} className="w-3 h-3" />
-                        {m.platform && <PlatformIcon platform={m.platform} className="w-3 h-3 rounded-[3px]" />}
-                        <span className="truncate">
-                          {KIND_LABEL[m.kind]}
-                          {m.at ? ` · ${markTime(m.at, withDay)}` : ""}
+          <Leaves>
+            <div
+              ref={pop}
+              role="dialog"
+              aria-label={label}
+              onPointerEnter={(e) => e.pointerType === "mouse" && cancel()}
+              onPointerLeave={(e) => e.pointerType === "mouse" && hide()}
+              className="pop-menu fixed z-[140] w-[320px] max-w-[calc(100vw-16px)] rounded-xl border border-line/15 bg-surface shadow-2xl"
+              style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
+            >
+              <div className="px-3.5 pt-3 pb-2 border-b border-line/10">
+                <p className="text-[13px] font-semibold">
+                  {items.length} video{items.length === 1 ? "" : "s"} posted
+                </p>
+                <p className="text-[11.5px] text-ink-faint mt-0.5">
+                  {when}
+                  {kinds.length ? ` · ${kindCounts(items)}` : ""}
+                </p>
+              </div>
+              <ul className="max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll py-1">
+                {items.slice(0, 40).map((m, k) => {
+                  const tall = m.kind === "short" || m.kind === "post";
+                  const inner = (
+                    <>
+                      <span className={`relative rounded-md overflow-hidden bg-surface-2 flex-shrink-0 ${tall ? "w-7 h-10" : "w-14 h-8"}`}>
+                        {m.thumbnail ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.thumbnail} alt="" loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="absolute inset-0 flex items-center justify-center">
+                            <MarkIcon kind={m.kind} className="w-4 h-4" />
+                          </span>
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px] font-semibold leading-snug line-clamp-2">{m.title || "Untitled"}</span>
+                        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ink-faint min-w-0">
+                          <MarkIcon kind={m.kind} className="w-3 h-3" />
+                          {m.platform && <PlatformIcon platform={m.platform} className="w-3 h-3 rounded-[3px]" />}
+                          <span className="truncate">
+                            {KIND_LABEL[m.kind]}
+                            {m.at ? ` · ${markTime(m.at, withDay)}` : ""}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                  </>
-                );
-                return (
-                  <li key={m.id ?? k}>
-                    {m.href ? (
-                      <Link href={m.href} className="flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-surface-2 focus-visible:bg-surface-2 outline-none">
-                        {inner}
-                      </Link>
-                    ) : (
-                      <div className="flex items-center gap-2.5 px-3.5 py-1.5">{inner}</div>
-                    )}
-                  </li>
-                );
-              })}
-              {items.length > 40 && <li className="px-3.5 py-1.5 text-[11.5px] text-ink-faint">and {items.length - 40} more</li>}
-            </ul>
-          </div>,
+                    </>
+                  );
+                  return (
+                    <li key={m.id ?? k}>
+                      {m.href ? (
+                        <Link href={m.href} className="flex items-center gap-2.5 px-3.5 py-1.5 hover:bg-surface-2 focus-visible:bg-surface-2 outline-none">
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2.5 px-3.5 py-1.5">{inner}</div>
+                      )}
+                    </li>
+                  );
+                })}
+                {items.length > 40 && <li className="px-3.5 py-1.5 text-[11.5px] text-ink-faint">and {items.length - 40} more</li>}
+              </ul>
+            </div>
+          </Leaves>,
           document.body
         )}
     </>

@@ -31,6 +31,7 @@ import { InvitePanel } from "./invite-panel";
 import { entryItem, recentItem, resultItems, switchItem, type BuildHelpers } from "./build";
 import { FILTERS, LIMIT_ALL, SECTION_TITLE, filterOf, orderSections, readPrefix, type FilterId, type Item, type SectionId } from "./sections";
 import { EMPTY_RESPONSE, type PersonResult, type RecentItem, type SearchResponse, type SearchTeamRef } from "./types";
+import { Leaves } from "@/components/ui/leaves";
 
 const NO_ROLES: readonly string[] = [];
 
@@ -490,172 +491,138 @@ export function SearchPalette({
     <>
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4" onKeyDown={onKeyDown}>
-            <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px] animate-[fadein_.12s_ease]" onClick={close} aria-hidden />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Search"
-              className="glass-pane glass-lift relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden animate-[modalin_.14s_ease]"
-              style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-            >
-              {/* Input row */}
-              <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0">
-                <SearchIcon className="w-[18px] h-[18px] text-ink-faint flex-shrink-0" />
-                <input
-                  ref={inputRef}
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    if (invitee) setInvitee(null);
-                  }}
-                  placeholder={wide ? "Search everything: videos, scripts, people, settings…" : "Search everything…"}
-                  className="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[15px] outline-none placeholder:text-ink-faint"
-                  role="combobox"
-                  aria-expanded="true"
-                  aria-controls="global-search-results"
-                  aria-activedescendant={items[safeHighlighted] ? `gs-item-${safeHighlighted}` : undefined}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="search"
-                />
-                {busy && <span aria-hidden className="w-4 h-4 rounded-full border-2 border-ink-faint/40 border-t-amber animate-spin flex-shrink-0" />}
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery("");
-                      setInvitee(null);
-                      inputRef.current?.focus();
+          // It leaves the way it came in, the dimmed page too (1.34.0).
+          <Leaves lock>
+            <div className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4" onKeyDown={onKeyDown}>
+              <div className="pop-dim absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={close} aria-hidden />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Search"
+                className="glass-pane glass-lift relative w-full h-full sm:h-auto sm:max-h-[min(680px,80vh)] sm:max-w-[680px] bg-surface sm:rounded-2xl sm:border sm:border-line/10 shadow-2xl flex flex-col overflow-hidden pop-modal"
+                style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+              >
+                {/* Input row */}
+                <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0">
+                  <SearchIcon className="w-[18px] h-[18px] text-ink-faint flex-shrink-0" />
+                  <input
+                    ref={inputRef}
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      if (invitee) setInvitee(null);
                     }}
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 transition-colors"
-                    aria-label="Clear search"
-                  >
-                    <CloseIcon className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button type="button" onClick={close} className="sm:hidden text-[14px] font-semibold text-amber pl-1">
-                  Cancel
-                </button>
-                <kbd className="hidden sm:inline font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint">Esc</kbd>
-              </div>
-
-              {/* Filters: what kind of thing to look for */}
-              {!invitee && (
-                <div className="border-b border-line/10 flex-shrink-0">
-                <div
-                  className="flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto no-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent)] sm:[mask-image:none]"
-                  role="toolbar"
-                  aria-label="Look for"
-                >
-                  {FILTERS.map((f) => {
-                    const on = f.id === activeFilter;
-                    const c = counts[f.id];
-                    const dim = typed && !on && f.id !== "all" && c.n === 0;
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        tabIndex={-1}
-                        aria-pressed={on}
-                        onClick={() => pickFilter(f.id)}
-                        className={`h-7 px-2.5 rounded-lg text-[12.5px] font-semibold whitespace-nowrap inline-flex items-center gap-1.5 transition-colors flex-shrink-0 ${
-                          on ? "bg-ink text-paper" : dim ? "text-ink-faint/70 hover:text-ink-soft" : "text-ink-soft hover:text-ink hover:bg-surface-2"
-                        }`}
-                      >
-                        {f.label}
-                        {typed && f.id !== "all" && c.n > 0 && (
-                          <span className={`text-[10.5px] tabular-nums font-bold ${on ? "text-paper/70" : "text-ink-faint"}`}>
-                            {c.n}
-                            {c.plus ? "+" : ""}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                </div>
-              )}
-
-              {/* Body */}
-              <div ref={listRef} id="global-search-results" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
-                {invitee ? (
-                  <InvitePanel
-                    person={invitee}
-                    masterTeams={search.data.master_teams}
-                    registerKeyHandler={registerKeyHandler}
-                    onBack={() => {
-                      setInvitee(null);
-                      inputRef.current?.focus();
-                    }}
-                    onSent={(teamId) => {
-                      patchPerson(invitee.id, (p) => ({ ...p, invited_to: [...p.invited_to, teamId] }));
-                      setInvitee(null);
-                      inputRef.current?.focus();
-                    }}
+                    placeholder={wide ? "Search everything: videos, scripts, people, settings…" : "Search everything…"}
+                    className="flex-1 min-w-0 bg-transparent text-[16px] sm:text-[15px] outline-none placeholder:text-ink-faint"
+                    role="combobox"
+                    aria-expanded="true"
+                    aria-controls="global-search-results"
+                    aria-activedescendant={items[safeHighlighted] ? `gs-item-${safeHighlighted}` : undefined}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="search"
                   />
-                ) : wantsRpc && error && hasQuery && !items.length ? (
-                  <p className="px-5 py-12 text-center text-[13px] text-ink-faint">Search isn&rsquo;t available right now. Check your connection and try again.</p>
-                ) : nothingFound ? (
-                  <div className="px-5 py-12 text-center">
-                    <p className="text-[14px] font-semibold mb-1">
-                      {filterMeta.none} for &ldquo;{text}&rdquo;
-                    </p>
-                    <p className="text-[12.5px] text-ink-faint">Try fewer words, or another spelling.</p>
-                    {activeFilter !== "all" && counts.all.n > 0 && (
-                      <button type="button" onClick={() => pickFilter("all")} className="mt-3 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
-                        Look everywhere ({counts.all.n})
-                      </button>
-                    )}
-                  </div>
-                ) : !typed && activeFilter !== "all" && activeFilter !== "app" && !items.length ? (
-                  <p className="px-6 py-12 text-center text-[13px] text-ink-soft max-w-sm mx-auto">{filterMeta.empty}</p>
-                ) : (
-                  <div className="p-2 pb-3">
-                    {/* Nothing remembered yet: what you can do here, first. */}
-                    {!typed && activeFilter === "all" && !recents.length && !terms.length && <Tips onTry={tryText} />}
-                    {/* What you searched for lately. */}
-                    {!typed && activeFilter === "all" && terms.length > 0 && (
-                      <div className="px-2.5 pt-2 pb-1.5">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Recent searches</span>
-                          <ClearButton
-                            onClear={() => {
-                              clearRecents(userId);
-                              setRecents([]);
-                              setTerms([]);
-                              inputRef.current?.focus();
-                            }}
-                          />
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {terms.map((t) => (
-                            <button
-                              key={t}
-                              type="button"
-                              tabIndex={-1}
-                              onClick={() => {
-                                setQuery(t);
-                                inputRef.current?.focus();
-                              }}
-                              className="inline-flex items-center gap-1.5 h-7 rounded-lg border border-line/15 px-2.5 text-[12.5px] text-ink-soft hover:text-ink hover:border-line/30 max-w-[14rem]"
-                            >
-                              <SearchIcon className="w-3 h-3 flex-shrink-0 text-ink-faint" />
-                              <span className="truncate">{t}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  {busy && <span aria-hidden className="w-4 h-4 rounded-full border-2 border-ink-faint/40 border-t-amber animate-spin flex-shrink-0" />}
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        setInvitee(null);
+                        inputRef.current?.focus();
+                      }}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <CloseIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button type="button" onClick={close} className="sm:hidden text-[14px] font-semibold text-amber pl-1">
+                    Cancel
+                  </button>
+                  <kbd className="hidden sm:inline font-mono text-[10.5px] font-semibold rounded-md border border-line/15 px-1.5 py-0.5 text-ink-faint">Esc</kbd>
+                </div>
 
-                    {sections.map((section) => {
-                      const name = section.id === "here" ? (here?.kind === "short" ? "This short" : "This video") : (SECTION_TITLE[section.id] ?? section.id.replace(/^area:/, ""));
+                {/* Filters: what kind of thing to look for */}
+                {!invitee && (
+                  <div className="border-b border-line/10 flex-shrink-0">
+                  <div
+                    className="flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto no-scrollbar [mask-image:linear-gradient(to_right,black_85%,transparent)] sm:[mask-image:none]"
+                    role="toolbar"
+                    aria-label="Look for"
+                  >
+                    {FILTERS.map((f) => {
+                      const on = f.id === activeFilter;
+                      const c = counts[f.id];
+                      const dim = typed && !on && f.id !== "all" && c.n === 0;
                       return (
-                      <div key={section.id} className="mb-1" role="group" aria-label={name}>
-                        <div className="flex items-center justify-between px-2.5 pt-2.5 pb-1">
-                          <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{name}</span>
-                          {section.id === "recent" && terms.length === 0 && (
+                        <button
+                          key={f.id}
+                          type="button"
+                          tabIndex={-1}
+                          aria-pressed={on}
+                          onClick={() => pickFilter(f.id)}
+                          className={`h-7 px-2.5 rounded-lg text-[12.5px] font-semibold whitespace-nowrap inline-flex items-center gap-1.5 transition-colors flex-shrink-0 ${
+                            on ? "bg-ink text-paper" : dim ? "text-ink-faint/70 hover:text-ink-soft" : "text-ink-soft hover:text-ink hover:bg-surface-2"
+                          }`}
+                        >
+                          {f.label}
+                          {typed && f.id !== "all" && c.n > 0 && (
+                            <span className={`text-[10.5px] tabular-nums font-bold ${on ? "text-paper/70" : "text-ink-faint"}`}>
+                              {c.n}
+                              {c.plus ? "+" : ""}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  </div>
+                )}
+
+                {/* Body */}
+                <div ref={listRef} id="global-search-results" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
+                  {invitee ? (
+                    <InvitePanel
+                      person={invitee}
+                      masterTeams={search.data.master_teams}
+                      registerKeyHandler={registerKeyHandler}
+                      onBack={() => {
+                        setInvitee(null);
+                        inputRef.current?.focus();
+                      }}
+                      onSent={(teamId) => {
+                        patchPerson(invitee.id, (p) => ({ ...p, invited_to: [...p.invited_to, teamId] }));
+                        setInvitee(null);
+                        inputRef.current?.focus();
+                      }}
+                    />
+                  ) : wantsRpc && error && hasQuery && !items.length ? (
+                    <p className="px-5 py-12 text-center text-[13px] text-ink-faint">Search isn&rsquo;t available right now. Check your connection and try again.</p>
+                  ) : nothingFound ? (
+                    <div className="px-5 py-12 text-center">
+                      <p className="text-[14px] font-semibold mb-1">
+                        {filterMeta.none} for &ldquo;{text}&rdquo;
+                      </p>
+                      <p className="text-[12.5px] text-ink-faint">Try fewer words, or another spelling.</p>
+                      {activeFilter !== "all" && counts.all.n > 0 && (
+                        <button type="button" onClick={() => pickFilter("all")} className="mt-3 rounded-lg border border-line/15 px-3 h-8 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
+                          Look everywhere ({counts.all.n})
+                        </button>
+                      )}
+                    </div>
+                  ) : !typed && activeFilter !== "all" && activeFilter !== "app" && !items.length ? (
+                    <p className="px-6 py-12 text-center text-[13px] text-ink-soft max-w-sm mx-auto">{filterMeta.empty}</p>
+                  ) : (
+                    <div className="p-2 pb-3">
+                      {/* Nothing remembered yet: what you can do here, first. */}
+                      {!typed && activeFilter === "all" && !recents.length && !terms.length && <Tips onTry={tryText} />}
+                      {/* What you searched for lately. */}
+                      {!typed && activeFilter === "all" && terms.length > 0 && (
+                        <div className="px-2.5 pt-2 pb-1.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Recent searches</span>
                             <ClearButton
                               onClear={() => {
                                 clearRecents(userId);
@@ -664,80 +631,117 @@ export function SearchPalette({
                                 inputRef.current?.focus();
                               }}
                             />
-                          )}
-                          {section.more && (
-                            <button type="button" tabIndex={-1} onClick={() => pickFilter(filterOf(section.id))} className="text-[11px] font-semibold text-ink-faint hover:text-ink">
-                              See all
-                            </button>
-                          )}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {terms.map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => {
+                                  setQuery(t);
+                                  inputRef.current?.focus();
+                                }}
+                                className="inline-flex items-center gap-1.5 h-7 rounded-lg border border-line/15 px-2.5 text-[12.5px] text-ink-soft hover:text-ink hover:border-line/30 max-w-[14rem]"
+                              >
+                                <SearchIcon className="w-3 h-3 flex-shrink-0 text-ink-faint" />
+                                <span className="truncate">{t}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        {section.items.map(({ item, index }) => (
-                          <Row
-                            key={item.key}
-                            item={item}
-                            index={index}
-                            active={index === safeHighlighted}
-                            onHover={() => highlighted !== index && setHighlighted(index)}
-                            onTab={() => openInTab(item)}
-                          />
-                        ))}
-                      </div>
-                      );
-                    })}
+                      )}
 
-                    {/* Still looking (1.28.0): rows shimmer where the results will be, instead of an empty box. */}
-                    {busy && <SearchSkeleton rows={items.length ? 3 : 6} more={items.length > 0} />}
+                      {sections.map((section) => {
+                        const name = section.id === "here" ? (here?.kind === "short" ? "This short" : "This video") : (SECTION_TITLE[section.id] ?? section.id.replace(/^area:/, ""));
+                        return (
+                        <div key={section.id} className="mb-1" role="group" aria-label={name}>
+                          <div className="flex items-center justify-between px-2.5 pt-2.5 pb-1">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{name}</span>
+                            {section.id === "recent" && terms.length === 0 && (
+                              <ClearButton
+                                onClear={() => {
+                                  clearRecents(userId);
+                                  setRecents([]);
+                                  setTerms([]);
+                                  inputRef.current?.focus();
+                                }}
+                              />
+                            )}
+                            {section.more && (
+                              <button type="button" tabIndex={-1} onClick={() => pickFilter(filterOf(section.id))} className="text-[11px] font-semibold text-ink-faint hover:text-ink">
+                                See all
+                              </button>
+                            )}
+                          </div>
+                          {section.items.map(({ item, index }) => (
+                            <Row
+                              key={item.key}
+                              item={item}
+                              index={index}
+                              active={index === safeHighlighted}
+                              onHover={() => highlighted !== index && setHighlighted(index)}
+                              onTab={() => openInTab(item)}
+                            />
+                          ))}
+                        </div>
+                        );
+                      })}
 
-                    {!typed && activeFilter === "all" && (recents.length > 0 || terms.length > 0) && <Tips onTry={tryText} />}
-                    {!typed && activeFilter === "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">Everything in the app. Type to narrow it down.</p>}
-                    {!typed && activeFilter !== "all" && activeFilter !== "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">{filterMeta.empty}</p>}
-                  </div>
-                )}
-              </div>
+                      {/* Still looking (1.28.0): rows shimmer where the results will be, instead of an empty box. */}
+                      {busy && <SearchSkeleton rows={items.length ? 3 : 6} more={items.length > 0} />}
 
-              {/* Keyboard legend (desktop) */}
-              <div className="hidden sm:flex items-center gap-4 px-4 h-10 border-t border-line/10 text-[11px] text-ink-faint flex-shrink-0">
-                {invitee ? (
-                  <>
-                    <span>
-                      <Kbd>↑</Kbd>
-                      <Kbd>↓</Kbd> team
-                    </span>
-                    <span>
-                      <Kbd>1–6</Kbd> roles
-                    </span>
-                    <span>
-                      <Kbd>↵</Kbd> send
-                    </span>
-                    <span>
-                      <Kbd>Esc</Kbd> back
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span>
-                      <Kbd>↑</Kbd>
-                      <Kbd>↓</Kbd> move
-                    </span>
-                    <span>
-                      <Kbd>↵</Kbd> open
-                    </span>
-                    <span>
-                      <Kbd>Tab</Kbd> filters
-                    </span>
-                    {highlightedPerson && canInviteAnyone && !highlightedPerson.is_self && (
+                      {!typed && activeFilter === "all" && (recents.length > 0 || terms.length > 0) && <Tips onTry={tryText} />}
+                      {!typed && activeFilter === "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">Everything in the app. Type to narrow it down.</p>}
+                      {!typed && activeFilter !== "all" && activeFilter !== "app" && <p className="px-2.5 pt-2 pb-1 text-[12px] text-ink-faint">{filterMeta.empty}</p>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Keyboard legend (desktop) */}
+                <div className="hidden sm:flex items-center gap-4 px-4 h-10 border-t border-line/10 text-[11px] text-ink-faint flex-shrink-0">
+                  {invitee ? (
+                    <>
                       <span>
-                        <Kbd>→</Kbd> invite
+                        <Kbd>↑</Kbd>
+                        <Kbd>↓</Kbd> team
                       </span>
-                    )}
-                    <span className="ml-auto">
-                      <Kbd>Esc</Kbd> close
-                    </span>
-                  </>
-                )}
+                      <span>
+                        <Kbd>1–6</Kbd> roles
+                      </span>
+                      <span>
+                        <Kbd>↵</Kbd> send
+                      </span>
+                      <span>
+                        <Kbd>Esc</Kbd> back
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        <Kbd>↑</Kbd>
+                        <Kbd>↓</Kbd> move
+                      </span>
+                      <span>
+                        <Kbd>↵</Kbd> open
+                      </span>
+                      <span>
+                        <Kbd>Tab</Kbd> filters
+                      </span>
+                      {highlightedPerson && canInviteAnyone && !highlightedPerson.is_self && (
+                        <span>
+                          <Kbd>→</Kbd> invite
+                        </span>
+                      )}
+                      <span className="ml-auto">
+                        <Kbd>Esc</Kbd> close
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>,
+          </Leaves>,
           document.body
         )}
     </>

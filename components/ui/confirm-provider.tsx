@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { sounds } from "@/lib/sounds";
+import { Leaves } from "./leaves";
 
 type ConfirmOptions = {
   title: string;
@@ -64,44 +65,47 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        // data-confirm: a menu or panel under it (the bell's Clear all) stays open while you answer.
-        <div data-confirm className="fixed inset-0 z-[300] flex items-center justify-center p-5" onClick={() => close(false)}>
-          {/* The dimmer is a layer of its own (not the box's parent), so the glass look can blur the page through the box. */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-[fadein_.12s_ease]" aria-hidden />
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirm-title"
-            className="glass-pane glass-lift relative w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl animate-[modalin_.15s_ease]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="confirm-title" className="font-display text-lg font-semibold mb-1.5">
-              {state.opts.title}
-            </h2>
-            {state.opts.description && (
-              <p className="text-[13px] text-ink-soft leading-relaxed">
-                {state.opts.description}
-              </p>
-            )}
-            <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={() => close(false)}
-                className="rounded-lg border border-line/15 px-3.5 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink transition-colors"
-              >
-                {state.opts.cancelLabel ?? "Cancel"}
-              </button>
-              <button
-                ref={confirmBtn}
-                onClick={() => close(true)}
-                className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 ${
-                  state.opts.danger ? "bg-red" : "bg-amber"
-                }`}
-              >
-                {state.opts.confirmLabel ?? "Confirm"}
-              </button>
+        // It leaves the way it came in, the dimmed page too (1.34.0).
+        <Leaves>
+          {/* data-confirm: a menu or panel under it (the bell's Clear all) stays open while you answer. */}
+          <div data-confirm className="fixed inset-0 z-[300] flex items-center justify-center p-5" onClick={() => close(false)}>
+            {/* The dimmer is a layer of its own (not the box's parent), so the glass look can blur the page through the box. */}
+            <div className="pop-dim absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-hidden />
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="confirm-title"
+              className="pop-modal glass-pane glass-lift relative w-full max-w-sm rounded-2xl bg-surface border border-line/10 p-6 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="confirm-title" className="font-display text-lg font-semibold mb-1.5">
+                {state.opts.title}
+              </h2>
+              {state.opts.description && (
+                <p className="text-[13px] text-ink-soft leading-relaxed">
+                  {state.opts.description}
+                </p>
+              )}
+              <div className="flex justify-end gap-2 mt-6">
+                <button
+                  onClick={() => close(false)}
+                  className="rounded-lg border border-line/15 px-3.5 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink transition-colors"
+                >
+                  {state.opts.cancelLabel ?? "Cancel"}
+                </button>
+                <button
+                  ref={confirmBtn}
+                  onClick={() => close(true)}
+                  className={`rounded-lg px-3.5 py-2 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 ${
+                    state.opts.danger ? "bg-red" : "bg-amber"
+                  }`}
+                >
+                  {state.opts.confirmLabel ?? "Confirm"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Leaves>
       )}
     </ConfirmContext.Provider>
   );

@@ -310,6 +310,18 @@ the page is live, or React throws that part away (production error #418).
   `STAGE_STATE_COLOR` (orange = current, teal = done, neutral = upcoming).
 - **Overlays that must escape the header** render through a portal on
   `document.body` (the sticky header's `backdrop-blur` traps fixed children).
+- **Pop-ups leave the way they came (1.34.0).** Anything that floats over
+  the page and closes (a window, prompt, menu, picker, sheet, side panel,
+  card) sits inside `<Leaves>` (`components/ui/leaves.tsx`; `lock` when it
+  holds the page still) with the condition that shows it OUTSIDE: `{open &&
+  <Leaves>…</Leaves>}`, or inside a component the condition removes. Its
+  moving parts carry a `pop-*` class instead of an `animate-[…]` one
+  (`pop-dim` the dimmed page, `pop-modal`, `pop-menu` with an `origin-*`,
+  `pop-drop`, `pop-sheet`, `pop-drawer`, `pop-card`, `pop-fade`;
+  globals.css "Pop-ups"). On close `lib/pop-ghost.ts` leaves a still,
+  inert copy playing the way in backwards. Something that grows inside the
+  page (a panel opening in place) keeps its one-way entrance and is listed
+  in `tests/pop-ups.test.ts` with why.
 - **People link to profiles** via `profileHref()` / `MemberAvatarLink` /
   `MemberNameLink`.
 - **Roles next to a name:** `<RolePills roles={…} />` (max 2 + "+N").
@@ -355,7 +367,18 @@ the page is live, or React throws that part away (production error #418).
   `top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)]`.
   `[data-shell="edge"]` (layout) blurs what scrolls under the floating bar;
   a new sticky bar of a page's own gets `data-shell="subbar"` and z-index 15
-  (above the edge, z 14; under the top bar, z 20).
+  (above the edge, z 14; under the top bar, z 20). Since 1.34.1 the top bar
+  floats at every glass level (at 0 it's a solid pane, not the old full-width
+  bar), and a `subbar` is glass like it, in every style: on a computer a pane
+  of its own under the top bar (margins −12px / −16px from xl undo its page
+  padding of 32 / 40 px, so it lines up with the top bar), on a phone a
+  tinted band. Give it the page padding `-mx-4 px-4 sm:-mx-8 sm:px-8
+  xl:-mx-10 xl:px-10` like Outliers' bar (`tests/glass-bars.test.ts`).
+- **A tab's underline** sits inside its row: `absolute left-… right-…
+  bottom-0 h-[2.5px] rounded-t-[2px] bg-amber`, never `-bottom-px`. A row of
+  tabs scrolls sideways (`overflow-x-auto`), which clips whatever hangs
+  below it, so the old underline showed half its height or none
+  (`tests/glass-bars.test.ts`).
 - **Toasts** (`useToast()`): their time comes from `toastDuration()`
   (3.5 s, an error 5.5 s, with an action 6.5 s); pass `duration` only for a
   reason. They go with their ×, a swipe sideways, up on a phone (they sit
@@ -452,6 +475,14 @@ all-caps labels, no arrows on links, no script of a page's own (the phone
 menu is a `<details>`, monthly / yearly is CSS). Every claim on Security
 must be something the app does today: change the page with the feature.
 `/.well-known/security.txt` comes from `lib/security-txt.ts`.
+
+**A video's name (1.33.1).** The heading of a short's or a long video's
+page is `EditableTitle` (`components/ui/editable-title.tsx`: click to rename,
+Save / Cancel, a toast from the caller's `useAction`), and both Settings
+windows start with `NameField`. Names go through `cleanName`
+(`lib/names.ts`) on both sides. A long video's name is its picked title
+idea's too (`renameLongVideo`, `setPrimaryTitle`, `updateTitleText` keep
+them equal).
 
 **Clip's tour.** `components/tutorial/tutorial.tsx`: starts once per person
 on `/dashboard` (`profiles.tutorial_done_at`, 0069); Settings → Account →

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { switchTeam } from "../../app/(dashboard)/actions";
 import type { TeamSummary } from "@/lib/teams";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { Leaves } from "./leaves";
 
 function initials(name: string) {
   return name
@@ -87,40 +88,42 @@ export function WorkspaceSwitcher({
       </button>
 
       {open && (
-        <div className="absolute top-[calc(100%+6px)] left-0 right-0 rounded-lg border border-line/10 bg-surface shadow-lg p-1.5 z-40">
-          {teams.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => {
-                setOpen(false);
-                startTransition(() => {
-                  switchTeam(t.id);
-                });
-              }}
-              className="w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-surface-2 transition-colors"
-            >
-              <TeamAvatar team={t} size="sm" />
-              <span className="text-[13px] font-medium flex-1 truncate">
-                {t.name}
-              </span>
-              {t.id === currentTeam.id && (
-                <CheckIcon className="w-4 h-4 text-amber" />
-              )}
-            </button>
-          ))}
-          <div className="border-t border-line/10 mt-1 pt-1">
-            <Link
-              href="/teams/new"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-2 transition-colors text-[13px] font-medium text-ink-soft"
-            >
-              <span className="w-5 h-5 rounded border border-dashed border-ink-faint flex items-center justify-center text-[11px] flex-shrink-0">
-                +
-              </span>
-              Create team
-            </Link>
+        <Leaves>
+          <div className="pop-menu origin-top absolute top-[calc(100%+6px)] left-0 right-0 rounded-lg border border-line/10 bg-surface shadow-lg p-1.5 z-40">
+            {teams.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  setOpen(false);
+                  startTransition(() => {
+                    switchTeam(t.id);
+                  });
+                }}
+                className="w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-surface-2 transition-colors"
+              >
+                <TeamAvatar team={t} size="sm" />
+                <span className="text-[13px] font-medium flex-1 truncate">
+                  {t.name}
+                </span>
+                {t.id === currentTeam.id && (
+                  <CheckIcon className="w-4 h-4 text-amber" />
+                )}
+              </button>
+            ))}
+            <div className="border-t border-line/10 mt-1 pt-1">
+              <Link
+                href="/teams/new"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-2 transition-colors text-[13px] font-medium text-ink-soft"
+              >
+                <span className="w-5 h-5 rounded border border-dashed border-ink-faint flex items-center justify-center text-[11px] flex-shrink-0">
+                  +
+                </span>
+                Create team
+              </Link>
+            </div>
           </div>
-        </div>
+        </Leaves>
       )}
     </div>
   );

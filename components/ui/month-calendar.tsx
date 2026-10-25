@@ -6,6 +6,7 @@ import type { PlannedRange } from "@/app/(dashboard)/calendar/planned-days";
 import { ArrowLeftIcon, ChevronRightIcon } from "./icons";
 import { PostedTick } from "./posted-tick";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
+import { Leaves } from "./leaves";
 
 /*
  * THE calendar. Every month calendar in the app is this component (date
@@ -290,43 +291,45 @@ export function MonthCalendar({
       </div>
 
       {peek && peekPlan && peekPlan.shorts.length + peekPlan.longs.length + peekMeetings.length > 0 && (
-        <div
-          className={`absolute left-0 right-0 ${peekAt ? "" : "top-0"} z-10 overflow-hidden rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 animate-[modalin_.12s_var(--ease-out)] pointer-events-none`}
-          style={
-            peekAt
-              ? peekAt.below
-                ? { top: peekAt.bottom + 10, maxHeight: Math.max(64, peekAt.height - peekAt.bottom - 10) }
-                : // A little higher above the row: clear of the fingertip.
-                  { bottom: peekAt.height - peekAt.top + 14, maxHeight: Math.max(64, peekAt.top - 14) }
-              : undefined
-          }
-          role="status"
-        >
-          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
-            {parse(peek).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+        <Leaves>
+          <div
+            className={`absolute left-0 right-0 ${peekAt ? "" : "top-0"} z-10 overflow-hidden rounded-xl border border-line/15 bg-surface shadow-2xl p-2.5 pop-menu pointer-events-none`}
+            style={
+              peekAt
+                ? peekAt.below
+                  ? { top: peekAt.bottom + 10, maxHeight: Math.max(64, peekAt.height - peekAt.bottom - 10) }
+                  : // A little higher above the row: clear of the fingertip.
+                    { bottom: peekAt.height - peekAt.top + 14, maxHeight: Math.max(64, peekAt.top - 14) }
+                : undefined
+            }
+            role="status"
+          >
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
+              {parse(peek).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+            <ul className="space-y-1">
+              {peekMeetings.map((m) => (
+                <li key={m.id} className={`flex items-center gap-2 text-[12.5px] ${m.cancelled ? "text-ink-soft line-through" : "text-ink"}`}>
+                  <span className="w-2 h-2 rounded-[3px] flex-shrink-0 bg-violet" />
+                  <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="truncate">{m.t}</span>
+                </li>
+              ))}
+              {[...peekPlan.longs.map((x) => ({ ...x, k: "long" as const })), ...peekPlan.shorts.map((x) => ({ ...x, k: "short" as const }))].slice(0, 7).map((x, i) => (
+                <li key={i} className="flex items-center gap-2 text-[12.5px] text-ink">
+                  <span className={`w-2 h-2 rounded-[2px] flex-shrink-0 ${x.k === "long" ? "bg-long" : "bg-short"}`} />
+                  <span className="font-mono text-ink-faint text-[11px]">#{x.n}</span>
+                  <span className="truncate flex-1 min-w-0">{x.t}</span>
+                  {/* Posted: the filled tick at the end (the title stays readable), as on the Calendar page. */}
+                  {x.done && <PostedTick />}
+                </li>
+              ))}
+            </ul>
+            {peekPlan.shorts.length + peekPlan.longs.length > 7 && (
+              <div className="text-[11.5px] text-ink-soft mt-1">and {peekPlan.shorts.length + peekPlan.longs.length - 7} more</div>
+            )}
           </div>
-          <ul className="space-y-1">
-            {peekMeetings.map((m) => (
-              <li key={m.id} className={`flex items-center gap-2 text-[12.5px] ${m.cancelled ? "text-ink-soft line-through" : "text-ink"}`}>
-                <span className="w-2 h-2 rounded-[3px] flex-shrink-0 bg-violet" />
-                <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                <span className="truncate">{m.t}</span>
-              </li>
-            ))}
-            {[...peekPlan.longs.map((x) => ({ ...x, k: "long" as const })), ...peekPlan.shorts.map((x) => ({ ...x, k: "short" as const }))].slice(0, 7).map((x, i) => (
-              <li key={i} className="flex items-center gap-2 text-[12.5px] text-ink">
-                <span className={`w-2 h-2 rounded-[2px] flex-shrink-0 ${x.k === "long" ? "bg-long" : "bg-short"}`} />
-                <span className="font-mono text-ink-faint text-[11px]">#{x.n}</span>
-                <span className="truncate flex-1 min-w-0">{x.t}</span>
-                {/* Posted: the filled tick at the end (the title stays readable), as on the Calendar page. */}
-                {x.done && <PostedTick />}
-              </li>
-            ))}
-          </ul>
-          {peekPlan.shorts.length + peekPlan.longs.length > 7 && (
-            <div className="text-[11.5px] text-ink-soft mt-1">and {peekPlan.shorts.length + peekPlan.longs.length - 7} more</div>
-          )}
-        </div>
+        </Leaves>
       )}
 
       {waiting ? (

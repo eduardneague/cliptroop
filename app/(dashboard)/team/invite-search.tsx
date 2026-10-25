@@ -9,6 +9,7 @@ import { ROLES } from "@/lib/permissions/roles";
 import type { RoleId } from "@/lib/permissions/roles";
 import { colorForId, displayName, initialsFor } from "@/lib/avatar";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { Leaves } from "@/components/ui/leaves";
 
 export function InviteSearch({ teamId }: { teamId: string }) {
   const [query, setQuery] = useState("");
@@ -140,38 +141,40 @@ export function InviteSearch({ teamId }: { teamId: string }) {
         className="w-full rounded-lg border border-line/15 bg-surface px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-amber"
       />
       {(results.length > 0 || loading) && (
-        <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-30 rounded-lg border border-line/10 bg-surface shadow-lg p-1 max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
-          {loading && <div className="px-3 py-3 text-[12px] text-ink-faint">Searching…</div>}
-          {!loading &&
-            results.map((r, i) => {
-              // Found by the whole email you typed (1.31.14: emails never come back): that email's name part.
-              const name = displayName(r.username, r.fullName, query.includes("@") ? query.trim() : null);
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => pick(r)}
-                  onMouseEnter={() => setHighlighted(i)}
-                  className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
-                    i === highlighted ? "bg-surface-2" : ""
-                  }`}
-                >
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
-                    style={{ background: colorForId(r.id) }}
+        <Leaves>
+          <div className="pop-menu origin-top absolute top-[calc(100%+6px)] left-0 right-0 z-30 rounded-lg border border-line/10 bg-surface shadow-lg p-1 max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
+            {loading && <div className="px-3 py-3 text-[12px] text-ink-faint">Searching…</div>}
+            {!loading &&
+              results.map((r, i) => {
+                // Found by the whole email you typed (1.31.14: emails never come back): that email's name part.
+                const name = displayName(r.username, r.fullName, query.includes("@") ? query.trim() : null);
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => pick(r)}
+                    onMouseEnter={() => setHighlighted(i)}
+                    className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+                      i === highlighted ? "bg-surface-2" : ""
+                    }`}
                   >
-                    <AvatarImg src={r.avatarUrl} fallback={initialsFor(name)} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold truncate">{name}</span>
-                    {r.username && (
-                      <span className="block text-[11px] text-ink-faint truncate">@{r.username}</span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-        </div>
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
+                      style={{ background: colorForId(r.id) }}
+                    >
+                      <AvatarImg src={r.avatarUrl} fallback={initialsFor(name)} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold truncate">{name}</span>
+                      {r.username && (
+                        <span className="block text-[11px] text-ink-faint truncate">@{r.username}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        </Leaves>
       )}
       <p className="text-[11px] text-ink-faint mt-1.5">
         Only finds people who already have a {APP_NAME} account. An email finds someone only when

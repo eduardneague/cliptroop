@@ -8,6 +8,7 @@ import { useToast } from "./toast-provider";
 import { ArrowRightIcon, CloseIcon, ChevronRightIcon, SmileIcon, PaperclipIcon, GifIcon } from "./icons";
 import { sounds } from "@/lib/sounds";
 import { pictureTooBig } from "@/lib/image/limits";
+import { Leaves } from "./leaves";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -342,59 +343,61 @@ export function MentionInput({
 
       <div className="relative flex items-center gap-1.5">
         {query !== null && items.length > 0 && (
-          <div className="absolute bottom-[calc(100%+6px)] left-0 w-64 max-h-64 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg z-30 p-1">
-            {items.map((item, i) => {
-              const active = i === highlighted;
-              if (item.type === "rolesGroup") {
-                return (
-                  <button
-                    key="roles-group"
-                    type="button"
-                    onClick={expandRoles}
-                    onMouseEnter={() => setHighlighted(i)}
-                    className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-left font-bold transition-colors ${
-                      active ? "bg-surface-2" : ""
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-[3px] bg-ink-faint flex-shrink-0" />
-                    Roles
-                    <span className="text-ink-faint text-[10.5px] font-normal ml-auto inline-flex items-center gap-0.5">Enter to expand <ChevronRightIcon className="w-3 h-3" /></span>
-                  </button>
-                );
-              }
-              const t = item.target;
-              const color = targetColor(t);
-              const showRolesHeader = rolesExpanded && i === peopleMatches.length;
-              return (
-                <div key={i}>
-                  {showRolesHeader && (
-                    <div className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+          <Leaves>
+            <div className="pop-menu origin-bottom-left absolute bottom-[calc(100%+6px)] left-0 w-64 max-h-64 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg z-30 p-1">
+              {items.map((item, i) => {
+                const active = i === highlighted;
+                if (item.type === "rolesGroup") {
+                  return (
+                    <button
+                      key="roles-group"
+                      type="button"
+                      onClick={expandRoles}
+                      onMouseEnter={() => setHighlighted(i)}
+                      className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-left font-bold transition-colors ${
+                        active ? "bg-surface-2" : ""
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-[3px] bg-ink-faint flex-shrink-0" />
                       Roles
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => selectTarget(t)}
-                    onMouseEnter={() => setHighlighted(i)}
-                    className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-left transition-colors ${
-                      active ? "bg-surface-2" : ""
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: color }} />
-                    <span style={{ color }} className="font-semibold">
-                      @{targetLabel(t)}
-                    </span>
-                    {t.kind === "role" && (
-                      <span className="text-ink-faint text-[10.5px] ml-auto">role</span>
+                      <span className="text-ink-faint text-[10.5px] font-normal ml-auto inline-flex items-center gap-0.5">Enter to expand <ChevronRightIcon className="w-3 h-3" /></span>
+                    </button>
+                  );
+                }
+                const t = item.target;
+                const color = targetColor(t);
+                const showRolesHeader = rolesExpanded && i === peopleMatches.length;
+                return (
+                  <div key={i}>
+                    {showRolesHeader && (
+                      <div className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                        Roles
+                      </div>
                     )}
-                    {t.kind === "all" && (
-                      <span className="text-ink-faint text-[10.5px] ml-auto">everyone</span>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                    <button
+                      type="button"
+                      onClick={() => selectTarget(t)}
+                      onMouseEnter={() => setHighlighted(i)}
+                      className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] text-left transition-colors ${
+                        active ? "bg-surface-2" : ""
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: color }} />
+                      <span style={{ color }} className="font-semibold">
+                        @{targetLabel(t)}
+                      </span>
+                      {t.kind === "role" && (
+                        <span className="text-ink-faint text-[10.5px] ml-auto">role</span>
+                      )}
+                      {t.kind === "all" && (
+                        <span className="text-ink-faint text-[10.5px] ml-auto">everyone</span>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </Leaves>
         )}
 
         <div
@@ -423,83 +426,89 @@ export function MentionInput({
           </button>
 
           {menuView === "menu" && (
-            <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-44 rounded-lg border border-line/10 bg-surface shadow-lg p-1 animate-[modalin_.12s_ease]">
-              <button
-                type="button"
-                onClick={() => setMenuView("emoji")}
-                className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
-              >
-                <SmileIcon className="w-4 h-4 text-ink-soft" /> Emoji
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuView("closed");
-                  fileInputRef.current?.click();
-                }}
-                className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
-              >
-                <PaperclipIcon className="w-4 h-4 text-ink-soft" /> Attach file
-                <span className="text-ink-faint text-[10.5px] ml-auto" title="Pictures up to 5 MB, other files up to 25 MB">≤25 MB</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMenuView("gif")}
-                className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
-              >
-                <GifIcon className="w-4 h-4 text-ink-soft" /> GIF
-              </button>
-            </div>
+            <Leaves>
+              <div className="pop-menu origin-bottom-right absolute bottom-[calc(100%+6px)] right-0 z-30 w-44 rounded-lg border border-line/10 bg-surface shadow-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setMenuView("emoji")}
+                  className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
+                >
+                  <SmileIcon className="w-4 h-4 text-ink-soft" /> Emoji
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuView("closed");
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
+                >
+                  <PaperclipIcon className="w-4 h-4 text-ink-soft" /> Attach file
+                  <span className="text-ink-faint text-[10.5px] ml-auto" title="Pictures up to 5 MB, other files up to 25 MB">≤25 MB</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuView("gif")}
+                  className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-[12.5px] font-medium hover:bg-surface-2"
+                >
+                  <GifIcon className="w-4 h-4 text-ink-soft" /> GIF
+                </button>
+              </div>
+            </Leaves>
           )}
 
           {menuView === "gif" && (
-            <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-72 rounded-lg border border-line/10 bg-surface shadow-lg p-2 animate-[modalin_.12s_ease]">
-              <input
-                autoFocus
-                value={gifQuery}
-                onChange={(e) => setGifQuery(e.target.value)}
-                placeholder="Search GIFs…"
-                className="w-full rounded-md border border-line/15 bg-surface-2 px-2.5 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-amber mb-2"
-              />
-              <div className="max-h-64 overflow-y-auto overflow-x-hidden styled-scroll grid grid-cols-3 gap-1.5">
-                {gifLoading && (
-                  <div className="col-span-3 text-center text-[11px] text-ink-faint py-6">Loading…</div>
-                )}
-                {!gifLoading && gifResults.length === 0 && (
-                  <div className="col-span-3 text-center text-[11px] text-ink-faint py-6">No GIFs found.</div>
-                )}
-                {!gifLoading &&
-                  gifResults.map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => selectGif(g)}
-                      className="rounded-md overflow-hidden border border-line/10 hover:border-amber transition-colors aspect-square"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img loading="lazy" decoding="async" src={g.preview} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+            <Leaves>
+              <div className="pop-menu origin-bottom-right absolute bottom-[calc(100%+6px)] right-0 z-30 w-72 rounded-lg border border-line/10 bg-surface shadow-lg p-2">
+                <input
+                  autoFocus
+                  value={gifQuery}
+                  onChange={(e) => setGifQuery(e.target.value)}
+                  placeholder="Search GIFs…"
+                  className="w-full rounded-md border border-line/15 bg-surface-2 px-2.5 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-amber mb-2"
+                />
+                <div className="max-h-64 overflow-y-auto overflow-x-hidden styled-scroll grid grid-cols-3 gap-1.5">
+                  {gifLoading && (
+                    <div className="col-span-3 text-center text-[11px] text-ink-faint py-6">Loading…</div>
+                  )}
+                  {!gifLoading && gifResults.length === 0 && (
+                    <div className="col-span-3 text-center text-[11px] text-ink-faint py-6">No GIFs found.</div>
+                  )}
+                  {!gifLoading &&
+                    gifResults.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => selectGif(g)}
+                        className="rounded-md overflow-hidden border border-line/10 hover:border-amber transition-colors aspect-square"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img loading="lazy" decoding="async" src={g.preview} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                </div>
               </div>
-            </div>
+            </Leaves>
           )}
 
           {menuView === "emoji" && (
-            <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5 animate-[modalin_.12s_ease]">
-              {EMOJI.map((e, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    insertAtCursor(e);
-                    setMenuView("closed");
-                  }}
-                  className="w-7 h-7 rounded-md flex items-center justify-center text-[16px] hover:bg-surface-2"
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
+            <Leaves>
+              <div className="pop-menu origin-bottom-right absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5">
+                {EMOJI.map((e, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      insertAtCursor(e);
+                      setMenuView("closed");
+                    }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-[16px] hover:bg-surface-2"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </Leaves>
           )}
         </div>
 

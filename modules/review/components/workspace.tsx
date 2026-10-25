@@ -22,6 +22,7 @@ import { VersionUploader } from "./uploader";
 import { CompareView } from "./compare";
 import { sounds } from "@/lib/sounds";
 import { minWidth } from "@/lib/breakpoints";
+import { Leaves } from "@/components/ui/leaves";
 
 type Filter = "open" | "all";
 
@@ -678,23 +679,25 @@ function TopComposer({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return createPortal(
-    <div className="fixed inset-0 z-[115]">
-      <div className="absolute inset-0 bg-black/35 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
-      <div
-        role="dialog"
-        aria-label="Add a note"
-        className="absolute inset-x-3 rounded-2xl border border-line/15 bg-surface shadow-2xl p-4 animate-[sheetdown_.28s_var(--ease-out)]"
-        style={{ top: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[12px] font-bold uppercase tracking-wide text-ink-soft">New note</span>
-          <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 -mr-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-            <CloseIcon className="w-4 h-4" />
-          </button>
+    <Leaves>
+      <div className="fixed inset-0 z-[115]">
+        <div className="pop-dim absolute inset-0 bg-black/35" onClick={onClose} aria-hidden />
+        <div
+          role="dialog"
+          aria-label="Add a note"
+          className="pop-drop absolute inset-x-3 rounded-2xl border border-line/15 bg-surface shadow-2xl p-4"
+          style={{ top: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] font-bold uppercase tracking-wide text-ink-soft">New note</span>
+            <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 -mr-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+              <CloseIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <Composer now={now} me={me} onPost={onPost} autoFocus />
         </div>
-        <Composer now={now} me={me} onPost={onPost} autoFocus />
       </div>
-    </div>,
+    </Leaves>,
     document.body
   );
 }
@@ -708,27 +711,29 @@ function BottomSheet({ title, extra, onClose, children }: { title: string; extra
     return () => document.removeEventListener("keydown", onKey);
   }, [close]);
   return createPortal(
-    <div className="fixed inset-0 z-[110]">
-      <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
-      <div
-        role="dialog"
-        aria-label={title}
-        className="absolute inset-x-0 bottom-0 max-h-[78dvh] flex flex-col rounded-t-2xl border border-line/15 bg-surface shadow-2xl animate-[sheetup_.32s_var(--ease-out)]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/25" aria-hidden />
-        <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
-          <h2 className="text-[13px] font-bold">{title}</h2>
-          <div className="flex items-center gap-2">
-            {extra}
-            <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-              <CloseIcon className="w-4 h-4" />
-            </button>
+    <Leaves lock>
+      <div className="fixed inset-0 z-[110]">
+        <div className="pop-dim absolute inset-0 bg-black/45" onClick={onClose} aria-hidden />
+        <div
+          role="dialog"
+          aria-label={title}
+          className="pop-sheet absolute inset-x-0 bottom-0 max-h-[78dvh] flex flex-col rounded-t-2xl border border-line/15 bg-surface shadow-2xl"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/25" aria-hidden />
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+            <h2 className="text-[13px] font-bold">{title}</h2>
+            <div className="flex items-center gap-2">
+              {extra}
+              <button type="button" onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                <CloseIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>,
+    </Leaves>,
     document.body
   );
 }

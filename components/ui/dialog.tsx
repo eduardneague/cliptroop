@@ -4,11 +4,14 @@ import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { CloseIcon } from "./icons";
+import { Leaves } from "./leaves";
 
 /**
  * The app's popup window. Closes with Esc, the X, or a click outside.
  * Focus moves inside when it opens, Tab stays inside while it's open,
- * and focus returns to whatever opened it. Bottom sheet on phones.
+ * and focus returns to whatever opened it. Bottom sheet on phones. It leaves
+ * the way it came in, the dimmed page too (1.34.0, <Leaves>), also when the
+ * page around it takes it away.
  */
 export function Dialog({
   open,
@@ -83,43 +86,45 @@ export function Dialog({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:p-4">
-      <div className="absolute inset-0 bg-black/50 animate-[fadein_.12s_ease]" onClick={onClose} aria-hidden />
-      <div
-        ref={boxRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        // Phones: a floating card with breathing room on every side (never flush to the edges).
-        className={`glass-pane glass-lift relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-2xl border border-line/15 shadow-2xl outline-none animate-[modalin_.14s_ease]`}
-      >
-        <div className="flex items-start gap-3 px-5 pt-5 pb-3 border-b border-line/10">
-          <div className="flex-1 min-w-0">
-            <h2 id={titleId} className="text-[16px] font-semibold">{title}</h2>
-            {description && <p className="text-[12.5px] text-ink-soft mt-0.5">{description}</p>}
+    <Leaves lock>
+      <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:p-4">
+        <div className="pop-dim absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+        <div
+          ref={boxRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          // Phones: a floating card with breathing room on every side (never flush to the edges).
+          className={`glass-pane glass-lift relative w-full ${width} max-h-[92dvh] flex flex-col bg-surface rounded-2xl border border-line/15 shadow-2xl outline-none pop-modal`}
+        >
+          <div className="flex items-start gap-3 px-5 pt-5 pb-3 border-b border-line/10">
+            <div className="flex-1 min-w-0">
+              <h2 id={titleId} className="text-[16px] font-semibold">{title}</h2>
+              {description && <p className="text-[12.5px] text-ink-soft mt-0.5">{description}</p>}
+            </div>
+            <button
+              type="button"
+              data-close
+              onClick={onClose}
+              aria-label="Close"
+              className="w-8 h-8 -mr-1.5 -mt-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
+            >
+              <CloseIcon className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            data-close
-            onClick={onClose}
-            aria-label="Close"
-            className="w-8 h-8 -mr-1.5 -mt-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
-          >
-            <CloseIcon className="w-4 h-4" />
-          </button>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4">{children}</div>
+          {footer && (
+            <div
+              className="px-5 py-3 border-t border-line/10 flex flex-wrap justify-end gap-2"
+              style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+            >
+              {footer}
+            </div>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4">{children}</div>
-        {footer && (
-          <div
-            className="px-5 py-3 border-t border-line/10 flex flex-wrap justify-end gap-2"
-            style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
-          >
-            {footer}
-          </div>
-        )}
       </div>
-    </div>,
+    </Leaves>,
     document.body
   );
 }

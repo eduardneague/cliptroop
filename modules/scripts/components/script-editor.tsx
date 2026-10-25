@@ -67,6 +67,7 @@ import { dock, useDock } from "../lib/dock";
 import { CommentComposer, KIND_COLOR } from "./comment-composer";
 import type { MentionPerson } from "../lib/mention-people";
 import type { Scene } from "../sketch/engine";
+import { Leaves } from "@/components/ui/leaves";
 
 // The Sketch Studio is only loaded when someone presses Draw.
 const SketchStudio = dynamic(() => import("../sketch/sketch-studio").then((m) => m.SketchStudio), {
@@ -1105,49 +1106,53 @@ export function ScriptEditor({
             </div>
           )}
           {sel && onAddComment && draft === null && (
-            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
-              <div className="flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1 animate-[modalin_.12s_var(--ease-out)]">
-                {([
-                  ["comment", "Comment"],
-                  ["edit_idea", "Editing idea"],
-                ] as const).map(([k, label]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setDraftKind(k);
-                      setDraft("");
-                      // (A new one takes the old one's place in the copy kept on this device.)
-                      setBackup(null);
-                    }}
-                    className="rounded-lg px-3 h-9 sm:h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
-                    style={{ background: KIND_COLOR[k] }}
-                  >
-                    {label}
-                  </button>
-                ))}
+            <Leaves>
+              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
+                <div className="pop-menu flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1">
+                  {([
+                    ["comment", "Comment"],
+                    ["edit_idea", "Editing idea"],
+                  ] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setDraftKind(k);
+                        setDraft("");
+                        // (A new one takes the old one's place in the copy kept on this device.)
+                        setBackup(null);
+                      }}
+                      className="rounded-lg px-3 h-9 sm:h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
+                      style={{ background: KIND_COLOR[k] }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            </Leaves>
           )}
           {sel && onAddComment && draft !== null && !isPhone && (
-            <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 308)) }}>
-              <CommentComposer
-                kind={draftKind}
-                quote={sel.quote}
-                people={people}
-                roleColors={roleColors}
-                text={draft}
-                setText={setDraft}
-                sketchUrl={sketch?.url ?? null}
-                onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
-                onRemoveSketch={() => setSketch(null)}
-                busy={sending}
-                onSubmit={() => void submitDraft()}
-                onCancel={() => void requestDiscard()}
-                sheet={false}
-              />
-            </div>
+            <Leaves>
+              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 308)) }}>
+                <CommentComposer
+                  kind={draftKind}
+                  quote={sel.quote}
+                  people={people}
+                  roleColors={roleColors}
+                  text={draft}
+                  setText={setDraft}
+                  sketchUrl={sketch?.url ?? null}
+                  onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
+                  onRemoveSketch={() => setSketch(null)}
+                  busy={sending}
+                  onSubmit={() => void submitDraft()}
+                  onCancel={() => void requestDiscard()}
+                  sheet={false}
+                />
+              </div>
+            </Leaves>
           )}
         </div>
         <p className="no-print mx-auto max-w-3xl mt-3 px-1 text-[11.5px] text-ink-soft md:hidden">
@@ -1161,24 +1166,26 @@ export function ScriptEditor({
       {/* Phones: the comment being written is a sheet at the bottom. */}
       {sel && onAddComment && draft !== null && isPhone &&
         createPortal(
-          <div className="no-print fixed inset-x-0 bottom-0 z-[95] rounded-t-2xl border-t border-line/15 bg-surface shadow-[0_-20px_50px_-20px_rgb(0_0_0/0.45)] animate-[sheetup_.22s_var(--ease-out)]">
-            <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/20" aria-hidden />
-            <CommentComposer
-              kind={draftKind}
-              quote={sel.quote}
-              people={people}
-              roleColors={roleColors}
-              text={draft}
-              setText={setDraft}
-              sketchUrl={sketch?.url ?? null}
-              onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
-              onRemoveSketch={() => setSketch(null)}
-              busy={sending}
-              onSubmit={() => void submitDraft()}
-              onCancel={() => void requestDiscard()}
-              sheet
-            />
-          </div>,
+          <Leaves>
+            <div className="no-print fixed inset-x-0 bottom-0 z-[95] rounded-t-2xl border-t border-line/15 bg-surface shadow-[0_-20px_50px_-20px_rgb(0_0_0/0.45)] pop-sheet">
+              <div className="mx-auto mt-2 h-1 w-10 rounded-[2px] bg-line/20" aria-hidden />
+              <CommentComposer
+                kind={draftKind}
+                quote={sel.quote}
+                people={people}
+                roleColors={roleColors}
+                text={draft}
+                setText={setDraft}
+                sketchUrl={sketch?.url ?? null}
+                onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
+                onRemoveSketch={() => setSketch(null)}
+                busy={sending}
+                onSubmit={() => void submitDraft()}
+                onCancel={() => void requestDiscard()}
+                sheet
+              />
+            </div>
+          </Leaves>,
           document.body
         )}
       <Dialog
@@ -1598,37 +1605,39 @@ function HighlightMenu({ editor, active }: { editor: Editor; active: boolean }) 
         <ChevronDownIcon className="w-3 h-3" />
       </button>
       {open && createPortal(
-        <div ref={box} role="menu" aria-label="Highlight color" style={style} className="z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-1 animate-[modalin_.12s_ease]">
-          {HIGHLIGHTS.map((h) => (
+        <Leaves>
+          <div ref={box} role="menu" aria-label="Highlight color" style={style} className="pop-menu z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+            {HIGHLIGHTS.map((h) => (
+              <button
+                key={h.color}
+                type="button"
+                role="menuitem"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().setHighlight({ color: h.color }).run();
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+              >
+                <span className="w-5 h-5 rounded-md border border-black/10" style={{ background: h.color }} />
+                {h.name}
+              </button>
+            ))}
             <button
-              key={h.color}
               type="button"
               role="menuitem"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                editor.chain().focus().setHighlight({ color: h.color }).run();
+                editor.chain().focus().unsetHighlight().run();
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-soft hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
             >
-              <span className="w-5 h-5 rounded-md border border-black/10" style={{ background: h.color }} />
-              {h.name}
+              <span className="w-5 h-5 rounded-md border border-line/30" />
+              No highlight
             </button>
-          ))}
-          <button
-            type="button"
-            role="menuitem"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              editor.chain().focus().unsetHighlight().run();
-              setOpen(false);
-            }}
-            className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-soft hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
-          >
-            <span className="w-5 h-5 rounded-md border border-line/30" />
-            No highlight
-          </button>
-        </div>,
+          </div>
+        </Leaves>,
         document.body
       )}
     </div>
@@ -1671,27 +1680,29 @@ function LinkButton({ editor, active }: { editor: Editor; active: boolean }) {
         <LinkIcon className="w-4 h-4" />
       </button>
       {open && createPortal(
-        <div ref={box} style={style} className="z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-2 animate-[modalin_.12s_ease]">
-          <input
-            ref={inputRef}
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                apply();
-              }
-              if (e.key === "Escape") {
-                e.preventDefault();
-                setOpen(false);
-                editor.commands.focus();
-              }
-            }}
-            placeholder="Paste a link, Enter to apply"
-            className="w-full rounded-lg border border-line/15 bg-surface px-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
-          />
-          <p className="mt-1.5 px-1 text-[11px] text-ink-soft">Leave empty and press Enter to remove the link.</p>
-        </div>,
+        <Leaves>
+          <div ref={box} style={style} className="pop-menu z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-2">
+            <input
+              ref={inputRef}
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  apply();
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setOpen(false);
+                  editor.commands.focus();
+                }
+              }}
+              placeholder="Paste a link, Enter to apply"
+              className="w-full rounded-lg border border-line/15 bg-surface px-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
+            />
+            <p className="mt-1.5 px-1 text-[11px] text-ink-soft">Leave empty and press Enter to remove the link.</p>
+          </div>
+        </Leaves>,
         document.body
       )}
     </div>
@@ -1716,31 +1727,33 @@ function ExportMenu({ onDocx, onPdf }: { onDocx: () => void; onPdf: () => void }
         <span className="hidden sm:inline">Export</span>
       </button>
       {open && (
-        <div ref={box} role="menu" aria-label="Export" className="absolute right-0 top-[calc(100%+4px)] z-30 w-52 rounded-xl border border-line/15 bg-surface shadow-xl p-1">
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onDocx();
-            }}
-            className="w-full text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
-          >
-            Word document (.docx)
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onPdf();
-            }}
-            className="w-full text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
-          >
-            PDF
-            <span className="block text-[11px] text-ink-soft">Opens print. Choose &ldquo;Save as PDF&rdquo;.</span>
-          </button>
-        </div>
+        <Leaves>
+          <div ref={box} role="menu" aria-label="Export" className="pop-menu origin-top-right absolute right-0 top-[calc(100%+4px)] z-30 w-52 rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onDocx();
+              }}
+              className="w-full text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+            >
+              Word document (.docx)
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onPdf();
+              }}
+              className="w-full text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+            >
+              PDF
+              <span className="block text-[11px] text-ink-soft">Opens print. Choose &ldquo;Save as PDF&rdquo;.</span>
+            </button>
+          </div>
+        </Leaves>
       )}
     </div>
   );
@@ -1768,27 +1781,29 @@ function WidthMenu({ value, onChange }: { value: Width; onChange: (w: Width) => 
         <ChevronDownIcon className="w-3 h-3" />
       </button>
       {open && (
-        <div ref={box} role="menu" aria-label="Page width" className="absolute right-0 top-[calc(100%+4px)] z-30 w-60 rounded-xl border border-line/15 bg-surface shadow-xl p-1">
-          {(["normal", "wide", "full"] as const).map((w) => (
-            <button
-              key={w}
-              type="button"
-              role="menuitemradio"
-              aria-checked={value === w}
-              onClick={() => {
-                onChange(w);
-                setOpen(false);
-              }}
-              className="w-full text-left rounded-lg px-3 py-2 flex items-center gap-2 hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
-            >
-              <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-semibold text-ink">{WIDTH_LABEL[w]}</span>
-                <span className="block text-[11px] text-ink-soft">{HINT[w]}</span>
-              </span>
-              {value === w && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
-            </button>
-          ))}
-        </div>
+        <Leaves>
+          <div ref={box} role="menu" aria-label="Page width" className="pop-menu origin-top-right absolute right-0 top-[calc(100%+4px)] z-30 w-60 rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+            {(["normal", "wide", "full"] as const).map((w) => (
+              <button
+                key={w}
+                type="button"
+                role="menuitemradio"
+                aria-checked={value === w}
+                onClick={() => {
+                  onChange(w);
+                  setOpen(false);
+                }}
+                className="w-full text-left rounded-lg px-3 py-2 flex items-center gap-2 hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-semibold text-ink">{WIDTH_LABEL[w]}</span>
+                  <span className="block text-[11px] text-ink-soft">{HINT[w]}</span>
+                </span>
+                {value === w && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </Leaves>
       )}
     </div>
   );

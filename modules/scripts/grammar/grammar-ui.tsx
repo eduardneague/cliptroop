@@ -8,6 +8,7 @@ import { ArrowLeftIcon, BookIcon, CheckIcon, CloseIcon, SpellCheckIcon, TargetIc
 import type { Grammar } from "./use-grammar";
 import { scoreColor, scoreInk } from "./score";
 import { CATEGORIES, CATEGORY_COLOR, CATEGORY_HINT, CATEGORY_LABEL, FORMALITY, LANGUAGES, type GrammarCategory, type Suggestion } from "./types";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * Writing suggestions on screen, the way Grammarly shows them:
@@ -186,35 +187,37 @@ function HoverCard({
 
   if (!s) return null;
   return createPortal(
-    <div
-      ref={box}
-      role="dialog"
-      aria-label={`${CATEGORY_LABEL[s.category]}: ${s.title}`}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: "min(330px, calc(100vw - 16px))", boxShadow: `inset 0 3px 0 ${CATEGORY_COLOR[s.category]}, 0 20px 50px -18px rgb(0 0 0 / .45)` }}
-      className="no-print fixed z-[120] rounded-xl border border-line/15 bg-surface p-3 animate-[modalin_.14s_var(--ease-out)]"
-    >
-      <SuggestionCard
-        s={s}
-        onAccept={(r) => {
-          g.accept(s.id, r);
-          onClose();
-        }}
-        onDismiss={() => {
-          g.dismiss(s.id);
-          onClose();
-        }}
-        onAddWord={
-          s.word
-            ? () => {
-                void g.dictionary.add(s.word!);
-                onClose();
-              }
-            : undefined
-        }
-      />
-    </div>,
+    <Leaves>
+      <div
+        ref={box}
+        role="dialog"
+        aria-label={`${CATEGORY_LABEL[s.category]}: ${s.title}`}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+        style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: "min(330px, calc(100vw - 16px))", boxShadow: `inset 0 3px 0 ${CATEGORY_COLOR[s.category]}, 0 20px 50px -18px rgb(0 0 0 / .45)` }}
+        className="pop-menu no-print fixed z-[120] rounded-xl border border-line/15 bg-surface p-3"
+      >
+        <SuggestionCard
+          s={s}
+          onAccept={(r) => {
+            g.accept(s.id, r);
+            onClose();
+          }}
+          onDismiss={() => {
+            g.dismiss(s.id);
+            onClose();
+          }}
+          onAddWord={
+            s.word
+              ? () => {
+                  void g.dictionary.add(s.word!);
+                  onClose();
+                }
+              : undefined
+          }
+        />
+      </div>
+    </Leaves>,
     document.body
   );
 }
@@ -429,9 +432,9 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
   );
 
   return createPortal(
-    <>
+    <Leaves>
       <section
-        className="no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col animate-[modalin_.18s_var(--ease-out)] inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[384px] lg:h-[min(680px,calc(100dvh-9rem))]"
+        className="pop-modal no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[384px] lg:h-[min(680px,calc(100dvh-9rem))]"
         aria-label="Writing suggestions"
       >
         <header className="px-4 pt-3.5 pb-3 border-b border-line/10">
@@ -623,7 +626,7 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
           ). Style suggestions are worked out on your device.
         </footer>
       </section>
-    </>,
+    </Leaves>,
     document.body
   );
 }

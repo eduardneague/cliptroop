@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ArrowLeftIcon, CloseIcon } from "@/components/ui/icons";
 import { motionReduced } from "@/components/ui/count-up";
 import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * The side panel a video or channel opens in (1.27.0): from the right on
@@ -100,36 +101,38 @@ export function PanelFrame({ onClose, onBack, backLabel, children }: { onClose: 
   if (!mounted) return null;
   return createPortal(
     <FrameCtx.Provider value={api}>
-      <div className="fixed inset-0 z-[65] flex justify-end" data-outliers-panel-root>
-        <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease] hidden md:block" onClick={onClose} aria-hidden />
-        <div
-          ref={box}
-          role="dialog"
-          aria-modal="true"
-          aria-label={label}
-          data-outliers-panel
-          tabIndex={-1}
-          className="relative h-full w-full md:w-[min(760px,calc(100vw-72px))] xl:w-[min(860px,calc(100vw-120px))] bg-paper md:border-l md:border-line/15 shadow-2xl outline-none flex flex-col animate-[sheetup_.28s_var(--ease-out)] md:animate-[drawer-in_.26s_var(--ease-out)]"
-          style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-        >
-          <div className="flex items-center gap-2 h-14 px-2 sm:px-3 border-b border-line/10 bg-paper/95 backdrop-blur flex-shrink-0">
-            {onBack ? (
-              <button type="button" onClick={onBack} aria-label={backLabel ?? "Back"} title={backLabel ?? "Back"} className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
-                <ArrowLeftIcon className="w-[18px] h-[18px]" />
+      <Leaves lock>
+        <div className="fixed inset-0 z-[65] flex justify-end" data-outliers-panel-root>
+          <div className="pop-dim absolute inset-0 bg-black/45 hidden md:block" onClick={onClose} aria-hidden />
+          <div
+            ref={box}
+            role="dialog"
+            aria-modal="true"
+            aria-label={label}
+            data-outliers-panel
+            tabIndex={-1}
+            className="relative h-full w-full md:w-[min(760px,calc(100vw-72px))] xl:w-[min(860px,calc(100vw-120px))] bg-paper md:border-l md:border-line/15 shadow-2xl outline-none flex flex-col pop-drawer"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+          >
+            <div className="flex items-center gap-2 h-14 px-2 sm:px-3 border-b border-line/10 bg-paper/95 backdrop-blur flex-shrink-0">
+              {onBack ? (
+                <button type="button" onClick={onBack} aria-label={backLabel ?? "Back"} title={backLabel ?? "Back"} className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
+                  <ArrowLeftIcon className="w-[18px] h-[18px]" />
+                </button>
+              ) : (
+                <span className="w-1 flex-shrink-0" />
+              )}
+              <div ref={setHeader} className="flex-1 min-w-0 flex items-center gap-2" />
+              <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
+                <CloseIcon className="w-[18px] h-[18px]" />
               </button>
-            ) : (
-              <span className="w-1 flex-shrink-0" />
-            )}
-            <div ref={setHeader} className="flex-1 min-w-0 flex items-center gap-2" />
-            <button type="button" onClick={onClose} aria-label="Close" className="w-10 h-10 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
-              <CloseIcon className="w-[18px] h-[18px]" />
-            </button>
-          </div>
-          <div ref={body} className="relative flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-            <div ref={inner}>{children}</div>
+            </div>
+            <div ref={body} className="relative flex-1 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+              <div ref={inner}>{children}</div>
+            </div>
           </div>
         </div>
-      </div>
+      </Leaves>
     </FrameCtx.Provider>,
     document.body
   );

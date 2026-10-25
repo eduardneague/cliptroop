@@ -246,7 +246,7 @@ export default function Loading() {
         {TABS.map((t) => (
           <span key={t.id} className={`relative px-2.5 sm:px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap ${t.id === tab ? "text-ink" : "text-ink-faint"}`}>
             {t.label}
-            {t.id === tab && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber" />}
+            {t.id === tab && <span className="absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber" />}
           </span>
         ))}
       </div>

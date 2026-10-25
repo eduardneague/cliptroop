@@ -103,7 +103,7 @@ export function TabOverflow() {
       >
         {current ? current.label : "More"}
         <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-        <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${current ? "opacity-100" : "opacity-0"}`} />
+        <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber transition-opacity ${current ? "opacity-100" : "opacity-0"}`} />
       </button>
       <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={220} label="More">
         <div className="p-1.5">

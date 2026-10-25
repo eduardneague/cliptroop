@@ -6,6 +6,7 @@ import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { Mascot } from "@/components/ui/mascot";
 import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { sounds } from "@/lib/sounds";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * Clip's tour itself: the steps, where each bubble goes, and the bubbles
@@ -279,159 +280,162 @@ function Tour({
   const count = list.length - 2; // the steps between hello and done
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] animate-[fadein_.3s_ease-out]" data-tour-active="">
-      {/* Clicks wait until the tour is over. */}
-      <div className="absolute inset-0" aria-hidden onClick={() => primary.current?.focus()} />
+    // It fades out the way it came in when it ends (1.34.0).
+    <Leaves>
+      <div className="pop-fade fixed inset-0 z-[200]" data-tour-active="">
+        {/* Clicks wait until the tour is over. */}
+        <div className="absolute inset-0" aria-hidden onClick={() => primary.current?.focus()} />
 
-      {/* The dim, with a hole over this step's part of the app. */}
-      <div
-        aria-hidden
-        className={`fixed rounded-[14px] pointer-events-none ${glide ? "transition-[top,left,width,height,box-shadow] duration-[450ms] ease-[var(--ease-out)]" : ""}`}
-        style={{
-          top: hole.top,
-          left: hole.left,
-          width: hole.width,
-          height: hole.height,
-          boxShadow: box
-            ? "0 0 0 2px rgb(var(--amber)), 0 0 0 9999px rgb(14 10 6 / 0.62)"
-            : "0 0 0 0 rgb(var(--amber) / 0), 0 0 0 9999px rgb(14 10 6 / 0.62)",
-        }}
-      >
-        {box && <span key={step.id} className="absolute inset-0 rounded-[14px] animate-[tour-ping_1.8s_var(--ease-out)_0.45s_infinite]" />}
-      </div>
+        {/* The dim, with a hole over this step's part of the app. */}
+        <div
+          aria-hidden
+          className={`fixed rounded-[14px] pointer-events-none ${glide ? "transition-[top,left,width,height,box-shadow] duration-[450ms] ease-[var(--ease-out)]" : ""}`}
+          style={{
+            top: hole.top,
+            left: hole.left,
+            width: hole.width,
+            height: hole.height,
+            boxShadow: box
+              ? "0 0 0 2px rgb(var(--amber)), 0 0 0 9999px rgb(14 10 6 / 0.62)"
+              : "0 0 0 0 rgb(var(--amber) / 0), 0 0 0 9999px rgb(14 10 6 / 0.62)",
+          }}
+        >
+          {box && <span key={step.id} className="absolute inset-0 rounded-[14px] animate-[tour-ping_1.8s_var(--ease-out)_0.45s_infinite]" />}
+        </div>
 
-      {/* Clip's bubble. */}
-      <div
-        ref={card}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tour-title"
-        aria-describedby="tour-text"
-        className={`fixed rounded-2xl border border-line/15 bg-surface text-ink shadow-[0_24px_60px_-20px_rgb(0_0_0/0.55)] ${glide ? "transition-[top,left,opacity] duration-[450ms] ease-[var(--ease-out)]" : ""} ${
-          ready ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ width: w, top: spot?.top ?? -9999, left: spot?.left ?? 0 }}
-      >
-        {spot && spot.side !== "center" && !asking && (
-          <span
-            aria-hidden
-            // Only the half outside the bubble is drawn, so a see-through (glass) bubble doesn't show a darker diamond.
-            className="glass-tail absolute w-3.5 h-3.5 rotate-45 bg-surface border-line/15"
-            style={
-              spot.side === "below"
-                ? { top: -7.5, left: spot.tail - 7, borderTopWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 100% 0, 0 100%)" }
-                : spot.side === "above"
-                  ? { bottom: -7.5, left: spot.tail - 7, borderBottomWidth: 1, borderRightWidth: 1, clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }
-                  : { left: -7.5, top: spot.tail - 7, borderBottomWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 0 100%, 100% 100%)" }
-            }
-          />
-        )}
+        {/* Clip's bubble. */}
+        <div
+          ref={card}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tour-title"
+          aria-describedby="tour-text"
+          className={`fixed rounded-2xl border border-line/15 bg-surface text-ink shadow-[0_24px_60px_-20px_rgb(0_0_0/0.55)] ${glide ? "transition-[top,left,opacity] duration-[450ms] ease-[var(--ease-out)]" : ""} ${
+            ready ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ width: w, top: spot?.top ?? -9999, left: spot?.left ?? 0 }}
+        >
+          {spot && spot.side !== "center" && !asking && (
+            <span
+              aria-hidden
+              // Only the half outside the bubble is drawn, so a see-through (glass) bubble doesn't show a darker diamond.
+              className="glass-tail absolute w-3.5 h-3.5 rotate-45 bg-surface border-line/15"
+              style={
+                spot.side === "below"
+                  ? { top: -7.5, left: spot.tail - 7, borderTopWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 100% 0, 0 100%)" }
+                  : spot.side === "above"
+                    ? { bottom: -7.5, left: spot.tail - 7, borderBottomWidth: 1, borderRightWidth: 1, clipPath: "polygon(100% 0, 100% 100%, 0 100%)" }
+                    : { left: -7.5, top: spot.tail - 7, borderBottomWidth: 1, borderLeftWidth: 1, clipPath: "polygon(0 0, 0 100%, 100% 100%)" }
+              }
+            />
+          )}
 
-        {asking ? (
-          <div className="p-5">
-            <div className="flex items-center gap-3">
-              <Mascot size={52} className="flex-shrink-0 -my-1" />
-              <h2 id="tour-title" className="font-display text-[19px] font-semibold leading-tight">
-                Skip the tour?
-              </h2>
-            </div>
-            <p id="tour-text" className="text-[14px] text-ink-soft leading-relaxed mt-3">
-              It won&rsquo;t start again by itself. You can watch it any time from Settings &rarr; Account.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button
-                ref={primary}
-                type="button"
-                onClick={() => onAsk(false)}
-                className="rounded-xl bg-amber text-white font-bold px-4 h-10 text-[14px] hover:brightness-110"
-              >
-                Keep going
-              </button>
-              <button
-                type="button"
-                onClick={() => onEnd(false)}
-                className="order-first rounded-xl border border-line/15 px-4 h-10 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-              >
-                Skip tour
-              </button>
-            </div>
-          </div>
-        ) : !middle ? (
-          <div className="p-6 text-center" key={step.id}>
-            <div className="flex justify-center -mt-1">
-              <Mascot mood="celebrate" size={104} />
-            </div>
-            <h2 id="tour-title" className="font-display text-[24px] font-semibold leading-tight mt-2">
-              {step.title}
-            </h2>
-            <p id="tour-text" className="text-[14.5px] text-ink-soft leading-relaxed mt-2">
-              {step.text}
-            </p>
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                ref={primary}
-                type="button"
-                data-sound="none"
-                onClick={() => (last ? onEnd(true) : onGo(1))}
-                className="w-full rounded-xl bg-amber text-white font-bold h-11 text-[15px] hover:brightness-110"
-              >
-                {last ? `Start using ${APP_NAME}` : "Show me around"}
-              </button>
-              {first && (
-                <button type="button" onClick={() => onAsk(true)} className="w-full rounded-xl h-10 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
-                  Skip tutorial
+          {asking ? (
+            <div className="p-5">
+              <div className="flex items-center gap-3">
+                <Mascot size={52} className="flex-shrink-0 -my-1" />
+                <h2 id="tour-title" className="font-display text-[19px] font-semibold leading-tight">
+                  Skip the tour?
+                </h2>
+              </div>
+              <p id="tour-text" className="text-[14px] text-ink-soft leading-relaxed mt-3">
+                It won&rsquo;t start again by itself. You can watch it any time from Settings &rarr; Account.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <button
+                  ref={primary}
+                  type="button"
+                  onClick={() => onAsk(false)}
+                  className="rounded-xl bg-amber text-white font-bold px-4 h-10 text-[14px] hover:brightness-110"
+                >
+                  Keep going
                 </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 pt-3.5">
-            <div className="flex items-start gap-3">
-              <Mascot key={step.id} size={50} className="flex-shrink-0 -ml-1 -mt-0.5" />
-              <div className="min-w-0 flex-1 pt-0.5">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 id="tour-title" className="font-display text-[18px] font-semibold leading-tight">
-                    {step.title}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => onAsk(true)}
-                    className="-mr-1.5 -mt-0.5 rounded-lg px-2 h-7 text-[12.5px] font-semibold text-ink-faint hover:text-ink hover:bg-surface-2 flex-shrink-0"
-                  >
-                    Skip
-                  </button>
-                </div>
-                <p id="tour-text" aria-live="polite" className="text-[14px] text-ink-soft leading-relaxed mt-1">
-                  {step.text}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => onEnd(false)}
+                  className="order-first rounded-xl border border-line/15 px-4 h-10 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+                >
+                  Skip tour
+                </button>
               </div>
             </div>
-            <div className="mt-3.5 flex items-center gap-3">
-              <span className="flex items-center gap-1.5 mr-auto" aria-label={`Step ${i} of ${count}`}>
-                {Array.from({ length: count }, (_, k) => (
-                  <span
-                    key={k}
-                    aria-hidden
-                    className={`h-1.5 rounded-[3px] transition-all duration-300 ${k + 1 === i ? "w-4 bg-amber" : k + 1 < i ? "w-1.5 bg-amber/50" : "w-1.5 bg-line/25"}`}
-                  />
-                ))}
-              </span>
-              <button type="button" onClick={() => onGo(i - 1)} className="rounded-xl px-3 h-9 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
-                Back
-              </button>
-              <button
-                ref={primary}
-                type="button"
-                onClick={() => onGo(i + 1)}
-                className="rounded-xl bg-amber text-white font-bold px-4 h-9 text-[13.5px] hover:brightness-110"
-              >
-                {i === list.length - 2 ? "Finish" : "Next"}
-              </button>
+          ) : !middle ? (
+            <div className="p-6 text-center" key={step.id}>
+              <div className="flex justify-center -mt-1">
+                <Mascot mood="celebrate" size={104} />
+              </div>
+              <h2 id="tour-title" className="font-display text-[24px] font-semibold leading-tight mt-2">
+                {step.title}
+              </h2>
+              <p id="tour-text" className="text-[14.5px] text-ink-soft leading-relaxed mt-2">
+                {step.text}
+              </p>
+              <div className="mt-5 flex flex-col gap-2">
+                <button
+                  ref={primary}
+                  type="button"
+                  data-sound="none"
+                  onClick={() => (last ? onEnd(true) : onGo(1))}
+                  className="w-full rounded-xl bg-amber text-white font-bold h-11 text-[15px] hover:brightness-110"
+                >
+                  {last ? `Start using ${APP_NAME}` : "Show me around"}
+                </button>
+                {first && (
+                  <button type="button" onClick={() => onAsk(true)} className="w-full rounded-xl h-10 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+                    Skip tutorial
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="p-4 pt-3.5">
+              <div className="flex items-start gap-3">
+                <Mascot key={step.id} size={50} className="flex-shrink-0 -ml-1 -mt-0.5" />
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 id="tour-title" className="font-display text-[18px] font-semibold leading-tight">
+                      {step.title}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => onAsk(true)}
+                      className="-mr-1.5 -mt-0.5 rounded-lg px-2 h-7 text-[12.5px] font-semibold text-ink-faint hover:text-ink hover:bg-surface-2 flex-shrink-0"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                  <p id="tour-text" aria-live="polite" className="text-[14px] text-ink-soft leading-relaxed mt-1">
+                    {step.text}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3.5 flex items-center gap-3">
+                <span className="flex items-center gap-1.5 mr-auto" aria-label={`Step ${i} of ${count}`}>
+                  {Array.from({ length: count }, (_, k) => (
+                    <span
+                      key={k}
+                      aria-hidden
+                      className={`h-1.5 rounded-[3px] transition-all duration-300 ${k + 1 === i ? "w-4 bg-amber" : k + 1 < i ? "w-1.5 bg-amber/50" : "w-1.5 bg-line/25"}`}
+                    />
+                  ))}
+                </span>
+                <button type="button" onClick={() => onGo(i - 1)} className="rounded-xl px-3 h-9 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+                  Back
+                </button>
+                <button
+                  ref={primary}
+                  type="button"
+                  onClick={() => onGo(i + 1)}
+                  className="rounded-xl bg-amber text-white font-bold px-4 h-9 text-[13.5px] hover:brightness-110"
+                >
+                  {i === list.length - 2 ? "Finish" : "Next"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>,
+    </Leaves>,
     document.body
   );
 }

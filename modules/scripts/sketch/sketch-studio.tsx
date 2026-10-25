@@ -45,6 +45,7 @@ import {
   type TextEl,
 } from "./engine";
 import { pictureTooBig } from "@/lib/image/limits";
+import { Leaves } from "@/components/ui/leaves";
 
 /**
  * Sketch Studio: a quick drawing board for editing ideas. Pen, marker,
@@ -997,119 +998,121 @@ export function SketchStudio({ initial, onCancel, onConfirm, title = "Sketch you
 
   return createPortal(
     // Black paper turns the whole studio dark (the app's dark colours, just in here).
-    <div className={`fixed inset-0 z-[150] flex flex-col bg-paper text-ink animate-[modalin_.18s_var(--ease-out)] ${paper === "dark" ? "dark" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
-      {/* Top bar */}
-      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 h-14 border-b border-line/10 bg-surface flex-shrink-0 pt-[env(safe-area-inset-top)]">
-        <button type="button" onClick={() => void requestClose()} aria-label="Close" title="Close (Esc)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-          <I.X />
-        </button>
-        <div className="min-w-0">
-          <div className="text-[14px] font-bold truncate">{title}</div>
-          <div className="hidden sm:block text-[11px] text-ink-faint truncate">Draw, then use it in your editing idea. Pinch or Ctrl + scroll to zoom.</div>
-        </div>
-        <span className="flex-1" />
-        <button type="button" onClick={undo} disabled={!past.current.length} aria-label="Undo" title="Undo (Ctrl+Z)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-35">
-          <I.Undo />
-        </button>
-        <button type="button" onClick={redo} disabled={!future.current.length} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-35">
-          <I.Redo />
-        </button>
-        <div className="hidden md:flex items-center rounded-xl border border-line/15 ml-1">
-          <button type="button" onClick={() => zoomAt((wrapRef.current?.clientWidth ?? 0) / 2, (wrapRef.current?.clientHeight ?? 0) / 2, 0.8)} aria-label="Zoom out" className="w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink">−</button>
-          <button type="button" onClick={() => zoomToFit()} title="Fit the drawing (Ctrl+0)" className="min-w-[3.5rem] h-9 text-[12px] font-semibold tabular-nums text-ink-soft hover:text-ink">{Math.round(zoom * 100)}%</button>
-          <button type="button" onClick={() => zoomAt((wrapRef.current?.clientWidth ?? 0) / 2, (wrapRef.current?.clientHeight ?? 0) / 2, 1.25)} aria-label="Zoom in" className="w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink">+</button>
-        </div>
-        <button
-          type="button"
-          onClick={togglePaper}
-          aria-pressed={paper === "dark"}
-          aria-label={paper === "dark" ? "White paper" : "Black paper"}
-          title={paper === "dark" ? "White paper" : "Black paper"}
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
-        >
-          <span className="w-[18px] h-[18px] rounded-[5px] border-[1.5px] border-current overflow-hidden flex" aria-hidden>
-            <span className={`w-1/2 h-full ${paper === "dark" ? "bg-current" : ""}`} />
-            <span className={`w-1/2 h-full ${paper === "dark" ? "" : "bg-current"}`} />
-          </span>
-        </button>
-        <button type="button" onClick={() => setGrid((g) => !g)} aria-pressed={grid} title="Dot grid" className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center ${grid ? "text-ink" : "text-ink-faint"} hover:bg-surface-2`}>
-          <I.Grid />
-        </button>
-        {elsRef.current.length > 0 && (
+    <Leaves lock>
+      <div className={`pop-modal fixed inset-0 z-[150] flex flex-col bg-paper text-ink ${paper === "dark" ? "dark" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
+        {/* Top bar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 h-14 border-b border-line/10 bg-surface flex-shrink-0 pt-[env(safe-area-inset-top)]">
+          <button type="button" onClick={() => void requestClose()} aria-label="Close" title="Close (Esc)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+            <I.X />
+          </button>
+          <div className="min-w-0">
+            <div className="text-[14px] font-bold truncate">{title}</div>
+            <div className="hidden sm:block text-[11px] text-ink-faint truncate">Draw, then use it in your editing idea. Pinch or Ctrl + scroll to zoom.</div>
+          </div>
+          <span className="flex-1" />
+          <button type="button" onClick={undo} disabled={!past.current.length} aria-label="Undo" title="Undo (Ctrl+Z)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-35">
+            <I.Undo />
+          </button>
+          <button type="button" onClick={redo} disabled={!future.current.length} aria-label="Redo" title="Redo (Ctrl+Shift+Z)" className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-35">
+            <I.Redo />
+          </button>
+          <div className="hidden md:flex items-center rounded-xl border border-line/15 ml-1">
+            <button type="button" onClick={() => zoomAt((wrapRef.current?.clientWidth ?? 0) / 2, (wrapRef.current?.clientHeight ?? 0) / 2, 0.8)} aria-label="Zoom out" className="w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink">−</button>
+            <button type="button" onClick={() => zoomToFit()} title="Fit the drawing (Ctrl+0)" className="min-w-[3.5rem] h-9 text-[12px] font-semibold tabular-nums text-ink-soft hover:text-ink">{Math.round(zoom * 100)}%</button>
+            <button type="button" onClick={() => zoomAt((wrapRef.current?.clientWidth ?? 0) / 2, (wrapRef.current?.clientHeight ?? 0) / 2, 1.25)} aria-label="Zoom in" className="w-9 h-9 flex items-center justify-center text-ink-soft hover:text-ink">+</button>
+          </div>
           <button
             type="button"
-            onClick={async () => {
-              if (await confirm({ title: "Clear the whole drawing?", description: "You can still undo it.", confirmLabel: "Clear", danger: true })) {
-                commit([]);
-                setSel([]);
-              }
-            }}
-            className="hidden sm:inline-flex h-10 px-3 rounded-xl items-center text-[13px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
+            onClick={togglePaper}
+            aria-pressed={paper === "dark"}
+            aria-label={paper === "dark" ? "White paper" : "Black paper"}
+            title={paper === "dark" ? "White paper" : "Black paper"}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
           >
-            Clear
+            <span className="w-[18px] h-[18px] rounded-[5px] border-[1.5px] border-current overflow-hidden flex" aria-hidden>
+              <span className={`w-1/2 h-full ${paper === "dark" ? "bg-current" : ""}`} />
+              <span className={`w-1/2 h-full ${paper === "dark" ? "" : "bg-current"}`} />
+            </span>
           </button>
-        )}
-        <button type="button" onClick={() => void finish()} disabled={busy} data-sound="none" className="h-10 px-4 rounded-xl bg-amber text-white text-[13.5px] font-bold disabled:opacity-60 whitespace-nowrap">
-          {busy ? "Saving…" : "Use sketch"}
-        </button>
-      </div>
+          <button type="button" onClick={() => setGrid((g) => !g)} aria-pressed={grid} title="Dot grid" className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center ${grid ? "text-ink" : "text-ink-faint"} hover:bg-surface-2`}>
+            <I.Grid />
+          </button>
+          {elsRef.current.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (await confirm({ title: "Clear the whole drawing?", description: "You can still undo it.", confirmLabel: "Clear", danger: true })) {
+                  commit([]);
+                  setSel([]);
+                }
+              }}
+              className="hidden sm:inline-flex h-10 px-3 rounded-xl items-center text-[13px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
+            >
+              Clear
+            </button>
+          )}
+          <button type="button" onClick={() => void finish()} disabled={busy} data-sound="none" className="h-10 px-4 rounded-xl bg-amber text-white text-[13.5px] font-bold disabled:opacity-60 whitespace-nowrap">
+            {busy ? "Saving…" : "Use sketch"}
+          </button>
+        </div>
 
-      {/* Board */}
-      <div ref={wrapRef} className="relative flex-1 min-h-0 overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className={`absolute inset-0 touch-none select-none ${tool === "hand" ? "cursor-grab active:cursor-grabbing" : tool === "select" ? "cursor-default" : tool === "text" ? "cursor-text" : "cursor-crosshair"}`}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onDoubleClick={onDoubleClick}
-          onWheel={onWheel}
-          onContextMenu={(e) => e.preventDefault()}
-        />
-        {editingEl && (
-          <textarea
-            ref={textRef}
-            autoFocus
-            value={editingEl.text}
-            onChange={(e) => setText(editingEl.id, e.target.value)}
-            onBlur={commitText}
-            placeholder={editingEl.t === "sticky" ? "Write on the note…" : "Type…"}
-            className="absolute bg-transparent outline-none resize-none overflow-hidden p-0 border-0"
-            style={
-              editingEl.t === "text"
-                ? { left: editingEl.x * z + ox, top: editingEl.y * z + oy, width: Math.max(40, editingEl.w * z), height: Math.max(editingEl.h, editingEl.fs * 1.3) * z + 4, font: font(editingEl.fs * z, editingEl.bold), lineHeight: 1.3, color: shownOn(editingEl.color, paper), transform: `rotate(${editingEl.rot}rad)`, transformOrigin: "center" }
-                : { left: (editingEl.x + 12) * z + ox, top: (editingEl.y + 12) * z + oy, width: (editingEl.w - 24) * z, height: (editingEl.h - 24) * z, font: font(Math.min(28, editingEl.h / 4) * z * 0.8, true), color: "#2B2118", textAlign: "center", transform: `rotate(${editingEl.rot}rad)`, transformOrigin: "center" }
-            }
+        {/* Board */}
+        <div ref={wrapRef} className="relative flex-1 min-h-0 overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            className={`absolute inset-0 touch-none select-none ${tool === "hand" ? "cursor-grab active:cursor-grabbing" : tool === "select" ? "cursor-default" : tool === "text" ? "cursor-text" : "cursor-crosshair"}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onDoubleClick={onDoubleClick}
+            onWheel={onWheel}
+            onContextMenu={(e) => e.preventDefault()}
           />
-        )}
-        {!elsRef.current.length && !drag.current && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
-            <p className={`text-center text-[13.5px] max-w-xs ${paper === "dark" ? "text-white/45" : "text-ink-faint"}`}>Draw your idea here. Pen, shapes, arrows, sticky notes, text, stamps and images are in the toolbar.</p>
-          </div>
-        )}
-        {/* Desktop: tools on the left, options on top */}
-        <div className="hidden lg:flex absolute left-3 top-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-2xl border border-line/15 bg-surface p-1.5 shadow-[0_16px_40px_-18px_rgb(0_0_0/0.35)]">{tools}</div>
-        <div className="hidden lg:block absolute left-1/2 -translate-x-1/2 top-3 max-w-[calc(100%-10rem)] rounded-2xl border border-line/15 bg-surface shadow-[0_16px_40px_-18px_rgb(0_0_0/0.35)] px-1.5">{props}</div>
-      </div>
+          {editingEl && (
+            <textarea
+              ref={textRef}
+              autoFocus
+              value={editingEl.text}
+              onChange={(e) => setText(editingEl.id, e.target.value)}
+              onBlur={commitText}
+              placeholder={editingEl.t === "sticky" ? "Write on the note…" : "Type…"}
+              className="absolute bg-transparent outline-none resize-none overflow-hidden p-0 border-0"
+              style={
+                editingEl.t === "text"
+                  ? { left: editingEl.x * z + ox, top: editingEl.y * z + oy, width: Math.max(40, editingEl.w * z), height: Math.max(editingEl.h, editingEl.fs * 1.3) * z + 4, font: font(editingEl.fs * z, editingEl.bold), lineHeight: 1.3, color: shownOn(editingEl.color, paper), transform: `rotate(${editingEl.rot}rad)`, transformOrigin: "center" }
+                  : { left: (editingEl.x + 12) * z + ox, top: (editingEl.y + 12) * z + oy, width: (editingEl.w - 24) * z, height: (editingEl.h - 24) * z, font: font(Math.min(28, editingEl.h / 4) * z * 0.8, true), color: "#2B2118", textAlign: "center", transform: `rotate(${editingEl.rot}rad)`, transformOrigin: "center" }
+              }
+            />
+          )}
+          {!elsRef.current.length && !drag.current && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+              <p className={`text-center text-[13.5px] max-w-xs ${paper === "dark" ? "text-white/45" : "text-ink-faint"}`}>Draw your idea here. Pen, shapes, arrows, sticky notes, text, stamps and images are in the toolbar.</p>
+            </div>
+          )}
+          {/* Desktop: tools on the left, options on top */}
+          <div className="hidden lg:flex absolute left-3 top-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-2xl border border-line/15 bg-surface p-1.5 shadow-[0_16px_40px_-18px_rgb(0_0_0/0.35)]">{tools}</div>
+          <div className="hidden lg:block absolute left-1/2 -translate-x-1/2 top-3 max-w-[calc(100%-10rem)] rounded-2xl border border-line/15 bg-surface shadow-[0_16px_40px_-18px_rgb(0_0_0/0.35)] px-1.5">{props}</div>
+        </div>
 
-      {/* Phones and tablets: options, then tools, at the bottom */}
-      <div className="lg:hidden flex-shrink-0 border-t border-line/10 bg-surface pb-[env(safe-area-inset-bottom)]">
-        <div className="px-2 pt-1.5">{props}</div>
-        <div className="flex items-center gap-1 overflow-x-auto overflow-y-visible no-scrollbar px-2 py-2">{tools}</div>
+        {/* Phones and tablets: options, then tools, at the bottom */}
+        <div className="lg:hidden flex-shrink-0 border-t border-line/10 bg-surface pb-[env(safe-area-inset-bottom)]">
+          <div className="px-2 pt-1.5">{props}</div>
+          <div className="flex items-center gap-1 overflow-x-auto overflow-y-visible no-scrollbar px-2 py-2">{tools}</div>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void insertImage(f);
+          }}
+        />
       </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (f) void insertImage(f);
-        }}
-      />
-    </div>,
+    </Leaves>,
     document.body
   );
 }
@@ -1208,7 +1211,11 @@ function Seg({ children }: { children: React.ReactNode }) {
   return <div className="flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">{children}</div>;
 }
 function Pop({ children, className }: { children: React.ReactNode; className: string }) {
-  return <div className={`absolute z-10 rounded-xl border border-line/15 bg-surface shadow-2xl p-1.5 animate-[modalin_.12s_var(--ease-out)] ${className}`}>{children}</div>;
+  return (
+    <Leaves>
+      <div className={`pop-menu absolute z-10 rounded-xl border border-line/15 bg-surface shadow-2xl p-1.5 ${className}`}>{children}</div>
+    </Leaves>
+  );
 }
 
 function ShapeIcon({ kind }: { kind: ShapeKind }) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "./icons";
+import { Leaves } from "./leaves";
 
 export type SelectOption = {
   value: string;
@@ -22,7 +23,8 @@ export type SelectOption = {
  *   ↑ ↓ move · Home/End jump · Enter/Space pick · Esc close · Tab leaves
  *   typing jumps to a match (or filters, when `searchable`)
  * Renders in a portal (never clipped by a table or card), opens upward
- * when there's no room below, and follows its button on scroll/resize.
+ * when there's no room below, and follows its button on scroll/resize. It
+ * shrinks back into its button as it closes (1.34.0, <Leaves>).
  */
 export function Select({
   value,
@@ -288,80 +290,82 @@ export function Select({
 
       {open &&
         createPortal(
-          <div
-            ref={menuRef}
-            data-floating-menu=""
-            onKeyDown={onMenuKey}
-            style={{
-              left: pos.left,
-              width: pos.width,
-              ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }),
-            }}
-            className="glass-pane fixed z-[130] rounded-xl border border-line/15 bg-surface shadow-2xl overflow-hidden animate-[modalin_.12s_ease]"
-          >
-            {useSearch && (
-              <div className="flex items-center gap-2 px-3 h-10 border-b border-line/10">
-                <SearchIcon className="w-4 h-4 text-ink-soft flex-shrink-0" />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setActive(0);
-                  }}
-                  placeholder="Type to filter…"
-                  className="flex-1 min-w-0 bg-transparent text-[13.5px] outline-none placeholder:text-ink-faint"
-                  aria-controls={listId}
-                  aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
-                />
-              </div>
-            )}
+          <Leaves>
             <div
-              ref={listRef}
-              id={listId}
-              role="listbox"
-              tabIndex={-1}
-              aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
-              className="overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll p-1 outline-none"
-              style={{ maxHeight: pos.maxH - (useSearch ? 40 : 0) }}
+              ref={menuRef}
+              data-floating-menu=""
+              onKeyDown={onMenuKey}
+              style={{
+                left: pos.left,
+                width: pos.width,
+                ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }),
+              }}
+              className={`pop-menu glass-pane fixed z-[130] rounded-xl border border-line/15 bg-surface shadow-2xl overflow-hidden ${pos.up ? "origin-bottom" : "origin-top"}`}
             >
-              {visible.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-soft">No matches</p>}
-              {visible.map((o, i) => {
-                const header = o.group && o.group !== lastGroup ? o.group : null;
-                lastGroup = o.group;
-                const isSel = o.value === selectedKey;
-                const isActive = i === active;
-                return (
-                  <div key={o.value}>
-                    {header && (
-                      <div className="px-2.5 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">
-                        {header}
+              {useSearch && (
+                <div className="flex items-center gap-2 px-3 h-10 border-b border-line/10">
+                  <SearchIcon className="w-4 h-4 text-ink-soft flex-shrink-0" />
+                  <input
+                    ref={searchRef}
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setActive(0);
+                    }}
+                    placeholder="Type to filter…"
+                    className="flex-1 min-w-0 bg-transparent text-[13.5px] outline-none placeholder:text-ink-faint"
+                    aria-controls={listId}
+                    aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
+                  />
+                </div>
+              )}
+              <div
+                ref={listRef}
+                id={listId}
+                role="listbox"
+                tabIndex={-1}
+                aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
+                className="overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll p-1 outline-none"
+                style={{ maxHeight: pos.maxH - (useSearch ? 40 : 0) }}
+              >
+                {visible.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-soft">No matches</p>}
+                {visible.map((o, i) => {
+                  const header = o.group && o.group !== lastGroup ? o.group : null;
+                  lastGroup = o.group;
+                  const isSel = o.value === selectedKey;
+                  const isActive = i === active;
+                  return (
+                    <div key={o.value}>
+                      {header && (
+                        <div className="px-2.5 pt-2.5 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">
+                          {header}
+                        </div>
+                      )}
+                      <div
+                        id={`${listId}-${i}`}
+                        data-idx={i}
+                        role="option"
+                        aria-selected={isSel}
+                        aria-disabled={o.disabled || undefined}
+                        onMouseMove={() => !o.disabled && active !== i && setActive(i)}
+                        onClick={() => pick(o)}
+                        className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] cursor-pointer select-none ${
+                          o.disabled ? "opacity-45 cursor-not-allowed" : isActive ? "bg-surface-2" : ""
+                        } ${o.value === "__none__" ? "text-ink-soft" : "text-ink"}`}
+                      >
+                        {o.icon}
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate">{o.label}</span>
+                          {o.hint && <span className="block text-[11.5px] text-ink-soft truncate">{o.hint}</span>}
+                        </span>
+                        {isSel && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
                       </div>
-                    )}
-                    <div
-                      id={`${listId}-${i}`}
-                      data-idx={i}
-                      role="option"
-                      aria-selected={isSel}
-                      aria-disabled={o.disabled || undefined}
-                      onMouseMove={() => !o.disabled && active !== i && setActive(i)}
-                      onClick={() => pick(o)}
-                      className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] cursor-pointer select-none ${
-                        o.disabled ? "opacity-45 cursor-not-allowed" : isActive ? "bg-surface-2" : ""
-                      } ${o.value === "__none__" ? "text-ink-soft" : "text-ink"}`}
-                    >
-                      {o.icon}
-                      <span className="flex-1 min-w-0">
-                        <span className="block truncate">{o.label}</span>
-                        {o.hint && <span className="block text-[11.5px] text-ink-soft truncate">{o.hint}</span>}
-                      </span>
-                      {isSel && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>,
+          </Leaves>,
           document.body
         )}
     </>

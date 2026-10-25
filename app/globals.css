@@ -561,28 +561,15 @@ html[data-glass-style="liquid"] [data-shell="header"]::before {
 html[data-glass-style="liquid"] [data-shell="topbar"] { border-bottom-color: transparent; }
 
 /*
-  A page's own bar under the top bar (Outliers' niche, kind and tabs;
-  1.29.0): as see-through as the top bar, so the two read as one; with
-  Liquid, the top bar's fade moves to the bottom of this bar.
+  A page's own bar under the top bar (Outliers' niche, kind and tabs).
+  1.34.1: the same glass as the top bar, in every style: its pane, its
+  tint, its blur, never just a fade (Liquid's was all but clear, so over
+  bright thumbnails its words had nothing behind them). On a computer it
+  floats under the top bar like it ("Pages' own bars float" below).
 */
-html[data-glass] [data-shell="subbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.75)); }
-html[data-glass-style="liquid"] [data-shell="subbar"] {
-  background-color: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-html[data-glass-style="liquid"] [data-shell="subbar"]::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 -20px 0;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.25)), rgb(var(--paper) / calc(var(--glass-tint) * 0.25)) calc(100% - 20px), rgb(var(--paper) / 0));
-  -webkit-backdrop-filter: blur(12px) saturate(1.6);
-  backdrop-filter: blur(12px) saturate(1.6);
-  -webkit-mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
-  mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
-}
+html[data-glass] [data-shell="subbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9)); }
+html[data-glass][data-glass-opaque] [data-shell="subbar"] { background-color: rgb(var(--paper)); }
+/* Phones, Liquid: the top bar's soft band stops at its own edge when a page's bar is under it (it would blur that bar's top). */
 html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]::before {
   inset: 0;
   -webkit-mask-image: none;
@@ -611,11 +598,37 @@ html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]
     border: 1px solid rgb(var(--glass-edge));
     border-radius: 30px;
   }
-  html[data-glass-style="liquid"] [data-shell="bottom-nav"] .nav-tick { display: none; }
-  html[data-glass-style="liquid"] [data-shell="bottom-nav"] [data-on] { background: rgb(var(--amber) / 0.14); border-radius: 26px; }
+  /* The lens (below) is a soft pill around the tab, inside the capsule's 4px. */
+  html[data-glass-style="liquid"] [data-shell="bottom-nav"] { --nav-pad: 4px; }
+  html[data-glass-style="liquid"] .nav-lens-blob { inset: 0; width: auto; height: auto; margin: 0; border-radius: 26px; background: rgb(var(--amber) / 0.14); }
   /* Room under the page for the floating bar. */
   html[data-glass-style="liquid"] main { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
 }
+
+/*
+  The phone's tab bar (1.34.0, components/ui/sidebar-nav.tsx): the place
+  you're on is one lens that slides to the tab you press, overshooting a
+  touch and stretching on the way (iOS 26's tab bar), then the tab's icon
+  hops. Plain bars: a short amber line at the top of the tab; Liquid: a soft
+  pill (above). One slot per tab: --i of --n.
+*/
+[data-shell="bottom-nav"] { --nav-pad: 0px; }
+.nav-lens {
+  position: absolute;
+  top: var(--nav-pad);
+  bottom: var(--nav-pad);
+  left: var(--nav-pad);
+  width: calc((100% - 2 * var(--nav-pad)) / var(--n));
+  transform: translateX(calc(var(--i) * 100%));
+  transition: transform 0.55s var(--ease-spring), opacity 0.2s ease;
+  pointer-events: none;
+}
+.nav-lens[data-hidden] { opacity: 0; }
+.nav-lens-blob { position: absolute; top: 0; left: 50%; width: 32px; height: 2.5px; margin-left: -16px; border-radius: 2px; background: rgb(var(--amber)); }
+.nav-lens-blob[data-moved] { animation: nav-stretch 0.55s var(--ease-out); }
+@keyframes nav-stretch { 35% { scale: 1.3 0.88; } }
+.nav-hop { animation: nav-hop 0.5s var(--ease-spring); }
+@keyframes nav-hop { 30% { scale: 0.82; } 65% { scale: 1.12; translate: 0 -2px; } }
 
 /* Settings' little pictures of the three styles. */
 .glass-sample {
@@ -759,7 +772,7 @@ html:not([data-glass]):has([data-dash-bg]) [data-shell="topbar"] { background-co
 /* Glass at 0 (solid): the bars are solid too, whatever the style or the picture (1.29.3). */
 html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="topbar"], [data-shell="subbar"]) { background-color: rgb(var(--paper)); }
 html[data-glass][data-glass-opaque] [data-shell="bottom-nav"] { background-color: rgb(var(--surface)); }
-html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subbar"])::before { display: none; }
+html[data-glass][data-glass-opaque] [data-shell="header"]::before { display: none; }
 
 /*
   The top bar floats (1.31.9). With the glass look on a computer (from md,
@@ -770,7 +783,9 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
   (blur, the cards' tint, a rim of light; Liquid's light follows the
   pointer on it). It used to run edge to edge from the side bar. What
   sticks under it starts below it: --shell-top (Outliers' bar). Phones keep
-  their bars; solid glass (the slider at 0) keeps the plain bar.
+  their bars. 1.34.1: at solid glass (the slider at 0) it still floats, as a
+  solid pane (it used to fall back to the plain bar beside a floating side
+  bar).
 
   What scrolls up under it blurs softly away instead of showing sharp
   around it (iOS 26's scroll edge): [data-shell="edge"], a band over the
@@ -778,12 +793,15 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
   page's own bar (Outliers', z 15) and the top bar (z 20). Its blur fades
   out before the page's first words (they start below --shell-top), and it
   comes in as the page scrolls where the browser can tie it to scrolling
-  (elsewhere it's there from the start, over the empty top only).
+  (elsewhere it's there from the start, over the empty top only). At every
+  glass level, solid too (1.34.1: with the bar floating there, what
+  scrolled under it showed sharp around it and between it and Outliers'
+  bar).
 */
 [data-shell="edge"] { display: none; }
 @media (min-width: 900px) {
-  html[data-glass]:not([data-glass-opaque]) { --shell-top: 72px; }
-  html[data-glass]:not([data-glass-opaque]) [data-shell="edge"] {
+  html[data-glass] { --shell-top: 72px; }
+  html[data-glass] [data-shell="edge"] {
     display: block;
     position: sticky;
     top: 0;
@@ -794,30 +812,38 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
-  html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]::before {
+  /*
+    1.34.1: it fades in from the page's left edge (it began there sharply, so the strip between the side bar and the
+    top bar showed a block of its own, the owner's "weird thing in the middle"), and only blurs: a saturate() lit up
+    the colours behind it, which showed as that block even with nothing scrolling under it.
+  */
+  html[data-glass] [data-shell="edge"]::before {
     content: "";
     position: absolute;
     inset: 0 0 auto 0;
     height: calc(var(--shell-top) + 10px);
     background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.4)), rgb(var(--paper) / 0));
-    -webkit-backdrop-filter: blur(10px) saturate(1.4);
-    backdrop-filter: blur(10px) saturate(1.4);
-    -webkit-mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
-    mask-image: linear-gradient(#000 calc(100% - 26px), transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    --edge-down: linear-gradient(#000 calc(100% - 26px), transparent);
+    --edge-in: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 12px), transparent);
+    -webkit-mask-image: var(--edge-down), var(--edge-in);
+    -webkit-mask-composite: source-in;
+    mask-image: var(--edge-down), var(--edge-in);
+    mask-composite: intersect;
   }
   /* A page with its own bar under it (Outliers): blurred right down to that bar, which goes on from there. */
-  html[data-glass]:not([data-glass-opaque]):has([data-shell="subbar"]) [data-shell="edge"]::before {
-    -webkit-mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
-    mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
+  html[data-glass]:has([data-shell="subbar"]) [data-shell="edge"]::before {
+    --edge-down: linear-gradient(#000 calc(100% - 10px), transparent);
   }
   @supports (animation-timeline: scroll()) {
-    html[data-glass]:not([data-glass-opaque]) [data-shell="edge"]::before {
+    html[data-glass] [data-shell="edge"]::before {
       animation: shell-edge-in auto linear both;
       animation-timeline: scroll(root block);
       animation-range: 0 48px;
     }
   }
-  html[data-glass]:not([data-glass-opaque]) [data-shell="header"] {
+  html[data-glass] [data-shell="header"] {
     top: 10px;
     height: 52px;
     margin: 10px 20px 0;
@@ -831,13 +857,19 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
     box-shadow: var(--glass-shadow);
   }
   /* Liquid's soft band of blur under a bar that touched the edges isn't needed under a floating one. */
-  html[data-glass]:not([data-glass-opaque]) [data-shell="header"]::before { display: none; }
-  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"] {
+  html[data-glass] [data-shell="header"]::before { display: none; }
+  /* Solid glass: the same pane, solid. */
+  html[data-glass][data-glass-opaque] [data-shell="header"] {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-glass-style="liquid"] [data-shell="header"] {
     border-radius: 20px;
     box-shadow: var(--liquid-rim), var(--liquid-drop);
   }
   /* Liquid's light, where the pointer is, on its rim (LiquidLight sets --mx / --my). */
-  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]::after {
+  html[data-glass-style="liquid"] [data-shell="header"]::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -851,8 +883,8 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
     opacity: 0;
     transition: opacity 0.3s ease;
   }
-  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]:hover::after { opacity: 1; }
-  html[data-glass-style="halo"]:not([data-glass-opaque]) [data-shell="header"] {
+  html[data-glass-style="liquid"] [data-shell="header"]:hover::after { opacity: 1; }
+  html[data-glass-style="halo"] [data-shell="header"] {
     border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
     box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
   }
@@ -864,10 +896,49 @@ html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="subb
   }
 }
 @media (min-width: 1400px) {
-  html[data-glass]:not([data-glass-opaque]) [data-shell="header"] { margin-left: 24px; margin-right: 24px; }
+  html[data-glass] [data-shell="header"] { margin-left: 24px; margin-right: 24px; }
 }
 @media (min-width: 900px) and (hover: none) {
-  html[data-glass-style="liquid"]:not([data-glass-opaque]) [data-shell="header"]::after { display: none; }
+  html[data-glass-style="liquid"] [data-shell="header"]::after { display: none; }
+}
+/*
+  Pages' own bars float (1.34.1, Outliers'): with the glass look on a
+  computer, the bar under the top bar is a pane like it, 10 px under it,
+  lined up with it (its page pads 32 px, 40 px from xl: the pane comes out
+  12 px, then 16 px, to the top bar's 20 / 24 px), the same radius, rim and
+  shadow; its tab row loses its own line (the pane has an edge).
+*/
+@media (min-width: 900px) {
+  html[data-glass] [data-shell="subbar"] {
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 18px;
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+  }
+  html[data-glass][data-glass-opaque] [data-shell="subbar"] {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-glass] [data-shell="subbar"] > nav { border-bottom-color: transparent; }
+  html[data-glass-style="liquid"] [data-shell="subbar"] { border-radius: 20px; box-shadow: var(--liquid-rim), var(--liquid-drop); }
+  html[data-glass-style="halo"] [data-shell="subbar"] {
+    border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
+    box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+  }
+  html[data-glass]:not([data-glass-opaque]):has([data-dash-bg]) [data-shell="subbar"] {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor)));
+    -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+    backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  }
+}
+@media (min-width: 1400px) {
+  html[data-glass] [data-shell="subbar"] { margin-left: -16px; margin-right: -16px; }
 }
 @keyframes shell-edge-in {
   from { opacity: 0; }
@@ -1254,6 +1325,64 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
   --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 }
 
+/* ---------------------------------------------------------------------------
+   Pop-ups (1.34.0): each comes in one way and leaves the same way backwards,
+   for as long. Its moving parts name how they move:
+     pop-dim    the darkened page behind a window (fades)
+     pop-fade   a picture shown big (fades)
+     pop-modal  a window or a prompt (rises a little, grows a little)
+     pop-menu   a menu, a picker, a small box from a button (grows from its button)
+     pop-drop   a box that drops from the top
+     pop-sheet  a phone's sheet (slides up from the bottom)
+     pop-drawer a side panel (slides in from the right; a sheet below md, 900px)
+     pop-card   a card at the edge of the page (What's new)
+   When one closes, components/ui/leaves.tsx keeps a still copy on screen
+   with data-leaving while its way in plays backwards (lib/pop-ghost.ts):
+   nothing in it can be pressed meanwhile. "backwards" on the way in: once in,
+   the part keeps no transform of the animation's (a fixed pop-up inside it
+   would place itself against it). */
+:root {
+  --pop-fast: 180ms;
+  --pop: 220ms;
+  --pop-slow: 320ms;
+  /* The way in settles into place (--ease-out); the way out leaves it, speeding up as it goes. (--ease-out
+     time-reversed would sit still for half the way out: it would feel like the click didn't land.) */
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+}
+.pop-dim, .pop-fade { animation: pop-dim var(--pop) var(--ease-out) backwards; }
+.pop-modal { animation: pop-modal var(--pop) var(--ease-out) backwards; }
+.pop-menu { --pop-y: -6px; animation: pop-menu var(--pop-fast) var(--ease-out) backwards; }
+.pop-menu.origin-bottom, .pop-menu[data-up] { --pop-y: 6px; }
+.pop-drop { animation: pop-drop var(--pop) var(--ease-out) backwards; }
+.pop-sheet, .pop-drawer { animation: pop-sheet var(--pop-slow) var(--ease-out) backwards; }
+@media (min-width: 900px) { .pop-drawer { animation: pop-drawer var(--pop-slow) var(--ease-out) backwards; } }
+.pop-card { animation: pop-card var(--pop-slow) var(--ease-out) backwards; }
+
+[data-leaving], [data-leaving] * { pointer-events: none !important; }
+[data-leaving] * { animation: none !important; }
+[data-leaving] .pop-dim, [data-leaving] .pop-fade { animation: pop-dim-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-modal { animation: pop-modal-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-menu { animation: pop-menu-out var(--pop-fast) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-drop { animation: pop-drop-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-sheet, [data-leaving] .pop-drawer { animation: pop-sheet-out var(--pop-slow) var(--ease-leave) forwards !important; }
+@media (min-width: 900px) { [data-leaving] .pop-drawer { animation: pop-drawer-out var(--pop-slow) var(--ease-leave) forwards !important; } }
+[data-leaving] .pop-card { animation: pop-card-out var(--pop-slow) var(--ease-leave) forwards !important; }
+
+@keyframes pop-dim { from { opacity: 0; } }
+@keyframes pop-dim-out { to { opacity: 0; } }
+@keyframes pop-modal { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes pop-modal-out { to { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes pop-menu { from { opacity: 0; transform: translateY(var(--pop-y)) scale(0.96); } }
+@keyframes pop-menu-out { to { opacity: 0; transform: translateY(var(--pop-y)) scale(0.96); } }
+@keyframes pop-drop { from { opacity: 0; transform: translateY(-16px) scale(0.98); } }
+@keyframes pop-drop-out { to { opacity: 0; transform: translateY(-16px) scale(0.98); } }
+@keyframes pop-sheet { from { transform: translateY(100%); } }
+@keyframes pop-sheet-out { to { transform: translateY(100%); } }
+@keyframes pop-drawer { from { opacity: 0; transform: translateX(28px); } }
+@keyframes pop-drawer-out { to { opacity: 0; transform: translateX(28px); } }
+@keyframes pop-card { from { opacity: 0; transform: translateY(18px) scale(0.96); } }
+@keyframes pop-card-out { to { opacity: 0; transform: translateY(18px) scale(0.96); } }
+
 /* Pages rise in when you navigate. */
 /* Timeline marker: a ring pulses out when clicked. */
 @keyframes marker-ping {
@@ -1261,15 +1390,6 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
   100% { box-shadow: 0 0 0 12px rgb(var(--amber) / 0); }
 }
 
-/* Bottom sheet rises; top popup drops in. */
-@keyframes sheetup {
-  from { transform: translateY(100%); }
-  to { transform: none; }
-}
-@keyframes sheetdown {
-  from { opacity: 0; transform: translateY(-16px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
 
 /* Ends on "transform: none" (not translateY(0)): a leftover transform
    would make fixed popups inside the page position against the page. */
@@ -2154,11 +2274,9 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 }
 
 /* ---------------------------------------------------------------------------
-   What's new (components/ui/whats-new.tsx): the update card springs in from
-   below; the sidebar dot breathes until you've looked. */
-@keyframes whats-new-in {
-  from { opacity: 0; transform: translateY(18px) scale(0.96); }
-}
+   What's new (components/ui/whats-new.tsx): the update card rises in from
+   below and sinks back the same way (pop-card, 1.34.0); the sidebar dot
+   breathes until you've looked. */
 @keyframes whats-new-dot {
   50% { box-shadow: 0 0 0 4px rgb(var(--amber) / 0.2); }
 }
@@ -2315,10 +2433,6 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
   to { opacity: 1; transform: none; }
 }
 .deal > * { animation: deal-in 0.5s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 26ms); }
-@keyframes drawer-in {
-  from { opacity: 0; transform: translateX(28px); }
-  to { opacity: 1; transform: none; }
-}
 /* The multiplier: tabular figures, a hair tighter. */
 .mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 /* A niche filling in (1.29.9): when the list itself says "Finding channels and videos…", the line at the top doesn't say it again. */

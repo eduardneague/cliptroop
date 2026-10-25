@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/dialog";
 import { DateChip } from "@/components/ui/date-picker";
@@ -10,7 +10,9 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import type { PipelineStage } from "@/lib/permissions/roles";
 import { AssigneeRow, ScriptersRow } from "./assignee-row";
-import { setLongPlatforms, updateExpectedDate, updateTypeTheme } from "./actions";
+import { renameLongVideo, setLongPlatforms, updateExpectedDate, updateTypeTheme } from "./actions";
+import { cleanName, NameField } from "@/components/ui/editable-title";
+import { FORM_LIMITS } from "@/lib/form-limits";
 import { setLongInAppReview } from "./review/actions";
 
 type Assignee = { rowId: string; teamMemberId: string; name: string; color: string };
@@ -33,12 +35,14 @@ const field = "w-full rounded-xl border border-line/15 bg-surface px-3.5 h-10 te
 const label = "block text-[12px] font-semibold text-ink-soft mb-1.5";
 
 /**
- * Long video settings: everything chosen when it was created. People
- * changes notify whoever is newly tagged (assigning sends it).
+ * Long video settings: everything chosen when it was created, its name
+ * first (1.33.1). People changes notify whoever is newly tagged (assigning
+ * sends it). A name still being typed is saved when the window closes.
  */
 export function LongVideoSettings({
   projectId,
   teamId,
+  title,
   videoType,
   theme: theme0,
   subtheme: subtheme0,
@@ -52,6 +56,7 @@ export function LongVideoSettings({
 }: {
   projectId: string;
   teamId: string;
+  title: string;
   videoType: string[];
   theme: string;
   subtheme: string | null;
@@ -74,6 +79,26 @@ export function LongVideoSettings({
   const [subtheme, setSubtheme] = useState(subtheme0 ?? "");
   const [platforms, setPlatforms] = useState(platforms0);
   const [inApp, setInApp] = useState<boolean | null>(inApp0);
+  const [name, setName] = useState(title);
+  // The name as saved: the page's, or the one just saved here (before the page catches up).
+  const [savedName, setSavedName] = useState(title);
+  useEffect(() => setSavedName(title), [title]);
+  const [naming, startNaming] = useTransition();
+  const rename = (next: string) =>
+    startNaming(async () => {
+      const r = await renameLongVideo(projectId, next);
+      if (r.error) toast.error(r.error);
+      else {
+        setSavedName(next);
+        toast.success(`Renamed to “${next}”`);
+        router.refresh();
+      }
+    });
+  const close = () => {
+    const next = cleanName(name);
+    if (next && next !== savedName && !naming) rename(next);
+    setOpen(false);
+  };
   const dirty = types.join() !== videoType.join() || theme !== theme0 || subtheme !== (subtheme0 ?? "");
 
   const run = (fn: () => Promise<{ error?: string } | object | undefined>, ok: string) =>
@@ -90,16 +115,24 @@ export function LongVideoSettings({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setName(savedName);
+          setOpen(true);
+        }}
         aria-label="Video settings"
         title="Video settings"
         className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
       >
         <SettingsIcon className="w-[18px] h-[18px]" />
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="Video settings" description="Everything set when the video was created." width="sm:max-w-2xl">
+      <Dialog open={open} onClose={close} title="Video settings" description="Everything set when the video was created." width="sm:max-w-2xl">
         <div className="space-y-6">
-          <section className="space-y-3">
+          <section>
+            <span className={label}>Name</span>
+            <NameField value={name} saved={savedName} onChange={setName} onSave={() => rename(cleanName(name))} max={FORM_LIMITS.videoTitle} pending={naming} />
+          </section>
+
+          <section className="space-y-3 pt-5 border-t border-line/10">
             <div>
               <span className={label}>Type</span>
               <div className="flex flex-wrap gap-2">

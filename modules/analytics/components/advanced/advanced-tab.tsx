@@ -151,7 +151,7 @@ export function AdvancedTab({
                 className={`relative px-2.5 h-9 inline-flex items-center text-[13px] font-semibold whitespace-nowrap transition-colors ${shown === v ? "text-ink" : "text-ink-soft hover:text-ink"}`}
               >
                 {ADV_VIEW_LABEL[v]}
-                <span aria-hidden className={`absolute left-1.5 right-1.5 -bottom-px h-[2px] rounded-[2px] bg-ink transition-opacity ${shown === v ? "opacity-100" : "opacity-0"}`} />
+                <span aria-hidden className={`absolute left-1.5 right-1.5 bottom-0 h-[2.5px] rounded-t-[2px] bg-ink transition-opacity ${shown === v ? "opacity-100" : "opacity-0"}`} />
               </a>
             ))}
           </nav>

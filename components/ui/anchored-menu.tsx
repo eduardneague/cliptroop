@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { placeMenu, type MenuPlace } from "@/lib/menu-place";
+import { Leaves } from "./leaves";
 
 /**
  * A dropdown that opens from its button, rendered at the top of the page (a
@@ -14,7 +15,8 @@ import { placeMenu, type MenuPlace } from "@/lib/menu-place";
  * sits above popups, so one opened from inside a popup is never hidden
  * behind it. Closes on an outside tap, Escape (just the menu, not the popup
  * it came from), or once its button scrolls off the screen (until then it
- * follows it).
+ * follows it). It grows from its button and shrinks back into it as it
+ * closes (1.34.0, <Leaves>).
  */
 export function AnchoredMenu({
   open,
@@ -116,15 +118,17 @@ export function AnchoredMenu({
 
   if (!open || !pos || typeof document === "undefined") return null;
   return createPortal(
-    <div
-      ref={panel}
-      role={role}
-      aria-label={label}
-      className={`glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain animate-[modalin_.14s_var(--ease-out)] ${pos.up ? "origin-bottom" : "origin-top"}`}
-      style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
-    >
-      {children}
-    </div>,
+    <Leaves>
+      <div
+        ref={panel}
+        role={role}
+        aria-label={label}
+        className={`pop-menu glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain ${pos.up ? "origin-bottom" : "origin-top"}`}
+        style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
+      >
+        {children}
+      </div>
+    </Leaves>,
     document.body
   );
 }
