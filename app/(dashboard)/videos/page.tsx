@@ -25,6 +25,7 @@ import { VideoMenu } from "@/modules/long-videos/components/video-menu";
 import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modules/long-videos/components/list-skeletons";
 import type { Metadata } from "next";
 import { sketchThumb, studioThumb, type PictureWidth } from "@/lib/picture-size";
+import { chunks, LIST_CHUNK, WIDE_CHUNK } from "@/lib/chunks";
 
 export const metadata: Metadata = { title: "Long videos" };
 
@@ -192,7 +193,7 @@ export default async function VideosPage({
           No projects{stageFilter ? " in this stage" : " yet"}.
         </div>
       ) : isTable ? (
-        <div className="motion-stagger rounded-xl border border-line/10 overflow-hidden">
+        <div className="rounded-xl border border-line/10 overflow-hidden">
           <div className={`${VIDEO_TABLE_COLS} gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint`}>
             <span className="text-right">#</span>
             <span></span>
@@ -203,7 +204,10 @@ export default async function VideosPage({
             <span className="hidden sm:block">Expected</span>
             <span />
           </div>
-          {projects.map((p) => {
+          {chunks(projects, LIST_CHUNK).map((group, g) => (
+          // A group of rows off screen isn't laid out or painted until it comes near (1.32.5, globals.css .list-chunk).
+          <div key={g} className="list-chunk motion-stagger">
+          {group.map((p) => {
             const cover = coverOf(p, 160);
             const c = stageColor(p.stage as PipelineStage);
             const themeColor = colorForId(p.theme || "theme");
@@ -252,10 +256,15 @@ export default async function VideosPage({
               </div>
             );
           })}
+          </div>
+        ))}
         </div>
       ) : (
-        <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
-          {projects.map((p) => {
+        <div className="flex flex-col gap-5">
+        {chunks(projects, WIDE_CHUNK).map((group, g) => (
+          // A group of cards off screen isn't drawn until it comes near (1.32.5, globals.css .list-chunk-cards).
+          <div key={g} className="list-chunk-cards motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+          {group.map((p) => {
             const cover = coverOf(p, 640);
             const c = stageColor(p.stage as PipelineStage);
             return (
@@ -334,6 +343,8 @@ export default async function VideosPage({
               </div>
             );
           })}
+          </div>
+        ))}
         </div>
       )}
       </PendingSwap>

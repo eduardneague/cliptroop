@@ -2,6 +2,7 @@ import "server-only";
 import { DEFAULT_MEDIA_KEEP_DAYS, readKeep, type KeepSetting } from "@/lib/media-keep";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { allPages } from "@/lib/all-pages";
 import { colorForId, displayName } from "@/lib/avatar";
 import type { RoleId } from "@/lib/permissions/roles";
 import { type Platform, type ShortStage, type ShortType } from "./constants";
@@ -91,12 +92,17 @@ function toEditor(raw: RawEditor | RawEditor[]): ShortEditor | null {
  */
 export async function listShorts(teamId: string): Promise<ShortListItem[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("short_videos")
-    .select(LIST_SELECT)
-    .eq("team_id", teamId)
-    .order("planned_date", { ascending: true, nullsFirst: false })
-    .order("queue_position", { ascending: true });
+  const data = await allPages((from, to) =>
+    supabase
+      .from("short_videos")
+      .select(LIST_SELECT)
+      .eq("team_id", teamId)
+      .order("planned_date", { ascending: true, nullsFirst: false })
+      .order("queue_position", { ascending: true })
+      // The same order on every page (two shorts can share a day and a place).
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
 
   return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => ({
     id: r.id as string,

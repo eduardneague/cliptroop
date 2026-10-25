@@ -1305,6 +1305,16 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
 .motion-stagger > *:nth-child(10) { animation-delay: 270ms; }
 .motion-stagger > *:nth-child(n + 11) { animation-delay: 300ms; }
 
+/* Long lists (1.32.5): rows and cards go in groups (LIST_CHUNK in lib/chunks.ts); a group off screen isn't laid
+   out or painted until it comes near, its height the one it had when last drawn (auto), or this guess before.
+   Groups, not each row: a thousand rows each watched on their own made scrolling stutter (frames of half a second
+   in the harness), 50 groups don't. What opens from a row (menus, pickers, dialogs) opens in a portal, so nothing
+   is cut off by a group (content-visibility contains its painting). */
+.list-chunk { content-visibility: auto; contain-intrinsic-block-size: auto 1450px; }
+/* Cards lift and cast a shadow when pointed at: 12 px of room around them inside the group (taken back outside it,
+   so the cards sit where they did; the list stacks groups with flex and a gap, not margins). */
+.list-chunk-cards { content-visibility: auto; contain-intrinsic-block-size: auto 1800px; padding: 12px; margin: -12px; }
+
 /* Popups and menus settle with a soft, decelerating scale. */
 [class*="animate-[modalin"] { animation-timing-function: var(--ease-out) !important; animation-duration: 0.22s !important; }
 [class*="animate-[toastin"] { animation-timing-function: var(--ease-out) !important; animation-duration: 0.42s !important; }

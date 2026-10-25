@@ -268,6 +268,14 @@ the page is live, or React throws that part away (production error #418).
   `app/(dashboard)/objectives/views.tsx`, `app/(dashboard)/team/lazy-tabs.tsx`,
   the dashboard widgets in `modules/dashboard/components/studio.tsx`. A big
   library used on one action (tus uploads) is `await import()`ed there.
+- A list that grows without end either pages ("Show more", like Outliers
+  and Analytics) or, when it's drawn on the server, renders its rows and
+  cards in groups of `LIST_CHUNK` / `WIDE_CHUNK` (lib/chunks.ts) in a
+  `.list-chunk` / `.list-chunk-cards` (globals.css, content-visibility: auto):
+  groups, never each row (a thousand watched rows stutter). What opens from a
+  row must open in a portal (a group clips what's drawn inside it). A query
+  for a list that can pass 1000 rows reads with `allPages()` (lib/all-pages.ts):
+  Supabase cuts every answer at 1000 rows without saying so (1.32.5).
 - Dashboard widgets: a new one gets its `dynamic()` line and its `PRELOAD`
   entry in `studio.tsx` (the board's widgets start downloading while the page
   hydrates; Customize fetches the rest for the library). Each renders inside

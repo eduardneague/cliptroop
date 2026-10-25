@@ -46,6 +46,8 @@ import { PostedToggles } from "@/modules/short-videos/components/posted-toggles"
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { MarkDoneButton } from "@/modules/short-videos/components/mark-done-button";
 import { ShortsRealtime } from "@/modules/short-videos/components/shorts-realtime";
+import { splitHistory } from "@/modules/short-videos/lib/history";
+import { chunks, LIST_CHUNK } from "@/lib/chunks";
 import { setShortsViewMode } from "./view-mode-actions";
 
 export const metadata: Metadata = { title: "Short videos" };
@@ -59,6 +61,8 @@ type Params = {
   type?: string;
   sort?: string;
   view?: string;
+  /** "all": posted shorts from before the last two weeks too (1.32.5). */
+  past?: string;
 };
 
 export default async function ShortsPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -164,6 +168,10 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   const dayCounts = new Map<string, number>();
   all.forEach((s) => s.plannedDate && dayCounts.set(s.plannedDate, (dayCounts.get(s.plannedDate) ?? 0) + 1));
   const firstUpcoming = newest ? null : shorts.find((s) => s.plannedDate && s.plannedDate >= today)?.id ?? null;
+  // A long history stays out of the way until asked for (1.32.5, modules/short-videos/lib/history.ts).
+  const showPast = params.past === "all";
+  const history = splitHistory(shorts, today, showPast);
+  const list = history.shown;
 
   const buildHref = (next: Partial<Params>) => {
     const merged = {
@@ -174,6 +182,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       only: only ? "1" : undefined,
       type: typeFilter ?? undefined,
       sort: newest ? "newest" : undefined,
+      past: showPast ? "all" : undefined,
       ...next,
     };
     const qs = new URLSearchParams();
@@ -189,6 +198,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       only: only ? "1" : null,
       type: typeFilter,
       sort: newest ? "newest" : null,
+      past: showPast ? "all" : null,
     }).filter((e): e is [string, string] => !!e[1])
   ).toString();
 
@@ -354,6 +364,8 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
       {!newest && firstUpcoming && <ScrollToToday />}
 
+      {!newest && history.offer && <HistoryBar history={history} showHref={buildHref({ past: "all" })} hideHref={buildHref({ past: undefined })} />}
+
       {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
       <PendingSwap fallback={isTable ? <ShortTableSkeleton /> : <ShortCardsSkeleton />} fallbacks={{ grid: <ShortCardsSkeleton />, table: <ShortTableSkeleton /> }}>
       {shorts.length === 0 ? (
@@ -379,7 +391,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
           ) : null}
         </div>
       ) : isTable ? (
-        <div className="motion-stagger rounded-xl border border-line/10 bg-surface overflow-hidden">
+        <div className="rounded-xl border border-line/10 bg-surface overflow-hidden">
           <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1fr)_120px_60px_64px] lg:grid-cols-[40px_minmax(0,1fr)_160px_120px_60px_64px] xl:grid-cols-[44px_minmax(0,1fr)_160px_120px_150px_64px] 2xl:grid-cols-[48px_minmax(0,1fr)_140px_160px_120px_150px_64px] gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
             <span className="text-right">#</span>
             <span>Title</span>
@@ -389,17 +401,21 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
             <span>Posted</span>
             <span></span>
           </div>
-          {shorts.map((s, i) => {
+          {chunks(list, LIST_CHUNK).map((group, g) => (
+          // A group of rows off screen isn't laid out or painted until it comes near (1.32.5, globals.css .list-chunk).
+          <div key={g} className="list-chunk motion-stagger">
+          {group.map((s, k) => {
+            const i = g * LIST_CHUNK + k;
             const { canToggle, canMarkDone, locked } = rowProps(s);
             const overdue = isOverdue(s.plannedDate, s.stage);
             const rel = relativeDay(s.plannedDate);
             // Day header when the date changes (schedule order only).
-            const newDay = !newest && s.plannedDate !== (shorts[i - 1]?.plannedDate ?? "__start");
+            const newDay = !newest && s.plannedDate !== (list[i - 1]?.plannedDate ?? "__start");
             const count = s.plannedDate ? dayCounts.get(s.plannedDate) ?? 0 : 0;
             return (
               <div key={s.id}>
                 {newDay &&
-                  emptyDaysBefore(s.plannedDate, shorts[i - 1]?.plannedDate ?? null).map((d) => (
+                  emptyDaysBefore(s.plannedDate, list[i - 1]?.plannedDate ?? null).map((d) => (
                     <div
                       key={`empty-${d}`}
                       className="flex items-center justify-between gap-3 px-3 py-2 border-t border-line/10 text-[11px] font-bold uppercase tracking-wide text-ink-soft bg-surface-2/40"
@@ -587,10 +603,15 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
               </div>
             );
           })}
+          </div>
+        ))}
         </div>
       ) : (
-        <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {shorts.map((s) => {
+        <div className="flex flex-col gap-4">
+        {chunks(list, LIST_CHUNK).map((group, g) => (
+          // A group of cards off screen isn't drawn until it comes near (1.32.5, globals.css .list-chunk-cards).
+          <div key={g} className="list-chunk-cards motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {group.map((s) => {
             const { canToggle, canMarkDone } = rowProps(s);
             const overdue = isOverdue(s.plannedDate, s.stage);
             return (
@@ -641,10 +662,18 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
               </div>
             );
           })}
+          </div>
+        ))}
         </div>
       )}
 
       </PendingSwap>
+
+      {newest && history.offer && (
+        <div className="mt-4">
+          <HistoryBar history={history} showHref={buildHref({ past: "all" })} hideHref={buildHref({ past: undefined })} />
+        </div>
+      )}
 
       {user && all.length > 0 && (
         <p className="mt-4 text-[11.5px] text-ink-faint">
@@ -655,5 +684,31 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       )}
     </div>
     </PendingNav>
+  );
+}
+
+/** "312 posted shorts from before Mon, Oct 12 · Show them" (and back), 1.32.5. */
+function HistoryBar({ history, showHref, hideHref }: { history: ReturnType<typeof splitHistory>; showHref: string; hideHref: string }) {
+  const when = formatShortDate(history.cutoff);
+  return (
+    <div className="mb-3 flex items-center gap-2 flex-wrap rounded-xl border border-dashed border-line/20 px-3.5 py-2.5 text-[12.5px] text-ink-soft">
+      {history.hiding ? (
+        <>
+          <span>
+            {history.older} posted short{history.older === 1 ? "" : "s"} from before {when} {history.older === 1 ? "is" : "are"} left out, so the list stays quick.
+          </span>
+          <Link href={showHref} className="font-semibold text-amber hover:underline">
+            Show them
+          </Link>
+        </>
+      ) : (
+        <>
+          <span>Showing every posted short, {history.older} from before {when}.</span>
+          <Link href={hideHref} className="font-semibold text-amber hover:underline">
+            Show only the last two weeks
+          </Link>
+        </>
+      )}
+    </div>
   );
 }

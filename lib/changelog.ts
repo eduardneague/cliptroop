@@ -22,6 +22,16 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.32.5",
+    date: "2026-10-25",
+    title: "Speed: long lists",
+    changes: [
+      { kind: "better", text: "The short videos list opens and updates much quicker once a team has a long history: posted shorts from before the last two weeks wait behind \"Show them\" (when there are 30 or more of them). Anything not posted yet, overdue included, is always there." },
+      { kind: "better", text: "The short and long videos lists draw what's on screen first and the rest as you scroll to it: a long list opens about twice as fast, and scrolling stays smooth." },
+      { kind: "fixed", text: "A team with more than 1,000 shorts no longer loses its newest ones from the list and the calendar." },
+    ],
+  },
+  {
     version: "1.32.4",
     date: "2026-10-25",
     title: "Speed: measured where it counts",
