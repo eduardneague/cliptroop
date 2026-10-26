@@ -19,8 +19,8 @@ export function PlatformMark({
   posted?: boolean;
   /** The logo's size and corners. */
   className?: string;
-  /** sm: for logos up to about 24 px; md: bigger ones. */
-  tick?: "sm" | "md";
+  /** xs: for logos of about 14 px; sm: up to about 24 px; md: bigger ones. */
+  tick?: "xs" | "sm" | "md";
 }) {
   return (
     <span className="relative inline-flex flex-shrink-0 align-middle" data-posted={posted ? "" : undefined}>
@@ -28,10 +28,10 @@ export function PlatformMark({
       {posted && (
         <span
           aria-hidden
-          className={`absolute flex items-center justify-center rounded-[4px] text-white ring-2 ring-surface ${tick === "md" ? "-right-1.5 -bottom-1.5 w-4 h-4" : "-right-1 -bottom-1 w-3 h-3"}`}
+          className={`absolute flex items-center justify-center text-white ${tick === "md" ? "-right-1.5 -bottom-1.5 w-4 h-4 rounded-[4px] ring-2" : tick === "sm" ? "-right-1 -bottom-1 w-3 h-3 rounded-[4px] ring-2" : "-right-[3px] -bottom-[3px] w-2.5 h-2.5 rounded-[3px] ring-[1.5px]"} ring-surface`}
           style={{ background: "rgb(var(--teal))" }}
         >
-          <CheckIcon className={tick === "md" ? "w-2.5 h-2.5" : "w-2 h-2"} />
+          <CheckIcon className={tick === "md" ? "w-2.5 h-2.5" : tick === "sm" ? "w-2 h-2" : "w-[7px] h-[7px]"} />
         </span>
       )}
     </span>

@@ -22,6 +22,16 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.34.4",
+    date: "2026-10-26",
+    title: "Followers per day, and platforms on the dashboard",
+    changes: [
+      { kind: "better", text: "The dashboard's Followers widget now shows the new followers of each day of the last 28 as bars (a day that lost some goes below the line). Point at a bar for that day's number." },
+      { kind: "new", text: "Followers: the platforms under the bars are filters. Pick YouTube to see only its subscribers, or All for every platform together. The widget remembers your choice." },
+      { kind: "new", text: "Upcoming shorts shows the platforms each short goes to, with a tick where it's posted already, and filters on top: see only Instagram's, only TikTok's, or all. It remembers your choice too." },
+    ],
+  },
+  {
     version: "1.34.3",
     date: "2026-10-26",
     title: "A better Ready to post",

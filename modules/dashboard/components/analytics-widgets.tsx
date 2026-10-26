@@ -10,6 +10,7 @@ import { reportedUntil } from "@/modules/analytics/lib/trend-math";
 import { countryName } from "@/modules/analytics/components/world-map";
 import { AudienceMapView, layerFor, MAP_MODES, type MapMode, type MapView } from "@/modules/analytics/components/audience-map";
 import { useBox } from "./widget-box";
+import { followerGains, sumSeries } from "@/modules/analytics/lib/followers";
 
 /*
  * Analytics on the dashboard. Each widget asks the server for its numbers
@@ -21,6 +22,7 @@ const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;
 type P = (typeof PLATFORMS)[number];
 const NAME: Record<P, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
 const COLOR: Record<P, string> = { youtube: "rgb(var(--chart-yt))", instagram: "rgb(var(--chart-ig))", tiktok: "rgb(var(--chart-tt))", facebook: "rgb(var(--chart-fb))" };
+const isP = (v: unknown): v is P => PLATFORMS.includes(v as P);
 
 type Loaded<T> = { state: "loading" } | { state: "error"; error: string } | { state: "ok"; data: T };
 const caches = { audience: new Map<string, { at: number; p: Promise<Loaded<DashAudience>> }>(), production: new Map<string, { at: number; p: Promise<Loaded<DashProduction>> }>() };
@@ -183,62 +185,40 @@ export function ViewsWidget({ teamId }: { teamId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Followers: each platform now, and the change over 28 days.
+// Followers: how many now, and the new ones each day of the last 28.
 // ---------------------------------------------------------------------------
 
-/**
- * Followers of every platform together, per day (1.27.5): each platform's
- * count carried over days it has none (before its first count: its first
- * one), so the line doesn't jump where a platform's history starts.
- */
-export function followersLine(daily: Partial<Record<P, (number | null)[]>> | undefined, days: number): (number | null)[] {
-  const series = PLATFORMS.map((p) => daily?.[p]).filter((x): x is (number | null)[] => Array.isArray(x) && x.some((v) => v !== null));
-  if (!series.length) return [];
-  const filled = series.map((xs) => {
-    const first = xs.find((v) => v !== null) ?? 0;
-    let last = first;
-    return Array.from({ length: days }, (_, i) => {
-      const v = xs[i];
-      if (v !== null && v !== undefined) last = v;
-      return last;
-    });
-  });
-  return Array.from({ length: days }, (_, i) => filled.reduce((s, xs) => s + (xs[i] ?? 0), 0));
-}
+const PEOPLE: Record<P, string> = { youtube: "subscribers", instagram: "followers", tiktok: "followers", facebook: "followers" };
+const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${fmtCompact(Math.abs(n))}`;
+const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /**
- * An area graph: the line, a soft fill under it, the last day's dot. It
- * fills the box it's put in (the widget gives it what's left under the
- * numbers), so it never pushes the platforms out of the widget.
+ * New followers each day as bars (1.34.4, the owner: "i want to see growth / per day to see the nice graph here"):
+ * a day's gain up from the line, a day that lost some down (red); the day and its number on hover. It fills the
+ * box it's put in (GraphRoom gives it what's left under the numbers).
  */
-function AreaGraph({ values, color }: { values: (number | null)[]; color: string }) {
-  const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null);
-  if (pts.length < 2) return null;
-  const max = Math.max(...pts.map((p) => p[1]));
-  const min = Math.min(...pts.map((p) => p[1]));
-  // A little room above and below, so a flat line sits in the middle.
-  const pad = (max - min || Math.max(1, max * 0.01)) * 0.18;
-  const lo = min - pad;
-  const span = max + pad - lo || 1;
-  // 0–100 both ways; the line keeps its width however the box is stretched.
-  const x = (i: number) => (i / (values.length - 1)) * 98 + 1;
-  const y = (v: number) => 4 + (1 - (v - lo) / span) * 92;
-  const line = pts.map(([i, v], k) => `${k ? "L" : "M"}${x(i).toFixed(2)},${y(v).toFixed(2)}`).join("");
-  const area = `${line}L${x(pts[pts.length - 1][0]).toFixed(2)},100L${x(pts[0][0]).toFixed(2)},100Z`;
-  const last = pts[pts.length - 1];
+function GainBars({ days, values, color, lostColor = "rgb(var(--red) / 0.75)" }: { days: string[]; values: (number | null)[]; color: string; lostColor?: string }) {
+  const pos = Math.max(0, ...values.map((v) => v ?? 0));
+  const neg = Math.max(0, ...values.map((v) => -(v ?? 0)));
+  const range = pos + neg || 1;
+  // The zero line, from the bottom (%): at the bottom unless some day lost followers.
+  const zero = (neg / range) * 100;
+  const total = values.reduce<number>((s, v) => s + (v ?? 0), 0);
   return (
-    <>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 w-full h-full overflow-visible">
-        <path d={area} fill={color} fillOpacity={0.13} />
-        <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      </svg>
-      {/* The dot as its own element: round in any box. */}
-      <span
-        aria-hidden
-        className="absolute w-[7px] h-[7px] -ml-[3.5px] -mt-[3.5px] rounded-full ring-[1.5px] ring-surface"
-        style={{ left: `${x(last[0])}%`, top: `${y(last[1])}%`, background: color }}
-      />
-    </>
+    <div role="img" aria-label={`New followers per day, ${shortDay(days[0])} to ${shortDay(days[days.length - 1])}: ${signed(total)} in all`} className="absolute inset-0 flex items-stretch gap-[2px]">
+      <span aria-hidden className="absolute inset-x-0 h-px bg-line/25" style={{ bottom: `${zero}%` }} />
+      {values.map((v, i) => (
+        <span key={days[i] ?? i} title={`${shortDay(days[i])}: ${v === null ? "no count that day" : signed(v)}`} className="relative flex-1 rounded-[3px] hover:bg-ink/[0.06] transition-colors">
+          {v !== null && v !== 0 && (
+            <span
+              aria-hidden
+              className="absolute inset-x-[12%] min-h-[2px] rounded-[2px]"
+              style={v > 0 ? { bottom: `${zero}%`, height: `${(v / range) * 100}%`, background: color } : { top: `${100 - zero}%`, height: `${(-v / range) * 100}%`, background: lostColor }}
+            />
+          )}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -260,75 +240,95 @@ function GraphRoom({ title, children }: { title?: string; children: React.ReactN
   );
 }
 
-export function FollowersWidget({ teamId }: { teamId: string }) {
+/**
+ * Followers (1.34.4): how many now and the change over 28 days, the new
+ * ones each day as bars, and the platforms as filters under it (each with
+ * its count; the choice is saved with the dashboard, like Top videos'). It
+ * used to draw the running total, a flat line at any size, and the
+ * platforms were only numbers.
+ */
+export function FollowersWidget({ teamId, settings, onSettings }: { teamId: string; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const r = useLoaded(caches.audience, teamId, loadDashAudience);
   const box = useBox();
+  const saved: P | "all" = isP(settings?.platform) ? settings!.platform : "all";
+  const [pick, setPick] = useState<P | "all">(saved);
+  useEffect(() => setPick(saved), [saved]);
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
   const a = r.data.audience;
   const list = PLATFORMS.filter((p) => a.followersNow[p] !== undefined);
   if (!list.length) return <Note text="Follower counts arrive with the next sync." href="/analytics?tab=audience" link="Analytics" />;
-  const total = list.reduce((s, p) => s + (a.followersNow[p] ?? 0), 0);
-  const net = a.totals.followersNet.value;
-  // The graph (1.27.5): followers over the 28 days, all platforms together.
-  const line = followersLine(a.followersDaily, a.days.length);
-  const rowsH = list.length * 30;
-  const rows = box.h >= 70 + rowsH + (line.length ? 70 : 0);
-  // How much the numbers take (roughly): the total and its change (on two lines when narrow), and the platforms in a
-  // row of small chips (as many lines as they wrap to). The graph gets exactly what's left (GraphRoom); this decides
-  // whether there's room to try, and in a small box the graph wins over the chips (their numbers stay in the tooltip).
-  const change = net === null ? 0 : (net === 0 ? 20 : fmtCompact(Math.abs(net)).length + 12) * 6.4;
-  const headH = box.w >= fmtCompact(total).length * 17 + 8 + change ? 32 : 50;
-  const perLine = Math.max(1, Math.floor((box.w + 10) / 55));
-  const chipLines = Math.ceil(list.length / perLine);
-  const chipsH = chipLines * 17 + (chipLines - 1) * 4 + 10;
-  const withChips = box.h - headH - 12 - (rows ? rowsH + 10 : chipsH);
-  const graph = line.length > 1 && (withChips >= 36 || (!rows && box.h - headH - 12 >= 44));
-  const chips = rows || !graph || withChips >= 36;
-  const from = line.find((v) => v !== null) ?? null;
-  const breakdown = list.map((p) => `${NAME[p]} ${fmtCompact(a.followersNow[p]!)}`).join(", ");
+  const shown: P | "all" = pick !== "all" && list.includes(pick) ? pick : "all";
+  const sel = shown === "all" ? list : [shown];
+  const choose = (v: P | "all") => {
+    setPick(v);
+    onSettings?.({ platform: v });
+  };
+  const count = (ps: readonly P[]) => ps.reduce((s, p) => s + (a.followersNow[p] ?? 0), 0);
+  const total = count(sel);
+  const nets = sel.map((p) => a.perPlatform[p]?.followersNet ?? null).filter((x): x is number => x !== null);
+  const net = nets.length ? nets.reduce((x, y) => x + y, 0) : null;
+  const gains = sumSeries(
+    sel.map((p) => followerGains(a.days.length, a.followersDaily?.[p], a.followersFlow?.[p])),
+    a.days.length
+  );
+  const bars = gains.filter((v) => v !== null).length >= 2;
+  const color = shown === "all" ? "rgb(var(--amber))" : COLOR[shown];
+  const filters = list.length > 1;
+  const what = shown === "all" ? (list.length > 1 ? "followers on every platform" : `${NAME[list[0]]} ${PEOPLE[list[0]]}`) : `${NAME[shown]} ${PEOPLE[shown]}`;
   return (
-    <Link href="/analytics?tab=audience" title={chips ? undefined : breakdown} className="h-full flex flex-col min-h-0 rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
-      {/* The change says its own period, so no line of words under it: that room is the graph's (1.27.5). */}
-      <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
-        <span className="font-display text-[28px] leading-none font-semibold tabular-nums">{fmtCompact(total)}</span>
-        {net !== null && (
-          <span className="text-[12px] tabular-nums whitespace-nowrap">
-            {net !== 0 && <b className={net > 0 ? "text-green" : "text-red"}>{`${net > 0 ? "+" : "−"}${fmtCompact(Math.abs(net))}`} </b>}
-            <span className="text-ink-faint">{net === 0 ? "no change in 28 days" : "in 28 days"}</span>
-          </span>
-        )}
-      </div>
-      {!graph && <span className="text-[11.5px] text-ink-faint mt-1 truncate">followers in all</span>}
-      {graph && (
-        <GraphRoom title={from !== null ? `${fmtInt(from)} → ${fmtInt(total)} over 28 days${chips ? "" : `\n${breakdown}`}` : undefined}>
-          <AreaGraph values={line} color="rgb(var(--amber))" />
-        </GraphRoom>
-      )}
-      {!chips ? null : rows ? (
-        <ul className={`${graph ? "mt-2.5" : "mt-auto pt-2"} space-y-1.5 flex-shrink-0`}>
-          {list.map((p) => (
-            <li key={p} className="flex items-center gap-2 text-[12.5px]">
-              <PlatformIcon platform={p} className="w-5 h-5 rounded-md" />
-              <span className="flex-1 text-ink-soft truncate">{NAME[p]}</span>
-              <span className="w-16 h-1.5 rounded-[3px] bg-line/[0.07] overflow-hidden hidden min-[300px]:block" aria-hidden>
-                <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(4, ((a.followersNow[p] ?? 0) / Math.max(1, ...list.map((x) => a.followersNow[x] ?? 0))) * 100)}%`, background: COLOR[p] }} />
-              </span>
-              <b className="tabular-nums w-14 text-right">{fmtCompact(a.followersNow[p]!)}</b>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className={`${graph ? "mt-2.5" : "mt-auto"} flex items-center gap-x-2.5 gap-y-1 flex-wrap flex-shrink-0`}>
-          {list.map((p) => (
-            <span key={p} className="inline-flex items-center gap-1 text-[11.5px]" title={NAME[p]}>
-              <PlatformIcon platform={p} className="w-3.5 h-3.5 rounded-[4px]" />
-              <b className="tabular-nums">{fmtCompact(a.followersNow[p]!)}</b>
+    <div className="h-full flex flex-col min-h-0">
+      <Link href="/analytics?tab=audience" className="flex-1 min-h-0 flex flex-col rounded-lg -m-1 p-1 hover:bg-surface-2/40 transition-colors">
+        <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
+          <span className="font-display text-[28px] leading-none font-semibold tabular-nums">{fmtCompact(total)}</span>
+          {net !== null && (
+            <span className="text-[12px] tabular-nums whitespace-nowrap">
+              {net !== 0 && <b className={net > 0 ? "text-green" : "text-red"}>{signed(net)} </b>}
+              <span className="text-ink-faint">{net === 0 ? "no change in 28 days" : "in 28 days"}</span>
             </span>
-          ))}
+          )}
+        </div>
+        {box.h >= 170 && <span className="text-[11.5px] text-ink-faint mt-1 truncate">{what}</span>}
+        {bars ? (
+          <GraphRoom>
+            {/* YouTube's own colour is a red: a day it lost subscribers is grey there. */}
+            <GainBars days={a.days} values={gains} color={color} lostColor={shown === "youtube" ? "rgb(var(--ink) / 0.35)" : undefined} />
+          </GraphRoom>
+        ) : (
+          <p className="mt-auto pt-2 text-[11.5px] text-ink-faint leading-snug">New {shown === "youtube" ? "subscribers" : "followers"} per day show here once there are two days of counts.</p>
+        )}
+        {bars && box.h >= 150 && (
+          <div className="mt-1 flex items-center justify-between gap-2 text-[10.5px] text-ink-faint tabular-nums flex-shrink-0">
+            <span>{shortDay(a.days[0])}</span>
+            {box.w >= 260 && <span className="truncate">new {shown === "youtube" ? "subscribers" : "followers"} per day</span>}
+            <span>{shortDay(a.days[a.days.length - 1])}</span>
+          </div>
+        )}
+      </Link>
+      {filters && (
+        <div role="radiogroup" aria-label="Platform" className="mt-2 flex items-center gap-1 flex-wrap flex-shrink-0">
+          {(["all", ...list] as const).map((p) => {
+            const on = shown === p;
+            const n = p === "all" ? count(list) : a.followersNow[p]!;
+            return (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => choose(p)}
+                aria-label={p === "all" ? `All platforms: ${fmtInt(n)}` : `${NAME[p]}: ${fmtInt(n)} ${PEOPLE[p]}`}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-1.5 h-7 text-[11.5px] font-semibold whitespace-nowrap transition-colors ${on ? "bg-ink text-paper" : "text-ink-soft hover:bg-surface-2 hover:text-ink"}`}
+              >
+                {p === "all" ? <span className="pl-0.5">All</span> : <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />}
+                {/* Narrow: the platforms only (their counts are in the label), so they stay on one line under the bars. */}
+                {box.w >= 330 && <span className="tabular-nums">{fmtCompact(n)}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
-    </Link>
+    </div>
   );
 }
 
@@ -341,7 +341,6 @@ const ago = (iso: string) => {
   return d === 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
 };
 
-const isP = (v: unknown): v is P => PLATFORMS.includes(v as P);
 
 /**
  * Top videos (1.27.5): every platform together or one at a time, from the

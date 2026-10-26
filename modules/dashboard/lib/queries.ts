@@ -373,7 +373,17 @@ export async function listTeamCards(teamIds: string[]): Promise<TeamCard[]> {
 // Team-wide widgets
 // ---------------------------------------------------------------------------
 
-export type UpcomingShort = { id: string; number: number; title: string; date: string; stage: string; editor: { name: string; avatarUrl: string | null; color: string } | null };
+export type UpcomingShort = {
+  id: string;
+  number: number;
+  title: string;
+  date: string;
+  stage: string;
+  editor: { name: string; avatarUrl: string | null; color: string } | null;
+  /** Where it goes, and where it's posted already (1.34.4). */
+  platforms: string[];
+  posted: string[];
+};
 export type UpcomingLong = { id: string; number: number; title: string; date: string | null; stage: string; thumb: string | null };
 export type Pipeline = { shorts: Record<string, number>; longs: Record<string, number> };
 export type PostToday = {
@@ -398,13 +408,14 @@ export async function listUpcoming(teamId: string, today: string) {
   const [{ data: shorts }, { data: longs }, { data: sCounts }, { data: lCounts }] = await Promise.all([
     supabase
       .from("short_videos")
-      .select("id, entry_number, title, planned_date, stage, editor:team_members!short_videos_editor_member_id_fkey(user_id, profiles(username, full_name, email, avatar_url))")
+      .select("id, entry_number, title, planned_date, stage, platforms, short_video_posts(platform), editor:team_members!short_videos_editor_member_id_fkey(user_id, profiles(username, full_name, email, avatar_url))")
       .eq("team_id", teamId)
       .neq("stage", "posted")
       .gte("planned_date", today)
       .order("planned_date")
       .order("queue_position")
-      .limit(12),
+      // 1.34.4: enough for one platform's own list too (the widget filters them).
+      .limit(30),
     supabase
       .from("long_video_projects")
       .select("id, entry_number, title, expected_date, stage")
@@ -426,6 +437,8 @@ export async function listUpcoming(teamId: string, today: string) {
       date: r.planned_date as string,
       stage: STAGE_LABEL[r.stage as string] ?? (r.stage as string),
       editor: e?.user_id ? { name: displayName(p?.username, p?.full_name, p?.email), avatarUrl: p?.avatar_url ?? null, color: colorForId(e.user_id) } : null,
+      platforms: ((r.platforms as string[] | null) ?? []).filter((x) => typeof x === "string"),
+      posted: ((r.short_video_posts as { platform: string }[] | null) ?? []).map((x) => x.platform),
     };
   });
   const longIds = (longs ?? []).map((l) => l.id as string);

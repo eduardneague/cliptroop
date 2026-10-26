@@ -280,7 +280,14 @@ the page is live, or React throws that part away (production error #418).
   entry in `studio.tsx` (the board's widgets start downloading while the page
   hydrates; Customize fetches the rest for the library). Each renders inside
   `WidgetBoundary`, so one failing widget shows its own Try again instead of
-  taking the dashboard down.
+  taking the dashboard down. A widget with a choice that should stay (Top
+  videos', Followers' and Upcoming shorts' platform, 1.34.4) gets
+  `settings` in its `CATALOG` entry (layout.ts), `HAS_SETTINGS` and a form
+  in `WidgetSettings`, and `settings` / `onSettings={update}` in
+  `renderWidget` (its own chips call `onSettings`, which saves the layout).
+  New followers per day: `modules/analytics/lib/followers.ts`
+  (`followerGains`: gained − lost where the platform says, else the change
+  in the count, a gap's change on the day after it; `sumSeries`).
 - **The frame is on every page** (the dashboard layout and the client
   components it draws: sidebar, header, bell, search, What's new, the tour,
   the celebrations), so it stays light (1.32.2). What only shows when opened

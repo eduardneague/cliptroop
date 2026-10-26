@@ -375,7 +375,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "minicalendar":
       return <MiniCalendarWidget />;
     case "upcomingShorts":
-      return <UpcomingShortsWidget items={data.upcomingShorts} />;
+      return <UpcomingShortsWidget items={data.upcomingShorts} settings={w.settings} onSettings={update} />;
     case "upcomingLongs":
       return <UpcomingLongsWidget items={data.upcomingLongs} />;
     case "pipeline":
@@ -389,7 +389,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "views":
       return <ViewsWidget teamId={data.teamId} />;
     case "followers":
-      return <FollowersWidget teamId={data.teamId} />;
+      return <FollowersWidget teamId={data.teamId} settings={w.settings} onSettings={update} />;
     case "topVideos":
       return <TopVideosWidget teamId={data.teamId} settings={w.settings} onSettings={update} />;
     case "audienceMap":
@@ -404,7 +404,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <StreakWidget teamId={data.teamId} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos", "followers", "upcomingShorts"];
 
 /** What the board needs to know about a widget. */
 const widgetMeta = (w: WidgetInstance): GridCardMeta => {
@@ -615,7 +615,7 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
       </div>
     );
   }
-  if (w.type === "topVideos") {
+  if (w.type === "topVideos" || w.type === "followers" || w.type === "upcomingShorts") {
     return (
       <div className={row}>
         <span className="text-[13.5px] font-semibold">Platform</span>

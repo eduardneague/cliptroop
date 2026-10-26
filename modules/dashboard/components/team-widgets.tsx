@@ -6,7 +6,8 @@ import { KindIcon } from "@/components/ui/kind-icon";
 import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PlatformFilter, type PlatformChoice } from "@/modules/short-videos/components/platform-filter";
-import { PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
+import { PLATFORMS, PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
+import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
 import type { Pipeline, PostToday, UpcomingLong, UpcomingShort } from "../lib/queries";
 import { DueChip, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
@@ -24,38 +25,81 @@ function EmptyLine({ text }: { text: string }) {
   return <p className="h-full min-h-[48px] flex items-center justify-center text-center text-[12.5px] text-ink-soft">{text}</p>;
 }
 
-export function UpcomingShortsWidget({ items }: { items: UpcomingShort[] }) {
+const isPlatform = (v: unknown): v is Platform => PLATFORMS.includes(v as Platform);
+
+/**
+ * Upcoming shorts (1.34.4, the owner: "i want to see which shorts will come
+ * with filters for instagram and so on and also see the platforms those
+ * shorts will be posted on. i want to see only instagram or only other
+ * platforms too"): each short's platforms (a tick where it's out already),
+ * and the platforms as filters on top, each with how many of these shorts go
+ * there. The choice is saved with the dashboard.
+ */
+export function UpcomingShortsWidget({ items, settings, onSettings }: { items: UpcomingShort[]; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const today = localDay();
+  const box = useBox();
+  const saved: PlatformChoice = isPlatform(settings?.platform) ? settings!.platform : "all";
+  const [platform, setPlatform] = useState<PlatformChoice>(saved);
+  useEffect(() => setPlatform(saved), [saved]);
   if (!items.length) return <EmptyLine text="No shorts planned ahead." />;
+  const counts: Partial<Record<Platform, number>> = {};
+  for (const s of items) for (const p of s.platforms) if (isPlatform(p)) counts[p] = (counts[p] ?? 0) + 1;
+  const used = PLATFORMS.filter((p) => counts[p]);
+  const choose = (v: PlatformChoice) => {
+    setPlatform(v);
+    onSettings?.({ platform: v });
+  };
+  const list = platform === "all" ? items : items.filter((s) => s.platforms.includes(platform));
+  const filter = (used.length > 1 || platform !== "all") && box.h >= 90;
+  // Wide: the platforms at the end of the row; narrow: after the day and step.
+  const wide = box.w >= 300;
   return (
-    <ul className="h-full widget-scroll -mx-1 motion-stagger">
-      {items.map((s, i) => {
-        const newDay = i === 0 || items[i - 1].date !== s.date;
-        return (
-          <li key={s.id}>
-            <Link href={`/shorts/${s.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
-              <span className={`w-8 text-center flex-shrink-0 leading-none ${newDay ? "" : "invisible"}`}>
-                <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })}</span>
-                <span className={`block text-[14px] font-bold tabular-nums ${s.date === today ? "text-amber" : ""}`}>{Number(s.date.slice(8))}</span>
+    <div className="h-full flex flex-col min-h-0">
+      {filter && <PlatformFilter compact iconsOnly={box.w < 230} value={platform} onChange={choose} counts={counts} total={items.length} className="mb-1.5 flex-shrink-0 overflow-x-auto no-scrollbar" />}
+      {list.length ? (
+        <ul key={platform} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {list.map((s, i) => {
+            const newDay = i === 0 || list[i - 1].date !== s.date;
+            const ps = s.platforms.filter(isPlatform);
+            const marks = ps.length ? (
+              <span className="inline-flex items-center gap-1 flex-shrink-0" aria-label={`Posts to ${ps.map((p) => PLATFORM_META[p].name).join(", ")}`}>
+                {ps.map((p) => (
+                  <PlatformMark key={p} platform={p} posted={s.posted.includes(p)} className="w-3.5 h-3.5 rounded-[4px]" tick="xs" />
+                ))}
               </span>
-              <span className="min-w-0 flex-1 leading-tight">
-                <span className="block text-[12.5px] font-semibold truncate">
-                  <span className="font-mono text-ink-faint font-normal">#{s.number}</span> {s.title}
-                </span>
-                <span className="block text-[11px] text-ink-soft truncate">
-                  {dayLabel(s.date, today)} · {s.stage}
-                </span>
-              </span>
-              {s.editor && (
-                <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 overflow-hidden" style={{ background: s.editor.color }}>
-                  <AvatarImg src={s.editor.avatarUrl} alt={s.editor.name} fallback={s.editor.name.slice(0, 1).toUpperCase()} />
-                </span>
-              )}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+            ) : null;
+            return (
+              <li key={s.id}>
+                <Link href={`/shorts/${s.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
+                  <span className={`w-8 text-center flex-shrink-0 leading-none ${newDay ? "" : "invisible"}`}>
+                    <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })}</span>
+                    <span className={`block text-[14px] font-bold tabular-nums ${s.date === today ? "text-amber" : ""}`}>{Number(s.date.slice(8))}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block text-[12.5px] font-semibold truncate">
+                      <span className="font-mono text-ink-faint font-normal">#{s.number}</span> {s.title}
+                    </span>
+                    <span className="flex items-center gap-1.5 min-w-0 text-[11px] text-ink-soft">
+                      {/* Narrow: the step only (the day is in the date column), so the platforms fit after it. */}
+                      <span className="truncate">{wide ? `${dayLabel(s.date, today)} · ${s.stage}` : s.stage}</span>
+                      {!wide && marks}
+                    </span>
+                  </span>
+                  {wide && marks}
+                  {s.editor && (
+                    <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 overflow-hidden" style={{ background: s.editor.color }}>
+                      <AvatarImg src={s.editor.avatarUrl} alt={s.editor.name} fallback={s.editor.name.slice(0, 1).toUpperCase()} />
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <EmptyLine text={`No upcoming shorts for ${PLATFORM_META[platform as Platform].name}.`} />
+      )}
+    </div>
   );
 }
 
