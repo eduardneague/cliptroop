@@ -112,7 +112,8 @@ ok(/signInWithPassword\(\{ email: user\.email, password: current \}\)/.test(chan
 ok(/updateUser\(\{ password: next, current_password: current \}\)/.test(change) && /passwordSaveError\(error, "settings"\)/.test(change), "saved with the current one (for Supabase's own check)");
 ok(change.indexOf("signInWithPassword") < change.indexOf("updateUser"), "a fresh sign-in first (Secure password change)");
 const settings = read("app/(dashboard)/settings/page.tsx");
-ok(/<PasswordSection/.test(settings) && /email=\{user\?\.email \?\? profile\?\.email/.test(settings), "Settings → Account shows it, for the sign-in's own email");
+const accountTab = read("app/(dashboard)/settings/account-tab.tsx");
+ok(/<PasswordSection email=\{email\}/.test(accountTab) && /<AccountOverview[\s\S]{0,200}email=\{user\?\.email \?\? profile\?\.email/.test(settings), "Settings → Account shows it, for the sign-in's own email");
 const section = read("app/(dashboard)/settings/password-section.tsx");
 ok(/id="password"/.test(section) && /autoComplete="current-password"/.test(section) && /resetPasswordForEmail\(email/.test(section), "the section: current password, and a reset link for a forgotten one");
 ok(/id: "settings\.password"/.test(read("lib/search/catalog.ts")), "search finds Change password");

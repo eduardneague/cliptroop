@@ -18,12 +18,9 @@ import type { RoleId } from "@/lib/permissions/roles";
 import { AvatarUploader } from "./avatar-uploader";
 import { ProfileForm } from "./profile-form";
 import { ProfilePrivacy } from "./profile-privacy";
-import { DeleteAccount, type AccountTeam } from "./delete-account";
-import { PasswordSection } from "./password-section";
-import { SignOutElsewhere } from "./sign-out-elsewhere";
+import type { AccountTeam } from "./delete-account";
 import { TeamsVisibilityToggle } from "./teams-visibility-toggle";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { LogoutButton } from "@/components/ui/logout-button";
 import type { Metadata } from "next";
 import { WhatsNewButton } from "@/components/ui/whats-new";
 import { cookies } from "next/headers";
@@ -33,20 +30,20 @@ import { PushDevices, type PushDevice } from "./push-devices";
 import { pushConfigured } from "@/lib/push/send";
 import { PUSH_COOKIE } from "@/lib/push/guard";
 import { isDeveloper } from "@/lib/errors";
-import { ChevronRightIcon } from "@/components/ui/icons";
-import { FeedbackForm, type SentReport } from "./feedback-form";
+import type { SentReport } from "./feedback-form";
 import { APP_NAME } from "@/lib/brand";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
-import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab } from "./skeletons";
-import { ReplayTutorialButton } from "@/components/tutorial/tutorial";
-import { Mascot } from "@/components/ui/mascot";
+import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab, settingsView } from "./skeletons";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { AccountOverview, DangerZone, HelpTab } from "./account-tab";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab: tabParam } = await searchParams;
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string; view?: string }> }) {
+  const { tab: tabParam, view: viewParam } = await searchParams;
   const tab = settingsTab(tabParam);
+  // Account's own sub-page (1.34.2): the Danger zone.
+  const danger = settingsView(tab, viewParam) === "danger";
   const supabase = await createClient();
   const user = await getCachedUser();
 
@@ -93,12 +90,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     .filter((w) => isOwnBgPath(w.path, user!.id))
     .map((w) => ({ id: w.id, path: w.path, url: supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(w.path).data.publicUrl, luma: clampLuma(w.luma), size: sizes.get(w.path) ?? null }));
   const palette = (paletteRow?.palette as string | null | undefined) ?? null;
-  // Account tab: the report form (with what you sent before), and for the
-  // developer the Developer and App setup pages. One round.
-  const [showAppSetup, accountTeam, sentReports] =
-    tab === "account"
+  // Account: the Developer and App setup pages, for the developer. Help & feedback: the report form
+  // (with what you sent before). 1.34.2: each loads only on its own tab.
+  const showAppSetup = tab === "account" && !danger ? await isDeveloper(user) : false;
+  const [accountTeam, sentReports] =
+    tab === "help"
       ? await Promise.all([
-          isDeveloper(user),
           getTeamsAndCurrent(supabase).then((t) => t.currentTeam?.id ?? null),
           // Before migration 0068 the table doesn't exist: just no list.
           supabase
@@ -119,7 +116,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               )
             ),
         ])
-      : [false, null, [] as SentReport[]];
+      : [null, [] as SentReport[]];
 
   // Notifications tab: your devices (this one marked), and the one-time key setup for the owner.
   let devices: PushDevice[] = [];
@@ -143,9 +140,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   const name = buildDisplayName(profile?.username, profile?.full_name, profile?.email ?? user?.email);
 
-  // Account tab (1.28.0): deleting the account needs you on no team; these are the ones to leave (or hand over).
+  // The Danger zone (1.28.0, its own page since 1.34.2): deleting the account needs you on no team; these are the ones to leave (or hand over).
   let accountTeams: AccountTeam[] = [];
-  if (tab === "account") {
+  if (danger) {
     const { data: owned } = await supabase.from("teams").select("id, name, color, logo_url").eq("owner_id", user!.id);
     const byId = new Map<string, AccountTeam>();
     for (const m of memberships ?? []) {
@@ -170,7 +167,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <PendingNav>
       <TabNav base="/settings" active={tab} label="Account settings" tabs={SETTINGS_TABS.map((t) => ({ id: t.id, label: t.label }))} />
 
-      <PendingSwap fallbacks={Object.fromEntries(SETTINGS_TABS.map((t) => [t.id, <SettingsTabSkeleton key={t.id} tab={t.id} />]))}>
+      <PendingSwap fallbacks={{ ...Object.fromEntries(SETTINGS_TABS.map((t) => [t.id, <SettingsTabSkeleton key={t.id} tab={t.id} />])), danger: <SettingsTabSkeleton tab="danger" /> }}>
       <div className="space-y-6">
 
       {tab === "profile" && (
@@ -357,79 +354,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </section>
         </div>
       )}
-      {tab === "account" && (
-        <section id="tutorial" className="rounded-xl border border-line/10 bg-surface p-6 mb-6 scroll-mt-24">
-          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Tutorial</h2>
-          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Mascot size={56} className="flex-shrink-0 -my-1" />
-              <p className="text-[13.5px] text-ink-soft leading-relaxed">
-                Clip&rsquo;s one-minute tour of {APP_NAME}: where everything is and how a video gets from idea to posted.
-              </p>
-            </div>
-            <ReplayTutorialButton className="rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] hover:brightness-110 flex-shrink-0" />
-          </div>
-        </section>
-      )}
-      {tab === "account" && (
-        <section id="report" className="rounded-xl border border-line/10 bg-surface p-6 mb-6 scroll-mt-24">
-          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Report a bug or suggest something</h2>
-          <p className="text-[12.5px] text-ink-soft mt-1 mb-4">Something broken, or an idea that would make {APP_NAME} better? Only the developer sees what you send.</p>
-          <FeedbackForm userId={user!.id} teamId={accountTeam} recent={sentReports} />
-        </section>
-      )}
-      {tab === "account" && (
-        <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
-          <div>
-            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Account</h2>
-            <p className="text-[12.5px] text-ink-soft mt-1">Signed in as {profile?.email ?? "you"}.</p>
-          </div>
-          {showAppSetup && (
-            <>
-              <Link
-                href="/developer"
-                className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
-              >
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[14px] font-semibold">Developer</span>
-                  <span className="block text-[12.5px] text-ink-soft">
-                    The whole app: status, errors and reports, how much the database and storage hold, every team and person. Only developer accounts see this.
-                  </span>
-                </span>
-                <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
-              </Link>
-              <Link
-                href="/setup"
-                className="flex items-center gap-3 rounded-xl border border-line/15 px-4 py-3 hover:border-line/30 hover:bg-surface-2 transition-colors"
-              >
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[14px] font-semibold">App setup</span>
-                  <span className="block text-[12.5px] text-ink-soft">
-                    What to paste in Supabase, Google, Meta, TikTok and Vercel for this copy of {APP_NAME}, including the sign-in emails. Only developer accounts see this.
-                  </span>
-                </span>
-                <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
-              </Link>
-            </>
-          )}
-          {/* 1.31.11: Log out is this device only; the other devices have their own button. */}
-          <div id="sessions" className="grid gap-2 sm:grid-cols-2 scroll-mt-24">
-            <LogoutButton className="w-full rounded-lg border border-red/30 text-red font-semibold py-2.5 text-sm hover:bg-red/10 transition-colors">
-              Log out
-            </LogoutButton>
-            <SignOutElsewhere className="w-full rounded-lg border border-line/20 font-semibold py-2.5 text-sm hover:border-line/40 hover:bg-surface-2 transition-colors disabled:opacity-60" />
-          </div>
-          <p className="text-[12px] text-ink-faint">Log out signs out this device. Lost a phone, or signed in on someone else&rsquo;s computer? Sign out everywhere else.</p>
-        </section>
-      )}
-      {tab === "account" && (
-        <PasswordSection
-          // The sign-in's own email (what a reset link goes to), the profile's copy only without it.
-          email={user?.email ?? profile?.email ?? ""}
-          names={[profile?.full_name as string | null | undefined, profile?.username as string | null | undefined].filter((n): n is string => !!n)}
-        />
-      )}
-      {tab === "account" && <DeleteAccount email={profile?.email ?? user?.email ?? ""} teams={accountTeams} />}
+      {tab === "account" &&
+        (danger ? (
+          // The sign-in's own email: what deleting checks.
+          <DangerZone email={user?.email ?? profile?.email ?? ""} teams={accountTeams} />
+        ) : (
+          <AccountOverview
+            // The sign-in's own email (what a reset link goes to), the profile's copy only without it.
+            email={user?.email ?? profile?.email ?? ""}
+            names={[profile?.full_name as string | null | undefined, profile?.username as string | null | undefined].filter((n): n is string => !!n)}
+            developer={showAppSetup}
+          />
+        ))}
+      {tab === "help" && <HelpTab userId={user!.id} teamId={accountTeam} recent={sentReports} />}
       </div>
       </PendingSwap>
       </PendingNav>

@@ -177,8 +177,8 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "sync", kind: "action", title: "Sync analytics now", trail: ["Analytics"], hint: "Get the latest numbers from every platform", words: "refresh update latest numbers reload fetch", icon: "retry", run: "sync" }, team && manager);
   add({ id: "claude", kind: "action", title: "Download for Claude", trail: ["Analytics"], hint: "Your numbers in one file to ask Claude about", words: "export ai claude chatgpt download data report csv", icon: "download", href: "/analytics?claude=1" }, team);
   add({ id: "logout", kind: "action", title: "Log out", trail: [], words: "logout sign out signout exit", icon: "logout", run: "logout" });
-  add({ id: "report", kind: "action", title: "Report a bug", trail: ["Settings", "Account"], hint: "Only the developer sees it", words: "bug report feedback problem broken issue support contact", icon: "bug", href: "/settings?tab=account#report" });
-  add({ id: "suggest", kind: "action", title: "Suggest an idea", trail: ["Settings", "Account"], hint: `Something that would make ${APP_NAME} better`, words: "suggest suggestion idea feature request feedback wish", icon: "lightbulb", href: "/settings?tab=account#report" });
+  add({ id: "report", kind: "action", title: "Report a bug", trail: ["Settings", "Help & feedback"], hint: "Only the developer sees it", words: "bug report feedback problem broken issue support contact", icon: "bug", href: "/settings?tab=help#report" });
+  add({ id: "suggest", kind: "action", title: "Suggest an idea", trail: ["Settings", "Help & feedback"], hint: `Something that would make ${APP_NAME} better`, words: "suggest suggestion idea feature request feedback wish", icon: "lightbulb", href: "/settings?tab=help#report" });
 
   // ---- Short videos ------------------------------------------------------
   if (team) {
@@ -292,7 +292,8 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "settings.account", kind: "tab", title: "Account", trail: ["Settings"], words: "account email sign in", icon: "settings", href: "/settings?tab=account" });
   add({ id: "settings.password", kind: "setting", title: "Change password", trail: ["Settings", "Account"], hint: "With your current one; signs out your other devices", words: "password change new reset forgot forgotten security sign in login credentials", icon: "lock", href: "/settings?tab=account#password" });
   add({ id: "settings.sign-out-elsewhere", kind: "setting", title: "Sign out everywhere else", trail: ["Settings", "Account"], hint: "Every other device signed in to your account", words: "sign out log out logout everywhere other devices sessions lost phone stolen shared computer security revoke", icon: "logout", href: "/settings?tab=account#sessions" });
-  add({ id: "settings.delete-account", kind: "setting", title: "Delete account", trail: ["Settings", "Account"], words: "delete remove close account deactivate erase data goodbye", icon: "trash", href: "/settings?tab=account#delete-account" });
+  add({ id: "settings.delete-account", kind: "setting", title: "Delete account", trail: ["Settings", "Account", "Danger zone"], words: "delete remove close account deactivate erase data goodbye danger zone", icon: "trash", href: "/settings?tab=account&view=danger#delete-account" });
+  add({ id: "settings.help", kind: "tab", title: "Help & feedback", trail: ["Settings"], hint: "Report a bug, suggest an idea, take the tour again", words: "help feedback support bug report idea suggestion tutorial tour contact", icon: "bug", href: "/settings?tab=help" });
 
   return out;
 }

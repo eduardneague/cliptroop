@@ -1,16 +1,21 @@
 "use client";
 
 import { PendingLink, usePendingNav } from "@/components/ui/pending-nav";
+import { TabOverflow } from "@/components/ui/tab-overflow";
 
 /**
  * Underlined tabs kept in the address (?tab=…), e.g. Team and account
  * settings. Inside <PendingNav> a clicked tab is underlined at once (and its
- * content turns into a skeleton) while it loads.
+ * content turns into a skeleton) while it loads; a tab's own sub-page on its
+ * way (Account's Danger zone) keeps its tab underlined. 1.34.2: on a phone
+ * the row slides to show the tab you're on (Settings has six); on a
+ * computer, tabs that don't fit go under More.
  */
 export function TabNav({ base, active, tabs, label }: { base: string; active: string; tabs: { id: string; label: string }[]; label: string }) {
-  const shown = usePendingNav().pending ?? active;
+  const pending = usePendingNav().pending;
+  const shown = pending && tabs.some((t) => t.id === pending) ? pending : active;
   return (
-    <nav className="flex items-center gap-1 border-b border-line/15 overflow-x-auto no-scrollbar -mx-1 px-1" aria-label={label}>
+    <nav className="relative flex items-center gap-1 border-b border-line/15 overflow-x-auto no-scrollbar -mx-1 px-1" aria-label={label}>
       {tabs.map((t) => {
         const on = t.id === shown;
         return (
@@ -26,6 +31,7 @@ export function TabNav({ base, active, tabs, label }: { base: string; active: st
           </PendingLink>
         );
       })}
+      <TabOverflow />
     </nav>
   );
 }

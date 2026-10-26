@@ -619,6 +619,21 @@ four sections (`#look` with `#appearance` and `#colours`, `#glass`,
 `#background`, `#motion` with `#animations` and `#sounds`); the search
 catalog and HashFlash use those ids, keep them.
 
+**Settings → Account, Help & feedback, the Danger zone (1.34.2).** The
+tabs are `SETTINGS_TABS` (`app/(dashboard)/settings/skeletons.tsx`):
+Profile, Teams, Notifications & app, Preferences, Account, Help &
+feedback. Account (`account-tab.tsx` `AccountOverview`) is cards of rows
+(`account-parts.tsx` `Group` and `Row`: what it is on the left, its value
+or button on the right; the skeleton draws the same rows with the same
+`TEXT`): Signing in (`#email`, `#password`), Devices (`#sessions`), the
+developer's pages, then one quiet row into the **Danger zone**, Account's
+own sub-page `?tab=account&view=danger` (`settingsView`, `DangerZone`,
+`#delete-account`). Anything that can't be undone goes there, never on a
+tab. Help & feedback (`HelpTab`): `#report` (the form, what you sent
+before) and `#tutorial`. Their data loads only on their own view. Old
+`?tab=account#report` / `#tutorial` / `#delete-account` links are sent to
+where those are now (`moved-here.tsx`). `tests/settings-account.test.ts`.
+
 **Small wallpapers, on every page (1.29.4, 0098).** Every wallpaper is made
 small in the browser before it's uploaded (`lib/wallpaper-convert.ts`
 `prepareWallpaper`; the pure rules and tests in `lib/wallpaper-plan.ts`):

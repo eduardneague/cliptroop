@@ -22,6 +22,17 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.34.2",
+    date: "2026-10-26",
+    title: "A tidier Account",
+    changes: [
+      { kind: "better", text: "Settings → Account is now just your sign-in and your devices: your email, your password, Log out and Sign out everywhere else, each on one line with its button right there." },
+      { kind: "new", text: "Reporting a bug or suggesting something has its own tab, Help & feedback, with what you sent before and Clip's tour, so it's no longer in the way on Account." },
+      { kind: "better", text: "Deleting your account is in the Danger zone, a page of its own behind one quiet row at the bottom of Account, so nobody ends up there by accident. It still asks twice before anything happens." },
+      { kind: "better", text: "On a phone, Settings' tabs slide to show the one you're on." },
+    ],
+  },
+  {
     version: "1.34.1",
     date: "2026-10-25",
     title: "Glass bars that hold together",

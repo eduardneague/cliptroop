@@ -60,8 +60,8 @@ ok(change.indexOf("forgetOtherDevices(supabase, user.id)") > change.indexOf("upd
 ok(/void forgetOtherDevicesNow\(\)/.test(read("app/reset-password/page.tsx")), "and from a reset link");
 const devices = read("lib/push/devices.ts");
 ok(/!mine \|\| pushDeviceHash\(d\.endpoint\) !== mine/.test(devices), "every device but this one (by its cookie)");
-const settings = read("app/(dashboard)/settings/page.tsx");
-ok(/<div id="sessions"/.test(settings) && /<SignOutElsewhere/.test(settings) && /<LogoutButton/.test(settings), "Settings → Account: Log out and Sign out everywhere else side by side");
+const accountTab = read("app/(dashboard)/settings/account-tab.tsx");
+ok(/<Group id="sessions"/.test(accountTab) && /<SignOutElsewhere/.test(accountTab) && /<LogoutButton/.test(accountTab), "Settings → Account → Devices: Log out and Sign out everywhere else, one under the other");
 ok(/id: "settings\.sign-out-elsewhere"/.test(read("lib/search/catalog.ts")), "search finds it");
 const logout = read("components/ui/logout-button.tsx");
 ok(/Your other devices stay signed in\./.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(logout) && /confirm\(LOGOUT_CONFIRM\)/.test(read("components/search/search-palette.tsx")), "\"Log out?\" says it's this device, wherever it's asked");

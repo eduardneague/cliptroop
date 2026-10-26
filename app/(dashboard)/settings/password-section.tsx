@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast-provider";
 import { NewPasswordFields, newPasswordState } from "@/components/ui/new-password";
 import { changePassword } from "./account-actions";
+import { BTN, Row, TEXT } from "./account-parts";
 
 const input =
   "w-full rounded-lg border border-line/15 bg-surface px-3 h-10 text-[14px] outline-none focus:ring-2 focus:ring-amber/40 focus:border-amber/60";
@@ -14,7 +15,9 @@ const label = "block text-[12.5px] font-semibold mb-1";
  * Settings → Account → Password (1.31.10): change it with the current one
  * (checked on the server with the sign-in limits), the new one by the same
  * rules as everywhere; every other device is signed out once it's saved.
- * Forgot the current one: a reset link to your email, from here.
+ * Forgot the current one: a reset link to your email, from here. 1.34.2: a
+ * row of the Signing in card (its button on the right, the form opening
+ * under it), no longer a card of its own.
  */
 export function PasswordSection({ email, names }: { email: string; names: string[] }) {
   const toast = useToast();
@@ -69,21 +72,19 @@ export function PasswordSection({ email, names }: { email: string; names: string
   }
 
   return (
-    <section id="password" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
-      <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Password</h2>
-      <p className="text-[12.5px] text-ink-soft mt-1 max-w-2xl">
-        You sign in as <b className="font-semibold text-ink break-all">{email}</b>. A new password signs out every other device signed in to your account; this one stays signed in.
-      </p>
-
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-4 rounded-lg border border-line/20 px-4 h-10 text-[13.5px] font-semibold hover:border-line/40 hover:bg-surface-2 transition-colors"
-        >
-          Change password
-        </button>
-      ) : (
+    <Row
+      id="password"
+      title={TEXT.password}
+      text={TEXT.passwordText}
+      action={
+        !open && (
+          <button type="button" onClick={() => setOpen(true)} className={BTN}>
+            Change password
+          </button>
+        )
+      }
+    >
+      {open && (
         <form onSubmit={save} className="mt-4 max-w-md space-y-4" noValidate>
           <div>
             <label className={label} htmlFor="current-password">
@@ -145,7 +146,7 @@ export function PasswordSection({ email, names }: { email: string; names: string
         </form>
       )}
 
-      <p className="mt-4 text-[12.5px] text-ink-soft" role="status">
+      <p className="mt-3 text-[12.5px] text-ink-soft" role="status">
         {mail === "sent" ? (
           <>
             A reset link is on its way to <b className="font-semibold text-ink break-all">{email}</b>. It works once, for a short while.
@@ -159,6 +160,6 @@ export function PasswordSection({ email, names }: { email: string; names: string
           </>
         )}
       </p>
-    </section>
+    </Row>
   );
 }
