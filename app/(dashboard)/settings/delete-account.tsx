@@ -9,6 +9,7 @@ import { switchTeam } from "@/app/(dashboard)/actions";
 import { LeaveTeamButton } from "@/app/(dashboard)/team/leave-team-button";
 import { deleteAccount } from "./account-actions";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { onFill } from "@/lib/contrast";
 
 export type AccountTeam = { id: string; name: string; color: string; logo_url: string | null; owner: boolean };
 
@@ -74,7 +75,7 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
           <ul className="divide-y divide-line/10">
             {teams.map((t) => (
               <li key={t.id} className="flex items-center gap-3 py-2.5 flex-wrap">
-                <span className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style={{ background: t.color }}>
+                <span className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style={{ background: t.color, color: onFill(t.color) }}>
                   <AvatarImg src={t.logo_url} fallback={t.name.slice(0, 2).toUpperCase()} />
                 </span>
                 <span className="min-w-0 flex-1">

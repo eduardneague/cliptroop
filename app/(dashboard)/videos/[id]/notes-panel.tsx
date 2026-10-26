@@ -17,6 +17,7 @@ import type { MentionTarget } from "@/lib/mentions";
 import type { RoleId } from "@/lib/permissions/roles";
 import { AvatarImg } from "@/components/ui/avatar-img";
 import { Leaves } from "@/components/ui/leaves";
+import { onFill } from "@/lib/contrast";
 
 export type AttachmentDisplay = {
   id: string;
@@ -226,7 +227,7 @@ export function NotesPanel({
           >
             <span
               className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5 overflow-hidden"
-              style={{ background: c.avatarColor }}
+              style={{ background: c.avatarColor, color: onFill(c.avatarColor) }}
             >
               <AvatarImg src={c.avatarUrl} fallback={initialsFor(c.name)} />
             </span>

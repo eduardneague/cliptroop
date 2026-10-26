@@ -22,6 +22,21 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.35.0",
+    date: "2026-10-26",
+    title: "Light mode, easy to read",
+    changes: [
+      { kind: "better", text: "Light mode got a full contrast pass. Every coloured word (links, statuses, chips, numbers in green or red) now uses a deeper shade of its colour, so it reads clearly on cards, the page and its own tinted chips, in every colour theme. Dark mode got lighter shades the same way." },
+      { kind: "better", text: "Main buttons use a slightly deeper shade of your theme's colour (in Default, a deeper orange), so their white words read clearly. Green and gold buttons too. In light mode a button darkens a little when you point at it, instead of washing out." },
+      { kind: "better", text: "Glass in light mode: the colours behind it stay soft and light, so dates, links and labels on the page stay readable with every theme (Ink and Slate included), your own colours and any glass level." },
+      { kind: "better", text: "Grey text, like dates and hints, is a touch darker in light mode, so it reads on every theme's page." },
+      { kind: "better", text: "A wallpaper on every page: behind pages other than the dashboard, a dark picture (in light mode) or a bright one (in dark mode) is softened a little more, so the words on the page stay readable." },
+      { kind: "better", text: "Your team's own short and long video colours (Team → Colors) are always readable as words, even a light yellow or blue." },
+      { kind: "fixed", text: "Initials on avatars are always readable: white on the deeper colours, dark on light ones." },
+      { kind: "fixed", text: "The TikTok logo no longer disappears on dark cards and selected filters: it has a faint edge and its colours." },
+    ],
+  },
+  {
     version: "1.34.5",
     date: "2026-10-26",
     title: "Graphs you can point at, and smoother Outliers",

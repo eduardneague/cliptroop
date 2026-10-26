@@ -12,6 +12,7 @@ import { actionableStatus, waitsForAnswer } from "@/lib/notification-status";
 import { useSwipeAway } from "./use-swipe-away";
 import { AvatarImg } from "@/components/ui/avatar-img";
 import type { NotificationItem } from "./notification-bell";
+import { wordColor } from "@/lib/word-color";
 
 /*
  * The bell's cards: each kind of notification in words and pictures, the
@@ -53,7 +54,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
 
   if (n.kind === "objective_reached" || n.kind === "projection_reached" || (n.kind === "projection_ended" && m?.made)) {
     return (
-      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }} aria-label={n.kind === "objective_reached" ? "Objective reached" : "Projection reached"}>
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgb(245 197 66 / 0.22)", color: "rgb(var(--gold-text))" }} aria-label={n.kind === "objective_reached" ? "Objective reached" : "Projection reached"}>
         <TrophyIcon className="w-4 h-4" />
       </span>
     );
@@ -95,7 +96,7 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
       <span className="relative flex-shrink-0">
         <span
           className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden"
-          style={{ background: "#888" }}
+          style={{ background: "#6F6A62" }}
         >
           <AvatarImg src={m.actor.avatarUrl} fallback={initialsFor(m.actor.name)} />
         </span>
@@ -279,7 +280,7 @@ function RichBody({ n }: { n: NotificationItem }) {
               <span key={r.name}>
                 <span
                   className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
-                  style={{ color: r.color, background: `color-mix(in srgb, ${r.color} 14%, transparent)` }}
+                  style={{ color: wordColor(r.color), background: `color-mix(in srgb, ${r.color} 14%, transparent)` }}
                 >
                   {r.name}
                 </span>
@@ -296,7 +297,7 @@ function RichBody({ n }: { n: NotificationItem }) {
           You&rsquo;ve been tagged on <b>&ldquo;{m.projectTitle}&rdquo;</b> for{" "}
           <span
             className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
-            style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
+            style={{ color: wordColor(stageTone(m)), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
           </span>
@@ -309,7 +310,7 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>&ldquo;{m.projectTitle}&rdquo;</b> moved into{" "}
           <span
             className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
-            style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
+            style={{ color: wordColor(stageTone(m)), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
           </span>
@@ -443,7 +444,7 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>{m.actor?.name}</b> mentioned you in{" "}
           <span
             className="font-bold px-1.5 py-0.5 rounded-md text-[10.5px]"
-            style={{ color: stageTone(m), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
+            style={{ color: wordColor(stageTone(m)), background: `color-mix(in srgb, ${stageTone(m)} 14%, transparent)` }}
           >
             {m.stageLabel}
           </span>{" "}

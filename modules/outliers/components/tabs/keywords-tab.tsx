@@ -245,7 +245,7 @@ function KeywordDetail({ k, data, onPick, inSheet = false }: { k: KeywordStat; d
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <div className="rounded-xl border border-line/10 px-3 py-2.5">
           <div className="text-[11.5px] font-semibold text-ink-faint">Median</div>
-          <div className="mt-1 font-display text-[22px] font-semibold leading-none" style={{ color: (k.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+          <div className="mt-1 font-display text-[22px] font-semibold leading-none" style={{ color: (k.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
             {multText(k.med)}
           </div>
         </div>

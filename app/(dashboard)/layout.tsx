@@ -149,7 +149,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 {/* Staging only: so it's always obvious you're not on the real app. */}
                 {APP_CHANNEL === "E" && (
                   <span
-                    className="rounded-md border border-amber/50 bg-amber/15 text-amber px-1.5 py-0.5 text-[10px] font-bold tracking-[0.12em]"
+                    className="rounded-md border border-amber/50 [background-color:color-mix(in_srgb,rgb(var(--amber))_10%,rgb(var(--surface)))] text-amber px-1.5 py-0.5 text-[10px] font-bold tracking-[0.12em]"
                     title={`Experimental build ${APP_VERSION_LABEL}`}
                   >
                     EXPERIMENTAL

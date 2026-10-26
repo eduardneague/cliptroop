@@ -324,6 +324,29 @@ the page is live, or React throws that part away (production error #418).
   Unicode symbols (iOS renders many as emoji).
 - **Stage colours mean state, not identity:** `stageState()` +
   `STAGE_STATE_COLOR` (orange = current, teal = done, neutral = upcoming).
+- **Words in a colour (1.35.0, light mode's contrast pass).** Every colour
+  token comes in two: the fill (`--amber`, `--teal`…: `bg-`, `border-`,
+  `ring-`, `fill-`, `stroke-`) and the word shade (`--amber-text`…), which
+  `text-amber` and the rest use (`tailwind.config.ts` `textColor`): deeper
+  in light mode, lighter in dark, 4.5:1 on every theme's cards, paper,
+  hovers and the colour's own 5–15 % chips. A theme sets its own
+  `--amber-text`; a team's short / long colours get theirs from
+  `kindColorCss` (`lib/kind-colors.ts`, through `wordsIn` in
+  `lib/contrast.ts`, which also has `contrast`, `textShade`, `forWhite` and
+  `WORST`, the darkest light and lightest dark backgrounds of any theme).
+  In an inline style, words take `wordColor(c)` (`lib/word-color.ts`): an
+  app colour becomes its word shade, any other is mixed toward the ink
+  (`--word-mix`). Fills that carry white words (the accent in every theme
+  and both modes, green, gold, red, teal, the avatar `PALETTE`) are 4.5:1
+  with white; initials on a colour that isn't take `onFill(color)`. In light
+  mode filled buttons darken a little on hover (they brightened past it),
+  and the glass's wash keeps its colours light (OKLCH lightness ≥ 0.84), so
+  words on the page read on it. A wallpaper behind a page's words (every
+  page but the dashboard) is covered by enough paper for grey words, from
+  its measured brightness (`.wall-cover[data-words]`). `tests/light-contrast.test.ts` recomputes
+  all of it from globals.css for every theme; a new theme, colour or fill
+  with words on it must pass there. The harness's `t-contrast.mjs` checks
+  the rendered pages (each word against the pixels behind it).
 - **Overlays that must escape the header** render through a portal on
   `document.body` (the sticky header's `backdrop-blur` traps fixed children).
 - **Pop-ups leave the way they came (1.34.0).** Anything that floats over

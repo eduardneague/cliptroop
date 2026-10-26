@@ -326,7 +326,7 @@ export function HistoryBars({
             <>
               <b className="font-semibold">{formatAmount(metric, p.value)}</b>
               <span className="opacity-75"> of {formatAmount(metric, p.target)} · {p.label}</span>
-              {p.target === 0 ? <span className="opacity-75"> · off</span> : p.reached ? <span className="text-[#7ee2a8]"> · reached</span> : null}
+              {p.target === 0 ? <span className="opacity-75"> · off</span> : p.reached ? <span className="text-[#7ee2a8] dark:text-[#0f7a3f]"> · reached</span> : null}
             </>
           )}
         </div>

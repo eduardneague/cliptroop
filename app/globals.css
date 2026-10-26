@@ -14,12 +14,14 @@
   --paper-2: 229 230 221;
   --ink: 20 17 12;         /* warm near-black */
   --ink-soft: 74 69 60;     /* 8.1:1 on paper */
-  --ink-faint: 110 104 92;  /* 4.7:1 on paper — WCAG AA */
+  --ink-faint: 100 94 82;   /* 1.35.0: 4.7:1 on the darkest theme's paper-2 (110 104 92 was 4.1 there) */
   --surface: 255 255 255;
   --surface-2: 247 246 240;
   --line: 20 17 12;
 
-  --amber: 232 99 13;      /* the one accent — used sparingly, on purpose */
+  /* The one accent, used sparingly, on purpose. 1.35.0: a deeper orange than 232 99 13, in both modes, so white
+     words on it (every main button) read at 4.5:1; it was 3.4:1. Words in it use --amber-text (below). */
+  --amber: 197 81 0;
   --teal: 21 130 115;
   --blue: 47 86 194;
   --violet: 88 58 200;     /* meetings: 7.4:1 on white */
@@ -28,8 +30,8 @@
   --short: 234 88 12;
   --long: 14 165 233;
   --pink: 178 61 107;
-  --gold: 173 131 13;
-  --green: 43 151 87;
+  --gold: 149 111 0;     /* 1.35.0: deeper (was 173 131 13), so white words on it read at 4.5:1 */
+  --green: 15 134 72;     /* the same (was 43 151 87) */
   --red: 208 56 70;
   --coral: 224 90 64;
   /* Chart series (validated for colour-blind separation and contrast on
@@ -51,13 +53,13 @@
      Its own colours, never the theme's (a multiplier in the accent read like a button). Each fill
      comes with the number's colour on it (--m-on-*) and a colour for the number on the page (*-ink). */
   --m-red: 220 38 38;
-  --m-red-ink: 185 28 28;
+  --m-red-ink: 176 13 19;      /* 1.35.0: a step deeper (was 185 28 28), 4.5:1 on its tint on every theme's paper */
   --m-yellow: 234 179 8;
-  --m-yellow-ink: 161 98 7;
+  --m-yellow-ink: 133 79 0;    /* the same (was 161 98 7) */
   --m-on-yellow: 66 50 0;
   --m-green: 21 128 61;
   --m-green-2: 22 101 52;
-  --m-green-ink: 21 128 61;
+  --m-green-ink: 0 93 40;      /* the same (was 21 128 61) */
   --m-on-green: 255 255 255;
   /* A chart's "N videos posted" chip (1.23.1): a fill and its number that read on each other. */
   --mark-short: 234 88 12;
@@ -94,6 +96,23 @@
   --obj-gold: 181 134 0;
   --obj-plum: 134 25 143;
   --obj-olive: 110 120 20;
+  /* Words in a colour (1.35.0: text-amber, text-red… go through these, tailwind.config.ts textColor): a deeper shade
+     in light mode, a lighter one in dark, so they read at 4.5:1 on cards, paper, hovers and the colour's own 5–15 %
+     chips in every theme (tests/light-contrast.test.ts). Fills, borders, rings and icons drawn with fill- / stroke-
+     keep the colour. A theme sets its own --amber-text; a team's own short / long colours set theirs
+     (lib/kind-colors.ts). */
+  --word-mix: 65%;          /* lib/word-color.ts: any other colour, as words, this much of it and the rest ink */
+  --amber-text: 156 62 0;
+  --teal-text: 0 104 92;
+  --blue-text: 43 81 189;
+  --violet-text: 88 58 200;
+  --short-text: 164 57 0;
+  --long-text: 0 101 146;
+  --pink-text: 161 45 93;
+  --gold-text: 118 87 0;
+  --green-text: 0 106 54;
+  --red-text: 179 20 47;
+  --coral-text: 175 43 16;
   /* --font-display / --font-body / --font-mono are provided by next/font
      via the className on <html> in app/layout.tsx — not redefined here,
      so there's a single source of truth instead of two competing ones. */
@@ -104,13 +123,12 @@
   --paper-2: 26 22 16;
   --ink: 240 236 227;
   --ink-soft: 204 196 181;  /* 11:1 on paper · 9.7:1 on surface-2 */
-  --ink-faint: 152 143 127; /* 6:1 on paper · 5.2:1 on surface-2 */
+  --ink-faint: 162 153 137; /* 1.35.0: 4.7:1 on Nord's lighter surface-2 (152 143 127 was 4.1 there) */
   --surface: 28 24 17;
   --surface-2: 34 29 20;
   --line: 240 236 227;
-  /* Accent/stage colors are NOT redefined here on purpose — they stay
-     identical to :root in both themes. Only structural tokens
-     (background/text/surface) actually need to invert for dark mode. */
+  /* Most accent and stage colours stay as in :root; the ones redefined here are brighter for dark backgrounds (and,
+     below, every word shade). */
   /* Brighter kind colours on dark backgrounds. */
   --violet: 152 130 245;   /* meetings: 5.8:1 on the dark surface */
   --short: 251 146 60;
@@ -130,7 +148,7 @@
   --score-green: #43bd66;
   /* The multiplier on the dark surface: brighter fills with a dark number on them. */
   --m-red: 248 113 113;
-  --m-red-ink: 248 113 113;
+  --m-red-ink: 255 124 123;    /* 1.35.0: a step lighter (was 248 113 113) */
   --m-yellow: 250 204 21;
   --m-yellow-ink: 250 204 21;
   --m-on-yellow: 66 50 0;
@@ -169,6 +187,19 @@
   --obj-gold: 214 168 40;
   --obj-plum: 196 90 205;
   --obj-olive: 160 170 60;
+  /* Words in a colour: lighter shades, 4.5:1 on the dark cards, paper and chips. */
+  --word-mix: 50%;
+  --amber-text: 239 119 58;
+  --teal-text: 73 170 153;
+  --blue-text: 104 149 255;
+  --violet-text: 165 145 255;
+  --short-text: 251 146 60;
+  --long-text: 56 189 248;
+  --pink-text: 235 112 156;
+  --gold-text: 188 149 59;
+  --green-text: 70 174 109;
+  --red-text: 255 101 108;
+  --coral-text: 251 114 87;
 }
 
 /*
@@ -176,56 +207,68 @@
   <html data-palette="…"> switches the paper, the cards and the accent (the
   "amber" token every button and link uses). No attribute = Default, the
   original. Kind, chart, status and meeting colours stay the same in every
-  theme so their meaning never changes. Accents keep white text ≥ 3.4:1.
+  theme so their meaning never changes. Accents keep white words on them at
+  4.5:1 in both modes (1.35.0: they were 3.4:1 and up; the dark ones and
+  Default's are deeper now). Each also sets --amber-text, its accent for
+  words: 4.5:1 on its own chips and on every theme's cards and paper (so on
+  see-through panes and covered wallpapers too; tests/light-contrast.test.ts).
 */
-html[data-palette="ocean"]:not(.dark) { --paper: 233 237 242; --paper-2: 224 229 236; --surface: 255 255 255; --surface-2: 244 246 250; --amber: 37 99 235; }
-html.dark[data-palette="ocean"] { --paper: 12 15 21; --paper-2: 17 21 29; --surface: 21 26 35; --surface-2: 27 33 44; --amber: 59 130 246; }
-html[data-palette="forest"]:not(.dark) { --paper: 231 236 229; --paper-2: 222 229 219; --surface: 255 255 255; --surface-2: 244 247 241; --amber: 22 128 74; }
-html.dark[data-palette="forest"] { --paper: 12 16 13; --paper-2: 17 22 18; --surface: 21 28 23; --surface-2: 27 35 29; --amber: 31 150 88; }
-html[data-palette="lagoon"]:not(.dark) { --paper: 229 237 236; --paper-2: 220 230 229; --surface: 255 255 255; --surface-2: 243 248 247; --amber: 13 124 128; }
-html.dark[data-palette="lagoon"] { --paper: 10 16 17; --paper-2: 15 22 23; --surface: 19 28 29; --surface-2: 25 35 36; --amber: 20 150 150; }
-html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224 237; --surface: 255 255 255; --surface-2: 247 245 251; --amber: 109 64 214; }
-html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 139 102 240; }
-html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; }
-html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 225 62 120; }
-html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 161 98 7; }
-html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 178 120 8; }
-html[data-palette="cherry"]:not(.dark) { --paper: 242 233 233; --paper-2: 235 224 224; --surface: 255 255 255; --surface-2: 250 245 245; --amber: 200 30 48; }
-html.dark[data-palette="cherry"] { --paper: 20 11 12; --paper-2: 26 16 17; --surface: 33 21 23; --surface-2: 41 27 29; --amber: 229 62 74; }
-html[data-palette="orchid"]:not(.dark) { --paper: 241 232 242; --paper-2: 234 223 236; --surface: 255 255 255; --surface-2: 250 244 251; --amber: 162 28 175; }
-html.dark[data-palette="orchid"] { --paper: 18 11 19; --paper-2: 24 16 26; --surface: 31 21 33; --surface-2: 39 27 42; --amber: 192 72 206; }
-html[data-palette="lime"]:not(.dark) { --paper: 236 239 226; --paper-2: 228 232 216; --surface: 255 255 255; --surface-2: 247 249 241; --amber: 77 124 15; }
-html.dark[data-palette="lime"] { --paper: 14 17 10; --paper-2: 19 23 14; --surface: 25 30 19; --surface-2: 32 38 25; --amber: 88 142 14; }
-html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223 216; --surface: 255 254 252; --surface-2: 248 244 240; --amber: 120 82 52; }
-html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 166 118 78; }
-html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; }
-html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; }
+html[data-palette="ocean"]:not(.dark) { --paper: 233 237 242; --paper-2: 224 229 236; --surface: 255 255 255; --surface-2: 244 246 250; --amber: 37 99 235; --amber-text: 18 78 213; }
+html.dark[data-palette="ocean"] { --paper: 12 15 21; --paper-2: 17 21 29; --surface: 21 26 35; --surface-2: 27 33 44; --amber: 42 112 227; --amber-text: 93 154 255; }
+html[data-palette="forest"]:not(.dark) { --paper: 231 236 229; --paper-2: 222 229 219; --surface: 255 255 255; --surface-2: 244 247 241; --amber: 22 128 74; --amber-text: 0 105 58; }
+html.dark[data-palette="forest"] { --paper: 12 16 13; --paper-2: 17 22 18; --surface: 21 28 23; --surface-2: 27 35 29; --amber: 0 134 75; --amber-text: 66 173 111; }
+html[data-palette="lagoon"]:not(.dark) { --paper: 229 237 236; --paper-2: 220 230 229; --surface: 255 255 255; --surface-2: 243 248 247; --amber: 13 124 128; --amber-text: 0 102 106; }
+html.dark[data-palette="lagoon"] { --paper: 10 16 17; --paper-2: 15 22 23; --surface: 19 28 29; --surface-2: 25 35 36; --amber: 0 130 131; --amber-text: 66 169 169; }
+html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224 237; --surface: 255 255 255; --surface-2: 247 245 251; --amber: 109 64 214; --amber-text: 103 56 206; }
+html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 129 91 228; --amber-text: 163 136 255; }
+html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; --amber-text: 176 2 84; }
+html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 214 51 111; --amber-text: 255 95 146; }
+html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 161 98 7; --amber-text: 133 79 0; }
+html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 160 106 0; --amber-text: 200 144 59; }
+html[data-palette="cherry"]:not(.dark) { --paper: 242 233 233; --paper-2: 235 224 224; --surface: 255 255 255; --surface-2: 250 245 245; --amber: 200 30 48; --amber-text: 179 0 35; }
+html.dark[data-palette="cherry"] { --paper: 20 11 12; --paper-2: 26 16 17; --surface: 33 21 23; --surface-2: 41 27 29; --amber: 219 51 66; --amber-text: 255 101 105; }
+html[data-palette="orchid"]:not(.dark) { --paper: 241 232 242; --paper-2: 234 223 236; --surface: 255 255 255; --surface-2: 250 244 251; --amber: 162 28 175; --amber-text: 153 11 167; }
+html.dark[data-palette="orchid"] { --paper: 18 11 19; --paper-2: 24 16 26; --surface: 31 21 33; --surface-2: 39 27 42; --amber: 184 63 198; --amber-text: 224 104 238; }
+html[data-palette="lime"]:not(.dark) { --paper: 236 239 226; --paper-2: 228 232 216; --surface: 255 255 255; --surface-2: 247 249 241; --amber: 77 124 15; --amber-text: 61 102 0; }
+html.dark[data-palette="lime"] { --paper: 14 17 10; --paper-2: 19 23 14; --surface: 25 30 19; --surface-2: 32 38 25; --amber: 79 130 0; --amber-text: 116 170 60; }
+html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223 216; --surface: 255 254 252; --surface-2: 248 244 240; --amber: 120 82 52; --amber-text: 119 82 52; }
+html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 154 107 67; --amber-text: 194 145 104; }
+html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; --amber-text: 51 65 85; }
+html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; --amber-text: 140 157 181; }
 /* 1.13.0: eight more. Some pair a tinted paper with a different-coloured accent (Solar, Sakura). */
-html[data-palette="coral"]:not(.dark) { --paper: 244 233 228; --paper-2: 238 224 218; --surface: 255 255 255; --surface-2: 251 245 242; --amber: 208 70 50; }
-html.dark[data-palette="coral"] { --paper: 21 13 11; --paper-2: 28 18 15; --surface: 35 23 20; --surface-2: 43 29 25; --amber: 226 88 64; }
-html[data-palette="solar"]:not(.dark) { --paper: 248 241 222; --paper-2: 241 232 208; --surface: 255 252 242; --surface-2: 251 246 232; --amber: 33 113 181; }
-html.dark[data-palette="solar"] { --paper: 0 28 36; --paper-2: 2 32 41; --surface: 6 36 45; --surface-2: 12 46 56; --amber: 45 140 210; }
-html[data-palette="sakura"]:not(.dark) { --paper: 245 233 238; --paper-2: 239 224 231; --surface: 255 255 255; --surface-2: 252 245 248; --amber: 46 125 72; }
-html.dark[data-palette="sakura"] { --paper: 20 13 16; --paper-2: 27 18 22; --surface: 35 24 29; --surface-2: 43 30 36; --amber: 64 150 92; }
-html[data-palette="indigo"]:not(.dark) { --paper: 234 234 245; --paper-2: 225 225 240; --surface: 255 255 255; --surface-2: 246 246 252; --amber: 79 70 229; }
-html.dark[data-palette="indigo"] { --paper: 13 13 24; --paper-2: 18 18 32; --surface: 24 24 41; --surface-2: 31 31 52; --amber: 109 100 240; }
-html[data-palette="sky"]:not(.dark) { --paper: 230 238 244; --paper-2: 220 231 239; --surface: 255 255 255; --surface-2: 243 248 251; --amber: 3 116 176; }
-html.dark[data-palette="sky"] { --paper: 9 15 20; --paper-2: 13 21 28; --surface: 18 28 37; --surface-2: 24 35 46; --amber: 14 140 205; }
-html[data-palette="nord"]:not(.dark) { --paper: 229 233 240; --paper-2: 216 222 233; --surface: 255 255 255; --surface-2: 240 243 247; --amber: 76 106 150; }
-html.dark[data-palette="nord"] { --paper: 22 26 33; --paper-2: 27 31 39; --surface: 34 39 49; --surface-2: 42 48 60; --amber: 98 134 178; }
-html[data-palette="pine"]:not(.dark) { --paper: 230 236 233; --paper-2: 220 229 225; --surface: 255 255 255; --surface-2: 243 247 245; --amber: 22 101 72; }
-html.dark[data-palette="pine"] { --paper: 10 16 13; --paper-2: 14 22 18; --surface: 19 29 24; --surface-2: 25 37 31; --amber: 34 140 100; }
-html[data-palette="ink"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 28 28 30; }
-html.dark[data-palette="ink"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 120 120 128; }
+html[data-palette="coral"]:not(.dark) { --paper: 244 233 228; --paper-2: 238 224 218; --surface: 255 255 255; --surface-2: 251 245 242; --amber: 208 70 50; --amber-text: 175 36 18; }
+html.dark[data-palette="coral"] { --paper: 21 13 11; --paper-2: 28 18 15; --surface: 35 23 20; --surface-2: 43 29 25; --amber: 206 70 47; --amber-text: 249 109 84; }
+html[data-palette="solar"]:not(.dark) { --paper: 248 241 222; --paper-2: 241 232 208; --surface: 255 252 242; --surface-2: 251 246 232; --amber: 33 113 181; --amber-text: 0 94 160; }
+html.dark[data-palette="solar"] { --paper: 0 28 36; --paper-2: 2 32 41; --surface: 6 36 45; --surface-2: 12 46 56; --amber: 18 122 191; --amber-text: 69 161 232; }
+html[data-palette="sakura"]:not(.dark) { --paper: 245 233 238; --paper-2: 239 224 231; --surface: 255 255 255; --surface-2: 252 245 248; --amber: 46 125 72; --amber-text: 21 105 54; }
+html.dark[data-palette="sakura"] { --paper: 20 13 16; --paper-2: 27 18 22; --surface: 35 24 29; --surface-2: 43 30 36; --amber: 44 132 76; --amber-text: 87 172 113; }
+html[data-palette="indigo"]:not(.dark) { --paper: 234 234 245; --paper-2: 225 225 240; --surface: 255 255 255; --surface-2: 246 246 252; --amber: 79 70 229; --amber-text: 74 62 221; }
+html.dark[data-palette="indigo"] { --paper: 13 13 24; --paper-2: 18 18 32; --surface: 24 24 41; --surface-2: 31 31 52; --amber: 107 97 237; --amber-text: 143 143 255; }
+html[data-palette="sky"]:not(.dark) { --paper: 230 238 244; --paper-2: 220 231 239; --surface: 255 255 255; --surface-2: 243 248 251; --amber: 3 116 176; --amber-text: 0 96 147; }
+html.dark[data-palette="sky"] { --paper: 9 15 20; --paper-2: 13 21 28; --surface: 18 28 37; --surface-2: 24 35 46; --amber: 0 123 183; --amber-text: 64 162 224; }
+html[data-palette="nord"]:not(.dark) { --paper: 229 233 240; --paper-2: 216 222 233; --surface: 255 255 255; --surface-2: 240 243 247; --amber: 76 106 150; --amber-text: 63 92 136; }
+html.dark[data-palette="nord"] { --paper: 22 26 33; --paper-2: 27 31 39; --surface: 34 39 49; --surface-2: 42 48 60; --amber: 84 119 163; --amber-text: 122 158 204; }
+html[data-palette="pine"]:not(.dark) { --paper: 230 236 233; --paper-2: 220 229 225; --surface: 255 255 255; --surface-2: 243 247 245; --amber: 22 101 72; --amber-text: 22 101 72; }
+html.dark[data-palette="pine"] { --paper: 10 16 13; --paper-2: 14 22 18; --surface: 19 29 24; --surface-2: 25 37 31; --amber: 23 133 94; --amber-text: 73 172 130; }
+html[data-palette="ink"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 28 28 30; --amber-text: 28 28 30; }
+html.dark[data-palette="ink"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 117 116 124; --amber-text: 156 155 163; }
 /* Ink's greys with coloured buttons (1.15.0): orange (the app's own), grape, orchid and cherry. */
-html[data-palette="inkorange"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 232 99 13; }
-html.dark[data-palette="inkorange"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 232 99 13; }
-html[data-palette="inkgrape"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 109 64 214; }
-html.dark[data-palette="inkgrape"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 139 102 240; }
-html[data-palette="inkorchid"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 162 28 175; }
-html.dark[data-palette="inkorchid"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 192 72 206; }
-html[data-palette="inkcherry"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 200 30 48; }
-html.dark[data-palette="inkcherry"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 229 62 74; }
+html[data-palette="inkorange"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 197 81 0; --amber-text: 156 62 0; }
+html.dark[data-palette="inkorange"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 197 81 0; --amber-text: 239 119 58; }
+html[data-palette="inkgrape"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 109 64 214; --amber-text: 103 56 206; }
+html.dark[data-palette="inkgrape"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 129 91 228; --amber-text: 163 136 255; }
+html[data-palette="inkorchid"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 162 28 175; --amber-text: 153 11 167; }
+html.dark[data-palette="inkorchid"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 184 63 198; --amber-text: 224 104 238; }
+html[data-palette="inkcherry"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 200 30 48; --amber-text: 179 0 35; }
+html.dark[data-palette="inkcherry"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 219 51 66; --amber-text: 255 101 105; }
+
+/*
+  1.35.0: in light mode a filled button darkens a little when pointed at instead of brightening, so its white words
+  keep their 4.5:1 (brightened, the deeper accent dropped to 3.9:1); dark mode still brightens.
+*/
+html:not(.dark) :is(.bg-amber, .bg-green, .bg-red, .bg-teal, .bg-blue, .bg-violet, .bg-gold):is(.hover\:brightness-110, .hover\:brightness-105):hover {
+  --tw-brightness: brightness(0.92);
+}
 
 body {
   background: rgb(var(--paper));
@@ -253,6 +296,7 @@ body {
     and two hues beside it where the browser can work them out; meetings'
     violet and long videos' blue otherwise), fixed behind the page. Since
     1.29.2 any theme's (--wash-base), three colours of their own, or none.
+    In light mode its colours stay light (1.35.0, below), so words read on it.
   - Cards (bg-surface) let it through by --glass-tint; insets and hovers
     (bg-surface-2) are a brighter pane on top; things that float over the
     page stay readable (--glass-float, or --glass-pop when glass goes
@@ -324,6 +368,28 @@ html[data-glass][data-glass-wash="three"] body::before {
     radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--wash-2) / 0.26), transparent 60%),
     radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--wash-3) / 0.22), transparent 62%),
     rgb(var(--paper));
+}
+/*
+  1.35.0: in light mode the colours behind the glass stay light (their hue and colour kept, lightness at least 0.84
+  in OKLCH), so words on the page and on see-through cards read on them as on the paper. A dark theme accent (Ink,
+  Slate, Mocha) or a deep colour of your own made a grey or muddy field that dimmed every date and link over it, and
+  at high glass levels the cards are mostly that field. Dark mode keeps its washes.
+*/
+@supports (color: oklch(from red l c h)) {
+  html[data-glass]:not(.dark) body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c h / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c calc(h - 36) / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c calc(h + 26) / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
+  html[data-glass][data-glass-wash="three"]:not(.dark) body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, oklch(from rgb(var(--wash-1)) max(l, 0.84) c h / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, oklch(from rgb(var(--wash-2)) max(l, 0.84) c h / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, oklch(from rgb(var(--wash-3)) max(l, 0.84) c h / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
 }
 /* No colours: the glass over the plain paper (no layer at all). */
 html[data-glass][data-glass-wash="none"] body::before { display: none; }
@@ -721,6 +787,16 @@ html.dark:has([data-dash-bg]),
   color: rgb(var(--words) var(--words) var(--words) / 0.86);
   text-shadow: 0 1px 12px rgb(var(--halo) var(--halo) var(--halo) / 0.55), 0 0 2px rgb(var(--halo) var(--halo) var(--halo) / 0.3);
 }
+/*
+  The paper over a wallpaper (--cover: its dim; modules/dashboard/components/backdrop.tsx). 1.35.0: behind a page
+  other than the dashboard, whose words sit right on the picture (data-words), a picture too dark for light mode's
+  dark words, or too bright for dark mode's light ones, is covered more: enough that grey words read at 4.5:1, from
+  its measured brightness (--pic; 0.5 until it's measured), never past 93 %. A picture that suits the words keeps the
+  dim as it was.
+*/
+.wall-cover { background: rgb(var(--paper) / var(--cover)); }
+html:not(.dark) .wall-cover[data-words] { background: rgb(var(--paper) / clamp(var(--cover), calc(max(0, 0.86 - var(--pic, 0.5)) / max(0.1, 0.93 - var(--pic, 0.5))), 0.93)); }
+html.dark .wall-cover[data-words] { background: rgb(var(--paper) / clamp(var(--cover), calc(max(0, var(--pic, 0.5) - 0.17) / max(0.11, var(--pic, 0.5) - 0.06)), 0.93)); }
 /* (The glass look's wash isn't needed under it. The body stays see-through: with the glass look on, the page's
    own background is on <html>, and a painted body would hide the picture.) */
 html:has([data-dash-bg]) body::before { display: none; }
@@ -1823,7 +1899,7 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--pf-on, white); /* 1.35.0: dark initials on a light colour (lib/contrast.ts onFill) */
   font-weight: 700;
 }
 .pf-ring { position: absolute; inset: calc(var(--s) / -16); border-radius: 50%; pointer-events: none; }

@@ -8,7 +8,7 @@ import { isMaster, roleAllowsStage, ROLES } from "@/lib/permissions/roles";
 import type { PipelineStage, RoleId } from "@/lib/permissions/roles";
 import { STAGE_LABELS, STAGE_ORDER, STAGE_STATE_COLOR, stageState } from "@/modules/long-videos/lib/stages";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { colorForId, displayName } from "@/lib/avatar";
+import { colorForId, displayName, PALETTE } from "@/lib/avatar";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { buildMentionCatalog } from "@/lib/mentions";
 import { CheckIcon, ArrowLeftIcon } from "@/components/ui/icons";
@@ -173,7 +173,8 @@ export default async function ProjectDetailPage({
   const showVideo = inAppReview || longVersions.length > 0;
   const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
 
-  const memberColors = ["#E8630D", "#178C7C", "#3159C9", "#6B4FD6", "#B84070", "#B4890E", "#2B9757"];
+  // The avatars' colours (1.35.0: one list, lib/avatar.ts, white initials readable on each).
+  const memberColors = PALETTE;
   const membersById = new Map(
     (teamMembers ?? []).map((m, i) => {
       const profile = m.profiles as unknown as { username: string | null; full_name: string | null; email: string | null; avatar_url: string | null } | null;

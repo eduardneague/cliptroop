@@ -77,7 +77,7 @@ export const TONE_TEXT = { red: "text-red", amber: "text-amber", violet: "text-v
 export const TONE_CHIP = {
   red: "bg-red text-white",
   amber: "bg-amber text-white",
-  violet: "bg-violet text-white",
+  violet: "bg-violet text-white dark:text-paper",
   ink: "bg-surface/95 text-ink",
   soft: "bg-surface/95 text-ink-soft",
 } as const;

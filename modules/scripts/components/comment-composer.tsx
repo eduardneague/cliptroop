@@ -6,6 +6,7 @@ import { ROLES, type RoleId } from "@/lib/permissions/roles";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { rankPeople, rankRoles, ROLE_LABEL, type MentionPerson } from "../lib/mention-people";
 import { Leaves } from "@/components/ui/leaves";
+import { wordColor } from "@/lib/word-color";
 
 export const KIND_COLOR = { comment: "rgb(var(--amber))", edit_idea: "rgb(59 130 246)" } as const;
 
@@ -264,7 +265,7 @@ export function MentionText({ text, people, roleColors }: { text: string; people
     if (m.start > i) parts.push(text.slice(i, m.start));
     const c = m.target.kind === "all" ? "rgb(var(--red))" : m.target.kind === "role" ? roleColors[m.target.roleId] ?? "rgb(var(--amber))" : people.find((p) => p.userId === (m.target as { userId: string }).userId)?.color ?? "rgb(var(--amber))";
     parts.push(
-      <span key={m.start} className="rounded px-0.5 font-semibold" style={{ color: c, background: `color-mix(in srgb, ${c} 12%, transparent)` }}>
+      <span key={m.start} className="rounded px-0.5 font-semibold" style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 12%, transparent)` }}>
         {text.slice(m.start, m.end)}
       </span>
     );

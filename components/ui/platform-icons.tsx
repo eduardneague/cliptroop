@@ -7,14 +7,21 @@ export function YouTubeIcon({ className }: { className?: string }) {
   );
 }
 
+// TikTok's note, and its cyan and red echoes.
+const TT_NOTE = "M15.8 6.2c.5.9 1.4 1.5 2.5 1.6v2.1a4.4 4.4 0 0 1-2.5-.8v4.6a3.9 3.9 0 1 1-3.9-3.9c.2 0 .3 0 .5.02v2.1a1.8 1.8 0 1 0 1.3 1.7V4h2.1v2.2Z";
+/**
+ * 1.35.0: the black tile has a faint light rim and the note its cyan and red
+ * echoes, as TikTok draws it: on a dark card or a black chip the plain black
+ * tile disappeared. On a light background the rim doesn't show.
+ */
 export function TikTokIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className}>
       <rect width="24" height="24" rx="6" fill="#000" />
-      <path
-        d="M15.8 6.2c.5.9 1.4 1.5 2.5 1.6v2.1a4.4 4.4 0 0 1-2.5-.8v4.6a3.9 3.9 0 1 1-3.9-3.9c.2 0 .3 0 .5.02v2.1a1.8 1.8 0 1 0 1.3 1.7V4h2.1v2.2Z"
-        fill="#fff"
-      />
+      <rect x="0.5" y="0.5" width="23" height="23" rx="5.5" fill="none" stroke="#fff" strokeOpacity="0.24" />
+      <path d={TT_NOTE} fill="#25F4EE" transform="translate(-0.65 -0.55)" />
+      <path d={TT_NOTE} fill="#FE2C55" transform="translate(0.65 0.55)" />
+      <path d={TT_NOTE} fill="#fff" />
     </svg>
   );
 }

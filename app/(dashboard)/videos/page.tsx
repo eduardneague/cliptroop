@@ -26,6 +26,7 @@ import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modu
 import type { Metadata } from "next";
 import { sketchThumb, studioThumb, type PictureWidth } from "@/lib/picture-size";
 import { chunks, LIST_CHUNK, WIDE_CHUNK } from "@/lib/chunks";
+import { wordColor } from "@/lib/word-color";
 
 export const metadata: Metadata = { title: "Long videos" };
 
@@ -237,14 +238,14 @@ export default async function VideosPage({
                 <span className="hidden sm:block text-[11.5px] text-ink-soft truncate">
                   {(p.video_type ?? []).join(" + ") || "None"}
                 </span>
-                <span className="hidden sm:block text-[12px] font-semibold truncate" style={{ color: themeColor }}>
+                <span className="hidden sm:block text-[12px] font-semibold truncate" style={{ color: wordColor(themeColor) }}>
                   {p.theme}
                   {p.subtheme ? ` · ${p.subtheme}` : ""}
                 </span>
                 <span className="hidden sm:block">
                   <span
                     className="text-[10.5px] font-bold px-2 py-0.5 rounded-md"
-                    style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
+                    style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 14%, transparent)` }}
                   >
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
@@ -320,7 +321,7 @@ export default async function VideosPage({
                   {(p.theme || (p.video_type ?? []).length > 0) && (
                     <span className="flex items-center gap-2 text-[12px] min-w-0">
                       {p.theme && (
-                        <span className="font-semibold truncate" style={{ color: colorForId(p.theme || "theme") }}>
+                        <span className="font-semibold truncate" style={{ color: wordColor(colorForId(p.theme || "theme")) }}>
                           {p.theme}
                           {p.subtheme ? ` · ${p.subtheme}` : ""}
                         </span>

@@ -179,7 +179,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
                 <p className="font-display text-[16px] leading-snug font-semibold">{templateLabel(t.text)}</p>
                 <p className="mt-1.5 text-[12px] text-ink-faint">
                   {t.n} videos from {t.ch} channels · {t.out} hit 3× · median{" "}
-                  <span className="font-display font-semibold" style={{ color: (t.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+                  <span className="font-display font-semibold" style={{ color: (t.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
                     {multText(t.med)}
                   </span>
                 </p>
@@ -267,7 +267,7 @@ function FormatDetail({ row, inSheet = false }: { row: Row; inSheet?: boolean })
             {s ? (
               <>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="font-display text-[24px] font-semibold leading-none" style={{ color: (s.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+                  <span className="font-display text-[24px] font-semibold leading-none" style={{ color: (s.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
                     {multText(s.med)}
                   </span>
                   <span className="text-[11.5px] text-ink-faint">median</span>

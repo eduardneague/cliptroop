@@ -1,5 +1,6 @@
 import { initialsFor } from "@/lib/avatar";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { onFill } from "@/lib/contrast";
 
 export function PersonAvatar({
   name,
@@ -15,7 +16,7 @@ export function PersonAvatar({
   return (
     <span
       className={`${className} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
-      style={{ background: color }}
+      style={{ background: color, color: onFill(color) }}
     >
       <AvatarImg src={avatarUrl} fallback={initialsFor(name)} />
     </span>

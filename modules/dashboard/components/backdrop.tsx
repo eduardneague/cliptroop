@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
 import { measureUrl } from "@/lib/wallpapers-measure";
 import { saveWallpaperLuma } from "@/app/(dashboard)/settings/wallpaper-actions";
@@ -32,6 +32,7 @@ export function DashboardBackdrop({
   luma = null,
   measure = null,
   global = false,
+  words = false,
 }: {
   src: string;
   video: boolean;
@@ -39,6 +40,8 @@ export function DashboardBackdrop({
   luma?: number | null;
   measure?: string | null;
   global?: boolean;
+  /** A page's words sit right on it (every page but the dashboard): covered enough for them (globals.css .wall-cover). */
+  words?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [still, setStill] = useState(false);
@@ -103,7 +106,11 @@ export function DashboardBackdrop({
           <img key={l.src} src={l.src} alt="" decoding="async" fetchPriority="high" onLoad={() => shown(l.src)} onError={() => shown(l.src)} className={cls} />
         );
       })}
-      <div className="absolute inset-0 transition-[background-color] duration-500" style={{ background: `rgb(var(--paper) / ${d / 100})` }} />
+      <div
+        className="wall-cover absolute inset-0 transition-[background-color] duration-500"
+        data-words={words ? "" : undefined}
+        style={{ "--cover": d / 100, ...(luma === null ? {} : { "--pic": Math.max(0, Math.min(100, luma)) / 100 }) } as CSSProperties}
+      />
     </div>
     </>
   );
@@ -124,5 +131,5 @@ export const EVERYWHERE_DIM = 70;
  */
 export function EverywhereBackdrop({ bg }: { bg: { url: string; video: boolean; dim: number; luma: number | null } }) {
   const dash = usePathname() === "/dashboard";
-  return <DashboardBackdrop src={bg.url} video={bg.video} dim={dash ? bg.dim : Math.max(bg.dim, EVERYWHERE_DIM)} luma={bg.luma} global />;
+  return <DashboardBackdrop src={bg.url} video={bg.video} dim={dash ? bg.dim : Math.max(bg.dim, EVERYWHERE_DIM)} luma={bg.luma} global words={!dash} />;
 }
