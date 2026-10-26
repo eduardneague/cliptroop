@@ -200,7 +200,7 @@ export async function getProduction(teamId: string, w: Window, tz: string): Prom
     if (!inRange(dayIn(new Date(v.end).toISOString(), tz), w.from, w.to)) continue;
     stageDays.set(`long:${stage}`, [...(stageDays.get(`long:${stage}`) ?? []), (v.end - v.start) / (24 * HOURS)]);
   }
-  const SHORT_ORDER = ["script", "editing", "review", "ready"];
+  const SHORT_ORDER = ["script", "filming", "editing", "review", "ready"];
   const LONG_ORDER = ["research", "script", "film", "edit", "review", "package", "publish"];
   const stages: Production["stages"] = [
     ...SHORT_ORDER.map((st) => {

@@ -119,6 +119,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       editorId: x.editor?.memberId ?? null,
       reviewerId: x.reviewer?.memberId ?? null,
       schedulerId: x.scheduler?.memberId ?? null,
+      filmerId: x.filmer?.memberId ?? null,
       scripterIds: x.scripterIds,
     },
     ctx: settingsCtx,
@@ -148,7 +149,9 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   // Counts come from the whole list; filtering happens after.
   const counts = new Map<string, number>();
   all.forEach((s) => counts.set(s.stage, (counts.get(s.stage) ?? 0) + 1));
-  const mineCount = all.filter((s) => s.editor?.memberId === myMemberId).length;
+  // "Assigned to me": you edit it, or (1.36.0) you film it.
+  const isMine = (s: (typeof all)[number]) => !!myMemberId && (s.editor?.memberId === myMemberId || s.filmer?.memberId === myMemberId);
+  const mineCount = all.filter(isMine).length;
   const lateCount = all.filter((s) => isOverdue(s.plannedDate, s.stage)).length;
   const reviewCount = counts.get("review") ?? 0;
   const readyCount = counts.get("ready") ?? 0;
@@ -156,7 +159,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   const filtered = all.filter(
     (s) =>
       (!stageFilter || s.stage === stageFilter) &&
-      (!mine || s.editor?.memberId === myMemberId) &&
+      (!mine || isMine(s)) &&
       (!late || isOverdue(s.plannedDate, s.stage)) &&
       (!platform || (only ? s.platforms.length === 1 && s.platforms[0] === platform : s.platforms.includes(platform))) &&
       (!typeFilter || s.shortType === typeFilter)

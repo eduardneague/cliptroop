@@ -47,6 +47,8 @@ export type ShortListItem = {
   platforms: Platform[];
   postedPlatforms: Platform[];
   editor: ShortEditor | null;
+  /** Who films it (1.36.0, migration 0113; null before it). */
+  filmer: ShortEditor | null;
   hasFileLink: boolean;
   /** The reviewer's "changes requested" note (shown while it's back in editing). */
   reviewNote?: string | null;
@@ -76,6 +78,20 @@ const LIST_SELECT =
   "id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, " +
   PEOPLE_SELECT +
   ", short_video_posts(platform), short_scripters(team_member_id), short_video_versions!short_video_versions_short_id_fkey(count)";
+/** 1.36.0: the filmer (migration 0113). */
+const FILMER_SELECT = `, filmer:team_members!short_videos_filmer_member_id_fkey${PERSON_EMBED}`;
+/** And on a short's page: when it was filmed, by whom, where the footage is. */
+const FILMED_SELECT = `${FILMER_SELECT}, filmed_at, footage_path, filmed_by, filmed_by_profile:profiles!short_videos_filmed_by_fkey(username, full_name, email, avatar_url)`;
+
+/**
+ * Migration 0113 is in (the Filming step's columns). Once per request: a page asks for them only then, so it keeps
+ * working in the minutes between this version going live and its migration running.
+ */
+export const hasShortFilming = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const { error } = await supabase.from("short_videos").select("filmer_member_id, filmed_at, footage_path").limit(1);
+  return !error;
+});
 
 type RawEditor = { id: string; user_id: string | null; profiles: ProfileRow | ProfileRow[] } | null;
 
@@ -91,11 +107,11 @@ function toEditor(raw: RawEditor | RawEditor[]): ShortEditor | null {
  * the same order the queue fills slots in. RLS limits it to teammates.
  */
 export async function listShorts(teamId: string): Promise<ShortListItem[]> {
-  const supabase = await createClient();
+  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
   const data = await allPages((from, to) =>
     supabase
       .from("short_videos")
-      .select(LIST_SELECT)
+      .select(LIST_SELECT + (filming ? FILMER_SELECT : ""))
       .eq("team_id", teamId)
       .order("planned_date", { ascending: true, nullsFirst: false })
       .order("queue_position", { ascending: true })
@@ -116,6 +132,7 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
     platforms: (r.platforms as Platform[]) ?? [],
     postedPlatforms: ((r.short_video_posts as { platform: Platform }[]) ?? []).map((p) => p.platform),
     editor: toEditor(r.editor as RawEditor),
+    filmer: toEditor(r.filmer as RawEditor),
     reviewer: toEditor(r.reviewer as RawEditor),
     scheduler: toEditor(r.scheduler as RawEditor),
     shortType: ((r.short_type as ShortType) ?? "filler"),
@@ -154,6 +171,10 @@ export type ShortDetail = ShortListItem & {
   caption: string | null;
   fileLink: string | null;
   reviewNote: string | null;
+  /** 1.36.0: when it was marked filmed, by whom, and where the footage is (a NAS folder). */
+  filmedAt: string | null;
+  filmedBy: Person | null;
+  footagePath: string | null;
   createdAt: string;
   createdBy: Person | null;
   posts: ShortPost[];
@@ -162,13 +183,14 @@ export type ShortDetail = ShortListItem & {
 
 /** One short with everything its page shows. Cached per request (page + tab title). */
 export const getShortDetail = cache(async (id: string): Promise<ShortDetail | null> => {
-  const supabase = await createClient();
+  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
   const { data } = await supabase
     .from("short_videos")
     .select(
       "id, team_id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, created_at, created_by, " +
         "creator:profiles!short_videos_created_by_fkey(username, full_name, email, avatar_url), " +
         PEOPLE_SELECT +
+        (filming ? FILMED_SELECT : "") +
         ", " +
         "short_scripters(team_member_id), " +
         "short_video_posts(platform, post_url, posted_at, posted_by, poster:profiles!short_video_posts_posted_by_fkey(username, full_name, email, avatar_url)), " +
@@ -202,8 +224,12 @@ export const getShortDetail = cache(async (id: string): Promise<ShortDetail | nu
     platforms: (r.platforms as Platform[]) ?? [],
     postedPlatforms: posts.map((p) => p.platform),
     editor: toEditor(r.editor as RawEditor),
+    filmer: toEditor(r.filmer as RawEditor),
     reviewer: toEditor(r.reviewer as RawEditor),
     scheduler: toEditor(r.scheduler as RawEditor),
+    filmedAt: (r.filmed_at as string | null) ?? null,
+    filmedBy: toPerson((r.filmed_by as string | null) ?? null, one(r.filmed_by_profile as ProfileRow)),
+    footagePath: (r.footage_path as string | null) ?? null,
     shortType: ((r.short_type as ShortType) ?? "filler"),
     captionEnabled: !!r.caption_enabled,
     hasVideo: false,
@@ -293,16 +319,19 @@ export type ShortTeamSettings = {
   defaultReviewer: string | null;
   defaultScheduler: string | null;
   defaultScripter: string | null;
+  /** 1.36.0 (0113): null before it. */
+  defaultFilmer: string | null;
   /** Filled into every YouTube description when scheduling. */
   youtubeDescription: string;
 };
 
 export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
-  const supabase = await createClient();
+  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
   const { data } = await supabase
     .from("teams")
     .select(
-      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description"
+      "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description" +
+        (filming ? ", default_short_filmer_member_id" : "")
     )
     .eq("id", teamId)
     .maybeSingle();
@@ -316,6 +345,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
     defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
+    defaultFilmer: ((data as Record<string, unknown> | null)?.default_short_filmer_member_id as string | null) ?? null,
     youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
   };
 }

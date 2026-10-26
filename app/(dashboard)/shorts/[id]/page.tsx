@@ -37,6 +37,7 @@ import { ShortTypeTag } from "@/modules/short-videos/components/short-type";
 import { MobileCollapse } from "@/components/ui/mobile-collapse";
 import { PendingLink, PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ShortStepSkeleton } from "./step-skeleton";
+import { FilmingCard, FootageFolder } from "./filming-card";
 
 /** The platforms the Posting card posts to, all four. */
 const POSTING_ORDER = ["youtube", "instagram", "facebook", "tiktok"] as const;
@@ -114,10 +115,13 @@ export default async function ShortPage({
   const roles = membership?.roles ?? [];
   const isAssignedEditor = !!membership && short.editor?.memberId === membership.teamMemberId;
   const isAssignedReviewer = !!membership && short.reviewer?.memberId === membership.teamMemberId;
+  const isAssignedFilmer = !!membership && short.filmer?.memberId === membership.teamMemberId;
   const perms = shortPermissions({
     roles,
     isAssignedEditor,
     isAssignedReviewer,
+    isAssignedFilmer,
+    hasFilmer: !!short.filmer,
     stage: short.stage,
     scheduleMode: short.scheduleMode,
   });
@@ -163,6 +167,7 @@ export default async function ShortPage({
     editorId: short.editor?.memberId ?? null,
     reviewerId: short.reviewer?.memberId ?? null,
     schedulerId: short.scheduler?.memberId ?? null,
+    filmerId: short.filmer?.memberId ?? null,
     scripterIds: short.scripterIds,
   };
   const lastChanges = short.events.find((e) => e.kind === "stage" && e.fromStage === "review" && e.toStage === "editing") ?? null;
@@ -219,6 +224,14 @@ export default async function ShortPage({
           {short.scheduleMode !== "auto" && <PinIcon className="w-3 h-3" />}
           {short.scheduleMode === "auto" ? "Auto date" : short.pinKind === "oneoff" ? "Fixed, just this one" : "Fixed, queue starts here"}
         </span>
+        {short.filmer && (
+          <span className="inline-flex items-center gap-1.5">
+            <PersonAvatar name={short.filmer.name} avatarUrl={short.filmer.avatarUrl} color={short.filmer.color} className="w-5 h-5 text-[8.5px]" />
+            <span>
+              Filmer <b className="font-semibold text-ink">{short.filmer.name}</b>
+            </span>
+          </span>
+        )}
         {short.editor && (
           <span className="inline-flex items-center gap-1.5">
             <PersonAvatar name={short.editor.name} avatarUrl={short.editor.avatarUrl} color={short.editor.color} className="w-5 h-5 text-[8.5px]" />
@@ -252,9 +265,9 @@ export default async function ShortPage({
         number={short.number}
         stage={short.stage}
         perms={perms}
-        hasEditor={!!short.editor}
         editorName={short.editor?.name ?? null}
         reviewerName={short.reviewer?.name ?? null}
+        filmerName={short.filmer?.name ?? null}
         hasVideo={!!latestVersion || short.hasVideo}
       />}
 
@@ -277,9 +290,32 @@ export default async function ShortPage({
             />
             </div>
           )}
+          {/* 1.36.0: Filming (now, or looked back at): mark it filmed, or who filmed it and where the footage is. */}
+          {shown === "filming" && (
+            <div className="order-1 lg:order-none">
+              <FilmingCard
+                id={short.id}
+                number={short.number}
+                current={short.stage === "filming" && !viewStage}
+                canMark={perms.canMarkFilmed}
+                canEditFolder={perms.canEditFootage}
+                filmerName={short.filmer?.name ?? null}
+                editorName={short.editor?.name ?? null}
+                filmedAt={short.filmedAt}
+                filmedBy={short.filmedBy?.name ?? null}
+                footagePath={short.footagePath}
+              />
+            </div>
+          )}
           {short.stage === "editing" && short.reviewNote && !viewStage && (
             <div className="order-2 lg:order-none">
               <ChangesCard note={short.reviewNote} by={lastChanges?.actor?.name ?? null} at={lastChanges?.createdAt ?? null} />
+            </div>
+          )}
+          {/* Editing: where the footage is, for the editor. */}
+          {shown === "editing" && short.footagePath && (
+            <div className="order-2 lg:order-none rounded-2xl border border-line/10 bg-surface p-4 sm:p-5">
+              <FootageFolder path={short.footagePath} />
             </div>
           )}
           {posting && (
@@ -341,7 +377,8 @@ export default async function ShortPage({
               />
             </div>
           )}
-          {(shown === "script" || shown === "editing") && (
+          {/* The script: written at Script, filmed from at Filming (1.36.0), there to check at Editing. */}
+          {(shown === "script" || shown === "filming" || shown === "editing") && (
           <div className={shown === "script" ? "order-1 lg:order-none" : "order-4 lg:order-none"}>
           <ScriptCard
             href={`/shorts/${short.id}/script`}
@@ -354,7 +391,7 @@ export default async function ShortPage({
           </div>
           )}
 
-          {shown !== "script" && (
+          {shown !== "script" && shown !== "filming" && (
             <div className="order-3 lg:order-none">
               <VideoCard
                 shortId={short.id}

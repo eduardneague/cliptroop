@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMenuKeyboard } from "@/lib/hooks/use-menu-keyboard";
-import { moveShortStage, sendShortToEditing } from "../actions";
+import { moveShortStage, sendShortToFilming } from "../actions";
 import { useAction } from "@/lib/hooks/use-action";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { ArrowRightIcon, CheckIcon, ChevronDownIcon } from "@/components/ui/icons";
@@ -12,63 +12,67 @@ import type { ShortPermissions } from "@/modules/short-videos/lib/permissions";
 import { Leaves } from "@/components/ui/leaves";
 
 /**
- * The one obvious next step for YOU on this short — Send to editing,
+ * The one obvious next step for YOU on this short — Send to filming,
  * Mark done, Approve / Needs changes — or a hint about who it's waiting
- * on. Masters also get a small "Move to…" menu for corrections.
+ * on. Masters also get a small "Move to…" menu for corrections. 1.36.0:
+ * Script goes to Filming (its filmer marks it filmed in the Filming card),
+ * then Editing.
  */
 export function WorkflowActions({
   id,
   number,
   stage,
   perms,
-  hasEditor,
   editorName,
   reviewerName,
+  filmerName,
   hasVideo,
 }: {
   id: string;
   number: number;
   stage: ShortStage;
   perms: ShortPermissions;
-  hasEditor: boolean;
   editorName: string | null;
   reviewerName: string | null;
+  /** Who films it (null: any filmer). */
+  filmerName: string | null;
   hasVideo: boolean;
 }) {
   const confirm = useConfirm();
 
-  const toEditing = useAction(sendShortToEditing, {
-    success: `Sent to editing. ${editorName ?? "the editor"} has been notified`,
+  const toFilming = useAction(sendShortToFilming, {
+    success: filmerName ? `Sent to filming. ${filmerName} has been notified.` : "Sent to filming. The filmers have been notified.",
     sound: "advance",
   });
-  async function handleSendToEditing() {
+  async function handleSendToFilming() {
     const ok = await confirm({
-      title: `Send #${number} to editing?`,
-      description: `${editorName ?? "The editor"} will get a notification that it's ready for them.`,
-      confirmLabel: "Send to editing",
+      title: `Send #${number} to filming?`,
+      description: filmerName ? `${filmerName} will get a notification that it's ready to film.` : "Nobody is set to film it: every filmer on the team gets a notification, and any of them can mark it filmed.",
+      confirmLabel: "Send to filming",
     });
-    if (ok) toEditing.run(id);
+    if (ok) toFilming.run(id);
   }
 
   let primary: React.ReactNode = null;
   let hint: string | null = null;
 
   if (stage === "script") {
-    if (perms.canSendToEditing) {
+    if (perms.canSendToFilming) {
       primary = (
         <button
           type="button"
-          onClick={handleSendToEditing}
-          disabled={!hasEditor || toEditing.pending}
-          title={hasEditor ? undefined : "Assign an editor first"}
+          onClick={handleSendToFilming}
+          disabled={toFilming.pending}
           className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] disabled:opacity-45 hover:brightness-110 transition-[filter]"
         >
-          {toEditing.pending ? "Sending…" : "Send to editing"}
+          {toFilming.pending ? "Sending…" : "Send to filming"}
           <ArrowRightIcon className="w-4 h-4" />
         </button>
       );
-      if (!hasEditor) hint = "Assign an editor below first.";
-    } else hint = "Waiting for the master to send it to editing.";
+      if (!filmerName) hint = "Nobody is set to film it: any filmer can.";
+    } else hint = "Waiting for the master to send it to filming.";
+  } else if (stage === "filming") {
+    hint = perms.canMarkFilmed ? "Film it, put the footage on the NAS, then mark it filmed below." : filmerName ? `${filmerName} is filming this.` : "Waiting for a filmer.";
   } else if (stage === "editing") {
     if (perms.canSubmitForReview) {
       primary = <MarkDoneButton shortId={id} number={number} disabled={!hasVideo} />;
@@ -99,7 +103,7 @@ export function WorkflowActions({
   );
 }
 
-const MOVABLE: ShortStage[] = ["script", "editing", "review", "ready"];
+const MOVABLE: ShortStage[] = ["script", "filming", "editing", "review", "ready"];
 
 function MoveToMenu({ id, stage }: { id: string; stage: ShortStage }) {
   const [open, setOpen] = useState(false);

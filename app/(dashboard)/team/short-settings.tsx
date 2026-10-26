@@ -23,6 +23,7 @@ export function ShortSettingsForm({
   const [rollForward, setRollForward] = useState(settings.rollForward);
   const [defaultType, setDefaultType] = useState(settings.defaultType);
   const [timezone, setTimezone] = useState(settings.timezone);
+  const [filmer, setFilmer] = useState(settings.defaultFilmer);
   const [editor, setEditor] = useState(settings.defaultEditor);
   const [reviewer, setReviewer] = useState(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState(settings.defaultScheduler);
@@ -44,6 +45,7 @@ export function ShortSettingsForm({
     rollForward !== settings.rollForward ||
     defaultType !== settings.defaultType ||
     timezone !== settings.timezone ||
+    filmer !== settings.defaultFilmer ||
     editor !== settings.defaultEditor ||
     reviewer !== settings.defaultReviewer ||
     scheduler !== settings.defaultScheduler ||
@@ -149,6 +151,11 @@ export function ShortSettingsForm({
             <div className="text-[11px] text-ink-faint mb-1">Scripter</div>
             <PersonSelect kind="scripter" people={people} value={scripter} onChange={setScripter} />
           </div>
+          {/* 1.36.0: who films new shorts. */}
+          <div>
+            <div className="text-[11px] text-ink-faint mb-1">Filmer</div>
+            <PersonSelect kind="filmer" people={people} value={filmer} onChange={setFilmer} />
+          </div>
           <div>
             <div className="text-[11px] text-ink-faint mb-1">Editor</div>
             <PersonSelect kind="editor" people={people} value={editor} onChange={setEditor} />
@@ -175,6 +182,7 @@ export function ShortSettingsForm({
               rollForward,
               defaultType,
               timezone,
+              defaultFilmer: filmer,
               defaultEditor: editor,
               defaultReviewer: reviewer,
               defaultScheduler: scheduler,

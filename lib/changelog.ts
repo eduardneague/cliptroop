@@ -22,6 +22,19 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.36.0",
+    date: "2026-10-26",
+    title: "A Filming step for shorts",
+    changes: [
+      { kind: "new", text: "Shorts have a Filming step, like long videos: Script → Filming → Editing. The master sends a finished script to filming, and the filmer gets a notification and a \"Film it\" task." },
+      { kind: "new", text: "When the footage is on the NAS, the filmer marks it filmed on the short's page and can add the NAS folder. The short moves to Editing and the editor is notified. With no editor yet, the masters are told it needs one." },
+      { kind: "new", text: "The NAS folder shows on the short at Editing, with a Copy button. Its filmer, its editor, a scheduler or the master can change it." },
+      { kind: "new", text: "Pick a short's filmer in its settings and when you add a short. Team → Defaults → Short videos has a default filmer for new shorts. With nobody picked, any filmer can film it." },
+      { kind: "better", text: "Filming a short gives 30 XP and counts toward the filming achievements. \"Assigned to me\" on the shorts list shows the shorts you film too." },
+      { kind: "better", text: "Step names in search results use their readable shade in dark mode." },
+    ],
+  },
+  {
     version: "1.35.2",
     date: "2026-10-26",
     title: "Scripts sent once, tasks done early",

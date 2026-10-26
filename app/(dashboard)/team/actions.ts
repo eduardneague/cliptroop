@@ -5,6 +5,7 @@ import { APP_NAME } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { hasShortFilming } from "@/modules/short-videos/lib/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, ROLES } from "@/lib/permissions/roles";
@@ -525,6 +526,8 @@ export async function updateShortSettings(
     defaultReviewer: string | null;
     defaultScheduler: string | null;
     defaultScripter: string | null;
+    /** 1.36.0 (migration 0113). */
+    defaultFilmer?: string | null;
     youtubeDescription: string;
   }
 ) {
@@ -556,6 +559,8 @@ export async function updateShortSettings(
       default_short_scheduler_member_id: input.defaultScheduler || null,
       default_short_scripter_member_id: input.defaultScripter || null,
       default_youtube_description: String(input.youtubeDescription ?? "").slice(0, 5000),
+      // Before migration 0113 there's no such column: left out then.
+      ...((await hasShortFilming()) && input.defaultFilmer !== undefined ? { default_short_filmer_member_id: input.defaultFilmer || null } : {}),
     })
     .eq("id", teamId);
 

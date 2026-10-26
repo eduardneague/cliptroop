@@ -138,6 +138,7 @@ for (const [f, re] of [
   ["app/(dashboard)/videos/page.tsx", /color: wordColor\(themeColor\)/],
   ["modules/short-videos/components/short-type.tsx", /color: wordColor\(c\)/],
   ["modules/scripts/components/comment-composer.tsx", /color: wordColor\(c\)/],
+  ["components/search/build.tsx", /color: wordColor\(color\)/],
 ] as const)
   ok(re.test(read(f)), `${f}: inline words use their shade`);
 ok(!/#b8860b/i.test(read("components/ui/notification-cards.tsx") + read("modules/objectives/components/celebrations.tsx")), "the gold trophy icons: the gold word shade (#b8860b was 2.6:1)");

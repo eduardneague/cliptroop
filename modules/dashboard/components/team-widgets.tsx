@@ -321,6 +321,7 @@ export function UpcomingLongsWidget({ items, settings, onSettings }: { items: Up
 
 const SHORT_STEPS: [string, string][] = [
   ["script", "Script"],
+  ["filming", "Filming"],
   ["editing", "Editing"],
   ["review", "Review"],
   ["ready", "Ready"],

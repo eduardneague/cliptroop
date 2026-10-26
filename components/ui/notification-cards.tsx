@@ -226,6 +226,19 @@ function RichBody({ n }: { n: NotificationItem }) {
           <ShortRef m={m} /> is ready for you to edit.
         </>
       );
+    // 1.36.0: the Filming step.
+    case "short_filming":
+      return (
+        <>
+          <ShortRef m={m} /> is ready for you to film.
+        </>
+      );
+    case "short_filmed":
+      return (
+        <>
+          <b>{m.actor?.name}</b> filmed <ShortRef m={m} />. {m.toEditor ? "It's ready for you to edit." : "It needs an editor."}
+        </>
+      );
     case "short_review_ready":
       return (
         <>

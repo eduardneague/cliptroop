@@ -103,7 +103,8 @@ export function PersonSelect({
       kind={kind}
       max={1}
       disabled={disabled}
-      emptyHint={kind === "reviewer" ? "Any master" : kind === "scheduler" ? "Any scheduler" : undefined}
+      // 1.36.0: nobody set to film it means any filmer can (shorts and long videos alike).
+      emptyHint={kind === "reviewer" ? "Any master" : kind === "scheduler" ? "Any scheduler" : kind === "filmer" ? "Any filmer" : undefined}
       onAdd={(id) => onChange(id)}
       onRemove={() => onChange(null)}
     />

@@ -17,6 +17,7 @@ import { ActionTile, DocThumb, GoalTile, MeetingTile, PersonAvatar, ProjectThumb
 import type { Item, SectionId } from "./sections";
 import type { PersonResult, RecentItem, SearchResponse, SearchTeamRef } from "./types";
 import { studioThumb } from "@/lib/picture-size";
+import { wordColor } from "@/lib/word-color";
 
 /**
  * Turns everything found into rows of the search window (1.26.0): videos,
@@ -54,9 +55,10 @@ export function compactViews(n: number | null | undefined) {
 const Num = ({ n }: { n: number | null | undefined }) =>
   n === null || n === undefined ? null : <span className="font-mono text-[11.5px] font-semibold text-ink-faint mr-1.5">#{n}</span>;
 
+/** A step as a pill. 1.36.0: its words in their shade (a short's new blue Filming read about 2.5:1 on the dark palette). */
 function Pill({ color, children }: { color: string; children: React.ReactNode }) {
   return (
-    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap" style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}>
+    <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-md flex-shrink-0 whitespace-nowrap" style={{ color: wordColor(color), background: `color-mix(in srgb, ${color} 14%, transparent)` }}>
       {children}
     </span>
   );

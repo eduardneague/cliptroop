@@ -57,6 +57,10 @@ export type NotificationItem = {
     shortTitle?: string;
     note?: string;
     readyToEdit?: boolean;
+    /** short_filmed (1.36.0): it went to its editor (else to the masters: no editor yet). */
+    toEditor?: boolean;
+    /** short_filmed: the footage folder given. */
+    folder?: string | null;
     roleLabel?: string;
     suffix?: string;
     at?: string;

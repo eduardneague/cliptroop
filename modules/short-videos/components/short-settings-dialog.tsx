@@ -31,6 +31,8 @@ export type ShortSettingsData = {
   editorId: string | null;
   reviewerId: string | null;
   schedulerId: string | null;
+  /** 1.36.0. */
+  filmerId: string | null;
   scripterIds: string[];
 };
 
@@ -80,7 +82,7 @@ export function ShortSettingsDialog({
   const [plats, setPlats] = useState(short.platforms);
   const [capOn, setCapOn] = useState(short.captionEnabled);
   const [cap, setCap] = useState(short.caption ?? "");
-  const [who, setWho] = useState({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
+  const [who, setWho] = useState({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
   const [scripters, setScripters] = useState<string[]>(short.scripterIds);
   const [name, setName] = useState(short.title);
   // The name as saved: the server's, or the one just saved here (before the page catches up).
@@ -99,9 +101,9 @@ export function ShortSettingsDialog({
     setPlats(short.platforms);
     setCapOn(short.captionEnabled);
     setCap(short.caption ?? "");
-    setWho({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
+    setWho({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
     setScripters(short.scripterIds);
-  }, [open, short.scripterIds.join(","), short.editorId, short.reviewerId, short.schedulerId, short.plannedDate, short.scheduleMode, short.pinKind, short.shortType, short.platforms, short.captionEnabled, short.caption]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, short.scripterIds.join(","), short.filmerId, short.editorId, short.reviewerId, short.schedulerId, short.plannedDate, short.scheduleMode, short.pinKind, short.shortType, short.platforms, short.captionEnabled, short.caption]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useAction(updateShortDetails, { success: "Saved" });
   const rename = useAction(updateShortDetails, {
@@ -116,7 +118,7 @@ export function ShortSettingsDialog({
   }
   const assign = useAction(assignShortPerson, {
     success: (_id, role, m) => (m ? `${role[0].toUpperCase()}${role.slice(1)} set. They've been notified.` : `${role[0].toUpperCase()}${role.slice(1)} cleared.`),
-    onError: () => setWho({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId }),
+    onError: () => setWho({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId }),
   });
   const scripter = useAction(setShortScripter, {
     success: (_id, _m, add) => (add ? "Scripter added. They've been notified." : "Scripter removed."),
@@ -127,7 +129,7 @@ export function ShortSettingsDialog({
     scripter.run(short.id, memberId, add);
   }
 
-  function setPerson(kind: "editor" | "reviewer" | "scheduler", memberId: string | null) {
+  function setPerson(kind: "filmer" | "editor" | "reviewer" | "scheduler", memberId: string | null) {
     setWho((w) => ({ ...w, [kind]: memberId }));
     assign.run(short.id, kind, memberId);
   }
@@ -162,8 +164,10 @@ export function ShortSettingsDialog({
       </Section>
 
       <Section label="People">
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* 1.36.0: the filmer too, in the order they work on it. */}
+        <div className="grid gap-3 sm:grid-cols-2">
           {([
+            ["filmer", "Filmer"],
             ["editor", "Editor"],
             ["reviewer", "Reviewer"],
             ["scheduler", "Scheduler"],

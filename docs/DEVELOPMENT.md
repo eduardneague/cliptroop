@@ -1602,11 +1602,29 @@ its own channel's usual in a niche, why, and ideas made from it. No AI.
   `MOCK_OUTLIERS_NEW=1` and `MOCK_OUTLIERS_ACCESS=0` show the other states,
   and `scripts/dev-mock/outliers-shot.cjs` takes the screenshots.
 
-**Short videos.** Script → Editing → In review → Ready to post → Posted.
-"Posted" follows `short_video_posts` (every planned platform marked).
+**Short videos.** Script → Filming → Editing → In review → Ready to post →
+Posted. "Posted" follows `short_video_posts` (every planned platform marked).
 `short_guard_update` (0026) decides who may change which field;
 `modules/short-videos/lib/permissions.ts` mirrors it for the UI. History is
 written only by triggers; numbers come from `next_team_number()`.
+
+**Filming a short (1.36.0).** Like a long video's Film step. The master sends
+a short from Script to Filming (`sendShortToFilming`; its filmer is notified,
+or every filmer when nobody is set). Its filmer, any filmer while nobody is
+set, or a master marks it filmed in the Filming card with the NAS folder
+(`markShortFilmed` → `short_mark_filmed`, 0113): it moves to Editing with
+`filmed_at`, `filmed_by` and `footage_path` (kept if no folder is given), and
+its editor hears it's theirs (the masters, when it has no editor yet, since
+it needs one). `filmed_at` / `filmed_by` are written only by that function or
+a master; the folder by a master, its filmer, its editor or a scheduler; who
+films it by a master or a scheduler (`filmer_member_id`, and the team's
+`default_short_filmer_member_id` for new shorts). The filmer gets a Filming
+task ("Film it", 30 XP, counted as filming; `lib/profile/progress.ts` lists
+the same number). The step itself is in its own migration (0112): PostgreSQL
+only uses a new enum value once the statement that adds it is committed, so
+0113 can use it. Until 0113 runs, `hasShortFilming()` (asked once per
+request) leaves the new columns out of every read and write, and Send to
+filming / Move to Filming say to run the migrations.
 
 **Scheduling queue (0027).** Auto-dated shorts are dated by the database
 (`recalc_short_queue`). The app only sets `planned_date` (a pin) or

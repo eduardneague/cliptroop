@@ -16,6 +16,7 @@ import {
   type Platform,
   type ShortStage,
 } from "@/modules/short-videos/lib/constants";
+import { hasShortFilming } from "@/modules/short-videos/lib/queries";
 
 /**
  * Every change to a short goes through here. The database (RLS + the
@@ -139,6 +140,8 @@ export async function createShort(input: {
   editorMemberId: string | null;
   reviewerMemberId: string | null;
   schedulerMemberId: string | null;
+  /** 1.36.0: who films it (leave out for the team default). */
+  filmerMemberId?: string | null;
   platforms: Platform[];
   caption: string;
   /** Leave out to use the team default. */
@@ -166,14 +169,16 @@ export async function createShort(input: {
   const caption = captionEnabled ? String(input.caption ?? "").trim().slice(0, 5000) || null : null;
   const shortType = isShortType(input.shortType) ? input.shortType : undefined;
 
+  // 1.36.0: the filmer once migration 0113 is in (before it the column isn't there to read or write).
+  const filming = await hasShortFilming();
   const [membership, settings] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     supabase
       .from("teams")
-      .select("default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id")
+      .select("default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id" + (filming ? ", default_short_filmer_member_id" : ""))
       .eq("id", currentTeam.id)
       .maybeSingle()
-      .then((r) => r.data),
+      .then((r) => r.data as Record<string, unknown> | null),
   ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
@@ -183,12 +188,19 @@ export async function createShort(input: {
 
   // Masters choose (the form starts from the team defaults); anyone else
   // gets the team defaults the master set up.
+  const defaultFilmer = (settings?.default_short_filmer_member_id as string | null) ?? null;
   const people = master
-    ? { editor: input.editorMemberId || null, reviewer: input.reviewerMemberId || null, scheduler: input.schedulerMemberId || null }
+    ? {
+        editor: input.editorMemberId || null,
+        reviewer: input.reviewerMemberId || null,
+        scheduler: input.schedulerMemberId || null,
+        filmer: input.filmerMemberId === undefined ? defaultFilmer : input.filmerMemberId || null,
+      }
     : {
         editor: (settings?.default_short_editor_member_id as string | null) ?? null,
         reviewer: (settings?.default_short_reviewer_member_id as string | null) ?? null,
         scheduler: (settings?.default_short_scheduler_member_id as string | null) ?? null,
+        filmer: defaultFilmer,
       };
 
   const { data, error } = await supabase
@@ -202,6 +214,7 @@ export async function createShort(input: {
       editor_member_id: people.editor,
       reviewer_member_id: people.reviewer,
       scheduler_member_id: people.scheduler,
+      ...(filming ? { filmer_member_id: people.filmer } : {}),
       platforms,
       caption,
       caption_enabled: captionEnabled,
@@ -337,11 +350,13 @@ export async function updateShortDetails(
 // Editor assignment (master)
 // ---------------------------------------------------------------------------
 
-type PersonRole = "editor" | "reviewer" | "scheduler";
-const PERSON_COLUMN: Record<PersonRole, "editor_member_id" | "reviewer_member_id" | "scheduler_member_id"> = {
+type PersonRole = "editor" | "reviewer" | "scheduler" | "filmer";
+const PERSON_COLUMN: Record<PersonRole, "editor_member_id" | "reviewer_member_id" | "scheduler_member_id" | "filmer_member_id"> = {
   editor: "editor_member_id",
   reviewer: "reviewer_member_id",
   scheduler: "scheduler_member_id",
+  // 1.36.0 (0113).
+  filmer: "filmer_member_id",
 };
 
 /** Master: set who edits / reviews / posts a short. Notifies the new person. */
@@ -353,7 +368,11 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
   const short = await loadShort(supabase, id);
   if (!short) return { error: "Short not found." };
   const column = PERSON_COLUMN[role];
-  if ((short[column] ?? null) === (memberId ?? null)) return {};
+  if (role === "filmer") {
+    if (!(await hasShortFilming())) return { error: "Run migration 0113 first." };
+    const { data: f } = await supabase.from("short_videos").select("filmer_member_id").eq("id", id).maybeSingle();
+    if (((f?.filmer_member_id as string | null) ?? null) === (memberId ?? null)) return {};
+  } else if ((short[column as keyof ShortRow] ?? null) === (memberId ?? null)) return {};
 
   const { error } = await supabase.from("short_videos").update({ [column]: memberId }).eq("id", id);
   if (error) return { error: friendlyDbError(error, "Couldn't change that. Try again.") };
@@ -365,7 +384,9 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
     const now =
       role === "editor" && short.stage === "editing"
         ? ". It's ready to edit."
-        : role === "reviewer" && short.stage === "review"
+        : role === "filmer" && short.stage === "filming"
+          ? ". It's ready to film."
+          : role === "reviewer" && short.stage === "review"
           ? ". It's waiting for your review."
           : role === "scheduler" && short.stage === "ready"
             ? ". It's ready to post."
@@ -377,7 +398,7 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
       metadata: {
         actor,
         ...shortMeta(short),
-        roleLabel: role === "editor" ? "editor" : role === "reviewer" ? "reviewer" : "scheduler",
+        roleLabel: role,
         readyToEdit: role === "editor" && short.stage === "editing",
         suffix: now,
       },
@@ -431,28 +452,83 @@ async function setStage(
   return {};
 }
 
-export async function sendShortToEditing(id: string): Promise<Result> {
+/**
+ * 1.36.0: Script → Filming (the master, as Script → Editing was): its filmer hears it's theirs, or, with nobody set to
+ * film it, every filmer on the team (any of them can mark it filmed then).
+ */
+export async function sendShortToFilming(id: string): Promise<Result> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
 
   const short = await loadShort(supabase, id);
   if (!short) return { error: "Short not found." };
-  if (!short.editor_member_id) return { error: "Assign an editor first." };
+  if (!(await hasShortFilming())) return { error: "Run migrations 0112 and 0113 first." };
 
-  const res = await setStage(supabase, id, "script", "editing", { review_note: null });
+  const res = await setStage(supabase, id, "script", "filming", { review_note: null });
   if (res.error) return res;
 
-  const editorId = await editorUserId(supabase, short.editor_member_id);
-  const actor = await actorMeta(supabase, user.id);
-  await notifyMany([editorId], user.id, (recipient_id) => ({
+  const { data: f } = await supabase.from("short_videos").select("filmer_member_id").eq("id", id).maybeSingle();
+  const [filmerId, actor] = await Promise.all([editorUserId(supabase, (f?.filmer_member_id as string | null) ?? null), actorMeta(supabase, user.id)]);
+  const recipients = filmerId ? [filmerId] : await teamUsersWithRoles(supabase, short.team_id, ["filmer"]);
+  await notifyMany(recipients, user.id, (recipient_id) => ({
     recipient_id,
     short_id: id,
-    kind: "short_editing",
+    kind: "short_filming",
     metadata: { actor, ...shortMeta(short) },
-    body: `#${short.entry_number} "${short.title}" is ready for you to edit.`,
+    body: `#${short.entry_number} "${short.title}" is ready for you to film.`,
   }));
 
   revalidateShort(id, "stage");
+  return {};
+}
+
+/**
+ * 1.36.0: filmed (its filmer, any filmer when nobody is set, or the master): Filming → Editing, with when, who and
+ * where the footage is (`short_mark_filmed`, 0113). Its editor hears it's theirs now; with no editor yet, the masters,
+ * so someone picks one.
+ */
+export async function markShortFilmed(id: string, folder: string): Promise<Result> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  const short = await loadShort(supabase, id);
+  if (!short) return { error: "Short not found." };
+  const path = String(folder ?? "").trim();
+  if (path.length > 500) return { error: "Keep the footage folder under 500 characters." };
+
+  const { error } = await supabase.rpc("short_mark_filmed", { p_short: id, p_path: path || null });
+  if (error) {
+    if (error.code === "PGRST202" || /short_mark_filmed/.test(error.message)) return { error: "Run migration 0113 first." };
+    if (error.code === "P0002") return { error: "Short not found." };
+    return { error: friendlyDbError(error, "Couldn't mark it filmed. Try again.") };
+  }
+
+  const [editorId, actor] = await Promise.all([editorUserId(supabase, short.editor_member_id), actorMeta(supabase, user.id)]);
+  const recipients = editorId ? [editorId] : await teamUsersWithRoles(supabase, short.team_id, ["master"]);
+  await notifyMany(recipients, user.id, (recipient_id) => ({
+    recipient_id,
+    short_id: id,
+    kind: "short_filmed",
+    metadata: { actor, ...shortMeta(short), folder: path || null, toEditor: !!editorId },
+    body: editorId
+      ? `${actor.name} filmed #${short.entry_number} "${short.title}". It's ready for you to edit.`
+      : `${actor.name} filmed #${short.entry_number} "${short.title}". It needs an editor.`,
+  }));
+
+  revalidateShort(id, "stage");
+  return {};
+}
+
+/** 1.36.0: where the footage is (the filmer, the editor, a scheduler or the master can correct it). */
+export async function setShortFootagePath(id: string, folder: string | null): Promise<Result> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const path = String(folder ?? "").trim();
+  if (path.length > 500) return { error: "Keep the footage folder under 500 characters." };
+  const { data, error } = await supabase.from("short_videos").update({ footage_path: path || null }).eq("id", id).select("id");
+  if (error) return { error: friendlyDbError(error, "Couldn't save that. Try again.") };
+  if (!data || data.length === 0) return { error: "Short not found." };
+  revalidateShort(id);
   return {};
 }
 
@@ -567,6 +643,8 @@ export async function moveShortStage(id: string, to: ShortStage): Promise<Result
   if (short.stage === "posted") return { error: "This short is posted and locked. Un-mark a platform to reopen it." };
   if (short.stage === to) return {};
   if (to === "editing" && !short.editor_member_id) return { error: "Assign an editor first." };
+  // 1.36.0: before migrations 0112 and 0113 the database has no Filming step.
+  if (to === "filming" && !(await hasShortFilming())) return { error: "Run migrations 0112 and 0113 first." };
 
   const res = await setStage(supabase, id, short.stage, to);
   if (res.error) return res;

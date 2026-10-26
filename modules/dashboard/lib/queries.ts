@@ -50,7 +50,7 @@ export type TeamCard = {
 };
 
 const ACTION: Record<TaskKind, Record<string, string>> = {
-  short: { script: "Write the script", editing: "Edit the video", review: "Review the edit", ready: "Schedule the posts" },
+  short: { script: "Write the script", filming: "Film it", editing: "Edit the video", review: "Review the edit", ready: "Schedule the posts" },
   long: {
     research: "Do the research",
     script: "Write the script",
@@ -63,6 +63,8 @@ const ACTION: Record<TaskKind, Record<string, string>> = {
 };
 const STAGE_LABEL: Record<string, string> = {
   script: "Script",
+  // 1.36.0: a short's Filming step (a long video's is "film", below).
+  filming: "Filming",
   editing: "Editing",
   review: "Review",
   ready: "Ready to post",
@@ -76,7 +78,7 @@ const STAGE_LABEL: Record<string, string> = {
   done: "Posted",
 };
 const STEPS: Record<TaskKind, string[]> = {
-  short: ["script", "editing", "review", "ready"],
+  short: ["script", "filming", "editing", "review", "ready"],
   long: ["research", "script", "film", "edit", "review", "package", "publish"],
 };
 export const stageLabel = (s: string) => STAGE_LABEL[s] ?? s;

@@ -33,7 +33,7 @@ export const TASK_XP: { label: string; xp: number }[] = [
   { label: "Scripting a long video", xp: 60 },
   { label: "Research, or editing a short", xp: 40 },
   { label: "Packaging a long video", xp: 35 },
-  { label: "Scripting a short", xp: 30 },
+  { label: "Scripting or filming a short", xp: 30 },
   { label: "Reviewing a long video", xp: 25 },
   { label: "Publishing a long video", xp: 20 },
   { label: "Reviewing a short or a script", xp: 15 },
@@ -170,9 +170,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "final-cut", name: "Final cut", text: "Edit 50 videos", why: "Fifty edits finished, of shorts or long videos.", tier: "epic", icon: "scissors", need: { kind: "count", cat: "edit", n: 50 } },
   { id: "directors-cut", name: "Director's cut", text: "Edit 100 videos", why: "A hundred edits finished. The editor's crown.", tier: "legendary", icon: "scissors", need: { kind: "count", cat: "edit", n: 100 } },
 
-  { id: "first-take", name: "First take", text: "Film your first long video", why: "Filming is a long video's step. It counts when you finish it.", tier: "common", icon: "camera", need: { kind: "count", cat: "film", n: 1 } },
-  { id: "rolling", name: "Rolling", text: "Film 5 long videos", why: "Filming steps of long videos you finished.", tier: "rare", icon: "camera", need: { kind: "count", cat: "film", n: 5 } },
-  { id: "behind-the-lens", name: "Behind the lens", text: "Film 25 long videos", why: "Twenty five long videos filmed.", tier: "epic", icon: "camera", need: { kind: "count", cat: "film", n: 25 } },
+  { id: "first-take", name: "First take", text: "Film your first video", why: "Filming counts when you finish it, of a short or a long video.", tier: "common", icon: "camera", need: { kind: "count", cat: "film", n: 1 } },
+  { id: "rolling", name: "Rolling", text: "Film 5 videos", why: "Filming steps you finished, of shorts or long videos.", tier: "rare", icon: "camera", need: { kind: "count", cat: "film", n: 5 } },
+  { id: "behind-the-lens", name: "Behind the lens", text: "Film 25 videos", why: "Twenty five videos filmed, shorts or long.", tier: "epic", icon: "camera", need: { kind: "count", cat: "film", n: 25 } },
 
   { id: "deep-dive", name: "Deep dive", text: "Finish 5 research steps", why: "Research is a long video's step, before its script.", tier: "common", icon: "search", need: { kind: "count", cat: "research", n: 5 } },
   { id: "scholar", name: "Scholar", text: "Finish 25 research steps", why: "Twenty five research steps of long videos finished.", tier: "rare", icon: "search", need: { kind: "count", cat: "research", n: 25 } },

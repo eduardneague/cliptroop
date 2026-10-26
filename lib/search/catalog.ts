@@ -55,6 +55,7 @@ export type SearchContext = {
 
 const SHORT_STAGE: Record<ShortStage, { title: string; words: string }> = {
   script: { title: "Shorts at Script", words: "scripting writing step stage" },
+  filming: { title: "Shorts in Filming", words: "film filmed filmer recording shooting shoot record nas footage step stage" },
   editing: { title: "Shorts in Editing", words: "edit edited being editor step stage" },
   review: { title: "Shorts in review", words: "reviewing approve approval waiting step stage" },
   ready: { title: "Shorts ready to post", words: "approved posting queue step stage" },
