@@ -10,6 +10,7 @@ import { MASCOT_NAME } from "@/lib/brand";
 import { sounds } from "@/lib/sounds";
 import { useBox } from "./widget-box";
 import type { Done, Task, TeamPersonLite, TeamTask, TeamTasks } from "../lib/queries";
+import { doneEarly, earlyText } from "../lib/done-early";
 import { AvatarImg } from "@/components/ui/avatar-img";
 
 // Clip's runner (1.29.7): loaded only once the secret is found.
@@ -26,31 +27,38 @@ const addDays = (day: string, n: number) => {
 };
 const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** A due day in a word: "Today" · "Tomorrow" · "Yesterday" · "Fri" (this week) · "Oct 9". */
+export function dueWord(due: string, today: string) {
+  const late = due < today;
+  const inWeek = due > today && due <= addDays(today, 6);
+  return due === today
+    ? "Today"
+    : due === addDays(today, 1)
+      ? "Tomorrow"
+      : late
+        ? due === addDays(today, -1)
+          ? "Yesterday"
+          : shortDate(due)
+        : inWeek
+          ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
+          : shortDate(due);
+}
+
+/** The whole day, for a tooltip. */
+export const dueTitle = (due: string) => new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
 /** "Overdue" · "Today" · "Tomorrow" · "Fri" (this week) · "Oct 9". */
 export function DueChip({ due, today }: { due: string | null; today: string }) {
   if (!due) return null;
   const late = due < today;
-  const inWeek = due > today && due <= addDays(today, 6);
-  const label =
-    due === today
-      ? "Today"
-      : due === addDays(today, 1)
-        ? "Tomorrow"
-        : late
-          ? due === addDays(today, -1)
-            ? "Yesterday"
-            : shortDate(due)
-          : inWeek
-            ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
-            : shortDate(due);
   return (
     <span
       className={`flex-shrink-0 rounded-[5px] px-1.5 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${
         late ? "bg-red/12 text-red" : due === today ? "bg-amber/12 text-amber" : "bg-surface-2 text-ink-soft"
       }`}
-      title={new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+      title={dueTitle(due)}
     >
-      {label}
+      {dueWord(due, today)}
     </span>
   );
 }
@@ -452,21 +460,26 @@ export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks
                 <div className="sticky top-0 z-[1] bg-surface px-2 pt-1.5 pb-0.5 text-[10.5px] font-bold uppercase tracking-wider text-ink-faint">
                   {dayName(day)} <span className="font-semibold">{list.length}</span>
                 </div>
-                {list.map((d) => (
-                  <Link key={d.id} href={d.href} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2/70">
-                    {/* (1.23.1) The calendar's posted tick: filled, in the green of a finished step. */}
-                    <span className="w-[26px] h-[26px] rounded-[6px] text-white flex items-center justify-center flex-shrink-0" style={{ background: "rgb(var(--teal))" }} aria-label="Done">
-                      <CheckIcon className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1 leading-tight">
-                      <span className="block text-[13px] font-semibold truncate">{d.action}</span>
-                      <span className="block text-[11.5px] text-ink-soft truncate">
-                        {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
+                {list.map((d) => {
+                  // 1.35.2: finished before the day it was due.
+                  const early = doneEarly(d.at, d.due, localDay);
+                  return (
+                    <Link key={d.id} href={d.href} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2/70">
+                      {/* (1.23.1) The calendar's posted tick: filled, in the green of a finished step. */}
+                      <span className="w-[26px] h-[26px] rounded-[6px] text-white flex items-center justify-center flex-shrink-0" style={{ background: "rgb(var(--teal))" }} aria-label="Done">
+                        <CheckIcon className="w-3.5 h-3.5" />
                       </span>
-                    </span>
-                    <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                  </Link>
-                ))}
+                      <span className="min-w-0 flex-1 leading-tight">
+                        <span className="block text-[13px] font-semibold truncate">{d.action}</span>
+                        <span className="block text-[11.5px] text-ink-soft truncate">
+                          {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
+                        </span>
+                        {early && d.due && <span className="block mt-0.5 text-[11px] font-semibold text-green truncate">{earlyText(early, d.due)}</span>}
+                      </span>
+                      <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </Link>
+                  );
+                })}
               </div>
             ))
           ) : (

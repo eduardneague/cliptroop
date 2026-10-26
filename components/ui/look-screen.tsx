@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Mascot } from "./mascot";
 import { motionReduced } from "./count-up";
-import { LOOK_SCREEN_EVENT, LOOK_SCREEN_FLAG, LOOK_WORDS, type LookChange, type LookRequest } from "@/lib/look-screen";
+import { LOOK_SCREEN_EVENT, LOOK_SCREEN_FLAG, LOOK_WORDS, runChanges, type LookChange, type LookRequest } from "@/lib/look-screen";
 
 /*
  * Clip's "new look" screen (1.29.8, lib/look-screen.ts): over the whole app
@@ -13,7 +13,9 @@ import { LOOK_SCREEN_EVENT, LOOK_SCREEN_FLAG, LOOK_WORDS, type LookChange, type 
  * takes the new colours as they arrive, and leaves once the new look has
  * been drawn: at least MIN ms so it never just flickers, about a second in
  * all. A second change while it's up happens under it and keeps it a little
- * longer. Mounted once, in the dashboard layout.
+ * longer. Mounted once, in the dashboard layout. 1.35.1: a change that takes
+ * a while (a wallpaper: saved, the page asked for again, its picture loaded)
+ * keeps it up until it's done (`runChanges`, at most LOOK_MAX_WAIT).
  */
 
 const MIN = 750;
@@ -23,6 +25,7 @@ const OUT = 240;
 
 /** After the browser has drawn two more frames (the first is the one already on its way). */
 const afterPaint = (f: () => void) => requestAnimationFrame(() => requestAnimationFrame(f));
+
 
 export function LookScreenHost() {
   const [screen, setScreen] = useState<{ what: LookChange; out: boolean } | null>(null);
@@ -63,8 +66,7 @@ export function LookScreenHost() {
       }
       if (up) {
         // Already covering the page: change it now, under the screen.
-        apply();
-        finish();
+        void runChanges([apply]).then(finish);
         return;
       }
       // Wait until the screen is on screen (and has faded in), then change the look under it.
@@ -73,8 +75,7 @@ export function LookScreenHost() {
         window.setTimeout(() => {
           const list = waiting.current ?? [];
           waiting.current = null;
-          list.forEach((f) => f());
-          finish();
+          void runChanges(list).then(finish);
         }, motionReduced() ? 0 : IN);
       });
     };

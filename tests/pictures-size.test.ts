@@ -101,7 +101,9 @@ if (process.env.PICTURES_TEST_CHILD) {
       return out;
     });
     ok(signs.length === 0, `no signed links for Thumbnail Studio's pictures (a new address every visit): ${signs.join(", ")}`);
-    ok(/const thumb = \(id: string\) => \(winner\.has\(id\) \? studioThumb\(winner\.get\(id\)!, 160\) : null\);/.test(read("modules/dashboard/lib/queries.ts")), "the dashboard: 160 px (shown 46 to 52)");
+    // 1.35.1: the winner, else the first sketch (Upcoming longs showed only winners), both 160 px wide.
+    const dq = read("modules/dashboard/lib/queries.ts");
+    ok(/cover\.set\(w\.project_id, studioThumb\(w\.id, 160\)\)/.test(dq) && /cover\.set\(s\.project_id, sketchThumb\(s\.id, 160\)\)/.test(dq), "the dashboard: 160 px (shown 44 to 68)");
     ok(/studioThumb\(winnerOf\.get\(l\.id as string\)!, 640\)/.test(read("app/(dashboard)/calendar/page.tsx")), "the calendar: 640 px (shown up to 240), loaded when a video's details open");
     ok(/studioThumb\(r\.id as string, 640\)/.test(read("app/(dashboard)/videos/[id]/page.tsx")), "a video's page: 640 px");
     const list = read("app/(dashboard)/videos/page.tsx");

@@ -61,9 +61,9 @@ export const CATALOG: Record<WidgetType, Meta> = {
   streak: { name: "Win streak", description: "How many days (or weeks) in a row the team reached a goal, the best run and the wins of the last 30 days. Confetti when it grows.", w: 3, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 5 }, stack: { min: 3, max: 4, phone: 3 }, isNew: true },
   posting: { name: "Posting today", description: "Today's posts per short, where each platform stands, with filters; and anything that failed.", w: 2, h: 3, limits: { minW: 2, minH: 2, maxW: 6, maxH: 8 } , stack: { min: 2, max: 4, phone: 3 } },
   todo: { name: "To-do list", description: "Your own list: priorities, due dates, notes.", w: 2, h: 4, limits: { minW: 2, minH: 3, maxW: 6, maxH: 12 } , stack: { min: 5, max: 8, phone: 5 } },
-  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step, editor and the platforms they go to. Show one platform's only.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 }, settings: { platform: "all" } , stack: { min: 5, max: 8, phone: 6 } },
+  upcomingShorts: { name: "Upcoming shorts", description: "The next shorts by date, with their step, editor and the platforms they go to. Show one platform's (or the ones that go only there), or one editor's.", w: 2, h: 4, limits: { minW: 2, minH: 2, maxW: 6, maxH: 12 }, settings: { platform: "all", only: false, editor: "all" } , stack: { min: 5, max: 8, phone: 6 } },
   minicalendar: { name: "Calendar", description: "This month with shorts and long videos marked.", w: 2, h: 4, limits: { minW: 2, minH: 4, maxW: 4, maxH: 8 } , stack: { min: 6, max: 7, phone: 6 } },
-  upcomingLongs: { name: "Upcoming longs", description: "The long videos coming up next, with their thumbnails, steps and dates.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 } , stack: { min: 4, max: 7, phone: 5 } },
+  upcomingLongs: { name: "Upcoming longs", description: "The long videos coming up next, with their thumbnails, steps, editors and dates. Show one editor's.", w: 4, h: 3, limits: { minW: 2, minH: 2, maxW: 8, maxH: 10 }, settings: { editor: "all" } , stack: { min: 4, max: 7, phone: 5 } },
   contributions: { name: "Contributions", description: "A year of finished tasks, one square per day.", w: 6, h: 3, limits: { minW: 4, minH: 3, maxW: 12, maxH: 5 }, settings: { color: "#22c55e", scope: "all" } , stack: { span: 2, min: 3, max: 4, phone: 3 } },
   pipeline: { name: "Pipeline", description: "How many videos sit at each step: bottlenecks at a glance.", w: 12, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 6 } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
   meetings: { name: "Next meeting", description: "The next team meeting: when, where, who's coming. Answer right here.", w: 4, h: 2, limits: { minW: 2, minH: 2, maxW: 8, maxH: 6 } , stack: { min: 2, max: 4, phone: 3 } },
@@ -75,6 +75,15 @@ export const CATALOG: Record<WidgetType, Meta> = {
   topVideos: { name: "Top videos", description: "Your best videos of the last 28 days, by views: every platform together or one at a time. Click one for its analytics.", w: 4, h: 4, limits: { minW: 3, minH: 3, maxW: 8, maxH: 10 }, settings: { platform: "all" } , stack: { span: 2, min: 4, max: 6, phone: 5 } },
   audienceMap: { name: "Audience map", description: "Where your audience is, last 28 days: a world map or a 3D globe of YouTube views, followers, or all platforms together.", w: 6, h: 4, limits: { minW: 3, minH: 3, maxW: 12, maxH: 8 }, settings: { view: "map", mode: "all" } , stack: { span: 2, min: 5, max: 7, phone: (st) => (st?.view === "globe" ? 7 : 5) } },
 };
+
+/**
+ * Top videos' "View all" (1.35.1, the owner: "a button to see view all on the top right"): Analytics → Content, the
+ * same 28 days, most viewed first, on the platform the widget shows.
+ */
+export function topVideosHref(settings?: Record<string, unknown>) {
+  const p = settings?.platform;
+  return `/analytics?tab=content&range=28d${typeof p === "string" && ["youtube", "instagram", "tiktok", "facebook"].includes(p) ? `&platform=${p}` : ""}`;
+}
 
 export const LIMITS_BY_TYPE = Object.fromEntries(Object.entries(CATALOG).map(([k, v]) => [k, v.limits])) as Record<WidgetType, Limits>;
 

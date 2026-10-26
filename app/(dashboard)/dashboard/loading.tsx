@@ -130,12 +130,21 @@ function WidgetBones({ type }: { type: WidgetType }) {
         </div>
       );
     case "upcomingShorts":
+      // 1.35.1: the filters on top, then each short with its day.
       return (
         <div className="space-y-3">
-          {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="space-y-1.5">
-              <Skeleton className={`h-3 ${i % 2 ? "w-2/3" : "w-4/5"}`} />
-              <Skeleton className="h-2.5 w-1/2" />
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }, (_, i) => (
+              <Skeleton key={i} className="h-6 w-6 rounded-lg" />
+            ))}
+          </div>
+          {Array.from({ length: 4 }, (_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton className="w-6 h-6 rounded-md flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <Skeleton className={`h-3 ${i % 2 ? "w-2/3" : "w-4/5"}`} />
+                <Skeleton className="h-2.5 w-1/2" />
+              </div>
             </div>
           ))}
         </div>
@@ -149,13 +158,17 @@ function WidgetBones({ type }: { type: WidgetType }) {
         </div>
       );
     case "upcomingLongs":
+      // 1.35.1: rows like the widget's (these bones were two big cards): a thumbnail, the title and step, the date.
       return (
-        <div className="flex gap-3 h-full">
-          {[0, 1].map((i) => (
-            <div key={i} className="flex-1 min-w-0 space-y-2">
-              <Skeleton className="aspect-video w-full rounded-lg" />
-              <Skeleton className="h-3 w-4/5" />
-              <Skeleton className="h-2.5 w-1/2" />
+        <div className="space-y-2.5">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton className="w-[68px] aspect-video rounded-[5px] flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <Skeleton className={`h-3 ${i % 2 ? "w-3/5" : "w-4/5"}`} />
+                <Skeleton className="h-2.5 w-1/3" />
+              </div>
+              <Skeleton className="h-5 w-12 rounded-md flex-shrink-0" />
             </div>
           ))}
         </div>

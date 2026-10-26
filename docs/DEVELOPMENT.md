@@ -281,13 +281,25 @@ the page is live, or React throws that part away (production error #418).
   hydrates; Customize fetches the rest for the library). Each renders inside
   `WidgetBoundary`, so one failing widget shows its own Try again instead of
   taking the dashboard down. A widget with a choice that should stay (Top
-  videos', Views', Followers' and Upcoming shorts' platform, 1.34.4–1.34.5) gets
+  videos', Views', Followers' and Upcoming shorts' platform, 1.34.4–1.34.5;
+  Upcoming shorts' Only and editor, Upcoming longs' editor, 1.35.1) gets
   `settings` in its `CATALOG` entry (layout.ts), `HAS_SETTINGS` and a form
   in `WidgetSettings`, and `settings` / `onSettings={update}` in
   `renderWidget` (its own chips call `onSettings`, which saves the layout).
   New followers per day: `modules/analytics/lib/followers.ts`
   (`followerGains`: gained − lost where the platform says, else the change
   in the count, a gap's change on the day after it; `sumSeries`).
+  Every widget's filter chips are `FilterChips` (`filter-chips.tsx`, 1.35.1:
+  a radio group, the picked chip ink on paper, arrow keys, Tab on the picked
+  one; SoundSync ticks any role="radio" or role="checkbox" click, so a
+  filter needs no sound of its own). Several of a widget's settings changed
+  by one click go in ONE `onSettings({...})` call: `updateSettings` starts
+  from the layout as it was rendered, so two calls in a row lose the first.
+  Upcoming shorts and longs filter with `modules/dashboard/lib/upcoming-filters.ts`
+  (pure, tested: `goesTo` a platform or only it, `editedBy`, `editorsOf`,
+  `editorPick`, `nothingFor`); an editor is their team membership's id. A
+  card's top-right link (`GridCardMeta.link`, from `widgetMeta`) is Top
+  videos' "View all" (`topVideosHref`, layout.ts).
   Views and Followers (1.34.5) share their parts in `analytics-widgets.tsx`:
   `PlatformChips` (the filters, each with the number you see when you pick
   it) and `usePlatformPick` (the saved pick); a day of either graph shows a
@@ -763,7 +775,16 @@ takes it away after the new look has been drawn (at least 750 ms). The
 restyle (every glass pane's blur at once) happens under it instead of as a
 visible stutter. Small changes (the see-through slider, the colours behind
 the glass) stay instant and don't use it. Outside the app shell
-`changeLook` just applies. Loading skeletons are `.skeleton` (or the
+`changeLook` just applies. A change that takes a while (1.35.1: the
+wallpaper, Settings → Preferences → Wallpaper, turned on or off, picked,
+uploaded, removed while showing, on every page or not) passes an `apply` that
+returns a promise: the screen stays up until it settles (`runChanges`, at
+most `LOOK_MAX_WAIT`, 8 s; a failure or a throw just lets it go). The
+wallpaper's settle when the server action has saved, the page has been asked
+for again and has it (`refreshed()` in `dashboard-background.tsx`: a
+`router.refresh()` in a transition, done when the transition is) and its new
+picture has loaded (`wallpaperDrawn()`, DashboardBackdrop's hidden layer).
+The darkness slider stays instant. Loading skeletons are `.skeleton` (or the
 `Skeleton` component) everywhere, so they take the theme's tint; don't draw
 loading blocks with greys of their own.
 
@@ -1049,6 +1070,23 @@ service role only). `SUPABASE_PLAN=pro` switches the limits it measures against.
 whose `tasks_visibility` (0076: own / masters / team) allows it
 (`shared_task_team_ids()`). So queries for "my tasks" must filter by
 `user_id` themselves (listMyTasks, listDone do).
+
+**When a task is done (1.35.2).** A video's step task is done the moment the
+video moves past the step (`sync_item_tasks`), whatever its date: the date
+is only when it's due. One exception was a short's Ready to post task
+("Schedule the posts"), which waited for the short to become Posted (its
+last post out, on the day). Since 0111 it's done once every platform the
+short goes to has its post set up (`short_ready_scheduled`: a
+`social_posts` row not failed or cancelled, or a `short_video_posts` row),
+marked `done_by_schedule`, and only such a task comes back (the same row)
+if a post is then cancelled or fails while the short is still at Ready to
+post; `sync_item_tasks` never adds a second one then. `social_posts`
+(insert, delete, a change of status only, never its progress),
+`short_video_posts` and a change of a short's platforms re-sync it. A
+finished task keeps the date it had (`due_date`): the history (My tasks →
+Done, a day on Contributions) says "Done early on Oct 26, due Oct 29"
+when it was done before that day where you are (`doneEarly`,
+`modules/dashboard/lib/done-early.ts`).
 
 **Daily word.** `lib/word/` (answers are server-only; the list of valid
 guesses, `words.ts`, is shared since 1.15.0 so the board can refuse a
@@ -1412,6 +1450,15 @@ strip in the private `video-frames` bucket
 (checks the path and that the file exists; people can't set
 `frames_path` directly). Only uploads from 1.16.0 on have one. The strips
 go into Download for Claude as signed URLs that last an hour.
+
+**Sending a script on (1.35.2).** Script's "Ready for review" and Review's
+"Ready for staging" (`script-flow.tsx`, `handOffScript`): once sent, the
+button is greyed out (and the server refuses another send) until the next
+step is done since: for the Script, Review sending it on to Staging or the
+script marked done; for Review, "Staging done". Then it opens again (a new
+round). `handOffLocked` (`modules/scripts/lib/flow-lock.ts`, pure) decides
+for both; the action reads the video's `script_handoffs` for it
+(`handOffWait`).
 
 **Script comments.** Each belongs to one document (`script_comments.script_id`:
 one short's or long video's script). Comments whose quoted words were since

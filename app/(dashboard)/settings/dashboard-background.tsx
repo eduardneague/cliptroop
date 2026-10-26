@@ -17,6 +17,7 @@ import { startUpload, UploadError } from "@/lib/upload/resumable";
 import { updateDashboardBackground } from "./actions";
 import { addWallpaper, pickWallpaper, removeWallpaper, replaceWallpaper } from "./wallpaper-actions";
 import { stillSrc } from "@/lib/video-still";
+import { changeLook, wallpaperDrawn } from "@/lib/look-screen";
 
 /**
  * Settings → Preferences → Dashboard background (1.27.5; saved wallpapers in
@@ -89,11 +90,36 @@ export function DashboardBackground({
   const [everywhere, setEverywhere] = useState(initialEverywhere);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState<{ id: string; kind: "use" | "remove" } | null>(null);
-  const [, start] = useTransition();
+  const [refreshing, start] = useTransition();
   const dimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (dimTimer.current && clearTimeout(dimTimer.current)), []);
 
   const refresh = () => start(() => router.refresh());
+  // 1.35.1: a refresh you can wait for (the look screen stays up until the page has the new wallpaper).
+  const waiters = useRef<(() => void)[]>([]);
+  useEffect(() => {
+    if (refreshing || !waiters.current.length) return;
+    const done = waiters.current;
+    waiters.current = [];
+    done.forEach((f) => f());
+  }, [refreshing]);
+  const refreshed = () =>
+    new Promise<void>((resolve) => {
+      waiters.current.push(resolve);
+      window.setTimeout(resolve, 6000);
+      refresh();
+    });
+  /**
+   * A change to the wallpaper you see (1.35.1, the owner: "turning wallpaper off should also give you the loading
+   * screen thing", "selecting a wallpaper should too"): under Clip's screen, like a new colour theme, which stays up
+   * until it's saved, the page has it and its picture has loaded.
+   */
+  const underScreen = (what: "wallpaper" | "wallpaper-off", change: () => Promise<boolean>) =>
+    changeLook(what, async () => {
+      if (!(await change())) return;
+      await refreshed();
+      if (what === "wallpaper") await wallpaperDrawn();
+    });
   const full = items.length >= WALLPAPER_MAX;
   const locked = !ready || !listReady || !!job || !!busy;
 
@@ -170,12 +196,13 @@ export function DashboardBackground({
         setItems((list) => [...list, { id: r.id!, path: path!, url, luma, size: f.size }]);
         toast.success(`Wallpaper added (${sizeLabel(f.size)}).${note}`);
       }
-      // Making one lighter keeps whatever was showing; anything else puts the new one up.
+      // Making one lighter keeps whatever was showing; anything else puts the new one up (1.35.1: under the screen).
       if (!lighten || target?.path === current) {
         setCurrent(path);
         if (!lighten) setOn(true);
       }
-      refresh();
+      if (lighten) refresh();
+      else underScreen("wallpaper", async () => true);
     } catch (e) {
       // Not saved: don't leave the file behind.
       if (uploaded && path) await supabase.storage.from(DASH_BG_BUCKET).remove([path]).then(() => null, () => null);
@@ -220,35 +247,42 @@ export function DashboardBackground({
     }
   }
 
-  async function changeEverywhere(next: boolean) {
+  function changeEverywhere(next: boolean) {
     if (next === everywhere || locked) return;
-    setEverywhere(next);
-    const r = await updateDashboardBackground({ everywhere: next });
-    if (r.error) {
-      setEverywhere(!next);
-      toast.error(r.error);
-      return;
-    }
-    toast.success(next ? "Your wallpaper is on every page" : "Your wallpaper is on the dashboard only");
-    refresh();
+    // This page gets it, or loses it: under the screen when there's one up.
+    const change = async () => {
+      setEverywhere(next);
+      const r = await updateDashboardBackground({ everywhere: next });
+      if (r.error) {
+        setEverywhere(!next);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success(next ? "Your wallpaper is on every page" : "Your wallpaper is on the dashboard only");
+      return true;
+    };
+    if (on && current) underScreen(next ? "wallpaper" : "wallpaper-off", change);
+    else void change().then((ok) => ok && refresh());
   }
 
-  async function switchTo(w: WallpaperItem) {
+  function switchTo(w: WallpaperItem) {
     if (locked || (w.path === current && on)) return;
-    setBusy({ id: w.id, kind: "use" });
-    const before = { current, on };
-    setCurrent(w.path);
-    setOn(true);
-    const r = await pickWallpaper(w.id);
-    setBusy(null);
-    if (r.error) {
-      setCurrent(before.current);
-      setOn(before.on);
-      toast.error(r.error);
-      return;
-    }
-    toast.success("Wallpaper changed");
-    refresh();
+    underScreen("wallpaper", async () => {
+      setBusy({ id: w.id, kind: "use" });
+      const before = { current, on };
+      setCurrent(w.path);
+      setOn(true);
+      const r = await pickWallpaper(w.id);
+      setBusy(null);
+      if (r.error) {
+        setCurrent(before.current);
+        setOn(before.on);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success("Wallpaper changed");
+      return true;
+    });
   }
 
   async function remove(w: WallpaperItem) {
@@ -262,39 +296,46 @@ export function DashboardBackground({
       danger: true,
     });
     if (!ok) return;
-    setBusy({ id: w.id, kind: "remove" });
-    const r = await removeWallpaper(w.id);
-    setBusy(null);
-    if (r.error) {
-      toast.error(r.error);
-      return;
-    }
-    setItems((list) => list.filter((x) => x.id !== w.id));
-    if (r.current !== undefined) setCurrent(r.current);
-    if (r.current === null) setOn(false);
-    toast.success("Wallpaper removed");
-    refresh();
+    const change = async () => {
+      setBusy({ id: w.id, kind: "remove" });
+      const r = await removeWallpaper(w.id);
+      setBusy(null);
+      if (r.error) {
+        toast.error(r.error);
+        return false;
+      }
+      setItems((list) => list.filter((x) => x.id !== w.id));
+      if (r.current !== undefined) setCurrent(r.current);
+      if (r.current === null) setOn(false);
+      toast.success("Wallpaper removed");
+      return true;
+    };
+    // The one showing: the next one goes up (or none), under the screen.
+    if (inUse && on) underScreen(others ? "wallpaper" : "wallpaper-off", change);
+    else if (await change()) refresh();
   }
 
-  async function toggle(next: boolean) {
+  function toggle(next: boolean) {
     if (next === on || locked) return;
     if (next && !items.length) {
       choose(null);
       return;
     }
     if (next && !items.some((w) => w.path === current)) {
-      await switchTo(items[items.length - 1]);
+      switchTo(items[items.length - 1]);
       return;
     }
-    setOn(next);
-    const r = await updateDashboardBackground({ on: next });
-    if (r.error) {
-      setOn(!next);
-      toast.error(r.error);
-      return;
-    }
-    toast.success(next ? "Dashboard background on" : "Dashboard background off");
-    refresh();
+    underScreen(next ? "wallpaper" : "wallpaper-off", async () => {
+      setOn(next);
+      const r = await updateDashboardBackground({ on: next });
+      if (r.error) {
+        setOn(!next);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success(next ? "Dashboard background on" : "Dashboard background off");
+      return true;
+    });
   }
 
   function changeDim(v: number) {

@@ -12,6 +12,7 @@ import { pointAt, pointX, slotAt, slotMid, viewsWeek } from "@/modules/analytics
 import { countryName } from "@/modules/analytics/components/world-map";
 import { AudienceMapView, layerFor, MAP_MODES, type MapMode, type MapView } from "@/modules/analytics/components/audience-map";
 import { useBox } from "./widget-box";
+import { FilterChips } from "./filter-chips";
 import { followerGains, sumSeries } from "@/modules/analytics/lib/followers";
 
 /*
@@ -248,7 +249,8 @@ function DayAxis({ days, what, wide }: { days: string[]; what: string; wide: boo
 /**
  * The platforms under a graph, as filters (Views and Followers): each with its number, which is the number you see
  * when you pick it; a narrow widget shows the logos only (the numbers are in their names). The choice is saved with
- * the dashboard. Arrow keys move between them.
+ * the dashboard. Arrow keys move between them. 1.35.1: the chips are `FilterChips`, shared with Upcoming shorts and
+ * Upcoming longs.
  */
 function PlatformChips({
   list,
@@ -265,38 +267,11 @@ function PlatformChips({
   name: (p: P | "all", n: number) => string;
   wide: boolean;
 }) {
-  const all: (P | "all")[] = ["all", ...list];
-  return (
-    <div role="radiogroup" aria-label="Platform" className="mt-2 flex items-center gap-1 flex-wrap flex-shrink-0">
-      {all.map((p, i) => {
-        const on = shown === p;
-        const n = num(p);
-        return (
-          <button
-            key={p}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            tabIndex={on ? 0 : -1}
-            aria-label={name(p, n)}
-            onClick={() => onPick(p)}
-            onKeyDown={(e) => {
-              const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-              if (!step) return;
-              e.preventDefault();
-              const k = (i + step + all.length) % all.length;
-              onPick(all[k]);
-              (e.currentTarget.parentElement?.children[k] as HTMLElement | undefined)?.focus();
-            }}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-1.5 h-7 text-[11.5px] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-amber ${on ? "bg-ink text-paper" : "text-ink-soft hover:bg-surface-2 hover:text-ink"}`}
-          >
-            {p === "all" ? <span className="pl-0.5">All</span> : <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />}
-            {wide && <span className="tabular-nums">{fmtCompact(n)}</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
+  const options = (["all", ...list] as (P | "all")[]).map((p) => {
+    const n = num(p);
+    return { id: p, name: name(p, n), face: p === "all" ? <span className="pl-0.5">All</span> : <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />, count: fmtCompact(n) };
+  });
+  return <FilterChips label="Platform" options={options} value={shown} onPick={onPick} counts={wide} className="mt-2 flex-wrap flex-shrink-0" />;
 }
 
 /** The platform picked on a widget: what's saved with the dashboard, and changing it (saved again). */
@@ -605,63 +580,63 @@ const ago = (iso: string) => {
 };
 
 
+/** How many Top videos lists (1.35.1: the 20 best, scrolling; was as many as fit, at most 12). */
+export const TOP_SHOWN = 20;
+
 /**
  * Top videos (1.27.5): every platform together or one at a time, from the
  * chips on top (or the widget's settings); the choice is saved with the
- * dashboard.
+ * dashboard. 1.35.1 (the owner: "i want to be able to scroll inside it so
+ * theres like the top 20 videos and a button to see view all on the top
+ * right too"): the 20 best, in a list that scrolls inside the widget, and
+ * "View all" in its top right corner (`topVideosHref`, the board's card);
+ * the chips are Followers' (`FilterChips`).
  */
 export function TopVideosWidget({ teamId, settings, onSettings }: { teamId: string; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const r = useLoaded(caches.audience, teamId, loadDashAudience);
   const box = useBox();
-  const saved: P | "all" = isP(settings?.platform) ? settings!.platform : "all";
-  const [pick, setPick] = useState<P | "all">(saved);
-  useEffect(() => setPick(saved), [saved]);
+  const [pick, choose] = usePlatformPick(settings, onSettings);
   const gate = audienceGate(r);
   if (gate || r.state !== "ok") return gate;
   const withViews = r.data.top.filter((t) => t.views !== null);
   // Only platforms that have videos here get a chip.
   const has = PLATFORMS.filter((p) => withViews.some((t) => t.platform === p));
   const shown: P | "all" = pick !== "all" && has.includes(pick) ? pick : "all";
-  const items = (shown === "all" ? withViews : withViews.filter((t) => t.platform === shown)).slice(0, 12);
+  const items = (shown === "all" ? withViews : withViews.filter((t) => t.platform === shown)).slice(0, TOP_SHOWN);
   const chips = has.length > 1 && box.h >= 90;
-  const choose = (v: P | "all") => {
-    setPick(v);
-    onSettings?.({ platform: v });
-  };
   if (!withViews.length) return <Note text="Nothing published in the last 28 days yet." href="/analytics?tab=content" link="Content" />;
   const thumbs = box.w >= 260;
   const rowH = thumbs ? 50 : 34;
-  const listH = box.h - (chips ? 34 : 0);
-  const count = Math.max(1, Math.min(items.length, Math.floor((listH + 6) / rowH)));
   const max = items[0]?.views ?? 1;
+  const named = box.w >= 420;
   return (
     <div className="h-full flex flex-col min-h-0">
       {chips && (
-        <div role="radiogroup" aria-label="Platform" className="flex items-center gap-1 mb-1.5 flex-shrink-0 overflow-x-auto no-scrollbar">
-          {(["all", ...has] as const).map((p) => {
-            const on = shown === p;
-            return (
-              <button
-                key={p}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => choose(p)}
-                title={p === "all" ? "Every platform together" : NAME[p]}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2 h-7 text-[11.5px] font-semibold whitespace-nowrap transition-colors ${on ? "bg-ink text-paper" : "text-ink-soft hover:bg-surface-2 hover:text-ink"}`}
-              >
-                {p === "all" ? "All" : <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />}
-                {p !== "all" && box.w >= 420 && NAME[p]}
-              </button>
-            );
-          })}
-        </div>
+        <FilterChips
+          label="Platform"
+          options={(["all", ...has] as (P | "all")[]).map((p) => ({
+            id: p,
+            name: p === "all" ? "Every platform together" : NAME[p],
+            face:
+              p === "all" ? (
+                <span className="px-0.5">All</span>
+              ) : (
+                <>
+                  <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />
+                  {named && NAME[p]}
+                </>
+              ),
+          }))}
+          value={shown}
+          onPick={choose}
+          className="mb-1.5 flex-shrink-0 overflow-x-auto no-scrollbar"
+        />
       )}
       {!items.length ? (
         <Note text={`No ${shown === "all" ? "" : `${NAME[shown]} `}videos with views in the last 28 days.`} />
       ) : (
-        <ol key={shown} className="flex-1 min-h-0 overflow-hidden -mx-1 motion-stagger">
-          {items.slice(0, count).map((v, i) => (
+        <ol key={shown} aria-label={`The ${items.length} most viewed${shown === "all" ? "" : ` on ${NAME[shown]}`}, last 28 days`} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {items.map((v, i) => (
             <li key={`${v.platform}${v.id}`}>
               {/* Each opens the video's own analytics (1.17.0). */}
               <Link href={v.noNumbers ? "/analytics?tab=content" : `/analytics/video/${v.platform}/${encodeURIComponent(v.id)}?from=dashboard`} className="flex items-center gap-2.5 rounded-lg px-1 py-1 hover:bg-surface-2/70" style={{ height: rowH }}>

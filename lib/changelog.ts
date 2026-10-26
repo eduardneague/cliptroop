@@ -22,6 +22,30 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.35.2",
+    date: "2026-10-26",
+    title: "Scripts sent once, tasks done early",
+    changes: [
+      { kind: "better", text: "Scripts: once you send a script to review or staging, its button turns grey until that step is done, so it can't be sent (and everyone notified) twice by accident. When the next step is done, you can send it again." },
+      { kind: "better", text: "Schedule the posts now counts as done as soon as every platform's post is scheduled, not on the day the posts go out. If a post is cancelled or fails, the task comes back." },
+      { kind: "new", text: "Your task history (My tasks → Done, and a day on Contributions) says when a task was done before its date: \"Done early on Oct 26, due Oct 29\"." },
+    ],
+  },
+  {
+    version: "1.35.1",
+    date: "2026-10-26",
+    title: "Dashboard filters, and a smoother wallpaper",
+    changes: [
+      { kind: "better", text: "Upcoming shorts' filters look like the ones on Followers and Views, and tick when you click them (with sounds on)." },
+      { kind: "new", text: "Upcoming shorts can show one editor's shorts: pick their face under the platforms, or \"No editor yet\" for the ones nobody is editing." },
+      { kind: "new", text: "Pick a platform on Upcoming shorts and tick Only to see just the shorts that go there and nowhere else, like the ones only for Instagram." },
+      { kind: "new", text: "Upcoming longs can show one editor's videos too, and shows who's editing each one." },
+      { kind: "fixed", text: "Upcoming longs shows each video's thumbnail: its winner from Thumbnail Studio, or else its first sketch. Before, only winners showed, so most videos had a plain icon." },
+      { kind: "better", text: "Top videos shows your 20 best in a list you can scroll inside the widget, and View all in its top right corner opens Analytics → Content on the same platform." },
+      { kind: "better", text: "Turning your wallpaper on or off, picking one, adding a new one or putting it on every page now shows Clip's loading screen, like a new colour theme, until the new look is ready." },
+    ],
+  },
+  {
     version: "1.35.0",
     date: "2026-10-26",
     title: "Light mode, easy to read",

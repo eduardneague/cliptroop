@@ -74,8 +74,11 @@ ok(/const color = shown === "all" \? "rgb\(var\(--amber\)\)" : COLOR\[shown\];/.
 ok(/<ViewsLine\s+values=\{wk\.line\}/.test(views) && /\{line && box\.h >= 150 && <DayAxis days=\{a\.days\} what="views per day"/.test(views), "each day of the 28, with the first and last day under it");
 ok(/sel\.length > 1 \? "Not all in yet" : "Not in yet"/.test(views) && /i > lastIndex\(a\.views\[p\]\) \? "not in yet" : "–"/.test(views), "a day YouTube hasn't reported yet says so");
 ok(/<\/Link>\s*\{active\.length > 1 && \(\s*<PlatformChips/.test(views), "the filters sit outside the link to Analytics");
+// 1.35.1: the chips are FilterChips (filter-chips.tsx), shared with Upcoming shorts and longs.
 const chips = w.slice(w.indexOf("function PlatformChips"), w.indexOf("function usePlatformPick"));
-ok(/role="radiogroup" aria-label="Platform"/.test(chips) && /tabIndex=\{on \? 0 : -1\}/.test(chips) && /e\.key === "ArrowRight" \|\| e\.key === "ArrowDown" \? 1/.test(chips), "the filters: a radio group, arrow keys move between them");
+const fc = read("modules/dashboard/components/filter-chips.tsx");
+ok(/<FilterChips label="Platform" options=\{options\} value=\{shown\} onPick=\{onPick\} counts=\{wide\}/.test(chips), "the filters are the shared chips");
+ok(/role="radiogroup" aria-label=\{label\}/.test(fc) && /role="radio"/.test(fc) && /tabIndex=\{i === at \? 0 : -1\}/.test(fc) && /e\.key === "ArrowRight" \|\| e\.key === "ArrowDown" \? 1/.test(fc), "the filters: a radio group, arrow keys move between them");
 const pickHook = w.slice(w.indexOf("function usePlatformPick"), w.indexOf("// Views: the last 7 days"));
 ok(/onSettings\?\.\(\{ platform: v \}\);/.test(pickHook), "the pick is saved with the dashboard");
 

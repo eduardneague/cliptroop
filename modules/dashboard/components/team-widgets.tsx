@@ -9,10 +9,13 @@ import { PlatformFilter, type PlatformChoice } from "@/modules/short-videos/comp
 import { PLATFORMS, PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
 import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
 import type { Pipeline, PostToday, UpcomingLong, UpcomingShort } from "../lib/queries";
-import { DueChip, localDay } from "./tasks-widget";
+import { editedBy, editorChoice, editorPick, editorsOf, goesTo, isPlatform, nothingFor, type EditorPick, type Person, type PlatformPick } from "../lib/upcoming-filters";
+import { DueChip, dueTitle, dueWord, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
+import { FilterChips, chipClass, type ChipOption } from "./filter-chips";
 import { CountUp } from "@/components/ui/count-up";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { onFill } from "@/lib/contrast";
 
 const dayLabel = (d: string, today: string) => {
   const t = new Date(`${today}T00:00:00`);
@@ -25,39 +28,159 @@ function EmptyLine({ text }: { text: string }) {
   return <p className="h-full min-h-[48px] flex items-center justify-center text-center text-[12.5px] text-ink-soft">{text}</p>;
 }
 
-const isPlatform = (v: unknown): v is Platform => PLATFORMS.includes(v as Platform);
+type Save = (s: Record<string, unknown>) => void;
+
+/** A filter saved with the dashboard: what's saved, and picking another (saved again). */
+function useSaved<T extends string | boolean>(saved: T, key: string, onSettings: Save | undefined) {
+  const [v, setV] = useState<T>(saved);
+  useEffect(() => setV(saved), [saved]);
+  const pick = (x: T) => {
+    setV(x);
+    onSettings?.({ [key]: x });
+  };
+  return [v, pick, setV] as const;
+}
+
+/** Someone's face on a chip: their picture, or their initial on their colour. */
+function Face({ p }: { p: Person }) {
+  return (
+    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden" style={{ background: p.color, color: onFill(p.color) }}>
+      <AvatarImg src={p.avatarUrl} fallback={p.name.slice(0, 1).toUpperCase()} />
+    </span>
+  );
+}
+
+/** Nobody yet: an empty dashed circle. */
+const NoFace = () => <span aria-hidden className="w-5 h-5 rounded-full border-[1.5px] border-dashed border-current opacity-70 flex-shrink-0" />;
+
+/**
+ * The editor filter (Upcoming shorts and longs, 1.35.1): All, each editor (their face, and their first name in a wide
+ * widget), and "No editor yet" when some have nobody; each with how many you see when you pick it.
+ */
+function editorOptions(people: readonly Person[], none: number, num: (e: EditorPick) => number, unit: (n: number) => string, names: boolean): ChipOption<EditorPick>[] {
+  return [
+    { id: "all", name: `Every editor: ${unit(num("all"))}`, face: <span className="pl-0.5">All</span>, count: num("all") },
+    ...people.map((p) => ({
+      id: p.id,
+      name: `${p.name}: ${unit(num(p.id))}`,
+      face: (
+        <>
+          <Face p={p} />
+          {names && <span className="max-w-[80px] truncate">{p.name.split(" ")[0]}</span>}
+        </>
+      ),
+      count: num(p.id),
+    })),
+    ...(none ? [{ id: "none", name: `No editor yet: ${unit(num("none"))}`, face: <NoFace />, count: num("none") }] : []),
+  ];
+}
+
+const nShorts = (n: number) => `${n} ${n === 1 ? "short" : "shorts"}`;
+const nLongs = (n: number) => `${n} ${n === 1 ? "long video" : "long videos"}`;
+
+/** An empty list after filtering: what's missing, and a way back to everything. */
+function Nothing({ text, all, onAll }: { text: string; all: string; onAll: () => void }) {
+  return (
+    <div className="flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 text-center px-2">
+      <p className="text-[12.5px] text-ink-soft">{text}</p>
+      <button type="button" onClick={onAll} className="text-[12px] font-semibold text-amber hover:underline">
+        {all}
+      </button>
+    </div>
+  );
+}
 
 /**
  * Upcoming shorts (1.34.4, the owner: "i want to see which shorts will come
  * with filters for instagram and so on and also see the platforms those
  * shorts will be posted on. i want to see only instagram or only other
  * platforms too"): each short's platforms (a tick where it's out already),
- * and the platforms as filters on top, each with how many of these shorts go
- * there. The choice is saved with the dashboard.
+ * and the platforms as filters on top. 1.35.1 (the owner: "i want the filters
+ * to look the same as the followers and views, i also want to be able to
+ * filter by editor and filter by only instagram or only 1 platform in
+ * particular. add sounds to the filters just like the other widgets"):
+ * Followers' chips (`FilterChips`, a tick on each click), an editor filter
+ * under them, and "Only" next to a picked platform for the shorts that go
+ * there and nowhere else. Each chip says how many you see when you pick it
+ * (a wide widget shows it). All of it is saved with the dashboard.
  */
-export function UpcomingShortsWidget({ items, settings, onSettings }: { items: UpcomingShort[]; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
+export function UpcomingShortsWidget({ items, settings, onSettings }: { items: UpcomingShort[]; settings?: Record<string, unknown>; onSettings?: Save }) {
   const today = localDay();
   const box = useBox();
-  const saved: PlatformChoice = isPlatform(settings?.platform) ? settings!.platform : "all";
-  const [platform, setPlatform] = useState<PlatformChoice>(saved);
-  useEffect(() => setPlatform(saved), [saved]);
+  const [platform, pickPlatform, setPlatform] = useSaved<PlatformPick>(isPlatform(settings?.platform) ? settings!.platform : "all", "platform", onSettings);
+  const [only, pickOnly] = useSaved<boolean>(settings?.only === true, "only", onSettings);
+  const [wantEditor, pickEditor, setEditor] = useSaved<EditorPick>(typeof settings?.editor === "string" ? settings.editor : "all", "editor", onSettings);
   if (!items.length) return <EmptyLine text="No shorts planned ahead." />;
-  const counts: Partial<Record<Platform, number>> = {};
-  for (const s of items) for (const p of s.platforms) if (isPlatform(p)) counts[p] = (counts[p] ?? 0) + 1;
-  const used = PLATFORMS.filter((p) => counts[p]);
-  const choose = (v: PlatformChoice) => {
-    setPlatform(v);
-    onSettings?.({ platform: v });
+  const editorsOfShort = (s: UpcomingShort) => (s.editor ? [s.editor] : []);
+  const { people, none } = editorsOf(items.map(editorsOfShort));
+  const editor = editorPick(wantEditor, people, none);
+  const pass = (s: UpcomingShort, p: PlatformPick, e: EditorPick) => goesTo(s.platforms, p, only) && editedBy(editorsOfShort(s), e);
+  const count = (p: PlatformPick, e: EditorPick) => items.filter((s) => pass(s, p, e)).length;
+  const list = items.filter((s) => pass(s, platform, editor));
+  // The platforms these shorts go to (and the one picked, even if none do any more: its empty list says so).
+  const used = PLATFORMS.filter((p) => p === platform || items.some((s) => goesTo(s.platforms, p)));
+  const room = box.h >= 90;
+  const showPlatforms = room && (used.length > 1 || platform !== "all");
+  const showEditors = room && editorChoice(people, none, editor);
+  // "Only" when it changes something: some of the picked platform's shorts go elsewhere too (or it's on).
+  const showOnly = showPlatforms && platform !== "all" && (only || items.some((s) => goesTo(s.platforms, platform) && !goesTo(s.platforms, platform, true)));
+  const counted = box.w >= 330;
+  const tight = box.w < 165;
+  const showAll = () => {
+    setPlatform("all");
+    setEditor("all");
+    // One save for both (two in a row would each start from the same old layout).
+    onSettings?.({ platform: "all", editor: "all" });
   };
-  const list = platform === "all" ? items : items.filter((s) => s.platforms.includes(platform));
-  const filter = (used.length > 1 || platform !== "all") && box.h >= 90;
+  const platformOptions: ChipOption<PlatformPick>[] = [
+    { id: "all", name: `All platforms: ${nShorts(count("all", editor))}`, face: <span className="pl-0.5">All</span>, count: count("all", editor) },
+    ...used.map((p) => {
+      const n = count(p, editor);
+      return { id: p, name: `${PLATFORM_META[p].name}${only ? " only" : ""}: ${nShorts(n)}`, face: <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />, count: n };
+    }),
+  ];
   // Wide: the platforms at the end of the row; narrow: after the day and step.
   const wide = box.w >= 300;
   return (
     <div className="h-full flex flex-col min-h-0">
-      {filter && <PlatformFilter compact iconsOnly={box.w < 230} value={platform} onChange={choose} counts={counts} total={items.length} className="mb-1.5 flex-shrink-0 overflow-x-auto no-scrollbar" />}
+      {(showPlatforms || showEditors) && (
+        <div className="mb-1.5 flex-shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {showPlatforms && (
+            <div className="flex flex-wrap items-center gap-1">
+              <FilterChips label="Platform" options={platformOptions} value={platform} onPick={pickPlatform} counts={counted} tight={tight} />
+              {showOnly && (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={only}
+                  aria-label={`Only ${PLATFORM_META[platform as Platform].name}`}
+                  title={`Only the shorts that go to ${PLATFORM_META[platform as Platform].name} and nowhere else`}
+                  onClick={() => pickOnly(!only)}
+                  className={chipClass(only, tight)}
+                >
+                  <span aria-hidden className={`w-3 h-3 rounded-[3px] flex items-center justify-center ${only ? "bg-paper text-ink" : "border-[1.5px] border-current"}`}>
+                    {only && <CheckIcon className="w-2.5 h-2.5" />}
+                  </span>
+                  Only
+                </button>
+              )}
+            </div>
+          )}
+          {showEditors && (
+            <FilterChips
+              label="Editor"
+              options={editorOptions(people, none, (e) => count(platform, e), nShorts, box.w >= 420)}
+              value={editor}
+              onPick={pickEditor}
+              counts={counted}
+              tight={tight}
+              className="flex-wrap"
+            />
+          )}
+        </div>
+      )}
       {list.length ? (
-        <ul key={platform} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+        <ul key={`${platform}${only}${editor}`} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
           {list.map((s, i) => {
             const newDay = i === 0 || list[i - 1].date !== s.date;
             const ps = s.platforms.filter(isPlatform);
@@ -87,7 +210,7 @@ export function UpcomingShortsWidget({ items, settings, onSettings }: { items: U
                   </span>
                   {wide && marks}
                   {s.editor && (
-                    <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 overflow-hidden" style={{ background: s.editor.color }}>
+                    <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden" style={{ background: s.editor.color, color: onFill(s.editor.color) }}>
                       <AvatarImg src={s.editor.avatarUrl} alt={s.editor.name} fallback={s.editor.name.slice(0, 1).toUpperCase()} />
                     </span>
                   )}
@@ -97,39 +220,102 @@ export function UpcomingShortsWidget({ items, settings, onSettings }: { items: U
           })}
         </ul>
       ) : (
-        <EmptyLine text={`No upcoming shorts for ${PLATFORM_META[platform as Platform].name}.`} />
+        <Nothing
+          text={nothingFor(
+            "shorts",
+            platform === "all" ? null : { name: PLATFORM_META[platform].name, only },
+            editor === "all" ? null : editor === "none" ? "none" : (people.find((p) => p.id === editor) ?? null)
+          )}
+          all="Show all shorts"
+          onAll={showAll}
+        />
       )}
     </div>
   );
 }
 
-export function UpcomingLongsWidget({ items }: { items: UpcomingLong[] }) {
+/**
+ * Upcoming longs: each long video in progress with its thumbnail, step, editor and date. 1.35.1 (the owner: "same
+ * for longs too, but its only youtube basically, and i want the thumbnails to show up in upcoming long"): the editor
+ * filter on top (Upcoming shorts' chips; long videos only go to YouTube, so no platforms), saved with the dashboard;
+ * the thumbnail is the winner or else the first sketch (only winners showed before), a little bigger in a wide widget.
+ */
+export function UpcomingLongsWidget({ items, settings, onSettings }: { items: UpcomingLong[]; settings?: Record<string, unknown>; onSettings?: Save }) {
   const today = localDay();
+  const box = useBox();
+  const [wantEditor, pickEditor] = useSaved<EditorPick>(typeof settings?.editor === "string" ? settings.editor : "all", "editor", onSettings);
   if (!items.length) return <EmptyLine text="No long videos in progress." />;
+  const { people, none } = editorsOf(items.map((l) => l.editors));
+  const editor = editorPick(wantEditor, people, none);
+  const count = (e: EditorPick) => items.filter((l) => editedBy(l.editors, e)).length;
+  const list = items.filter((l) => editedBy(l.editors, editor));
+  const showEditors = box.h >= 90 && editorChoice(people, none, editor);
+  const thumbW = box.w >= 340 ? "w-[68px]" : box.w >= 260 ? "w-[52px]" : "w-[44px]";
+  // Faces when there's room for them beside the title and the date; a narrow widget puts the date under the title.
+  const faces = box.w >= 300;
+  const narrow = box.w < 260;
   return (
-    <ul className="h-full widget-scroll -mx-1 motion-stagger">
-      {items.map((l) => (
-        <li key={l.id}>
-          <Link href={`/videos/${l.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
-            {l.thumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={l.thumb} alt="" className="w-[52px] aspect-video rounded-[5px] object-cover flex-shrink-0 bg-surface-2" />
-            ) : (
-              <span className="w-[52px] aspect-video rounded-[5px] bg-long/10 flex items-center justify-center flex-shrink-0">
-                <KindIcon kind="long" className="w-3.5 h-3.5" />
-              </span>
-            )}
-            <span className="min-w-0 flex-1 leading-tight">
-              <span className="block text-[12.5px] font-semibold truncate">
-                <span className="font-mono text-ink-faint font-normal">#{l.number}</span> {l.title}
-              </span>
-              <span className="block text-[11px] font-semibold text-long truncate">{l.stage}</span>
-            </span>
-            {l.date ? <DueChip due={l.date} today={today} /> : <span className="text-[10.5px] text-ink-faint flex-shrink-0">No date</span>}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="h-full flex flex-col min-h-0">
+      {showEditors && (
+        <FilterChips
+          label="Editor"
+          options={editorOptions(people, none, count, nLongs, box.w >= 420)}
+          value={editor}
+          onPick={pickEditor}
+          counts={box.w >= 330}
+          tight={box.w < 165}
+          className="mb-1.5 flex-shrink-0 flex-wrap"
+        />
+      )}
+      {list.length ? (
+        <ul key={editor} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {list.map((l) => (
+            <li key={l.id}>
+              <Link href={`/videos/${l.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
+                {l.thumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.thumb} alt="" className={`${thumbW} aspect-video rounded-[5px] object-cover flex-shrink-0 bg-surface-2`} />
+                ) : (
+                  <span className={`${thumbW} aspect-video rounded-[5px] bg-long/10 flex items-center justify-center flex-shrink-0`}>
+                    <KindIcon kind="long" className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 leading-tight">
+                  <span className="block text-[12.5px] font-semibold truncate">
+                    <span className="font-mono text-ink-faint font-normal">#{l.number}</span> {l.title}
+                  </span>
+                  <span className="block text-[11px] font-semibold text-long truncate">
+                    {l.stage}
+                    {narrow && (
+                      <span className={!l.date ? "text-ink-faint font-medium" : l.date < today ? "text-red" : l.date === today ? "text-amber" : "text-ink-soft font-medium"} title={l.date ? dueTitle(l.date) : undefined}>
+                        {" · "}
+                        {l.date ? dueWord(l.date, today) : "No date"}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                {faces && l.editors.length > 0 && (
+                  <span title={`Editing: ${l.editors.map((e) => e.name).join(", ")}`} className="flex -space-x-1 flex-shrink-0">
+                    {l.editors.slice(0, 2).map((e) => (
+                      <span key={e.id} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold overflow-hidden ring-2 ring-surface" style={{ background: e.color, color: onFill(e.color) }}>
+                        <AvatarImg src={e.avatarUrl} alt={e.name} fallback={e.name.slice(0, 1).toUpperCase()} />
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {!narrow && (l.date ? <DueChip due={l.date} today={today} /> : <span className="text-[10.5px] text-ink-faint flex-shrink-0">No date</span>)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Nothing
+          text={nothingFor("long videos", null, editor === "none" ? "none" : (people.find((p) => p.id === editor) ?? null))}
+          all="Show all long videos"
+          onAll={() => pickEditor("all")}
+        />
+      )}
+    </div>
   );
 }
 

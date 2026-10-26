@@ -103,6 +103,9 @@ async function teamTz(teamId: string) {
   return ((team?.timezone as string | null) || "Europe/Bucharest") as string;
 }
 
+/** How many of each platform's best videos the dashboard's Top videos gets (1.35.1). */
+const TOP_EACH = 20;
+
 /** Views, followers, countries and the top videos of the last 28 days (platform numbers end yesterday). */
 export async function loadDashAudience(teamId: string): Promise<Result<{ data: DashAudience }>> {
   const tz = await teamTz(teamId);
@@ -110,13 +113,15 @@ export async function loadDashAudience(teamId: string): Promise<Result<{ data: D
   const w = windowFor("28d", addDays(todayIn(tz), -1));
   // The connected platforms and whose numbers they are: looked up once for both.
   const shared = sharedLookups(teamId, await createClient());
-  const [audience, content] = await Promise.all([getAudience(teamId, w, shared), getContent(teamId, w, shared, { limit: 60 })]);
-  // Top videos (1.27.5): enough of each platform for its own filter, not only the 8 best overall.
+  const [audience, content] = await Promise.all([getAudience(teamId, w, shared), getContent(teamId, w, shared, { limit: 200 })]);
+  // Top videos (1.27.5): enough of each platform for its own filter, not only the best overall. 1.35.1 (the owner:
+  // "i want to be able to scroll inside it so theres like the top 20 videos"): each platform's 20 best (was 8), out of
+  // the 200 most viewed (was 60), so one platform's own list still has 20 when another gets most of the views.
   const top: typeof content.items = [];
   const per = new Map<string, number>();
   for (const it of content.items) {
     const n = per.get(it.platform) ?? 0;
-    if (top.length < 8 || n < 8) top.push(it);
+    if (n < TOP_EACH) top.push(it);
     per.set(it.platform, n + 1);
   }
   return { data: { audience, top } };

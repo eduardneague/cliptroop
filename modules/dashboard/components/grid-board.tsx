@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { CloseIcon, GripIcon, ResizeCornerIcon, SettingsIcon } from "@/components/ui/icons";
 import { sounds } from "@/lib/sounds";
 import { COLS, bottom, fill, preview as previewBoxes, compact, readingOrder, type Box, type Interaction, type Limits } from "../grid";
@@ -18,7 +19,15 @@ import { BoxContext } from "./widget-box";
 /** A card's place: x/y = column/row of its top-left corner, w/h = columns/rows; `fixed` = sized by hand (Fill leaves it). */
 export type GridItem = { id: string; x: number; y: number; w: number; h: number; fixed?: boolean; settings?: Record<string, unknown> };
 /** What the board needs to know about a card: its title, whether it draws its own frame, how it stacks, its normal size. */
-export type GridCardMeta = { name: string; bare?: boolean; stack: Stack; hasSettings?: boolean; size: { w: number; h: number } };
+export type GridCardMeta = {
+  name: string;
+  bare?: boolean;
+  stack: Stack;
+  hasSettings?: boolean;
+  size: { w: number; h: number };
+  /** A link at the top right, beside the title (1.35.1: Top videos' "View all"). Not while customizing. */
+  link?: { href: string; label: string };
+};
 
 const boxOf = (w: GridItem): Box => ({ i: w.id, x: w.x, y: w.y, w: w.w, h: w.h });
 
@@ -545,6 +554,11 @@ function GridCard({
         <div className="flex items-center gap-1.5 h-5 mb-2 flex-shrink-0">
           {canDrag && <GripIcon className="w-3.5 h-3.5 -ml-0.5 text-ink-faint" />}
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex-1 truncate">{meta.name}</h2>
+          {meta.link && !editing && (
+            <Link href={meta.link.href} className="-my-0.5 h-6 px-1.5 rounded-md inline-flex items-center text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0 whitespace-nowrap">
+              {meta.link.label}
+            </Link>
+          )}
           {hasSettings && (
             <button
               type="button"

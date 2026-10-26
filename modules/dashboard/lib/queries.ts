@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
-import { studioThumb } from "@/lib/picture-size";
+import { sketchThumb, studioThumb } from "@/lib/picture-size";
+import type { Person } from "./upcoming-filters";
 
 export type TaskKind = "short" | "long";
 /** What a task row looks like: a short, a long video, or a meeting action item. */
@@ -33,7 +34,8 @@ export type Task = {
 };
 /** A finished thing on the contribution grid: a task, or the daily word ("word"). */
 export type DoneLook = TaskLook | "word";
-export type Done = { id: string; at: string; kind: DoneLook; action: string; number: number; title: string; href: string; teamId: string };
+/** `due`: the day it was due (1.35.2: done before it, the history says "Done early"). */
+export type Done = { id: string; at: string; kind: DoneLook; action: string; number: number; title: string; href: string; teamId: string; due?: string | null };
 /** Someone's open task, for My tasks → Team (when the team shares them, 0076). */
 export type TeamPersonLite = { userId: string; name: string; avatarUrl: string | null; color: string };
 export type TeamTask = Task & { userId: string };
@@ -89,21 +91,26 @@ function hrefFor(kind: TaskKind, id: string, stage: string) {
 
 type ItemInfo = { number: number; title: string; stage: string };
 async function itemsFor(supabase: Awaited<ReturnType<typeof createClient>>, shortIds: string[], longIds: string[], withThumbs = true) {
-  const [{ data: shorts }, { data: longs }, { data: winners }] = await Promise.all([
+  const [{ data: shorts }, { data: longs }, { data: winners }, { data: sketches }] = await Promise.all([
     shortIds.length ? supabase.from("short_videos").select("id, entry_number, title, stage").in("id", shortIds) : Promise.resolve({ data: [] }),
     longIds.length ? supabase.from("long_video_projects").select("id, entry_number, title, stage").in("id", longIds) : Promise.resolve({ data: [] }),
     withThumbs && longIds.length
       ? supabase.from("package_entries").select("id, project_id, position").in("project_id", longIds).eq("is_winner", true).not("thumbnail_storage_path", "is", null).order("position")
       : Promise.resolve({ data: [] }),
+    // 1.35.1: and the Ideate sketches, for the videos with no winner yet (most of the ones in progress).
+    withThumbs && longIds.length ? supabase.from("project_thumbnails").select("id, project_id, position").in("project_id", longIds).order("position") : Promise.resolve({ data: [] }),
   ]);
   const info = new Map<string, ItemInfo>();
   for (const s of shorts ?? []) info.set(s.id as string, { number: s.entry_number as number, title: s.title as string, stage: s.stage as string });
   for (const l of longs ?? []) info.set(l.id as string, { number: l.entry_number as number, title: l.title as string, stage: l.stage as string });
-  // The winning thumbnail at an address that never changes, 160 px wide (1.32.3; the widgets show it 46 to 52 px):
+  // The winning thumbnail at an address that never changes, 160 px wide (1.32.3; the widgets show it 46 to 72 px):
   // no signed link made on every visit (one more trip to storage, and a new address the browser downloads again).
-  const winner = new Map<string, string>();
-  for (const w of (winners ?? []) as { id: string; project_id: string }[]) if (!winner.has(w.project_id)) winner.set(w.project_id, w.id);
-  const thumb = (id: string) => (winner.has(id) ? studioThumb(winner.get(id)!, 160) : null);
+  // 1.35.1 (the owner: "i want the thumbnails to show up in upcoming long"): no winner yet, its first sketch, as the
+  // long videos list shows it; only winners showed here, so a video before Package had the plain long-video mark.
+  const cover = new Map<string, string>();
+  for (const w of (winners ?? []) as { id: string; project_id: string }[]) if (!cover.has(w.project_id)) cover.set(w.project_id, studioThumb(w.id, 160));
+  for (const s of (sketches ?? []) as { id: string; project_id: string }[]) if (!cover.has(s.project_id)) cover.set(s.project_id, sketchThumb(s.id, 160));
+  const thumb = (id: string) => cover.get(id) ?? null;
   return { info, thumb };
 }
 
@@ -285,7 +292,7 @@ export async function listDone(sinceIso: string, teamId = ""): Promise<Done[]> {
   const [{ data }, { data: words }] = await Promise.all([
     supabase
       .from("tasks")
-      .select("id, kind, item_id, stage, completed_at, team_id")
+      .select("id, kind, item_id, stage, completed_at, team_id, due_date")
       .eq("user_id", user.id)
       .eq("state", "done")
       .gte("completed_at", sinceIso)
@@ -320,6 +327,7 @@ export async function listDone(sinceIso: string, teamId = ""): Promise<Done[]> {
       title: t?.title ?? (r.kind === "meeting" ? "Removed action item" : "Deleted video"),
       href: t?.href ?? "#",
       teamId: r.team_id,
+      due: r.due_date ?? null,
     };
   });
   return [...tasks, ...played].sort((a, b) => b.at.localeCompare(a.at));
@@ -379,12 +387,22 @@ export type UpcomingShort = {
   title: string;
   date: string;
   stage: string;
-  editor: { name: string; avatarUrl: string | null; color: string } | null;
+  /** Its editor (1.35.1: with their membership's id, for the editor filter). */
+  editor: Person | null;
   /** Where it goes, and where it's posted already (1.34.4). */
   platforms: string[];
   posted: string[];
 };
-export type UpcomingLong = { id: string; number: number; title: string; date: string | null; stage: string; thumb: string | null };
+export type UpcomingLong = {
+  id: string;
+  number: number;
+  title: string;
+  date: string | null;
+  stage: string;
+  thumb: string | null;
+  /** Who's on its Edit step (1.35.1, for the editor filter). */
+  editors: Person[];
+};
 export type Pipeline = { shorts: Record<string, number>; longs: Record<string, number> };
 export type PostToday = {
   id: string;
@@ -408,7 +426,7 @@ export async function listUpcoming(teamId: string, today: string) {
   const [{ data: shorts }, { data: longs }, { data: sCounts }, { data: lCounts }] = await Promise.all([
     supabase
       .from("short_videos")
-      .select("id, entry_number, title, planned_date, stage, platforms, short_video_posts(platform), editor:team_members!short_videos_editor_member_id_fkey(user_id, profiles(username, full_name, email, avatar_url))")
+      .select("id, entry_number, title, planned_date, stage, platforms, short_video_posts(platform), editor:team_members!short_videos_editor_member_id_fkey(id, user_id, profiles(username, full_name, email, avatar_url))")
       .eq("team_id", teamId)
       .neq("stage", "posted")
       .gte("planned_date", today)
@@ -427,22 +445,36 @@ export async function listUpcoming(teamId: string, today: string) {
     supabase.from("long_video_projects").select("stage").eq("team_id", teamId),
   ]);
   type P = { username: string | null; full_name: string | null; email: string | null; avatar_url: string | null } | null;
-  const upcomingShorts: UpcomingShort[] = (shorts ?? []).map((r) => {
-    const e = (Array.isArray(r.editor) ? r.editor[0] : r.editor) as { user_id: string | null; profiles: P | P[] } | null;
-    const p = e ? ((Array.isArray(e.profiles) ? e.profiles[0] : e.profiles) as P) : null;
-    return {
-      id: r.id as string,
-      number: r.entry_number as number,
-      title: r.title as string,
-      date: r.planned_date as string,
-      stage: STAGE_LABEL[r.stage as string] ?? (r.stage as string),
-      editor: e?.user_id ? { name: displayName(p?.username, p?.full_name, p?.email), avatarUrl: p?.avatar_url ?? null, color: colorForId(e.user_id) } : null,
-      platforms: ((r.platforms as string[] | null) ?? []).filter((x) => typeof x === "string"),
-      posted: ((r.short_video_posts as { platform: string }[] | null) ?? []).map((x) => x.platform),
-    };
-  });
+  type M = { id: string; user_id: string | null; profiles: P | P[] } | null;
+  // A membership as a person (none when its account is gone).
+  const person = (m: M): Person | null => {
+    if (!m?.user_id) return null;
+    const p = (Array.isArray(m.profiles) ? m.profiles[0] : m.profiles) as P;
+    return { id: m.id, name: displayName(p?.username, p?.full_name, p?.email), avatarUrl: p?.avatar_url ?? null, color: colorForId(m.user_id) };
+  };
+  const upcomingShorts: UpcomingShort[] = (shorts ?? []).map((r) => ({
+    id: r.id as string,
+    number: r.entry_number as number,
+    title: r.title as string,
+    date: r.planned_date as string,
+    stage: STAGE_LABEL[r.stage as string] ?? (r.stage as string),
+    editor: person((Array.isArray(r.editor) ? r.editor[0] : r.editor) as M),
+    platforms: ((r.platforms as string[] | null) ?? []).filter((x) => typeof x === "string"),
+    posted: ((r.short_video_posts as { platform: string }[] | null) ?? []).map((x) => x.platform),
+  }));
   const longIds = (longs ?? []).map((l) => l.id as string);
-  const { thumb } = await itemsFor(supabase, [], longIds);
+  const [{ thumb }, { data: cutters }] = await Promise.all([
+    itemsFor(supabase, [], longIds),
+    // 1.35.1: who edits each one (its Edit step's people), for the editor filter.
+    longIds.length
+      ? supabase.from("project_assignees").select("project_id, team_members(id, user_id, profiles(username, full_name, email, avatar_url))").in("project_id", longIds).eq("stage", "edit").order("assigned_at")
+      : Promise.resolve({ data: [] }),
+  ]);
+  const editorsOn = new Map<string, Person[]>();
+  for (const a of (cutters ?? []) as { project_id: string; team_members: M | M[] }[]) {
+    const e = person((Array.isArray(a.team_members) ? a.team_members[0] : a.team_members) as M);
+    if (e) editorsOn.set(a.project_id, [...(editorsOn.get(a.project_id) ?? []), e]);
+  }
   const upcomingLongs: UpcomingLong[] = (longs ?? []).map((l) => ({
     id: l.id as string,
     number: l.entry_number as number,
@@ -450,6 +482,7 @@ export async function listUpcoming(teamId: string, today: string) {
     date: (l.expected_date as string | null) ?? null,
     stage: STAGE_LABEL[l.stage as string] ?? (l.stage as string),
     thumb: thumb(l.id as string),
+    editors: editorsOn.get(l.id as string) ?? [],
   }));
   const count = (rows: { stage: string }[] | null) => (rows ?? []).reduce<Record<string, number>>((m, r) => ((m[r.stage] = (m[r.stage] ?? 0) + 1), m), {});
   const pipeline: Pipeline = { shorts: count(sCounts as { stage: string }[] | null), longs: count(lCounts as { stage: string }[] | null) };

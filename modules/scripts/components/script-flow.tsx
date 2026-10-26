@@ -16,6 +16,7 @@ import { sounds } from "@/lib/sounds";
 import type { FlowStepInfo, ScriptFlow } from "../lib/flow";
 import type { FlowStep } from "../lib/queries";
 import { PendingLink, usePendingNav } from "@/components/ui/pending-nav";
+import { handOffLocked, LOCK_WAIT } from "../lib/flow-lock";
 
 /*
  * The strip under the script's top bar: Script → Review → Staging, who's on
@@ -153,7 +154,12 @@ export function FlowStrip({
         </button>
         <span className="flex-1" />
         {showHandOff && current && (
-          <HandOffButton step={current} next={nextOf(current)} onOpen={() => setSending(current)} />
+          <HandOffButton
+            step={current}
+            next={nextOf(current)}
+            locked={handOffLocked({ step: current.step as "write" | "review", sentAt: current.sent?.at ?? null, nextSentAt: nextOf(current)?.sent?.at ?? null, doneAt: done?.at ?? null })}
+            onOpen={() => setSending(current)}
+          />
         )}
         {current?.step === "staging" && (showFinish || done) && (
           <FinishButton
@@ -196,14 +202,36 @@ export function FlowStrip({
   );
 }
 
-function HandOffButton({ step, next, onOpen }: { step: FlowStepInfo; next: FlowStepInfo | null; onOpen: () => void }) {
+/**
+ * Script's "Ready for review", Review's "Ready for staging". Once sent: what was sent and when, greyed out while the
+ * next step is still at it (1.35.2, `handOffLocked`), then a way to send it again.
+ */
+function HandOffButton({ step, next, locked, onOpen }: { step: FlowStepInfo; next: FlowStepInfo | null; locked: boolean; onOpen: () => void }) {
   const word = NEXT[step.step] === "review" ? "review" : "staging";
+  if (step.sent && locked) {
+    // (The tooltip on a wrapper: a disabled button shows none in some browsers.)
+    return (
+      <span title={`Sent to ${word}. ${LOCK_WAIT[step.step as "write" | "review"]}`} className="inline-flex flex-shrink-0 cursor-not-allowed">
+        <button
+          type="button"
+          disabled
+          className="pointer-events-none inline-flex items-center gap-1.5 rounded-lg border border-line/15 bg-surface-2 text-ink-soft px-3 h-8 text-[12.5px] font-semibold"
+        >
+          <CheckIcon className="w-3.5 h-3.5" />
+          Sent to {word}
+          <span className="font-normal text-ink-faint">
+            · <Ago iso={step.sent.at} />
+          </span>
+        </button>
+      </span>
+    );
+  }
   if (step.sent) {
     return (
       <button
         type="button"
         onClick={onOpen}
-        title="Send it again (notifies them again)"
+        title={`The ${word} is done: send it to ${word} again (notifies them again)`}
         className="inline-flex items-center gap-1.5 rounded-lg border border-green/40 bg-green/10 text-ink px-3 h-8 text-[12.5px] font-semibold hover:bg-green/15 flex-shrink-0"
       >
         <CheckIcon className="w-3.5 h-3.5 text-green" />

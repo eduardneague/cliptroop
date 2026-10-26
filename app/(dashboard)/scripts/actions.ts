@@ -7,6 +7,7 @@ import { actorMeta, sendNotifications } from "@/lib/notify";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 import { displayName } from "@/lib/avatar";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
+import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
 
 type SaveResult =
   | { ok: true; version: number; updatedAt: string }
@@ -479,6 +480,31 @@ export async function setScriptPeople(input: { scriptId?: string; teamId?: strin
  * copies the text into the next document when it's still empty and logs it;
  * then the next step's people get a notification and an email.
  */
+/**
+ * Why a document can't be sent on again yet (1.35.2), or null: it was sent and the next step isn't done since
+ * (`handOffLocked`). Reads the video's flow documents and their hand-offs.
+ */
+async function handOffWait(supabase: Awaited<ReturnType<typeof createClient>>, scriptId: string): Promise<string | null> {
+  const { data: doc } = await supabase.from("scripts").select("id, step, short_video_id, long_video_id").eq("id", scriptId).maybeSingle();
+  const step = doc?.step as string | null | undefined;
+  if (!doc || (step !== "write" && step !== "review")) return null;
+  const video = doc.short_video_id ? { col: "short_video_id", id: doc.short_video_id as string } : doc.long_video_id ? { col: "long_video_id", id: doc.long_video_id as string } : null;
+  if (!video) return null;
+  const { data: docs } = await supabase.from("scripts").select("id, step").eq(video.col, video.id).in("step", ["review", "staging"]);
+  const review = (docs ?? []).find((d) => d.step === "review")?.id as string | undefined;
+  const staging = (docs ?? []).find((d) => d.step === "staging")?.id as string | undefined;
+  const ids = [scriptId, review, staging].filter((x): x is string => !!x);
+  const { data: rows } = await supabase.from("script_handoffs").select("script_id, to_step, created_at").in("script_id", ids).order("created_at", { ascending: false }).limit(60);
+  const last = (f: (r: { script_id: string; to_step: string }) => boolean) => ((rows ?? []) as { script_id: string; to_step: string; created_at: string }[]).find(f)?.created_at ?? null;
+  const locked = handOffLocked({
+    step,
+    sentAt: last((r) => r.script_id === scriptId && r.to_step !== "done"),
+    nextSentAt: review ? last((r) => r.script_id === review && r.to_step === "staging") : null,
+    doneAt: staging ? last((r) => r.script_id === staging && r.to_step === "done") : null,
+  });
+  return locked ? `Already sent to ${step === "write" ? "review" : "staging"}. ${LOCK_WAIT[step]}` : null;
+}
+
 export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; comments: number; notified: number }>> {
   if (!UUID_RX.test(scriptId)) return { error: "Document not found." };
   const supabase = await createClient();
@@ -486,6 +512,9 @@ export async function handOffScript(scriptId: string, copy: boolean): Promise<Do
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
+  // 1.35.2: not again while the next step is still at it (the button is greyed out then too).
+  const wait = await handOffWait(supabase, scriptId);
+  if (wait) return { error: wait };
   const { data, error } = await supabase.rpc("script_hand_off", { p_script: scriptId, p_copy: !!copy });
   if (error || !data) return { error: flowError(error?.message) };
   const r = data as { next_id: string; next_name: string; next_step: "review" | "staging"; name: string; copied: boolean; team: string; short: string | null; long: string | null; recipients: string[] };

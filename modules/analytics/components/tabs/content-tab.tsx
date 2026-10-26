@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { ContentList, type ContentKind } from "../content-list";
 import { fmtCompact } from "../charts";
@@ -84,7 +85,9 @@ export function ContentTab({
   rangeLabel: string | null;
   advancedHref: string;
 }) {
-  const [platform, setPlatform] = useState<"all" | P>("all");
+  // 1.35.1: a link can open it on one platform (the dashboard's Top videos' "View all", ?platform=).
+  const asked = useSearchParams().get("platform");
+  const [platform, setPlatform] = useState<"all" | P>(() => (asked && (ALL_P as readonly string[]).includes(asked) ? (asked as P) : "all"));
   const [kind, setKind] = useState<ContentKind>("all");
   const inPlatform = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
   const counts = useMemo(() => Object.fromEntries(KINDS.map((k) => [k.id, k.id === "all" ? inPlatform.length : inPlatform.filter((i) => i.kind === k.id).length])) as Record<ContentKind, number>, [inPlatform]);

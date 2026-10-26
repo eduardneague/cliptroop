@@ -11,7 +11,7 @@ import { FillIcon, PlusIcon, SettingsIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
 import { saveLayout } from "../actions";
-import { CATALOG, CONTRIB_COLORS, CONTRIB_THEME, DEFAULT_LAYOUT, addWidget, limitsFor, type Layout, type WidgetInstance, type WidgetType } from "../layout";
+import { CATALOG, CONTRIB_COLORS, CONTRIB_THEME, DEFAULT_LAYOUT, addWidget, limitsFor, topVideosHref, type Layout, type WidgetInstance, type WidgetType } from "../layout";
 import { PALETTES } from "@/components/ui/palette";
 
 /** Every colour theme's accent once (1.27.5: the Contributions widget's colours). */
@@ -36,6 +36,7 @@ const TOP_PLATFORMS = [
 ] as const;
 import type { Done, Pipeline, PostToday, Task, TeamCard, TeamTasks, Todo, UpcomingLong, UpcomingShort } from "../lib/queries";
 import { BoxContext } from "./widget-box";
+import { editorPick, editorsOf } from "../lib/upcoming-filters";
 import { GAP, GridBoard, type GridCardMeta } from "./grid-board";
 import { WidgetBoundary } from "./widget-boundary";
 import type { Meeting } from "@/modules/meetings/lib/types";
@@ -338,7 +339,7 @@ export function DashboardStudio({ name, initial, data }: { name: string; initial
       </Dialog>
 
       <Dialog open={!!editingWidget} onClose={() => setSettingsFor(null)} title={editingWidget ? `${CATALOG[editingWidget.type].name} settings` : ""}>
-        {editingWidget && <WidgetSettings w={editingWidget} teamId={data.teamId} onChange={(settings) => updateSettings(editingWidget.id, settings)} />}
+        {editingWidget && <WidgetSettings w={editingWidget} data={data} onChange={(settings) => updateSettings(editingWidget.id, settings)} />}
       </Dialog>
     </div>
   );
@@ -377,7 +378,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "upcomingShorts":
       return <UpcomingShortsWidget items={data.upcomingShorts} settings={w.settings} onSettings={update} />;
     case "upcomingLongs":
-      return <UpcomingLongsWidget items={data.upcomingLongs} />;
+      return <UpcomingLongsWidget items={data.upcomingLongs} settings={w.settings} onSettings={update} />;
     case "pipeline":
       return <PipelineWidget pipeline={data.pipeline} />;
     case "posting":
@@ -404,12 +405,19 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <StreakWidget teamId={data.teamId} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos", "views", "followers", "upcomingShorts"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos", "views", "followers", "upcomingShorts", "upcomingLongs"];
 
 /** What the board needs to know about a widget. */
 const widgetMeta = (w: WidgetInstance): GridCardMeta => {
   const m = CATALOG[w.type];
-  return { name: m.name, bare: m.bare, stack: m.stack, hasSettings: HAS_SETTINGS.includes(w.type), size: { w: m.w, h: m.h } };
+  return {
+    name: m.name,
+    bare: m.bare,
+    stack: m.stack,
+    hasSettings: HAS_SETTINGS.includes(w.type),
+    size: { w: m.w, h: m.h },
+    link: w.type === "topVideos" ? { href: topVideosHref(w.settings), label: "View all" } : undefined,
+  };
 };
 const BOARD_HINTS = {
   narrow: "Make the window wider to move and resize widgets.",
@@ -484,9 +492,9 @@ function LibraryTile({ type, added, data, onAdd }: { type: WidgetType; added: bo
 // Per-widget settings
 // ---------------------------------------------------------------------------
 
-function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: string; onChange: (s: Record<string, unknown>) => void }) {
+function WidgetSettings({ w, data, onChange }: { w: WidgetInstance; data: StudioData; onChange: (s: Record<string, unknown>) => void }) {
   const s = w.settings ?? {};
-  if (w.type === "objectives") return <ObjectivesWidgetSettingsForm teamId={teamId} settings={s} onChange={onChange} />;
+  if (w.type === "objectives") return <ObjectivesWidgetSettingsForm teamId={data.teamId} settings={s} onChange={onChange} />;
   const row = "flex items-center justify-between gap-4 py-3 border-b border-line/10 last:border-none";
   const Switch = ({ on, set }: { on: boolean; set: (v: boolean) => void }) => (
     <button type="button" role="switch" aria-checked={on} onClick={() => set(!on)} className="relative w-10 h-6 rounded-lg transition-colors flex-shrink-0" style={{ background: on ? "rgb(var(--amber))" : "rgb(var(--line) / 0.25)" }}>
@@ -615,18 +623,48 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
       </div>
     );
   }
-  if (w.type === "topVideos" || w.type === "views" || w.type === "followers" || w.type === "upcomingShorts") {
+  const platformRow = (
+    <div className={row}>
+      <span className="text-[13.5px] font-semibold">Platform</span>
+      <div className="w-56">
+        <Select
+          value={(s.platform as string) ?? "all"}
+          onChange={(v) => v && onChange({ platform: v })}
+          options={TOP_PLATFORMS.map((p) => ({ value: p.id, label: p.label }))}
+          ariaLabel="Platform"
+          className="!h-9 !text-[13px]"
+        />
+      </div>
+    </div>
+  );
+  if (w.type === "topVideos" || w.type === "views" || w.type === "followers") return platformRow;
+  // Upcoming shorts and longs (1.35.1): the same filters as their chips (for a widget too small to show them).
+  if (w.type === "upcomingShorts" || w.type === "upcomingLongs") {
+    const shorts = w.type === "upcomingShorts";
+    const { people, none } = editorsOf(shorts ? data.upcomingShorts.map((x) => (x.editor ? [x.editor] : [])) : data.upcomingLongs.map((x) => x.editors));
     return (
-      <div className={row}>
-        <span className="text-[13.5px] font-semibold">Platform</span>
-        <div className="w-56">
-          <Select
-            value={(s.platform as string) ?? "all"}
-            onChange={(v) => v && onChange({ platform: v })}
-            options={TOP_PLATFORMS.map((p) => ({ value: p.id, label: p.label }))}
-            ariaLabel="Platform"
-            className="!h-9 !text-[13px]"
-          />
+      <div>
+        {shorts && platformRow}
+        {shorts && (
+          <div className={row}>
+            <span className="min-w-0">
+              <span className="block text-[13.5px] font-semibold">Only that platform</span>
+              <span className="block text-[12px] text-ink-soft">The shorts that go there and nowhere else.</span>
+            </span>
+            <Switch on={s.only === true} set={(v) => onChange({ only: v })} />
+          </div>
+        )}
+        <div className={row}>
+          <span className="text-[13.5px] font-semibold">Editor</span>
+          <div className="w-56">
+            <Select
+              value={editorPick(s.editor, people, none)}
+              onChange={(v) => v && onChange({ editor: v })}
+              options={[{ value: "all", label: "Every editor" }, ...people.map((p) => ({ value: p.id, label: p.name })), ...(none ? [{ value: "none", label: "No editor yet" }] : [])]}
+              ariaLabel="Editor"
+              className="!h-9 !text-[13px]"
+            />
+          </div>
         </div>
       </div>
     );
