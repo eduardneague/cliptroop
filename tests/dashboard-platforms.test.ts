@@ -30,14 +30,15 @@ ok(same(sumSeries([], 2), [null, null]), "no platforms: nothing");
 // --- Followers --------------------------------------------------------------------------------------------------------
 const w = read("modules/dashboard/components/analytics-widgets.tsx");
 const fol = w.slice(w.indexOf("export function FollowersWidget"), w.indexOf("// Top videos of the last 28 days."));
-ok(/const gains = sumSeries\(\s*sel\.map\(\(p\) => followerGains\(a\.days\.length, a\.followersDaily\?\.\[p\], a\.followersFlow\?\.\[p\]\)\),/.test(fol), "the bars: the picked platforms' new followers each day");
+ok(/const per = sel\.map\(\(p\) => \(\{ p, gains: followerGains\(a\.days\.length, a\.followersDaily\?\.\[p\], a\.followersFlow\?\.\[p\]\) \}\)\);/.test(fol) && /const gains = sumSeries\(\s*per\.map\(\(x\) => x\.gains\),/.test(fol), "the bars: the picked platforms' new followers each day");
 ok(/<GainBars days=\{a\.days\} values=\{gains\}/.test(fol) && !/AreaGraph|followersLine/.test(w), "bars, not the running total's flat line (gone)");
-ok(/role="radiogroup" aria-label="Platform"/.test(fol) && /onClick=\{\(\) => choose\(p\)\}/.test(fol) && /onSettings\?\.\(\{ platform: v \}\);/.test(fol), "the platforms are filters, the choice saved with the dashboard");
+// 1.34.5: the filters and the saved pick are shared with Views (PlatformChips, usePlatformPick).
+ok(/<PlatformChips\s+list=\{list\}\s+shown=\{shown\}\s+onPick=\{choose\}/.test(fol) && /const \[pick, choose\] = usePlatformPick\(settings, onSettings\);/.test(fol) && /role="radiogroup" aria-label="Platform"/.test(w) && /onSettings\?\.\(\{ platform: v \}\);/.test(w), "the platforms are filters, the choice saved with the dashboard");
 ok(/const shown: P \| "all" = pick !== "all" && list\.includes\(pick\) \? pick : "all";/.test(fol), "a saved platform with no counts any more: every platform");
 ok(/const total = count\(sel\);/.test(fol) && /a\.perPlatform\[p\]\?\.followersNet/.test(fol), "the number and its change follow the filter");
 ok(/lostColor=\{shown === "youtube" \? "rgb\(var\(--ink\) \/ 0\.35\)" : undefined\}/.test(fol), "a lost day stays visible on YouTube's own red");
-const bars = w.slice(w.indexOf("function GainBars"), w.indexOf("function GraphRoom"));
-ok(/const zero = \(neg \/ range\) \* 100;/.test(bars) && /title=\{`\$\{shortDay\(days\[i\]\)\}: /.test(bars) && /role="img" aria-label=\{`New followers per day/.test(bars), "a day that lost followers goes below the line; each day says its number; screen readers get the sum");
+const bars = w.slice(w.indexOf("function GainBars"), w.indexOf("export function FollowersWidget"));
+ok(/const zero = \(neg \/ range\) \* 100;/.test(bars) && /<DayTip host=\{bind\.ref\}/.test(bars) && /role="img" aria-label=\{`New followers per day/.test(bars), "a day that lost followers goes below the line; each day says its number (a popup since 1.34.5); screen readers get the sum");
 
 // --- Upcoming shorts ----------------------------------------------------------------------------------------------------
 const t = read("modules/dashboard/components/team-widgets.tsx");
@@ -53,7 +54,7 @@ ok(/platforms: \(\(r\.platforms as string\[\] \| null\) \?\? \[\]\)/.test(q) && 
 // --- Saved with the dashboard -----------------------------------------------------------------------------------------
 ok(same(CATALOG.followers.settings, { platform: "all" }) && same(CATALOG.upcomingShorts.settings, { platform: "all" }), "both start on every platform");
 const studio = read("modules/dashboard/components/studio.tsx");
-ok(/"topVideos", "followers", "upcomingShorts"\]/.test(studio) && /if \(w\.type === "topVideos" \|\| w\.type === "followers" \|\| w\.type === "upcomingShorts"\)/.test(studio), "both have the settings gear, with the platform picker");
+ok(/const HAS_SETTINGS: WidgetType\[\] = \[[^\]]*"followers", "upcomingShorts"\]/.test(studio) && /w\.type === "followers" \|\| w\.type === "upcomingShorts"\) \{/.test(studio), "both have the settings gear, with the platform picker");
 ok(/<UpcomingShortsWidget items=\{data\.upcomingShorts\} settings=\{w\.settings\} onSettings=\{update\} \/>/.test(studio) && /<FollowersWidget teamId=\{data\.teamId\} settings=\{w\.settings\} onSettings=\{update\} \/>/.test(studio), "the board passes their settings and saves the changes");
 
 if (fails) {

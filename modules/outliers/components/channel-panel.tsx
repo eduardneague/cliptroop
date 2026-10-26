@@ -306,7 +306,7 @@ function ChannelBody({
           <PanelSection title="Latest uploads">
             <ul className="divide-y divide-line/[0.07] rounded-2xl border border-line/10 bg-surface px-3">
               {latest.map((v) => (
-                <VideoRow key={v.id} v={v} />
+                <VideoRow key={v.id} v={v} hideChannel />
               ))}
             </ul>
           </PanelSection>

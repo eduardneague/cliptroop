@@ -19,7 +19,7 @@ import { previews, useOutliers, useOutliersBlocked } from "./context";
 import { forgetChannel, videoDetails as details } from "./detail-cache";
 import { IdeaCard, useIdeaMarks } from "./idea-card";
 import { PanelContent, PanelSection } from "./panel";
-import { Player, VideoPreviewBody, VideoSkeleton } from "./panel-preview";
+import { PreviewRest, PreviewSide, VideoSkeleton, VideoTop } from "./panel-preview";
 import { RemoveFromNiche } from "./remove-from-niche";
 import { SaveButton } from "./save-menu";
 import { TrackButton } from "./track-button";
@@ -160,10 +160,17 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
             Open it on YouTube <ExternalIcon className="w-3.5 h-3.5" />
           </a>
         </div>
-      ) : !d || !v ? (
-        preview ? <VideoPreviewBody v={preview} /> : <VideoSkeleton />
+      ) : d && v ? (
+        // The same VideoTop as while it loads (below), so the player in it stays, playing if it was started.
+        <VideoTop video={v} side={<VideoSide d={d} />}>
+          <VideoRest d={d} />
+        </VideoTop>
+      ) : preview ? (
+        <VideoTop video={preview} busy side={<PreviewSide v={preview} />}>
+          <PreviewRest />
+        </VideoTop>
       ) : (
-        <VideoBody d={d} />
+        <VideoSkeleton />
       )}
     </PanelContent>
   );
@@ -194,76 +201,85 @@ function ScoreNote({ v, short, then, now, own }: { v: VideoDetail["video"]; shor
   );
 }
 
-function VideoBody({ d }: { d: VideoDetail }) {
-  const ctx = useOutliers();
+/** Its usual now, and the usual its × is measured against (the channel's videos just before it: 1.31.8). */
+function usuals(d: VideoDetail) {
+  const v = d.video;
+  const now = v.channel.usual ?? (v.kind === "short" ? d.channel.shortMedian : d.channel.longMedian);
+  const then = usualThen(v);
+  return { now, then, usual: then ?? now };
+}
+
+/** Beside (or under) the player: the title and every headline number. */
+function VideoSide({ d }: { d: VideoDetail }) {
   const v = d.video;
   const short = v.kind === "short";
-  // Its usual now, and the usual its × is measured against (the channel's videos just before it: 1.31.8).
-  const usualNow = v.channel.usual ?? (short ? d.channel.shortMedian : d.channel.longMedian);
-  const then = usualThen(v);
-  const usual = then ?? usualNow;
+  const { now: usualNow, then, usual } = usuals(d);
   const eng = v.views ? (((v.likes ?? 0) + (v.comments ?? 0)) / v.views) * 100 : null;
   const engaged = d.own?.engaged ?? null;
   const engagedPct = engaged !== null && d.own?.views ? (engaged / d.own.views) * 100 : null;
   const vps = v.views && d.channel.subs ? v.views / d.channel.subs : null;
   const h = heat(v.score);
-  const model = useNicheModel(ctx.teamId, ctx.nicheId, short ? "short" : "long");
+  return (
+    <>
+      <div>
+        <h2 className="font-display text-[21px] sm:text-[24px] leading-[1.18] font-semibold text-balance">{v.title}</h2>
+        <p className="mt-1.5 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
+          <TimeAgo iso={v.publishedAt} />
+          {v.durationS ? <span>· {duration(v.durationS)}</span> : null}
+          {short && <span>· Short</span>}
+          {v.formats.slice(0, 3).map((f) => (
+            <FormatChip key={f} id={f} />
+          ))}
+        </p>
+      </div>
+      <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+        <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }} title={BAND_LABEL[band(v.score)]}>
+          <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
+              {multText(v.score)}
+            </span>
+          </div>
+          <div className="mt-1 text-[11.5px] text-ink-soft truncate">
+            {v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : then && v.views ? `${compact(v.views)} ÷ ${compact(then)}` : BAND_LABEL[band(v.score)]}
+          </div>
+        </div>
+        <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} title={then ? "Its usual: the median views of the channel's videos just before this one" : undefined} />
+        <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} sub={v.statsAt ? <>counted <TimeAgo iso={v.statsAt} /></> : undefined} />
+        <Tile label="Engagement" value={eng === null ? "–" : `${eng.toFixed(1)}%`} sub="likes + comments per view" title="(Likes + comments) ÷ views" />
+        <Tile label="Likes" value={compact(v.likes)} />
+        <Tile label="Comments" value={compact(v.comments)} />
+        <Tile label="Views per subscriber" value={vps === null ? "–" : vps >= 10 ? Math.round(vps).toString() : vps.toFixed(2)} sub={d.channel.subs ? `${compact(d.channel.subs)} subscribers` : "subscribers hidden"} />
+        {d.own ? (
+          <Tile
+            label="Engaged views"
+            value={compact(engaged)}
+            sub={engagedPct !== null ? `${engagedPct >= 99.5 ? Math.round(engagedPct) : engagedPct.toFixed(1)}% of its views` : "from your YouTube Analytics"}
+            title="Your own video: views where people kept watching past the first moment (YouTube gives these to a channel's owner only)"
+          />
+        ) : d.earnings ? (
+          <Tile label="Would have earned" value={money(d.earnings.estimate, d.earnings.currency)} sub={`at your ${money(d.earnings.rpm, d.earnings.currency)} per 1,000 views`} title="Its views at your team's own revenue per 1,000 views over the last 90 days. An estimate." />
+        ) : (
+          <Tile label="Posted" value={<span className="text-[18px]"><TimeAgo iso={v.publishedAt} /></span>} sub={new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} />
+        )}
+      </div>
+      <ScoreNote v={v} short={short} then={then} now={usualNow} own={!!d.own} />
+    </>
+  );
+}
 
+/** Under the player: how it did next to the channel's other videos, over time, ideas from it, and the rest. */
+function VideoRest({ d }: { d: VideoDetail }) {
+  const ctx = useOutliers();
+  const v = d.video;
+  const short = v.kind === "short";
+  const { usual } = usuals(d);
+  const h = heat(v.score);
+  const model = useNicheModel(ctx.teamId, ctx.nicheId, short ? "short" : "long");
   const bars = useMemo(() => d.peers.map((p) => ({ id: p.id, title: p.title, views: p.views, score: p.score, at: p.publishedAt })), [d.peers]);
   const stats = d.stats.filter((s) => s.views !== null);
-
   return (
-    <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-7">
-      {/* The video and its headline numbers (a Short stands beside them). */}
-      <div className={short ? "grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)] items-start" : "space-y-4"}>
-        <Player id={v.id} short={short} title={v.title} />
-        <div className="min-w-0 space-y-4">
-          <div>
-            <h2 className="font-display text-[21px] sm:text-[24px] leading-[1.18] font-semibold text-balance">{v.title}</h2>
-            <p className="mt-1.5 text-[12.5px] text-ink-soft flex items-center gap-x-2 gap-y-1 flex-wrap">
-              <TimeAgo iso={v.publishedAt} />
-              {v.durationS ? <span>· {duration(v.durationS)}</span> : null}
-              {short && <span>· Short</span>}
-              {v.formats.slice(0, 3).map((f) => (
-                <FormatChip key={f} id={f} />
-              ))}
-            </p>
-          </div>
-          <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
-            <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }} title={BAND_LABEL[band(v.score)]}>
-              <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
-                  {multText(v.score)}
-                </span>
-              </div>
-              <div className="mt-1 text-[11.5px] text-ink-soft truncate">
-                {v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : then && v.views ? `${compact(v.views)} ÷ ${compact(then)}` : BAND_LABEL[band(v.score)]}
-              </div>
-            </div>
-            <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} title={then ? "Its usual: the median views of the channel's videos just before this one" : undefined} />
-            <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} sub={v.statsAt ? <>counted <TimeAgo iso={v.statsAt} /></> : undefined} />
-            <Tile label="Engagement" value={eng === null ? "–" : `${eng.toFixed(1)}%`} sub="likes + comments per view" title="(Likes + comments) ÷ views" />
-            <Tile label="Likes" value={compact(v.likes)} />
-            <Tile label="Comments" value={compact(v.comments)} />
-            <Tile label="Views per subscriber" value={vps === null ? "–" : vps >= 10 ? Math.round(vps).toString() : vps.toFixed(2)} sub={d.channel.subs ? `${compact(d.channel.subs)} subscribers` : "subscribers hidden"} />
-            {d.own ? (
-              <Tile
-                label="Engaged views"
-                value={compact(engaged)}
-                sub={engagedPct !== null ? `${engagedPct >= 99.5 ? Math.round(engagedPct) : engagedPct.toFixed(1)}% of its views` : "from your YouTube Analytics"}
-                title="Your own video: views where people kept watching past the first moment (YouTube gives these to a channel's owner only)"
-              />
-            ) : d.earnings ? (
-              <Tile label="Would have earned" value={money(d.earnings.estimate, d.earnings.currency)} sub={`at your ${money(d.earnings.rpm, d.earnings.currency)} per 1,000 views`} title="Its views at your team's own revenue per 1,000 views over the last 90 days. An estimate." />
-            ) : (
-              <Tile label="Posted" value={<span className="text-[18px]"><TimeAgo iso={v.publishedAt} /></span>} sub={new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} />
-            )}
-          </div>
-          <ScoreNote v={v} short={short} then={then} now={usualNow} own={!!d.own} />
-        </div>
-      </div>
-
+    <>
       <PanelSection title="Next to the channel's other videos" sub={`Each bar is one of its ${short ? "Shorts" : "videos"} around this one, oldest on the left; this one is outlined. The dashed line is the usual it's measured against.`}>
         <div className="rounded-2xl border border-line/10 bg-surface p-4 pt-8">
           <BarsChart bars={bars} usual={usual} focus={v.id} onPick={(pid) => pid !== v.id && ctx.openVideo(pid)} label={`${v.title} against the channel's other videos`} />
@@ -319,7 +335,7 @@ function VideoBody({ d }: { d: VideoDetail }) {
       <Details d={d} />
 
       <SourceNote />
-    </div>
+    </>
   );
 }
 

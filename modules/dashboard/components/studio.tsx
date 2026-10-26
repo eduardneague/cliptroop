@@ -387,7 +387,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "weather":
       return <WeatherWidget settings={w.settings} />;
     case "views":
-      return <ViewsWidget teamId={data.teamId} />;
+      return <ViewsWidget teamId={data.teamId} settings={w.settings} onSettings={update} />;
     case "followers":
       return <FollowersWidget teamId={data.teamId} settings={w.settings} onSettings={update} />;
     case "topVideos":
@@ -404,7 +404,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
       return <StreakWidget teamId={data.teamId} />;
   }
 }
-const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos", "followers", "upcomingShorts"];
+const HAS_SETTINGS: WidgetType[] = ["contributions", "clock", "tasks", "weather", "audienceMap", "objectives", "topVideos", "views", "followers", "upcomingShorts"];
 
 /** What the board needs to know about a widget. */
 const widgetMeta = (w: WidgetInstance): GridCardMeta => {
@@ -615,7 +615,7 @@ function WidgetSettings({ w, teamId, onChange }: { w: WidgetInstance; teamId: st
       </div>
     );
   }
-  if (w.type === "topVideos" || w.type === "followers" || w.type === "upcomingShorts") {
+  if (w.type === "topVideos" || w.type === "views" || w.type === "followers" || w.type === "upcomingShorts") {
     return (
       <div className={row}>
         <span className="text-[13.5px] font-semibold">Platform</span>

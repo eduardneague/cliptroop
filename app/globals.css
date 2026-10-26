@@ -2091,6 +2091,20 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
    else rows of the same length (3 + 3, 3 + 2, 2 + 2), else pairs, so no
    number is left alone on a row. `data-n`: how many numbers there are;
    the widths keep about 100px per number. */
+/*
+  An outlier's row (Outliers' lists, a panel's Latest uploads; 1.34.5): laid out by the room the row has, not the
+  window's width. With less than 540px (a phone, or a column beside another) the multiplier goes on the picture and
+  the column on the right goes, so the title gets the width: in a channel panel's half-width column it was squeezed
+  to a word a line, under its chips. (VideoRow in modules/outliers/components/video-card.tsx.)
+*/
+.vrow { container: vrow / inline-size; }
+.vrow .vrow-narrow { display: none; }
+@container vrow (max-width: 539px) {
+  .vrow .vrow-narrow { display: inline-flex; }
+  .vrow .vrow-wide { display: none; }
+  .vrow .vrow-thumb { width: 124px; }
+}
+
 .stat-cq { container-type: inline-size; }
 .stat-grid { display: grid; gap: 10px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @container (min-width: 288px) {

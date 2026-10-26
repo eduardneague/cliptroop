@@ -1,5 +1,4 @@
-// 1.34.3: a short's Ready to post card. At a glance, where each platform is (a tile each, a teal tick where it's posted);
-// when posts go out (in 30 minutes, the team's times on the planned day, or chosen); one caption for Instagram, TikTok
+// 1.34.3: a short's Ready to post card. When posts go out (in 30 minutes, the team's times on the planned day, or chosen); one caption for Instagram, TikTok
 // and Facebook unless one gets its own; what will happen and the buttons always in sight; quiet posts folded to a line.
 // And every platform logo in full colour, a teal tick where it's posted (the shorts list, the calendar).
 import { readFileSync } from "node:fs";
@@ -46,9 +45,9 @@ ok(/options: \{ caption: captionOf\("instagram"\) \}/.test(panel) && /options: \
 ok(/if \(p === "instagram"\) setIg\(\{ caption: shared \}\);/.test(panel), "its own caption starts from the shared one");
 ok(/caption=\{captionFor\("tiktok"\)\}/.test(panel) && !/<span className=\{label\}>Caption<\/span>\s*<textarea value=\{v\.caption\}/.test(panel), "TikTok's caption is the card's (still there to edit, as TikTok asks)");
 ok(/Posting to <b className="text-ink">\{creator\.nickname\}<\/b>/.test(panel) && /Who can see this video/.test(panel) && /placeholder="Choose…"/.test(panel) && /Disclose commercial content/.test(panel) && /Music Usage Confirmation/.test(panel), "TikTok's review asks for these, all still on the card");
-ok(/const showTiles = active\.length > 0 \|\| platforms\.some\(\(p\) => !!byHand\(p\)\);/.test(panel), "tiles once anything is scheduled or posted");
-ok(/<PlatformMark platform=\{p\} posted=\{t\.tone === "done"\}/.test(panel) && /onClick=\{\(\) => jump\(p\)\}/.test(panel) && /if \(el\) flashElement\(el\);/.test(panel), "a tile: its logo (ticked when posted), and a press goes to that platform");
-ok(/\{postedCount === platforms\.length \? "Posted everywhere" : `\$\{postedCount\} of \$\{platforms\.length\} posted`\}/.test(panel), "how many are posted");
+// 1.34.5, the owner: the row of tiles over the card was "useless … we can already see what's posted from the ones below".
+ok(!/showTiles|tileFor|jump\(p\)|Where it's posted|postedCount/.test(panel), "no row of tiles (or count) over the card");
+ok(/<PlatformMark platform=\{p\} posted=\{postedOn\(p\)\} className="w-8 h-8 rounded-lg" tick="md" \/>/.test(panel), "each platform's own row: its logo, ticked when it's posted");
 ok(/className="sticky z-\[6\] bottom-\[calc\(5rem\+env\(safe-area-inset-bottom\)\)\] md:bottom-4/.test(panel) && /bg-surface glass-pane/.test(panel), "what happens and the buttons stay in sight, above the phone's tab bar");
 ok(!/variant="big"/.test(panel) && /variant="row" onDone=\{refresh\}/.test(panel), "Post everywhere now: a button in a line, not a banner over the card");
 ok(/const calm = post\.status === "published" \|\| \(\(post\.status === "scheduled" \|\| post\.status === "waiting"\) && !late && post\.attempts === 0\);/.test(panel) && /useState\(!calm\)/.test(panel), "published or quietly waiting: one line, the steps on request");

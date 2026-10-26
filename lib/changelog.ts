@@ -22,6 +22,18 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.34.5",
+    date: "2026-10-26",
+    title: "Graphs you can point at, and smoother Outliers",
+    changes: [
+      { kind: "new", text: "The dashboard's Views widget has the platforms as filters, like Followers: pick YouTube, Instagram, TikTok or Facebook, or All. The number, the line and its colour follow your pick, and the widget remembers it." },
+      { kind: "new", text: "Point at any day of the Views or Followers graph for a popup with that day's views or new followers (every platform's own number too, when it shows them all). On a phone, tap a day; tap the numbers above to open Analytics." },
+      { kind: "better", text: "Ready to post: the row of platform tiles over the card is gone. Each platform's own part below already says where it's posted." },
+      { kind: "fixed", text: "Outliers: a video played straight after opening it no longer stops when its numbers arrive, so one press is enough." },
+      { kind: "fixed", text: "Outliers: a channel's Latest uploads no longer squeeze the titles to a word a line. In narrow spots the multiplier sits on the picture and the title gets the room." },
+    ],
+  },
+  {
     version: "1.34.4",
     date: "2026-10-26",
     title: "Followers per day, and platforms on the dashboard",

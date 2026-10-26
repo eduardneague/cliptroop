@@ -14,7 +14,6 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
 import { Switch } from "@/modules/short-videos/components/short-type";
 import { Segmented } from "@/components/ui/segmented";
-import { flashElement } from "@/lib/flash";
 import { AnalyticsIcon, ChevronDownIcon, ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { setShortPlatformPosted } from "../actions";
@@ -474,38 +473,9 @@ function SchedulePanelLive({
     router.refresh();
   }
 
-  // ---- the overview (1.34.3): where each platform is, at a glance ------------
+  // ---- where it's posted: each platform's own row below says so (1.34.5: the row of tiles that repeated it is gone) ----
   const postedOn = (p: Platform) => !!byHand(p) || active.some((x) => x.platform === p && x.status === "published");
-  const postedCount = platforms.filter(postedOn).length;
-  // Once anything is scheduled or posted (before that, the form below is the overview).
-  const showTiles = active.length > 0 || platforms.some((p) => !!byHand(p));
   const statusPlatforms = platforms.filter((p) => !formPlatforms.includes(p));
-  const jump = (p: Platform) => {
-    const el = document.getElementById(`posting-${p}`);
-    if (el) flashElement(el);
-  };
-  const publishedAt = (post: PostInfo) => live.events.find((e) => e.postId === post.id && e.kind === "published")?.at ?? post.scheduledAt;
-  function tileFor(p: Platform): { text: string; sub?: React.ReactNode; tone: "done" | "live" | "plan" | "bad" | "warn" | "off" } {
-    const post = postFor(p);
-    const hand = byHand(p);
-    const acc = account(p);
-    if (post?.status === "published") return { text: "Published", sub: <Ago iso={publishedAt(post)} />, tone: "done" };
-    if (hand) return { text: "Marked posted", sub: <Ago iso={hand.postedAt} />, tone: "done" };
-    if (formPlatforms.includes(p)) return include[p] ? { text: post ? "Editing" : "Will post", sub: fmtWhen(whenOf(p)), tone: "plan" } : { text: "Not posting", tone: "off" };
-    if (post) {
-      if (post.status === "failed") return { text: "Failed", sub: canManage ? "Retry, or edit it" : null, tone: "bad" };
-      if (post.status === "scheduled" && Date.parse(post.nextAttemptAt) < now - 3 * 60_000) return { text: "Late", sub: "Hasn't started", tone: "warn" };
-      if (post.status === "uploading") return { text: `Uploading ${post.progress}%`, tone: "live" };
-      if (post.status === "processing") return { text: "Processing", tone: "live" };
-      if (post.status === "waiting") return { text: post.platform === "youtube" ? "Scheduled" : "Waiting", sub: fmtWhen(slotOf(post.scheduledAt)), tone: "plan" };
-      return { text: "Scheduled", sub: fmtWhen(slotOf(post.scheduledAt)), tone: "plan" };
-    }
-    if (!acc) return { text: "Not connected", sub: canManage ? "Mark it posted by hand" : null, tone: "off" };
-    if (acc.status !== "active") return { text: "Reconnect it", sub: "Team → Connected accounts", tone: "warn" };
-    if (acc.cannotPost) return { text: "Analytics only", sub: "Can't post from here", tone: "off" };
-    return { text: "Not scheduled", tone: "off" };
-  }
-  const TONE = { done: "text-teal", live: "text-amber", plan: "text-ink", bad: "text-red", warn: "text-amber", off: "text-ink-faint" } as const;
 
   // ---- the form's parts ----------------------------------------------------------
   const captionPlatforms = CAPTIONED.filter((p) => formPlatforms.includes(p) && include[p]);
@@ -558,41 +528,9 @@ function SchedulePanelLive({
 
   return (
     <section aria-labelledby="posting-card-title" className="rounded-2xl border border-line/10 bg-surface p-3 sm:p-5 space-y-3">
-      <div className="flex items-center justify-between gap-3 px-1">
-        <h2 id="posting-card-title" className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">
-          Posting
-        </h2>
-        {showTiles && (
-          <span className={`text-[12px] font-semibold tabular-nums ${postedCount === platforms.length ? "text-teal" : "text-ink-soft"}`}>
-            {postedCount === platforms.length ? "Posted everywhere" : `${postedCount} of ${platforms.length} posted`}
-          </span>
-        )}
-      </div>
-
-      {showTiles && (
-        <ol aria-label="Where it's posted" className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {platforms.map((p) => {
-            const t = tileFor(p);
-            return (
-              <li key={p} className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => jump(p)}
-                  aria-label={`${NAME[p]}: ${t.text}. Show it`}
-                  className={`w-full h-full flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-surface-2/70 ${t.tone === "bad" ? "border-red/30 bg-red/[0.05]" : "border-line/10 bg-surface-2/30"}`}
-                >
-                  <PlatformMark platform={p} posted={t.tone === "done"} className="w-7 h-7 rounded-lg" tick="md" />
-                  <span className="min-w-0 leading-tight">
-                    <span className="block text-[11.5px] font-semibold text-ink-soft truncate">{NAME[p]}</span>
-                    <span className={`block text-[13px] font-bold truncate ${TONE[t.tone]}`}>{t.text}</span>
-                    {t.sub && <span className="block text-[11.5px] text-ink-soft truncate tabular-nums">{t.sub}</span>}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <h2 id="posting-card-title" className="px-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">
+        Posting
+      </h2>
 
       {canManage && nowable.length > 0 && (
         <div className="flex items-center gap-x-3 gap-y-2 flex-wrap rounded-xl border border-amber/30 bg-amber/[0.06] px-3.5 py-2.5">
@@ -675,7 +613,7 @@ function SchedulePanelLive({
             const post = postFor(p);
             const acc = account(p)!;
             return (
-              <div key={p} id={`posting-${p}`} className="rounded-2xl border border-line/10 bg-surface-2/30 scroll-mt-24">
+              <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30">
                 <div className="flex items-center gap-3 px-3.5 sm:px-4 py-3">
                   <PlatformMark platform={p} className="w-8 h-8 rounded-lg" tick="md" />
                   <div className="min-w-0 flex-1">
@@ -762,7 +700,7 @@ function SchedulePanelLive({
         const acc = account(p);
         const c = chip(post, now);
         return (
-          <div key={p} id={`posting-${p}`} className="rounded-2xl border border-line/10 bg-surface-2/30 scroll-mt-24">
+          <div key={p} className="rounded-2xl border border-line/10 bg-surface-2/30">
             <div className="flex items-center gap-3 px-3.5 sm:px-4 py-3">
               <PlatformMark platform={p} posted={postedOn(p)} className="w-8 h-8 rounded-lg" tick="md" />
               <div className="min-w-0 flex-1">

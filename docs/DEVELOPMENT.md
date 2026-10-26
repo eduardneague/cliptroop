@@ -281,13 +281,22 @@ the page is live, or React throws that part away (production error #418).
   hydrates; Customize fetches the rest for the library). Each renders inside
   `WidgetBoundary`, so one failing widget shows its own Try again instead of
   taking the dashboard down. A widget with a choice that should stay (Top
-  videos', Followers' and Upcoming shorts' platform, 1.34.4) gets
+  videos', Views', Followers' and Upcoming shorts' platform, 1.34.4–1.34.5) gets
   `settings` in its `CATALOG` entry (layout.ts), `HAS_SETTINGS` and a form
   in `WidgetSettings`, and `settings` / `onSettings={update}` in
   `renderWidget` (its own chips call `onSettings`, which saves the layout).
   New followers per day: `modules/analytics/lib/followers.ts`
   (`followerGains`: gained − lost where the platform says, else the change
   in the count, a gap's change on the day after it; `sumSeries`).
+  Views and Followers (1.34.5) share their parts in `analytics-widgets.tsx`:
+  `PlatformChips` (the filters, each with the number you see when you pick
+  it) and `usePlatformPick` (the saved pick); a day of either graph shows a
+  popup (`useDayPointer`: under the mouse, or a finger, where a tap reads the
+  graph instead of following the widget's link; gone on leaving, a touch
+  elsewhere or a scroll; `DayTip` in a portal, as `.dash-item` clips). Which
+  day is under the pointer, and the Views week (up to the last day every
+  picked platform has reported), are `modules/analytics/lib/day-graph.ts`
+  (pure, tested).
 - **The frame is on every page** (the dashboard layout and the client
   components it draws: sidebar, header, bell, search, What's new, the tour,
   the celebrations), so it stays light (1.32.2). What only shows when opened
@@ -758,7 +767,15 @@ frame is in the page's own code (`outliers-view.tsx`); only what's inside
 (`PanelBody` in `panels.tsx`) is a lazy piece, behind
 `<Suspense fallback={<PanelLoading panel={…} />}>`
 (`panel-preview.tsx`, which the panels also use while their numbers load,
-so nothing jumps). General rule: a `dynamic()` (or `lazy()`) component that
+so nothing jumps). The video's panel renders the same `VideoTop` (player,
+then what's beside and under it) while its numbers load and once they're
+in, so a video started at once goes on playing (1.34.5: the player used to
+be built anew when they arrived, and stopped); a `Player` built anew just
+after a press (the stand-in swapped for the panels' code) plays at once
+(`pressed`, forgotten 1.5 s after its player goes). A list row
+(`VideoRow`) is laid out by its own width (`.vrow`, a container query in
+globals.css), not the window's: under 540px the multiplier is on the
+picture and the title has the width. General rule: a `dynamic()` (or `lazy()`) component that
 first renders after a click needs a `loading` (or its own `<Suspense>`):
 without one it suspends up to the route's loading.tsx and the whole page
 flashes its loading screen. Wherever a usual sits next to a ×, it's
@@ -971,8 +988,8 @@ file that gets posted (`post-video-preview.tsx`): a closed bar, Watch opens the
 review player. How long a
 short may be per platform lives in `lib/short-length.ts` (used by the cards and
 by the server before scheduling). Since 1.34.3 the card (`schedule-panel.tsx`)
-opens with a tile per platform once anything is scheduled or posted (a press
-goes to that platform's part, `#posting-<platform>`); When is In 30 min,
+says where each platform is in that platform's own row (1.34.5: the row of
+tiles that repeated it over the card is gone); When is In 30 min,
 Team's times (`teams.post_time_*` on the planned day, where a short planned
 for a later day starts) or Choose (`post-times.ts`, pure and tested; every
 check, the review and what's sent go through `whenOf`); one caption for

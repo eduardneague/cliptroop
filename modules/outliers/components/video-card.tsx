@@ -99,38 +99,45 @@ export function ShortCard({ v, eager = false }: { v: OutlierVideo; eager?: boole
   );
 }
 
-/** One video in a list: a small thumbnail, the words, the multiplier and spike on the right. */
-export function VideoRow({ v, rank, compact: tight = false, className = "" }: { v: OutlierVideo; rank?: number; compact?: boolean; className?: string }) {
+/**
+ * One video in a list: a small thumbnail, the words, the multiplier and spike on the right. Laid out by the room the
+ * row has, not the window's width (1.34.5, .vrow in globals.css): with less than 540px (a phone, or a column beside
+ * another, like a channel's Latest uploads) the multiplier goes on the picture and the title gets the width; it was
+ * squeezed to a word a line there, under the chips. `hideChannel`: in the channel's own panel, where every row is its.
+ */
+export function VideoRow({ v, rank, compact: tight = false, hideChannel = false, className = "" }: { v: OutlierVideo; rank?: number; compact?: boolean; hideChannel?: boolean; className?: string }) {
   const { openVideo, openChannel } = useOutliersNav();
   const short = v.kind === "short";
   return (
-    <li className={`group flex items-center min-w-0 ${tight ? "gap-2.5 py-2" : "gap-3 py-2.5"} ${className}`}>
+    <li className={`group flex items-center min-w-0 ${tight ? "gap-2.5 py-2" : "vrow gap-3 py-2.5"} ${className}`}>
       {rank !== undefined && <span className="w-5 text-right text-[12px] font-semibold text-ink-faint tabular-nums flex-shrink-0">{rank}</span>}
-      <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className={`relative flex-shrink-0 rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 ${short ? (tight ? "w-[44px]" : "w-[54px]") + " aspect-[9/16]" : tight ? "w-[96px] aspect-video" : "w-[124px] sm:w-[140px] aspect-video"}`}>
+      <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className={`relative flex-shrink-0 rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 ${short ? (tight ? "w-[44px]" : "w-[54px]") + " aspect-[9/16]" : tight ? "w-[96px] aspect-video" : "vrow-thumb w-[140px] aspect-video"}`}>
         <Thumb id={v.id} kind={v.kind} sizes={short ? "54px" : "140px"} tint={v.colors?.[0]} />
         {!short && !tight && <DurationChip secs={v.durationS} className="!bottom-1 !right-1 !text-[10px]" />}
-        {/* Phones: the multiplier on the picture, so the words get the width. */}
-        {!tight && <Mult score={v.score} size="sm" className="absolute top-1 left-1 sm:hidden" />}
+        {/* A narrow row: the multiplier on the picture, so the words get the width. */}
+        {!tight && <Mult score={v.score} size="sm" on className="vrow-narrow absolute top-1 left-1" />}
       </button>
       <div className="min-w-0 flex-1">
-        <button type="button" onClick={() => openVideo(v.id, v)} className={`block text-left font-semibold leading-snug line-clamp-2 hover:underline decoration-ink/30 underline-offset-2 ${tight ? "text-[13px]" : "text-[13.5px]"}`}>
+        <button type="button" onClick={() => openVideo(v.id, v)} className={`block text-left font-semibold leading-snug line-clamp-2 [overflow-wrap:anywhere] hover:underline decoration-ink/30 underline-offset-2 ${tight ? "text-[13px]" : "text-[13.5px]"}`}>
           {v.title}
         </button>
-        <div className="mt-0.5 text-[12px] text-ink-faint truncate">
-          <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="hover:text-ink">
-            {v.channel.title}
-          </button>
-          {v.channel.subs !== null && <span> · {compact(v.channel.subs)} subs</span>}
-        </div>
+        {!hideChannel && (
+          <div className="mt-0.5 text-[12px] text-ink-faint truncate">
+            <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="hover:text-ink">
+              {v.channel.title}
+            </button>
+            {v.channel.subs !== null && <span> · {compact(v.channel.subs)} subs</span>}
+          </div>
+        )}
         {!tight && (
           <div className="mt-0.5 text-[12px] text-ink-soft truncate">
             <span className="tabular-nums font-semibold text-ink">{compact(v.views)}</span> views · <TimeAgo iso={v.publishedAt} />
-            {v.vph !== null && v.vph > 0 && <span className="hidden sm:inline"> · {compact(v.vph)}/hour</span>}
+            {v.vph !== null && v.vph > 0 && <span className="vrow-wide"> · {compact(v.vph)}/hour</span>}
           </div>
         )}
       </div>
-      <div className={`flex-col items-end gap-1.5 flex-shrink-0 ${tight ? "flex" : "hidden sm:flex"}`}>
-        <Mult score={v.score} projected={tight ? null : v.projected} size={tight ? "sm" : "md"} className="flex-col !items-end sm:flex-row sm:!items-center" />
+      <div className={`flex-col items-end gap-1.5 flex-shrink-0 flex ${tight ? "" : "vrow-wide"}`}>
+        <Mult score={v.score} projected={tight ? null : v.projected} size={tight ? "sm" : "md"} className={tight ? "flex-col !items-end sm:flex-row sm:!items-center" : "!items-center"} />
         {tight ? <span className="text-[11.5px] tabular-nums text-ink-faint">{compact(v.views)}</span> : <Spike peers={v.peers} at={v.peerI} score={v.score} width={46} height={16} reserve />}
       </div>
       {!tight && <CardMenu v={v} className="flex-shrink-0 -mr-1.5 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100" />}
