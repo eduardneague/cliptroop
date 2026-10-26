@@ -30,7 +30,7 @@ export function PostNowButton({
   pending?: Platform[];
   /** "#231" (for the confirmation). */
   shortRef?: string;
-  variant?: "big" | "small" | "row";
+  variant?: "small" | "row";
   onDone?: () => void | Promise<void>;
 }) {
   const router = useRouter();
@@ -69,19 +69,6 @@ export function PostNowButton({
   }
 
   const spinner = <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden />;
-  if (variant === "big") {
-    return (
-      <button
-        type="button"
-        onClick={() => void go()}
-        disabled={busy}
-        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14px] hover:brightness-105 disabled:opacity-60"
-      >
-        {busy ? spinner : <PostingIcon className="w-4 h-4" />}
-        {busy ? "Starting…" : "Post everywhere now"}
-      </button>
-    );
-  }
   return (
     <button
       type="button"
@@ -94,7 +81,7 @@ export function PostNowButton({
       }
     >
       {busy ? spinner : <PostingIcon className="w-3.5 h-3.5" />}
-      {busy ? "Starting…" : "Post now"}
+      {busy ? "Starting…" : platform === "all" ? "Post everywhere now" : "Post now"}
     </button>
   );
 }

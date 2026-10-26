@@ -22,6 +22,18 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.34.3",
+    date: "2026-10-26",
+    title: "A better Ready to post",
+    changes: [
+      { kind: "better", text: "A short that's ready to post opens with a tile for each platform: scheduled for when, published, failed or not connected, with a tick where it's posted. Press one to jump to it." },
+      { kind: "new", text: "When to post: In 30 min, Team's times (each platform at your team's posting time, on the short's planned day) or Choose. A short planned for a later day starts on its planned day at your team's times." },
+      { kind: "new", text: "One caption for Instagram, TikTok and Facebook. Write one just for one of them if you want." },
+      { kind: "better", text: "What will be posted and when, with Post now and Schedule, stays at the bottom of the window while you fill it in. YouTube's description, audience and visibility fold into one line, and published or waiting posts take one line until you open their steps." },
+      { kind: "better", text: "Platform logos on short videos are now always in full colour, with a small teal tick where it's posted (they used to be greyed out until then). The calendar shows the same tick." },
+    ],
+  },
+  {
     version: "1.34.2",
     date: "2026-10-26",
     title: "A tidier Account",

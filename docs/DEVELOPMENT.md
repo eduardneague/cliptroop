@@ -963,7 +963,21 @@ Posting card refuses until it's there. The Posting card always has the exact
 file that gets posted (`post-video-preview.tsx`): a closed bar, Watch opens the
 review player. How long a
 short may be per platform lives in `lib/short-length.ts` (used by the cards and
-by the server before scheduling).
+by the server before scheduling). Since 1.34.3 the card (`schedule-panel.tsx`)
+opens with a tile per platform once anything is scheduled or posted (a press
+goes to that platform's part, `#posting-<platform>`); When is In 30 min,
+Team's times (`teams.post_time_*` on the planned day, where a short planned
+for a later day starts) or Choose (`post-times.ts`, pure and tested; every
+check, the review and what's sent go through `whenOf`); one caption for
+Instagram, TikTok and Facebook unless one gets its own (`captionOf`); the
+plan and the buttons stick to the bottom of the window; published and quietly
+waiting posts fold to one line (`calm`). TikTok's required parts (nickname,
+privacy with no default, comment / duet / stitch, commercial disclosure,
+Music Usage Confirmation) stay on the card: TikTok's review checks them.
+**A platform's logo** is always in full colour; posted there, it gets the
+teal tick: `PlatformMark` (`modules/short-videos/components/platform-mark.tsx`),
+never a greyed-out logo for "not posted" (greyed is for off: a picker's
+unchosen platform, an account not connected).
 The Posting page (a dashboard since 1.24.0) reads unfinished posts (soonest
 first), the latest 100 published ones, the platforms' copies of the last 30
 days (`analytics_content`, the connected accounts only) and the shorts

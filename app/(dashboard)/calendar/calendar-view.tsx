@@ -11,6 +11,7 @@ import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon, ExternalIcon } from "@/
 import { PostedTick } from "@/components/ui/posted-tick";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { DayLimitControl } from "@/modules/short-videos/components/day-limit-control";
 import { moveShortAuto, moveShortInQueue, setShortDayLimit, swapShorts, updateShortDetails } from "@/app/(dashboard)/shorts/actions";
@@ -1171,8 +1172,8 @@ function QuickView({
                   {item.platforms.map((p) => {
                     const posted = item.postedPlatforms.includes(p) || item.posts.some((x) => x.platform === p && x.status === "published");
                     return (
-                      <span key={p} title={`${PLATFORM_NAME[p] ?? p}${posted ? " · posted" : ""}`} className={`inline-flex rounded-lg ${posted ? "ring-2 ring-green ring-offset-1 ring-offset-surface" : ""}`}>
-                        <PlatformIcon platform={p as "youtube"} className="w-7 h-7 rounded-md" />
+                      <span key={p} title={`${PLATFORM_NAME[p] ?? p}${posted ? " · posted" : ""}`} className="inline-flex">
+                        <PlatformMark platform={p as "youtube"} posted={posted} className="w-7 h-7 rounded-md" tick="md" />
                       </span>
                     );
                   })}

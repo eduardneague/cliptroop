@@ -82,7 +82,7 @@ export function WorkflowActions({
         ? `Waiting for ${reviewerName} to review.`
         : "Waiting for the master to review.";
   } else if (stage === "ready") {
-    hint = perms.canMarkPosted ? "Approved. Mark each platform below as you post it." : "Approved and waiting to be posted.";
+    hint = perms.canMarkPosted ? "Approved. Schedule it below, or post it right away." : "Approved and waiting to be posted.";
   } else if (stage === "posted") {
     hint = "Posted and locked. Un-mark a platform below to reopen it.";
   }
