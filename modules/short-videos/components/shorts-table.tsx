@@ -11,14 +11,15 @@ import { PostedToggles } from "./posted-toggles";
 import { ShortRowMenu } from "./row-menu";
 import { ShortStagePill } from "./stage-pill";
 import { ShortTypeBadge } from "./short-type";
-import { DayPick, RowPick } from "./pick-shorts";
+import { GroupPick, RowPick } from "@/components/ui/list-pick";
 import type { ShortSettingsContext } from "./short-settings-dialog";
 
 /*
  * The shorts list as a table (moved out of app/(dashboard)/shorts/page.tsx in 1.38.0, so the harness draws the real
  * thing): a header per day with its limit, a row per short (number, title, date, editor, step, posted, ⋯). The page
  * reads everything and filters; this only draws. 1.38.0: each row is marked for picking several (pick-shorts.tsx) and
- * for its way out when deleted (data-short-row, data-row-title), and its ⋯ is everyone's (export).
+ * for its way out when deleted (data-short-row, data-row-title), and its ⋯ is everyone's (export). 1.40.0: the picking is
+ * shared (components/ui/list-pick.tsx); data-item-id finds a row to take away when several are deleted at once.
  */
 
 export type ShortsTableProps = {
@@ -148,7 +149,7 @@ export function ShortsTable(p: ShortsTableProps) {
                     }`}
                   >
                     <span className="inline-flex items-center">
-                      {s.plannedDate && <DayPick ids={dayIds.get(s.plannedDate) ?? []} label={formatShortDate(s.plannedDate) ?? s.plannedDate} />}
+                      {s.plannedDate && <GroupPick ids={dayIds.get(s.plannedDate) ?? []} label={`Every short on ${formatShortDate(s.plannedDate) ?? s.plannedDate}`} />}
                       <span>
                         {s.plannedDate ? formatShortDate(s.plannedDate) : "No date"}
                         {rel ? ` · ${rel}` : ""}
@@ -180,6 +181,7 @@ export function ShortsTable(p: ShortsTableProps) {
                 )}
                 <div
                   data-short-row=""
+                  data-item-id={s.id}
                   className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] ${COLS} gap-x-3 gap-y-1 px-3 py-2.5 items-center border-t border-line/5 hover:bg-surface-2/70 transition-colors`}
                   style={
                     SHORT_TYPE_META[s.shortType].color
@@ -294,7 +296,7 @@ export function ShortsTable(p: ShortsTableProps) {
                     <ShortTypeBadge type={s.shortType} />
                     {menu(s, locked)}
                   </div>
-                  <RowPick id={s.id} number={s.number} title={s.title} />
+                  <RowPick id={s.id} label={`#${s.number} ${s.title}`} />
                 </div>
               </div>
             );

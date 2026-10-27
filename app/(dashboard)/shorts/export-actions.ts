@@ -1,9 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { flowStartDocId } from "@/modules/scripts/lib/flow-start";
-import type { ScriptFlow } from "@/modules/scripts/lib/flow";
-import type { FlowStep } from "@/modules/scripts/lib/queries";
+import { currentDoc } from "@/modules/scripts/lib/current-doc";
 
 /*
  * 1.38.0: the scripts of shorts picked on the list, to export them (one or many) as PDF or Word in the browser. Each
@@ -16,7 +14,7 @@ type Result<T = object> = ({ error?: undefined } & T) | { error: string };
 export type ShortScriptExport = { id: string; number: number; title: string; doc: Record<string, unknown> | null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Per call: the list asks in batches of this many (modules/short-videos/lib/export-shorts.ts, EXPORT_BATCH). A "use server"
+/** Per call: the list asks in batches of this many (modules/scripts/lib/export-many.ts, EXPORT_BATCH). A "use server"
  * file exports only its actions, so the number is written in both places (tests/short-bulk.test.ts checks they agree). */
 const MAX_PER_CALL = 50;
 
@@ -57,26 +55,4 @@ export async function shortScriptsForExport(ids: string[]): Promise<Result<{ ite
     items.push({ id, number: s.entry_number as number, title: (s.title as string) ?? "", doc: currentDoc(mine, (handoffs ?? []) as Record<string, unknown>[]) });
   }
   return { items };
-}
-
-/** Where the short's script is now (the same document its Script page opens without one picked). */
-function currentDoc(docs: Record<string, unknown>[], handoffs: Record<string, unknown>[]): Record<string, unknown> | null {
-  const content = (d: Record<string, unknown> | undefined) => (d?.content && typeof d.content === "object" ? (d.content as Record<string, unknown>) : null);
-  const order: FlowStep[] = ["write", "review", "staging"];
-  const byStep = new Map<FlowStep, Record<string, unknown>>();
-  for (const d of docs) if (order.includes(d.step as FlowStep) && !byStep.has(d.step as FlowStep)) byStep.set(d.step as FlowStep, d);
-  if (!byStep.size) return content(docs[0]);
-  const mine = new Set([...byStep.values()].map((d) => d.id as string));
-  const ours = handoffs.filter((h) => mine.has(h.script_id as string));
-  const done = byStep.has("staging") ? ours.find((h) => h.to_step === "done") : undefined;
-  const steps = order
-    .filter((s) => byStep.has(s))
-    .map((step) => {
-      const docId = byStep.get(step)!.id as string;
-      const sent = step === "staging" ? undefined : ours.find((h) => h.script_id === docId && h.to_step !== "done");
-      return { step, docId, name: "", wordCount: 0, people: [], usesDefaults: false, sent: sent ? { at: sent.created_at as string, by: null } : null };
-    });
-  const flow: ScriptFlow = { ready: true, steps, done: done ? { at: done.created_at as string, by: null } : null, defaults: { review: [], staging: [] } };
-  const at = flowStartDocId(flow);
-  return content(docs.find((d) => d.id === at) ?? docs[0]);
 }

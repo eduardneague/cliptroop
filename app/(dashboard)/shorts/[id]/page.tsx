@@ -175,7 +175,7 @@ export default async function ShortPage({
   const rel = relativeDay(short.plannedDate);
 
   return (
-    // data-short-page: what falls away when the short is deleted (1.38.0, remove-animation.ts).
+    // data-short-page: what falls away when the short is deleted (1.38.0, lib/remove-animation.ts).
     <div data-short-page className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1200px] mx-auto">
       <ShortsRealtime teamId={short.teamId} shortId={short.id} />
 

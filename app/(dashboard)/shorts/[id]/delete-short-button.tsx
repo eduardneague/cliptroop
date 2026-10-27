@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useDeleteShort } from "@/modules/short-videos/lib/use-delete-short";
-import { pageAway } from "@/modules/short-videos/lib/remove-animation";
+import { pageAway } from "@/lib/remove-animation";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { TrashIcon } from "@/components/ui/icons";
 

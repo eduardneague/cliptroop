@@ -2,11 +2,13 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getAudience, getContent, contentCols, contentItem, type ContentItem } from "@/modules/analytics/lib/queries";
 import { getMembership } from "@/lib/permissions/membership";
-import { canMakeMediaKit } from "./access";
+import { getCachedUser } from "@/lib/supabase/get-user";
+import { listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { canMakeMediaKit, type KitPerson } from "./access";
 import { getAudienceBreakdowns } from "@/modules/analytics/lib/advanced";
 import { numbersVisibility, visibleRows } from "@/modules/analytics/lib/accounts";
 import { addDays, readCustom, todayIn, windowFor, type Window } from "@/modules/analytics/lib/ranges";
-import { KIT_PLATFORMS, readKitSettings, type KitPeriod, type KitPlatform } from "./settings";
+import { KIT_PLATFORMS, readKitSettings, templateSettings, TEMPLATES_MAX, type KitPeriod, type KitPlatform, type KitTemplateInfo } from "./settings";
 import type { MediaKitTabData } from "../components/media-kit-tab";
 import {
   agesFrom,
@@ -30,10 +32,24 @@ import {
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 
-/** The team, if this person may make its kit (Masters and Partnerships, 1.39.0: access.ts). */
-export async function kitTeam(supabase: Supa, teamId: string) {
-  const [membership, { data }] = await Promise.all([getMembership(supabase, teamId), supabase.from("teams").select("name, color, logo_url, timezone").eq("id", teamId).maybeSingle()]);
-  if (!canMakeMediaKit(membership?.roles) || !data) return null;
+/**
+ * May this person make the team's kit (1.40.0, access.ts): an active Master, or someone a Master let in (their own
+ * row of media_kit_access, which they see: migration 0117; none, or before 0117: not let in). `master`: they also
+ * choose who else opens it. `userId`: the person a server action checked itself (else this request's).
+ */
+export async function mayMakeMediaKit(supabase: Supa, teamId: string, userId?: string): Promise<{ ok: false } | { ok: true; master: boolean; userId: string }> {
+  const [membership, me] = await Promise.all([getMembership(supabase, teamId), userId ? Promise.resolve({ id: userId }) : getCachedUser()]);
+  if (!membership || !me) return { ok: false };
+  const master = membership.roles.includes("master");
+  if (master) return { ok: true, master, userId: me.id };
+  const { data, error } = await supabase.from("media_kit_access").select("user_id").eq("team_id", teamId).eq("user_id", me.id).maybeSingle();
+  return canMakeMediaKit(membership.roles, !error && !!data) ? { ok: true, master, userId: me.id } : { ok: false };
+}
+
+/** The team, if this person may make its kit (1.40.0: Masters and the people they let in). */
+export async function kitTeam(supabase: Supa, teamId: string, userId?: string) {
+  const [may, { data }] = await Promise.all([mayMakeMediaKit(supabase, teamId, userId), supabase.from("teams").select("name, color, logo_url, timezone").eq("id", teamId).maybeSingle()]);
+  if (!may.ok || !data) return null;
   return { name: data.name as string, color: (data.color as string | null) ?? "#E8630D", logoUrl: (data.logo_url as string | null) ?? null, tz: (data.timezone as string | null) || "Europe/Bucharest" };
 }
 
@@ -160,20 +176,55 @@ function audienceOf(p: KitPlatform, breakdowns: Breakdowns, a: Aud): KitAudience
 
 /**
  * What Analytics → Media kit opens with: the saved setup (defaults before migration 0114, or before the first save),
- * an hour's link to its cover photo, and the numbers for its period, sent after the page.
+ * an hour's link to its cover photo, and the numbers for its period, sent after the page. 1.40.0: the team's
+ * templates (newest change first; before migration 0118, none) and the one the setup was opened from, to tell whether
+ * it's changed since; for Masters, the team and who of it they've let in (before migration 0117, nobody).
  */
 export async function mediaKitData(
   supabase: Supa,
   teamId: string,
   team: { name: string; color: string; logoUrl: string | null; tz: string },
-  latest: string
+  latest: string,
+  me: { id: string; master: boolean }
 ): Promise<MediaKitTabData> {
-  const { data, error } = await supabase.from("media_kit_settings").select("settings").eq("team_id", teamId).maybeSingle();
+  const [{ data, error }, tpl, people, grants] = await Promise.all([
+    supabase.from("media_kit_settings").select("settings").eq("team_id", teamId).maybeSingle(),
+    supabase.from("media_kit_templates").select("id, name, updated_at, updated_by").eq("team_id", teamId).order("updated_at", { ascending: false }).limit(TEMPLATES_MAX),
+    listTeamPeople(teamId),
+    me.master ? supabase.from("media_kit_access").select("user_id").eq("team_id", teamId) : Promise.resolve(null),
+  ]);
   const saved = readKitSettings(data?.settings ?? null, teamId);
-  let coverUrl: string | null = null;
-  if (saved.coverPath) {
-    const { data: signed } = await supabase.storage.from("media-kit").createSignedUrl(saved.coverPath, 3600);
-    coverUrl = signed?.signedUrl ?? null;
+  const nameOf = new Map(people.map((p) => [p.userId, p.name]));
+  const templates: KitTemplateInfo[] = ((tpl.data ?? []) as { id: string; name: string; updated_at: string; updated_by: string | null }[]).map((t) => ({
+    id: t.id,
+    name: t.name,
+    updatedAt: t.updated_at,
+    byId: t.updated_by,
+    by: t.updated_by ? (nameOf.get(t.updated_by) ?? null) : null,
+  }));
+  const [base, coverUrl] = await Promise.all([
+    // The template it was opened from, as it is now (gone: none).
+    saved.fromTemplate && templates.some((t) => t.id === saved.fromTemplate)
+      ? supabase
+          .from("media_kit_templates")
+          .select("settings, updated_at")
+          .eq("id", saved.fromTemplate)
+          .maybeSingle()
+          .then(({ data: b }) => (b ? { id: saved.fromTemplate!, settings: templateSettings(b.settings, teamId), updatedAt: b.updated_at as string } : null))
+      : Promise.resolve(null),
+    saved.coverPath
+      ? supabase.storage
+          .from("media-kit")
+          .createSignedUrl(saved.coverPath, 3600)
+          .then(({ data: signed }) => signed?.signedUrl ?? null)
+      : Promise.resolve(null),
+  ]);
+  let access: KitPerson[] | null = null;
+  if (me.master) {
+    const granted = new Set(((grants?.data ?? []) as { user_id: string }[]).map((g) => g.user_id));
+    access = people
+      .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, color: p.color, master: p.roles.includes("master"), granted: granted.has(p.userId) }))
+      .sort((a, b) => Number(b.master) - Number(a.master) || a.name.localeCompare(b.name));
   }
   const numbers = gatherMediaKit(teamId, team, { period: saved.period, from: saved.from, to: saved.to }).then(
     (d) => ({ data: d }),
@@ -182,6 +233,24 @@ export async function mediaKitData(
       return { error: "Couldn't get the numbers. Reload the page to try again." };
     }
   );
-  // Everyone who opens the kit saves it (1.39.0: Masters and Partnerships; the page only calls this for them).
-  return { allowed: true, teamId, teamName: team.name, teamColor: team.color, logoUrl: team.logoUrl, ready: !error, saved, coverUrl, numbers, latest };
+  // Everyone who opens the kit saves it and its templates (1.40.0: Masters and the people they let in; the page only
+  // calls this for them). Masters also choose who else opens it.
+  return {
+    allowed: true,
+    teamId,
+    teamName: team.name,
+    teamColor: team.color,
+    logoUrl: team.logoUrl,
+    ready: !error,
+    saved,
+    coverUrl,
+    numbers,
+    latest,
+    me: me.id,
+    templates,
+    templatesReady: !tpl.error,
+    base,
+    access,
+    accessReady: !!grants && !grants.error,
+  };
 }

@@ -22,6 +22,8 @@ import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { FilterChip } from "@/components/ui/filter-chip";
 import { VideoMenu } from "@/modules/long-videos/components/video-menu";
+import { PickVideosButton, VideosPicker } from "@/modules/long-videos/components/pick-videos";
+import { CardPick, RowPick } from "@/components/ui/list-pick";
 import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modules/long-videos/components/list-skeletons";
 import type { Metadata } from "next";
 import { sketchThumb, studioThumb, type PictureWidth } from "@/lib/picture-size";
@@ -96,8 +98,8 @@ export default async function VideosPage({
   };
   const createRoles = membership?.roles ?? [];
   const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
-  // Deleting straight from the list (1.27.5): masters.
-  const canDelete = isMaster(createRoles);
+  // Deleting straight from the list (1.27.5): masters. 1.40.0: moving to a step too, one or many; everyone exports.
+  const master = isMaster(createRoles);
   const viewHref = (mode: "grid" | "table") => {
     const q = new URLSearchParams();
     if (stageFilter) q.set("stage", stageFilter);
@@ -150,6 +152,8 @@ export default async function VideosPage({
         )}
       </div>
 
+      {/* 1.40.0: long videos picked together (pick-videos.tsx): export; masters move and delete (with their password). */}
+      <VideosPicker items={(projects ?? []).map((p) => ({ id: p.id, number: p.entry_number, title: p.title, stage: p.stage as PipelineStage }))} canMove={master} canDelete={master}>
       {/* Filters — small, low-key, border-led rather than solid fills — with the view toggle on the same row, opposite side */}
       <div className="flex items-center justify-between gap-3 mb-7 flex-wrap">
         {/* Neutral, quiet filter chips: color is reserved for the ONE that's
@@ -178,13 +182,16 @@ export default async function VideosPage({
           </div>
         </div>
 
-        <ViewToggle
-          value={isTable ? "table" : "grid"}
-          cookie={VIEW_MODE_COOKIE}
-          hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
-          action={setViewMode}
-          fields={{ stage: stageFilter ?? "" }}
-        />
+        <div className="flex items-center gap-2">
+          {(projects ?? []).length > 0 && <PickVideosButton />}
+          <ViewToggle
+            value={isTable ? "table" : "grid"}
+            cookie={VIEW_MODE_COOKIE}
+            hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
+            action={setViewMode}
+            fields={{ stage: stageFilter ?? "" }}
+          />
+        </div>
       </div>
 
       {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
@@ -215,9 +222,10 @@ export default async function VideosPage({
             return (
               <div
                 key={p.id}
+                data-item-id={p.id}
                 className={`relative ${VIDEO_TABLE_COLS} gap-3 px-3 py-2 items-center border-t border-line/10 hover:bg-surface-2 transition-colors`}
               >
-                <span className="text-right font-mono text-[12px] text-ink-faint tabular-nums">{p.entry_number}</span>
+                <span data-row-num="" className="text-right font-mono text-[12px] text-ink-faint tabular-nums">{p.entry_number}</span>
                 <span
                   className="w-14 h-8 rounded-md overflow-hidden flex-shrink-0"
                   style={{
@@ -232,7 +240,7 @@ export default async function VideosPage({
                   )}
                 </span>
                 {/* The title's link stretches over the whole row; the ⋯ sits above it. */}
-                <Link href={`/videos/${p.id}`} className="text-[13px] font-semibold truncate after:absolute after:inset-0 after:content-['']">
+                <Link href={`/videos/${p.id}`} data-row-title="" className="text-[13px] font-semibold truncate after:absolute after:inset-0 after:content-['']">
                   {p.title}
                 </Link>
                 <span className="hidden sm:block text-[11.5px] text-ink-soft truncate">
@@ -252,8 +260,9 @@ export default async function VideosPage({
                 </span>
                 <span className={`hidden sm:block text-[11.5px] tabular-nums ${due(p).tone}`}>{p.stage === "done" ? "Posted" : formatDate(p.expected_date)}</span>
                 <span className="justify-self-end">
-                  {canDelete && <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} className="text-ink-soft hover:text-ink hover:bg-surface" />}
+                  <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} className="text-ink-soft hover:text-ink hover:bg-surface" />
                 </span>
+                <RowPick id={p.id} label={`#${p.entry_number} ${p.title}`} />
               </div>
             );
           })}
@@ -271,6 +280,8 @@ export default async function VideosPage({
             return (
               <div
                 key={p.id}
+                data-card=""
+                data-item-id={p.id}
                 className="group relative rounded-2xl border border-line/10 bg-surface overflow-hidden hover:border-line/25 hover:shadow-[0_10px_28px_-14px_rgb(0_0_0/0.35)] hover:-translate-y-0.5 transition-all flex flex-col"
               >
                 <div className="aspect-video relative overflow-hidden bg-surface-2">
@@ -291,13 +302,11 @@ export default async function VideosPage({
                     <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: c }} aria-hidden />
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
-                  <span className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                  <span data-card-num="" className="absolute top-2.5 right-2.5 flex items-center gap-1">
                     <span className="font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
                       #{p.entry_number}
                     </span>
-                    {canDelete && (
-                      <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
-                    )}
+                    <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
                   </span>
                   {/* Where it is in the pipeline: one segment per step. */}
                   <span className="absolute inset-x-2.5 bottom-2.5 flex gap-[3px]" aria-hidden>
@@ -315,7 +324,7 @@ export default async function VideosPage({
                 </div>
                 <div className="p-4 flex flex-col gap-1.5 flex-1">
                   {/* The title's link covers the whole card; the ⋯ sits above it. */}
-                  <Link href={`/videos/${p.id}`} className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']">
+                  <Link href={`/videos/${p.id}`} data-row-title="" className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']">
                     {p.title}
                   </Link>
                   {(p.theme || (p.video_type ?? []).length > 0) && (
@@ -341,6 +350,7 @@ export default async function VideosPage({
                     );
                   })()}
                 </div>
+                <CardPick id={p.id} label={`#${p.entry_number} ${p.title}`} corner="right" x={10} y={13} />
               </div>
             );
           })}
@@ -349,6 +359,7 @@ export default async function VideosPage({
         </div>
       )}
       </PendingSwap>
+      </VideosPicker>
     </div>
     </PendingNav>
   );

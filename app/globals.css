@@ -1547,6 +1547,10 @@ button { transition-timing-function: var(--ease-out); }
   position: absolute; inset: 0; z-index: 20; width: 100%; cursor: pointer;
   background: transparent; transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
+/* 1.40.0: no press-in on a tick area as wide as a row or a card: 0.97 of a whole row moved its box ~18 px from under the
+   pointer (the owner: "the box on the left is unclickable because the short goes to the right when clicking"). */
+button.row-pick:not(:disabled):active,
+button.card-pick:not(:disabled):active { scale: none; }
 .row-pick:hover { background: rgb(var(--ink) / 0.03); }
 .row-pick.is-on { background: rgb(var(--amber) / 0.08); box-shadow: inset 3px 0 0 rgb(var(--amber)); }
 .row-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
@@ -1560,6 +1564,19 @@ button { transition-timing-function: var(--ease-out); }
 .pick-box.is-on { background: rgb(var(--amber)); border-color: rgb(var(--amber)); }
 .pick-box.is-on svg { animation: pick-pop 0.24s var(--ease-spring) both; }
 .row-pick-box { position: absolute; left: 14px; top: 50%; margin-top: -9px; animation: pick-pop 0.22s var(--ease-spring) both; }
+/* 1.40.0: cards too (shorts and long videos, components/ui/list-pick.tsx): the whole card is the tick box, its box in
+   the corner where the card's number was; picked, the card is outlined. */
+[data-selecting] [data-card-num] { visibility: hidden; }
+.card-pick {
+  position: absolute; inset: 0; z-index: 20; width: 100%; border-radius: inherit; cursor: pointer;
+  background: transparent; transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-pick:hover { background: rgb(var(--ink) / 0.03); }
+.card-pick.is-on { background: rgb(var(--amber) / 0.07); box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.card-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.card-pick.is-on:focus-visible { box-shadow: inset 0 0 0 3px rgb(var(--amber)); }
+.card-pick-box { position: absolute; left: var(--pick-x, 14px); top: var(--pick-y, 14px); animation: pick-pop 0.22s var(--ease-spring) both; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
+.card-pick-box.is-right { left: auto; right: var(--pick-x, 14px); }
 .pick-count {
   min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;

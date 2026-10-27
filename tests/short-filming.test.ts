@@ -90,8 +90,9 @@ const teamUi = read("app/(dashboard)/team/short-settings.tsx");
 ok(/<PersonSelect kind="filmer" people=\{people\} value=\{filmer\} onChange=\{setFilmer\} \/>/.test(teamUi) && /defaultFilmer: filmer,/.test(teamUi) && /filmer !== settings\.defaultFilmer \|\|/.test(teamUi), "Team: pick the default filmer (and Save notices it)");
 ok(/emptyHint=\{[^}]*kind === "filmer" \? "Any filmer"/.test(read("modules/short-videos/components/person-select.tsx")), "nobody set: Any filmer");
 
+// (Either layout: one line, or a call a line as an editor's formatter writes it.)
 const queries = read("modules/short-videos/lib/queries.ts");
-ok(/export const hasShortFilming = cache\(async \(\): Promise<boolean> => \{[\s\S]{0,200}select\("filmer_member_id, filmed_at, footage_path"\)\.limit\(1\);\s+return !error;/.test(queries), "the app asks once per request whether 0113 ran");
+ok(/export const hasShortFilming = cache\(async \(\): Promise<boolean> => \{[\s\S]{0,200}select\("filmer_member_id, filmed_at, footage_path"\)\s*\.limit\(1\);\s+return !error;/.test(queries), "the app asks once per request whether 0113 ran");
 ok(/LIST_SELECT \+ \(filming \? FILMER_SELECT : ""\)/.test(queries), "lists read the filmer only when it's there");
 
 const page = read("app/(dashboard)/shorts/[id]/page.tsx");

@@ -13,6 +13,7 @@ import { isMaster, ROLES, PIPELINE_STAGES, roleAllowsStage } from "@/lib/permiss
 import { displayName } from "@/lib/avatar";
 import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
 import { cleanName } from "@/lib/names";
+import { removeLongVideo } from "@/modules/long-videos/lib/remove-video";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 
 /**
@@ -56,43 +57,8 @@ export async function deleteProject(projectId: string, _teamId?: string, opts?: 
     return { error: "The name doesn't match. Nothing was deleted." };
   }
 
-  const admin = createAdminClient();
-  // Its scripts' pictures and drawings (1.27.5): <team>/<script>/ in their buckets.
-  const { data: docs } = await admin.from("scripts").select("id").eq("long_video_id", projectId);
-  await Promise.all(
-    (docs ?? []).flatMap((d) =>
-      (["script-images", "script-sketches"] as const).map(async (bucket) => {
-        const dir = `${check.project.team_id as string}/${d.id as string}`;
-        const { data: files } = await admin.storage.from(bucket).list(dir, { limit: 1000 });
-        if (files?.length) await admin.storage.from(bucket).remove(files.map((f) => `${dir}/${f.name}`));
-      })
-    )
-  );
-
-  // Its edits (1.25.0, up to 3 GB each) and Thumbnail Studio's images live
-  // under <team>/<video>/: they go too, so nothing is left behind.
-  const folder = `${check.project.team_id as string}/${projectId}`;
-  const [{ data: thumbFiles }, { data: attachFiles }, { data: editFiles }, { data: studioFiles }] = await Promise.all([
-    admin.storage.from("thumbnails").list(projectId),
-    admin.storage.from("comment-attachments").list(projectId),
-    admin.storage.from("long-review-videos").list(folder, { limit: 1000 }),
-    admin.storage.from("package-thumbs").list(folder, { limit: 1000 }),
-  ]);
-  if (thumbFiles && thumbFiles.length > 0) {
-    await admin.storage.from("thumbnails").remove(thumbFiles.map((f) => `${projectId}/${f.name}`));
-  }
-  if (attachFiles && attachFiles.length > 0) {
-    await admin.storage.from("comment-attachments").remove(attachFiles.map((f) => `${projectId}/${f.name}`));
-  }
-  if (editFiles && editFiles.length > 0) {
-    await admin.storage.from("long-review-videos").remove(editFiles.map((f) => `${folder}/${f.name}`));
-  }
-  if (studioFiles && studioFiles.length > 0) {
-    await admin.storage.from("package-thumbs").remove(studioFiles.map((f) => `${folder}/${f.name}`));
-  }
-
-  const { error } = await admin.from("long_video_projects").delete().eq("id", projectId);
-  if (error) return { error: "Couldn't delete the project. Try again." };
+  const removed = await removeLongVideo(createAdminClient(), { id: projectId, teamId: check.project.team_id as string });
+  if (removed.error) return { error: removed.error };
 
   queueObjectivesSync(check.project.team_id as string);
   revalidatePath("/videos");

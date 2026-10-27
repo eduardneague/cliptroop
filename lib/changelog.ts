@@ -22,6 +22,20 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.40.0",
+    date: "2026-10-27",
+    title: "Select on cards, long videos like shorts, media kit templates",
+    changes: [
+      { kind: "fixed", text: "Selecting shorts on the table: the tick box stays under your pointer when you click it (the row used to shift as it was pressed)." },
+      { kind: "new", text: "Select works on the cards too, for shorts and long videos: a click anywhere on a card picks it, Shift picks everything in between." },
+      { kind: "new", text: "Masters can delete the shorts they've picked, right from the bar at the bottom. It asks first, then each one is struck through and taken off the list." },
+      { kind: "new", text: "Long videos get the same tools: a video's ⋯ exports its script as a PDF or a Word file, and masters move it to a step (with Undo). Select several to export them in one zip, move them, or delete them." },
+      { kind: "new", text: "Deleting several long videos at once needs your password, so nothing goes by accident, or by someone else using your account. Only masters can." },
+      { kind: "new", text: "Media kit → Who can open it: masters choose who else makes the media kit, the way they choose who sees revenue. The people let in get a notification. This replaces the Partnerships role; everyone who had it is let in." },
+      { kind: "new", text: "Media kit templates: save your setup under a name, as many as you like. Open one next time and change what you need. Update template keeps your changes in it; the template stays as it was until you do." },
+    ],
+  },
+  {
     version: "1.39.0",
     date: "2026-10-27",
     title: "Media kit: your own numbers, your own videos",

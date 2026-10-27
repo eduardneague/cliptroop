@@ -3,7 +3,8 @@
 import { useTransition } from "react";
 import { moveShortsStage, type StageMove, type StageMoves } from "@/app/(dashboard)/shorts/actions";
 import { useToast } from "@/components/ui/toast-provider";
-import { moveMessage } from "./bulk-text";
+import { moveMessage } from "@/lib/bulk-text";
+import { SHORT_STAGE_LABELS } from "./constants";
 
 /**
  * Shorts to a step (1.38.0): the row's ⋯ and shorts picked together. The toast offers Undo (each back where it was).
@@ -24,7 +25,7 @@ export function useMoveShorts() {
             return;
           }
           const to = moves.length && moves.every((m) => m.to === moves[0].to) ? moves[0].to : null;
-          const msg = moveMessage(r, to, opts.undo);
+          const msg = moveMessage(r, to ? SHORT_STAGE_LABELS[to] : null, opts.undo);
           if (!msg.ok) toast.error(msg.text);
           else if (opts.undo || !r.moved.length) toast.success(msg.text);
           else

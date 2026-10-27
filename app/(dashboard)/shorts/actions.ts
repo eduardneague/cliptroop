@@ -717,6 +717,40 @@ export async function moveShortsStage(moves: StageMove[]): Promise<Result<StageM
   return out;
 }
 
+/** 1.40.0: what deleting several shorts did: the ones gone, and the ones that couldn't go (and why). */
+export type ShortsDeleted = { deleted: { id: string; number: number }[]; failed: { id: string; number: number | null; error: string }[] };
+
+/**
+ * 1.40.0: several shorts deleted at once, from the list's selection (the owner: "i want to be able to delete as well
+ * from the select thing"), after the list has asked (pick-shorts.tsx). Masters only, as one by one (the database's
+ * rule, 0026: anyone else deletes nothing and is told so); the other auto-scheduled shorts re-date to close the gaps
+ * as they do for one. At most 200 at once.
+ */
+export async function deleteShorts(ids: string[]): Promise<Result<ShortsDeleted>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!Array.isArray(ids) || ids.length === 0) return { deleted: [], failed: [] };
+  if (ids.length > 200) return { error: "Delete at most 200 shorts at once." };
+  if (!ids.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) return { error: "Couldn't delete those shorts. Refresh and try again." };
+  const wanted = [...new Set(ids)];
+  const { data: rows } = await supabase.from("short_videos").select("id, team_id, entry_number").in("id", wanted);
+  const { data, error } = await supabase.from("short_videos").delete().in("id", wanted).select("id");
+  if (error) return { error: friendlyDbError(error, "Couldn't delete them. Try again.") };
+  const gone = new Set((data ?? []).map((r) => r.id as string));
+  const out: ShortsDeleted = { deleted: [], failed: [] };
+  for (const id of wanted) {
+    const r = (rows ?? []).find((x) => x.id === id);
+    const number = (r?.entry_number as number | undefined) ?? null;
+    if (gone.has(id)) out.deleted.push({ id, number: number ?? 0 });
+    else out.failed.push({ id, number, error: r ? "Only the master can delete shorts." : "Not found." });
+  }
+  if (out.deleted.length) {
+    revalidateShort();
+    for (const t of new Set((rows ?? []).filter((r) => gone.has(r.id as string)).map((r) => r.team_id as string))) queueObjectivesSync(t);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Posting (master / scheduler)
 // ---------------------------------------------------------------------------

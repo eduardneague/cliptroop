@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DownloadIcon, ExpandIcon, LockIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
@@ -16,11 +16,14 @@ import { loadKitMeasure } from "../lib/fonts";
 import { renderKitPdf } from "../lib/render-pdf";
 import type { Measure } from "../lib/scene";
 import type { MediaKitNumbers } from "../lib/numbers";
-import { readKitSettings, type MediaKitSettings } from "../lib/settings";
+import { readKitSettings, type KitTemplateInfo, type MediaKitSettings } from "../lib/settings";
+import type { KitPerson } from "../lib/access";
 import { KitPageSvg, KIT_FONT_CSS } from "./kit-page-svg";
 import { KitPresenter, type PresenterStart } from "./kit-presenter";
 import { AboutPart, AudiencePart, ContactPart, CoverPart, GlancePart, KitPart, LookPart, PartnersPart, PlatformsPart, RatesPart, VideosPart, type KitForm } from "./kit-sections";
 import { barBottom, pageAnchorFor, useKitSync, useWide } from "./use-kit-sync";
+import { KitTemplates, type TemplateBase } from "./kit-templates";
+import { KitAccess } from "./kit-access";
 
 /*
  * Analytics → Media kit (1.37.0): what a sponsor asks for, made from the team's own numbers. Set it up on the left,
@@ -29,8 +32,11 @@ import { barBottom, pageAnchorFor, useKitSync, useWide } from "./use-kit-sync";
  * 1.39.0: the form follows the kit's pages, part by part, and keeps up with the preview (use-kit-sync.ts): the part
  * you're at lights up with its page, a click on a page takes you to its part. Every part with numbers can be typed in
  * (Manual) instead of read (Auto); the videos on the cover and the videos page can be picked; the cover's wall comes in
- * three shapes; the kit shows full screen (kit-presenter.tsx). Masters and the people with the Partnerships role open
- * it and save it (access.ts). On a phone, the download sits in a bar of its own above the tab bar.
+ * three shapes; the kit shows full screen (kit-presenter.tsx). On a phone, the download sits in a bar of its own above
+ * the tab bar.
+ *
+ * 1.40.0: Masters and the people they let in open it and save it (access.ts; Masters choose who: kit-access.tsx), and
+ * the setup is kept as named templates, to open next time and change what's needed (kit-templates.tsx).
  */
 
 export type MediaKitTabData =
@@ -48,6 +54,16 @@ export type MediaKitTabData =
       /** The numbers for the saved period, sent after the page. */
       numbers: Promise<{ data?: MediaKitNumbers; error?: string }>;
       latest: string;
+      /** 1.40.0: who's looking (their id). */
+      me: string;
+      /** The team's templates, newest change first; `templatesReady`: migration 0118 has run. */
+      templates: KitTemplateInfo[];
+      templatesReady: boolean;
+      /** The template the setup was opened from, as it is now (to tell whether the setup differs from it). */
+      base: TemplateBase | null;
+      /** Masters: the team, and who of it they've let in (null for everyone else); `accessReady`: migration 0117 has run. */
+      access: KitPerson[] | null;
+      accessReady: boolean;
     };
 
 export function MediaKitTab({ data }: { data: MediaKitTabData }) {
@@ -58,7 +74,7 @@ export function MediaKitTab({ data }: { data: MediaKitTabData }) {
           <LockIcon className="w-6 h-6" />
         </span>
         <p className="text-[15px] font-semibold mt-3">The media kit is private</p>
-        <p className="text-[13px] text-ink-soft mt-1 max-w-sm">It has the team&rsquo;s rates, so only masters and the people with the Partnerships role open it. A master gives the role in Team → Members.</p>
+        <p className="text-[13px] text-ink-soft mt-1 max-w-sm">It has the team&rsquo;s rates, so only masters and the people they choose open it. Ask a master to let you in.</p>
       </div>
     );
   return <Builder {...data} />;
@@ -81,6 +97,8 @@ function Builder(props: BuilderProps) {
   const [view, setView] = useState<"setup" | "preview">("setup");
   const [making, setMaking] = useState<{ kit: number; step: string } | null>(null);
   const [present, setPresent] = useState<PresenterStart | null>(null);
+  /** A template opened: the form is drawn afresh (nothing half-typed carries over). */
+  const [formKey, setFormKey] = useState(0);
   const editorRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const wide = useWide();
@@ -119,6 +137,15 @@ function Builder(props: BuilderProps) {
       document.removeEventListener("visibilitychange", renew);
     };
   }, [storedCover, renewCover]);
+
+  // 1.40.0: a template opened (kit-templates.tsx): its setup on screen, with a fresh link to its photo. It's saved as
+  // the setup a moment later, as any change is; the numbers follow its period.
+  const replace = useCallback((next: MediaKitSettings, cover: string | null) => {
+    coverSigned.current = Date.now();
+    setCoverUrl(cover);
+    setS(next);
+    setFormKey((k) => k + 1);
+  }, []);
 
   // The numbers: the saved period's came with the page; another period is asked for (the latest asked wins).
   const keyOf = (x: Pick<MediaKitSettings, "period" | "from" | "to">) => `${x.period}|${x.period === "custom" ? `${x.from}|${x.to}` : ""}`;
@@ -214,7 +241,7 @@ function Builder(props: BuilderProps) {
       const path = `${props.teamId}/cover-${Date.now()}-${safeFileName(file.name)}`;
       const { error } = await createClient().storage.from("media-kit").upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });
       if (error) {
-        toast.error(props.ready ? "Couldn't add the photo. Check your connection and try again (for the Partnerships role, migrations 0115 and 0116 come first)." : "Run migration 0114 first.");
+        toast.error(props.ready ? "Couldn't add the photo. Check your connection and try again (for people a master let in, migrations 0116 and 0117 come first)." : "Run migration 0114 first.");
         return;
       }
       setCoverUrl(URL.createObjectURL(file));
@@ -419,6 +446,10 @@ function Builder(props: BuilderProps) {
               <span className="text-ink-faint">Your changes save as you go.</span>
             )}
           </p>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <KitTemplates teamId={props.teamId} me={props.me} ready={props.templatesReady} s={s} deferred={deferred} initial={props.templates} initialBase={props.base} set={set} replace={replace} />
+            {props.access && <KitAccess teamId={props.teamId} me={props.me} ready={props.accessReady} people={props.access} />}
+          </div>
         </div>
         <div className="hidden lg:flex items-center gap-2.5">
           {kits && <span className="text-[12.5px] text-ink-faint mr-1">{kits.length > 1 ? `${kits.length} kits, ${pageCount} pages` : `${pageCount} pages`}</span>}
@@ -433,17 +464,19 @@ function Builder(props: BuilderProps) {
 
       <div className="grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] gap-6 items-start">
         <div ref={editorRef} className={`space-y-4 ${view === "setup" ? "" : "hidden lg:block"}`}>
-          <KitPart f={f} />
-          <LookPart f={f} />
-          <CoverPart f={f} />
-          <AboutPart f={f} />
-          {s.split === "together" && chosen.length > 1 && <GlancePart f={f} />}
-          <PlatformsPart f={f} />
-          <AudiencePart f={f} />
-          <VideosPart f={f} />
-          <PartnersPart f={f} />
-          <RatesPart f={f} />
-          <ContactPart f={f} />
+          <Fragment key={formKey}>
+            <KitPart f={f} />
+            <LookPart f={f} />
+            <CoverPart f={f} />
+            <AboutPart f={f} />
+            {s.split === "together" && chosen.length > 1 && <GlancePart f={f} />}
+            <PlatformsPart f={f} />
+            <AudiencePart f={f} />
+            <VideosPart f={f} />
+            <PartnersPart f={f} />
+            <RatesPart f={f} />
+            <ContactPart f={f} />
+          </Fragment>
         </div>
         <div
           ref={previewRef}

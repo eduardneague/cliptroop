@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { deleteShort, setShortDayLimit } from "@/app/(dashboard)/shorts/actions";
 import { useToast } from "@/components/ui/toast-provider";
 import { formatShortDate } from "./dates";
-import type { Away } from "./remove-animation";
+import type { Away } from "@/lib/remove-animation";
 
 /**
  * Delete a short. The queue pulls the next short in to fill the gap —

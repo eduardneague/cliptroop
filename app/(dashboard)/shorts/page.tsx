@@ -44,7 +44,8 @@ import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { MarkDoneButton } from "@/modules/short-videos/components/mark-done-button";
 import { ShortsRealtime } from "@/modules/short-videos/components/shorts-realtime";
 import { ShortsTable } from "@/modules/short-videos/components/shorts-table";
-import { PickButton, ShortsPicker } from "@/modules/short-videos/components/pick-shorts";
+import { PickShortsButton, ShortsPicker } from "@/modules/short-videos/components/pick-shorts";
+import { CardPick } from "@/components/ui/list-pick";
 import { splitHistory } from "@/modules/short-videos/lib/history";
 import { chunks, LIST_CHUNK } from "@/lib/chunks";
 import { setShortsViewMode } from "./view-mode-actions";
@@ -220,8 +221,8 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
         )}
       </div>
 
-      {/* 1.38.0: on the table, shorts can be picked together (export, move): pick-shorts.tsx. */}
-      <ShortsPicker items={isTable ? list.map((x) => ({ id: x.id, number: x.number, title: x.title, stage: x.stage })) : []} canMove={master}>
+      {/* Shorts picked together (pick-shorts.tsx): export; masters move and delete. 1.38.0 on the table; 1.40.0 on the cards too. */}
+      <ShortsPicker items={list.map((x) => ({ id: x.id, number: x.number, title: x.title, stage: x.stage }))} canMove={master} canDelete={master}>
       {/* One row at every screen size: stage chips, Filters, Select (the table), view toggle. */}
       <div className="flex items-center gap-2 mb-6">
         <div className="-ml-4 pl-4 sm:ml-0 sm:pl-0 flex-1 min-w-0 overflow-x-auto no-scrollbar">
@@ -246,7 +247,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
 
-        {isTable && shorts.length > 0 && <PickButton />}
+        {shorts.length > 0 && <PickShortsButton />}
         <ViewToggle
           value={isTable ? "table" : "grid"}
           cookie={SHORTS_VIEW_COOKIE}
@@ -386,17 +387,20 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
             return (
               <div
                 key={s.id}
+                data-card=""
+                data-item-id={s.id}
                 className="relative rounded-2xl border-2 border-line/10 bg-surface p-4 flex flex-col gap-3 hover:border-amber hover:shadow-[0_8px_24px_-8px_rgb(var(--amber)/0.35)] hover:-translate-y-0.5 transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="font-mono text-[12px] font-bold text-ink-faint tabular-nums">#{s.number}</span>
+                    <span data-card-num="" className="font-mono text-[12px] font-bold text-ink-faint tabular-nums">#{s.number}</span>
                     <ShortTypeBadge type={s.shortType} />
                   </span>
                   <ShortStagePill stage={s.stage} />
                 </div>
                 <Link
                   href={`/shorts/${s.id}`}
+                  data-row-title=""
                   className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']"
                 >
                   {s.title}
@@ -428,6 +432,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                     <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
                   </div>
                 )}
+                <CardPick id={s.id} label={`#${s.number} ${s.title}`} x={14} y={17} />
               </div>
             );
           })}

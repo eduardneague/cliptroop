@@ -157,6 +157,8 @@ export type MediaKitSettings = {
   /** The cover's wall: the best (off), or these. */
   coverPicks: VideoPicks;
   coverGrid: KitCoverGrid;
+  /** 1.40.0: the template this setup was opened from (media_kit_templates, migration 0118), or null. */
+  fromTemplate: string | null;
 };
 
 export const LIMITS = {
@@ -229,6 +231,7 @@ export function defaultKitSettings(): MediaKitSettings {
     videoPicks: { on: false, list: [] },
     coverPicks: { on: false, list: [] },
     coverGrid: "auto",
+    fromTemplate: null,
   };
 }
 
@@ -284,6 +287,7 @@ export function websiteUrl(v: string): string | null {
   return /^https?:\/\//i.test(s) ? s : `https://${s}`;
 }
 const ID = /^[a-z0-9]{1,12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A short id for a new package or quote. */
 export const newId = () => Math.random().toString(36).slice(2, 10) || "x";
 
@@ -475,7 +479,30 @@ export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitS
     videoPicks: readPicks(r.videoPicks, LIMITS.videoPicks),
     coverPicks: readPicks(r.coverPicks, LIMITS.coverPicks),
     coverGrid: r.coverGrid === "shorts" || r.coverGrid === "longs" || r.coverGrid === "mixed" ? r.coverGrid : "auto",
+    fromTemplate: typeof r.fromTemplate === "string" && UUID.test(r.fromTemplate) ? r.fromTemplate.toLowerCase() : null,
   };
+}
+
+// ---- 1.40.0: templates ----------------------------------------------------------------------------------------------
+// The owner: "i want to be able to set my things, then save it as a template. next time i can go into that template and
+// just modify a few things and so on, and i can save as many templates as i want". A template is a named copy of a
+// setup (media_kit_templates, migration 0118). Opening one puts it on screen (the setup saves as you go, as always) and
+// notes which it was; the template itself changes only when it's updated.
+
+export const TEMPLATE_NAME_MAX = 80;
+/** More than anyone needs (each up to 100 KB); past it, one is deleted to save another. */
+export const TEMPLATES_MAX = 200;
+/** A template in the list: its name, and when and by whom it last changed (`by`: their name, null if they left). */
+export type KitTemplateInfo = { id: string; name: string; updatedAt: string; byId: string | null; by: string | null };
+/** A template's name as it's kept: one line, no spaces around it, at most 80 characters ("" if nothing's left). */
+export const templateName = (v: unknown) => cleanText(v, TEMPLATE_NAME_MAX);
+/** What a template keeps: the setup, checked, without the note of where it came from. */
+export function templateSettings(raw: unknown, teamId?: string | null): MediaKitSettings {
+  return { ...readKitSettings(raw, teamId), fromTemplate: null };
+}
+/** The same setup (whatever template each came from, and however it was typed: both read the same way). */
+export function sameSetup(a: unknown, b: unknown, teamId?: string | null): boolean {
+  return JSON.stringify(templateSettings(a, teamId)) === JSON.stringify(templateSettings(b, teamId));
 }
 
 /** The price as people read it: "$2,500", "€1,200.50", "RON 3,000". */

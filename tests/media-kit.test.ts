@@ -9,11 +9,14 @@
 // "for the cover … long videos too, and a hybrid between longs and shorts, a cool grid"; "only masters and people who
 // have the sponsorship role … can access media kits" (Partnerships). Typed-in numbers are checked and laid over the
 // read ones; picked videos keep their order; the three walls; who opens it, here and in the database (0115, 0116).
+// 1.40.0: "as the master, i can set people who can see and create the media kit, i dont want it through a role, i want
+// it as a separate thing" (media_kit_access, 0117: the Partnerships role becomes it); "save templates … next time i can
+// go into that template and just modify a few things … as many templates as i want" (media_kit_templates, 0118).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
+import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, sameSetup, templateName, templateSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, TEMPLATE_NAME_MAX, TEMPLATES_MAX, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
 import { applyManual, audienceFrom, audienceFromRead, kitTotals, manualFromRead, parseAmount, parsePoints, pickedVideo, pointsText, toPicked, totalsFromRead, withManual } from "../modules/media-kit/lib/manual";
-import { canMakeMediaKit, KIT_ROLES } from "../modules/media-kit/lib/access";
+import { canMakeMediaKit, KIT_NO_ACCESS } from "../modules/media-kit/lib/access";
 import { pageAnchorFor } from "../modules/media-kit/components/use-kit-sync";
 import { addDaily, agesFrom, changePct, countriesFrom, gendersFrom, growthPct, isVertical, mean, profileUrl, ratePct, shares, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "../modules/media-kit/lib/numbers";
 import { big, dayRange, fitSize, pct, roundRect, shortDay, signedPct, smoothPath, wrap, PAGE_H, PAGE_W, type Measure, type Op } from "../modules/media-kit/lib/scene";
@@ -413,21 +416,23 @@ ok(outside2 === 0, `typed-in numbers and picked videos: every word inside its pa
 const actions = read("app/(dashboard)/analytics/media-kit-actions.ts");
 ok(/^"use server";/.test(actions) && !/export async function kitTeam/.test(actions) && !/export const/.test(actions), "server actions only (the team check isn't one; nothing else exported)");
 const loadFn = actions.slice(actions.indexOf("export async function loadMediaKitNumbers"), actions.indexOf("export async function saveMediaKit"));
-ok(/const team = await kitTeam\(supabase, teamId\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(loadFn), "numbers: only for the kit's people (Masters and Partnerships)");
+ok(/const team = await kitTeam\(supabase, teamId, user\.id\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(loadFn), "numbers: only for the kit's people (Masters and the people they let in)");
 const saveFn = actions.slice(actions.indexOf("export async function saveMediaKit"), actions.indexOf("export async function mediaKitCoverLink"));
-ok(/if \(!canMakeMediaKit\(membership\?\.roles\)\) return \{ error: KIT_NO_ACCESS \};/.test(saveFn) && /const settings = readKitSettings\(raw, teamId\);/.test(saveFn) && /upsert\(\{ team_id: teamId, settings \}, \{ onConflict: "team_id" \}\)/.test(saveFn), "saving: Masters and Partnerships, every field checked, one row per team");
-ok(/if \(error\.code === "42501"\) return \{ error: "Run migrations 0115 and 0116 first\." \};/.test(saveFn), "Partnerships before 0116: says which migrations to run");
-ok(/if \(isCoverPath\(old, teamId\) && old !== settings\.coverPath\) await supabase\.storage\.from\("media-kit"\)\.remove\(\[old\]\);/.test(saveFn), "a replaced photo is removed");
+ok(/if \(!\(await mayMakeMediaKit\(supabase, teamId, user\.id\)\)\.ok\) return \{ error: KIT_NO_ACCESS \};/.test(saveFn) && /const settings = readKitSettings\(raw, teamId\);/.test(saveFn) && /upsert\(\{ team_id: teamId, settings \}, \{ onConflict: "team_id" \}\)/.test(saveFn), "saving: Masters and the people they let in, every field checked, one row per team");
+ok(/if \(error\.code === "42501"\) return \{ error: "Run migrations 0116 and 0117 first\." \};/.test(saveFn), "someone let in before 0116 and 0117: says which migrations to run");
+ok(/if \(old !== settings\.coverPath\) await tidyCover\(supabase, teamId, old\);/.test(saveFn), "a replaced photo is tidied away");
 ok(/if \(!UUID\.test\(teamId\) \|\| !isCoverPath\(path, teamId\)\) return/.test(actions) && /createSignedUrl\(path, 3600\)/.test(actions), "the photo's link: the team's own file, for an hour");
 const searchFn = actions.slice(actions.indexOf("export async function searchKitVideos"));
-ok(/const team = await kitTeam\(supabase, teamId\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(searchFn) && /query\.trim\(\)\.slice\(0, 80\)/.test(searchFn) && /await findVideos\(teamId, q\)/.test(searchFn) && /KIT_PLATFORMS\.includes\(v\.platform as KitPlatform\) && !v\.noNumbers\)\.slice\(0, 40\)/.test(searchFn), "search: the kit's people, Analytics' own search, the four platforms, at most 40");
+ok(/const team = await kitTeam\(supabase, teamId, user\.id\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(searchFn) && /query\.trim\(\)\.slice\(0, 80\)/.test(searchFn) && /await findVideos\(teamId, q\)/.test(searchFn) && /KIT_PLATFORMS\.includes\(v\.platform as KitPlatform\) && !v\.noNumbers\)\.slice\(0, 40\)/.test(searchFn), "search: the kit's people, Analytics' own search, the four platforms, at most 40");
 const gather = read("modules/media-kit/lib/gather.ts");
-ok(/^import "server-only";/.test(gather) && /getMembership\(supabase, teamId\)/.test(gather) && /if \(!canMakeMediaKit\(membership\?\.roles\) \|\| !data\) return null;/.test(gather) && !/canViewRevenue/.test(gather) && /visibleRows\(/.test(gather), "the team check: Masters and Partnerships (revenue access alone no longer); the accounts connected now only");
+ok(/^import "server-only";/.test(gather) && /getMembership\(supabase, teamId\)/.test(gather) && /if \(!may\.ok \|\| !data\) return null;/.test(gather) && !/canViewRevenue/.test(gather) && /visibleRows\(/.test(gather), "the team check: Masters and the people they let in (revenue access alone no longer); the accounts connected now only");
+const mayFn = gather.slice(gather.indexOf("export async function mayMakeMediaKit"), gather.indexOf("export async function kitTeam"));
+ok(/if \(!membership \|\| !me\) return \{ ok: false \};/.test(mayFn) && /if \(master\) return \{ ok: true, master, userId: me\.id \};/.test(mayFn) && /from\("media_kit_access"\)\.select\("user_id"\)\.eq\("team_id", teamId\)\.eq\("user_id", me\.id\)\.maybeSingle\(\)/.test(mayFn) && /canMakeMediaKit\(membership\.roles, !error && !!data\)/.test(mayFn), "who may: an active member, a Master or let in (their own row; none or no table: not let in)");
 ok(/getAudience\(teamId, w\)/.test(gather) && /getAudienceBreakdowns\(teamId, w\)/.test(gather) && /getContent\(teamId, w\)/.test(gather), "the same reads as Analytics");
 ok(/as unknown as Record<string, unknown>\[\]/.test(gather), "a select built at run time read as plain fields (1.36.1)");
 ok(/pool\.size < 90/.test(gather) && /!vis\.platforms\.has\(v\.platform\)/.test(gather) && /pool: \[\.\.\.pool\.values\(\)\]/.test(gather), "the videos to pick from: the period's and the best ever, connected accounts only, at most 90");
 const page = read("app/(dashboard)/analytics/page.tsx");
-ok(/const kitAllowed = canMakeMediaKit\(roles\);/.test(page) && /case "mediakit":\s+data = \{ tab, kit: kitAllowed \? await mediaKitData\(/.test(page) && /: \{ allowed: false \} \};/.test(page) && /kitAllowed=\{kitAllowed\}/.test(page), "the tab: the builder for Masters and Partnerships, a locked card for the rest");
+ok(/mayMakeMediaKit\(supabase, teamId\),/.test(page) && /kit: kitAccess\.ok\s+\? await mediaKitData\(/.test(page) && /\{ id: kitAccess\.userId, master: kitAccess\.master \}\)\s+: \{ allowed: false \},/.test(page) && /kitAllowed=\{kitAccess\.ok\}/.test(page) && !/canMakeMediaKit/.test(page), "the tab: the builder for Masters and the people they let in, a locked card for the rest");
 const view = read("modules/analytics/components/analytics-view.tsx");
 ok(/const locked = \(id === "revenue" && !revenueAllowed\) \|\| \(id === "mediakit" && !kitAllowed\);/.test(view) && /mediakit: "Media kit"/.test(view) && /"production", "mediakit"\];/.test(view), "Analytics → Media kit, locked for everyone else");
 ok(/const MediaKitTab = dynamic\(\(\) => import\("@\/modules\/media-kit\/components\/media-kit-tab"\)\.then\(\(m\) => m\.MediaKitTab\), \{\s+ssr: false/.test(view), "its builder loads with the tab, in the browser");
@@ -436,7 +441,7 @@ ok(/\["mediakit", "Media kit", "media kit sponsors/.test(read("lib/search/catalo
 const tab = read("modules/media-kit/components/media-kit-tab.tsx");
 ok(/buildKits\(nums, readKitSettings\(deferred, props\.teamId\), measure, images\)/.test(tab) && /buildKits\(nums, readKitSettings\(s, props\.teamId\), measure,/.test(tab), "the preview and the download both lay out the checked setup");
 ok(/if \(!props\.ready\) return;/.test(tab) && /await saveMediaKit\(props\.teamId, s\)/.test(tab) && !/canSave/.test(tab), "saved as you go, by everyone who opens it");
-ok(/only masters and the people with the Partnerships role open it\. A master gives the role in Team → Members\./.test(tab), "the locked card says who opens it and where the role is given");
+ok(/only masters and the people they choose open it\. Ask a master to let you in\./.test(tab) && !/Partnerships role/.test(tab), "the locked card says who opens it and who to ask");
 ok(/await mediaKitCoverLink\(props\.teamId, coverPath\)/.test(tab) && /storedCover \? \(\(await renewCover\(\)\) \?\? coverUrl\)/.test(tab) && /const COVER_RENEW_MS = 45 \* 60_000;/.test(tab), "a stored photo's link is signed again before its hour is up, and for a download");
 ok(/createClient\(\)\.storage\.from\("media-kit"\)\.upload\(path, file/.test(tab) && /const path = `\$\{props\.teamId\}\/cover-/.test(tab), "the photo goes to the team's folder");
 ok(/lg:sticky lg:top-\[calc\(var\(--shell-top,3\.5rem\)\+1rem\)\] lg:max-h-\[calc\(100dvh-var\(--shell-top,3\.5rem\)-2rem\)\]/.test(tab) && /lg:overscroll-contain/.test(tab), "the preview sticks under the app's top bar (not behind it) and keeps its scrolling to itself");
@@ -446,13 +451,22 @@ const pdf = read("modules/media-kit/lib/render-pdf.ts");
 ok(/Subtype: "Link"/.test(pdf) && /URI: lib\.PDFString\.of\(op\.url\)/.test(pdf) && /pdf\.setTitle/.test(pdf) && /embedPdfFonts\(pdf, fontkit\)/.test(pdf), "the PDF: links, its title, the app's fonts");
 ok(/from "@\/lib\/pdf-kit"/.test(read("modules/analytics/export/build-pdf.ts")), "the export for Claude shares the PDF loader");
 
-// Who opens it (1.39.0).
-ok(same(KIT_ROLES, ["master", "partnerships"]) && canMakeMediaKit(["master"]) && canMakeMediaKit(["editor", "partnerships"]) && !canMakeMediaKit(["editor", "publisher", "scripter"]) && !canMakeMediaKit([]) && !canMakeMediaKit(null) && !canMakeMediaKit(undefined), "the kit: Masters and Partnerships, nobody else");
+// Who opens it (1.40.0: a Master's choice, not a role).
+ok(canMakeMediaKit(["master"], false) && canMakeMediaKit(["editor"], true) && canMakeMediaKit([], true) && !canMakeMediaKit(["editor", "publisher", "scripter"], false) && !canMakeMediaKit([], false) && !canMakeMediaKit(null, true) && !canMakeMediaKit(undefined, true), "the kit: Masters, and whoever a Master let in while they're on the team; nobody else");
+ok(!canMakeMediaKit(["partnerships"], false), "the old Partnerships role alone opens nothing");
+ok(KIT_NO_ACCESS === "Only masters and the people they choose can open the media kit.", "what someone else is told");
 const roles = read("lib/permissions/roles.ts");
-ok(/\{ id: "partnerships", name: "Partnerships", colorVar: "--coral", stages: \[\] as PipelineStage\[\] \}/.test(roles), "the Partnerships role: its name, a colour, no step of a video");
-ok(/alter type role_type add value if not exists 'partnerships';/.test(read("supabase/migrations/0115_partnerships_role.sql")), "0115: the role in the database");
+ok(!/id: "partnerships"/.test(roles), "no Partnerships role to give any more");
+ok(/alter type role_type add value if not exists 'partnerships';/.test(read("supabase/migrations/0115_partnerships_role.sql")), "0115 as it ran (never changed)");
 const m116 = read("supabase/migrations/0116_media_kit_partnerships.sql");
-ok(/mr\.role in \('master', 'partnerships'\)/.test(m116) && /security definer/.test(m116) && /revoke all on function media_kit_team_ids\(\) from public, anon;/.test(m116) && (m116.match(/create policy/g) ?? []).length === 7 && (m116.match(/media_kit_team_ids\(\)/g) ?? []).length >= 9, "0116: the setup's three rules and the photo's four, through Masters and Partnerships");
+ok(/mr\.role in \('master', 'partnerships'\)/.test(m116) && (m116.match(/create policy/g) ?? []).length === 7 && (m116.match(/media_kit_team_ids\(\)/g) ?? []).length >= 9, "0116 as it ran: the setup's three rules and the photo's four go through media_kit_team_ids()");
+const m117 = read("supabase/migrations/0117_media_kit_access.sql");
+ok(/create table if not exists media_kit_access \(/.test(m117) && /primary key \(team_id, user_id\)/.test(m117) && /create index if not exists media_kit_access_user_idx on media_kit_access \(user_id\);/.test(m117) && /create index if not exists media_kit_access_granted_by_idx on media_kit_access \(granted_by\);/.test(m117), "0117: one row per person and team, every reference indexed");
+ok(/revoke all on media_kit_access from anon, authenticated;\s+grant select, insert, delete on media_kit_access to authenticated;/.test(m117) && (m117.match(/create policy/g) ?? []).length === 3 && /using \(user_id = \(select auth\.uid\(\)\) or team_id in \(select my_master_team_ids\(\)\)\);/.test(m117) && /tm\.status = 'active'\)\s+\);/.test(m117), "0117: the person and Masters see it, Masters give it (to someone active on the team) and take it away; nobody changes it");
+ok(/new\.granted_by := coalesce\(auth\.uid\(\), new\.granted_by\);\s+new\.granted_at := now\(\);/.test(m117), "0117: who gave it and when are the database's");
+ok(/mr\.role = 'master'\s+union\s+select ma\.team_id\s+from media_kit_access ma\s+join team_members tm on tm\.team_id = ma\.team_id and tm\.user_id = ma\.user_id and tm\.status = 'active'/.test(m117) && !/'partnerships'\)/.test(m117.slice(m117.indexOf("create or replace function media_kit_team_ids"), m117.indexOf("create or replace function media_kit_role_to_access"))), "0117: media_kit_team_ids() is Masters and the people let in, while active (no role)");
+ok(/after delete on team_members/.test(m117) && /delete from media_kit_access where team_id = old\.team_id and user_id = old\.user_id;/.test(m117), "0117: leaving the team takes it away");
+ok(/delete from member_roles where role = 'partnerships';/.test(m117) && /array_remove\(proposed_roles, 'partnerships'::role_type\)/.test(m117) && /delete from role_colors where role = 'partnerships';/.test(m117) && /on conflict \(team_id, user_id\) do nothing;/.test(m117) && /revoke all on function media_kit_role_to_access\(\) from public, anon, authenticated;\s+select media_kit_role_to_access\(\);/.test(m117), "0117: whoever had Partnerships is let in, and the role goes from members, invites and colours (safe to run again)");
 
 // The form and the preview find each other (1.39.0).
 ok(pageAnchorFor("kit") === "cover" && pageAnchorFor("look") === "cover" && pageAnchorFor("platform:tiktok") === "platform:tiktok" && pageAnchorFor("rates") === "rates", "the channels and the look show the cover; every other part its own page");
@@ -462,6 +476,69 @@ const anchors = new Set(one.pages.map((p) => p.anchor));
 ok(one.pages.every((p) => p.anchor) && same([...anchors], ["cover", "about", "glance", "platform:youtube", "platform:instagram", "platform:tiktok", "audience:youtube", "audience:tiktok", "videos", "partners", "rates", "contact"]), `every page says which part makes it (${[...anchors].join(", ")})`);
 const sync = read("modules/media-kit/components/use-kit-sync.ts");
 ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handled\.current < 1200/.test(sync) && /motionReduced\(\) \? "auto" : "smooth"/.test(sync) && /addEventListener\("focusin"/.test(sync), "side by side from lg; the preview left alone just after it's scrolled by hand; no smooth scrolling when motion is off; the part you type in");
+
+// --- Templates (1.40.0) -----------------------------------------------------------------------------------------------
+{
+  const T1 = "50000000-0000-4000-8000-0000000118a1";
+  const fromT = readKitSettings({ ...d, title: "Deals", fromTemplate: T1.toUpperCase() }, TEAM);
+  ok(fromT.fromTemplate === T1 && readKitSettings({ fromTemplate: "x" }).fromTemplate === null && readKitSettings({ fromTemplate: 7 }).fromTemplate === null && d.fromTemplate === null, "the template a setup came from: a real id (lower case), else none");
+  const kept = templateSettings({ ...fromT, coverPath: `${TEAM}/cover-1.jpg`, title: "  Deals  " }, TEAM);
+  ok(kept.fromTemplate === null && kept.title === "Deals" && kept.coverPath === `${TEAM}/cover-1.jpg`, "a template keeps the setup, checked, without where it came from");
+  ok(templateSettings({ coverPath: "10000000-0000-4000-8000-0000000114b0/cover-1.jpg" }, TEAM).coverPath === null, "another team's photo isn't kept");
+  ok(sameSetup({ ...d, fromTemplate: T1 }, d, TEAM) && sameSetup({ ...d, title: "Deals " }, { ...d, title: "Deals" }, TEAM), "the same setup: whatever template it came from, however it was typed");
+  ok(!sameSetup({ ...d, title: "Deals" }, d, TEAM) && !sameSetup({ ...d, rates: { ...d.rates, show: true } }, d, TEAM) && !sameSetup({ ...d, period: "90d" }, d, TEAM), "any real change counts (the period too)");
+  ok(templateName("  Brand   deals\n2027 ") === "Brand deals 2027" && templateName(42) === "" && templateName("   ") === "" && Array.from(templateName("é".repeat(100))).length === TEMPLATE_NAME_MAX && TEMPLATE_NAME_MAX === 80, "a name: one line, no spaces around it, at most 80 characters");
+  ok(TEMPLATES_MAX >= 100, "as many templates as anyone needs");
+}
+{
+  const fnBody = (src: string, name: string) => {
+    const at = src.indexOf(`export async function ${name}(`);
+    const next = src.indexOf("\nexport async function ", at + 10);
+    return at < 0 ? "" : src.slice(at, next < 0 ? src.length : next);
+  };
+  const tpl = actions.slice(actions.indexOf("// ---- 1.40.0: templates"));
+  const caller = tpl.slice(tpl.indexOf("async function templateCaller"), tpl.indexOf("export async function createMediaKitTemplate"));
+  ok(/supabase\.auth\.getUser\(\)/.test(caller) && /if \(!\(await mayMakeMediaKit\(supabase, teamId, user\.id\)\)\.ok\) return \{ error: KIT_NO_ACCESS \};/.test(caller), "every template action: the person, and the kit theirs to make");
+  for (const fn of ["createMediaKitTemplate", "openMediaKitTemplate", "updateMediaKitTemplate", "renameMediaKitTemplate", "deleteMediaKitTemplate"])
+    ok(/const c = await templateCaller\(teamId\);\s+if \("error" in c\) return \{ error: c\.error \};/.test(fnBody(tpl, fn)), `${fn}: who's asking, first`);
+  const create = fnBody(tpl, "createMediaKitTemplate");
+  ok(/const nm = templateName\(name\);\s+if \(!nm\) return \{ error: "Give the template a name\." \};/.test(create) && /if \(\(count \?\? 0\) >= TEMPLATES_MAX\)/.test(create) && /insert\(\{ team_id: teamId, name: nm, settings: templateSettings\(raw, teamId\) \}\)/.test(create), "a new template: a name, the setup checked (no note of where it came from), within the most a team keeps");
+  ok(/if \(e\.code === "23505"\) return `There's already a template called “\$\{name \?\? "that"\}”\. Pick another name\.`;/.test(tpl) && /if \(noTemplatesYet\(e\)\) return "Run migration 0118 first\.";/.test(tpl), "a name in use, or no migration yet: said plainly");
+  const open = fnBody(tpl, "openMediaKitTemplate");
+  ok(/\.eq\("id", id\)\.eq\("team_id", teamId\)\.maybeSingle\(\)/.test(open) && /fromTemplate: id\.toLowerCase\(\)/.test(open) && /createSignedUrl\(settings\.coverPath, 3600\)/.test(open) && /if \(!data\) return \{ error: "That template was deleted\." \};/.test(open), "opening: the team's own template, noted as where the setup came from, with its photo's link");
+  const update = fnBody(tpl, "updateMediaKitTemplate");
+  ok(/\.update\(\{ settings \}\)\.eq\("id", id\)\.eq\("team_id", teamId\)\.eq\("updated_at", since\)/.test(update) && /Someone changed “\$\{before\.name\}” since you opened it\./.test(update), "updating: never over someone else's change made meanwhile");
+  ok(/const settings = templateSettings\(raw, teamId\);/.test(update) && /if \(old !== settings\.coverPath\) await tidyCover\(c\.supabase, teamId, old\);/.test(update), "updating: the setup checked; a photo it stopped using is tidied away");
+  ok(/const nm = templateName\(name\);/.test(fnBody(tpl, "renameMediaKitTemplate")) && /\.update\(\{ name: nm \}\)\.eq\("id", id\)\.eq\("team_id", teamId\)/.test(fnBody(tpl, "renameMediaKitTemplate")), "renaming: the name checked, the team's own template");
+  const del = fnBody(tpl, "deleteMediaKitTemplate");
+  ok(/\.delete\(\)\.eq\("id", id\)\.eq\("team_id", teamId\)\.select\("settings"\)/.test(del) && /if \(gone\) await tidyCover\(c\.supabase, teamId, gone\.settings\?\.coverPath\);/.test(del), "deleting: the team's own template, and its photo if nothing else has it");
+  const tidy = actions.slice(actions.indexOf("async function tidyCover"), actions.indexOf("const noTemplatesYet"));
+  ok(/if \(!isCoverPath\(path, teamId\)\) return;/.test(tidy) && /from\("media_kit_settings"\)\.select\("team_id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy) && /from\("media_kit_templates"\)\.select\("id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy), "a photo is removed only once the setup and every template have stopped using it");
+  ok(/if \(kit\.error \|\| kit\.data\?\.length\) return;\s+if \(tpl\.error \? !noTemplatesYet\(tpl\.error\) : tpl\.data\?\.length\) return;\s+await supabase\.storage\.from\("media-kit"\)\.remove\(\[path\]\);/.test(tidy), "kept whenever that can't be told");
+  const access = fnBody(actions, "setMediaKitAccess");
+  ok(/supabase\.auth\.getUser\(\)/.test(access) && /if \(!membership\?\.roles\.includes\("master"\)\) return \{ error: "Only masters choose who opens the media kit\." \};/.test(access), "letting people in: Masters only");
+  ok(/from\("media_kit_access"\)\.insert\(\{ team_id: teamId, user_id: userId \}\)/.test(access) && /from\("media_kit_access"\)\.delete\(\)\.eq\("team_id", teamId\)\.eq\("user_id", userId\)/.test(access), "letting in and taking away: one row");
+  ok(/if \(!error && userId !== user\.id\)/.test(access) && /kind: "media_kit_access"/.test(access) && /href: "\/analytics\?tab=mediakit"/.test(access), "whoever's let in is told (not yourself), and the notification opens the kit");
+  ok(/case "media_kit_access":/.test(read("components/ui/notification-cards.tsx")), "the bell says it");
+  ok(/me\.master \? supabase\.from\("media_kit_access"\)\.select\("user_id"\)\.eq\("team_id", teamId\) : Promise\.resolve\(null\)/.test(gather) && /let access: KitPerson\[\] \| null = null;\s+if \(me\.master\)/.test(gather), "only Masters get the list of who's in");
+  ok(/from\("media_kit_templates"\)\.select\("id, name, updated_at, updated_by"\)\.eq\("team_id", teamId\)\.order\("updated_at", \{ ascending: false \}\)\.limit\(TEMPLATES_MAX\)/.test(gather) && /templatesReady: !tpl\.error/.test(gather), "the templates: the team's, newest change first, without their setups (one's read when it's opened)");
+
+  const tt = read("modules/media-kit/components/kit-templates.tsx");
+  ok(/const changed = !!current && \(base\?\.id !== current\.id \|\| nowKey !== baseKey\);/.test(tt) && /\{changed && current && \(/.test(tt), "Update template: once the setup on screen differs from the template it came from");
+  ok(/const unkept = changed \|\| \(!current && nowKey !== emptyKey\);/.test(tt) && /if \(unkept\) \{\s+const ok = await confirm\(/.test(tt), "opening a template over a setup that's kept nowhere asks first");
+  ok(/updateMediaKitTemplate\(teamId, current\.id, s, base\?\.id === current\.id \? base\.updatedAt : current\.updatedAt\)/.test(tt), "updating says which version it changes");
+  ok(/title: `Delete “\$\{t\.name\}”\?`[\s\S]{0,260}danger: true/.test(tt), "deleting a template asks first");
+  ok(/if \(e\.key === "Escape"\) \{\s+e\.preventDefault\(\);/.test(tt), "Esc while renaming leaves the name, not the window");
+  ok(/if \(s\.fromTemplate === id\) set\(\{ fromTemplate: null \}\);/.test(tt), "the template on screen deleted: the setup stays, from no template");
+  ok(/<KitTemplates teamId=\{props\.teamId\}/.test(tab) && /\{props\.access && <KitAccess /.test(tab) && /<Fragment key=\{formKey\}>/.test(tab) && /coverSigned\.current = Date\.now\(\);\s+setCoverUrl\(cover\);\s+setS\(next\);\s+setFormKey\(\(k\) => k \+ 1\);/.test(tab), "the builder: templates for everyone, who's in for Masters; a template opened draws the form afresh with its photo");
+  const ka = read("modules/media-kit/components/kit-access.tsx");
+  ok(/const ok = await confirm\(/.test(ka) && /confirmLabel: "Take it away", danger: true/.test(ka) && /setMediaKitAccess\(teamId, p\.userId, !on\)/.test(ka) && /\{p\.master \? \(\s+<span className="text-\[12px\] text-ink-faint">Master<\/span>/.test(ka), "who's in: Masters always, a switch for the rest, asked first");
+
+  const m118 = read("supabase/migrations/0118_media_kit_templates.sql");
+  ok(/create unique index if not exists media_kit_templates_name_idx on media_kit_templates \(team_id, lower\(name\)\);/.test(m118) && /check \(char_length\(name\) between 1 and 80 and name = btrim\(name\)\)/.test(m118) && /octet_length\(settings::text\) <= 100000/.test(m118), "0118: a name once per team whatever its case, 1 to 80 characters; a setup of 100 KB at most");
+  ok((m118.match(/create policy/g) ?? []).length === 4 && (m118.match(/team_id in \(select media_kit_team_ids\(\)\)/g) ?? []).length === 5 && /grant select, insert, update, delete on media_kit_templates to authenticated;/.test(m118), "0118: the kit's people read, add, change and delete them");
+  ok(/new\.team_id := old\.team_id;\s+new\.created_by := old\.created_by;\s+new\.created_at := old\.created_at;/.test(m118) && /new\.updated_by := coalesce\(auth\.uid\(\), new\.updated_by\);\s+new\.updated_at := now\(\);/.test(m118), "0118: who and when are the database's; a template stays on its team");
+}
 
 if (fails) {
   console.log(`${fails} FAILED`);

@@ -355,6 +355,13 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>{m.actor?.name}</b> let you see <b>{m.team?.name}</b>&rsquo;s revenue in Analytics.
         </>
       );
+    // 1.40.0: let into the media kit (Analytics → Media kit → Who can open it).
+    case "media_kit_access":
+      return (
+        <>
+          <b>{m.actor?.name}</b> let you make <b>{m.team?.name}</b>&rsquo;s media kit in Analytics.
+        </>
+      );
     case "app_alert":
       return (
         <>

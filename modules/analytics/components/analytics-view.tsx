@@ -93,7 +93,7 @@ export function AnalyticsView({
   /** The morning copy was missed and a catch-up just started (this page refreshes itself when it's likely done). */
   catchingUp?: boolean;
   revenueAllowed: boolean;
-  /** Masters and Partnerships: the media kit (1.39.0). */
+  /** The media kit: Masters and the people they let in (1.40.0). */
   kitAllowed?: boolean;
   /** The last day with numbers (the range bar's custom panel). */
   latest: string;
@@ -361,7 +361,7 @@ export function AnalyticsView({
       <nav className="relative flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
         {TAB_ORDER.map((id) => {
           const on = id === (pending?.tab ?? data.tab);
-          // Revenue: the people who see it. The media kit: Masters and Partnerships (1.39.0).
+          // Revenue: the people who see it. The media kit: Masters and the people they let in (1.40.0).
           const locked = (id === "revenue" && !revenueAllowed) || (id === "mediakit" && !kitAllowed);
           return (
             <Link

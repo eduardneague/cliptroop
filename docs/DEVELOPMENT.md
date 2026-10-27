@@ -1483,21 +1483,55 @@ in `modules/media-kit/`:
   Another period asks for its numbers (`loadMediaKitNumbers`); the saved
   period's come with the page.
 
-Who (1.39.0): the team's Masters and the people with the Partnerships role
-(`lib/permissions/roles.ts`, id `partnerships`, no step of a video; migration
-0115 adds it to `role_type`). `modules/media-kit/lib/access.ts`
-(`canMakeMediaKit`) decides it for the page, the tab's lock and the server
-actions; in the database `media_kit_team_ids()` (0116) does, for
-`media_kit_settings` (read, start, change) and the `media-kit` bucket (read,
-add, replace, remove). Revenue access alone no longer opens it (it did in
-1.37.0, through 0114's rules, which 0116 replaces). `updated_at` /
-`updated_by` are set by the database. The cover photo goes from the browser
-to the private `media-kit` bucket (`<team id>/cover-…`, pictures only, 5 MB);
-the page signs it for an hour, and the builder signs it again
-(`mediaKitCoverLink`) after 45 minutes, on coming back to the page, and
-before a download, so a page left open still puts the photo in the PDF.
-Saving a setup that no longer uses a photo removes it; deleting the team
-removes its photos.
+Who (1.40.0): the team's Masters, and the people a Master lets in, as with
+revenue (the owner: "i dont want it through a role, i want it as a separate
+thing"). `media_kit_access` (0117: team, person, who let them in and when,
+set by the database; the person and Masters see it, Masters add and remove
+it, only for someone active on the team; it counts only while they are, and
+leaving the team removes it). `modules/media-kit/lib/access.ts`
+(`canMakeMediaKit(roles, granted)`, pure) and `mayMakeMediaKit` in
+`lib/gather.ts` (an active Master, or their own `media_kit_access` row;
+before 0117, Masters only) decide it for the page, the tab's lock and every
+server action; in the database `media_kit_team_ids()` (0116, redefined by
+0117: Masters and the people let in, while active) does, for
+`media_kit_settings` (read, start, change), `media_kit_templates` and the
+`media-kit` bucket (read, add, replace, remove). Masters choose in the
+builder's "Who can open it" (`components/kit-access.tsx`: a switch per
+person, asked first, `setMediaKitAccess`, a `media_kit_access`
+notification). 1.39.0's Partnerships role is gone from the app
+(`lib/permissions/roles.ts`); 0117's `media_kit_role_to_access()` let in
+whoever had it and took it off members, pending invites and role colours
+(the value stays in `role_type`: PostgreSQL can't drop one). Revenue access
+alone never opens it (it did in 1.37.0, through 0114's rules).
+`updated_at` / `updated_by` are set by the database. The cover photo goes
+from the browser to the private `media-kit` bucket (`<team id>/cover-…`,
+pictures only, 5 MB); the page signs it for an hour, and the builder signs
+it again (`mediaKitCoverLink`) after 45 minutes, on coming back to the page,
+and before a download, so a page left open still puts the photo in the PDF.
+A photo nothing uses any more (not the setup, not any template) is removed
+(`tidyCover`, media-kit-actions.ts; kept whenever that can't be told);
+deleting the team removes its photos.
+
+**Media kit templates (1.40.0).** The owner: "set my things, then save it as
+a template. next time i can go into that template and just modify a few
+things … as many templates as i want". `media_kit_templates` (0118): a named
+copy of a setup (the same JSON, checked by `templateSettings`, which also
+drops `fromTemplate`), a name of 1 to 80 characters with no spaces around it,
+each once per team whatever its case (`unique (team_id, lower(name))`), who
+made and changed it and when set by the database, never moved to another
+team; read, added, changed and deleted through `media_kit_team_ids()`. Up to
+200 a team (`TEMPLATES_MAX`, the app). The builder's Templates
+(`components/kit-templates.tsx`): save the setup on screen under a name,
+open one (`openMediaKitTemplate`: its setup and its photo's link; the form
+is drawn afresh), rename, delete. The setup notes which template it came
+from (`fromTemplate`, a uuid, in the saved setup); while the setup on screen
+differs from it (`sameSetup`), "Update template" keeps the changes in it
+(`updateMediaKitTemplate`, only if nobody changed the template since it was
+opened: `updated_at` compared in the update itself). Opening a template over
+a setup that's kept nowhere (changed since its template, or from none and
+not the defaults) asks first; "Go back to it" opens the same one as saved.
+The page reads the list (newest change first) without the setups, and only
+the setup of the one it came from.
 
 **Media kit: the form, Manual numbers, picked videos (1.39.0).**
 
@@ -1749,8 +1783,9 @@ filters; the cards view stays on the page). Every row's ⋯
 - **Export script as PDF / Word** (everyone: the whole team reads scripts,
   0034). `shortScriptsForExport(ids)` (`app/(dashboard)/shorts/export-actions.ts`,
   read as the person, 50 at a time) gives each short's script where it is
-  now (`flowStartDocId`, the document its Script page opens); the browser
-  makes the files (`modules/short-videos/lib/export-shorts.ts`): PDF with
+  now (`currentDoc`, `modules/scripts/lib/current-doc.ts`: the document its
+  Script page opens); the browser makes the files
+  (`modules/scripts/lib/export-many.ts`, 1.40.0 shared with long videos): PDF with
   `modules/scripts/lib/script-pdf.ts` (pdf-lib and the app's PDF fonts: A4,
   the print's 18 mm margins and 12 pt text, headings, lists, ticks, quotes,
   highlights, links that open, pictures, page breaks, page numbers; italics
@@ -1772,12 +1807,48 @@ filters; the cards view stays on the page). Every row's ⋯
   (`data-short-page`). Animations off: a fade. The `remove` sound plays as it
   goes.
 
-**Select** (the table only, `pick-shorts.tsx`): each row's number turns into
-a tick box over the whole row (`[data-selecting]`, `.row-pick`, globals.css),
-Shift picks a range, a day's box its day, Ctrl/Cmd+A all, Esc ends it. The
-bar at the foot exports each picked short's script (one zip, a file each:
-`lib/zip.ts`, stored, UTF-8 names, "(2)" for a name that's taken) or, for
-masters, moves them all to a step (asked first; Undo).
+**Select** (`pick-shorts.tsx` on `components/ui/list-pick.tsx`, 1.40.0 on the
+table and the cards, shared with long videos): each row's number (a card's
+corner, where its number was: `data-card-num`) turns into a tick box over
+the whole row or card (`[data-selecting]`, `.row-pick`, `.card-pick`,
+globals.css), Shift picks a range, a day's box its day, Ctrl/Cmd+A all, Esc
+ends it (not while a menu or a window has it). The tick areas don't press in
+(`scale: none`: the app's 0.97 press on a button as wide as a row slid its
+box ~20 px from under the pointer). The bar at the foot exports each picked
+short's script (one zip, a file each: `lib/zip.ts`, stored, UTF-8 names,
+"(2)" for a name that's taken) or, for masters, moves them all to a step
+(asked first, posted ones left out and said; Undo) and, 1.40.0, deletes
+them: asked first (in red, saying which), then `itemsAway`
+(`lib/remove-animation.ts`: rows a beat apart; cards struck, shrunk, then
+the cards after them glide into the gaps), then `deleteShorts(ids)` (at most
+200, as the person: the database lets only Masters; each that stayed says
+why and comes back). Rows and cards carry `data-item-id`. Words for all of
+it: `lib/bulk-text.ts` (`deleteMessage`, `deleteWhat`, each list's own
+nouns).
+
+**The long videos list: export, move, pick, delete (1.40.0).** As the shorts'
+(the owner: "i want this same logic to apply to long videos too … but for
+longs deleting in bulk should require you to input the password and only the
+master can do that"). A video's ⋯ (`modules/long-videos/components/video-menu.tsx`)
+is everyone's: Open, Export script as PDF / Word
+(`app/(dashboard)/videos/export-actions.ts` `longScriptsForExport`, read as
+the person, 50 at a time, Script documents only, where each is now:
+`currentDoc`); masters also Move to step (`moveLongVideosStage` in
+`videos/bulk-actions.ts`: a master of each video's own team, never to
+Posted, a posted video stays, compare-and-swap, Undo) and Delete… (the name
+typed, as before). Select on the table or the cards (`pick-videos.tsx`):
+export a zip ("Long video scripts (3 PDFs).zip"), move (masters, asked
+first), delete (masters): a window lists them and asks for the password
+(`deleteLongVideos(ids, password)`: the password first, with
+`lib/auth/confirm-password.ts`, the same check as deleting your account:
+the sign-in limits, a side client that keeps no session, a wrong one counted
+like a wrong sign-in; nothing is read or touched until it's right; then a
+master of each video's own team; each with its files, as one is deleted:
+`modules/long-videos/lib/remove-video.ts`, shared with `deleteProject`; at
+most 50). A wrong password says so in the window and empties the box. Right:
+the window closes, each is struck through and taken off, then the list is
+drawn again (the action leaves `/videos` alone so it isn't redrawn under the
+animation).
 
 **Scheduling queue (0027).** Auto-dated shorts are dated by the database
 (`recalc_short_queue`). The app only sets `planned_date` (a pin) or

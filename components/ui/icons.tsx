@@ -1081,3 +1081,13 @@ export function PhotoIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A page laid out, a heading across and a column (1.40.0): the media kit's templates. */
+export function TemplateIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.75" y="4.25" width="16.5" height="15.5" rx="2.5" />
+      <path d="M3.75 9.25h16.5M10 9.25v10.5" />
+    </Svg>
+  );
+}
