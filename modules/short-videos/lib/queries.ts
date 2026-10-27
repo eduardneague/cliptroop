@@ -327,7 +327,7 @@ export type ShortTeamSettings = {
 
 export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
   const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
-  const { data } = await supabase
+  const { data: row } = await supabase
     .from("teams")
     .select(
       "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description" +
@@ -335,6 +335,9 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     )
     .eq("id", teamId)
     .maybeSingle();
+  // 1.36.1: a select built at run time (the filmer only after 0113) isn't a literal the client can read the columns
+  // from, so it types the row as an error (CI's typecheck failed on 1.36.0): read it as plain fields.
+  const data = row as Record<string, unknown> | null;
   return {
     perDay: (data?.shorts_per_day as number) ?? 2,
     weekends: (data?.shorts_weekends as boolean) ?? true,
@@ -345,7 +348,7 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
     defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
     defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
-    defaultFilmer: ((data as Record<string, unknown> | null)?.default_short_filmer_member_id as string | null) ?? null,
+    defaultFilmer: (data?.default_short_filmer_member_id as string | null) ?? null,
     youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
   };
 }
