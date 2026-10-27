@@ -1540,6 +1540,41 @@ button { transition-timing-function: var(--ease-out); }
   background-image: linear-gradient(rgb(var(--amber) / 0.08), rgb(var(--amber) / 0.08));
 }
 
+/* Picking shorts on the table (1.38.0, modules/short-videos/components/pick-shorts.tsx): the row's number gives way to
+   its tick box, and the whole row is the tick box (on top of its link, toggles and ⋯ until you're done). */
+[data-selecting] [data-row-num] { visibility: hidden; }
+.row-pick {
+  position: absolute; inset: 0; z-index: 20; width: 100%; cursor: pointer;
+  background: transparent; transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.row-pick:hover { background: rgb(var(--ink) / 0.03); }
+.row-pick.is-on { background: rgb(var(--amber) / 0.08); box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.row-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.row-pick.is-on:focus-visible { box-shadow: inset 3px 0 0 rgb(var(--amber)), inset 0 0 0 2px rgb(var(--amber)); }
+.pick-box {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid rgb(var(--ink) / 0.3); background: rgb(var(--surface)); color: #fff;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.pick-box.is-on { background: rgb(var(--amber)); border-color: rgb(var(--amber)); }
+.pick-box.is-on svg { animation: pick-pop 0.24s var(--ease-spring) both; }
+.row-pick-box { position: absolute; left: 14px; top: 50%; margin-top: -9px; animation: pick-pop 0.22s var(--ease-spring) both; }
+.pick-count {
+  min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+  animation: pick-pop 0.24s var(--ease-spring) both;
+}
+@keyframes pick-pop { from { opacity: 0; transform: scale(0.55); } }
+
+/* A menu's second list (1.38.0: a short's ⋯ → Move to step) comes in from the right, and the first one back from the
+   left. */
+.menu-slide-in { animation: menu-slide 0.2s var(--ease-out) both; }
+.menu-back-in { animation: menu-back 0.2s var(--ease-out) both; }
+@keyframes menu-slide { from { opacity: 0; transform: translateX(12px); } }
+@keyframes menu-back { from { opacity: 0; transform: translateX(-12px); } }
+
 /* Off: the user's setting, or the device asks for less motion. */
 html[data-motion="off"] *,
 html[data-motion="off"] *::before,

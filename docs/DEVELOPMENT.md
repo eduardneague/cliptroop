@@ -1678,6 +1678,43 @@ only uses a new enum value once the statement that adds it is committed, so
 request) leaves the new columns out of every read and write, and Send to
 filming / Move to Filming say to run the migrations.
 
+**The shorts table: export, move, pick, delete (1.38.0).** The table is drawn
+by `modules/short-videos/components/shorts-table.tsx` (the page reads and
+filters; the cards view stays on the page). Every row's ⋯
+(`row-menu.tsx`) is everyone's now:
+- **Export script as PDF / Word** (everyone: the whole team reads scripts,
+  0034). `shortScriptsForExport(ids)` (`app/(dashboard)/shorts/export-actions.ts`,
+  read as the person, 50 at a time) gives each short's script where it is
+  now (`flowStartDocId`, the document its Script page opens); the browser
+  makes the files (`modules/short-videos/lib/export-shorts.ts`): PDF with
+  `modules/scripts/lib/script-pdf.ts` (pdf-lib and the app's PDF fonts: A4,
+  the print's 18 mm margins and 12 pt text, headings, lists, ticks, quotes,
+  highlights, links that open, pictures, page breaks, page numbers; italics
+  are Inter slanted), Word with `scriptDocxBlob` (`export-docx.ts`, the
+  script page's own export). Named like the script page's files
+  (`12-the-title.pdf`; 1.38.0: `safeFileName` drops accents instead of
+  turning them into dashes). A short with no script yet is left out, and the
+  toast says so.
+- **Move to step** (masters): `moveShortsStage(moves)` (shorts/actions.ts),
+  as Move to on a short's page (a correction, nobody is told, never to
+  Posted; Editing needs an editor; Filming its migrations), each move
+  compare-and-swap on its own step, each answering where it came from, so
+  the toast's Undo moves each back (`use-move-shorts.ts`).
+- **Delete** (masters): `rowAway` (`lib/remove-animation.ts`) strikes the
+  title through (the words' own boxes, a line a row), slides the row off and
+  closes the gap; the server is asked after the slide (so the list never
+  jumps half-way) and the row comes back if it fails. On a short's own page,
+  `pageAway` strikes its title and the page falls away before the list opens
+  (`data-short-page`). Animations off: a fade. The `remove` sound plays as it
+  goes.
+
+**Select** (the table only, `pick-shorts.tsx`): each row's number turns into
+a tick box over the whole row (`[data-selecting]`, `.row-pick`, globals.css),
+Shift picks a range, a day's box its day, Ctrl/Cmd+A all, Esc ends it. The
+bar at the foot exports each picked short's script (one zip, a file each:
+`lib/zip.ts`, stored, UTF-8 names, "(2)" for a name that's taken) or, for
+masters, moves them all to a step (asked first; Undo).
+
 **Scheduling queue (0027).** Auto-dated shorts are dated by the database
 (`recalc_short_queue`). The app only sets `planned_date` (a pin) or
 `schedule_mode = 'auto'`, and reorders through `move_short()`.

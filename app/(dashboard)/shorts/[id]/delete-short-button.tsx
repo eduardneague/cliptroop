@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useDeleteShort } from "@/modules/short-videos/lib/use-delete-short";
+import { pageAway } from "@/modules/short-videos/lib/remove-animation";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { TrashIcon } from "@/components/ui/icons";
 
@@ -17,7 +18,12 @@ export function DeleteShortButton({ id, number, title }: { id: string; number: n
       confirmLabel: "Delete short",
       danger: true,
     });
-    if (ok) del.run(id, number);
+    // 1.38.0: the title is struck through and the page falls away, then the list opens.
+    if (ok)
+      del.run(id, number, () => {
+        const page = document.querySelector<HTMLElement>("[data-short-page]");
+        return page ? pageAway(page) : null;
+      });
   }
 
   return (

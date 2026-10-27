@@ -202,8 +202,8 @@ async function blocks(D: Docx, nodes: Node[] | undefined, ctx: Ctx): Promise<Par
   return out;
 }
 
-/** Build and download a .docx of the script. */
-export async function exportScriptDocx(doc: Node, title: string, fileName: string) {
+/** The script as a .docx file (1.38.0: also for the shorts list's exports, one or many at once). */
+export async function scriptDocxBlob(doc: Node, title: string): Promise<Blob> {
   const D = await loadDocx();
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, LevelFormat, AlignmentType } = D;
   const numbering: Numbering = { lists: [] };
@@ -236,7 +236,12 @@ export async function exportScriptDocx(doc: Node, title: string, fileName: strin
       },
     ],
   });
-  const blob = await Packer.toBlob(document);
+  return Packer.toBlob(document);
+}
+
+/** Build and download a .docx of the script. */
+export async function exportScriptDocx(doc: Node, title: string, fileName: string) {
+  const blob = await scriptDocxBlob(doc, title);
   const url = URL.createObjectURL(blob);
   const a = window.document.createElement("a");
   a.href = url;

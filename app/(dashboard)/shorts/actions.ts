@@ -653,6 +653,70 @@ export async function moveShortStage(id: string, to: ShortStage): Promise<Result
   return {};
 }
 
+export type StageMove = { id: string; to: ShortStage };
+export type StageMoves = {
+  moved: { id: string; number: number; from: ShortStage; to: ShortStage }[];
+  failed: { id: string; number: number | null; error: string }[];
+};
+
+/**
+ * 1.38.0: shorts moved to a step from the list, one (the row's ⋯) or many (picked together), as the master's Move to
+ * on a short's page: a correction, nobody is notified, Posted only comes by itself. Each move on its own (one that
+ * can't go doesn't stop the others) and each says where it came from, so Undo puts it back.
+ */
+export async function moveShortsStage(moves: StageMove[]): Promise<Result<StageMoves>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!Array.isArray(moves) || moves.length === 0) return { moved: [], failed: [] };
+  if (moves.length > 200) return { error: "Move at most 200 shorts at once." };
+  if (!moves.every((m) => m && typeof m.id === "string" && /^[0-9a-f-]{36}$/i.test(m.id) && isShortStage(m.to)))
+    return { error: "Couldn't move those shorts. Refresh and try again." };
+  if (moves.some((m) => m.to === "posted")) return { error: "Posted is set automatically once every platform is marked posted." };
+
+  const ids = [...new Set(moves.map((m) => m.id))];
+  const { data: rows } = await supabase.from("short_videos").select("id, team_id, entry_number, stage, editor_member_id").in("id", ids);
+  const filming = moves.some((m) => m.to === "filming") ? await hasShortFilming() : true;
+
+  const out: StageMoves = { moved: [], failed: [] };
+  const teams = new Set<string>();
+  for (const m of moves) {
+    const s = (rows ?? []).find((r) => r.id === m.id);
+    const number = (s?.entry_number as number | undefined) ?? null;
+    const fail = (error: string) => out.failed.push({ id: m.id, number, error });
+    if (!s) {
+      fail("Not found.");
+      continue;
+    }
+    const from = s.stage as ShortStage;
+    if (from === m.to) continue;
+    if (from === "posted") {
+      fail("Posted and locked. Un-mark a platform to reopen it.");
+      continue;
+    }
+    if (m.to === "editing" && !s.editor_member_id) {
+      fail("Needs an editor first.");
+      continue;
+    }
+    if (m.to === "filming" && !filming) {
+      fail("Run migrations 0112 and 0113 first.");
+      continue;
+    }
+    const res = await setStage(supabase, m.id, from, m.to);
+    if (res.error) {
+      fail(res.error);
+      continue;
+    }
+    out.moved.push({ id: m.id, number: number ?? 0, from, to: m.to });
+    teams.add(s.team_id as string);
+  }
+  if (out.moved.length) {
+    revalidateShort();
+    for (const m of out.moved) revalidatePath(`/shorts/${m.id}`);
+    for (const t of teams) queueObjectivesSync(t);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Posting (master / scheduler)
 // ---------------------------------------------------------------------------

@@ -22,6 +22,18 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.38.0",
+    date: "2026-10-27",
+    title: "Shorts: export, move, select",
+    changes: [
+      { kind: "new", text: "A short's ⋯ on the list exports its script as a PDF or a Word file, straight away, without opening it. Everyone on the team can." },
+      { kind: "new", text: "Masters move a short to another step from its ⋯ too (Move to step). Undo puts it back." },
+      { kind: "new", text: "Select on the list: tick as many shorts as you like (Shift picks everything in between, a day's box the whole day), then export each one's script, as PDFs or Word files in one zip, or move them all to a step at once." },
+      { kind: "better", text: "Deleting a short: it's struck through, slides off the list and the gap closes. On its own page, the page falls away before the list opens." },
+      { kind: "better", text: "Exported files keep their letters: \"Transfăgărășan\" becomes \"transfagarasan\" in a file's name, not \"transfa-ga-ra-s-an\"." },
+    ],
+  },
+  {
     version: "1.37.0",
     date: "2026-10-27",
     title: "Media kit",

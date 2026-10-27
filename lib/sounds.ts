@@ -88,6 +88,12 @@ export const sounds = {
     }),
   /** Something added. */
   pop: () => play((ac) => note(ac, 660, 0, 0.09, 0.04, "sine", 990)),
+  /** Something deleted (1.38.0: a short sliding off the list): a soft falling swish and a tiny tick. */
+  remove: () =>
+    play((ac) => {
+      note(ac, 720, 0, 0.22, 0.035, "sine", 190);
+      note(ac, 1600, 0.01, 0.03, 0.012, "triangle");
+    }),
   /** Saved / done (success toasts). */
   success: () =>
     play((ac) => {

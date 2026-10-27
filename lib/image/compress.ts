@@ -91,6 +91,8 @@ export function safeFileName(name: string, ext?: string) {
   const dot = name.lastIndexOf(".");
   const base = (dot > 0 ? name.slice(0, dot) : name)
     .normalize("NFKD")
+    // 1.38.0: the accents NFKD splits off go (ș → s, not "s-"), as lib/feedback.ts does.
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")

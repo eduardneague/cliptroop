@@ -60,8 +60,11 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
   ok(/\.list-chunk-cards \{ content-visibility: auto; contain-intrinsic-block-size: auto 1800px; padding: 12px; margin: -12px; \}/.test(css), "…cards too, with room to lift and cast their shadow");
   ok(!/\.list-row|\.list-card \{/.test(css), "not each row on its own (a thousand watched rows made scrolling stutter in the harness)");
   const shorts = read("app/(dashboard)/shorts/page.tsx");
-  ok((shorts.match(/\{chunks\(list, LIST_CHUNK\)\.map\(\(group, g\) => \(/g) ?? []).length === 2 && /<div key=\{g\} className="list-chunk motion-stagger">/.test(shorts) && /<div key=\{g\} className="list-chunk-cards motion-stagger grid /.test(shorts), "the shorts list: rows and cards in groups (each group's rows still cascade in)");
-  ok(/const i = g \* LIST_CHUNK \+ k;/.test(shorts) && /list\[i - 1\]\?\.plannedDate/.test(shorts), "…a day's heading still knows the short before it, across groups");
+  // 1.38.0: the table's rows are drawn by modules/short-videos/components/shorts-table.tsx (the cards stay on the page).
+  const table = read("modules/short-videos/components/shorts-table.tsx");
+  const groups = /\{chunks\(list, LIST_CHUNK\)\.map\(\(group, g\) => \(/;
+  ok(groups.test(table) && /<div key=\{g\} className="list-chunk motion-stagger">/.test(table) && groups.test(shorts) && /<div key=\{g\} className="list-chunk-cards motion-stagger grid /.test(shorts), "the shorts list: rows and cards in groups (each group's rows still cascade in)");
+  ok(/const i = g \* LIST_CHUNK \+ k;/.test(table) && /list\[i - 1\]\?\.plannedDate/.test(table), "…a day's heading still knows the short before it, across groups");
   ok(/<div className="flex flex-col gap-4">\s*\{chunks\(list, LIST_CHUNK\)/.test(shorts), "…groups of cards stacked with a gap (margins would fight their room to lift)");
   ok(/const history = splitHistory\(shorts, today, showPast\);\s*const list = history\.shown;/.test(shorts) && !/\{shorts\.map\(/.test(shorts), "…draws what's shown, in both views");
   ok(/past: showPast \? "all" : undefined,/.test(shorts) && /past: showPast \? "all" : null,/.test(shorts), "filters, views and order keep ?past=all");
