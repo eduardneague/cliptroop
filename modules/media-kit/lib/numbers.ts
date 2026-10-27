@@ -55,6 +55,14 @@ export type KitPlatformNumbers = {
   /** The most viewed videos posted in the period, most viewed first (up to 6). */
   top: KitVideo[];
   audience: KitAudience | null;
+  /** 1.39.0 (manual.ts): numbers typed in for this platform (the kit says which numbers are its own). */
+  manual?: boolean;
+  /** Its audience typed in. */
+  manualAudience?: boolean;
+  /** A typed-in engagement rate (%), when there are no views to work it out from. */
+  engagementRate?: number | null;
+  /** A chart of your own (Manual): its points and what they are, drawn instead of the views per day. */
+  chart?: { label: string; points: number[] } | null;
 };
 
 export type MediaKitNumbers = {
@@ -65,6 +73,8 @@ export type MediaKitNumbers = {
   platforms: KitPlatformNumbers[];
   /** The most viewed videos ever (for the cover's wall when the period has few). */
   allTime: KitVideo[];
+  /** 1.39.0: the videos to pick from (the period's and the most viewed ever, each once, most viewed first). */
+  pool?: KitVideo[];
 };
 
 // ---- Sums -----------------------------------------------------------------------------------------------------------

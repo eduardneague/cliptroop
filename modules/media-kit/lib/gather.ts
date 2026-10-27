@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { canViewRevenue, getAudience, getContent, contentCols, contentItem, type ContentItem } from "@/modules/analytics/lib/queries";
+import { getAudience, getContent, contentCols, contentItem, type ContentItem } from "@/modules/analytics/lib/queries";
+import { getMembership } from "@/lib/permissions/membership";
+import { canMakeMediaKit } from "./access";
 import { getAudienceBreakdowns } from "@/modules/analytics/lib/advanced";
 import { numbersVisibility, visibleRows } from "@/modules/analytics/lib/accounts";
 import { addDays, readCustom, todayIn, windowFor, type Window } from "@/modules/analytics/lib/ranges";
@@ -28,10 +30,10 @@ import {
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
 
-/** The team, if this person may make its kit (Masters and the people given revenue access: the rates are money). */
+/** The team, if this person may make its kit (Masters and Partnerships, 1.39.0: access.ts). */
 export async function kitTeam(supabase: Supa, teamId: string) {
-  const [allowed, { data }] = await Promise.all([canViewRevenue(supabase, teamId), supabase.from("teams").select("name, color, logo_url, timezone").eq("id", teamId).maybeSingle()]);
-  if (!allowed || !data) return null;
+  const [membership, { data }] = await Promise.all([getMembership(supabase, teamId), supabase.from("teams").select("name, color, logo_url, timezone").eq("id", teamId).maybeSingle()]);
+  if (!canMakeMediaKit(membership?.roles) || !data) return null;
   return { name: data.name as string, color: (data.color as string | null) ?? "#E8630D", logoUrl: (data.logo_url as string | null) ?? null, tz: (data.timezone as string | null) || "Europe/Bucharest" };
 }
 
@@ -49,7 +51,8 @@ export function kitWindow(period: KitPeriod, from: string | null, to: string | n
 const thumbOf = (teamId: string, v: Pick<ContentItem, "platform" | "id" | "kind" | "thumbnail">) =>
   v.thumbnail ? `/api/analytics/thumb?${new URLSearchParams({ team: teamId, platform: v.platform, id: v.id, kind: v.kind })}` : null;
 
-function kitVideo(teamId: string, v: ContentItem): KitVideo {
+/** A video as the kit draws it (its thumbnail through ClipTroop's own address). */
+export function kitVideo(teamId: string, v: ContentItem): KitVideo {
   return {
     platform: v.platform as KitPlatform,
     id: v.id,
@@ -117,12 +120,21 @@ export async function gatherMediaKit(
     });
   }
 
+  // 1.39.0: the videos to pick from: the period's and the most viewed ever, each once, most viewed first.
+  const pool = new Map<string, KitVideo>();
+  for (const v of [...content.items.filter((i) => !i.noNumbers), ...best].sort((a, b) => (b.views ?? -1) - (a.views ?? -1))) {
+    if (!KIT_PLATFORMS.includes(v.platform as KitPlatform) || !vis.platforms.has(v.platform)) continue;
+    const k = `${v.platform}:${v.id}`;
+    if (!pool.has(k) && pool.size < 90) pool.set(k, kitVideo(teamId, v));
+  }
+
   return {
     team: { name: team.name, color: team.color, logoUrl: team.logoUrl },
     window: { from: w.from, to: w.to, days: w.days },
     generatedAt: new Date().toISOString(),
     platforms,
     allTime: best.filter((v) => v.views !== null).slice(0, 24).map((v) => kitVideo(teamId, v)),
+    pool: [...pool.values()],
   };
 }
 
@@ -154,7 +166,6 @@ export async function mediaKitData(
   supabase: Supa,
   teamId: string,
   team: { name: string; color: string; logoUrl: string | null; tz: string },
-  isMaster: boolean,
   latest: string
 ): Promise<MediaKitTabData> {
   const { data, error } = await supabase.from("media_kit_settings").select("settings").eq("team_id", teamId).maybeSingle();
@@ -171,5 +182,6 @@ export async function mediaKitData(
       return { error: "Couldn't get the numbers. Reload the page to try again." };
     }
   );
-  return { allowed: true, teamId, teamName: team.name, teamColor: team.color, logoUrl: team.logoUrl, canSave: isMaster, ready: !error, saved, coverUrl, numbers, latest };
+  // Everyone who opens the kit saves it (1.39.0: Masters and Partnerships; the page only calls this for them).
+  return { allowed: true, teamId, teamName: team.name, teamColor: team.color, logoUrl: team.logoUrl, ready: !error, saved, coverUrl, numbers, latest };
 }

@@ -1,5 +1,9 @@
 import "server-only";
-import { DEFAULT_MEDIA_KEEP_DAYS, readKeep, type KeepSetting } from "@/lib/media-keep";
+import {
+  DEFAULT_MEDIA_KEEP_DAYS,
+  readKeep,
+  type KeepSetting,
+} from "@/lib/media-keep";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { allPages } from "@/lib/all-pages";
@@ -55,7 +59,7 @@ export type ShortListItem = {
 };
 
 function one<T>(v: T | T[] | null | undefined): T | null {
-  return Array.isArray(v) ? v[0] ?? null : v ?? null;
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 }
 
 function toPerson(userId: string | null, p: ProfileRow): Person | null {
@@ -69,7 +73,8 @@ function toPerson(userId: string | null, p: ProfileRow): Person | null {
   };
 }
 
-const PERSON_EMBED = "(id, user_id, profiles(username, full_name, email, avatar_url))";
+const PERSON_EMBED =
+  "(id, user_id, profiles(username, full_name, email, avatar_url))";
 const PEOPLE_SELECT =
   `editor:team_members!short_videos_editor_member_id_fkey${PERSON_EMBED}, ` +
   `reviewer:team_members!short_videos_reviewer_member_id_fkey${PERSON_EMBED}, ` +
@@ -89,11 +94,18 @@ const FILMED_SELECT = `${FILMER_SELECT}, filmed_at, footage_path, filmed_by, fil
  */
 export const hasShortFilming = cache(async (): Promise<boolean> => {
   const supabase = await createClient();
-  const { error } = await supabase.from("short_videos").select("filmer_member_id, filmed_at, footage_path").limit(1);
+  const { error } = await supabase
+    .from("short_videos")
+    .select("filmer_member_id, filmed_at, footage_path")
+    .limit(1);
   return !error;
 });
 
-type RawEditor = { id: string; user_id: string | null; profiles: ProfileRow | ProfileRow[] } | null;
+type RawEditor = {
+  id: string;
+  user_id: string | null;
+  profiles: ProfileRow | ProfileRow[];
+} | null;
 
 function toEditor(raw: RawEditor | RawEditor[]): ShortEditor | null {
   const e = one(raw);
@@ -107,7 +119,10 @@ function toEditor(raw: RawEditor | RawEditor[]): ShortEditor | null {
  * the same order the queue fills slots in. RLS limits it to teammates.
  */
 export async function listShorts(teamId: string): Promise<ShortListItem[]> {
-  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
+  const [supabase, filming] = await Promise.all([
+    createClient(),
+    hasShortFilming(),
+  ]);
   const data = await allPages((from, to) =>
     supabase
       .from("short_videos")
@@ -117,35 +132,42 @@ export async function listShorts(teamId: string): Promise<ShortListItem[]> {
       .order("queue_position", { ascending: true })
       // The same order on every page (two shorts can share a day and a place).
       .order("id", { ascending: true })
-      .range(from, to)
+      .range(from, to),
   );
 
-  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map((r) => ({
-    id: r.id as string,
-    number: r.entry_number as number,
-    title: r.title as string,
-    stage: r.stage as ShortStage,
-    plannedDate: (r.planned_date as string | null) ?? null,
-    scheduleMode: (r.schedule_mode as "auto" | "pinned") ?? "auto",
-    pinKind: (r.pin_kind as "anchor" | "oneoff" | null) ?? null,
-    queuePosition: Number(r.queue_position ?? 0),
-    platforms: (r.platforms as Platform[]) ?? [],
-    postedPlatforms: ((r.short_video_posts as { platform: Platform }[]) ?? []).map((p) => p.platform),
-    editor: toEditor(r.editor as RawEditor),
-    filmer: toEditor(r.filmer as RawEditor),
-    reviewer: toEditor(r.reviewer as RawEditor),
-    scheduler: toEditor(r.scheduler as RawEditor),
-    shortType: ((r.short_type as ShortType) ?? "filler"),
-    captionEnabled: !!r.caption_enabled,
-    caption: (r.caption as string | null) ?? null,
-    // "Has a video": any uploaded version.
-    hasVideo:
-      (((r.short_video_versions as { count: number }[] | undefined)?.[0]?.count ?? 0) > 0),
-    fileLink: (r.file_link as string | null) ?? null,
-    scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
-    hasFileLink: !!r.file_link,
-    reviewNote: (r.review_note as string | null) ?? null,
-  }));
+  return ((data ?? []) as unknown as Array<Record<string, unknown>>).map(
+    (r) => ({
+      id: r.id as string,
+      number: r.entry_number as number,
+      title: r.title as string,
+      stage: r.stage as ShortStage,
+      plannedDate: (r.planned_date as string | null) ?? null,
+      scheduleMode: (r.schedule_mode as "auto" | "pinned") ?? "auto",
+      pinKind: (r.pin_kind as "anchor" | "oneoff" | null) ?? null,
+      queuePosition: Number(r.queue_position ?? 0),
+      platforms: (r.platforms as Platform[]) ?? [],
+      postedPlatforms: (
+        (r.short_video_posts as { platform: Platform }[]) ?? []
+      ).map((p) => p.platform),
+      editor: toEditor(r.editor as RawEditor),
+      filmer: toEditor(r.filmer as RawEditor),
+      reviewer: toEditor(r.reviewer as RawEditor),
+      scheduler: toEditor(r.scheduler as RawEditor),
+      shortType: (r.short_type as ShortType) ?? "filler",
+      captionEnabled: !!r.caption_enabled,
+      caption: (r.caption as string | null) ?? null,
+      // "Has a video": any uploaded version.
+      hasVideo:
+        ((r.short_video_versions as { count: number }[] | undefined)?.[0]
+          ?.count ?? 0) > 0,
+      fileLink: (r.file_link as string | null) ?? null,
+      scripterIds: (
+        (r.short_scripters as { team_member_id: string }[]) ?? []
+      ).map((w) => w.team_member_id),
+      hasFileLink: !!r.file_link,
+      reviewNote: (r.review_note as string | null) ?? null,
+    }),
+  );
 }
 
 export type ShortPost = {
@@ -182,98 +204,130 @@ export type ShortDetail = ShortListItem & {
 };
 
 /** One short with everything its page shows. Cached per request (page + tab title). */
-export const getShortDetail = cache(async (id: string): Promise<ShortDetail | null> => {
-  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
-  const { data } = await supabase
-    .from("short_videos")
-    .select(
-      "id, team_id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, created_at, created_by, " +
-        "creator:profiles!short_videos_created_by_fkey(username, full_name, email, avatar_url), " +
-        PEOPLE_SELECT +
-        (filming ? FILMED_SELECT : "") +
-        ", " +
-        "short_scripters(team_member_id), " +
-        "short_video_posts(platform, post_url, posted_at, posted_by, poster:profiles!short_video_posts_posted_by_fkey(username, full_name, email, avatar_url)), " +
-        "short_video_events(id, kind, from_stage, to_stage, platform, note, created_at, actor_id, actor:profiles!short_video_events_actor_id_fkey(username, full_name, email, avatar_url))"
-    )
-    .eq("id", id)
-    .order("id", { referencedTable: "short_video_events", ascending: false })
-    .limit(60, { referencedTable: "short_video_events" })
-    .maybeSingle();
+export const getShortDetail = cache(
+  async (id: string): Promise<ShortDetail | null> => {
+    const [supabase, filming] = await Promise.all([
+      createClient(),
+      hasShortFilming(),
+    ]);
+    const { data } = await supabase
+      .from("short_videos")
+      .select(
+        "id, team_id, entry_number, title, stage, planned_date, schedule_mode, pin_kind, queue_position, platforms, file_link, short_type, caption_enabled, caption, review_note, created_at, created_by, " +
+          "creator:profiles!short_videos_created_by_fkey(username, full_name, email, avatar_url), " +
+          PEOPLE_SELECT +
+          (filming ? FILMED_SELECT : "") +
+          ", " +
+          "short_scripters(team_member_id), " +
+          "short_video_posts(platform, post_url, posted_at, posted_by, poster:profiles!short_video_posts_posted_by_fkey(username, full_name, email, avatar_url)), " +
+          "short_video_events(id, kind, from_stage, to_stage, platform, note, created_at, actor_id, actor:profiles!short_video_events_actor_id_fkey(username, full_name, email, avatar_url))",
+      )
+      .eq("id", id)
+      .order("id", { referencedTable: "short_video_events", ascending: false })
+      .limit(60, { referencedTable: "short_video_events" })
+      .maybeSingle();
 
-  if (!data) return null;
-  const r = data as unknown as Record<string, unknown>;
+    if (!data) return null;
+    const r = data as unknown as Record<string, unknown>;
 
-  const posts = ((r.short_video_posts as Array<Record<string, unknown>>) ?? []).map((p) => ({
-    platform: p.platform as Platform,
-    url: (p.post_url as string | null) ?? null,
-    postedAt: p.posted_at as string,
-    postedBy: toPerson(p.posted_by as string | null, one(p.poster as ProfileRow)),
-  }));
+    const posts = (
+      (r.short_video_posts as Array<Record<string, unknown>>) ?? []
+    ).map((p) => ({
+      platform: p.platform as Platform,
+      url: (p.post_url as string | null) ?? null,
+      postedAt: p.posted_at as string,
+      postedBy: toPerson(
+        p.posted_by as string | null,
+        one(p.poster as ProfileRow),
+      ),
+    }));
 
-  return {
-    id: r.id as string,
-    teamId: r.team_id as string,
-    number: r.entry_number as number,
-    title: r.title as string,
-    stage: r.stage as ShortStage,
-    plannedDate: (r.planned_date as string | null) ?? null,
-    scheduleMode: (r.schedule_mode as "auto" | "pinned") ?? "auto",
-    pinKind: (r.pin_kind as "anchor" | "oneoff" | null) ?? null,
-    queuePosition: Number(r.queue_position ?? 0),
-    platforms: (r.platforms as Platform[]) ?? [],
-    postedPlatforms: posts.map((p) => p.platform),
-    editor: toEditor(r.editor as RawEditor),
-    filmer: toEditor(r.filmer as RawEditor),
-    reviewer: toEditor(r.reviewer as RawEditor),
-    scheduler: toEditor(r.scheduler as RawEditor),
-    filmedAt: (r.filmed_at as string | null) ?? null,
-    filmedBy: toPerson((r.filmed_by as string | null) ?? null, one(r.filmed_by_profile as ProfileRow)),
-    footagePath: (r.footage_path as string | null) ?? null,
-    shortType: ((r.short_type as ShortType) ?? "filler"),
-    captionEnabled: !!r.caption_enabled,
-    hasVideo: false,
-    hasFileLink: !!r.file_link,
-    fileLink: (r.file_link as string | null) ?? null,
-    scripterIds: ((r.short_scripters as { team_member_id: string }[]) ?? []).map((w) => w.team_member_id),
-    caption: (r.caption as string | null) ?? null,
-    reviewNote: (r.review_note as string | null) ?? null,
-    createdAt: r.created_at as string,
-    createdBy: toPerson(r.created_by as string | null, one(r.creator as ProfileRow)),
-    posts,
-    events: ((r.short_video_events as Array<Record<string, unknown>>) ?? []).map((e) => ({
-      id: e.id as number,
-      kind: e.kind as string,
-      fromStage: (e.from_stage as ShortStage | null) ?? null,
-      toStage: (e.to_stage as ShortStage | null) ?? null,
-      platform: (e.platform as Platform | null) ?? null,
-      note: (e.note as string | null) ?? null,
-      createdAt: e.created_at as string,
-      actor: toPerson(e.actor_id as string | null, one(e.actor as ProfileRow)),
-    })),
-  };
-});
+    return {
+      id: r.id as string,
+      teamId: r.team_id as string,
+      number: r.entry_number as number,
+      title: r.title as string,
+      stage: r.stage as ShortStage,
+      plannedDate: (r.planned_date as string | null) ?? null,
+      scheduleMode: (r.schedule_mode as "auto" | "pinned") ?? "auto",
+      pinKind: (r.pin_kind as "anchor" | "oneoff" | null) ?? null,
+      queuePosition: Number(r.queue_position ?? 0),
+      platforms: (r.platforms as Platform[]) ?? [],
+      postedPlatforms: posts.map((p) => p.platform),
+      editor: toEditor(r.editor as RawEditor),
+      filmer: toEditor(r.filmer as RawEditor),
+      reviewer: toEditor(r.reviewer as RawEditor),
+      scheduler: toEditor(r.scheduler as RawEditor),
+      filmedAt: (r.filmed_at as string | null) ?? null,
+      filmedBy: toPerson(
+        (r.filmed_by as string | null) ?? null,
+        one(r.filmed_by_profile as ProfileRow),
+      ),
+      footagePath: (r.footage_path as string | null) ?? null,
+      shortType: (r.short_type as ShortType) ?? "filler",
+      captionEnabled: !!r.caption_enabled,
+      hasVideo: false,
+      hasFileLink: !!r.file_link,
+      fileLink: (r.file_link as string | null) ?? null,
+      scripterIds: (
+        (r.short_scripters as { team_member_id: string }[]) ?? []
+      ).map((w) => w.team_member_id),
+      caption: (r.caption as string | null) ?? null,
+      reviewNote: (r.review_note as string | null) ?? null,
+      createdAt: r.created_at as string,
+      createdBy: toPerson(
+        r.created_by as string | null,
+        one(r.creator as ProfileRow),
+      ),
+      posts,
+      events: (
+        (r.short_video_events as Array<Record<string, unknown>>) ?? []
+      ).map((e) => ({
+        id: e.id as number,
+        kind: e.kind as string,
+        fromStage: (e.from_stage as ShortStage | null) ?? null,
+        toStage: (e.to_stage as ShortStage | null) ?? null,
+        platform: (e.platform as Platform | null) ?? null,
+        note: (e.note as string | null) ?? null,
+        createdAt: e.created_at as string,
+        actor: toPerson(
+          e.actor_id as string | null,
+          one(e.actor as ProfileRow),
+        ),
+      })),
+    };
+  },
+);
 
 export type TeamPerson = Person & { memberId: string; roles: RoleId[] };
 
 /** Active teammates with roles — for the editor picker. Editors first. */
 /* cache(): one read per request, however many places on the page need the team. */
-export const listTeamPeople = cache(async function listTeamPeople(teamId: string): Promise<TeamPerson[]> {
+export const listTeamPeople = cache(async function listTeamPeople(
+  teamId: string,
+): Promise<TeamPerson[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
-    .select("id, user_id, profiles(username, full_name, email, avatar_url), member_roles(role)")
+    .select(
+      "id, user_id, profiles(username, full_name, email, avatar_url), member_roles(role)",
+    )
     .eq("team_id", teamId)
     .eq("status", "active");
 
   const people = ((data ?? []) as unknown as Array<Record<string, unknown>>)
     .map((m) => {
-      const person = toPerson(m.user_id as string | null, one(m.profiles as ProfileRow));
+      const person = toPerson(
+        m.user_id as string | null,
+        one(m.profiles as ProfileRow),
+      );
       if (!person) return null;
       return {
         ...person,
         memberId: m.id as string,
-        roles: ((m.member_roles as { role: RoleId }[]) ?? []).map((x) => x.role),
+        roles: ((m.member_roles as { role: RoleId }[]) ?? []).map(
+          (x) => x.role,
+        ),
       };
     })
     .filter((p): p is TeamPerson => !!p);
@@ -285,7 +339,12 @@ export const listTeamPeople = cache(async function listTeamPeople(teamId: string
   });
 });
 
-export type DatedShort = { id: string; number: number; title: string; date: string };
+export type DatedShort = {
+  id: string;
+  number: number;
+  title: string;
+  date: string;
+};
 
 /**
  * Shorts with a planned date around now — powers the "already 2 shorts
@@ -325,13 +384,18 @@ export type ShortTeamSettings = {
   youtubeDescription: string;
 };
 
-export async function getShortSettings(teamId: string): Promise<ShortTeamSettings> {
-  const [supabase, filming] = await Promise.all([createClient(), hasShortFilming()]);
+export async function getShortSettings(
+  teamId: string,
+): Promise<ShortTeamSettings> {
+  const [supabase, filming] = await Promise.all([
+    createClient(),
+    hasShortFilming(),
+  ]);
   const { data: row } = await supabase
     .from("teams")
     .select(
       "shorts_per_day, shorts_weekends, shorts_roll_forward, default_short_type, timezone, default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id, default_short_scripter_member_id, default_youtube_description" +
-        (filming ? ", default_short_filmer_member_id" : "")
+        (filming ? ", default_short_filmer_member_id" : ""),
     )
     .eq("id", teamId)
     .maybeSingle();
@@ -342,14 +406,20 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
     perDay: (data?.shorts_per_day as number) ?? 2,
     weekends: (data?.shorts_weekends as boolean) ?? true,
     rollForward: (data?.shorts_roll_forward as boolean) ?? true,
-    defaultType: ((data?.default_short_type as ShortType) ?? "filler"),
+    defaultType: (data?.default_short_type as ShortType) ?? "filler",
     timezone: (data?.timezone as string) ?? "Europe/Bucharest",
-    defaultEditor: (data?.default_short_editor_member_id as string | null) ?? null,
-    defaultReviewer: (data?.default_short_reviewer_member_id as string | null) ?? null,
-    defaultScheduler: (data?.default_short_scheduler_member_id as string | null) ?? null,
-    defaultScripter: (data?.default_short_scripter_member_id as string | null) ?? null,
-    defaultFilmer: (data?.default_short_filmer_member_id as string | null) ?? null,
-    youtubeDescription: (data?.default_youtube_description as string | null) ?? "",
+    defaultEditor:
+      (data?.default_short_editor_member_id as string | null) ?? null,
+    defaultReviewer:
+      (data?.default_short_reviewer_member_id as string | null) ?? null,
+    defaultScheduler:
+      (data?.default_short_scheduler_member_id as string | null) ?? null,
+    defaultScripter:
+      (data?.default_short_scripter_member_id as string | null) ?? null,
+    defaultFilmer:
+      (data?.default_short_filmer_member_id as string | null) ?? null,
+    youtubeDescription:
+      (data?.default_youtube_description as string | null) ?? "",
   };
 }
 
@@ -357,17 +427,38 @@ export async function getShortSettings(teamId: string): Promise<ShortTeamSetting
  * Team → Defaults → Video files: how long posted shorts' files stay
  * (0070; `ready` is false until that migration is in) and what's stored now.
  */
-export async function getMediaKeep(teamId: string): Promise<{ days: KeepSetting; ready: boolean; files: number; bytes: number }> {
+export async function getMediaKeep(
+  teamId: string,
+): Promise<{
+  days: KeepSetting;
+  ready: boolean;
+  files: number;
+  bytes: number;
+}> {
   const supabase = await createClient();
   const [team, files] = await Promise.all([
-    supabase.from("teams").select("media_keep_days").eq("id", teamId).maybeSingle(),
-    supabase.from("short_video_versions").select("size_bytes").eq("team_id", teamId).is("deleted_at", null).limit(5000),
+    supabase
+      .from("teams")
+      .select("media_keep_days")
+      .eq("id", teamId)
+      .maybeSingle(),
+    supabase
+      .from("short_video_versions")
+      .select("size_bytes")
+      .eq("team_id", teamId)
+      .is("deleted_at", null)
+      .limit(5000),
   ]);
-  const raw = (team.data as { media_keep_days?: unknown } | null)?.media_keep_days;
-  const sizes = ((files.data ?? []) as { size_bytes: number | string }[]).map((f) => Number(f.size_bytes) || 0);
+  const raw = (team.data as { media_keep_days?: unknown } | null)
+    ?.media_keep_days;
+  const sizes = ((files.data ?? []) as { size_bytes: number | string }[]).map(
+    (f) => Number(f.size_bytes) || 0,
+  );
   return {
     // null: never deleted (1.27.5).
-    days: team.error ? DEFAULT_MEDIA_KEEP_DAYS : readKeep(raw, DEFAULT_MEDIA_KEEP_DAYS),
+    days: team.error
+      ? DEFAULT_MEDIA_KEEP_DAYS
+      : readKeep(raw, DEFAULT_MEDIA_KEEP_DAYS),
     ready: !team.error,
     files: sizes.length,
     bytes: sizes.reduce((a, b) => a + b, 0),
@@ -382,7 +473,9 @@ export async function getNextShortSlot(teamId: string): Promise<string | null> {
 }
 
 /** Day exceptions from ~a month ago on: { "2026-09-30": 1, … } */
-export async function listDayLimits(teamId: string): Promise<Record<string, number>> {
+export async function listDayLimits(
+  teamId: string,
+): Promise<Record<string, number>> {
   const supabase = await createClient();
   const from = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
   const { data } = await supabase
@@ -390,7 +483,9 @@ export async function listDayLimits(teamId: string): Promise<Record<string, numb
     .select("day, max_shorts")
     .eq("team_id", teamId)
     .gte("day", from);
-  return Object.fromEntries((data ?? []).map((d) => [d.day as string, d.max_shorts as number]));
+  return Object.fromEntries(
+    (data ?? []).map((d) => [d.day as string, d.max_shorts as number]),
+  );
 }
 
 /**
@@ -407,7 +502,15 @@ export type QueueStart = { id: string; number: number; date: string } | null;
 /** The short that currently starts the queue (only one at a time). */
 export async function getQueueStart(teamId: string): Promise<QueueStart> {
   const supabase = await createClient();
-  const { data } = await supabase.rpc("current_queue_start", { p_team: teamId });
+  const { data } = await supabase.rpc("current_queue_start", {
+    p_team: teamId,
+  });
   const row = Array.isArray(data) ? data[0] : null;
-  return row ? { id: row.id as string, number: row.entry_number as number, date: row.planned_date as string } : null;
+  return row
+    ? {
+        id: row.id as string,
+        number: row.entry_number as number,
+        date: row.planned_date as string,
+      }
+    : null;
 }

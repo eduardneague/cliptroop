@@ -1479,20 +1479,84 @@ in `modules/media-kit/`:
   platform), contact (the closing line, links, and where the numbers come
   from).
 - `components/media-kit-tab.tsx`: the builder (loaded with its tab, in the
-  browser only). Masters' changes save a moment after each one
-  (`saveMediaKit`); the people given revenue access make kits from the saved
-  setup and their own changes. Another period asks for its numbers
-  (`loadMediaKitNumbers`); the saved period's come with the page.
+  browser only). Changes save a moment after each one (`saveMediaKit`).
+  Another period asks for its numbers (`loadMediaKitNumbers`); the saved
+  period's come with the page.
 
-Who: the same people as revenue (the rates are money): `media_kit_settings`
-(0114) is read by `revenue_team_ids()`, written by `my_master_team_ids()`;
-`updated_at` / `updated_by` set by the database. The cover photo goes from
-the browser to the private `media-kit` bucket (`<team id>/cover-…`,
-pictures only, 5 MB; read by revenue people, written by Masters); the page
-signs it for an hour, and the builder signs it again (`mediaKitCoverLink`)
-after 45 minutes, on coming back to the page, and before a download, so a
-page left open still puts the photo in the PDF. Saving a setup that no
-longer uses a photo removes it; deleting the team removes its photos.
+Who (1.39.0): the team's Masters and the people with the Partnerships role
+(`lib/permissions/roles.ts`, id `partnerships`, no step of a video; migration
+0115 adds it to `role_type`). `modules/media-kit/lib/access.ts`
+(`canMakeMediaKit`) decides it for the page, the tab's lock and the server
+actions; in the database `media_kit_team_ids()` (0116) does, for
+`media_kit_settings` (read, start, change) and the `media-kit` bucket (read,
+add, replace, remove). Revenue access alone no longer opens it (it did in
+1.37.0, through 0114's rules, which 0116 replaces). `updated_at` /
+`updated_by` are set by the database. The cover photo goes from the browser
+to the private `media-kit` bucket (`<team id>/cover-…`, pictures only, 5 MB);
+the page signs it for an hour, and the builder signs it again
+(`mediaKitCoverLink`) after 45 minutes, on coming back to the page, and
+before a download, so a page left open still puts the photo in the PDF.
+Saving a setup that no longer uses a photo removes it; deleting the team
+removes its photos.
+
+**Media kit: the form, Manual numbers, picked videos (1.39.0).**
+
+- The form follows the kit's pages (`components/kit-sections.tsx`): Your kit
+  (name, channels, one kit or one per platform, period), Look, then one part
+  per page with that page's switch (In the kit / Left out; a part left out
+  folds away). Platform pages and Audience have a block per platform. Parts
+  and blocks carry `data-kit-anchor`; pages carry `anchor` (layout.ts:
+  `cover`, `about`, `glance`, `platform:<p>`, `audience:<p>`, `videos`,
+  `partners`, `rates`, `contact`), drawn as `data-page-anchor` in the
+  preview.
+- `components/use-kit-sync.ts`: side by side (lg, `lib/breakpoints.ts`) the
+  part you're at is the last whose top has passed a line a third of the way
+  down under the app's bar (the line sinks over the last 60% of a screen of
+  scrolling, so the last parts get their turn), or the one you're typing in
+  (focusin). It lights up (the part, and its page with an "Editing" tag), and
+  its page scrolls into the preview's own box if it isn't already in sight,
+  unless the preview was scrolled by hand in the last 1.2 s (wheel, touch,
+  pointer, keys). A click on a page scrolls the window to its part (the
+  part's heading gets focus) and holds the place-based choice until the
+  scroll ends. Smooth scrolling only when motion is on. On a phone (form and
+  preview take turns): a part's "See this page" and a page's "Edit" switch
+  views and scroll to it; a tap on a page shows it full screen. The preview
+  box sticks under the app's bar (`--shell-top`) with `overscroll-contain`.
+- Manual (`lib/manual.ts`, `components/kit-manual.tsx`): At a glance, each
+  platform's page and each platform's audience have Auto / Manual (Auto by
+  default). Switching to Manual the first time fills its boxes from what was
+  read (`manualFromRead`, `audienceFromRead`, `totalsFromRead`), so nothing
+  changes until something's typed; an emptied box is left off the page.
+  Numbers can be typed as they're said (`parseAmount`: 2.5M, 120K, 1,200).
+  `applyManual` lays the typed numbers over the read ones before any page is
+  laid out: growth and change become the counts the pages work from; a
+  platform's chart can be its views per day, none, or its own points (two at
+  least, `parsePoints` / `pointsText`). A platform with no connection can be
+  added by hand (`extra`, all its numbers typed). At a glance's typed totals
+  stand for a kit of several platforms (its cover and last page too); a kit
+  of one platform has that platform's own. The last page says which numbers
+  were typed in ("… are our own count", `sourceNote`).
+- Picked videos (`components/kit-video-picker.tsx`): the videos page and the
+  cover each take "the best" or picked ones (6 and 15 at most), in the order
+  picked, moved with the arrows or by dragging, drawn with the freshest
+  numbers the kit has for them (`pickedVideo`). The window shows the videos
+  the numbers came with (`pool`: the period's and the most viewed ever, 90 at
+  most) and searches any posted video by its title or #number
+  (`searchKitVideos`: Analytics' own `findVideos`, the kit's people only, the
+  four platforms, 40 at most). A picked video keeps only ClipTroop's own
+  thumbnail address and an https link (`readKitSettings`).
+- The cover's wall (layout.ts `coverWall`): Shorts (three columns of tall
+  tiles), long videos (two columns of wide ones) or both (tall and wide take
+  turns, the columns interlocking); Auto picks by what the videos are
+  (`coverGridFor`: 70% one shape). On its own it takes the videos of its
+  shape from the best and the pool, so it rarely repeats one; one to three
+  picked show big. `pic()` fills a tile when the shapes are close, else shows
+  the picture whole on the accent's tint (a Short upright in a wide tile).
+- Full screen (`components/kit-presenter.tsx`): a page at a time, as big as
+  the screen allows; ← → Space Page Up / Down Home End, a swipe, the pages
+  along the bottom, F for the browser's whole screen, Esc to close; kit tabs
+  when there are several; its links work. On a phone the kit's actions sit in
+  a bar of their own above the tab bar (full screen, pages, Download).
 
 **Opening frames.** When a short's cut is uploaded for review, the browser
 grabs eight frames from the file (`modules/review/lib/frames.ts`: 0, 1, 2

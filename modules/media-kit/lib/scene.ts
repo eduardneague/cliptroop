@@ -25,7 +25,9 @@ export type Op =
   /** A clickable area (the PDF's link; the preview's too). */
   | { t: "link"; x: number; y: number; w: number; h: number; url: string };
 
-export type Page = { w: number; h: number; bg: Color; ops: Op[]; label: string };
+/** A slide. `anchor` (1.39.0): the part of the setup it comes from ("cover", "platform:youtube"…), so the builder's form
+ * and the preview find each other. */
+export type Page = { w: number; h: number; bg: Color; ops: Op[]; label: string; anchor?: string };
 
 /** How text is measured and what a font can draw: the PDF's own fonts (fonts.ts), or a stand-in in tests. */
 export type Measure = {

@@ -22,6 +22,22 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.39.0",
+    date: "2026-10-27",
+    title: "Media kit: your own numbers, your own videos",
+    changes: [
+      { kind: "better", text: "The media kit's form follows its pages, in the same order. As you scroll, the part you're on lights up and its page comes into view beside it, marked Editing. Click a page to jump to its part." },
+      { kind: "new", text: "Manual numbers: every part with numbers (At a glance, each platform's page, who watches) can be typed in instead of read. Auto is the default; Manual starts from the numbers read, so you only change what you want. Type numbers as you say them: 2.5M, 120K." },
+      { kind: "new", text: "A platform's chart can show its views per day, your own points (say, subscribers per month) or nothing. A channel that isn't connected can be added by hand. The kit says which numbers are your own." },
+      { kind: "new", text: "Pick the videos: the best videos page (up to 6, called \"Videos we're proud of\") and the cover (up to 15) can show the ones you choose, in your order. Search finds any video you've posted." },
+      { kind: "new", text: "The cover's wall comes in three shapes: Shorts, long videos, or both together in one grid. Auto picks the one that suits your videos." },
+      { kind: "new", text: "Full screen: go through the kit page by page, the way a sponsor will, with the arrow keys, a swipe, or the pages along the bottom." },
+      { kind: "better", text: "On phones, Download PDF sits in a bar of its own at the bottom, with the page count and full screen beside it." },
+      { kind: "new", text: "A Partnerships role, for the people who deal with sponsors. Only masters and people with this role can open the media kit now (revenue access alone no longer does). A master gives the role in Team → Members." },
+      { kind: "fixed", text: "The media kit's preview no longer slides under the top bar as you scroll." },
+    ],
+  },
+  {
     version: "1.38.0",
     date: "2026-10-27",
     title: "Shorts: export, move, select",

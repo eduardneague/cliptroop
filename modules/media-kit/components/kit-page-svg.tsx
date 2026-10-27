@@ -23,7 +23,8 @@ export const KIT_FONT_CSS = `
 
 const rgb = (c: Color) => `rgb(${c[0]} ${c[1]} ${c[2]})`;
 
-export function KitPageSvg({ page, className, title }: { page: Page; className?: string; title?: string }) {
+/** `links` (1.39.0): off where the page is itself a button (the builder's preview, the pages along the presenter's bottom). */
+export function KitPageSvg({ page, className, title, links = true }: { page: Page; className?: string; title?: string; links?: boolean }) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const defs: ReactNode[] = [];
   // Ops in order; a clip opens a group that the matching unclip closes.
@@ -131,6 +132,7 @@ export function KitPageSvg({ page, className, title }: { page: Page; className?:
         break;
       }
       case "link":
+        if (!links) break;
         push(
           <a key={key} href={op.url} target="_blank" rel="noopener noreferrer">
             <rect x={op.x} y={op.y} width={op.w} height={op.h} fill="transparent" />

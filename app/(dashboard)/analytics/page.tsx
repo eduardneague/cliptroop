@@ -15,6 +15,7 @@ import { isCurrencyCode } from "@/lib/fx";
 import { after } from "next/server";
 import { catchUpAnalytics, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 import { mediaKitData } from "@/modules/media-kit/lib/gather";
+import { canMakeMediaKit } from "@/modules/media-kit/lib/access";
 
 export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
@@ -56,6 +57,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const roles = membership?.roles ?? [];
   const isMaster = roles.includes("master");
   const canSync = isMaster || roles.includes("publisher");
+  // 1.39.0: the media kit is for Masters and Partnerships (modules/media-kit/lib/access.ts, migration 0116).
+  const kitAllowed = canMakeMediaKit(roles);
   // Platform numbers arrive a day or two late: their ranges end yesterday (Production's today).
   const today = todayIn(tz);
   const latest = tab === "production" ? today : addDays(today, -1);
@@ -101,7 +104,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       };
       break;
     case "mediakit":
-      data = { tab, kit: revenueAllowed ? await mediaKitData(supabase, teamId, { name: currentTeam.name, color: currentTeam.color, logoUrl: currentTeam.logoUrl ?? null, tz }, isMaster, latest) : { allowed: false } };
+      data = { tab, kit: kitAllowed ? await mediaKitData(supabase, teamId, { name: currentTeam.name, color: currentTeam.color, logoUrl: currentTeam.logoUrl ?? null, tz }, latest) : { allowed: false } };
       break;
     default:
       data = { tab: "revenue", revenue: await getRevenue(teamId, w, isMaster, wantedCurrency, revenueAllowed) };
@@ -117,6 +120,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       canSync={canSync}
       catchingUp={catchingUp !== "none" && !!membership}
       revenueAllowed={revenueAllowed}
+      kitAllowed={kitAllowed}
       latest={latest}
       earliest={earliest}
       data={data}

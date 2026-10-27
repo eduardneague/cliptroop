@@ -48,6 +48,9 @@ export const ROLES = [
   // Shown as "Scheduler": handles the long-video Publish stage AND marks
   // shorts as posted. (The id stays "publisher" in the database.)
   { id: "publisher", name: "Scheduler", colorVar: "--green", stages: ["publish"] as PipelineStage[] },
+  // 1.39.0 (migration 0115): the people who deal with sponsors. No step of a video of its own; with Masters, the only
+  // ones who open the media kit (Analytics → Media kit, migration 0116).
+  { id: "partnerships", name: "Partnerships", colorVar: "--coral", stages: [] as PipelineStage[] },
 ] as const;
 
 export function defaultRoleColor(roleId: RoleId): string {

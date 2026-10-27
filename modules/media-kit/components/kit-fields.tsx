@@ -7,24 +7,12 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { KIT_CURRENCIES, KIT_PLATFORMS, KIT_PLATFORM_NAME, LIMITS, newId, type MediaKitSettings, type RatePackage, type Testimonial } from "../lib/settings";
 
 /*
- * The media kit builder's form parts (1.37.0): a section card, labelled fields with a character count, and the
- * editors for the rates, the brands and the kind words.
+ * The media kit builder's form parts (1.37.0): labelled fields with a character count, and the editors for the rates,
+ * the brands and the kind words. (1.39.0: the parts themselves are kit-sections.tsx.)
  */
 
 export const inputClass =
   "w-full rounded-xl border border-line/15 bg-surface px-3.5 py-2.5 text-[14px] outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-amber transition-shadow disabled:opacity-60";
-
-export function Section({ title, hint, children, id }: { title: string; hint?: string; children: React.ReactNode; id?: string }) {
-  return (
-    <section id={id} className="rounded-2xl border border-line/10 bg-surface p-4 sm:p-5 space-y-4">
-      <div>
-        <h2 className="text-[15px] font-bold">{title}</h2>
-        {hint && <p className="text-[12.5px] text-ink-soft mt-0.5">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /** A label above its control, an optional hint or problem under it. */
 export function Field({ label, hint, problem, children, htmlFor, aside }: { label: string; hint?: string; problem?: string | null; children: React.ReactNode; htmlFor?: string; aside?: React.ReactNode }) {
@@ -65,28 +53,6 @@ export function TextArea({ label, value, onChange, max, placeholder, hint, rows 
     <Field label={label} hint={hint} htmlFor={id} aside={<Counter value={value} max={max} />}>
       <textarea id={id} value={value} onChange={(e) => onChange(Array.from(e.target.value).slice(0, max).join(""))} placeholder={placeholder} rows={rows} disabled={disabled} className={`${inputClass} resize-y leading-relaxed`} />
     </Field>
-  );
-}
-
-/** An on/off row (a page of the kit). */
-export function Toggle({ label, hint, on, onChange, disabled }: { label: string; hint?: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      className="w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-surface-2/70 transition-colors disabled:opacity-50"
-    >
-      <span className={`relative w-8 h-[18px] rounded-[6px] flex-shrink-0 transition-colors ${on ? "bg-amber" : "bg-line/20"}`}>
-        <span className={`absolute top-[3px] w-3 h-3 rounded-[4px] bg-white transition-all ${on ? "left-[17px]" : "left-[3px]"}`} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[13.5px] font-semibold">{label}</span>
-        {hint && <span className="block text-[12px] text-ink-faint">{hint}</span>}
-      </span>
-    </button>
   );
 }
 

@@ -43,6 +43,83 @@ export type KitCover = "videos" | "photo" | "plain";
 export type RatePackage = { id: string; name: string; detail: string; platform: KitPlatform | "any"; price: number | null };
 export type Testimonial = { id: string; quote: string; by: string };
 
+// ---- 1.39.0: your own numbers, picked videos, the cover's grid ----------------------------------------------------------
+// The owner: "add the option to manually input data for everything too, auto is very nice, but sometimes you might want
+// to do something else, so add a manual button for each part of the presentation where there are graphs, data, etc.
+// auto should be on by default"; "pick which videos i want to feature manually as well"; "for the cover, i want to be
+// able to select what videos i want in the first page, long videos too, and a hybrid between longs and shorts".
+
+/** The age groups the platforms share (YouTube's and Meta's), youngest first. */
+export const KIT_AGES = ["13–17", "18–24", "25–34", "35–44", "45–54", "55–64", "65+"] as const;
+export type KitAge = (typeof KIT_AGES)[number];
+
+/** A video picked by hand: what the kit shows of it, as it was when picked (fresher numbers are used when the kit has them). */
+export type PickedVideo = {
+  platform: KitPlatform;
+  id: string;
+  kind: "short" | "long" | "live" | "post";
+  title: string;
+  /** Its thumbnail through ClipTroop's own address (nothing else is kept). */
+  thumb: string | null;
+  url: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+};
+export const videoKey = (v: { platform: string; id: string }) => `${v.platform}:${v.id}`;
+
+/** A platform's page with numbers you type in (Manual). An empty field is left off the page. */
+export type ManualPlatform = {
+  on: boolean;
+  handle: string;
+  followers: number | null;
+  /** Follower growth over the period, in %. */
+  growth: number | null;
+  views: number | null;
+  /** Views against the period before, in %. */
+  viewsChange: number | null;
+  /** Likes, comments and shares for every view, in %. */
+  engagementRate: number | null;
+  avgViews: number | null;
+  /** YouTube: long videos and Shorts on their own. */
+  avgViewsLong: number | null;
+  avgViewsShort: number | null;
+  posted: number | null;
+  watchHours: number | null;
+  /** The chart: the real views per day, none, or your own points. */
+  chart: "auto" | "none" | "own";
+  chartLabel: string;
+  chartPoints: number[];
+};
+/** Who watches on a platform, typed in (Manual): shares in %. */
+export type ManualAudience = {
+  on: boolean;
+  women: number | null;
+  men: number | null;
+  other: number | null;
+  ages: Record<KitAge, number | null>;
+  countries: { name: string; share: number | null }[];
+};
+/** At a glance (and the cover's and contact page's totals), typed in (Manual). An empty field is left off the page. */
+export type ManualTotals = {
+  on: boolean;
+  followers: number | null;
+  growth: number | null;
+  views: number | null;
+  viewsChange: number | null;
+  engagementRate: number | null;
+  avgViews: number | null;
+  posted: number | null;
+};
+export type KitManual = {
+  glance: ManualTotals;
+  platforms: Partial<Record<KitPlatform, ManualPlatform>>;
+  audience: Partial<Record<KitPlatform, ManualAudience>>;
+};
+/** The cover's wall: Shorts (tall), long videos (wide), both together, or whatever the videos are. */
+export type KitCoverGrid = "auto" | "shorts" | "longs" | "mixed";
+export type VideoPicks = { on: boolean; list: PickedVideo[] };
+
 export type MediaKitSettings = {
   v: 1;
   /** The channels in the kit (none chosen: every connected one). */
@@ -72,6 +149,14 @@ export type MediaKitSettings = {
   partners: string[];
   testimonials: Testimonial[];
   contact: { name: string; email: string; phone: string; website: string; cta: string };
+  /** 1.39.0: platforms with no connection, added by hand (their numbers in manual.platforms). */
+  extra: KitPlatform[];
+  manual: KitManual;
+  /** The best videos page: the most viewed (off), or these, in this order. */
+  videoPicks: VideoPicks;
+  /** The cover's wall: the best (off), or these. */
+  coverPicks: VideoPicks;
+  coverGrid: KitCoverGrid;
 };
 
 export const LIMITS = {
@@ -94,6 +179,18 @@ export const LIMITS = {
   phone: 40,
   website: 120,
   cta: 120,
+  // 1.39.0
+  handle: 60,
+  chartLabel: 40,
+  chartPoints: 60,
+  /** The best videos page shows up to 6; the cover's wall up to 15. */
+  videoPicks: 6,
+  coverPicks: 15,
+  pickTitle: 200,
+  countries: 5,
+  country: 40,
+  /** Any count (followers, views…). */
+  count: 1e12,
 } as const;
 
 /** Currencies offered first (any ISO code the browser knows works too). */
@@ -127,7 +224,22 @@ export function defaultKitSettings(): MediaKitSettings {
     partners: [],
     testimonials: [],
     contact: { name: "", email: "", phone: "", website: "", cta: "" },
+    extra: [],
+    manual: { glance: emptyTotals(), platforms: {}, audience: {} },
+    videoPicks: { on: false, list: [] },
+    coverPicks: { on: false, list: [] },
+    coverGrid: "auto",
   };
+}
+
+export function emptyTotals(): ManualTotals {
+  return { on: false, followers: null, growth: null, views: null, viewsChange: null, engagementRate: null, avgViews: null, posted: null };
+}
+export function emptyManualPlatform(): ManualPlatform {
+  return { on: false, handle: "", followers: null, growth: null, views: null, viewsChange: null, engagementRate: null, avgViews: null, avgViewsLong: null, avgViewsShort: null, posted: null, watchHours: null, chart: "auto", chartLabel: "", chartPoints: [] };
+}
+export function emptyManualAudience(): ManualAudience {
+  return { on: false, women: null, men: null, other: null, ages: Object.fromEntries(KIT_AGES.map((a) => [a, null])) as Record<KitAge, null>, countries: [] };
 }
 
 // ---- Reading --------------------------------------------------------------------------------------------------------
@@ -180,6 +292,90 @@ export function isCoverPath(v: unknown, teamId?: string | null): v is string {
   if (typeof v !== "string") return false;
   const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[A-Za-z0-9._-]{1,80}$/.exec(v);
   return !!m && (!teamId || m[1] === teamId) && !v.includes("..");
+}
+
+/** A number from a form or a save: finite, within [min, max], rounded to `dp` decimals; null for anything else. */
+export function num(v: unknown, min: number, max: number, dp = 0): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return null;
+  const f = 10 ** dp;
+  return Math.round(Math.min(max, Math.max(min, n)) * f) / f;
+}
+const count = (v: unknown) => num(v, 0, LIMITS.count);
+const pct = (v: unknown, min = 0, max = 100) => num(v, min, max, 1);
+/** Our own thumbnail address only (the PDF fetches it): /api/analytics/thumb?… */
+export const isOwnThumb = (v: unknown): v is string => typeof v === "string" && v.length <= 400 && /^\/api\/analytics\/thumb\?[\w=&%.-]+$/.test(v);
+const isHttps = (v: unknown): v is string => typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s"<>]+$/.test(v);
+
+function readPicked(v: unknown): PickedVideo | null {
+  if (!isObj(v) || !isPlatform(v.platform) || typeof v.id !== "string" || !/^[\w.:-]{1,120}$/.test(v.id)) return null;
+  const kind = v.kind === "short" || v.kind === "long" || v.kind === "live" || v.kind === "post" ? v.kind : "long";
+  return { platform: v.platform, id: v.id, kind, title: cleanText(v.title, LIMITS.pickTitle), thumb: isOwnThumb(v.thumb) ? v.thumb : null, url: isHttps(v.url) ? v.url : null, views: count(v.views), likes: count(v.likes), comments: count(v.comments) };
+}
+function readPicks(v: unknown, max: number): VideoPicks {
+  if (!isObj(v)) return { on: false, list: [] };
+  const seen = new Set<string>();
+  const list: PickedVideo[] = [];
+  for (const x of Array.isArray(v.list) ? v.list : []) {
+    const p = readPicked(x);
+    if (!p || seen.has(videoKey(p)) || list.length >= max) continue;
+    seen.add(videoKey(p));
+    list.push(p);
+  }
+  return { on: v.on === true, list };
+}
+function readManualPlatform(v: unknown): ManualPlatform | null {
+  if (!isObj(v)) return null;
+  const points = (Array.isArray(v.chartPoints) ? v.chartPoints : []).map(count).filter((x): x is number => x !== null).slice(0, LIMITS.chartPoints);
+  return {
+    on: v.on === true,
+    handle: cleanText(v.handle, LIMITS.handle),
+    followers: count(v.followers),
+    growth: pct(v.growth, -100, 100000),
+    views: count(v.views),
+    viewsChange: pct(v.viewsChange, -100, 100000),
+    engagementRate: pct(v.engagementRate),
+    avgViews: count(v.avgViews),
+    avgViewsLong: count(v.avgViewsLong),
+    avgViewsShort: count(v.avgViewsShort),
+    posted: num(v.posted, 0, 100000),
+    watchHours: count(v.watchHours),
+    chart: v.chart === "none" || v.chart === "own" ? v.chart : "auto",
+    chartLabel: cleanText(v.chartLabel, LIMITS.chartLabel),
+    chartPoints: points,
+  };
+}
+function readManualAudience(v: unknown): ManualAudience | null {
+  if (!isObj(v)) return null;
+  const a = isObj(v.ages) ? v.ages : {};
+  return {
+    on: v.on === true,
+    women: pct(v.women),
+    men: pct(v.men),
+    other: pct(v.other),
+    ages: Object.fromEntries(KIT_AGES.map((k) => [k, pct(a[k])])) as Record<KitAge, number | null>,
+    countries: (Array.isArray(v.countries) ? v.countries : [])
+      .filter(isObj)
+      .map((c) => ({ name: cleanText(c.name, LIMITS.country), share: pct(c.share) }))
+      .filter((c) => c.name || c.share !== null)
+      .slice(0, LIMITS.countries),
+  };
+}
+function readTotals(v: unknown): ManualTotals {
+  if (!isObj(v)) return emptyTotals();
+  return { on: v.on === true, followers: count(v.followers), growth: pct(v.growth, -100, 100000), views: count(v.views), viewsChange: pct(v.viewsChange, -100, 100000), engagementRate: pct(v.engagementRate), avgViews: count(v.avgViews), posted: num(v.posted, 0, 100000) };
+}
+function readManual(v: unknown): KitManual {
+  const m = isObj(v) ? v : {};
+  const platforms: Partial<Record<KitPlatform, ManualPlatform>> = {};
+  const audience: Partial<Record<KitPlatform, ManualAudience>> = {};
+  for (const p of KIT_PLATFORMS) {
+    const mp = isObj(m.platforms) ? readManualPlatform(m.platforms[p]) : null;
+    if (mp) platforms[p] = mp;
+    const ma = isObj(m.audience) ? readManualAudience(m.audience[p]) : null;
+    if (ma) audience[p] = ma;
+  }
+  return { glance: readTotals(m.glance), platforms, audience };
 }
 
 export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitSettings {
@@ -274,6 +470,11 @@ export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitS
       website,
       cta: cleanText(c.cta, LIMITS.cta),
     },
+    extra: Array.isArray(r.extra) ? [...new Set(r.extra.filter(isPlatform))] : [],
+    manual: readManual(r.manual),
+    videoPicks: readPicks(r.videoPicks, LIMITS.videoPicks),
+    coverPicks: readPicks(r.coverPicks, LIMITS.coverPicks),
+    coverGrid: r.coverGrid === "shorts" || r.coverGrid === "longs" || r.coverGrid === "mixed" ? r.coverGrid : "auto",
   };
 }
 

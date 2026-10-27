@@ -8,7 +8,8 @@
  * the cover: a wall of the channel's own best thumbnails running off the page (or a photo, or one big number).
  */
 import { isVertical, addDaily, changePct, growthPct, ratePct, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "./numbers";
-import { KIT_PLATFORM_NAME, formatPrice, isEmail, websiteUrl, type KitPlatform, type MediaKitSettings } from "./settings";
+import { KIT_PLATFORM_NAME, LIMITS, formatPrice, isEmail, websiteUrl, type KitCoverGrid, type KitPlatform, type MediaKitSettings } from "./settings";
+import { applyManual, kitTotals, pickedVideo, type Totals } from "./manual";
 import { kitPalette, type KitPalette } from "./theme";
 import {
   PAGE_H,
@@ -45,6 +46,8 @@ type Ctx = {
   s: MediaKitSettings;
   nums: MediaKitNumbers;
   ps: KitPlatformNumbers[];
+  /** The kit's totals: its platforms added up, or At a glance's own numbers (1.39.0, manual.ts). */
+  totals: Totals;
   title: string;
   images: KitImages;
   minus: string;
@@ -154,10 +157,10 @@ function points(daily: (number | null)[]): (number | null)[] {
   return out;
 }
 
-/** Views per day as a soft area under a line, the best day marked. */
-function areaChart(ops: Op[], c: Ctx, x: number, y: number, w: number, h: number, daily: (number | null)[], from: string, to: string) {
+/** Views per day as a soft area under a line, the best day marked. `from` null: your own points (1.39.0), no days. */
+function areaChart(ops: Op[], c: Ctx, x: number, y: number, w: number, h: number, daily: (number | null)[], from: string | null, to: string | null) {
   const { pal } = c;
-  const pts = points(daily);
+  const pts = from ? points(daily) : daily;
   const vals = pts.map((v) => (v === null ? 0 : Math.max(0, v)));
   const max = Math.max(1, ...vals);
   const top = y + 16;
@@ -178,15 +181,17 @@ function areaChart(ops: Op[], c: Ctx, x: number, y: number, w: number, h: number
     const weekly = daily.length > 120;
     const day = (i: number) => {
       const d = new Date(Date.parse(`${from}T00:00:00Z`) + i * (weekly ? 7 : 1) * 86_400_000).toISOString().slice(0, 10);
-      return d > to ? to : d;
+      return to && d > to ? to : d;
     };
-    const label = `${weekly ? "Best week" : "Best day"}: ${big(vals[bestI])} views, ${shortDay(day(bestI))}`;
+    const label = from ? `${weekly ? "Best week" : "Best day"}: ${big(vals[bestI])} views, ${shortDay(day(bestI))}` : `Highest: ${big(vals[bestI])}`;
     const lw = c.m.width(c.m.clean(label, "semi"), "semi", 9);
     const lx = Math.min(Math.max(p.x - lw / 2, x), x + w - lw);
     text(ops, c, lx, Math.max(y + 8, p.y - 11), label, "semi", 9, pal.ink);
   }
-  text(ops, c, x, bottom + 14, shortDay(from, true), "reg", 8.5, pal.faint);
-  text(ops, c, x + w, bottom + 14, shortDay(to, true), "reg", 8.5, pal.faint, "right");
+  if (from && to) {
+    text(ops, c, x, bottom + 14, shortDay(from, true), "reg", 8.5, pal.faint);
+    text(ops, c, x + w, bottom + 14, shortDay(to, true), "reg", 8.5, pal.faint, "right");
+  }
 }
 
 /** A thumbnail (or, without one, a tile with the platform's logo); vertical videos stand in a frame of the accent's tint. */
@@ -207,33 +212,38 @@ function thumb(ops: Op[], c: Ctx, v: KitVideo, x: number, y: number, w: number, 
   if (v.url) ops.push({ t: "link", x, y, w, h, url: v.url });
 }
 
+/**
+ * A video's picture in a tile (1.39.0): filling it (cropped) when their shapes are close, else whole, in the middle,
+ * on the accent's tint (a Short in a wide tile stands upright; a long video in a tall one lies across), so a picked
+ * video is never cut down to a sliver of itself.
+ */
+function pic(ops: Op[], c: Ctx, v: KitVideo, x: number, y: number, w: number, h: number, r: number) {
+  const va = isVertical(v) ? 9 / 16 : 16 / 9;
+  const ta = w / h;
+  if (!v.thumb) {
+    ops.push({ t: "rect", x, y, w, h, r, fill: c.pal.wash });
+    platformIcon(ops, c, v.platform, x + w / 2 - 12, y + h / 2 - 12, 24);
+  } else if (Math.max(va / ta, ta / va) <= 1.55) {
+    ops.push({ t: "image", x, y, w, h, src: v.thumb, r });
+  } else {
+    ops.push({ t: "rect", x, y, w, h, r, fill: c.pal.wash });
+    const iw = va < ta ? h * va : w;
+    const ih = va < ta ? h : w / va;
+    ops.push({ t: "image", x: x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih, src: v.thumb, r: Math.min(r, 8) });
+  }
+  if (v.url) {
+    // Its link only where it's on the page (a wall's tiles run off it).
+    const top = Math.max(0, y);
+    const bottom = Math.min(H, y + h);
+    if (bottom > top) ops.push({ t: "link", x, y: top, w, h: bottom - top, url: v.url });
+  }
+}
+
 // ---- Totals ------------------------------------------------------------------------------------------------------------
 
-type Totals = {
-  followers: number | null;
-  followersGrowth: number | null;
-  views: number | null;
-  viewsChange: number | null;
-  engagementRate: number | null;
-  avgViews: number | null;
-  posted: number;
-};
+/** The platforms added up (1.39.0: manual.ts kitTotals, which also takes At a glance's own numbers). */
 export function totalsOf(ps: KitPlatformNumbers[]): Totals {
-  const followers = sum(ps.map((p) => p.followers));
-  const net = sum(ps.filter((p) => p.followers !== null).map((p) => p.followersNet));
-  const views = sum(ps.map((p) => p.views));
-  const prev = sum(ps.filter((p) => p.views !== null).map((p) => p.viewsPrev));
-  const engaged = ps.filter((p) => p.engagement !== null && p.views !== null);
-  const counted = ps.reduce((t, p) => t + (p.avgViews !== null ? p.counted : 0), 0);
-  return {
-    followers,
-    followersGrowth: growthPct(followers, net),
-    views,
-    viewsChange: changePct(views, prev),
-    engagementRate: ratePct(sum(engaged.map((p) => p.engagement)), sum(engaged.map((p) => p.views))),
-    avgViews: counted ? ps.reduce((t, p) => t + (p.avgViews ?? 0) * (p.avgViews !== null ? p.counted : 0), 0) / counted : null,
-    posted: ps.reduce((t, p) => t + p.posted, 0),
-  };
+  return kitTotals(ps);
 }
 
 // ---- Slides --------------------------------------------------------------------------------------------------------------
@@ -274,7 +284,7 @@ function coverPage(c: Ctx): Page {
     }
   }
   const tag = s.tagline ? wrap(c.m, s.tagline, "reg", 15, leftW - 20, 3) : [];
-  const t = totalsOf(ps);
+  const t = c.totals;
   // The block's height, so it sits in the middle of the room between the logo and the handles.
   const titleH = size * 0.75 + (titleLines.length - 1) * size * 1.04;
   const tagH = tag.length ? 40 + (tag.length - 1) * 21 : 0;
@@ -288,7 +298,7 @@ function coverPage(c: Ctx): Page {
     y += 56;
     const numW = text(ops, c, MX, y, big(t.followers), "disp", 34, pal.accentText);
     const who = ps.filter((p) => p.followers !== null).map((p) => KIT_PLATFORM_NAME[p.platform]);
-    const label = who.length > 1 ? `followers across ${listWords(who)}` : `followers on ${who[0]}`;
+    const label = who.length > 1 ? `followers across ${listWords(who)}` : who.length ? `followers on ${who[0]}` : "followers";
     const lab = wrap(c.m, label, "reg", 11.5, leftW - numW - 14, 2);
     lines(ops, c, MX + numW + 12, lab.length > 1 ? y - 15 : y - 4, lab, "reg", 11.5, pal.muted, 15);
   }
@@ -321,21 +331,22 @@ function coverPage(c: Ctx): Page {
   const mk = text(ops, c, MX, H - 46, "Media kit", "semi", 10.5, pal.ink);
   text(ops, c, MX + mk + 10, H - 46, dayRange(nums.window.from, nums.window.to), "reg", 10.5, pal.muted);
 
-  // The right side: the wall of thumbnails, the photo, or one big number.
+  // The right side: a wall of thumbnails (Shorts, long videos or both), the photo, or one big number.
   const want = s.cover === "photo" && c.images.cover ? "photo" : s.cover === "plain" ? "plain" : "videos";
   const vids = coverVideos(c);
   if (want === "photo") {
     ops.push({ t: "image", x: 536, y: 34, w: 390, h: H - 68, src: c.images.cover!, r: 22 });
-  } else if (want === "videos" && vids.length >= 6) {
-    wall(ops, c, vids);
+  } else if (want === "videos" && vids.length >= (pickedCover(c).length ? 1 : 6)) {
+    coverWall(ops, c, vids);
   } else {
     bigPanel(ops, c, t);
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: "Cover" };
+  return { w: W, h: H, bg: pal.paper, ops, label: "Cover", anchor: "cover" };
 }
 
-/** The cover's videos: the period's best, then the best ever, with a picture, each once. */
-function coverVideos(c: Ctx): KitVideo[] {
+/** The kit's own videos for the cover, best first: the period's most viewed, then the best ever, then the rest of the
+ * videos to pick from (1.39.0); the kit's platforms only, with a picture, each once. */
+function bestVideos(c: Pick<Ctx, "nums" | "ps">): KitVideo[] {
   const mine = new Set(c.ps.map((p) => p.platform));
   const seen = new Set<string>();
   const out: KitVideo[] = [];
@@ -345,33 +356,122 @@ function coverVideos(c: Ctx): KitVideo[] {
     seen.add(k);
     out.push(v);
   };
-  const period = c.ps.flatMap((p) => p.top).sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
-  period.forEach(add);
+  c.ps
+    .flatMap((p) => p.top)
+    .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+    .forEach(add);
   c.nums.allTime.forEach(add);
-  return out.slice(0, 15);
+  (c.nums.pool ?? []).forEach(add);
+  return out;
 }
 
-/** Three columns of thumbnails, each set a little higher or lower, running off the top, the bottom and the right. */
-function wall(ops: Op[], c: Ctx, vids: KitVideo[]) {
-  const colW = 132;
-  const gap = 12;
-  const x0 = 540;
-  const offsets = [-26, -92, -48];
-  // Dealt across the columns in turn; a column that runs out carries on from another point of the list, so the
-  // same picture never sits next to itself.
-  offsets.forEach((off, ci) => {
-    const x = x0 + ci * (colW + gap);
-    let y = off;
-    let k = 0;
-    while (y < H && k < 12) {
-      const idx = ci + k * 3;
-      const v = vids[idx < vids.length ? idx : (ci * 2 + k * 5) % vids.length];
-      const h = isVertical(v) ? 176 : v.kind === "post" ? colW : 74;
-      ops.push({ t: "image", x, y, w: colW, h, src: v.thumb!, r: 10 });
-      y += h + gap;
-      k++;
-    }
-  });
+/** The ones picked by hand (1.39.0, in their order, with a picture). */
+const pickedCover = (c: Pick<Ctx, "s" | "nums">) => (c.s.coverPicks.on ? c.s.coverPicks.list.map((v) => pickedVideo(v, c.nums.pool ?? [])).filter((v) => v.thumb) : []);
+
+/** The cover's videos: the ones picked, or the best fifteen. */
+function coverVideos(c: Pick<Ctx, "s" | "nums" | "ps">): KitVideo[] {
+  const picked = pickedCover(c);
+  return picked.length ? picked : bestVideos(c).slice(0, 15);
+}
+
+/** The wall's shape: as chosen, or (Auto) what its videos are: mostly tall (Shorts), mostly wide (long videos), or both. */
+export function coverGridFor(vids: KitVideo[], chosen: KitCoverGrid): "shorts" | "longs" | "mixed" {
+  if (chosen !== "auto") return chosen;
+  const first = vids.slice(0, 12);
+  const tall = first.filter(isVertical).length;
+  if (tall >= first.length * 0.7) return "shorts";
+  if (tall <= first.length * 0.3) return "longs";
+  return "mixed";
+}
+
+/** The wall the cover gets on Auto, for these numbers and this setup (the builder says it beside the choice). */
+export function autoCoverGrid(read: MediaKitNumbers, s: MediaKitSettings): "shorts" | "longs" | "mixed" {
+  const nums = applyManual(read, s);
+  return coverGridFor(coverVideos({ s, nums, ps: kitPlatforms(nums, s) }), "auto");
+}
+
+/** The wall's left edge: from here it runs off the page on the right, the top and the bottom. */
+const WALL_X = 540;
+
+/**
+ * The cover's wall (1.39.0: three shapes). Shorts: three columns of tall thumbnails, each column set a little higher
+ * or lower. Long videos: two columns of wide ones. Both: two columns where tall and wide take turns, the second
+ * column the other way round, so they interlock. One to three videos (picked by hand): those, big. On its own, a wall
+ * takes the videos of its shape (as many as it has room for); picked ones go where they're put, and one that doesn't
+ * match its tile's shape shows whole in it. A column that runs out carries on from another point of the list, so the
+ * same picture never sits next to itself.
+ */
+function coverWall(ops: Op[], c: Ctx, shown: KitVideo[]) {
+  const grid = coverGridFor(shown, c.s.coverGrid);
+  const picked = pickedCover(c).length > 0;
+  if (picked && shown.length <= 3) return featureTiles(ops, c, shown);
+  const every = picked ? shown : bestVideos(c);
+  const tall = every.filter(isVertical);
+  const wide = every.filter((v) => !isVertical(v));
+  const own = (list: KitVideo[], min: number) => (picked || list.length < min ? every : list);
+  const at = (vids: KitVideo[], idx: number, alt: number) => vids[idx < vids.length ? idx : alt % vids.length];
+  if (grid === "shorts") {
+    const vids = own(tall, 6);
+    const colW = 132;
+    [-26, -92, -48].forEach((off, ci) => {
+      let y = off;
+      for (let k = 0; y < H && k < 12; k++) {
+        pic(ops, c, at(vids, ci + k * 3, ci * 2 + k * 5), WALL_X + ci * (colW + 12), y, colW, 176, 10);
+        y += 176 + 12;
+      }
+    });
+  } else if (grid === "longs") {
+    const vids = own(wide, 4);
+    const colW = 204;
+    const h = Math.round(colW * (9 / 16));
+    [-34, -96].forEach((off, ci) => {
+      let y = off;
+      for (let k = 0; y < H && k < 12; k++) {
+        pic(ops, c, at(vids, ci + k * 2, ci * 3 + k * 5), WALL_X + ci * (colW + 12), y, colW, h, 10);
+        y += h + 12;
+      }
+    });
+  } else {
+    const T = tall.length ? tall : every;
+    const Wd = wide.length ? wide : every;
+    const colW = 204;
+    const hT = 272;
+    const hW = Math.round(colW * (9 / 16));
+    let ti = 0;
+    let wi = 0;
+    [
+      { off: -40, first: "w" },
+      { off: -122, first: "t" },
+    ].forEach(({ off, first }, ci) => {
+      let y = off;
+      for (let k = 0; y < H && k < 10; k++) {
+        const isTall = (k % 2 === 0) === (first === "t");
+        const v = isTall ? T[ti++ % T.length] : Wd[wi++ % Wd.length];
+        const h = isTall ? hT : hW;
+        pic(ops, c, v, WALL_X + ci * (colW + 12), y, colW, h, 10);
+        y += h + 12;
+      }
+    });
+  }
+}
+
+/** One to three picked videos: big, in the cover's panel (each whole when its shape is far from its tile's). */
+function featureTiles(ops: Op[], c: Ctx, vids: KitVideo[]) {
+  const x = 536;
+  const y = 34;
+  const w = 390;
+  const h = H - 68;
+  const g = 12;
+  const put = (v: KitVideo, bx: number, by: number, bw: number, bh: number) => pic(ops, c, v, bx, by, bw, bh, 18);
+  if (vids.length === 1) put(vids[0], x, y, w, h);
+  else if (vids.length === 2) {
+    if (vids.every(isVertical)) vids.forEach((v, i) => put(v, x + i * ((w + g) / 2), y, (w - g) / 2, h));
+    else vids.forEach((v, i) => put(v, x, y + i * ((h + g) / 2), w, (h - g) / 2));
+  } else {
+    const top = Math.round(h * 0.56);
+    put(vids[0], x, y, w, top);
+    vids.slice(1, 3).forEach((v, i) => put(v, x + i * ((w + g) / 2), y + top + g, (w - g) / 2, h - top - g));
+  }
 }
 
 /** Without pictures: the accent, and the period's views as one big number. */
@@ -401,7 +501,10 @@ function aboutPage(c: Ctx): Page | null {
   const { pal, s } = c;
   if (!s.about) return null;
   const ops: Op[] = [];
-  const vids = coverVideos(c).slice(0, 4);
+  // Four tall tiles: the cover's picked videos first, then the best; tall ones first (they fill their tiles).
+  const seen = new Set<string>();
+  const cands = [...pickedCover(c), ...bestVideos(c)].filter((v) => (seen.has(`${v.platform}:${v.id}`) ? false : (seen.add(`${v.platform}:${v.id}`), true)));
+  const vids = [...cands.filter(isVertical), ...cands.filter((v) => !isVertical(v))].slice(0, 4);
   const picture = c.images.cover && s.cover === "photo" ? "photo" : vids.length >= 4 ? "videos" : null;
   const textW = picture ? 560 : CW - 120;
   // As big as fits in the room (nine lines at most).
@@ -421,9 +524,9 @@ function aboutPage(c: Ctx): Page | null {
     const x0 = 660;
     const gw = (W - MX - x0 - 12) / 2;
     const gh = (H - 128 - 12) / 2;
-    vids.forEach((v, i) => ops.push({ t: "image", x: x0 + (i % 2) * (gw + 12), y: 64 + Math.floor(i / 2) * (gh + 12), w: gw, h: gh, src: v.thumb!, r: 12 }));
+    vids.forEach((v, i) => pic(ops, c, v, x0 + (i % 2) * (gw + 12), 64 + Math.floor(i / 2) * (gh + 12), gw, gh, 12));
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: "About us" };
+  return { w: W, h: H, bg: pal.paper, ops, label: "About us", anchor: "about" };
 }
 
 function glancePage(c: Ctx): Page {
@@ -431,14 +534,14 @@ function glancePage(c: Ctx): Page {
   const ops: Op[] = [];
   const names = ps.map((p) => KIT_PLATFORM_NAME[p.platform]);
   const top = header(ops, c, "At a glance", { right: dayRange(nums.window.from, nums.window.to), sub: `${listWords(names)} together, over ${daysWords(nums.window.days)}.` });
-  const t = totalsOf(ps);
+  const t = c.totals;
   const d = nums.window.days;
   const items: { value: string; label: string; note: string | null; tone: "accent" | "muted" }[] = [];
   if (t.followers !== null)
     items.push({ value: big(t.followers), label: "followers", note: t.followersGrowth !== null ? `${signedPct(t.followersGrowth, c.minus)} in ${d} days` : null, tone: (t.followersGrowth ?? 0) > 0 ? "accent" : "muted" });
   if (t.views !== null) items.push({ value: big(t.views), label: "views", note: t.viewsChange !== null ? `${signedPct(t.viewsChange, c.minus)} on the ${d} days before` : null, tone: (t.viewsChange ?? 0) > 0 ? "accent" : "muted" });
   if (t.engagementRate !== null) items.push({ value: pct(t.engagementRate), label: "engagement rate", note: "likes, comments and shares for every view", tone: "muted" });
-  if (t.avgViews !== null) items.push({ value: big(t.avgViews), label: "average views per video", note: `${t.posted} ${t.posted === 1 ? "video" : "videos"} posted in these ${d} days`, tone: "muted" });
+  if (t.avgViews !== null) items.push({ value: big(t.avgViews), label: "average views per video", note: t.posted ? `${t.posted} ${t.posted === 1 ? "video" : "videos"} posted in these ${d} days` : null, tone: "muted" });
   const gap = 28;
   const colW = items.length ? (CW - gap * (items.length - 1)) / items.length : CW;
   let bottom = top;
@@ -478,7 +581,7 @@ function glancePage(c: Ctx): Page {
       lx += 13 + text(ops, c, lx + 13, by + 28, label, "reg", 9.5, pal.muted) + 18;
     }
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: "At a glance" };
+  return { w: W, h: H, bg: pal.paper, ops, label: "At a glance", anchor: "glance" };
 }
 
 function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
@@ -487,7 +590,10 @@ function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
   const name = KIT_PLATFORM_NAME[p.platform];
   const top = header(ops, c, name, { icon: p.platform, right: p.handle, rightLink: p.url, sub: dayRange(nums.window.from, nums.window.to) });
   const d = nums.window.days;
-  const leftW = 360;
+  // Nothing for the right (no chart, no videos: a platform added by hand, 1.39.0): the numbers take the whole width.
+  const alone = !p.chart && !p.daily.some((v) => v !== null) && !p.top.length;
+  const leftW = alone ? CW : 360;
+  const perRow = alone ? 4 : 2;
   // Followers, big.
   let y = top;
   if (p.followers !== null) {
@@ -501,22 +607,22 @@ function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
     const watch = p.watchHours !== null && p.watchHours > 0 ? `${big(p.watchHours)} hours watched` : null;
     cells.push({ value: big(p.views), label: "views", note: [ch !== null ? `${signedPct(ch, c.minus)} on the ${d} days before` : null, watch].filter(Boolean).join(", ") || null });
   }
-  const er = ratePct(p.engagement, p.views);
+  const er = p.engagementRate ?? ratePct(p.engagement, p.views);
   if (er !== null) cells.push({ value: pct(er), label: "engagement rate", note: null });
   if (p.avgViewsLong !== null && p.avgViewsShort !== null) {
     cells.push({ value: big(p.avgViewsLong), label: "average views, long videos", note: null });
     cells.push({ value: big(p.avgViewsShort), label: "average views, Shorts", note: null });
   } else {
     if (p.avgViews !== null) cells.push({ value: big(p.avgViews), label: "average views per video", note: null });
-    cells.push({ value: String(p.posted), label: p.posted === 1 ? "video posted" : "videos posted", note: null });
+    if (p.posted || !p.manual) cells.push({ value: String(p.posted), label: p.posted === 1 ? "video posted" : "videos posted", note: null });
   }
-  const cellW = (leftW - 24) / 2;
+  const cellW = (leftW - 24 * (perRow - 1)) / perRow;
   let rowTop = y + 22;
-  for (let r = 0; r < Math.min(4, cells.length); r += 2) {
+  for (let r = 0; r < Math.min(4, cells.length); r += perRow) {
     ops.push({ t: "path", d: `M${MX} ${round(rowTop - 12)}H${MX + leftW}`, stroke: pal.hair, sw: 1 });
     let rowBottom = rowTop;
-    cells.slice(r, r + 2).forEach((cell, k) => {
-      rowBottom = Math.max(rowBottom, stat(ops, c, MX + k * (cellW + 24), rowTop, cellW, cell.value, cell.label, cell.note, { size: 26 }));
+    cells.slice(r, r + perRow).forEach((cell, k) => {
+      rowBottom = Math.max(rowBottom, stat(ops, c, MX + k * (cellW + 24), rowTop, cellW, cell.value, cell.label, cell.note, { size: alone ? 34 : 26 }));
     });
     rowTop = rowBottom + 22;
   }
@@ -525,7 +631,11 @@ function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
   const rx = MX + leftW + 48;
   const rw = W - MX - rx;
   const chartH = 150;
-  if (p.daily.some((v) => v !== null)) {
+  if (p.chart) {
+    // Your own points (Manual): what they are, no days.
+    text(ops, c, rx, top + 4, p.chart.label, "semi", 10.5, pal.ink);
+    areaChart(ops, c, rx, top + 10, rw, chartH, p.chart.points, null, null);
+  } else if (p.daily.some((v) => v !== null)) {
     text(ops, c, rx, top + 4, "Views per day", "semi", 10.5, pal.ink);
     areaChart(ops, c, rx, top + 10, rw, chartH, p.daily, nums.window.from, nums.window.to);
   }
@@ -545,7 +655,7 @@ function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
       text(ops, c, x, end + 13, `${big(v.views)} views`, "reg", 9, pal.muted);
     });
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: name };
+  return { w: W, h: H, bg: pal.paper, ops, label: name, anchor: `platform:${p.platform}` };
 }
 
 function audiencePage(c: Ctx, p: KitPlatformNumbers): Page | null {
@@ -611,29 +721,33 @@ function audiencePage(c: Ctx, p: KitPlatformNumbers): Page | null {
       cy += 40;
     });
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: `Audience: ${name}` };
+  return { w: W, h: H, bg: pal.paper, ops, label: `Audience: ${name}`, anchor: `audience:${p.platform}` };
 }
 
 function videosPage(c: Ctx): Page | null {
   const { pal, s, nums, ps } = c;
   const count = s.videos;
   const mine = new Set(ps.map((p) => p.platform));
-  let list = ps.flatMap((p) => p.top).sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
+  // 1.39.0: picked by hand (in their order), else the period's most viewed (the best ever when it has too few).
+  const picked = s.videoPicks.on && s.videoPicks.list.length > 0;
+  let list = picked ? s.videoPicks.list.slice(0, LIMITS.videoPicks).map((v) => pickedVideo(v, nums.pool ?? [])) : ps.flatMap((p) => p.top).sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
   let ever = false;
-  if (list.length < Math.min(3, count)) {
+  if (!picked && list.length < Math.min(3, count)) {
     // A period with too few: the best ever.
     list = nums.allTime.filter((v) => mine.has(v.platform));
     ever = true;
   }
-  list = list.slice(0, count);
+  if (!picked) list = list.slice(0, count);
   if (!list.length) return null;
   const ops: Op[] = [];
-  const top = header(ops, c, "Our best videos", { right: ever ? "Most viewed ever" : `Most viewed, ${dayRange(nums.window.from, nums.window.to)}` });
-  const cols = 3;
+  const top = header(ops, c, picked ? "Videos we're proud of" : "Our best videos", { right: picked ? null : ever ? "Most viewed ever" : `Most viewed, ${dayRange(nums.window.from, nums.window.to)}` });
+  // Three across; one to three picked: as many as there are; four: two by two.
+  const cols = list.length <= 3 ? list.length : list.length === 4 ? 2 : 3;
   const gap = 20;
   const cw = (CW - gap * (cols - 1)) / cols;
   const rows = Math.ceil(list.length / cols);
-  const rowH = rows === 1 ? cw * (9 / 16) : (H - 50 - top - (rows - 1) * 18) / rows - 52;
+  const roomH = H - 50 - top - 52 - 30;
+  const rowH = rows === 1 ? Math.min(cw * (9 / 16), roomH) : (H - 50 - top - (rows - 1) * 18) / rows - 52;
   const startY = rows === 1 ? top + 30 : top + 6;
   list.forEach((v, i) => {
     const x = MX + (i % cols) * (cw + gap);
@@ -645,7 +759,7 @@ function videosPage(c: Ctx): Page | null {
     const meta = [`${big(v.views)} views`, v.likes ? `${big(v.likes)} likes` : null, v.comments ? `${big(v.comments)} comments` : null].filter(Boolean).join(", ");
     text(ops, c, x, end + 14, meta, "reg", 9.5, pal.muted);
   });
-  return { w: W, h: H, bg: pal.paper, ops, label: "Best videos" };
+  return { w: W, h: H, bg: pal.paper, ops, label: "Best videos", anchor: "videos" };
 }
 
 function partnersPages(c: Ctx): Page[] {
@@ -685,14 +799,14 @@ function partnersPages(c: Ctx): Page[] {
     const together = s.testimonials.length > 0 && s.partners.length <= 8;
     const end = tiles(ops, top + 4, s.partners);
     if (together) quotes(ops, end + 34);
-    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Brands" });
+    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Brands", anchor: "partners" });
     if (together) return pages;
   }
   if (s.testimonials.length) {
     const ops: Op[] = [];
     const top = header(ops, c, "What brands say");
     quotes(ops, top + 20);
-    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Kind words" });
+    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Kind words", anchor: "partners" });
   }
   return pages;
 }
@@ -732,7 +846,7 @@ function ratesPage(c: Ctx): Page {
   } else if (s.rates.note) {
     lines(ops, c, MX, Math.min(y + 34, H - 70), wrap(c.m, s.rates.note, "reg", 10.5, CW, 2), "reg", 10.5, pal.muted, 14.5);
   }
-  return { w: W, h: H, bg: pal.paper, ops, label: "Rates" };
+  return { w: W, h: H, bg: pal.paper, ops, label: "Rates", anchor: "rates" };
 }
 
 function contactPage(c: Ctx): Page {
@@ -757,13 +871,13 @@ function contactPage(c: Ctx): Page {
       ry += 58;
     }
   }
-  const t = totalsOf(ps);
+  const t = c.totals;
   if (t.followers !== null) {
     const v = big(t.followers);
     const size = fitSize(c.m, v, "disp", 56, pw - 68, 30);
     text(ops, c, px + 34, H - 84, v, "disp", size, pal.onAccent);
     const on = ps.filter((p) => p.followers !== null);
-    text(ops, c, px + 34, H - 62, on.length > 1 ? "followers in all" : `followers on ${KIT_PLATFORM_NAME[on[0].platform]}`, "reg", 11, pal.onAccent, "left", 0.86);
+    text(ops, c, px + 34, H - 62, on.length === 1 ? `followers on ${KIT_PLATFORM_NAME[on[0].platform]}` : "followers in all", "reg", 11, pal.onAccent, "left", 0.86);
   }
 
   // The left: the invitation, then how to reach us.
@@ -789,13 +903,29 @@ function contactPage(c: Ctx): Page {
   const site = websiteUrl(s.contact.website);
   if (site) row("Website", s.contact.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), site);
 
-  // Where the numbers come from.
-  const from = ps.map((p) => KIT_PLATFORM_NAME[p.platform]);
-  if (from.length) {
-    const note = `Every number in this kit comes straight from ${listWords(from)}, read by ClipTroop on ${shortDay(nums.generatedAt.slice(0, 10), true)}.`;
-    lines(ops, c, MX, H - 62, wrap(c.m, note, "reg", 9, leftW, 2), "reg", 9, pal.faint, 12.5);
-  }
-  return { w: W, h: H, bg: pal.paper, ops, label: "Contact" };
+  // Where the numbers come from (1.39.0: and which are the team's own).
+  const note = sourceNote(c);
+  if (note) lines(ops, c, MX, H - 62, wrap(c.m, note, "reg", 9, leftW, 2), "reg", 9, pal.faint, 12.5);
+  return { w: W, h: H, bg: pal.paper, ops, label: "Contact", anchor: "contact" };
+}
+
+/**
+ * Where the kit's numbers come from, honestly: read from the platforms by ClipTroop, or typed in by the team (1.39.0:
+ * a platform's numbers, the audience, the totals). Null without numbers.
+ */
+export function sourceNote(c: Pick<Ctx, "ps" | "nums" | "totals">): string | null {
+  const { ps, nums } = c;
+  if (!ps.length) return null;
+  const day = shortDay(nums.generatedAt.slice(0, 10), true);
+  const read = ps.filter((p) => !p.manual).map((p) => KIT_PLATFORM_NAME[p.platform]);
+  const own = [
+    ps.some((p) => p.manual) ? `${listWords(ps.filter((p) => p.manual).map((p) => `${KIT_PLATFORM_NAME[p.platform]}’s`))} numbers` : null,
+    ps.some((p) => p.manualAudience) ? "the audience figures" : null,
+    c.totals.manual && ps.length > 1 ? "the totals" : null,
+  ].filter((x): x is string => !!x);
+  if (!own.length) return `Every number in this kit comes straight from ${listWords(read)}, read by ClipTroop on ${day}.`;
+  const ours = `${listWords(own).charAt(0).toUpperCase()}${listWords(own).slice(1)} are our own count.`;
+  return read.length ? `${listWords(read.map((r) => `${r}’s`))} numbers come straight from the platform${read.length > 1 ? "s" : ""}, read by ClipTroop on ${day}. ${ours}` : ours;
 }
 
 /** Every page's footer: the kit's name on the left, the page on the right (not on the cover). */
@@ -821,14 +951,19 @@ export function kitPlatforms(nums: MediaKitNumbers, s: MediaKitSettings): KitPla
   return chosen;
 }
 
-export function buildKits(nums: MediaKitNumbers, s: MediaKitSettings, m: Measure, images: KitImages): Kit[] {
+export function buildKits(read: MediaKitNumbers, s: MediaKitSettings, m: Measure, images: KitImages): Kit[] {
+  // 1.39.0: what's typed in laid over what was read (manual.ts); every page draws from these.
+  const nums = applyManual(read, s);
   const pal = kitPalette(s.accent || nums.team.color, s.theme);
   const title = s.title || nums.team.name || "Our channel";
   const minus = m.clean("−", "disp") === "−" && m.clean("−", "reg") === "−" ? "−" : "-";
   const all = kitPlatforms(nums, s);
   const groups: { platform: KitPlatform | null; ps: KitPlatformNumbers[] }[] = s.split === "each" && all.length > 1 ? all.map((p) => ({ platform: p.platform, ps: [p] })) : [{ platform: null, ps: all }];
   return groups.map((g) => {
-    const c: Ctx = { m, pal, s, nums, ps: g.ps, title, images, minus };
+    // At a glance's own numbers stand for a kit of several platforms (the page they're typed on is only in those);
+    // a kit of one platform has that platform's own.
+    const totals = kitTotals(g.ps, g.platform || g.ps.length < 2 ? null : s.manual.glance);
+    const c: Ctx = { m, pal, s, nums, ps: g.ps, totals, title, images, minus };
     const pages: Page[] = [];
     if (s.sections.cover) pages.push(coverPage(c));
     if (s.sections.about) {

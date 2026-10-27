@@ -4,12 +4,20 @@
 // wonderful and beautiful." The setup is checked field by field; the numbers add up the way Analytics does; the
 // pages come out in order, every word inside its page and readable on what it sits on; the server side keeps the
 // rates to the people who see revenue and the saving to masters.
+// 1.39.0: "add the option to manually input data for everything too … a manual button for each part of the
+// presentation where there are graphs, data … auto should be on by default"; "pick which videos i want to feature";
+// "for the cover … long videos too, and a hybrid between longs and shorts, a cool grid"; "only masters and people who
+// have the sponsorship role … can access media kits" (Partnerships). Typed-in numbers are checked and laid over the
+// read ones; picked videos keep their order; the three walls; who opens it, here and in the database (0115, 0116).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, formatPrice, isCoverPath, isCurrency, isEmail, isWebsite, readKitSettings, websiteUrl, KIT_SECTIONS, type MediaKitSettings } from "../modules/media-kit/lib/settings";
+import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
+import { applyManual, audienceFrom, audienceFromRead, kitTotals, manualFromRead, parseAmount, parsePoints, pickedVideo, pointsText, toPicked, totalsFromRead, withManual } from "../modules/media-kit/lib/manual";
+import { canMakeMediaKit, KIT_ROLES } from "../modules/media-kit/lib/access";
+import { pageAnchorFor } from "../modules/media-kit/components/use-kit-sync";
 import { addDaily, agesFrom, changePct, countriesFrom, gendersFrom, growthPct, isVertical, mean, profileUrl, ratePct, shares, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "../modules/media-kit/lib/numbers";
 import { big, dayRange, fitSize, pct, roundRect, shortDay, signedPct, smoothPath, wrap, PAGE_H, PAGE_W, type Measure, type Op } from "../modules/media-kit/lib/scene";
-import { buildKits, kitFileName, totalsOf, type KitImages } from "../modules/media-kit/lib/layout";
+import { autoCoverGrid, buildKits, coverGridFor, kitFileName, sourceNote, totalsOf, type KitImages } from "../modules/media-kit/lib/layout";
 import { kitPalette } from "../modules/media-kit/lib/theme";
 import { contrast, over } from "../lib/contrast";
 
@@ -223,9 +231,10 @@ ok(buildKits(nums, { ...full, videos: 3 }, m, images)[0].pages.find((p) => p.lab
 const fewVideos = { ...nums, platforms: nums.platforms.map((p) => ({ ...p, top: p.top.slice(0, 0) })) };
 ok(/Most viewed ever/.test(texts(buildKits(fewVideos, full, m, images)[0].pages.find((p) => p.label === "Best videos")!.ops)), "a period without videos: the best ever");
 const cover = (s: Partial<MediaKitSettings>, imgs: KitImages = images, n = nums) => buildKits(n, { ...full, ...s }, m, imgs)[0].pages[0].ops;
-ok(cover({ cover: "videos" }).filter((o) => o.t === "image").length > 10, "cover: a wall of thumbnails");
+const wallImgs = (ops: Op[]) => ops.filter((o): o is Extract<Op, { t: "image" }> => o.t === "image" && o.src !== "/logo.png");
+ok(wallImgs(cover({ cover: "videos" })).length >= 6, `cover: a wall of thumbnails (${wallImgs(cover({ cover: "videos" })).length})`);
 ok(cover({ cover: "photo" }, { logo: "/logo.png", cover: "/photo.jpg" }).some((o) => o.t === "image" && o.src === "/photo.jpg"), "cover: the photo");
-ok(!cover({ cover: "photo" }).some((o) => o.t === "image" && o.src === "/photo.jpg") && cover({ cover: "photo" }).filter((o) => o.t === "image").length > 10, "photo picked but none added: the thumbnails");
+ok(!cover({ cover: "photo" }).some((o) => o.t === "image" && o.src === "/photo.jpg") && wallImgs(cover({ cover: "photo" })).length >= 6, "photo picked but none added: the thumbnails");
 ok(/views in the last 28 days/.test(texts(cover({ cover: "plain" }))), "cover: one big number");
 ok(cover({}, { logo: null, cover: null }).some((o) => o.t === "text" && o.s === "N"), "no logo: the name's first letter on the accent");
 const empty = buildKits({ ...nums, platforms: [], allTime: [] }, full, m, images)[0];
@@ -235,35 +244,224 @@ ok(!texts(longTitle.pages[0].ops).includes("…") || texts(longTitle.pages[0].op
 const dark = buildKits(nums, { ...full, theme: "dark" }, m, images)[0];
 ok(dark.pages.every((p) => contrast(p.bg, [255, 255, 255]) > 10), "dark pages are dark");
 
+// --- 1.39.0: the setup's new parts ---------------------------------------------------------------------------------------
+ok(same(d.extra, []) && !d.manual.glance.on && same(d.manual.platforms, {}) && same(d.manual.audience, {}) && !d.videoPicks.on && !d.coverPicks.on && d.coverGrid === "auto", "defaults: Auto everywhere, the best videos, the wall as its videos are");
+const thumbOk = "/api/analytics/thumb?team=t&platform=youtube&id=abc&kind=long";
+const r2 = readKitSettings({
+  extra: ["facebook", "facebook", "myspace", "tiktok"],
+  manual: {
+    glance: { on: true, followers: "2500000", growth: 1e9, views: -5, viewsChange: -250, engagementRate: 140, avgViews: "x", posted: 3.7 },
+    platforms: {
+      youtube: { on: true, handle: "  @north\u0000  ", followers: 1.5e15, growth: 3.456, chart: "own", chartLabel: "y".repeat(90), chartPoints: [1, "2", -3, null, ...Array.from({ length: 80 }, (_, i) => i)] },
+      myspace: { on: true },
+      instagram: "nope",
+    },
+    audience: { tiktok: { on: true, women: 48.25, men: "51.75", ages: { "18–24": 60, "99+": 5 }, countries: [{ name: "United States", share: 40 }, { name: "", share: null }, ...Array.from({ length: 9 }, (_, i) => ({ name: `C${i}`, share: 1 }))] } },
+  },
+  videoPicks: { on: true, list: [{ platform: "youtube", id: "a", kind: "long", title: "A", thumb: thumbOk, url: "https://x.com/a", views: 5 }, { platform: "youtube", id: "a" }, { platform: "myspace", id: "b" }, { platform: "tiktok", id: "bad id!" }, { platform: "tiktok", id: "c", kind: "weird", thumb: "https://evil.com/x.jpg", url: "javascript:alert(1)" }, ...Array.from({ length: 10 }, (_, i) => ({ platform: "instagram", id: `i${i}` }))] },
+  coverPicks: { on: "yes", list: Array.from({ length: 30 }, (_, i) => ({ platform: "youtube", id: `v${i}` })) },
+  coverGrid: "diagonal",
+});
+ok(same(r2.extra, ["facebook", "tiktok"]), "platforms by hand: known ones, each once");
+const g2 = r2.manual.glance;
+ok(g2.on && g2.followers === 2_500_000 && g2.growth === 100000 && g2.views === 0 && g2.viewsChange === -100 && g2.engagementRate === 100 && g2.avgViews === null && g2.posted === 4, `typed totals: numbers only, each kept to its range (${JSON.stringify(g2)})`);
+const y2 = r2.manual.platforms.youtube!;
+ok(y2.on && y2.handle === "@north" && y2.followers === LIMITS.count && y2.growth === 3.5 && y2.chart === "own" && Array.from(y2.chartLabel).length === LIMITS.chartLabel && y2.chartPoints.length === LIMITS.chartPoints && y2.chartPoints[0] === 1 && y2.chartPoints[1] === 2 && y2.chartPoints[2] === 0, "a platform's typed numbers: the handle cleaned, counts capped, percentages to a decimal, the chart's points kept to 60");
+ok(!("myspace" in r2.manual.platforms) && !("instagram" in r2.manual.platforms), "typed numbers only for the four platforms, only as an object");
+const a2 = r2.manual.audience.tiktok!;
+ok(a2.on && a2.women === 48.3 && a2.men === 51.8 && a2.ages["18–24"] === 60 && !("99+" in a2.ages) && KIT_AGES.every((k) => k in a2.ages) && a2.countries.length === LIMITS.countries && a2.countries[0].name === "United States", "a typed audience: shares to a decimal, the platforms' age groups only, five countries at most");
+ok(r2.videoPicks.on && same(r2.videoPicks.list.map(videoKey), ["youtube:a", "tiktok:c", "instagram:i0", "instagram:i1", "instagram:i2", "instagram:i3"]), `picked videos: real ones, each once, in their order, six at most (${r2.videoPicks.list.map(videoKey).join(" ")})`);
+ok(r2.videoPicks.list[0].thumb === thumbOk && r2.videoPicks.list[0].url === "https://x.com/a" && r2.videoPicks.list[1].thumb === null && r2.videoPicks.list[1].url === null && r2.videoPicks.list[1].kind === "long", "a picked video keeps only ClipTroop's own thumbnail and an https link");
+ok(!r2.coverPicks.on && r2.coverPicks.list.length === LIMITS.coverPicks && r2.coverGrid === "auto", "the cover's picks: on only when it says true, fifteen at most; an unknown wall: Auto");
+ok(isOwnThumb(thumbOk) && !isOwnThumb("/api/analytics/thumb?x=<script>") && !isOwnThumb("https://i.ytimg.com/x.jpg") && !isOwnThumb("/api/other?x=1"), "only ClipTroop's own thumbnail address is kept");
+ok(same(readKitSettings(JSON.parse(JSON.stringify(r2))), r2), "a checked setup reads back the same");
+
+// Numbers as they're typed.
+ok(parseAmount("2.5M") === 2_500_000 && parseAmount("120k") === 120_000 && parseAmount("1,200") === 1200 && parseAmount(" 12% ") === 12 && parseAmount("+3.5") === 3.5 && parseAmount("-4") === -4 && parseAmount("1.2B") === 1.2e9 && parseAmount(".5") === 0.5, "numbers typed as they're said: 2.5M, 120k, 1,200, 12%");
+ok(parseAmount("") === null && parseAmount("abc") === null && parseAmount("1.2.3") === null && parseAmount("5 apples") === null && parseAmount("-") === null && parseAmount("M") === null, "anything else: not a number");
+ok(same(parsePoints("120K, 180K; 240K 1.1M"), [120_000, 180_000, 240_000, 1_100_000]) && same(parsePoints("1,200, 1,500,000"), [1200, 1_500_000]) && same(parsePoints("10,20,30"), [10, 20, 30]) && same(parsePoints("5, x, -3, 7"), [5, 7]), "a chart's points: commas, semicolons or spaces between; 1,200 stays one; not numbers and below zero left out");
+const pts = [880_000, 1_020_000, 1_234_567, 950, 2_500, 3e9, 0];
+ok(pointsText(pts) === "880K, 1.02M, 1234567, 950, 2.5K, 3B, 0" && same(parsePoints(pointsText(pts)), pts), `points shown back exactly, and read back the same (${pointsText(pts)})`);
+
+// Typed numbers laid over the read ones.
+const yt0 = nums.platforms[0];
+const mYt: ManualPlatform = { ...emptyManualPlatform(), on: true, handle: "northbound", followers: 110_000, growth: 10, views: 1_250_000, viewsChange: 25, engagementRate: 6, avgViews: 300_000, posted: 9, chart: "none" };
+const w1m = withManual(yt0, mYt);
+ok(w1m.handle === "@northbound" && w1m.url === "https://www.youtube.com/@northbound" && w1m.followers === 110_000 && Math.abs(growthPct(w1m.followers, w1m.followersNet)! - 10) < 1e-9 && Math.abs(changePct(w1m.views, w1m.viewsPrev)! - 25) < 1e-9, "typed growth and change become the counts the pages work from (+10% → 10,000 gained)");
+ok(Math.abs(ratePct(w1m.engagement, w1m.views)! - 6) < 1e-9 && w1m.engagementRate === 6 && w1m.posted === 9 && w1m.counted === 9 && w1m.watchHours === null && same(w1m.daily, []) && w1m.chart === null && w1m.manual === true && same(w1m.top, yt0.top) && same(w1m.audience, yt0.audience), "the rate, the videos posted; an empty box (hours) left out; chart None; its videos and audience as read");
+ok(withManual(plat("instagram"), { ...emptyManualPlatform(), on: true, handle: "Our Page" }).handle === "Our Page" && withManual(plat("youtube"), { ...emptyManualPlatform(), on: true }).handle === "@youtube", "a handle with a space is a page's name (no @); none typed: the one read");
+ok(same(withManual(yt0, { ...mYt, chart: "auto" }).daily, yt0.daily) && same(withManual(yt0, { ...mYt, chart: "own", chartLabel: "", chartPoints: [1, 2, 3] }).chart, { label: "Views", points: [1, 2, 3] }) && withManual(yt0, { ...mYt, chart: "own", chartPoints: [5] }).chart === null, "the chart: the views per day read, your own points (two at least), or none");
+const withExtra = applyManual(nums, { ...full, extra: ["facebook"], manual: { glance: emptyTotals(), platforms: { facebook: { ...emptyManualPlatform(), followers: 50_000 }, youtube: { ...mYt, on: false } }, audience: {} } });
+ok(same(withExtra.platforms.map((p) => p.platform), ["youtube", "instagram", "tiktok", "facebook"]) && withExtra.platforms[3].followers === 50_000 && withExtra.platforms[3].manual === true && withExtra.platforms[0].followers === yt0.followers && !withExtra.platforms[0].manual, "a platform by hand joins in its place, its numbers typed (whatever its switch says); a platform on Auto keeps what was read");
+ok(applyManual(nums, { ...full, extra: ["youtube"] }).platforms.length === 3 && !applyManual(nums, { ...full, extra: ["youtube"] }).platforms[0].manual && applyManual(nums, full).platforms.every((p, i) => p === nums.platforms[i]), "by hand but connected after all: the numbers read win; nothing typed: the numbers as read");
+ok(withManual(plat("instagram"), { ...emptyManualPlatform(), on: true, watchHours: 500, avgViewsLong: 9, avgViewsShort: 9 }).watchHours === null && withManual(plat("instagram"), { ...emptyManualPlatform(), on: true, avgViewsLong: 9 }).avgViewsLong === null && withManual(plat("youtube"), { ...emptyManualPlatform(), on: true, watchHours: 500 }).watchHours === 500, "hours watched and long / Shorts averages: YouTube's only");
+const audOff = applyManual(nums, { ...full, manual: { glance: emptyTotals(), platforms: {}, audience: { youtube: { ...emptyManualAudience(), on: false, women: 99 }, instagram: { ...emptyManualAudience(), on: true, women: 70, men: 30 } } } });
+ok(same(audOff.platforms[0].audience, yt0.audience) && !audOff.platforms[0].manualAudience && audOff.platforms[1].manualAudience === true && audOff.platforms[1].audience!.genders[0].share === 70, "a typed audience counts only on Manual");
+
+// Who watches, typed in: as typed.
+const aud = audienceFrom("tiktok", { ...emptyManualAudience(), on: true, women: 48, men: 50, ages: { ...emptyManualAudience().ages, "25–34": 33, "18–24": 44 }, countries: [{ name: "Mexico", share: 12 }, { name: "United States", share: 40 }, { name: "", share: 10 }] })!;
+ok(same(aud.genders, [{ label: "Men", share: 50 }, { label: "Women", share: 48 }]) && same(aud.ages, [{ label: "18–24", share: 44 }, { label: "25–34", share: 33 }]), "women and men as typed (not stretched to 100%), biggest first; ages youngest first");
+ok(same(aud.countries.map((c) => [c.label, c.share]), [["United States", 40], ["Mexico", 12], ["Other countries", 48]]) && aud.who === "TikTok audience", "countries biggest first, a nameless one left out, the rest as other countries");
+ok(audienceFrom("tiktok", emptyManualAudience()) === null && audienceFrom("youtube", { ...emptyManualAudience(), countries: [{ name: "Romania", share: 100 }] })!.countries.length === 1, "nothing typed: no audience page; 100% in one country: no other countries");
+
+// The totals: added up, or At a glance's own.
+const t0 = kitTotals(nums.platforms);
+ok(same(t0, { ...totalsOf(nums.platforms), manual: false }) && t0.followers === 200_000, "the totals: the platforms added up");
+const tg = kitTotals(nums.platforms, { ...emptyTotals(), on: true, followers: 3e6, views: 4e7 });
+ok(tg.manual && tg.followers === 3e6 && tg.views === 4e7 && tg.engagementRate === null && tg.followersGrowth === null && tg.posted === 0, "At a glance on Manual: exactly what's typed (an empty box left off the page)");
+ok(kitTotals(nums.platforms, { ...emptyTotals(), followers: 1 }).followers === 200_000, "its numbers kept but switched off: added up");
+ok(kitTotals([withManual(plat("youtube"), { ...emptyManualPlatform(), on: true, engagementRate: 7 })]).engagementRate === 7, "one platform with only a typed rate: that rate stands for the kit");
+
+// Switching to Manual changes nothing until something's typed.
+for (const p0 of nums.platforms) {
+  const back = withManual(p0, { ...emptyManualPlatform(), ...manualFromRead(p0), on: true, chart: "auto" });
+  const keys = ["followers", "views", "avgViews", "avgViewsLong", "avgViewsShort", "posted", "watchHours"] as const;
+  ok(keys.every((k) => back[k] === (k === "posted" ? p0.posted : p0[k] === null ? null : Math.round(p0[k]!))) && same(back.daily, p0.daily), `${p0.platform}: Manual starts from the numbers read`);
+  const g0 = growthPct(p0.followers, p0.followersNet);
+  ok((g0 === null && growthPct(back.followers, back.followersNet) === null) || Math.abs(growthPct(back.followers, back.followersNet)! - g0!) < 0.06, `${p0.platform}: its growth, to a decimal`);
+}
+const ar = audienceFromRead(yt0.audience);
+ok(ar.men === 60 && ar.women === 40 && ar.ages["25–34"] === 60 && ar.ages["65+"] === null && same(ar.countries, [{ name: "United States", share: 70 }]), "who watches, read, fills Manual's boxes (other countries left to add up)");
+ok(audienceFromRead(null).women === null && same(audienceFromRead(null).countries, []), "nothing read: empty boxes");
+const tr = totalsFromRead(t0);
+ok(tr.followers === 200_000 && tr.growth === Math.round(t0.followersGrowth! * 10) / 10 && tr.posted === 24, "At a glance's boxes start from the totals");
+
+// Picked videos.
+const pv = toPicked({ ...vid("youtube", 9, "short", 10), url: "http://insecure.com/x" });
+ok(pv.url === null && pv.thumb === "/t/youtube9.jpg" && pv.kind === "short" && pv.views === 10, "a picked video: what the kit shows of it (no plain-http link)");
+const fresh = { ...vid("youtube", 9, "short", 999), title: "New title" };
+ok(pickedVideo(pv, [fresh]) === fresh && pickedVideo(pv, []).views === 10 && pickedVideo(pv, []).title === pv.title, "drawn with the freshest numbers the kit has, else as it was picked");
+const poolNums: MediaKitNumbers = { ...nums, pool: [...nums.platforms.flatMap((p) => p.top), ...nums.allTime] };
+const wideFive = () => Array.from({ length: 5 }, (_, i) => vid("youtube", 300 + i, "long", 10 - i));
+const picks = [vid("tiktok", 3, "short", 1), vid("youtube", 2, "long", 1), vid("instagram", 4, "short", 1)].map(toPicked);
+const vp = buildKits(poolNums, { ...full, videoPicks: { on: true, list: picks } }, m, images)[0].pages.find((p) => p.anchor === "videos")!;
+ok(/Videos we're proud of/.test(texts(vp.ops)) && !/Most viewed/.test(texts(vp.ops)) && vp.label === "Best videos", "picked: their own title, no period on the right");
+const vpImgs = vp.ops.filter((o): o is Extract<Op, { t: "image" }> => o.t === "image").map((o) => o.src);
+ok(same(vpImgs, ["/t/tiktok3.jpg", "/t/youtube2.jpg", "/t/instagram4.jpg"]), `the picked videos, in their order (${vpImgs.join(" ")})`);
+ok(/497K views/.test(texts(vp.ops)) && !/(^|\| )1 views/.test(texts(vp.ops)), "with the freshest numbers (the pool's: 497K, not the 1 it had when picked)");
+const fivePicked = buildKits(poolNums, { ...full, videos: 3, videoPicks: { on: true, list: [...wideFive()].map(toPicked) } }, m, images)[0].pages.find((p) => p.anchor === "videos")!;
+ok(fivePicked.ops.filter((o) => o.t === "image").length === 5, "picked: all of them, whatever the count for the most viewed");
+ok(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.label === "Best videos" && /Our best videos/.test(texts(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.ops)), "Pick on but nothing picked: the most viewed");
+
+// The cover's wall: three shapes.
+const tallV = (n: number) => Array.from({ length: n }, (_, i) => vid("tiktok", 100 + i, "short", 1000 - i));
+const wideV = (n: number) => Array.from({ length: n }, (_, i) => vid("youtube", 200 + i, "long", 1000 - i));
+ok(coverGridFor(tallV(10), "auto") === "shorts" && coverGridFor(wideV(10), "auto") === "longs" && coverGridFor([...tallV(5), ...wideV(5)], "auto") === "mixed" && coverGridFor(tallV(10), "longs") === "longs", "Auto: mostly tall, Shorts; mostly wide, long videos; else both. A choice wins");
+ok(coverGridFor([...tallV(7), ...wideV(3)], "auto") === "shorts" && coverGridFor([...tallV(3), ...wideV(7)], "auto") === "longs" && coverGridFor([...tallV(6), ...wideV(4)], "auto") === "mixed", "70% one shape is enough for it");
+const sizes = (g: MediaKitSettings["coverGrid"]) => new Set(wallImgs(cover({ cover: "videos", coverGrid: g }, images, poolNums)).map((o) => `${o.w}x${o.h}`));
+ok(same([...sizes("shorts")], ["132x176"]), `Shorts: tall tiles (${[...sizes("shorts")].join(" ")})`);
+ok(same([...sizes("longs")], ["204x115"]), `long videos: wide tiles (${[...sizes("longs")].join(" ")})`);
+ok(sizes("mixed").has("204x272") && sizes("mixed").has("204x115"), `both: tall and wide together (${[...sizes("mixed")].join(" ")})`);
+for (const g of ["shorts", "longs", "mixed"] as const) {
+  const imgs = wallImgs(cover({ cover: "videos", coverGrid: g }, images, poolNums));
+  const cols = new Map<number, string[]>();
+  for (const o of imgs) cols.set(Math.round(o.x), [...(cols.get(Math.round(o.x)) ?? []), o.src]);
+  ok([...cols.values()].every((c) => c.every((src, i) => i === 0 || src !== c[i - 1])) && imgs.every((o) => o.x >= 536 && o.x + o.w <= PAGE_W + 0.5), `${g}: never the same picture twice in a row, inside the page's right edge`);
+}
+// Few of the best, many to pick from: the wall takes as many as it has room for, each once.
+const roomy: MediaKitNumbers = { ...nums, allTime: [], pool: Array.from({ length: 30 }, (_, i) => vid("youtube", 400 + i, "long", 100 - i)) };
+const roomyImgs = wallImgs(cover({ cover: "videos", coverGrid: "longs" }, images, roomy));
+ok(roomyImgs.length >= 10 && new Set(roomyImgs.map((o) => o.src)).size === roomyImgs.length, `a wall with room for ${roomyImgs.length}: as many different videos (${new Set(roomyImgs.map((o) => o.src)).size})`);
+ok(autoCoverGrid(poolNums, full) === coverGridFor([...nums.platforms.flatMap((p) => p.top)].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, 12), "auto"), "the builder says which wall Auto makes");
+// Picked for the cover: one to three big; more, a wall of just those.
+const coverPicked = (list: KitVideo[]) => wallImgs(cover({ cover: "videos", coverPicks: { on: true, list: list.map(toPicked) } }, images, poolNums));
+ok(coverPicked(wideV(1)).length === 1 && coverPicked(wideV(1))[0].w === 390, "one picked (wide): whole, across the panel");
+const two = coverPicked([wideV(1)[0], tallV(1)[0]]);
+ok(two.length === 2 && two[0].w === 390 && two[1].h < 236 && two[1].w < two[1].h, "two, one wide, one tall: stacked, the tall one standing whole in its tile");
+ok(coverPicked(tallV(2)).every((o) => o.h === PAGE_H - 68), "two tall: side by side, the panel's height");
+ok(coverPicked(wideV(3)).length === 3, "three: one big, two under it");
+const eight = coverPicked([...wideV(4), ...tallV(4)]);
+const pickedSrcs = new Set([...wideV(4), ...tallV(4)].map((v) => v.thumb));
+ok(eight.length >= 6 && eight.every((o) => pickedSrcs.has(o.src)), "eight picked: a wall of only those");
+ok(cover({ cover: "videos", coverPicks: { on: true, list: [] } }, images, poolNums).filter((o) => o.t === "image").length === cover({ cover: "videos" }, images, poolNums).filter((o) => o.t === "image").length, "Pick on, nothing picked: the best, as before");
+
+// Typed-in numbers on the pages, and the kit saying which are its own.
+const manualS: MediaKitSettings = {
+  ...full,
+  extra: ["facebook"],
+  manual: {
+    glance: { ...emptyTotals(), on: true, followers: 3_000_000, views: 52_000_000, engagementRate: 7.1 },
+    platforms: { youtube: { ...mYt, chart: "own", chartLabel: "Subscribers per month", chartPoints: [880_000, 1_000_000, 1_500_000] }, facebook: { ...emptyManualPlatform(), on: true, handle: "Northbound Travels", followers: 210_000, views: 3_100_000 } },
+    audience: { tiktok: { ...emptyManualAudience(), on: true, women: 48, men: 50, countries: [{ name: "United States", share: 40 }] } },
+  },
+};
+const mk = buildKits(poolNums, manualS, m, images)[0];
+ok(same(mk.pages.map((p) => p.label), ["Cover", "About us", "At a glance", "YouTube", "Instagram", "TikTok", "Facebook", "Audience: YouTube", "Audience: TikTok", "Best videos", "Brands", "Rates", "Contact"]), `typed in: Facebook's page, TikTok's audience page (${mk.pages.map((p) => p.label).join(", ")})`);
+const ytPage = texts(mk.pages.find((p) => p.anchor === "platform:youtube")!.ops);
+ok(/110K/.test(ytPage) && /Subscribers per month/.test(ytPage) && /Highest: 1\.5M/.test(ytPage) && !/Best day/.test(ytPage) && !/hours watched/.test(ytPage), "YouTube's page: the typed numbers, its own chart and its highest point, no hours (left empty)");
+ok(/3M/.test(texts(mk.pages[0].ops)) && /3M/.test(texts(mk.pages.find((p) => p.anchor === "glance")!.ops)) && /52M/.test(texts(mk.pages.find((p) => p.anchor === "glance")!.ops)) && /3M/.test(texts(mk.pages.find((p) => p.anchor === "contact")!.ops)), "At a glance's own numbers on it, the cover and the last page");
+const fbPage = texts(mk.pages.find((p) => p.anchor === "platform:facebook")!.ops);
+ok(/210K/.test(fbPage) && /Northbound Travels/.test(fbPage) && !/videos posted/.test(fbPage), "a platform by hand: what's typed (nothing about videos posted when that's empty)");
+const cellXs = (pg: { ops: Op[] }) => pg.ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text" && /^(views|engagement rate|average views per video|videos? posted)$/.test(o.s)).map((o) => o.x);
+const fbFull = buildKits(poolNums, { ...manualS, manual: { ...manualS.manual, platforms: { ...manualS.manual.platforms, facebook: { ...manualS.manual.platforms.facebook!, engagementRate: 3.3, avgViews: 120_000, posted: 9 } } } }, m, images)[0].pages.find((p) => p.anchor === "platform:facebook")!;
+ok(cellXs(fbFull).length === 4 && Math.max(...cellXs(fbFull)) > 600, `nothing to draw on its right (a platform by hand): its numbers across the page (${cellXs(fbFull).map(Math.round)})`);
+ok(Math.max(...cellXs(mk.pages.find((p) => p.anchor === "platform:instagram")!)) < 420, "with a chart and videos: two by two on the left");
+const note = sourceNote({ ps: applyManual(poolNums, manualS).platforms, nums: poolNums, totals: kitTotals(applyManual(poolNums, manualS).platforms, manualS.manual.glance) })!;
+ok(/Instagram’s and TikTok’s numbers come straight from the platforms, read by ClipTroop on Oct 27, 2026\./.test(note) && /YouTube’s and Facebook’s numbers, the audience figures and the totals are our own count\./.test(note), `the kit says which numbers are its own (${note})`);
+ok(sourceNote({ ps: nums.platforms, nums, totals: t0 }) === "Every number in this kit comes straight from YouTube, Instagram and TikTok, read by ClipTroop on Oct 27, 2026.", "all read: says so");
+ok(texts(mk.pages.find((p) => p.anchor === "contact")!.ops).includes("our own count"), "the note on the last page");
+const perPlatform = buildKits(poolNums, { ...manualS, split: "each" }, m, images);
+ok(perPlatform.every((k) => !texts(k.pages[0].ops).includes("3M")) && perPlatform[0].pages[0].ops.some((o) => o.t === "text" && o.s === "110K"), "a kit per platform: its own followers (At a glance's typed totals are for the kit of them all)");
+ok(!texts(buildKits(poolNums, { ...manualS, platforms: ["youtube"] }, m, images)[0].pages[0].ops).includes("3M"), "one platform chosen: no At a glance page, so its typed totals don't stand for the kit");
+let outside2 = 0;
+for (const k of [...buildKits(poolNums, manualS, m, images), ...buildKits(poolNums, { ...manualS, split: "each", videoPicks: { on: true, list: picks }, coverPicks: { on: true, list: [...wideV(3), ...tallV(5)].map(toPicked) } }, m, images)])
+  for (const p of k.pages)
+    for (const o of p.ops) if (o.t === "text" && (o.x < 0 || o.x + m.width(o.s, o.f, o.size) > PAGE_W + 0.5 || o.y < 0 || o.y > PAGE_H)) outside2++;
+ok(outside2 === 0, `typed-in numbers and picked videos: every word inside its page (${outside2} outside)`);
+
 // --- The server side and the page ------------------------------------------------------------------------------------------
 const actions = read("app/(dashboard)/analytics/media-kit-actions.ts");
-ok(/^"use server";/.test(actions) && !/export async function kitTeam/.test(actions), "server actions: only the three (the team check isn't one)");
+ok(/^"use server";/.test(actions) && !/export async function kitTeam/.test(actions) && !/export const/.test(actions), "server actions only (the team check isn't one; nothing else exported)");
 const loadFn = actions.slice(actions.indexOf("export async function loadMediaKitNumbers"), actions.indexOf("export async function saveMediaKit"));
-ok(/const team = await kitTeam\(supabase, teamId\);\s+if \(!team\) return \{ error: NO_ACCESS \};/.test(loadFn), "numbers: only for the people who see revenue");
+ok(/const team = await kitTeam\(supabase, teamId\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(loadFn), "numbers: only for the kit's people (Masters and Partnerships)");
 const saveFn = actions.slice(actions.indexOf("export async function saveMediaKit"), actions.indexOf("export async function mediaKitCoverLink"));
-ok(/if \(!membership\?\.roles\.includes\("master"\)\) return/.test(saveFn) && /const settings = readKitSettings\(raw, teamId\);/.test(saveFn) && /upsert\(\{ team_id: teamId, settings \}, \{ onConflict: "team_id" \}\)/.test(saveFn), "saving: masters, every field checked, one row per team");
+ok(/if \(!canMakeMediaKit\(membership\?\.roles\)\) return \{ error: KIT_NO_ACCESS \};/.test(saveFn) && /const settings = readKitSettings\(raw, teamId\);/.test(saveFn) && /upsert\(\{ team_id: teamId, settings \}, \{ onConflict: "team_id" \}\)/.test(saveFn), "saving: Masters and Partnerships, every field checked, one row per team");
+ok(/if \(error\.code === "42501"\) return \{ error: "Run migrations 0115 and 0116 first\." \};/.test(saveFn), "Partnerships before 0116: says which migrations to run");
 ok(/if \(isCoverPath\(old, teamId\) && old !== settings\.coverPath\) await supabase\.storage\.from\("media-kit"\)\.remove\(\[old\]\);/.test(saveFn), "a replaced photo is removed");
 ok(/if \(!UUID\.test\(teamId\) \|\| !isCoverPath\(path, teamId\)\) return/.test(actions) && /createSignedUrl\(path, 3600\)/.test(actions), "the photo's link: the team's own file, for an hour");
+const searchFn = actions.slice(actions.indexOf("export async function searchKitVideos"));
+ok(/const team = await kitTeam\(supabase, teamId\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(searchFn) && /query\.trim\(\)\.slice\(0, 80\)/.test(searchFn) && /await findVideos\(teamId, q\)/.test(searchFn) && /KIT_PLATFORMS\.includes\(v\.platform as KitPlatform\) && !v\.noNumbers\)\.slice\(0, 40\)/.test(searchFn), "search: the kit's people, Analytics' own search, the four platforms, at most 40");
 const gather = read("modules/media-kit/lib/gather.ts");
-ok(/^import "server-only";/.test(gather) && /canViewRevenue\(supabase, teamId\)/.test(gather) && /visibleRows\(/.test(gather), "numbers read as the person, the accounts connected now only");
+ok(/^import "server-only";/.test(gather) && /getMembership\(supabase, teamId\)/.test(gather) && /if \(!canMakeMediaKit\(membership\?\.roles\) \|\| !data\) return null;/.test(gather) && !/canViewRevenue/.test(gather) && /visibleRows\(/.test(gather), "the team check: Masters and Partnerships (revenue access alone no longer); the accounts connected now only");
 ok(/getAudience\(teamId, w\)/.test(gather) && /getAudienceBreakdowns\(teamId, w\)/.test(gather) && /getContent\(teamId, w\)/.test(gather), "the same reads as Analytics");
 ok(/as unknown as Record<string, unknown>\[\]/.test(gather), "a select built at run time read as plain fields (1.36.1)");
+ok(/pool\.size < 90/.test(gather) && /!vis\.platforms\.has\(v\.platform\)/.test(gather) && /pool: \[\.\.\.pool\.values\(\)\]/.test(gather), "the videos to pick from: the period's and the best ever, connected accounts only, at most 90");
 const page = read("app/(dashboard)/analytics/page.tsx");
-ok(/case "mediakit":\s+data = \{ tab, kit: revenueAllowed \? await mediaKitData\(/.test(page) && /: \{ allowed: false \} \};/.test(page), "the tab: the builder for revenue people, a locked card for the rest");
+ok(/const kitAllowed = canMakeMediaKit\(roles\);/.test(page) && /case "mediakit":\s+data = \{ tab, kit: kitAllowed \? await mediaKitData\(/.test(page) && /: \{ allowed: false \} \};/.test(page) && /kitAllowed=\{kitAllowed\}/.test(page), "the tab: the builder for Masters and Partnerships, a locked card for the rest");
 const view = read("modules/analytics/components/analytics-view.tsx");
-ok(/const locked = \(id === "revenue" \|\| id === "mediakit"\) && !revenueAllowed;/.test(view) && /mediakit: "Media kit"/.test(view) && /"production", "mediakit"\];/.test(view), "Analytics → Media kit, locked like Revenue");
+ok(/const locked = \(id === "revenue" && !revenueAllowed\) \|\| \(id === "mediakit" && !kitAllowed\);/.test(view) && /mediakit: "Media kit"/.test(view) && /"production", "mediakit"\];/.test(view), "Analytics → Media kit, locked for everyone else");
 ok(/const MediaKitTab = dynamic\(\(\) => import\("@\/modules\/media-kit\/components\/media-kit-tab"\)\.then\(\(m\) => m\.MediaKitTab\), \{\s+ssr: false/.test(view), "its builder loads with the tab, in the browser");
 ok(/if \(tab === "realtime" \|\| tab === "mediakit"\) return \[\];/.test(read("modules/analytics/lib/ranges.ts")), "no range bar (the kit has its own period)");
 ok(/\["mediakit", "Media kit", "media kit sponsors/.test(read("lib/search/catalog.ts")), "search finds it");
 const tab = read("modules/media-kit/components/media-kit-tab.tsx");
 ok(/buildKits\(nums, readKitSettings\(deferred, props\.teamId\), measure, images\)/.test(tab) && /buildKits\(nums, readKitSettings\(s, props\.teamId\), measure,/.test(tab), "the preview and the download both lay out the checked setup");
-ok(/if \(!props\.canSave \|\| !props\.ready\) return;/.test(tab) && /await saveMediaKit\(props\.teamId, s\)/.test(tab), "saved as you go, by masters only");
+ok(/if \(!props\.ready\) return;/.test(tab) && /await saveMediaKit\(props\.teamId, s\)/.test(tab) && !/canSave/.test(tab), "saved as you go, by everyone who opens it");
+ok(/only masters and the people with the Partnerships role open it\. A master gives the role in Team → Members\./.test(tab), "the locked card says who opens it and where the role is given");
 ok(/await mediaKitCoverLink\(props\.teamId, coverPath\)/.test(tab) && /storedCover \? \(\(await renewCover\(\)\) \?\? coverUrl\)/.test(tab) && /const COVER_RENEW_MS = 45 \* 60_000;/.test(tab), "a stored photo's link is signed again before its hour is up, and for a download");
 ok(/createClient\(\)\.storage\.from\("media-kit"\)\.upload\(path, file/.test(tab) && /const path = `\$\{props\.teamId\}\/cover-/.test(tab), "the photo goes to the team's folder");
+ok(/lg:sticky lg:top-\[calc\(var\(--shell-top,3\.5rem\)\+1rem\)\] lg:max-h-\[calc\(100dvh-var\(--shell-top,3\.5rem\)-2rem\)\]/.test(tab) && /lg:overscroll-contain/.test(tab), "the preview sticks under the app's top bar (not behind it) and keeps its scrolling to itself");
+ok(/bottom-\[calc\(env\(safe-area-inset-bottom\)\+5\.25rem\)\] md:bottom-6/.test(tab) && /lg:hidden fixed z-30/.test(tab), "a phone: the download in a bar of its own above the tab bar");
 ok(/admin\.storage\.from\("media-kit"\)\.list\(teamId\)/.test(read("app/(dashboard)/team/actions.ts")) && /admin\.storage\.from\("media-kit"\)\.remove\(kitFiles\.map\(\(f\) => `\$\{teamId\}\/\$\{f\.name\}`\)\)/.test(read("app/(dashboard)/team/actions.ts")), "a deleted team's kit photos go with it");
 const pdf = read("modules/media-kit/lib/render-pdf.ts");
 ok(/Subtype: "Link"/.test(pdf) && /URI: lib\.PDFString\.of\(op\.url\)/.test(pdf) && /pdf\.setTitle/.test(pdf) && /embedPdfFonts\(pdf, fontkit\)/.test(pdf), "the PDF: links, its title, the app's fonts");
 ok(/from "@\/lib\/pdf-kit"/.test(read("modules/analytics/export/build-pdf.ts")), "the export for Claude shares the PDF loader");
+
+// Who opens it (1.39.0).
+ok(same(KIT_ROLES, ["master", "partnerships"]) && canMakeMediaKit(["master"]) && canMakeMediaKit(["editor", "partnerships"]) && !canMakeMediaKit(["editor", "publisher", "scripter"]) && !canMakeMediaKit([]) && !canMakeMediaKit(null) && !canMakeMediaKit(undefined), "the kit: Masters and Partnerships, nobody else");
+const roles = read("lib/permissions/roles.ts");
+ok(/\{ id: "partnerships", name: "Partnerships", colorVar: "--coral", stages: \[\] as PipelineStage\[\] \}/.test(roles), "the Partnerships role: its name, a colour, no step of a video");
+ok(/alter type role_type add value if not exists 'partnerships';/.test(read("supabase/migrations/0115_partnerships_role.sql")), "0115: the role in the database");
+const m116 = read("supabase/migrations/0116_media_kit_partnerships.sql");
+ok(/mr\.role in \('master', 'partnerships'\)/.test(m116) && /security definer/.test(m116) && /revoke all on function media_kit_team_ids\(\) from public, anon;/.test(m116) && (m116.match(/create policy/g) ?? []).length === 7 && (m116.match(/media_kit_team_ids\(\)/g) ?? []).length >= 9, "0116: the setup's three rules and the photo's four, through Masters and Partnerships");
+
+// The form and the preview find each other (1.39.0).
+ok(pageAnchorFor("kit") === "cover" && pageAnchorFor("look") === "cover" && pageAnchorFor("platform:tiktok") === "platform:tiktok" && pageAnchorFor("rates") === "rates", "the channels and the look show the cover; every other part its own page");
+const sections = read("modules/media-kit/components/kit-sections.tsx");
+for (const a of ['anchor="kit"', 'anchor="look"', 'anchor="cover" page="cover"', 'anchor="about" page="about"', 'anchor="glance" page="glance"', 'anchor="videos" page="videos"', 'anchor="partners" page="partners"', 'anchor="rates" page="rates"', 'anchor="contact" page="contact"', "anchor={`platform:${p}`}", "anchor={`audience:${p}`}"]) ok(sections.includes(a), `the form has a part for ${a}`);
+const anchors = new Set(one.pages.map((p) => p.anchor));
+ok(one.pages.every((p) => p.anchor) && same([...anchors], ["cover", "about", "glance", "platform:youtube", "platform:instagram", "platform:tiktok", "audience:youtube", "audience:tiktok", "videos", "partners", "rates", "contact"]), `every page says which part makes it (${[...anchors].join(", ")})`);
+const sync = read("modules/media-kit/components/use-kit-sync.ts");
+ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handled\.current < 1200/.test(sync) && /motionReduced\(\) \? "auto" : "smooth"/.test(sync) && /addEventListener\("focusin"/.test(sync), "side by side from lg; the preview left alone just after it's scrolled by hand; no smooth scrolling when motion is off; the part you type in");
 
 if (fails) {
   console.log(`${fails} FAILED`);
