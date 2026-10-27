@@ -1,0 +1,175 @@
+import "server-only";
+import { createClient } from "@/lib/supabase/server";
+import { canViewRevenue, getAudience, getContent, contentCols, contentItem, type ContentItem } from "@/modules/analytics/lib/queries";
+import { getAudienceBreakdowns } from "@/modules/analytics/lib/advanced";
+import { numbersVisibility, visibleRows } from "@/modules/analytics/lib/accounts";
+import { addDays, readCustom, todayIn, windowFor, type Window } from "@/modules/analytics/lib/ranges";
+import { KIT_PLATFORMS, readKitSettings, type KitPeriod, type KitPlatform } from "./settings";
+import type { MediaKitTabData } from "../components/media-kit-tab";
+import {
+  agesFrom,
+  countriesFrom,
+  countryName,
+  gendersFrom,
+  mean,
+  profileUrl,
+  sum,
+  type KitAudience,
+  type KitPlatformNumbers,
+  type KitVideo,
+  type MediaKitNumbers,
+} from "./numbers";
+
+/*
+ * The media kit's numbers (1.37.0), from Analytics' own reads so the kit and Analytics always agree: followers and
+ * views per day (getAudience), who watches (getAudienceBreakdowns), the videos posted in the period (getContent) and
+ * the most viewed ever. Read with the person's own client: their team only, the accounts connected now only.
+ */
+
+type Supa = Awaited<ReturnType<typeof createClient>>;
+
+/** The team, if this person may make its kit (Masters and the people given revenue access: the rates are money). */
+export async function kitTeam(supabase: Supa, teamId: string) {
+  const [allowed, { data }] = await Promise.all([canViewRevenue(supabase, teamId), supabase.from("teams").select("name, color, logo_url, timezone").eq("id", teamId).maybeSingle()]);
+  if (!allowed || !data) return null;
+  return { name: data.name as string, color: (data.color as string | null) ?? "#E8630D", logoUrl: (data.logo_url as string | null) ?? null, tz: (data.timezone as string | null) || "Europe/Bucharest" };
+}
+
+/** The period's days: like Analytics, ending yesterday (the platforms' numbers come a day late). */
+export function kitWindow(period: KitPeriod, from: string | null, to: string | null, tz: string, now = new Date()): Window {
+  const latest = addDays(todayIn(tz, now), -1);
+  if (period === "custom") {
+    const c = readCustom(from, to, latest);
+    if (c) return windowFor("custom", c.to, c.from);
+    return windowFor("28d", latest);
+  }
+  return windowFor(period, latest);
+}
+
+const thumbOf = (teamId: string, v: Pick<ContentItem, "platform" | "id" | "kind" | "thumbnail">) =>
+  v.thumbnail ? `/api/analytics/thumb?${new URLSearchParams({ team: teamId, platform: v.platform, id: v.id, kind: v.kind })}` : null;
+
+function kitVideo(teamId: string, v: ContentItem): KitVideo {
+  return {
+    platform: v.platform as KitPlatform,
+    id: v.id,
+    kind: v.kind,
+    title: v.title,
+    url: v.url,
+    thumb: thumbOf(teamId, v),
+    views: v.views,
+    likes: v.likes,
+    comments: v.comments,
+    publishedAt: v.publishedAt,
+  };
+}
+
+export async function gatherMediaKit(
+  teamId: string,
+  team: { name: string; color: string; logoUrl: string | null; tz: string },
+  period: { period: KitPeriod; from: string | null; to: string | null }
+): Promise<MediaKitNumbers> {
+  const supabase = await createClient();
+  const w = kitWindow(period.period, period.from, period.to, team.tz);
+  const [audience, breakdowns, content, vis, cols] = await Promise.all([
+    getAudience(teamId, w),
+    getAudienceBreakdowns(teamId, w).catch(() => ({}) as Awaited<ReturnType<typeof getAudienceBreakdowns>>),
+    getContent(teamId, w),
+    numbersVisibility(supabase, teamId),
+    contentCols(),
+  ]);
+  // The most viewed ever, for the cover (a short period may have only a few videos). (A select built at run time:
+  // its rows are read as plain fields, 1.36.1.)
+  const { data: bestRows } = await supabase.from("analytics_content").select(cols).eq("team_id", teamId).order("views", { ascending: false, nullsFirst: false }).range(0, 59);
+  const best = visibleRows((bestRows ?? []) as unknown as Record<string, unknown>[], vis).map(contentItem);
+
+  const platforms: KitPlatformNumbers[] = [];
+  for (const p of KIT_PLATFORMS) {
+    const status = audience.status.find((s) => s.platform === p);
+    if (!status?.connected || !vis.platforms.has(p)) continue;
+    const per = audience.perPlatform[p];
+    const followers = audience.followersNow[p] ?? null;
+    const hasNumbers = followers !== null || per.views.some((v) => v !== null) || per.engagement.some((v) => v !== null);
+    if (!hasNumbers) continue;
+    const posted = content.items.filter((i) => i.platform === p);
+    const counted = posted.filter((i) => !i.noNumbers && i.views !== null);
+    const top = [...counted].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, 6).map((v) => kitVideo(teamId, v));
+    const longs = counted.filter((i) => i.kind === "long" || i.kind === "live");
+    const shorts = counted.filter((i) => i.kind === "short");
+    platforms.push({
+      platform: p,
+      handle: status.account,
+      url: profileUrl(p, status.account),
+      followers,
+      followersNet: per.followersNet,
+      views: sum(per.views),
+      viewsPrev: sum(per.prevViews),
+      engagement: sum(per.engagement),
+      watchHours: p === "youtube" ? sum(per.watchHours) : null,
+      posted: posted.length,
+      counted: counted.length,
+      avgViews: mean(counted.map((i) => i.views)),
+      avgViewsLong: p === "youtube" && longs.length ? mean(longs.map((i) => i.views)) : null,
+      avgViewsShort: p === "youtube" && shorts.length ? mean(shorts.map((i) => i.views)) : null,
+      daily: per.views,
+      top,
+      audience: audienceOf(p, breakdowns, audience),
+    });
+  }
+
+  return {
+    team: { name: team.name, color: team.color, logoUrl: team.logoUrl },
+    window: { from: w.from, to: w.to, days: w.days },
+    generatedAt: new Date().toISOString(),
+    platforms,
+    allTime: best.filter((v) => v.views !== null).slice(0, 24).map((v) => kitVideo(teamId, v)),
+  };
+}
+
+type Breakdowns = Awaited<ReturnType<typeof getAudienceBreakdowns>>;
+type Aud = Awaited<ReturnType<typeof getAudience>>;
+
+/** Who watches on one platform: ages, genders and countries, where the platform shares them. */
+function audienceOf(p: KitPlatform, breakdowns: Breakdowns, a: Aud): KitAudience | null {
+  const list = breakdowns[p] ?? [];
+  const find = (id: string) => list.find((b) => b.id === id)?.rows.map((r) => ({ key: r.key, value: r.value })) ?? [];
+  let ages = agesFrom(find("age_gender"), true);
+  let genders = gendersFrom(find("age_gender"), true);
+  if (!ages.length) ages = agesFrom(find("follower_age"), false);
+  if (!genders.length) genders = gendersFrom(find("follower_gender"), false);
+  const countryRows =
+    p === "youtube"
+      ? a.countries.map((c) => ({ code: c.code, value: c.views }))
+      : (a.followerCountries[p as "instagram" | "facebook" | "tiktok"] ?? []).map((c) => ({ code: c.code, value: c.value }));
+  const countries = countriesFrom(countryRows, countryName);
+  if (!ages.length && !genders.length && !countries.length) return null;
+  return { who: p === "youtube" ? "YouTube viewers" : `${p === "instagram" ? "Instagram" : p === "facebook" ? "Facebook" : "TikTok"} followers`, ages, genders, countries };
+}
+
+/**
+ * What Analytics → Media kit opens with: the saved setup (defaults before migration 0114, or before the first save),
+ * an hour's link to its cover photo, and the numbers for its period, sent after the page.
+ */
+export async function mediaKitData(
+  supabase: Supa,
+  teamId: string,
+  team: { name: string; color: string; logoUrl: string | null; tz: string },
+  isMaster: boolean,
+  latest: string
+): Promise<MediaKitTabData> {
+  const { data, error } = await supabase.from("media_kit_settings").select("settings").eq("team_id", teamId).maybeSingle();
+  const saved = readKitSettings(data?.settings ?? null, teamId);
+  let coverUrl: string | null = null;
+  if (saved.coverPath) {
+    const { data: signed } = await supabase.storage.from("media-kit").createSignedUrl(saved.coverPath, 3600);
+    coverUrl = signed?.signedUrl ?? null;
+  }
+  const numbers = gatherMediaKit(teamId, team, { period: saved.period, from: saved.from, to: saved.to }).then(
+    (d) => ({ data: d }),
+    (e) => {
+      console.error("[media kit numbers]", e instanceof Error ? e.message : e);
+      return { error: "Couldn't get the numbers. Reload the page to try again." };
+    }
+  );
+  return { allowed: true, teamId, teamName: team.name, teamColor: team.color, logoUrl: team.logoUrl, canSave: isMaster, ready: !error, saved, coverUrl, numbers, latest };
+}

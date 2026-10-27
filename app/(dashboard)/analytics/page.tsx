@@ -14,6 +14,7 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { isCurrencyCode } from "@/lib/fx";
 import { after } from "next/server";
 import { catchUpAnalytics, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { mediaKitData } from "@/modules/media-kit/lib/gather";
 
 export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
@@ -98,6 +99,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         advanced: await getAdvanced(teamId, w, { platform: readAdvPlatform(sp.platform), content: readAdvContent(sp.content), tz, revenueAllowed, currency: wantedCurrency }),
         view: readAdvView(sp.view),
       };
+      break;
+    case "mediakit":
+      data = { tab, kit: revenueAllowed ? await mediaKitData(supabase, teamId, { name: currentTeam.name, color: currentTeam.color, logoUrl: currentTeam.logoUrl ?? null, tz }, isMaster, latest) : { allowed: false } };
       break;
     default:
       data = { tab: "revenue", revenue: await getRevenue(teamId, w, isMaster, wantedCurrency, revenueAllowed) };

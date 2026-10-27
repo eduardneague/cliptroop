@@ -1442,6 +1442,58 @@ JPEG through a canvas before embedding. Thumbnails come through
 6 MB, never cached publicly), so the canvas isn't tainted. Claude reads PDFs
 under 100 pages, so the PDF stops at 95 (about 240 videos).
 
+**Media kit (1.37.0).** Analytics → Media kit (`?tab=mediakit`, no range
+bar: the kit has its own period). A 16:9 PDF deck of the team's numbers for
+sponsors, made in the browser like Download for Claude (the pdf-lib loader,
+the fonts and the picture helper are shared in `lib/pdf-kit.ts`). The parts,
+in `modules/media-kit/`:
+
+- `lib/settings.ts`: the setup (channels, one kit or one per platform, period,
+  pages, three or six best videos, light or dark, colour, cover, words, rates
+  or on request, packages, brands, quotes, contact) and `readKitSettings`,
+  which turns anything into a valid setup (every field checked and cut to
+  its limit; anything wrong replaced by its default). The server saves only
+  what it returns; the preview and the download lay out only what it
+  returns.
+- `lib/gather.ts` (server only): the numbers from Analytics' own reads
+  (`getAudience`, `getAudienceBreakdowns`, `getContent`, the most viewed
+  ever), as the person, the accounts connected now only; `kitWindow` ends
+  yesterday like Analytics. `lib/numbers.ts`: the pure sums (growth over
+  what there was, change on the period before, engagement over views,
+  average views of the videos posted in the period, ages, genders and the top
+  five countries in %).
+- `lib/layout.ts`: the pages as drawing steps (`lib/scene.ts`: boxes, text at
+  its baseline, pictures cropped to their box, paths, links), measured with
+  the PDF's own fonts (`lib/fonts.ts`), so the preview
+  (`components/kit-page-svg.tsx`, SVG with the same font files) and the PDF
+  (`lib/render-pdf.ts`) are the same pages. `lib/theme.ts` makes the colours
+  from one (the team's, or the one picked): the ink is a deep shade of its
+  hue; every word clears 4.5:1 on what it sits on, shapes 3:1
+  (tests/media-kit.test.ts checks eight colours in both themes).
+- Pages, in order: cover (a wall of the best thumbnails, a photo, or one big
+  number), About us (only with words), At a glance (two platforms or more),
+  one per platform, Audience (where the platform shares ages, genders or
+  countries; up to four), best videos (the period's, else the best ever),
+  brands and quotes (only with some), rates (prices, or "Rates on request"
+  with the packages; a platform's kit gets its packages and the ones for any
+  platform), contact (the closing line, links, and where the numbers come
+  from).
+- `components/media-kit-tab.tsx`: the builder (loaded with its tab, in the
+  browser only). Masters' changes save a moment after each one
+  (`saveMediaKit`); the people given revenue access make kits from the saved
+  setup and their own changes. Another period asks for its numbers
+  (`loadMediaKitNumbers`); the saved period's come with the page.
+
+Who: the same people as revenue (the rates are money): `media_kit_settings`
+(0114) is read by `revenue_team_ids()`, written by `my_master_team_ids()`;
+`updated_at` / `updated_by` set by the database. The cover photo goes from
+the browser to the private `media-kit` bucket (`<team id>/cover-…`,
+pictures only, 5 MB; read by revenue people, written by Masters); the page
+signs it for an hour, and the builder signs it again (`mediaKitCoverLink`)
+after 45 minutes, on coming back to the page, and before a download, so a
+page left open still puts the photo in the PDF. Saving a setup that no
+longer uses a photo removes it; deleting the team removes its photos.
+
 **Opening frames.** When a short's cut is uploaded for review, the browser
 grabs eight frames from the file (`modules/review/lib/frames.ts`: 0, 1, 2
 and 3 s for the hook, then 25 %, 50 %, 75 % and the end) into one JPEG

@@ -28,6 +28,7 @@ import { InsightsTab } from "./tabs/insights-tab";
 import { ProductionTab } from "./tabs/production-tab";
 import { ADV_VIEWS, type AdvView } from "./advanced/views";
 import { AdvancedTab } from "./advanced/advanced-tab";
+import type { MediaKitTabData } from "@/modules/media-kit/components/media-kit-tab";
 
 /*
  * Analytics (1.20.0): tabs instead of one long page, like YouTube Studio.
@@ -39,6 +40,11 @@ import { AdvancedTab } from "./advanced/advanced-tab";
 // The export for Claude comes with its button. (The Advanced tab is no longer loaded apart: next/dynamic
 // gave its icons other ids on the server than in the browser, a hydration mismatch.)
 const ClaudeExport = dynamic(() => import("../export/claude-export").then((m) => m.ClaudeExport), { ssr: false });
+// The media kit's builder (1.37.0): only in the browser (its preview measures with the PDF's own fonts), loaded with its tab.
+const MediaKitTab = dynamic(() => import("@/modules/media-kit/components/media-kit-tab").then((m) => m.MediaKitTab), {
+  ssr: false,
+  loading: () => <div className="skeleton h-[60vh] w-full rounded-2xl" aria-hidden />,
+});
 
 export type AnalyticsData =
   | { tab: "overview"; overview: Overview; insights: Promise<InsightsPreview> }
@@ -48,7 +54,8 @@ export type AnalyticsData =
   | { tab: "realtime"; status: PlatformStatus[] }
   | { tab: "insights"; insights: Insights }
   | { tab: "advanced"; advanced: AdvancedData; view: AdvView | null }
-  | { tab: "revenue"; revenue: Revenue };
+  | { tab: "revenue"; revenue: Revenue }
+  | { tab: "mediakit"; kit: MediaKitTabData };
 
 const TAB_LABEL: Record<TabId, string> = {
   overview: "Overview",
@@ -59,8 +66,9 @@ const TAB_LABEL: Record<TabId, string> = {
   insights: "Insights",
   advanced: "Advanced",
   production: "Production",
+  mediakit: "Media kit",
 };
-const TAB_ORDER: TabId[] = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production"];
+const TAB_ORDER: TabId[] = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production", "mediakit"];
 
 export function AnalyticsView({
   teamId,
@@ -282,13 +290,15 @@ export function AnalyticsView({
       ]);
     }
   }
-  const canExport = !["realtime", "insights"].includes(data.tab) && !(data.tab === "revenue" && !data.revenue.allowed);
+  const canExport = !["realtime", "insights", "mediakit"].includes(data.tab) && !(data.tab === "revenue" && !data.revenue.allowed);
 
   const when =
     data.tab === "realtime"
       ? "the last 48 hours, live"
       : data.tab === "insights"
         ? "every video"
+        : data.tab === "mediakit"
+          ? "a deck of your numbers for sponsors"
         : data.tab === "overview" && data.overview.hourly
           ? "the last 48 hours"
           : `${niceDay(w.from, true)} – ${niceDay(w.to, true)}`;
@@ -348,7 +358,8 @@ export function AnalyticsView({
       <nav className="relative flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
         {TAB_ORDER.map((id) => {
           const on = id === (pending?.tab ?? data.tab);
-          const locked = id === "revenue" && !revenueAllowed;
+          // The media kit has the rates: the same people as revenue (1.37.0).
+          const locked = (id === "revenue" || id === "mediakit") && !revenueAllowed;
           return (
             <Link
               key={id}
@@ -458,6 +469,7 @@ export function AnalyticsView({
           />
         )}
         {data.tab === "revenue" && <RevenueTab r={data.revenue} compare={compare} teamId={teamId} />}
+        {data.tab === "mediakit" && <MediaKitTab data={data.kit} />}
       </div>
       {claudeOpen && <ClaudeExport teamId={teamId} teamName={teamName} range={range === "48h" ? "7d" : range} span={range === "custom" || range === "lifetime" ? { from: w.from, to: w.to } : null} platform={advPlatform} revenueAllowed={revenueAllowed} onClose={() => setClaudeOpen(false)} />}
     </div>

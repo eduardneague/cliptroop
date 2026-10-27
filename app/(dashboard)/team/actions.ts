@@ -189,6 +189,11 @@ export async function deleteTeam(teamId: string) {
   if (logoFiles && logoFiles.length > 0) {
     await admin.storage.from("team-logos").remove(logoFiles.map((f) => `${teamId}/${f.name}`));
   }
+  // The media kit's cover photos (1.37.0; the setup itself goes with the team).
+  const { data: kitFiles } = await admin.storage.from("media-kit").list(teamId);
+  if (kitFiles && kitFiles.length > 0) {
+    await admin.storage.from("media-kit").remove(kitFiles.map((f) => `${teamId}/${f.name}`));
+  }
 
   const { error } = await admin.from("teams").delete().eq("id", teamId);
   if (error) return { error: "Couldn't delete the team. Try again." };

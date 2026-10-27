@@ -1,12 +1,12 @@
 "use client";
 
-import type * as PdfLibNs from "pdf-lib";
 import type { PDFFont, PDFImage, PDFPage, RGB } from "pdf-lib";
 import type { ClaudeExportData } from "../lib/claude-export";
 import type { AdvancedData, AdvVideo, Fmt } from "../lib/advanced";
 import { compact, duration } from "../lib/patterns";
 import { claudePrompt, typeName } from "./build-text";
 import { isWide, KIND_LABEL } from "../lib/kinds";
+import { loadPdfLib, toJpeg } from "@/lib/pdf-kit";
 
 /*
  * The PDF for Claude (1.16.0), made in the browser with pdf-lib (loaded
@@ -17,57 +17,10 @@ import { isWide, KIND_LABEL } from "../lib/kinds";
  * Claude reads PDFs of up to 100 pages visually, so it stays under that.
  */
 
-type PdfLib = typeof PdfLibNs;
 const MAX_PAGES = 95;
 
-let loading: Promise<{ lib: PdfLib; fontkit: unknown }> | null = null;
-function script(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Couldn't load ${src}`));
-    document.head.appendChild(s);
-  });
-}
-function loadPdfLib() {
-  const w = window as unknown as { PDFLib?: PdfLib; fontkit?: unknown };
-  if (w.PDFLib && w.fontkit) return Promise.resolve({ lib: w.PDFLib, fontkit: w.fontkit });
-  loading ??= Promise.all([w.PDFLib ? null : script("/vendor/pdf-lib.min.js"), w.fontkit ? null : script("/vendor/fontkit.umd.min.js")])
-    .then(() => {
-      if (!w.PDFLib || !w.fontkit) throw new Error("The PDF library didn't load");
-      return { lib: w.PDFLib, fontkit: w.fontkit };
-    })
-    .catch((e) => {
-      loading = null;
-      throw e;
-    });
-  return loading;
-}
-
-/** A picture as a small JPEG (any format the browser can open), at most maxW × maxH. */
-export async function toJpeg(blob: Blob, maxW: number, maxH: number, quality = 0.8): Promise<{ bytes: Uint8Array; w: number; h: number } | null> {
-  try {
-    const bmp = await createImageBitmap(blob);
-    const scale = Math.min(1, maxW / bmp.width, maxH / bmp.height);
-    const w = Math.max(1, Math.round(bmp.width * scale));
-    const h = Math.max(1, Math.round(bmp.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bmp, 0, 0, w, h);
-    bmp.close?.();
-    const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", quality));
-    return out ? { bytes: new Uint8Array(await out.arrayBuffer()), w, h } : null;
-  } catch {
-    return null;
-  }
-}
+// pdf-lib and fontkit from /vendor, and pictures as small JPEGs: shared with the media kit since 1.37.0 (lib/pdf-kit.ts).
+export { toJpeg };
 
 async function fetchImage(url: string, maxW: number, maxH: number) {
   try {

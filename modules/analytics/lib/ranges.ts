@@ -15,12 +15,13 @@ export const RANGES = [
   { id: "custom", label: "Custom", days: 0 },
 ] as const;
 export type RangeId = (typeof RANGES)[number]["id"];
-export const TABS = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production"] as const;
+/** 1.37.0: the media kit (its own period: no range bar). */
+export const TABS = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production", "mediakit"] as const;
 export type TabId = (typeof TABS)[number];
 
 /** The ranges each tab offers (Realtime has its own 48 hours; 48 hours is the Overview's). */
 export function rangesFor(tab: TabId): RangeId[] {
-  if (tab === "realtime") return [];
+  if (tab === "realtime" || tab === "mediakit") return [];
   return RANGES.map((r) => r.id).filter((id) => id !== "48h" || tab === "overview");
 }
 export const rangeLabel = (id: RangeId) => RANGES.find((r) => r.id === id)!.label;

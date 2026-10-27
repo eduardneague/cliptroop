@@ -101,6 +101,8 @@ const ANALYTICS_TABS: [string, string, string][] = [
   ["insights", "Insights", "tips patterns what works hooks advice"],
   ["advanced", "Advanced", "detailed details metrics retention ctr impressions watch time"],
   ["production", "Production", "output on time late cycle speed how fast"],
+  // 1.37.0.
+  ["mediakit", "Media kit", "media kit sponsors sponsorship brand deck pdf rates press kit one sheet pitch partners"],
 ];
 const RANGES: [string, string, string][] = [
   ["48h", "Last 48 hours", "48h two days 2 days hours"],

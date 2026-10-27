@@ -22,6 +22,28 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.37.0",
+    date: "2026-10-27",
+    title: "Media kit",
+    changes: [
+      { kind: "new", text: "Analytics → Media kit makes the deck sponsors ask for: a PDF of your reach, your audience, your best videos, your rates and how to reach you, made from your own numbers. Every page shows as you set it up, exactly as the PDF will be." },
+      { kind: "new", text: "Pick the channels, one kit with everything or one kit per platform, and the period: 28 days, 90 days, 365 days or your own dates." },
+      { kind: "new", text: "Pick the pages: a cover, About us, At a glance, a page per platform, Audience (ages, genders and countries), your best videos, brands and kind words, rates and contact." },
+      { kind: "new", text: "Rates: show a price for each package, or say they're on request. Choose the currency and add a note, like what the price includes." },
+      { kind: "new", text: "Make it yours: light or dark pages, your team's colour or any other, and a cover with your best thumbnails, your own photo or one big number." },
+      { kind: "new", text: "The PDF has real text and links that work: your videos, profiles, email and website open from it. It says where its numbers come from and when they were read." },
+      { kind: "new", text: "A master's setup is saved, so the next kit starts from it. Like revenue, only masters and the people they give revenue access can make a kit." },
+    ],
+  },
+  {
+    version: "1.36.1",
+    date: "2026-10-27",
+    title: "Filming step, ready to go live",
+    changes: [
+      { kind: "fixed", text: "1.36.0 failed its build checks, so it couldn't go live. This fixes that; the Filming step works as described in 1.36.0." },
+    ],
+  },
+  {
     version: "1.36.0",
     date: "2026-10-26",
     title: "A Filming step for shorts",

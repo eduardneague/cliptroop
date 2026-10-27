@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import VideoAnalyticsLoading from "./video/[platform]/[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 
-/** Analytics (1.20.0): title, the 8 tabs, the filter row, the Overview's headline, its cards over the chart, two cards. */
+/** Analytics (1.20.0): title, the 9 tabs (1.37.0: Media kit), the filter row, the Overview's headline, its cards over the chart, two cards. */
 function AnalyticsSkeleton() {
   return (
     <SkeletonPage width="max-w-[1400px]">
@@ -13,7 +13,7 @@ function AnalyticsSkeleton() {
         <Skeleton className="h-4 w-72 max-w-full" />
       </div>
       <div className="flex gap-5 border-b border-line/15 h-11 items-center mb-4 px-3.5 overflow-hidden" aria-hidden>
-        {["w-16", "w-14", "w-16", "w-16", "w-16", "w-14", "w-16", "w-20"].map((w, i) => (
+        {["w-16", "w-14", "w-16", "w-16", "w-16", "w-14", "w-16", "w-20", "w-16"].map((w, i) => (
           <Skeleton key={i} className={`h-3.5 flex-shrink-0 ${w}`} />
         ))}
       </div>
