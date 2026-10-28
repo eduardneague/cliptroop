@@ -12,7 +12,7 @@
 // 1.40.0: "as the master, i can set people who can see and create the media kit, i dont want it through a role, i want
 // it as a separate thing" (media_kit_access, 0117: the Partnerships role becomes it); "save templates … next time i can
 // go into that template and just modify a few things … as many templates as i want" (media_kit_templates, 0118).
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, sameSetup, templateName, templateSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, TEMPLATE_NAME_MAX, TEMPLATES_MAX, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
 import { applyManual, audienceFrom, audienceFromRead, kitTotals, manualFromRead, parseAmount, parsePoints, pickedVideo, pointsText, toPicked, totalsFromRead, withManual } from "../modules/media-kit/lib/manual";
@@ -20,7 +20,9 @@ import { canMakeMediaKit, KIT_NO_ACCESS } from "../modules/media-kit/lib/access"
 import { pageAnchorFor } from "../modules/media-kit/components/use-kit-sync";
 import { addDaily, agesFrom, changePct, countriesFrom, gendersFrom, growthPct, isVertical, mean, profileUrl, ratePct, shares, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "../modules/media-kit/lib/numbers";
 import { big, dayRange, fitSize, pct, roundRect, shortDay, signedPct, smoothPath, wrap, PAGE_H, PAGE_W, type Measure, type Op } from "../modules/media-kit/lib/scene";
-import { autoCoverGrid, buildKits, coverGridFor, kitFileName, sourceNote, totalsOf, type KitImages } from "../modules/media-kit/lib/layout";
+import { autoCoverGrid, buildKits, coverGridFor, kitFileName, packagesFor, sourceNote, totalsOf, type KitImages } from "../modules/media-kit/lib/layout";
+import { allOf, likeEscape, orValue, pickedKeys, readBrowse, searchTree, SHAPE_TREE, yearsSince, BROWSE_PAGE, KIT_SHAPES } from "../modules/media-kit/lib/browse";
+import { NUMBER_PAGES, pagesTouched, touches } from "../modules/media-kit/lib/touched";
 import { kitPalette } from "../modules/media-kit/lib/theme";
 import { contrast, over } from "../lib/contrast";
 
@@ -342,6 +344,9 @@ ok(/Videos we're proud of/.test(texts(vp.ops)) && !/Most viewed/.test(texts(vp.o
 const vpImgs = vp.ops.filter((o): o is Extract<Op, { t: "image" }> => o.t === "image").map((o) => o.src);
 ok(same(vpImgs, ["/t/tiktok3.jpg", "/t/youtube2.jpg", "/t/instagram4.jpg"]), `the picked videos, in their order (${vpImgs.join(" ")})`);
 ok(/497K views/.test(texts(vp.ops)) && !/(^|\| )1 views/.test(texts(vp.ops)), "with the freshest numbers (the pool's: 497K, not the 1 it had when picked)");
+const ytOnly = buildKits(poolNums, { ...full, platforms: ["youtube"], videoPicks: { on: true, list: picks } }, m, images)[0].pages.find((p) => p.anchor === "contact")!;
+const ytNone = buildKits(poolNums, { ...full, platforms: ["youtube"], sections: { ...full.sections, videos: false }, videoPicks: { on: true, list: picks } }, m, images)[0].pages.find((p) => p.anchor === "contact")!;
+ok(/comes straight from YouTube, Instagram and TikTok,/.test(texts(ytOnly.ops)) && /comes straight from YouTube,/.test(texts(ytNone.ops)), `a YouTube kit with picked TikToks and Reels: their platforms named where the numbers come from (not when the page is off)`);
 const fivePicked = buildKits(poolNums, { ...full, videos: 3, videoPicks: { on: true, list: [...wideFive()].map(toPicked) } }, m, images)[0].pages.find((p) => p.anchor === "videos")!;
 ok(fivePicked.ops.filter((o) => o.t === "image").length === 5, "picked: all of them, whatever the count for the most viewed");
 ok(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.label === "Best videos" && /Our best videos/.test(texts(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.ops)), "Pick on but nothing picked: the most viewed");
@@ -402,6 +407,7 @@ ok(Math.max(...cellXs(mk.pages.find((p) => p.anchor === "platform:instagram")!))
 const note = sourceNote({ ps: applyManual(poolNums, manualS).platforms, nums: poolNums, totals: kitTotals(applyManual(poolNums, manualS).platforms, manualS.manual.glance) })!;
 ok(/Instagram’s and TikTok’s numbers come straight from the platforms, read by ClipTroop on Oct 27, 2026\./.test(note) && /YouTube’s and Facebook’s numbers, the audience figures and the totals are our own count\./.test(note), `the kit says which numbers are its own (${note})`);
 ok(sourceNote({ ps: nums.platforms, nums, totals: t0 }) === "Every number in this kit comes straight from YouTube, Instagram and TikTok, read by ClipTroop on Oct 27, 2026.", "all read: says so");
+ok(sourceNote({ ps: nums.platforms.filter((p) => p.platform === "youtube"), nums, totals: t0 }, ["facebook", "youtube"]) === "Every number in this kit comes straight from YouTube and Facebook, read by ClipTroop on Oct 27, 2026." && sourceNote({ ps: nums.platforms, nums, totals: t0 }, ["instagram"]) === sourceNote({ ps: nums.platforms, nums, totals: t0 }), "1.41.0: videos picked from another platform: its numbers are read from it too (said once)");
 ok(texts(mk.pages.find((p) => p.anchor === "contact")!.ops).includes("our own count"), "the note on the last page");
 const perPlatform = buildKits(poolNums, { ...manualS, split: "each" }, m, images);
 ok(perPlatform.every((k) => !texts(k.pages[0].ops).includes("3M")) && perPlatform[0].pages[0].ops.some((o) => o.t === "text" && o.s === "110K"), "a kit per platform: its own followers (At a glance's typed totals are for the kit of them all)");
@@ -422,15 +428,23 @@ ok(/if \(!\(await mayMakeMediaKit\(supabase, teamId, user\.id\)\)\.ok\) return \
 ok(/if \(error\.code === "42501"\) return \{ error: "Run migrations 0116 and 0117 first\." \};/.test(saveFn), "someone let in before 0116 and 0117: says which migrations to run");
 ok(/if \(old !== settings\.coverPath\) await tidyCover\(supabase, teamId, old\);/.test(saveFn), "a replaced photo is tidied away");
 ok(/if \(!UUID\.test\(teamId\) \|\| !isCoverPath\(path, teamId\)\) return/.test(actions) && /createSignedUrl\(path, 3600\)/.test(actions), "the photo's link: the team's own file, for an hour");
-const searchFn = actions.slice(actions.indexOf("export async function searchKitVideos"));
-ok(/const team = await kitTeam\(supabase, teamId, user\.id\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(searchFn) && /query\.trim\(\)\.slice\(0, 80\)/.test(searchFn) && /await findVideos\(teamId, q\)/.test(searchFn) && /KIT_PLATFORMS\.includes\(v\.platform as KitPlatform\) && !v\.noNumbers\)\.slice\(0, 40\)/.test(searchFn), "search: the kit's people, Analytics' own search, the four platforms, at most 40");
+// 1.41.0: the picker pages through every video (browseKitVideos), not 90 of them; the old search went.
+const browseFn = actions.slice(actions.indexOf("export async function browseKitVideos"), actions.indexOf("// ---- 1.40.0: who opens it"));
+ok(!/searchKitVideos/.test(actions) && browseFn.length > 0, "every video: browseKitVideos (the 90-video pool and its search are gone)");
+ok(/const o = readBrowse\(raw\);/.test(browseFn) && /const team = await kitTeam\(supabase, teamId, user\.id\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(browseFn) && !/createAdminClient/.test(browseFn), "every video: the request checked, the kit's people only, read as the person");
+ok(/const platforms = KIT_PLATFORMS\.filter\(\(p\) => vis\.platforms\.has\(p\)\);/.test(browseFn) && /\.eq\("team_id", teamId\)\.in\("platform", platforms\)/.test(browseFn), "every video: the team's, on the accounts connected now");
+ok(/select\(cols, \{ count: "exact" \}\)/.test(browseFn) && /\.range\(o\.offset, o\.offset \+ BROWSE_PAGE - 1\)/.test(browseFn) && /const next = videos\.length === BROWSE_PAGE && o\.offset \+ BROWSE_PAGE < total \? o\.offset \+ BROWSE_PAGE : null;/.test(browseFn), "every video: a page at a time, with how many there are and where the next page starts");
+ok(/allOf\(\[shape === "all" \? null : SHAPE_TREE\[shape\], search\]\)/.test(browseFn) && /x\.gte\("published_at", `\$\{o\.year\}-01-01T00:00:00Z`\)\.lt\("published_at", `\$\{o\.year \+ 1\}-01-01T00:00:00Z`\)/.test(browseFn), "every video: shape, year and search filters, in one tree");
+ok(/\.eq\("entry_number", Number\(num\)\)/.test(browseFn) && /shorts\.limit\(BROWSE_NAMED\), longs\.limit\(BROWSE_NAMED\)/.test(browseFn) && /searchTree\(\{ words, phrase: o\.q, number: !!num, shorts: ids\(sh\), longs: ids\(lo\) \}\)/.test(browseFn), "every video: a search by the title, its short's or long video's title, or #number");
 const gather = read("modules/media-kit/lib/gather.ts");
 ok(/^import "server-only";/.test(gather) && /getMembership\(supabase, teamId\)/.test(gather) && /if \(!may\.ok \|\| !data\) return null;/.test(gather) && !/canViewRevenue/.test(gather) && /visibleRows\(/.test(gather), "the team check: Masters and the people they let in (revenue access alone no longer); the accounts connected now only");
 const mayFn = gather.slice(gather.indexOf("export async function mayMakeMediaKit"), gather.indexOf("export async function kitTeam"));
 ok(/if \(!membership \|\| !me\) return \{ ok: false \};/.test(mayFn) && /if \(master\) return \{ ok: true, master, userId: me\.id \};/.test(mayFn) && /from\("media_kit_access"\)\.select\("user_id"\)\.eq\("team_id", teamId\)\.eq\("user_id", me\.id\)\.maybeSingle\(\)/.test(mayFn) && /canMakeMediaKit\(membership\.roles, !error && !!data\)/.test(mayFn), "who may: an active member, a Master or let in (their own row; none or no table: not let in)");
 ok(/getAudience\(teamId, w\)/.test(gather) && /getAudienceBreakdowns\(teamId, w\)/.test(gather) && /getContent\(teamId, w\)/.test(gather), "the same reads as Analytics");
 ok(/as unknown as Record<string, unknown>\[\]/.test(gather), "a select built at run time read as plain fields (1.36.1)");
-ok(/pool\.size < 90/.test(gather) && /!vis\.platforms\.has\(v\.platform\)/.test(gather) && /pool: \[\.\.\.pool\.values\(\)\]/.test(gather), "the videos to pick from: the period's and the best ever, connected accounts only, at most 90");
+ok(/more < 90/.test(gather) && /!vis\.platforms\.has\(v\.platform\)/.test(gather) && /pool: \[\.\.\.pool\.values\(\)\]/.test(gather), "the kit's other videos: the period's and the best ever, connected accounts only, 90 of them");
+ok(/for \(const v of fresh\) pool\.set\(/.test(gather) && /\.in\("external_id", \[\.\.\.new Set\(wanted\.map\(\(k\) => k\.id\)\)\]\)/.test(gather) && /visibleRows\(\(pickedRows \?\? \[\]\)/.test(gather), "1.41.0: the picked videos read again (connected accounts only), so they show today's numbers");
+ok(/gatherMediaKit\(teamId, team, \{ period: saved\.period, from: saved\.from, to: saved\.to \}, \[\.\.\.saved\.videoPicks\.list, \.\.\.saved\.coverPicks\.list\]\)/.test(gather) && /gatherMediaKit\(teamId, team, \{ period, from, to \}, pickedKeys\(picked\)\)/.test(actions), "the page and another period both read the picked ones again");
 const page = read("app/(dashboard)/analytics/page.tsx");
 ok(/mayMakeMediaKit\(supabase, teamId\),/.test(page) && /kit: kitAccess\.ok\s+\? await mediaKitData\(/.test(page) && /\{ id: kitAccess\.userId, master: kitAccess\.master \}\)\s+: \{ allowed: false \},/.test(page) && /kitAllowed=\{kitAccess\.ok\}/.test(page) && !/canMakeMediaKit/.test(page), "the tab: the builder for Masters and the people they let in, a locked card for the rest");
 const view = read("modules/analytics/components/analytics-view.tsx");
@@ -538,6 +552,144 @@ ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handl
   ok(/create unique index if not exists media_kit_templates_name_idx on media_kit_templates \(team_id, lower\(name\)\);/.test(m118) && /check \(char_length\(name\) between 1 and 80 and name = btrim\(name\)\)/.test(m118) && /octet_length\(settings::text\) <= 100000/.test(m118), "0118: a name once per team whatever its case, 1 to 80 characters; a setup of 100 KB at most");
   ok((m118.match(/create policy/g) ?? []).length === 4 && (m118.match(/team_id in \(select media_kit_team_ids\(\)\)/g) ?? []).length === 5 && /grant select, insert, update, delete on media_kit_templates to authenticated;/.test(m118), "0118: the kit's people read, add, change and delete them");
   ok(/new\.team_id := old\.team_id;\s+new\.created_by := old\.created_by;\s+new\.created_at := old\.created_at;/.test(m118) && /new\.updated_by := coalesce\(auth\.uid\(\), new\.updated_by\);\s+new\.updated_at := now\(\);/.test(m118), "0118: who and when are the database's; a template stays on its team");
+}
+
+// --- 1.41.0 ----------------------------------------------------------------------------------------------------------------
+// "for the any platform on rates, you need to come up with something that shows any platform, maybe all of them in a
+// grid"; "this only shows up for youtube, if you add a package, the other pages dont work (working together)"; "theres
+// only 90 shorts here to pick from … better filters needed"; "long videos dont show up at all".
+{
+  const P = (id: string, platform: "youtube" | "instagram" | "tiktok" | "facebook" | "any", price: number | null = null, name = `Package ${id}`, detail = "A whole video built around your brand, with a link in the description and a pinned comment") => ({ id, name, detail, platform, price });
+  const pk = [P("y", "youtube"), P("i", "instagram", 555), P("t", "tiktok"), P("a", "any")];
+  // Which packages a kit lists.
+  ok(same(packagesFor(pk, ["youtube"], null).map((p) => p.id), ["y", "i", "t", "a"]), "one kit with everything: every package, whatever its platform (the owner's Instagram package on a YouTube-only kit)");
+  ok(same(packagesFor(pk, ["youtube"], new Set(["youtube", "instagram"])).map((p) => p.id), ["y", "t", "a"]) && same(packagesFor(pk, ["instagram"], new Set(["youtube", "instagram"])).map((p) => p.id), ["i", "t", "a"]), "one kit per platform: its own, any platform's, and a platform's with no kit of its own (so each shows somewhere)");
+  // The owner's case: only YouTube connected, a package for Instagram.
+  const ytOnly: MediaKitNumbers = { ...nums, platforms: [plat("youtube")] };
+  const owner = buildKits(ytOnly, { ...full, rates: { show: true, currency: "EUR", note: "", packages: [P("t1", "instagram", 555, "tester", "test"), P("d", "youtube", null, "Dedicated video", "A whole video built around your brand"), P("s", "any", null, "Short or Reel", "A vertical video of 30 to 60 seconds")] } }, m, images)[0];
+  const ownerRates = owner.pages.find((p) => p.anchor === "rates")!;
+  ok(/tester/.test(texts(ownerRates.ops)) && /€555/.test(texts(ownerRates.ops)) && /Dedicated video/.test(texts(ownerRates.ops)) && /Short or Reel/.test(texts(ownerRates.ops)), "Working together lists the Instagram package on a YouTube kit, with its price");
+  // Any platform: every logo, two by two, in the room of one (YouTube red, Facebook blue, TikTok black, Instagram's bands).
+  const anyOnly = buildKits(ytOnly, { ...full, rates: { show: false, currency: "EUR", note: "", packages: [P("s", "any")] } }, m, images)[0].pages.find((p) => p.anchor === "rates")!;
+  const fills = anyOnly.ops.filter((o): o is Extract<Op, { t: "rect" }> => o.t === "rect" && !!o.fill && o.w <= 10 && o.h <= 10 && o.w >= 8);
+  const has = (c: number[]) => fills.some((o) => same(o.fill, c));
+  ok(has([255, 0, 0]) && has([8, 102, 255]) && has([0, 0, 0]) && anyOnly.ops.some((o) => o.t === "clip" && o.w <= 10), `any platform: all four logos, small (${fills.length} tiles)`);
+  const ytPkg = buildKits(ytOnly, { ...full, rates: { show: false, currency: "EUR", note: "", packages: [P("y", "youtube")] } }, m, images)[0].pages.find((p) => p.anchor === "rates")!;
+  ok(ytPkg.ops.some((o) => o.t === "rect" && same(o.fill, [255, 0, 0]) && o.w === 20) && !ytPkg.ops.some((o) => o.t === "rect" && same(o.fill, [8, 102, 255])), "one platform: its own logo, the grid's size");
+  // Up to eight packages, prices or on request, a long note: everything on the page, above the footer, nothing on top of anything.
+  const longNote = "Prices exclude VAT. Every package includes a link in the description, a pinned comment, and two rounds of changes before it goes live.";
+  for (const n of [1, 3, 4, 5, 6, 7, 8])
+    for (const show of [true, false])
+      for (const note of ["", longNote]) {
+        const list = Array.from({ length: n }, (_, i) => P(`p${i}`, (["youtube", "instagram", "tiktok", "facebook", "any"] as const)[i % 5], i % 3 ? 2500 * (i + 1) : null, `Package number ${i + 1} with a long name`));
+        const page = buildKits(ytOnly, { ...full, rates: { show, currency: "EUR", note, packages: list } }, m, images)[0].pages.find((p) => p.anchor === "rates")!;
+        const words = page.ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text" && !/media kit|\d+ \/ \d+/.test(o.s));
+        const off = words.filter((o) => o.x < 0 || o.x + m.width(o.s, o.f, o.size) > PAGE_W - 40 || o.y > PAGE_H - 40);
+        // Lines of words that sit on the same spot (a row's words over the closing words, or two rows).
+        const boxes = words.map((o) => ({ x0: o.x, x1: o.x + m.width(o.s, o.f, o.size), y0: o.y - o.size * 0.75, y1: o.y + o.size * 0.2 }));
+        let overlaps = 0;
+        for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length; b++) if (boxes[a].x0 < boxes[b].x1 - 0.5 && boxes[b].x0 < boxes[a].x1 - 0.5 && boxes[a].y0 < boxes[b].y1 - 0.5 && boxes[b].y0 < boxes[a].y1 - 0.5) overlaps++;
+        const listed = list.filter((p) => texts(page.ops).includes(p.name.slice(0, 10))).length;
+        ok(off.length === 0 && overlaps === 0 && listed === n, `rates, ${n} packages, ${show ? "prices" : "on request"}${note ? ", a long note" : ""}: ${off.length} words off the page, ${overlaps} on top of each other, ${listed} of ${n} listed`);
+      }
+  const eight = buildKits(ytOnly, { ...full, rates: { show: true, currency: "EUR", note: "", packages: Array.from({ length: 8 }, (_, i) => P(`p${i}`, "youtube", 1000)) } }, m, images)[0].pages.find((p) => p.anchor === "rates")!;
+  const names = eight.ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text" && /^Package p/.test(o.s));
+  ok(new Set(names.map((o) => Math.round(o.x))).size === 2, "five to eight packages: two columns");
+  ok(/Rates on request/.test(texts(buildKits(ytOnly, { ...full, rates: { show: true, currency: "EUR", note: "", packages: [] } }, m, images)[0].pages.find((p) => p.anchor === "rates")!.ops)), "prices on, but no package to price: rates on request");
+
+  // Every video, to pick from: the request, read safely.
+  const b = readBrowse({ q: "  phone\u0007 says  ", platform: "tiktok", shape: "wide", sort: "oldest", year: 2024, offset: 96 });
+  ok(b.q === "phone  says" && b.platform === "tiktok" && b.shape === "wide" && b.sort === "oldest" && b.year === 2024 && b.offset === 96, "a request: kept as asked (control characters out)");
+  const bad = readBrowse({ q: 5, platform: "myspace", shape: "round", sort: "random", year: 1999.5, offset: -3 });
+  ok(bad.q === "" && bad.platform === "all" && bad.shape === "all" && bad.sort === "views" && bad.year === null && bad.offset === 0 && readBrowse(null).platform === "all", "anything wrong: every video, most viewed first");
+  ok(readBrowse({ q: "x".repeat(200) }).q.length === 80 && readBrowse({ offset: 1e9 }).offset === 100_000 && BROWSE_PAGE === 48, "at most 80 letters, a page of 48");
+  // The shapes: a tiny reader of PostgREST's logic trees, over every platform and kind (as isVertical sees them).
+  const evalTree = (tree: string, row: Record<string, string>): boolean => {
+    const t = tree.trim();
+    const m2 = /^(or|and)\((.*)\)$/.exec(t);
+    if (m2) {
+      const parts: string[] = [];
+      let depth = 0;
+      let cur = "";
+      for (const ch of m2[2]) {
+        if (ch === "(") depth++;
+        if (ch === ")") depth--;
+        if (ch === "," && depth === 0) {
+          parts.push(cur);
+          cur = "";
+        } else cur += ch;
+      }
+      parts.push(cur);
+      return m2[1] === "or" ? parts.some((p) => evalTree(p, row)) : parts.every((p) => evalTree(p, row));
+    }
+    const f = /^(\w+)\.(not\.)?(eq|neq|in)\.(.*)$/.exec(t)!;
+    const v = row[f[1]];
+    const r = f[3] === "eq" ? v === f[4] : f[3] === "neq" ? v !== f[4] : f[4].replace(/^\(|\)$/g, "").split(",").includes(v);
+    return f[2] ? !r : r;
+  };
+  let wrong = 0;
+  for (const platform of ["youtube", "instagram", "tiktok", "facebook"] as const)
+    for (const kind of ["short", "long", "live", "post"] as const) {
+      const row = { platform, kind };
+      const hits = (["tall", "wide", "post"] as const).filter((sh) => evalTree(SHAPE_TREE[sh], row));
+      const want = isVertical(row) ? "tall" : kind === "post" ? "post" : "wide";
+      if (hits.length !== 1 || hits[0] !== want) {
+        wrong++;
+        console.log("shape:", platform, kind, hits, want);
+      }
+    }
+  ok(wrong === 0 && same(KIT_SHAPES, ["all", "tall", "wide", "post"]), "the shapes: every platform and kind in exactly one, as the kit draws it (Shorts, TikToks and Reels tall)");
+  ok(likeEscape("50%_off\\") === "50\\%\\_off\\\\" && orValue('a,b"c') === '"a,b\\"c"', "a search's own % and _ taken literally; commas and quotes inside a quoted value");
+  const st = searchTree({ words: ["phone", "says"], phrase: "phone says", number: false, shorts: ["s1"], longs: [] });
+  ok(st === 'or(and(title.ilike."%phone%",title.ilike."%says%"),short_id.in.(s1))', `search: every word in the title, or the short it names (${st})`);
+  ok(searchTree({ words: [], phrase: "#12", number: true, shorts: [], longs: [] }) === 'or(title.ilike."%#12%")' && searchTree({ words: ["12"], phrase: "12", number: true, shorts: [], longs: ["l9"] }) === 'or(title.ilike."%12%",project_id.in.(l9))', "a #number: the video it names, or a title with it as typed");
+  ok(searchTree({ words: [], phrase: "", number: false, shorts: [], longs: [] }) === "or(external_id.eq.__none__)" && searchTree({ words: [], phrase: "", number: true, shorts: [], longs: [] }) === "or(external_id.eq.__none__)", "nothing to look for: a tree nothing matches");
+  ok(allOf([null, null]) === null && allOf([SHAPE_TREE.wide, null]) === SHAPE_TREE.wide && allOf(["or(a.eq.1,b.eq.2)"]) === "a.eq.1,b.eq.2" && allOf([SHAPE_TREE.tall, st]) === `and(${SHAPE_TREE.tall},${st})`, "the filters as one tree for .or()");
+  ok(same(yearsSince("2023-05-01T00:00:00Z", new Date("2026-10-28T00:00:00Z")), [2026, 2025, 2024, 2023]) && same(yearsSince(null, new Date("2026-10-28T00:00:00Z")), [2026]) && yearsSince("1990-01-01", new Date("2026-01-01")).at(-1) === 2005, "the years with videos, newest first");
+  const keys = pickedKeys([{ platform: "youtube", id: "a" }, { platform: "youtube", id: "a" }, { platform: "myspace", id: "b" }, { platform: "tiktok", id: "bad id!" }, ...Array.from({ length: 30 }, (_, i) => ({ platform: "instagram", id: `i${i}` }))]);
+  ok(keys.length === 21 && keys[0].id === "a" && !keys.some((k) => k.id === "b" || k.id === "bad id!") && pickedKeys("nope").length === 0, "the picked videos to read again: real ones, each once, at most 21");
+
+  // The window itself.
+  const picker = read("modules/media-kit/components/kit-video-picker.tsx");
+  ok(/browseKitVideos\(teamId, \{ \.\.\.f, offset: 0 \}\)/.test(picker) && /browseKitVideos\(teamId, \{ \.\.\.f, offset: from \}\)/.test(picker) && /new IntersectionObserver\(/.test(picker) && /Show more/.test(picker), "the window: the first page, then more as you scroll (or Show more)");
+  ok(/if \(mine !== seq\.current\) return;/.test(picker) && /const skeleton = !onlyPicked && \(firstLoad \|\| changing\);/.test(picker) && /\{skeleton \? \(/.test(picker) && !/BusyVeil|busy-under|busy-veil/.test(picker), "the latest filter wins; until its videos come, their skeletons (no loading card)");
+  ok(/ariaLabel="Which platform"/.test(picker) && /ariaLabel="Which kind"/.test(picker) && /ariaLabel="Order"/.test(picker) && /ariaLabel="When it was posted"/.test(picker) && /Picked/.test(picker), "filters: platform, kind, order, year, and the ones picked");
+  ok(!/pool/.test(picker), "no 90-video pool any more");
+  // 1.41.0, the owner: "I DONT WANT LOADING THINGS ACROSS PAGES LIKE TIHS, REMOVE THOSE … ONLY FOR THE MEDIA KIT PREVIEW
+  // PAGES, THERE SHOULD BE SOME SORT OF LOADING ANIMATION OR SOMETHING TO TELL YOU THAT ITS BEING MODIFIED".
+  const css = read("app/globals.css");
+  ok(!existsSync(join(root, "components/ui/busy-veil.tsx")) && !/busy-veil|busy-under/.test(css) && ["modules/analytics/components/analytics-view.tsx", "modules/outliers/components/outliers-view.tsx", "modules/media-kit/components/media-kit-tab.tsx"].every((f) => !/BusyVeil|busy-veil|busy-under/.test(read(f))), "no loading card over Analytics, Outliers or the media kit: only its pages say they're being updated");
+  const pageBusy = read("modules/media-kit/components/kit-page-busy.tsx");
+  const busyCss = css.match(/\.kit-page-busy \{([^}]*)\}/)?.[1] ?? "";
+  ok(/className="kit-page-busy" data-late=\{late \? "" : undefined\} style=\{[^\n]*\} aria-hidden>/.test(pageBusy) && /window\.setTimeout\(\(\) => setLate\(true\), 220\)/.test(pageBusy) && /<span>Updating<\/span>/.test(pageBusy) && /animation: kit-busy-in 0\.25s var\(--ease-out\) 0\.2s both;/.test(busyCss) && /rgb\(var\(--amber\) \/ 0\.6\)/.test(busyCss) && /background: rgb\(var\(--page-paper, var\(--surface\)\) \/ 0\.45\);/.test(busyCss) && /"--page-paper": `\$\{bg\[0\]\} \$\{bg\[1\]\} \$\{bg\[2\]\}`/.test(pageBusy) && /pointer-events: none;/.test(busyCss), "a page being updated: dimmed, a sweep and a tag in the theme's colour, a beat after the change");
+  ok(/html\[data-motion="off"\] \.kit-page-busy:not\(\[data-late\]\) \{ visibility: hidden; \}/.test(css) && /html:not\(\[data-motion="on"\]\) \.kit-page-busy:not\(\[data-late\]\) \{ visibility: hidden; \}/.test(css), "animations off: still, and only once the beat has passed (no flash on every change)");
+  ok(/const deferred = useLaidOut\(s\);/.test(tab) && !/useDeferredValue\(/.test(tab) && /const raf = requestAnimationFrame\(\(\) => \{\s+t = window\.setTimeout\(go, 0\);\s+\}\);/.test(tab) && /const fallback = window\.setTimeout\(go, 150\);/.test(tab), "the preview: laid out a beat after each change, after the next paint, never waiting on a save (React's deferred value drew with every server action in flight)");
+  ok(/const touched = useMemo\(\(\) => \(kits && deferred !== s \? pagesTouched\(deferred, s\) : null\), \[kits, deferred, s\]\);/.test(tab) && /const updating = \(p: Page\) => touches\(touched, p\.anchor\) \|\| \(reloading && touches\(NUMBER_PAGES, p\.anchor\)\) \|\| \(uploading && \(p\.anchor === "cover" \|\| p\.anchor === "about"\)\) \|\| picturesComing\(p\);/.test(tab) && /\{busy && <KitPageBusy bg=\{p\.bg\} \/>\}/.test(tab) && /aria-busy=\{busy \|\| undefined\}/.test(tab) && /className=\{`relative block w-full rounded-xl overflow-hidden/.test(tab), "the preview: each page says it's being updated while its change is drawn, other numbers come, a photo goes up or its new pictures load");
+  ok(/if \(s\.first\) \{\s+s\.first = false;\s+srcs\.forEach\(\(src\) => s\.done\.add\(src\)\);/.test(pageBusy) && /window\.setTimeout\(finish, PICTURE_WAIT_MS\)/.test(pageBusy) && /return \(page\) => !st\.current\.first && page\.ops\.some/.test(pageBusy), "pictures: waited on after a change only (the first layout's are the kit loading), never for ever");
+  // Which pages a change redraws.
+  const T = (patch: Partial<MediaKitSettings>) => pagesTouched(full, { ...full, ...patch });
+  const hit = (t: ReturnType<typeof pagesTouched>, ...as: string[]) => as.every((a) => touches(t, a));
+  const miss = (t: ReturnType<typeof pagesTouched>, ...as: string[]) => as.every((a) => !touches(t, a));
+  ok(pagesTouched(full, full) !== "all" && miss(pagesTouched(full, full), "cover", "rates") && miss(pagesTouched(full, { ...full }), "cover", "rates", "contact"), "nothing changed: no page");
+  const rates = T({ rates: { ...full.rates, show: !full.rates.show } });
+  ok(hit(rates, "rates") && miss(rates, "cover", "about", "glance", "platform:youtube", "videos", "partners", "contact"), "rates: only Working together");
+  ok(["platforms", "split", "extra", "sections", "theme", "accent", "title"].every((k) => T({ [k]: k === "split" ? (full.split === "each" ? "together" : "each") : k === "sections" ? { ...full.sections, rates: !full.sections.rates } : k === "theme" ? (full.theme === "dark" ? "light" : "dark") : k === "accent" ? "#123456" : k === "title" ? "Another name" : ["facebook"] } as Partial<MediaKitSettings>) === "all"), "the look, the channels, the kits, the pages in it, the kit's name: every page");
+  const period = T({ period: full.period === "90d" ? "28d" : "90d" });
+  ok(hit(period, ...[...NUMBER_PAGES].map((a) => a.replace("*", "tiktok"))) && miss(period, "rates", "partners"), "another period: every page drawn from the numbers (all but the rates and the brands)");
+  ok(hit(T({ videoPicks: { on: true, list: picks } }), "videos", "contact") && miss(T({ videoPicks: { on: true, list: picks } }), "cover", "about"), "picked videos: their page, and the last one (where the numbers come from)");
+  ok(hit(T({ coverPicks: { on: true, list: picks } }), "cover", "about") && miss(T({ coverPicks: { on: true, list: picks } }), "videos"), "the cover's videos: the cover and About us (it shows them)");
+  ok(hit(T({ about: "Something else." }), "about") && miss(T({ about: "Something else." }), "cover") && T({ about: "" }) === "all" && pagesTouched({ ...full, about: "" }, full) === "all", "About us: its page; gone or back: every page (they're numbered again)");
+  const ytTyped = T({ manual: { ...full.manual, platforms: { ...full.manual.platforms, youtube: { ...emptyManualPlatform(), on: true, followers: 5 } } } });
+  ok(hit(ytTyped, "platform:youtube", "glance", "cover", "contact") && miss(ytTyped, "platform:instagram", "audience:youtube", "rates"), "YouTube's numbers typed in: its page and the totals' pages");
+  const tkAudience = T({ manual: { ...full.manual, audience: { ...full.manual.audience, tiktok: { ...emptyManualAudience(), on: true } } } });
+  ok(hit(tkAudience, "audience:tiktok", "contact") && miss(tkAudience, "audience:youtube", "platform:tiktok"), "TikTok's audience typed in: its page (and the note on the last)");
+  ok(hit(T({ partners: [...full.partners, "Sony"] }), "partners") && miss(T({ partners: [...full.partners, "Sony"] }), "rates") && T({ partners: [], testimonials: [] }) === "all", "brands: their page; none left: every page");
+  ok(T({ contact: { ...full.contact, cta: "Hi" } }) !== "all" && hit(T({ contact: { ...full.contact, cta: "Hi" } }), "contact") && hit(T({ tagline: "New" }), "cover") && miss(T({ tagline: "New" }), "about") && hit(T({ audienceNote: "Mostly gamers" }), "audience:instagram"), "contact, tagline, the audience note: their own pages");
+  ok(pagesTouched(full, { ...full, later: 1 } as unknown as MediaKitSettings) === "all" && T({ fromTemplate: "x" }) !== "all" && miss(T({ fromTemplate: "x" }), "cover"), "a part this doesn't know yet: every page; the template's id: none");
+  ok(!touches(null, "cover") && touches("all", undefined) && !touches(new Set(["platform:*"]), "audience:youtube") && touches(new Set(["platform:*"]), "platform:facebook"), "touches: none, all, and the platform pages together");
+  ok(/@media \(max-width: 639px\) \{\s+\.swipe-row \{/.test(read("app/globals.css")) && (picker.match(/swipe-row/g) ?? []).length === 2 && /flex items-center gap-2 flex-wrap sm:contents/.test(picker), "the picker on a phone: its platforms and kinds swiped (fading at the edge), the order and year whole, Picked under them when narrow");
+  const fields = read("modules/media-kit/components/kit-fields.tsx");
+  ok(/\{ value: "any", label: "Any platform", icon: <AnyPlatformIcon className="w-4 h-4" \/> \}/.test(fields) && /export function AnyPlatformIcon/.test(read("components/ui/platform-icons.tsx")), "the form: any platform shows all four too");
 }
 
 if (fails) {

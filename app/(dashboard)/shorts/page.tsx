@@ -6,6 +6,7 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { getCachedUser } from "@/lib/supabase/get-user";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import { PlusIcon, CalendarIcon } from "@/components/ui/icons";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ViewToggle } from "@/components/ui/view-toggle";
@@ -79,13 +80,15 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
   // First visit of a new day rolls unposted Auto shorts forward, so the list
   // and the queue are read after that; everything else loads alongside it.
-  const [membership, user, settings, everyone, dayLimits, [all, queueStart]] = await Promise.all([
+  const [membership, user, settings, everyone, dayLimits, [all, queueStart], rights] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
     getShortSettings(currentTeam.id),
     listTeamPeople(currentTeam.id),
     listDayLimits(currentTeam.id),
     refreshShortQueue(currentTeam.id).then(() => Promise.all([listShorts(currentTeam.id), getQueueStart(currentTeam.id)])),
+    // 1.41.0: masters, and whoever the owner lets delete shorts (one at a time, or several when the team lets them).
+    getDeleteRights(supabase, currentTeam.id),
   ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
@@ -221,8 +224,8 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
         )}
       </div>
 
-      {/* Shorts picked together (pick-shorts.tsx): export; masters move and delete. 1.38.0 on the table; 1.40.0 on the cards too. */}
-      <ShortsPicker items={list.map((x) => ({ id: x.id, number: x.number, title: x.title, stage: x.stage }))} canMove={master} canDelete={master}>
+      {/* Shorts picked together (pick-shorts.tsx): export; masters move; masters (1.41.0: and whoever the owner lets) delete. 1.38.0 on the table; 1.40.0 on the cards too. */}
+      <ShortsPicker items={list.map((x) => ({ id: x.id, number: x.number, title: x.title, stage: x.stage }))} canMove={master} canDelete={rights.shorts} deleteMany={rights.manyShorts}>
       {/* One row at every screen size: stage chips, Filters, Select (the table), view toggle. */}
       <div className="flex items-center gap-2 mb-6">
         <div className="-ml-4 pl-4 sm:ml-0 sm:pl-0 flex-1 min-w-0 overflow-x-auto no-scrollbar">
@@ -370,6 +373,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
           perDay={settings.perDay}
           weekends={settings.weekends}
           master={master}
+          canDelete={rights.shorts}
           canPost={canPost}
           myMemberId={myMemberId}
           editors={editors}

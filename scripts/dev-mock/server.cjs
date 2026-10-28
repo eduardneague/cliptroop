@@ -30,42 +30,91 @@ const tableRows = (F, name) => {
   return stores.get(name);
 };
 
-function applyFilters(rows, params) {
+/** One PostgREST test on one row's column (`not` turns it round). */
+function testOp(row, k, not, op, raw) {
+  const x = row[k];
+  let r;
+  if (op === "eq") r = String(x) === raw;
+  else if (op === "neq") r = String(x) !== raw;
+  else if (op === "in") r = raw.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")).includes(String(x));
+  else if (op === "is") r = raw === "null" ? x === null || x === undefined : String(x) === raw;
+  else if (op === "gte") r = x !== null && x !== undefined && String(x) >= raw;
+  else if (op === "lte") r = x !== null && x !== undefined && String(x) <= raw;
+  else if (op === "gt") r = x !== null && x !== undefined && String(x) > raw;
+  else if (op === "lt") r = x !== null && x !== undefined && String(x) < raw;
+  else if (op === "like" || op === "ilike") {
+    // PostgREST patterns: % or * any run, _ one character, \ escapes.
+    let re = "";
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === "\\" && i + 1 < raw.length) re += raw[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      else if (ch === "%" || ch === "*") re += ".*";
+      else if (ch === "_") re += ".";
+      else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    r = x !== null && x !== undefined && new RegExp(`^${re}$`, op === "ilike" ? "is" : "s").test(String(x));
+  } else r = true;
+  return not ? !r : r;
+}
+
+/** A logic tree's parts: commas at its own level (not inside brackets or a "quoted, value"). */
+function splitTop(s) {
+  const out = [];
+  let depth = 0;
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quoted) {
+      if (ch === "\\" && i + 1 < s.length) {
+        cur += ch + s[++i];
+        continue;
+      }
+      if (ch === '"') quoted = false;
+      cur += ch;
+      continue;
+    }
+    if (ch === '"') quoted = true;
+    else if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "," && depth === 0 && !quoted) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const unquote = (v) => (/^".*"$/s.test(v) ? v.slice(1, -1).replace(/\\(.)/g, "$1") : v);
+/** 1.41.0: or=(…) / and=(…) logic trees (nested, not., quoted values), as PostgREST reads them. */
+function evalTree(expr, row) {
+  const m = /^(not\.)?(or|and)\((.*)\)$/s.exec(expr.trim());
+  if (m) {
+    const parts = splitTop(m[3]);
+    const r = m[2] === "or" ? parts.some((p) => evalTree(p, row)) : parts.every((p) => evalTree(p, row));
+    return m[1] ? !r : r;
+  }
+  const f = /^([a-z0-9_]+)\.(not\.)?(eq|neq|in|is|gte|lte|gt|lt|like|ilike)\.(.*)$/s.exec(expr.trim());
+  if (!f) return true;
+  return testOp(row, f[1], !!f[2], f[3], unquote(f[4]));
+}
+
+/** The rows a request's filters and order let through, and (1.41.0) how many before its page (count=exact). */
+function filterRows(rows, params) {
   let out = rows;
   for (const [k, v] of params) {
-    if (["select", "order", "limit", "offset", "on_conflict", "columns", "or", "and"].includes(k)) continue;
+    if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(k)) continue;
+    if (k === "or" || k === "and") {
+      out = out.filter((row) => evalTree(`${k}${v}`, row));
+      continue;
+    }
     if (k.includes(".")) continue; // filters on embedded tables: ignore
     const m = /^(not\.)?(eq|neq|in|is|gte|lte|gt|lt|like|ilike)\.(.*)$/.exec(v);
     if (!m) continue;
     const [, not, op, raw] = m;
     const has = out.length && Object.prototype.hasOwnProperty.call(out[0], k);
     if (!has) continue;
-    const test = (row) => {
-      const x = row[k];
-      let r;
-      if (op === "eq") r = String(x) === raw;
-      else if (op === "neq") r = String(x) !== raw;
-      else if (op === "in") r = raw.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")).includes(String(x));
-      else if (op === "is") r = raw === "null" ? x === null || x === undefined : String(x) === raw;
-      else if (op === "gte") r = x !== null && String(x) >= raw;
-      else if (op === "lte") r = x !== null && String(x) <= raw;
-      else if (op === "gt") r = x !== null && String(x) > raw;
-      else if (op === "lt") r = x !== null && String(x) < raw;
-      else if (op === "like" || op === "ilike") {
-        // PostgREST patterns: % or * any run, _ one character, \ escapes.
-        let re = "";
-        for (let i = 0; i < raw.length; i++) {
-          const ch = raw[i];
-          if (ch === "\\" && i + 1 < raw.length) re += raw[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          else if (ch === "%" || ch === "*") re += ".*";
-          else if (ch === "_") re += ".";
-          else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        }
-        r = x !== null && x !== undefined && new RegExp(`^${re}$`, op === "ilike" ? "is" : "s").test(String(x));
-      } else r = true;
-      return not ? !r : r;
-    };
-    out = out.filter(test);
+    out = out.filter((row) => testOp(row, k, !!not, op, raw));
   }
   // order=col.desc.nullslast,col2.asc (columns of the row itself; embedded ones are ignored).
   const order = params.get("order");
@@ -92,11 +141,14 @@ function applyFilters(rows, params) {
         return 0;
       });
   }
+  const total = out.length;
   const offset = Number(params.get("offset") || 0);
   const limit = params.get("limit");
   if (offset || limit) out = out.slice(offset, limit ? offset + Number(limit) : undefined);
-  return out;
+  return { rows: out, total };
 }
+const applyFilters = (rows, params) => filterRows(rows, params).rows;
+
 /** A flat sample picture: a "thumbnail" (16:9, a big word) or a channel picture (square). */
 function sampleImage(res, p) {
   let h = 0;
@@ -253,6 +305,8 @@ function answer(req, res, url, body) {
       return send(res, 200, out);
     }
     const t = /^\/rest\/v1\/([a-z0-9_]+)$/.exec(url.pathname);
+    // A table a migration hasn't made yet (fixtures' missingTables, e.g. MOCK_NO_0119=1): PostgREST's own answer.
+    if (t && (F.missingTables ?? []).includes(t[1])) return send(res, 404, { code: "PGRST205", message: `Could not find the table 'public.${t[1]}' in the schema cache`, details: null, hint: null });
     if (t) {
       // Tables that remember writes (the daily word's plays, and any in MOCK_WRITES=a,b):
       // inserts are kept, updates change the rows they match.
@@ -279,9 +333,10 @@ function answer(req, res, url, body) {
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, req.method === "POST" ? 201 : 200, []);
       const table = t[1];
       if (!F.tables[table] && process.env.MOCK_LOG) console.log("   (no fixture for", table + ")");
-      let rows = applyFilters(tableRows(F, table) ?? [], url.searchParams);
+      const found = filterRows(tableRows(F, table) ?? [], url.searchParams);
+      let rows = found.rows;
       const range = req.headers["range"];
-      const total = rows.length;
+      const total = found.total;
       if (range) {
         const [a, b] = String(range).split("-").map(Number);
         rows = rows.slice(a, b + 1);

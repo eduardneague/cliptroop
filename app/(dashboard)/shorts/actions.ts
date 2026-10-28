@@ -17,6 +17,8 @@ import {
   type ShortStage,
 } from "@/modules/short-videos/lib/constants";
 import { hasShortFilming } from "@/modules/short-videos/lib/queries";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { mayDelete, noDeleteText, NO_DELETE } from "@/lib/permissions/delete-rules";
 
 /**
  * Every change to a short goes through here. The database (RLS + the
@@ -721,10 +723,28 @@ export async function moveShortsStage(moves: StageMove[]): Promise<Result<StageM
 export type ShortsDeleted = { deleted: { id: string; number: number }[]; failed: { id: string; number: number | null; error: string }[] };
 
 /**
+ * 1.41.0: shorts deleted through the database's delete_shorts (0119): Masters as always, and the people the team's
+ * owner lets delete shorts, one at a time or several when the team lets them (the database decides, short by short).
+ * Before 0119 (no such function yet): straight from the table, Masters only (0026's rule), as before.
+ */
+async function removeShorts(supabase: Awaited<ReturnType<typeof createClient>>, ids: string[]): Promise<{ gone: Set<string> } | { error: string }> {
+  const { data, error } = await supabase.rpc("delete_shorts", { p_ids: ids });
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883" || /delete_shorts/.test(error.message)) {
+      const old = await supabase.from("short_videos").delete().in("id", ids).select("id");
+      if (old.error) return { error: friendlyDbError(old.error, "Couldn't delete. Try again.") };
+      return { gone: new Set((old.data ?? []).map((r) => r.id as string)) };
+    }
+    return { error: friendlyDbError(error, "Couldn't delete. Try again.") };
+  }
+  return { gone: new Set(((data ?? []) as { short_id: string }[]).map((r) => r.short_id)) };
+}
+
+/**
  * 1.40.0: several shorts deleted at once, from the list's selection (the owner: "i want to be able to delete as well
- * from the select thing"), after the list has asked (pick-shorts.tsx). Masters only, as one by one (the database's
- * rule, 0026: anyone else deletes nothing and is told so); the other auto-scheduled shorts re-date to close the gaps
- * as they do for one. At most 200 at once.
+ * from the select thing"), after the list has asked (pick-shorts.tsx). Masters, and (1.41.0) the people the owner lets
+ * delete shorts when the team lets them delete several (delete-rules.ts; the database checks each short too: 0119);
+ * the other auto-scheduled shorts re-date to close the gaps as they do for one. At most 200 at once.
  */
 export async function deleteShorts(ids: string[]): Promise<Result<ShortsDeleted>> {
   const { supabase, user } = await requireUser();
@@ -733,20 +753,27 @@ export async function deleteShorts(ids: string[]): Promise<Result<ShortsDeleted>
   if (ids.length > 200) return { error: "Delete at most 200 shorts at once." };
   if (!ids.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) return { error: "Couldn't delete those shorts. Refresh and try again." };
   const wanted = [...new Set(ids)];
-  const { data: rows } = await supabase.from("short_videos").select("id, team_id, entry_number").in("id", wanted);
-  const { data, error } = await supabase.from("short_videos").delete().in("id", wanted).select("id");
-  if (error) return { error: friendlyDbError(error, "Couldn't delete them. Try again.") };
-  const gone = new Set((data ?? []).map((r) => r.id as string));
+  const { data } = await supabase.from("short_videos").select("id, team_id, entry_number").in("id", wanted);
+  const rows = data ?? [];
+  // What each team lets this person do (the team is the short's own, never one the browser sent), and how many of
+  // that team's shorts are asked for at once.
+  const teams = [...new Set(rows.map((r) => r.team_id as string))];
+  const rights = new Map(await Promise.all(teams.map(async (t) => [t, await getDeleteRights(supabase, t, user.id)] as const)));
+  const countIn = (team: string) => rows.filter((x) => x.team_id === team).length;
+  const asked = rows.filter((r) => mayDelete(rights.get(r.team_id as string) ?? NO_DELETE, "short", countIn(r.team_id as string)));
+  const removed = asked.length ? await removeShorts(supabase, asked.map((r) => r.id as string)) : { gone: new Set<string>() };
+  if ("error" in removed) return { error: removed.error };
+  const gone = removed.gone;
   const out: ShortsDeleted = { deleted: [], failed: [] };
   for (const id of wanted) {
-    const r = (rows ?? []).find((x) => x.id === id);
+    const r = rows.find((x) => x.id === id);
     const number = (r?.entry_number as number | undefined) ?? null;
     if (gone.has(id)) out.deleted.push({ id, number: number ?? 0 });
-    else out.failed.push({ id, number, error: r ? "Only the master can delete shorts." : "Not found." });
+    else out.failed.push({ id, number, error: r ? noDeleteText(rights.get(r.team_id as string) ?? NO_DELETE, "short", countIn(r.team_id as string)) : "Not found." });
   }
   if (out.deleted.length) {
     revalidateShort();
-    for (const t of new Set((rows ?? []).filter((r) => gone.has(r.id as string)).map((r) => r.team_id as string))) queueObjectivesSync(t);
+    for (const t of new Set(rows.filter((r) => gone.has(r.id as string)).map((r) => r.team_id as string))) queueObjectivesSync(t);
   }
   return out;
 }
@@ -806,7 +833,7 @@ export async function setShortPostUrl(id: string, platform: Platform, url: strin
 }
 
 // ---------------------------------------------------------------------------
-// Delete (master)
+// Delete (masters, and 1.41.0 the people the owner lets: delete-rules.ts)
 // ---------------------------------------------------------------------------
 
 export async function deleteShort(
@@ -814,6 +841,7 @@ export async function deleteShort(
 ): Promise<Result<{ vacated?: { teamId: string; day: string; keep: number } }>> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return { error: "Short not found." };
 
   // Note the day it leaves (and how many stay there) BEFORE deleting, so
   // the toast can offer "keep this day at N" instead of pulling the next
@@ -823,6 +851,9 @@ export async function deleteShort(
     .select("team_id, planned_date, stage")
     .eq("id", id)
     .maybeSingle();
+  if (!before) return { error: "Short not found." };
+  const rights = await getDeleteRights(supabase, before.team_id as string, user.id);
+  if (!mayDelete(rights, "short", 1)) return { error: noDeleteText(rights, "short") };
 
   // How many shorts that day had, counted BEFORE the queue refills the gap.
   let dayCount = 0;
@@ -835,9 +866,9 @@ export async function deleteShort(
     dayCount = count ?? 0;
   }
 
-  const { data, error } = await supabase.from("short_videos").delete().eq("id", id).select("id");
-  if (error) return { error: friendlyDbError(error, "Couldn't delete. Try again.") };
-  if (!data || data.length === 0) return { error: "Only the master can delete shorts." };
+  const removed = await removeShorts(supabase, [id]);
+  if ("error" in removed) return { error: removed.error };
+  if (!removed.gone.has(id)) return { error: noDeleteText(rights, "short") };
 
   let vacated: { teamId: string; day: string; keep: number } | undefined;
   const today = new Date().toISOString().slice(0, 10);

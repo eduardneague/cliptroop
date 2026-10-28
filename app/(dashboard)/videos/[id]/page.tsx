@@ -23,6 +23,7 @@ import { ExpectedDateEditor } from "./expected-date-editor";
 import { TypeThemeEditor } from "./type-theme-editor";
 import { NotesPanel } from "./notes-panel";
 import { DeleteProjectButton } from "./delete-project-button";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import { postComment } from "./actions";
 import type { Metadata } from "next";
 import { getProject } from "@/modules/long-videos/lib/queries";
@@ -98,6 +99,7 @@ export default async function ProjectDetailPage({
     longVersions,
     longNotes,
     { data: reviewDefaults },
+    deleteRights,
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -143,6 +145,8 @@ export default async function ProjectDetailPage({
     tab === "edit" || tab === "review" ? listNotes(id, "long") : Promise.resolve([] as ReviewNote[]),
     // Its own query: long_media_keep_days arrives with 0089.
     supabase.from("teams").select("long_in_app_review, long_media_keep_days").eq("id", teamId).maybeSingle(),
+    // 1.41.0: masters, and whoever the team's owner lets delete long videos.
+    getDeleteRights(supabase, teamId),
   ]);
   // Reviewed in ClipTroop: the video's own choice, else the team's (Team → Defaults).
   const inAppReview = (project.in_app_review as boolean | null) ?? !!reviewDefaults?.long_in_app_review;
@@ -285,8 +289,9 @@ export default async function ProjectDetailPage({
           title={project.title}
           canEdit={userIsMaster || canActOnStage(membership, project.stage as PipelineStage)}
         />
-        {userIsMaster && (
+        {(userIsMaster || deleteRights.longs) && (
           <div className="flex-shrink-0 pt-0.5 flex items-center gap-1">
+            {userIsMaster && (
             <LongVideoSettings
               projectId={id}
               teamId={teamId}
@@ -309,6 +314,7 @@ export default async function ProjectDetailPage({
                 ])
               )}
             />
+            )}
             <DeleteProjectButton projectId={id} teamId={teamId} projectTitle={project.title} />
           </div>
         )}

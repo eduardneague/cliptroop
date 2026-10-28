@@ -26,6 +26,7 @@ import {
   type ManualPlatform,
   type ManualTotals,
   type MediaKitSettings,
+  type RatePackage,
 } from "../lib/settings";
 import { CURRENCY_OPTIONS, PartnersEditor, QuotesEditor, RatesEditor, TextArea, TextField } from "./kit-fields";
 import { AutoManual, ManualAudienceFields, ManualPlatformFields, ManualTotalsFields } from "./kit-manual";
@@ -321,7 +322,6 @@ export function CoverPart({ f }: { f: KitForm }) {
               picks={picks}
               onChange={(coverPicks) => set({ coverPicks })}
               max={LIMITS.coverPicks}
-              pool={f.read?.pool ?? []}
               teamId={f.teamId}
               title="Pick the cover's videos"
               bestLabel="Your most viewed"
@@ -549,7 +549,6 @@ export function VideosPart({ f }: { f: KitForm }) {
         picks={s.videoPicks}
         onChange={(videoPicks) => set({ videoPicks })}
         max={LIMITS.videoPicks}
-        pool={f.read?.pool ?? []}
         teamId={f.teamId}
         title="Pick the videos to feature"
         bestLabel="Most viewed"
@@ -579,6 +578,14 @@ export function PartnersPart({ f }: { f: KitForm }) {
 
 export function RatesPart({ f }: { f: KitForm }) {
   const { s, set } = f;
+  // 1.41.0: one kit per platform: each package says which kit it's in (packagesFor in layout.ts decides the same).
+  const each = s.split === "each" && f.chosen.length > 1;
+  const where = (p: RatePackage) => {
+    if (!each) return null;
+    if (p.platform === "any") return "In every kit (any platform).";
+    if (f.chosen.includes(p.platform)) return `In the ${KIT_PLATFORM_NAME[p.platform]} kit.`;
+    return `In every kit: ${KIT_PLATFORM_NAME[p.platform]} has no kit of its own.`;
+  };
   return (
     <Part f={f} anchor="rates" page="rates" title="Rates" hint="Show your prices, or say they're on request. Packages say what a sponsor can buy either way.">
       <div className="flex items-center gap-3 flex-wrap">
@@ -589,7 +596,7 @@ export function RatesPart({ f }: { f: KitForm }) {
           </div>
         )}
       </div>
-      <RatesEditor rates={s.rates} onChange={(rates) => set({ rates })} />
+      <RatesEditor rates={s.rates} onChange={(rates) => set({ rates })} where={where} />
       <TextArea label={s.rates.show ? "A note under the prices" : "A line under “Rates on request”"} value={s.rates.note} onChange={(v) => set({ rates: { ...s.rates, note: v } })} max={LIMITS.rateNote} placeholder={s.rates.show ? "Prices exclude VAT. Every package includes a link in the description." : "Tell us about your campaign and we’ll send a quote that fits it."} rows={2} />
     </Part>
   );

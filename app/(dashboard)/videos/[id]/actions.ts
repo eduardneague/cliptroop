@@ -14,6 +14,8 @@ import { displayName } from "@/lib/avatar";
 import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
 import { cleanName } from "@/lib/names";
 import { removeLongVideo } from "@/modules/long-videos/lib/remove-video";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { mayDelete, noDeleteText } from "@/lib/permissions/delete-rules";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 
 /**
@@ -39,8 +41,25 @@ async function requireProjectMaster(projectId: string) {
 }
 
 /**
- * Deletes a project permanently — master-only, checked here before doing
- * anything. Uses the admin client for the actual deletion so we can also
+ * 1.41.0: as requireProjectMaster, for deleting: a Master of the project's own team, or someone its owner lets delete
+ * long videos (lib/permissions/delete-rules.ts, migration 0119), read here with the person's verified id.
+ */
+async function requireProjectDeleter(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Your session expired. Sign in again." };
+  const { data: project } = await supabase.from("long_video_projects").select("id, team_id, stage, title").eq("id", projectId).maybeSingle();
+  if (!project) return { ok: false as const, error: "Project not found." };
+  const rights = await getDeleteRights(supabase, project.team_id as string, user.id);
+  if (!mayDelete(rights, "long", 1)) return { ok: false as const, error: noDeleteText(rights, "long") };
+  return { ok: true as const, supabase, project };
+}
+
+/**
+ * Deletes a project permanently: masters, and (1.41.0) the people the team's owner lets delete long videos, checked
+ * here before doing anything. Uses the admin client for the actual deletion so we can also
  * clean up the project's uploaded files (thumbnails, chat attachments),
  * which live in storage and aren't covered by the database's own cascade
  * deletes on the comment/title/assignee rows.
@@ -48,10 +67,9 @@ async function requireProjectMaster(projectId: string) {
 export async function deleteProject(projectId: string, _teamId?: string, opts?: { stay?: boolean; confirmTitle?: string }) {
   // The team is taken from the project itself — previously a master of
   // team A could pass their own teamId and delete team B's project.
-  const check = await requireProjectMaster(projectId);
-  if (!check.ok) {
-    return { error: check.error === "Only the master can do this." ? "Only the master can delete a project." : check.error };
-  }
+  if (typeof projectId !== "string" || !/^[0-9a-f-]{36}$/i.test(projectId)) return { error: "Project not found." };
+  const check = await requireProjectDeleter(projectId);
+  if (!check.ok) return { error: check.error };
   // From the list (1.27.5): the name typed in the window must be this video's.
   if (opts?.confirmTitle !== undefined && opts.confirmTitle.trim().toLowerCase() !== String(check.project.title ?? "").trim().toLowerCase()) {
     return { error: "The name doesn't match. Nothing was deleted." };
@@ -82,13 +100,13 @@ export type VideoWork = {
 /**
  * What deleting a long video would take with it (1.27.5, from the list): the
  * words in its scripts and research and who wrote last, open comments and
- * editing ideas, edits, thumbnails, notes. Masters only (they're the ones who
- * can delete).
+ * editing ideas, edits, thumbnails, notes. For the people who can delete it
+ * (masters, and 1.41.0 whoever the team's owner lets delete long videos).
  */
 export async function getVideoWork(projectId: string): Promise<({ error?: undefined } & VideoWork) | { error: string }> {
   if (!/^[0-9a-f-]{36}$/i.test(projectId)) return { error: "Video not found." };
-  const check = await requireProjectMaster(projectId);
-  if (!check.ok) return { error: check.error === "Only the master can do this." ? "Only the master can delete a long video." : check.error };
+  const check = await requireProjectDeleter(projectId);
+  if (!check.ok) return { error: check.error };
   const { supabase } = check;
   const head = { count: "exact" as const, head: true };
   const [{ data: p }, { data: docs }, files, thumbs, entries, notes] = await Promise.all([

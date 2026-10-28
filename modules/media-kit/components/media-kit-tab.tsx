@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DownloadIcon, ExpandIcon, LockIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
@@ -14,11 +14,13 @@ import { autoCoverGrid, buildKits, kitPlatforms, type Kit } from "../lib/layout"
 import { applyManual } from "../lib/manual";
 import { loadKitMeasure } from "../lib/fonts";
 import { renderKitPdf } from "../lib/render-pdf";
-import type { Measure } from "../lib/scene";
+import type { Measure, Page } from "../lib/scene";
 import type { MediaKitNumbers } from "../lib/numbers";
 import { readKitSettings, type KitTemplateInfo, type MediaKitSettings } from "../lib/settings";
+import { NUMBER_PAGES, pagesTouched, touches } from "../lib/touched";
 import type { KitPerson } from "../lib/access";
 import { KitPageSvg, KIT_FONT_CSS } from "./kit-page-svg";
+import { KitPageBusy, usePicturesComing } from "./kit-page-busy";
 import { KitPresenter, type PresenterStart } from "./kit-presenter";
 import { AboutPart, AudiencePart, ContactPart, CoverPart, GlancePart, KitPart, LookPart, PartnersPart, PlatformsPart, RatesPart, VideosPart, type KitForm } from "./kit-sections";
 import { barBottom, pageAnchorFor, useKitSync, useWide } from "./use-kit-sync";
@@ -155,6 +157,9 @@ function Builder(props: BuilderProps) {
   keyNow.current = periodKey;
   /** Which period the numbers on show are for (null: the page's own haven't come yet). */
   const [numsKey, setNumsKey] = useState<string | null>(null);
+  // 1.41.0: the picked videos, read again with the numbers (a new period doesn't wait on them, nor reloads for them).
+  const picksNow = useRef<{ platform: string; id: string }[]>([]);
+  picksNow.current = [...s.videoPicks.list, ...s.coverPicks.list].map((v) => ({ platform: v.platform, id: v.id }));
   useEffect(() => {
     props.numbers.then((r) => {
       if (keyNow.current !== initialKey) return;
@@ -171,7 +176,7 @@ function Builder(props: BuilderProps) {
     setLoadingNums(true);
     const t = setTimeout(async () => {
       try {
-        const r = await loadMediaKitNumbers(props.teamId, s.period, s.from, s.to);
+        const r = await loadMediaKitNumbers(props.teamId, s.period, s.from, s.to, picksNow.current);
         if (keyNow.current !== key) return;
         if (r.error !== undefined) setNumsError(r.error);
         else {
@@ -213,8 +218,8 @@ function Builder(props: BuilderProps) {
     return () => clearTimeout(t);
   }, [s, props.ready, props.teamId]);
 
-  // The kit(s), laid out a beat after typing (the form stays quick).
-  const deferred = useDeferredValue(s);
+  // The kit(s), laid out a beat after each change (the form stays quick).
+  const deferred = useLaidOut(s);
   const images = useMemo(() => ({ logo: props.logoUrl, cover: deferred.cover === "photo" ? coverUrl : null }), [props.logoUrl, coverUrl, deferred.cover]);
   const kits = useMemo<Kit[] | null>(() => (nums && measure ? buildKits(nums, readKitSettings(deferred, props.teamId), measure, images) : null), [nums, measure, deferred, images, props.teamId]);
 
@@ -359,6 +364,14 @@ function Builder(props: BuilderProps) {
     </button>
   );
 
+  // 1.41.0: the pages being drawn again show it, each on its own (kit-page-busy.tsx): the ones a change redraws while
+  // the new layout is on its way (the laid-out setup is behind), the numbers' pages while another period's numbers come,
+  // the cover (and About us, which shows its photo) while a photo goes up, and any page whose new pictures are coming.
+  const touched = useMemo(() => (kits && deferred !== s ? pagesTouched(deferred, s) : null), [kits, deferred, s]);
+  const reloading = loadingNums && !!nums;
+  const picturesComing = usePicturesComing(kits);
+  const updating = (p: Page) => touches(touched, p.anchor) || (reloading && touches(NUMBER_PAGES, p.anchor)) || (uploading && (p.anchor === "cover" || p.anchor === "about")) || picturesComing(p);
+
   const preview = (
     <div className="space-y-6" aria-busy={loadingNums || !measure || undefined}>
       {(numsError || fontError) && <p className="rounded-xl bg-coral/10 text-coral text-[13px] px-3.5 py-2.5">{numsError ?? fontError}</p>}
@@ -370,7 +383,7 @@ function Builder(props: BuilderProps) {
         </div>
       ) : (
         kits.map((k, ki) => (
-          <section key={k.fileName} aria-label={k.title} className={`space-y-4 transition-opacity ${loadingNums ? "opacity-60" : ""}`}>
+          <section key={k.fileName} aria-label={k.title} className="space-y-4">
             {kits.length > 1 && (
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
@@ -389,15 +402,17 @@ function Builder(props: BuilderProps) {
             {k.pages.map((p, pi) => {
               const on = !!lit && p.anchor === lit;
               const where = `page ${pi + 1}: ${p.label}`;
+              const busy = updating(p);
               return (
-                <figure key={pi} data-page-anchor={p.anchor} className="group/page">
+                <figure key={pi} data-page-anchor={p.anchor} aria-busy={busy || undefined} className="group/page">
                   <button
                     type="button"
                     onClick={() => (wide ? p.anchor && goToPart(p.anchor) : setPresent({ kit: ki, page: pi }))}
                     aria-label={wide ? `Edit ${where}` : `See ${where}, full screen`}
-                    className={`block w-full rounded-xl overflow-hidden border bg-surface transition-[border-color,box-shadow] duration-300 outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${on ? "border-amber/70 shadow-[0_0_0_3px_rgb(var(--amber)/0.28)]" : "border-line/10 shadow-sm hover:border-line/30"} ${wide ? "cursor-pointer" : "cursor-zoom-in"}`}
+                    className={`relative block w-full rounded-xl overflow-hidden border bg-surface transition-[border-color,box-shadow] duration-300 outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${on ? "border-amber/70 shadow-[0_0_0_3px_rgb(var(--amber)/0.28)]" : "border-line/10 shadow-sm hover:border-line/30"} ${wide ? "cursor-pointer" : "cursor-zoom-in"}`}
                   >
                     <KitPageSvg page={p} links={false} className="block w-full h-auto" title={`${k.title}, ${where}`} />
+                    {busy && <KitPageBusy bg={p.bg} />}
                   </button>
                   <figcaption className="flex items-center gap-2 mt-1.5 px-0.5 min-h-7 text-[12px]">
                     <span className={`tabular-nums ${on ? "text-ink font-semibold" : "text-ink-faint"}`}>{pi + 1}</span>
@@ -505,3 +520,38 @@ function Builder(props: BuilderProps) {
 
 /** A stored photo's link is signed for an hour; it's signed again after 45 minutes. */
 const COVER_RENEW_MS = 45 * 60_000;
+
+/**
+ * The setup the preview is laid out from (1.41.0): the form's, a moment later, so the form stays quick. Not React's
+ * useDeferredValue any more: React draws that "later" together with every transition in flight, and each server action
+ * is one (the save a moment after a change, another period's numbers), so the preview waited for the save's round trip
+ * before showing a change (seconds on a slow connection). This is an ordinary update, after the next paint: the pages
+ * it changes say Updating first, should it take a while (kit-page-busy.tsx); in a hidden tab, soon anyway.
+ */
+function useLaidOut(s: MediaKitSettings): MediaKitSettings {
+  const [laid, setLaid] = useState(s);
+  const latest = useRef(s);
+  latest.current = s;
+  useEffect(() => {
+    if (laid === s) return;
+    let done = false;
+    let t = 0;
+    const go = () => {
+      if (done) return;
+      done = true;
+      setLaid(latest.current);
+    };
+    const raf = requestAnimationFrame(() => {
+      t = window.setTimeout(go, 0);
+    });
+    const fallback = window.setTimeout(go, 150);
+    return () => {
+      done = true;
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+      window.clearTimeout(fallback);
+    };
+  }, [s, laid]);
+  return laid;
+}
+

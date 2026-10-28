@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import {
   STAGE_LABELS,
   STAGE_ORDER,
@@ -73,7 +74,7 @@ export default async function VideosPage({
 
   // Stage counts for the filter chips — one tiny query (just the stage
   // column), run in parallel with the main list.
-  const [{ data: projects }, { data: stageRows }, membership, { data: winnerRows }] = await Promise.all([
+  const [{ data: projects }, { data: stageRows }, membership, { data: winnerRows }, rights] = await Promise.all([
     query,
     supabase.from("long_video_projects").select("stage").eq("team_id", currentTeam.id),
     getMembership(supabase, currentTeam.id),
@@ -85,6 +86,8 @@ export default async function VideosPage({
       .eq("is_winner", true)
       .not("thumbnail_storage_path", "is", null)
       .order("position"),
+    // 1.41.0: masters, and whoever the team's owner lets delete long videos (one at a time, or several with the password).
+    getDeleteRights(supabase, currentTeam.id),
   ]);
   const winnerOf = new Map<string, string>();
   for (const w of winnerRows ?? []) if (!winnerOf.has(w.project_id as string)) winnerOf.set(w.project_id as string, w.id as string);
@@ -152,8 +155,8 @@ export default async function VideosPage({
         )}
       </div>
 
-      {/* 1.40.0: long videos picked together (pick-videos.tsx): export; masters move and delete (with their password). */}
-      <VideosPicker items={(projects ?? []).map((p) => ({ id: p.id, number: p.entry_number, title: p.title, stage: p.stage as PipelineStage }))} canMove={master} canDelete={master}>
+      {/* 1.40.0: long videos picked together (pick-videos.tsx): export; masters move; masters (1.41.0: and whoever the owner lets) delete, with their password. */}
+      <VideosPicker items={(projects ?? []).map((p) => ({ id: p.id, number: p.entry_number, title: p.title, stage: p.stage as PipelineStage }))} canMove={master} canDelete={rights.longs} deleteMany={rights.manyLongs}>
       {/* Filters — small, low-key, border-led rather than solid fills — with the view toggle on the same row, opposite side */}
       <div className="flex items-center justify-between gap-3 mb-7 flex-wrap">
         {/* Neutral, quiet filter chips: color is reserved for the ONE that's
@@ -260,7 +263,7 @@ export default async function VideosPage({
                 </span>
                 <span className={`hidden sm:block text-[11.5px] tabular-nums ${due(p).tone}`}>{p.stage === "done" ? "Posted" : formatDate(p.expected_date)}</span>
                 <span className="justify-self-end">
-                  <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} className="text-ink-soft hover:text-ink hover:bg-surface" />
+                  <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} canDelete={rights.longs} className="text-ink-soft hover:text-ink hover:bg-surface" />
                 </span>
                 <RowPick id={p.id} label={`#${p.entry_number} ${p.title}`} />
               </div>
@@ -306,7 +309,7 @@ export default async function VideosPage({
                     <span className="font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
                       #{p.entry_number}
                     </span>
-                    <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
+                    <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} canDelete={rights.longs} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
                   </span>
                   {/* Where it is in the pipeline: one segment per step. */}
                   <span className="absolute inset-x-2.5 bottom-2.5 flex gap-[3px]" aria-hidden>

@@ -254,8 +254,32 @@ export function TeamTabSkeleton({ tab }: { tab: TeamTab }) {
             <Skeleton className="h-9 w-32 rounded-lg" />
           </div>
         </Card>
-        <Card title="Transfer ownership" tone="danger" text="Send someone a request to become this team’s owner. Nothing changes until they accept. You stay the owner until then.">
-          <Skeleton className="h-10 w-full rounded-lg" />
+        {/* 1.41.0: the owner's Danger zone (who else deletes videos, several at once, the ownership, the team). */}
+        <Card title="Danger zone" tone="danger" text="What you change here can delete things for good. Only you, the team’s owner, see it.">
+          <h3 className="text-[12px] font-bold text-red mb-1">Who can delete videos</h3>
+          <Skeleton className="h-3 w-3/4 mb-3" />
+          <div className="rounded-xl border border-red/15 bg-surface divide-y divide-line/10">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className={`h-3.5 ${["w-28", "w-36", "w-24"][i]}`} />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-lg" />
+                <Skeleton className="h-8 w-24 rounded-lg" />
+              </div>
+            ))}
+          </div>
+          <h3 className="text-[12px] font-bold text-red mt-5 mb-1">Deleting several at once</h3>
+          <Skeleton className="h-3 w-2/3 mb-3" />
+          <Skeleton className="h-8 w-72 max-w-full rounded-lg mb-2" />
+          <Skeleton className="h-8 w-80 max-w-full rounded-lg" />
+          <div className="mt-6 pt-5 border-t border-red/20">
+            <h3 className="text-[12px] font-bold text-red mb-1">Transfer ownership</h3>
+            <p className="text-[12px] text-ink-soft mb-4">Send someone a request to become this team’s owner. Nothing changes until they accept. You stay the owner until then.</p>
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
           <div className="mt-5 pt-5 border-t border-red/20">
             <h3 className="text-[12px] font-bold text-red mb-1">Delete team</h3>
             <p className="text-[12px] text-ink-soft mb-3">Permanent. Every project, comment, and member goes with it.</p>

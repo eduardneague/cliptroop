@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
 import { gatherMediaKit, kitTeam, kitVideo, mayMakeMediaKit } from "@/modules/media-kit/lib/gather";
-import { findVideos } from "@/modules/analytics/lib/queries";
+import { contentCols, contentItem } from "@/modules/analytics/lib/queries";
+import { numbersVisibility } from "@/modules/analytics/lib/accounts";
+import { searchWords } from "@/modules/analytics/lib/search-words";
+import { allOf, BROWSE_NAMED, BROWSE_PAGE, likeEscape, pickedKeys, readBrowse, searchTree, SHAPE_TREE, yearsSince, type KitBrowse, type KitBrowsed, type KitShape } from "@/modules/media-kit/lib/browse";
 import { KIT_NO_ACCESS } from "@/modules/media-kit/lib/access";
 import {
   readKitSettings,
@@ -19,7 +22,7 @@ import {
   type KitTemplateInfo,
   type MediaKitSettings,
 } from "@/modules/media-kit/lib/settings";
-import type { KitVideo, MediaKitNumbers } from "@/modules/media-kit/lib/numbers";
+import type { MediaKitNumbers } from "@/modules/media-kit/lib/numbers";
 
 /*
  * The media kit's server side (1.37.0): its numbers for a period, saving the setup, and a short-lived link to the
@@ -33,8 +36,8 @@ type Result<T = object> = ({ error?: undefined } & T) | { error: string };
 type Supa = Awaited<ReturnType<typeof createClient>>;
 
 
-/** The numbers for a period (every connected platform; the kit picks its own). */
-export async function loadMediaKitNumbers(teamId: string, period: KitPeriod, from: string | null, to: string | null): Promise<Result<{ data: MediaKitNumbers }>> {
+/** The numbers for a period (every connected platform; the kit picks its own), with the picked videos read again (1.41.0). */
+export async function loadMediaKitNumbers(teamId: string, period: KitPeriod, from: string | null, to: string | null, picked: unknown = []): Promise<Result<{ data: MediaKitNumbers }>> {
   if (!UUID.test(teamId)) return { error: "Team not found." };
   if (!KIT_PERIODS.some((p) => p.id === period)) return { error: "Pick a period." };
   const supabase = await createClient();
@@ -45,7 +48,7 @@ export async function loadMediaKitNumbers(teamId: string, period: KitPeriod, fro
   const team = await kitTeam(supabase, teamId, user.id);
   if (!team) return { error: KIT_NO_ACCESS };
   try {
-    return { data: await gatherMediaKit(teamId, team, { period, from, to }) };
+    return { data: await gatherMediaKit(teamId, team, { period, from, to }, pickedKeys(picked)) };
   } catch (e) {
     console.error("[media kit numbers]", e instanceof Error ? e.message : e);
     return { error: "Couldn't get the numbers. Try again in a moment." };
@@ -107,14 +110,20 @@ export async function mediaKitCoverLink(teamId: string, path: string): Promise<R
   return { url: data.signedUrl };
 }
 
+// ---- 1.41.0: every video, to pick from ------------------------------------------------------------------------------
+// The owner: "theres only 90 shorts here to pick from, you should be able to pick any short you ever had on your channel
+// or on any platform, so better filters needed here"; "long videos dont show up at all, same story". The window pages
+// through every video the team's connected accounts have (analytics_content), with filters (lib/browse.ts).
+
 /**
- * 1.39.0: any of the team's videos, to pick for the kit (the cover's wall, the videos page): Analytics' own search
- * (the title on the platform or in ClipTroop, or #number), the accounts connected now, read as the person.
+ * A page of the team's videos for the picker: by platform, by shape (tall: Shorts, Reels, TikToks; wide: long videos
+ * and live streams; posts), by year, by words in the title (on the platform, or its ClipTroop short's or long video's)
+ * or #number; most viewed, newest or oldest first. Only the accounts connected now (as Analytics), read as the person.
+ * The first page also says how many each choice would show, and which years have videos.
  */
-export async function searchKitVideos(teamId: string, query: string): Promise<Result<{ videos: KitVideo[] }>> {
+export async function browseKitVideos(teamId: string, raw: Partial<KitBrowse>): Promise<Result<KitBrowsed>> {
   if (!UUID.test(teamId)) return { error: "Team not found." };
-  const q = typeof query === "string" ? query.trim().slice(0, 80) : "";
-  if (!q) return { videos: [] };
+  const o = readBrowse(raw);
   const supabase = await createClient();
   const {
     data: { user },
@@ -123,11 +132,71 @@ export async function searchKitVideos(teamId: string, query: string): Promise<Re
   const team = await kitTeam(supabase, teamId, user.id);
   if (!team) return { error: KIT_NO_ACCESS };
   try {
-    const found = await findVideos(teamId, q);
-    return { videos: found.filter((v) => KIT_PLATFORMS.includes(v.platform as KitPlatform) && !v.noNumbers).slice(0, 40).map((v) => kitVideo(teamId, v)) };
+    const [vis, cols] = await Promise.all([numbersVisibility(supabase, teamId), contentCols()]);
+    const platforms = KIT_PLATFORMS.filter((p) => vis.platforms.has(p));
+    const zero = { all: 0, youtube: 0, instagram: 0, tiktok: 0, facebook: 0 };
+    if (!platforms.length) return { videos: [], total: 0, next: null, counts: { platform: zero, shape: { all: 0, tall: 0, wide: 0, post: 0 } }, years: yearsSince(null), platforms: [] };
+
+    // A search: the team's shorts and long videos it names (their ClipTroop titles, or a #number) come first.
+    let search: string | null = null;
+    if (o.q) {
+      const words = searchWords(o.q);
+      const num = o.q.match(/^#?(\d{1,6})$/)?.[1] ?? null;
+      let shorts = supabase.from("short_videos").select("id").eq("team_id", teamId);
+      let longs = supabase.from("long_video_projects").select("id").eq("team_id", teamId);
+      if (num) {
+        shorts = shorts.eq("entry_number", Number(num));
+        longs = longs.eq("entry_number", Number(num));
+      } else
+        for (const w of words.length ? words : [o.q]) {
+          shorts = shorts.ilike("title", `%${likeEscape(w)}%`);
+          longs = longs.ilike("title", `%${likeEscape(w)}%`);
+        }
+      const [sh, lo] = await Promise.all([shorts.limit(BROWSE_NAMED), longs.limit(BROWSE_NAMED)]);
+      const ids = (r: { data: unknown[] | null }) => ((r.data ?? []) as { id: string }[]).map((x) => x.id).filter((x) => UUID.test(x));
+      search = searchTree({ words, phrase: o.q, number: !!num, shorts: ids(sh), longs: ids(lo) });
+    }
+    // The same filters on any query of the table: a page, or a count with one choice left open.
+    // (The query builder's own type changes with each select: `any` here, the rows read as plain fields below.)
+    const filtered = (q: any, platform: KitPlatform | "all", shape: KitShape) => {
+      let x = q.eq("team_id", teamId).in("platform", platforms);
+      if (platform !== "all") x = x.eq("platform", platform);
+      if (o.year) x = x.gte("published_at", `${o.year}-01-01T00:00:00Z`).lt("published_at", `${o.year + 1}-01-01T00:00:00Z`);
+      const tree = allOf([shape === "all" ? null : SHAPE_TREE[shape], search]);
+      return tree ? x.or(tree) : x;
+    };
+    const head = (platform: KitPlatform | "all", shape: KitShape) => filtered(supabase.from("analytics_content").select("external_id", { count: "exact", head: true }), platform, shape) as PromiseLike<{ count: number | null }>;
+    let page = filtered(supabase.from("analytics_content").select(cols, { count: "exact" }), o.platform, o.shape);
+    page = o.sort === "views" ? page.order("views", { ascending: false, nullsFirst: false }) : page.order("published_at", { ascending: o.sort === "oldest", nullsFirst: false });
+    const first = o.offset === 0;
+    const [rows, counts, oldest] = await Promise.all([
+      page.order("platform").order("external_id").range(o.offset, o.offset + BROWSE_PAGE - 1) as PromiseLike<{ data: unknown[] | null; count: number | null; error: { message: string } | null }>,
+      first
+        ? Promise.all([
+            head("all", o.shape),
+            ...platforms.map((p) => head(p, o.shape)),
+            head(o.platform, "all"),
+            ...(["tall", "wide", "post"] as const).map((sh) => head(o.platform, sh)),
+          ]).then((r) => r.map((x) => x.count ?? 0))
+        : Promise.resolve(null),
+      first
+        ? supabase.from("analytics_content").select("published_at").eq("team_id", teamId).in("platform", platforms).not("published_at", "is", null).order("published_at", { ascending: true }).limit(1)
+        : Promise.resolve(null),
+    ]);
+    if (rows.error) throw new Error(rows.error.message);
+    const videos = ((rows.data ?? []) as Record<string, unknown>[]).map(contentItem).map((v) => kitVideo(teamId, v));
+    const total = rows.count ?? o.offset + videos.length;
+    const next = videos.length === BROWSE_PAGE && o.offset + BROWSE_PAGE < total ? o.offset + BROWSE_PAGE : null;
+    if (!counts) return { videos, total, next };
+    const k = platforms.length;
+    const platform = { ...zero, all: counts[0] };
+    platforms.forEach((p, i) => (platform[p] = counts[1 + i]));
+    const shape = { all: counts[k + 1], tall: counts[k + 2], wide: counts[k + 3], post: counts[k + 4] };
+    const oldestAt = ((oldest?.data ?? []) as { published_at: string }[])[0]?.published_at ?? null;
+    return { videos, total, next, counts: { platform, shape }, years: yearsSince(oldestAt), platforms };
   } catch (e) {
-    console.error("[media kit search]", e instanceof Error ? e.message : e);
-    return { error: "Couldn't search. Try again in a moment." };
+    console.error("[media kit videos]", e instanceof Error ? e.message : e);
+    return { error: "Couldn't load the videos. Try again in a moment." };
   }
 }
 

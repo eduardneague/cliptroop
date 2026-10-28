@@ -427,9 +427,7 @@ export async function getShortSettings(
  * Team → Defaults → Video files: how long posted shorts' files stay
  * (0070; `ready` is false until that migration is in) and what's stored now.
  */
-export async function getMediaKeep(
-  teamId: string,
-): Promise<{
+export async function getMediaKeep(teamId: string): Promise<{
   days: KeepSetting;
   ready: boolean;
   files: number;

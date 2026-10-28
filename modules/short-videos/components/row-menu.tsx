@@ -23,8 +23,8 @@ export const MOVABLE: ShortStage[] = ["script", "filming", "editing", "review", 
 /**
  * ⋯ menu on a table row. Everyone: open it, export its script as PDF or Word (1.38.0). Masters and schedulers: its
  * settings and moving it a slot up or down the queue. Masters: move it to another step (1.38.0, with Undo), hand a
- * fixed-date short back to Auto, delete it (1.38.0: it's struck through and slides away). Keyboard: ↑/↓, Enter, Esc.
- * Rendered in a portal so the table never clips it.
+ * fixed-date short back to Auto. Masters, and (1.41.0) whoever the team's owner lets delete shorts: delete it (1.38.0:
+ * it's struck through and slides away). Keyboard: ↑/↓, Enter, Esc. Rendered in a portal so the table never clips it.
  */
 export function ShortRowMenu({
   id,
@@ -37,6 +37,7 @@ export function ShortRowMenu({
   locked,
   queueStart = null,
   isMaster = false,
+  canDelete = isMaster,
   canReorder = isMaster,
   settings,
 }: {
@@ -50,8 +51,10 @@ export function ShortRowMenu({
   pinKind: "anchor" | "oneoff" | null;
   locked: boolean;
   queueStart?: { id: string; number: number; date: string } | null;
-  /** Steps, fixed dates and deleting are the master's. */
+  /** Steps and fixed dates are the master's. */
   isMaster?: boolean;
+  /** Deleting it: masters, and (1.41.0) whoever the team's owner lets delete shorts. */
+  canDelete?: boolean;
   /** Masters and schedulers can move shorts up and down. */
   canReorder?: boolean;
   /** Masters and schedulers: the short's settings window. */
@@ -264,7 +267,7 @@ export function ShortRowMenu({
                     <FileTypeIcon kind="docx" className="w-3.5 h-3.5 text-ink-soft" />
                     Export script as Word
                   </button>
-                  {(isMaster || canReorder) && <div className="my-1 h-px bg-line/10" />}
+                  {(isMaster || canReorder || canDelete) && <div className="my-1 h-px bg-line/10" />}
                   {isMaster && (
                     <button
                       type="button"
@@ -355,7 +358,11 @@ export function ShortRowMenu({
                         </>
                       )}
                       {locked && <p className="px-3 pt-1 pb-1.5 text-[11.5px] text-ink-soft">Posted (or partly posted) shorts keep their place. Un-mark a platform to move it.</p>}
-                      <div className="my-1 h-px bg-line/10" />
+                    </>
+                  )}
+                  {canDelete && (
+                    <>
+                      {(isMaster || canReorder) && <div className="my-1 h-px bg-line/10" />}
                       <button type="button" role="menuitem" className={`${item} !text-red hover:!bg-red/10 focus:!bg-red/10`} disabled={busy} onClick={handleDelete}>
                         <TrashIcon className="w-3.5 h-3.5" />
                         Delete short

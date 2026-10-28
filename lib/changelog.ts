@@ -22,6 +22,21 @@ export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-m
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.41.0",
+    date: "2026-10-28",
+    title: "Who deletes videos, every video for the media kit",
+    changes: [
+      { kind: "new", text: "Team → Team → Danger zone, for the team's owner: let anyone on the team delete shorts, long videos or both. It asks first, they get a notification, and you can take it away any time. Masters can always delete." },
+      { kind: "new", text: "The owner also decides whether those people delete one at a time or several at once (long videos with their password, as masters do). One at a time is the default." },
+      { kind: "better", text: "Media kit → Pick the videos: every video your connected accounts have, on every platform and from every year, long videos and live streams too (before, only the latest 90 Shorts). Filter by platform, by kind and by year, put the most viewed, the newest or the oldest first, and search by title or #number. More come as you scroll." },
+      { kind: "fixed", text: "Media kit → Working together shows every package, whatever its platform. With one kit per platform, each kit has its own packages and the Any platform ones, and each package says which kit it's in." },
+      { kind: "better", text: "An Any platform package shows the four platforms' icons together, on the page and in the form. Up to eight packages fit on the page, in two columns." },
+      { kind: "new", text: "Media kit: a page of the preview that's being changed says so until its new version is there: it dims, a light in your theme's colour sweeps across it and a tag says Updating (another period's numbers, new pictures, a new photo, a bigger change). Only the pages that change, and a quick change never flashes it." },
+      { kind: "fixed", text: "Media kit: the preview shows a change at once, even while the last one is still being saved. It used to wait for the save, which on a slow connection took seconds." },
+      { kind: "fixed", text: "Media kit: the last page names every platform its numbers come from, the picked videos' platforms too." },
+    ],
+  },
+  {
     version: "1.40.0",
     date: "2026-10-27",
     title: "Select on cards, long videos like shorts, media kit templates",

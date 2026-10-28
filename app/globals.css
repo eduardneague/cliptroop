@@ -1118,6 +1118,21 @@ html[data-bars="classic"] .side-scroll:hover::-webkit-scrollbar-thumb { backgrou
 html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.36); }
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-x: contain; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+/*
+  1.41.0: a row you swipe on a phone (the media kit picker's platforms and kinds) fades at its far end, so it shows
+  there's more past the edge; where the browser can tie it to the scroll, the fade goes once you reach the end.
+*/
+@property --swipe-end { syntax: "<length>"; inherits: false; initial-value: 28px; }
+@media (max-width: 639px) {
+  .swipe-row {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--swipe-end)), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - var(--swipe-end)), transparent);
+  }
+  @supports (animation-timeline: scroll()) {
+    .swipe-row { animation: swipe-end auto linear both; animation-timeline: scroll(self inline); }
+  }
+}
+@keyframes swipe-end { 0%, 80% { --swipe-end: 28px; } 100% { --swipe-end: 0px; } }
 /* Underlined tabs that don't fit on a computer go under More (1.30.1, components/ui/tab-overflow.tsx): out of the row, still measured. */
 [data-overflow] { position: absolute !important; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 @supports not selector(::-webkit-scrollbar) {
@@ -2433,6 +2448,63 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   35% { transform: rotate(0deg); }
   55% { transform: rotate(-20deg); }
   100% { transform: rotate(-12deg); }
+}
+
+/* ---------------------------------------------------------------------------
+   A kit page being updated (1.41.0, modules/media-kit/components/kit-page-busy.tsx):
+   over a page of the media kit's preview while a change is drawn into it (only
+   there). A beat after the change (a quick one never shows it), the page dims a
+   little, a light sweeps across it in the theme's own colour and a tag says
+   Updating. With animations off: the same, still, once the beat has passed. */
+.kit-page-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: rgb(var(--page-paper, var(--surface)) / 0.45);
+  box-shadow: inset 0 0 0 2px rgb(var(--amber) / 0.6);
+  animation: kit-busy-in 0.25s var(--ease-out) 0.2s both;
+}
+.kit-page-busy::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, rgb(var(--amber) / 0.12) 30%, rgb(var(--amber) / 0.26) 50%, rgb(var(--amber) / 0.12) 70%, transparent);
+  transform: translateX(-110%) skewX(-14deg);
+  animation: kit-busy-sweep 1.35s cubic-bezier(0.45, 0, 0.35, 1) 0.2s infinite;
+}
+.kit-page-busy-tag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px 3px 6px;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  color: rgb(var(--amber));
+  border: 1px solid rgb(var(--amber) / 0.35);
+  box-shadow: 0 8px 20px -10px rgb(var(--amber) / 0.7), 0 1px 3px rgb(0 0 0 / 0.08);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.kit-page-busy-tag > span { color: rgb(var(--ink)); }
+.clap-loader { width: 20px; height: 20px; flex-shrink: 0; overflow: visible; }
+.clap-loader-arm { transform-box: view-box; transform-origin: 4px 11px; animation: clap-loader 0.9s ease-in-out infinite; }
+@keyframes kit-busy-in { from { opacity: 0; } }
+@keyframes kit-busy-sweep { to { transform: translateX(340%) skewX(-14deg); } }
+@keyframes clap-loader { 0%, 100% { transform: rotate(-24deg); } 45% { transform: rotate(-24deg); } 62% { transform: rotate(2deg); } 72% { transform: rotate(-5deg); } 82% { transform: rotate(0deg); } }
+/* Animations off (the setting, or the device's "reduce motion"): no wait in CSS, so the tag waits for data-late. */
+html[data-motion="off"] .kit-page-busy:not([data-late]) { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .kit-page-busy:not([data-late]) { visibility: hidden; }
 }
 
 /* ---------------------------------------------------------------------------

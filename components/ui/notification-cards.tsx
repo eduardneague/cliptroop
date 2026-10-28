@@ -362,6 +362,13 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>{m.actor?.name}</b> let you make <b>{m.team?.name}</b>&rsquo;s media kit in Analytics.
         </>
       );
+    // 1.41.0: the owner let them delete shorts or long videos (Team → Team → Danger zone).
+    case "delete_access":
+      return (
+        <>
+          <b>{m.actor?.name}</b> let you delete <b>{m.what === "longs" ? "long videos" : "shorts"}</b> in <b>{m.team?.name}</b>. They go for good, so take care.
+        </>
+      );
     case "app_alert":
       return (
         <>

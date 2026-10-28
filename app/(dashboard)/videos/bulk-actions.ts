@@ -9,6 +9,8 @@ import { confirmPassword } from "@/lib/auth/confirm-password";
 import { queueObjectivesSync, queueObjectivesSyncFor } from "@/modules/objectives/lib/sync";
 import { STAGE_ORDER } from "@/modules/long-videos/lib/stages";
 import { removeLongVideo } from "@/modules/long-videos/lib/remove-video";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { mayDelete, noDeleteText, NO_DELETE, type DeleteRights } from "@/lib/permissions/delete-rules";
 
 /*
  * Long videos from the list, one or several (1.40.0, as the shorts' 1.38.0: the owner, "i want this same logic to apply
@@ -37,6 +39,11 @@ async function masterTeams(supabase: Awaited<ReturnType<typeof createClient>>, t
     })
   );
   return out;
+}
+
+/** 1.41.0: what the person asking may delete on each of these teams (their verified id; delete-rules.ts). */
+async function deleteRightsFor(supabase: Awaited<ReturnType<typeof createClient>>, teams: string[], userId: string): Promise<Map<string, DeleteRights>> {
+  return new Map(await Promise.all([...new Set(teams)].map(async (t) => [t, await getDeleteRights(supabase, t, userId)] as const)));
 }
 
 export async function moveLongVideosStage(moves: LongMove[]): Promise<Result<LongMoves>> {
@@ -104,8 +111,10 @@ export type LongDeleteResult = (LongDeleted & { error?: undefined }) | { error: 
 
 /**
  * Several long videos deleted for good, with their files. The password first (`confirmPassword`: a wrong one says so
- * and nothing is touched; too many wrong ones wait, as signing in does), then a master of each video's own team (read
- * here, never taken from the browser), then each with its files (`removeLongVideo`). At most 50 at once.
+ * and nothing is touched; too many wrong ones wait, as signing in does), then who may delete them on each video's own
+ * team (read here, never taken from the browser): a master, or (1.41.0) someone the owner lets delete long videos,
+ * one at a time unless the team lets them delete several (lib/permissions/delete-rules.ts), then each with its files
+ * (`removeLongVideo`). At most 50 at once.
  */
 export async function deleteLongVideos(ids: string[], password: string): Promise<LongDeleteResult> {
   const supabase = await createClient();
@@ -122,7 +131,7 @@ export async function deleteLongVideos(ids: string[], password: string): Promise
 
   const wanted = [...new Set(ids)];
   const { data: rows } = await supabase.from("long_video_projects").select("id, team_id, entry_number").in("id", wanted);
-  const masters = await masterTeams(supabase, (rows ?? []).map((r) => r.team_id as string));
+  const rights = await deleteRightsFor(supabase, (rows ?? []).map((r) => r.team_id as string), user.id);
   const admin = createAdminClient();
   const out: LongDeleted = { deleted: [], failed: [] };
   const teams = new Set<string>();
@@ -133,8 +142,10 @@ export async function deleteLongVideos(ids: string[], password: string): Promise
       out.failed.push({ id, number, error: "Not found." });
       continue;
     }
-    if (!masters.has(v.team_id as string)) {
-      out.failed.push({ id, number, error: "Only the master can delete long videos." });
+    const right = rights.get(v.team_id as string) ?? NO_DELETE;
+    const many = (rows ?? []).filter((r) => r.team_id === v.team_id).length;
+    if (!mayDelete(right, "long", many)) {
+      out.failed.push({ id, number, error: noDeleteText(right, "long", many) });
       continue;
     }
     const r = await removeLongVideo(admin, { id, teamId: v.team_id as string });

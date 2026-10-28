@@ -15,20 +15,23 @@ import { FileTypeIcon } from "@/modules/short-videos/components/file-type-icon";
 import { STAGE_LABELS, stageColor } from "../lib/stages";
 import { useMoveVideos } from "../lib/use-move-videos";
 import { LONG_MOVABLE } from "./video-menu";
+import { oneAtATime } from "@/lib/permissions/delete-rules";
 
 /*
  * Picking several long videos at once (1.40.0, as the shorts: the owner, "i want this same logic to apply to long
  * videos too, it might be useful one day"), on the table or the cards (components/ui/list-pick.tsx). The bar exports
  * each one's script (PDF or Word, in one zip); masters move them to a step (Undo) and delete them, which asks for their
  * password ("deleting in bulk should require you to input the password and only the master can do that"): nothing is
- * touched until it's right; then each is struck through and taken off the list.
+ * touched until it's right; then each is struck through and taken off the list. 1.41.0: whoever the team's owner lets
+ * delete long videos deletes here too, with their password: one at a time (the bar's Delete waits for just one), or
+ * several when the owner lets them (lib/permissions/delete-rules.ts).
  */
 
 export type VideoPickItem = { id: string; number: number; title: string; stage: PipelineStage };
 
-export function VideosPicker({ items, canMove, canDelete, children }: { items: VideoPickItem[]; canMove: boolean; canDelete: boolean; children: React.ReactNode }) {
+export function VideosPicker({ items, canMove, canDelete, deleteMany = canDelete, children }: { items: VideoPickItem[]; canMove: boolean; canDelete: boolean; /** Several at once (else one at a time). */ deleteMany?: boolean; children: React.ReactNode }) {
   return (
-    <ListPicker ids={items.map((i) => i.id)} bar={<VideosBar items={items} canMove={canMove} canDelete={canDelete} />}>
+    <ListPicker ids={items.map((i) => i.id)} bar={<VideosBar items={items} canMove={canMove} canDelete={canDelete} deleteMany={deleteMany} />}>
       {children}
     </ListPicker>
   );
@@ -39,7 +42,7 @@ export function PickVideosButton() {
   return <PickButton what="long videos" hint="Select long videos to export, move or delete" />;
 }
 
-function VideosBar({ items, canMove, canDelete }: { items: VideoPickItem[]; canMove: boolean; canDelete: boolean }) {
+function VideosBar({ items, canMove, canDelete, deleteMany }: { items: VideoPickItem[]; canMove: boolean; canDelete: boolean; deleteMany: boolean }) {
   const p = usePick()!;
   const toast = useToast();
   const confirm = useConfirm();
@@ -147,9 +150,12 @@ function VideosBar({ items, canMove, canDelete }: { items: VideoPickItem[]; canM
           <BarDelete
             onClick={() => {
               setMenu(null);
+              // 1.41.0: one at a time (the team's owner decides): said, nothing asked.
+              if (!deleteMany && n > 1) return void toast.error(oneAtATime("long"));
               setDeleting(chosen);
             }}
             disabled={!n || working}
+            hint={!deleteMany && n > 1 ? oneAtATime("long") : null}
             icon={<TrashIcon className="w-4 h-4" />}
           />
         )}
@@ -269,7 +275,7 @@ function DeleteVideosDialog({ videos, onClose, onDeleted }: { videos: VideoPickI
             className={`w-full rounded-xl border bg-surface px-3.5 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-amber ${problem ? "border-red/60" : "border-line/15"}`}
           />
           <p id={`${id}-hint`} className={`text-[12px] mt-1.5 ${problem ? "text-red" : "text-ink-faint"}`} role={problem ? "alert" : undefined}>
-            {problem ?? "Deleting several at once needs your password, so nothing goes by accident, or by someone else using your account."}
+            {problem ?? `${n === 1 ? "Deleting from the selection" : "Deleting several at once"} needs your password, so nothing goes by accident, or by someone else using your account.`}
           </p>
         </form>
       </div>

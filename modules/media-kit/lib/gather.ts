@@ -10,6 +10,7 @@ import { numbersVisibility, visibleRows } from "@/modules/analytics/lib/accounts
 import { addDays, readCustom, todayIn, windowFor, type Window } from "@/modules/analytics/lib/ranges";
 import { KIT_PLATFORMS, readKitSettings, templateSettings, TEMPLATES_MAX, type KitPeriod, type KitPlatform, type KitTemplateInfo } from "./settings";
 import type { MediaKitTabData } from "../components/media-kit-tab";
+import { pickedKeys } from "./browse";
 import {
   agesFrom,
   countriesFrom,
@@ -86,10 +87,13 @@ export function kitVideo(teamId: string, v: ContentItem): KitVideo {
 export async function gatherMediaKit(
   teamId: string,
   team: { name: string; color: string; logoUrl: string | null; tz: string },
-  period: { period: KitPeriod; from: string | null; to: string | null }
+  period: { period: KitPeriod; from: string | null; to: string | null },
+  /** 1.41.0: the videos picked by hand (any of the team's, from the picker): read again, so the kit shows their numbers now. */
+  picked: { platform: string; id: string }[] = []
 ): Promise<MediaKitNumbers> {
   const supabase = await createClient();
   const w = kitWindow(period.period, period.from, period.to, team.tz);
+  const wanted = pickedKeys(picked);
   const [audience, breakdowns, content, vis, cols] = await Promise.all([
     getAudience(teamId, w),
     getAudienceBreakdowns(teamId, w).catch(() => ({}) as Awaited<ReturnType<typeof getAudienceBreakdowns>>),
@@ -98,9 +102,18 @@ export async function gatherMediaKit(
     contentCols(),
   ]);
   // The most viewed ever, for the cover (a short period may have only a few videos). (A select built at run time:
-  // its rows are read as plain fields, 1.36.1.)
-  const { data: bestRows } = await supabase.from("analytics_content").select(cols).eq("team_id", teamId).order("views", { ascending: false, nullsFirst: false }).range(0, 59);
+  // its rows are read as plain fields, 1.36.1.) And the picked ones as they are now.
+  const [{ data: bestRows }, { data: pickedRows }] = await Promise.all([
+    supabase.from("analytics_content").select(cols).eq("team_id", teamId).order("views", { ascending: false, nullsFirst: false }).range(0, 59),
+    wanted.length
+      ? supabase.from("analytics_content").select(cols).eq("team_id", teamId).in("external_id", [...new Set(wanted.map((k) => k.id))]).limit(100)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
   const best = visibleRows((bestRows ?? []) as unknown as Record<string, unknown>[], vis).map(contentItem);
+  const keys = new Set(wanted.map((k) => `${k.platform}:${k.id}`));
+  const fresh = visibleRows((pickedRows ?? []) as unknown as Record<string, unknown>[], vis)
+    .map(contentItem)
+    .filter((v) => keys.has(`${v.platform}:${v.id}`));
 
   const platforms: KitPlatformNumbers[] = [];
   for (const p of KIT_PLATFORMS) {
@@ -136,12 +149,19 @@ export async function gatherMediaKit(
     });
   }
 
-  // 1.39.0: the videos to pick from: the period's and the most viewed ever, each once, most viewed first.
+  // 1.39.0: the videos the kit draws from beyond its platforms' own: the period's and the most viewed ever, each once,
+  // most viewed first. 1.41.0: the picker pages through every video itself (browseKitVideos); here, the picked ones
+  // too, read just now, so they show their numbers of today.
   const pool = new Map<string, KitVideo>();
+  for (const v of fresh) pool.set(`${v.platform}:${v.id}`, kitVideo(teamId, v));
+  let more = 0;
   for (const v of [...content.items.filter((i) => !i.noNumbers), ...best].sort((a, b) => (b.views ?? -1) - (a.views ?? -1))) {
     if (!KIT_PLATFORMS.includes(v.platform as KitPlatform) || !vis.platforms.has(v.platform)) continue;
     const k = `${v.platform}:${v.id}`;
-    if (!pool.has(k) && pool.size < 90) pool.set(k, kitVideo(teamId, v));
+    if (!pool.has(k) && more < 90) {
+      pool.set(k, kitVideo(teamId, v));
+      more++;
+    }
   }
 
   return {
@@ -226,7 +246,7 @@ export async function mediaKitData(
       .map((p) => ({ userId: p.userId, name: p.name, avatarUrl: p.avatarUrl, color: p.color, master: p.roles.includes("master"), granted: granted.has(p.userId) }))
       .sort((a, b) => Number(b.master) - Number(a.master) || a.name.localeCompare(b.name));
   }
-  const numbers = gatherMediaKit(teamId, team, { period: saved.period, from: saved.from, to: saved.to }).then(
+  const numbers = gatherMediaKit(teamId, team, { period: saved.period, from: saved.from, to: saved.to }, [...saved.videoPicks.list, ...saved.coverPicks.list]).then(
     (d) => ({ data: d }),
     (e) => {
       console.error("[media kit numbers]", e instanceof Error ? e.message : e);

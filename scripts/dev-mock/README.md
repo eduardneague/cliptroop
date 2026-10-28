@@ -56,6 +56,12 @@ screenshots. It never touches a real Supabase project.
 #    `npx tsx scripts/dev-mock/make-outliers.ts` (writes scripts/dev-mock/.outliers.json, git-ignored; restart
 #    the server after), MOCK_OUTLIERS_EMPTY=1 the team has no niche yet (Explore and the setup card),
 #    MOCK_OUTLIERS_NEW=1 its niche was just added (collecting), MOCK_OUTLIERS_ACCESS=0 no way to read YouTube
+#    1.41.0 (kit.cjs): MOCK_LIBRARY=1 about 1,500 more videos on every platform since 2021 (Shorts, Reels, TikToks,
+#    long videos, live streams, posts) for the media kit's picker (MOCK_LIBRARY=200: that many), MOCK_KIT=owner the
+#    owner's media kit (a YouTube kit, the "tester" Instagram package at 555 EUR, Show prices), MOCK_KIT=eight eight
+#    packages and a long note, MOCK_KIT_TEMPLATES=2 that many saved templates, MOCK_DELETE=maria:shorts,andrei:both
+#    whom the owner lets delete what (shorts, longs or both: Team → Danger zone), MOCK_DELETE_MANY=shorts,longs they
+#    delete several at once, MOCK_NO_0119=1 as before migration 0119 (no delete_shorts: the old way, Masters only),
 #    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
 #    every 10 minutes for the busiest videos; 0084's 10-minute slots and top content work out the
 #    same way as the database), YouTube's impressions and CTR per day (Shorts and long videos apart),
@@ -89,8 +95,9 @@ node scripts/dev-mock/outliers-shot.cjs /tmp/shots "" --size=phone [--dark] [--v
 - `fixtures.cjs`: the sample team, people, shorts, long videos and
   analytics numbers. Rows carry every embedded relation the pages select,
   so one row answers any query on its table.
-- `server.cjs`: understands `eq/neq/in/is/gte/lte/gt/lt` filters on plain
-  columns, `limit` / `offset` (`.range()` paging), Range headers and
+- `server.cjs`: understands `eq/neq/in/is/gte/lte/gt/lt/like/ilike` filters on plain
+  columns, `or=` / `and=` logic trees (nested, `not.`, quoted values: `.or()`; 1.41.0),
+  `count=exact` (the total before the page, in Content-Range), `limit` / `offset` (`.range()` paging), Range headers and
   single-row requests; writes are accepted and ignored (an update answers with
   the rows its filters match, like `update … returning`); `/storage/v1/bucket` lists one bucket; `rpc/*` answers from
   `fixtures.rpc`. Filters on embedded tables are ignored on purpose. Signed

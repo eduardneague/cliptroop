@@ -66,7 +66,7 @@ ok(/auth\.getUser\(\)/.test(del) && /ids\.length > 50\)/.test(del) && /UUID\.tes
 const pw = del.indexOf("await confirmPassword(user, password)");
 ok(pw > 0 && pw < del.indexOf('.from("long_video_projects")') && pw < del.indexOf("removeLongVideo(") && pw < del.indexOf("createAdminClient()"), "deleting several: the password before anything is read or touched");
 ok(/if \("error" in checked\) return \{ error: checked\.error, password: true \};/.test(del), "a wrong password says so (the window stays open for another try)");
-ok(/if \(!masters\.has\(v\.team_id as string\)\) \{\s+out\.failed\.push\(\{ id, number, error: "Only the master can delete long videos\." \}\);/.test(del), "deleting several: only a master of each video's own team");
+ok(/const rights = await deleteRightsFor\(supabase, \(rows \?\? \[\]\)\.map\(\(r\) => r\.team_id as string\), user\.id\);/.test(del) && /if \(!mayDelete\(right, "long", many\)\) \{\s+out\.failed\.push\(\{ id, number, error: noDeleteText\(right, "long", many\) \}\);/.test(del) && del.indexOf("deleteRightsFor(") > pw, "deleting several: who may on each video's own team (a master, or whoever the owner lets; several only if the team lets them), after the password");
 ok(/const r = await removeLongVideo\(admin, \{ id, teamId: v\.team_id as string \}\);/.test(del) && /queueObjectivesSync\(t\)/.test(del), "deleting several: each with its files, as one is deleted; objectives catch up");
 ok(!/revalidatePath\("\/videos"\)/.test(del) && /revalidatePath\("\/calendar"\)/.test(del), "the list takes them away itself, then draws itself again (not drawn again under the animation)");
 
@@ -94,7 +94,7 @@ ok(/exportScripts\(longScriptsForExport, ids, format, LONG_VIDEOS, progress\)/.t
 
 // --- The list ------------------------------------------------------------------------------------------------------------
 const page = read("app/(dashboard)/videos/page.tsx");
-ok(/<VideosPicker items=\{\(projects \?\? \[\]\)\.map\(/.test(page) && /canMove=\{master\} canDelete=\{master\}>/.test(page) && /\{\(projects \?\? \[\]\)\.length > 0 && <PickVideosButton \/>\}/.test(page) && /<\/VideosPicker>/.test(page), "the page: picking on the table and the cards; moving and deleting for masters");
+ok(/<VideosPicker items=\{\(projects \?\? \[\]\)\.map\(/.test(page) && /canMove=\{master\} canDelete=\{rights\.longs\} deleteMany=\{rights\.manyLongs\}>/.test(page) && /\{\(projects \?\? \[\]\)\.length > 0 && <PickVideosButton \/>\}/.test(page) && /<\/VideosPicker>/.test(page), "the page: picking on the table and the cards; moving for masters; deleting for masters and whoever the owner lets (1.41.0)");
 ok((page.match(/<VideoMenu id=\{p\.id\} teamId=\{currentTeam\.id\} number=\{p\.entry_number\} title=\{p\.title\} stage=\{p\.stage as PipelineStage\} isMaster=\{master\}/g) ?? []).length === 2 && !/\{canDelete && /.test(page), "everyone gets the ⋯ (export), on the table and the cards");
 ok(/data-item-id=\{p\.id\}[\s\S]{0,200}<span data-row-num=""/.test(page) && /<RowPick id=\{p\.id\} label=\{`#\$\{p\.entry_number\} \$\{p\.title\}`\} \/>/.test(page), "the table's rows: picked as a whole, the box where the number was");
 ok(/data-card=""\s+data-item-id=\{p\.id\}/.test(page) && /<span data-card-num="" className="absolute top-2\.5 right-2\.5/.test(page) && /<CardPick id=\{p\.id\} label=\{`#\$\{p\.entry_number\} \$\{p\.title\}`\} corner="right"/.test(page), "the cards: picked as a whole, the box in the corner where the number and ⋯ were");

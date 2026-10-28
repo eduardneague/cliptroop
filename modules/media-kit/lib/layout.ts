@@ -8,7 +8,7 @@
  * the cover: a wall of the channel's own best thumbnails running off the page (or a photo, or one big number).
  */
 import { isVertical, addDaily, changePct, growthPct, ratePct, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "./numbers";
-import { KIT_PLATFORM_NAME, LIMITS, formatPrice, isEmail, websiteUrl, type KitCoverGrid, type KitPlatform, type MediaKitSettings } from "./settings";
+import { KIT_PLATFORMS, KIT_PLATFORM_NAME, LIMITS, formatPrice, isEmail, websiteUrl, type KitCoverGrid, type KitPlatform, type MediaKitSettings, type RatePackage } from "./settings";
 import { applyManual, kitTotals, pickedVideo, type Totals } from "./manual";
 import { kitPalette, type KitPalette } from "./theme";
 import {
@@ -48,6 +48,8 @@ type Ctx = {
   ps: KitPlatformNumbers[];
   /** The kit's totals: its platforms added up, or At a glance's own numbers (1.39.0, manual.ts). */
   totals: Totals;
+  /** 1.41.0: one kit per platform: the platforms that have a kit of their own (null: one kit with everything). */
+  ownKits: Set<KitPlatform> | null;
   title: string;
   images: KitImages;
   minus: string;
@@ -113,6 +115,16 @@ function platformIcon(ops: Op[], c: Ctx, p: KitPlatform, x: number, y: number, s
   }
 }
 const round = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * 1.41.0, a package for any platform (the owner: "something that shows any platform, maybe all of them in a grid"):
+ * every platform's logo, two by two, in the room of one.
+ */
+function anyPlatformIcon(ops: Op[], c: Ctx, x: number, y: number, size: number) {
+  const gap = Math.max(1.5, round(size * 0.1));
+  const t = (size - gap) / 2;
+  KIT_PLATFORMS.forEach((p, i) => platformIcon(ops, c, p, x + (i % 2) * (t + gap), y + Math.floor(i / 2) * (t + gap), t));
+}
 
 /** A slide's title row: the title (and an icon), something on the right, a line under it. Returns where content starts. */
 function header(ops: Op[], c: Ctx, title: string, o: { sub?: string | null; right?: string | null; rightLink?: string | null; icon?: KitPlatform } = {}): number {
@@ -811,40 +823,79 @@ function partnersPages(c: Ctx): Page[] {
   return pages;
 }
 
+/**
+ * The packages a kit's rates page lists (1.41.0). One kit with everything: every package (1.37.0 left out a package for
+ * a platform the kit had no page of its own for, the owner: "this only shows up for youtube, if you add a package, the
+ * other pages dont work"). One kit per platform: that kit's own platform's, the any-platform ones, and those of a
+ * platform with no kit of its own, so every package shows somewhere.
+ */
+export function packagesFor(packages: RatePackage[], kit: KitPlatform[], ownKits: Set<KitPlatform> | null): RatePackage[] {
+  if (!ownKits) return packages;
+  const mine = new Set(kit);
+  return packages.filter((p) => p.platform === "any" || mine.has(p.platform) || !ownKits.has(p.platform));
+}
+
+const REQUEST_LINE = "Tell us about your campaign and we’ll send a quote that fits it.";
+
+/**
+ * Working together: the packages, each with its platform's logo (any platform: all four, 1.41.0) and its price or "On
+ * request"; under them "Rates on request" and a line, or the note under the prices. 1.41.0: up to four in a column,
+ * five to eight in two, each row as tall as the page has room for, so eight packages and a three-line note still fit.
+ */
 function ratesPage(c: Ctx): Page {
-  const { pal, s, ps } = c;
+  const { pal, s } = c;
   const ops: Op[] = [];
-  const mine = new Set(ps.map((p) => p.platform));
-  const list = s.rates.packages.filter((p) => p.platform === "any" || mine.has(p.platform) || !ps.length);
-  const show = s.rates.show;
-  const top = header(ops, c, "Working together", { right: show && list.some((p) => p.price !== null) ? `Prices in ${s.rates.currency}` : null });
-  let y = top + 4;
-  const rowH = list.length > 5 ? 50 : 62;
-  const textW = show ? CW - 220 : CW;
+  const list = packagesFor(s.rates.packages, c.ps.map((p) => p.platform), c.ownKits);
+  const n = list.length;
+  // Prices shown only when there's a package to price (nothing to buy: rates on request).
+  const show = s.rates.show && n > 0;
+  const priced = show && list.some((p) => p.price !== null);
+  const top = header(ops, c, "Working together", { right: priced ? `Prices in ${s.rates.currency}` : null });
+  const limit = H - 48;
+  const reqLines = show ? [] : wrap(c.m, s.rates.note || REQUEST_LINE, "reg", 12.5, 560, 3);
+  const noteLines = show && s.rates.note ? wrap(c.m, s.rates.note, "reg", 10.5, CW, 2) : [];
+  // From the rows' last line to the last baseline below them (and a little for the letters' tails).
+  const tail = show ? (noteLines.length ? 34 + (noteLines.length - 1) * 14.5 + 4 : 0) : 88 + (reqLines.length - 1) * 18;
+  const cols = n > 4 ? 2 : 1;
+  const perCol = Math.ceil(n / cols);
+  const y0 = top + 4;
+  const rowH = n ? Math.max(44, Math.min(62, (limit - y0 - tail) / perCol)) : 0;
+  const colGap = 40;
+  const colW = cols === 2 ? (CW - colGap) / 2 : CW;
+  const priceW = show ? (cols === 2 ? 118 : 200) : 0;
+  const priceSize = cols === 2 ? 22 : 26;
+  const ICON = 20;
   list.forEach((p, i) => {
-    ops.push({ t: "path", d: `M${MX} ${round(y)}H${MX + CW}`, stroke: pal.hair, sw: 1 });
-    let nx = MX;
-    if (p.platform !== "any") {
-      platformIcon(ops, c, p.platform, MX, y + 12, 16);
-      nx += 24;
-    }
-    text(ops, c, nx, y + 25, ellipsize(c.m, p.name || "Package", "semi", 14, textW - (nx - MX)), "semi", 14, pal.ink);
-    if (p.detail) lines(ops, c, nx, y + 42, wrap(c.m, p.detail, "reg", 10.5, textW - (nx - MX), rowH > 55 ? 2 : 1), "reg", 10.5, pal.muted, 13.5);
+    const ci = cols === 2 ? Math.floor(i / perCol) : 0;
+    const ri = cols === 2 ? i % perCol : i;
+    const x0 = MX + ci * (colW + colGap);
+    const y = y0 + ri * rowH;
+    ops.push({ t: "path", d: `M${round(x0)} ${round(y)}H${round(x0 + colW)}`, stroke: pal.hair, sw: 1 });
+    const nameY = y + Math.min(25, rowH * 0.42);
+    if (p.platform === "any") anyPlatformIcon(ops, c, x0, nameY - 15, ICON);
+    else platformIcon(ops, c, p.platform, x0, nameY - 15, ICON);
+    const nx = x0 + ICON + 10;
+    const textW = colW - (nx - x0) - (show ? priceW + 16 : 0);
+    text(ops, c, nx, nameY, ellipsize(c.m, p.name || "Package", "semi", 14, textW), "semi", 14, pal.ink);
+    if (p.detail) lines(ops, c, nx, nameY + 17, wrap(c.m, p.detail, "reg", 10.5, textW, rowH > 55 ? 2 : 1), "reg", 10.5, pal.muted, 13.5);
     if (show) {
-      if (p.price !== null) text(ops, c, W - MX, y + 31, formatPrice(p.price, s.rates.currency), "disp", 26, pal.ink, "right");
-      else text(ops, c, W - MX, y + 27, "On request", "semi", 11, pal.accentText, "right");
+      if (p.price !== null) {
+        const label = formatPrice(p.price, s.rates.currency);
+        const size = fitSize(c.m, c.m.clean(label, "disp"), "disp", priceSize, priceW, 14);
+        text(ops, c, x0 + colW, y + rowH / 2 + size * 0.34, label, "disp", size, pal.ink, "right");
+      } else text(ops, c, x0 + colW, y + rowH / 2 + 4, "On request", "semi", 11, pal.accentText, "right");
     }
-    y += rowH;
-    if (i === list.length - 1) ops.push({ t: "path", d: `M${MX} ${round(y)}H${MX + CW}`, stroke: pal.hair, sw: 1 });
+    // Each column's last row closes with a line.
+    if (ri === perCol - 1 || i === n - 1) ops.push({ t: "path", d: `M${round(x0)} ${round(y + rowH)}H${round(x0 + colW)}`, stroke: pal.hair, sw: 1 });
   });
+  const end = n ? y0 + perCol * rowH : top;
   if (!show) {
-    // Prices on request: say so, big, with the note (or a friendly line).
-    const by = list.length ? y + 54 : top + 60;
+    // Prices on request: said big, with the note (or a friendly line).
+    const by = n ? end + 54 : top + 60;
     text(ops, c, MX, by, "Rates on request", "disp", 34, pal.accentText);
-    const note = s.rates.note || "Tell us about your campaign and we’ll send a quote that fits it.";
-    lines(ops, c, MX, by + 30, wrap(c.m, note, "reg", 12.5, 560, 3), "reg", 12.5, pal.muted, 18);
-  } else if (s.rates.note) {
-    lines(ops, c, MX, Math.min(y + 34, H - 70), wrap(c.m, s.rates.note, "reg", 10.5, CW, 2), "reg", 10.5, pal.muted, 14.5);
+    lines(ops, c, MX, by + 30, reqLines, "reg", 12.5, pal.muted, 18);
+  } else if (noteLines.length) {
+    lines(ops, c, MX, Math.min(end + 34, limit - (noteLines.length - 1) * 14.5 - 4), noteLines, "reg", 10.5, pal.muted, 14.5);
   }
   return { w: W, h: H, bg: pal.paper, ops, label: "Rates", anchor: "rates" };
 }
@@ -903,21 +954,34 @@ function contactPage(c: Ctx): Page {
   const site = websiteUrl(s.contact.website);
   if (site) row("Website", s.contact.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), site);
 
-  // Where the numbers come from (1.39.0: and which are the team's own).
-  const note = sourceNote(c);
+  // Where the numbers come from (1.39.0: and which are the team's own; 1.41.0: and the picked videos' platforms).
+  const note = sourceNote(c, pickedFrom(c));
   if (note) lines(ops, c, MX, H - 62, wrap(c.m, note, "reg", 9, leftW, 2), "reg", 9, pal.faint, 12.5);
   return { w: W, h: H, bg: pal.paper, ops, label: "Contact", anchor: "contact" };
 }
 
 /**
- * Where the kit's numbers come from, honestly: read from the platforms by ClipTroop, or typed in by the team (1.39.0:
- * a platform's numbers, the audience, the totals). Null without numbers.
+ * The platforms of the videos picked for the best videos page, shown there with their numbers (1.41.0: they can come
+ * from any platform the team has, not only the kit's own).
  */
-export function sourceNote(c: Pick<Ctx, "ps" | "nums" | "totals">): string | null {
+function pickedFrom(c: Pick<Ctx, "s">): KitPlatform[] {
+  const { s } = c;
+  if (!s.sections.videos || !s.videoPicks.on) return [];
+  const on = new Set(s.videoPicks.list.slice(0, LIMITS.videoPicks).map((v) => v.platform));
+  return KIT_PLATFORMS.filter((p) => on.has(p));
+}
+
+/**
+ * Where the kit's numbers come from, honestly: read from the platforms by ClipTroop, or typed in by the team (1.39.0:
+ * a platform's numbers, the audience, the totals). `also`: other platforms whose numbers it shows (1.41.0: picked
+ * videos from a platform the kit isn't about), read from them too. Null without numbers.
+ */
+export function sourceNote(c: Pick<Ctx, "ps" | "nums" | "totals">, also: readonly KitPlatform[] = []): string | null {
   const { ps, nums } = c;
   if (!ps.length) return null;
   const day = shortDay(nums.generatedAt.slice(0, 10), true);
-  const read = ps.filter((p) => !p.manual).map((p) => KIT_PLATFORM_NAME[p.platform]);
+  const mine = new Set(ps.map((p) => p.platform));
+  const read = [...ps.filter((p) => !p.manual).map((p) => p.platform), ...KIT_PLATFORMS.filter((p) => !mine.has(p) && also.includes(p))].map((p) => KIT_PLATFORM_NAME[p]);
   const own = [
     ps.some((p) => p.manual) ? `${listWords(ps.filter((p) => p.manual).map((p) => `${KIT_PLATFORM_NAME[p.platform]}’s`))} numbers` : null,
     ps.some((p) => p.manualAudience) ? "the audience figures" : null,
@@ -963,7 +1027,7 @@ export function buildKits(read: MediaKitNumbers, s: MediaKitSettings, m: Measure
     // At a glance's own numbers stand for a kit of several platforms (the page they're typed on is only in those);
     // a kit of one platform has that platform's own.
     const totals = kitTotals(g.ps, g.platform || g.ps.length < 2 ? null : s.manual.glance);
-    const c: Ctx = { m, pal, s, nums, ps: g.ps, totals, title, images, minus };
+    const c: Ctx = { m, pal, s, nums, ps: g.ps, totals, title, images, minus, ownKits: g.platform ? new Set(all.map((p) => p.platform)) : null };
     const pages: Page[] = [];
     if (s.sections.cover) pages.push(coverPage(c));
     if (s.sections.about) {

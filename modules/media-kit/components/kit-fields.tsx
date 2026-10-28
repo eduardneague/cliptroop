@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { ChevronDownIcon, CloseIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
+import { AnyPlatformIcon } from "@/components/ui/platform-icons";
 import { KIT_CURRENCIES, KIT_PLATFORMS, KIT_PLATFORM_NAME, LIMITS, newId, type MediaKitSettings, type RatePackage, type Testimonial } from "../lib/settings";
 
 /*
@@ -58,10 +59,22 @@ export function TextArea({ label, value, onChange, max, placeholder, hint, rows 
 
 // ---- Rates ------------------------------------------------------------------------------------------------------------
 
-const PLATFORM_OPTIONS = [{ value: "any", label: "Any platform" }, ...KIT_PLATFORMS.map((p) => ({ value: p, label: KIT_PLATFORM_NAME[p], icon: <PlatformIcon platform={p} className="w-4 h-4" /> }))];
+// 1.41.0: any platform shows them all, two by two (as the kit draws it).
+const PLATFORM_OPTIONS = [{ value: "any", label: "Any platform", icon: <AnyPlatformIcon className="w-4 h-4" /> }, ...KIT_PLATFORMS.map((p) => ({ value: p, label: KIT_PLATFORM_NAME[p], icon: <PlatformIcon platform={p} className="w-4 h-4" /> }))];
 export const CURRENCY_OPTIONS = KIT_CURRENCIES.map((c) => ({ value: c, label: c }));
 
-export function RatesEditor({ rates, onChange, disabled }: { rates: MediaKitSettings["rates"]; onChange: (r: MediaKitSettings["rates"]) => void; disabled?: boolean }) {
+export function RatesEditor({
+  rates,
+  onChange,
+  disabled,
+  where,
+}: {
+  rates: MediaKitSettings["rates"];
+  onChange: (r: MediaKitSettings["rates"]) => void;
+  disabled?: boolean;
+  /** 1.41.0: which kit a package shows in (one kit per platform), said under it; null: nothing to say. */
+  where?: (p: RatePackage) => string | null;
+}) {
   const set = (packages: RatePackage[]) => onChange({ ...rates, packages });
   const edit = (id: string, patch: Partial<RatePackage>) => set(rates.packages.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   const move = (i: number, by: -1 | 1) => {
@@ -130,6 +143,7 @@ export function RatesEditor({ rates, onChange, disabled }: { rates: MediaKitSett
               </label>
             )}
           </div>
+          {where?.(p) && <p className="text-[11.5px] text-ink-faint -mt-1">{where(p)}</p>}
         </div>
       ))}
       {rates.packages.length < LIMITS.packages && (

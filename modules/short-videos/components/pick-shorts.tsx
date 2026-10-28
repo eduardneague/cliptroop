@@ -12,21 +12,24 @@ import { FileTypeIcon } from "./file-type-icon";
 import { SHORT_STAGE_COLOR, SHORT_STAGE_LABELS, type ShortStage } from "../lib/constants";
 import { useMoveShorts } from "../lib/use-move-shorts";
 import { MOVABLE } from "./row-menu";
+import { oneAtATime } from "@/lib/permissions/delete-rules";
 
 /*
  * Picking several shorts at once (1.38.0 on the table; 1.40.0 on the cards too, the picking itself shared with long
  * videos: components/ui/list-pick.tsx). The bar at the foot exports each picked short's script (PDF or Word, in one
  * zip); masters also move them all to a step (with Undo) and, 1.40.0, delete them (asked first: the owner, "i want to
  * be able to delete as well from the select thing … i want confirmation on deletion"). Deleting strikes each through
- * and takes it off the list, then the server is asked; any it couldn't delete come back.
+ * and takes it off the list, then the server is asked; any it couldn't delete come back. 1.41.0: whoever the team's
+ * owner lets delete shorts deletes here too: one at a time (the bar's Delete waits for just one), or several when the
+ * owner lets them (lib/permissions/delete-rules.ts).
  */
 
 export type PickItem = { id: string; number: number; title: string; stage: ShortStage };
 
 /** Around the shorts list (the bar of filters too), as a table or as cards. */
-export function ShortsPicker({ items, canMove, canDelete, children }: { items: PickItem[]; canMove: boolean; canDelete: boolean; children: React.ReactNode }) {
+export function ShortsPicker({ items, canMove, canDelete, deleteMany = canDelete, children }: { items: PickItem[]; canMove: boolean; canDelete: boolean; /** Several at once (else one at a time). */ deleteMany?: boolean; children: React.ReactNode }) {
   return (
-    <ListPicker ids={items.map((i) => i.id)} bar={<ShortsBar items={items} canMove={canMove} canDelete={canDelete} />}>
+    <ListPicker ids={items.map((i) => i.id)} bar={<ShortsBar items={items} canMove={canMove} canDelete={canDelete} deleteMany={deleteMany} />}>
       {children}
     </ListPicker>
   );
@@ -37,8 +40,8 @@ export function PickShortsButton() {
   return <PickButton what="shorts" hint="Select shorts to export, move or delete" />;
 }
 
-/** The bar at the foot while picking: export, move (masters), delete (masters). */
-function ShortsBar({ items, canMove, canDelete }: { items: PickItem[]; canMove: boolean; canDelete: boolean }) {
+/** The bar at the foot while picking: export, move (masters), delete (masters, and whoever the owner lets). */
+function ShortsBar({ items, canMove, canDelete, deleteMany }: { items: PickItem[]; canMove: boolean; canDelete: boolean; deleteMany: boolean }) {
   const p = usePick()!;
   const toast = useToast();
   const confirm = useConfirm();
@@ -95,6 +98,8 @@ function ShortsBar({ items, canMove, canDelete }: { items: PickItem[]; canMove: 
   async function doDelete() {
     setMenu(null);
     if (!n) return;
+    // 1.41.0: one at a time (the team's owner decides): said, nothing asked.
+    if (!deleteMany && n > 1) return void toast.error(oneAtATime("short"));
     const ok = await confirm({
       title: n === 1 ? `Delete ${deleteWhat(chosen)}?` : `Delete ${n} shorts?`,
       description:
@@ -165,7 +170,7 @@ function ShortsBar({ items, canMove, canDelete }: { items: PickItem[]; canMove: 
           })}
         />
       )}
-      {canDelete && <BarDelete onClick={() => void doDelete()} disabled={!n || working} icon={<TrashIcon className="w-4 h-4" />} />}
+      {canDelete && <BarDelete onClick={() => void doDelete()} disabled={!n || working} hint={!deleteMany && n > 1 ? oneAtATime("short") : null} icon={<TrashIcon className="w-4 h-4" />} />}
     </PickBar>
   );
 }

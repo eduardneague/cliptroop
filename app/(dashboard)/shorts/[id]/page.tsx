@@ -14,6 +14,7 @@ import {
   listTeamPeople,
 } from "@/modules/short-videos/lib/queries";
 import { shortPermissions } from "@/modules/short-videos/lib/permissions";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { formatShortDate, isOverdue, relativeDay } from "@/modules/short-videos/lib/dates";
 import { ShortStagePill } from "@/modules/short-videos/components/stage-pill";
@@ -111,7 +112,7 @@ export default async function ShortPage({
     : null;
   postingPromise?.catch(() => {});
 
-  const membership = await getMembership(supabase, short.teamId);
+  const [membership, deleteRights] = await Promise.all([getMembership(supabase, short.teamId), getDeleteRights(supabase, short.teamId)]);
   const roles = membership?.roles ?? [];
   const isAssignedEditor = !!membership && short.editor?.memberId === membership.teamMemberId;
   const isAssignedReviewer = !!membership && short.reviewer?.memberId === membership.teamMemberId;
@@ -201,7 +202,8 @@ export default async function ShortPage({
               }}
             />
           )}
-          {perms.canDelete && <DeleteShortButton id={short.id} number={short.number} title={short.title} />}
+          {/* 1.41.0: masters, and whoever the team's owner lets delete shorts. */}
+          {(perms.canDelete || deleteRights.shorts) && <DeleteShortButton id={short.id} number={short.number} title={short.title} />}
         </div>
       </div>
 

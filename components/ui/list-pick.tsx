@@ -343,14 +343,16 @@ export function BarMenu({ label, short, open, onOpen, disabled, items }: { label
 }
 
 /** Delete, in the bar: red, an icon on a phone. */
-export function BarDelete({ onClick, disabled, icon }: { onClick: () => void; disabled?: boolean; icon: React.ReactNode }) {
+export function BarDelete({ onClick, disabled, icon, hint }: { onClick: () => void; disabled?: boolean; icon: React.ReactNode; /** 1.41.0: why it can't go now (one at a time): it looks off, says so as its tooltip, and a press says it too. */ hint?: string | null }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label="Delete"
-      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 h-9 text-[13px] font-semibold text-red border border-red/30 hover:bg-red/10 disabled:opacity-40 disabled:hover:bg-transparent whitespace-nowrap"
+      aria-label={hint ? `Delete. ${hint}` : "Delete"}
+      aria-disabled={hint ? true : undefined}
+      title={hint ?? undefined}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 h-9 text-[13px] font-semibold text-red border border-red/30 hover:bg-red/10 disabled:opacity-40 disabled:hover:bg-transparent whitespace-nowrap ${hint ? "opacity-40 hover:bg-transparent" : ""}`}
     >
       {icon}
       <span className="max-sm:hidden">Delete</span>

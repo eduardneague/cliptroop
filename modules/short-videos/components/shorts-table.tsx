@@ -37,6 +37,8 @@ export type ShortsTableProps = {
   perDay: number;
   weekends: boolean;
   master: boolean;
+  /** 1.41.0: masters, and whoever the team's owner lets delete shorts (lib/permissions/delete-rules.ts). */
+  canDelete?: boolean;
   /** Masters and schedulers. */
   canPost: boolean;
   myMemberId: string | null;
@@ -102,6 +104,7 @@ export function ShortsTable(p: ShortsTableProps) {
       locked={locked}
       queueStart={p.queueStart}
       isMaster={master}
+      canDelete={p.canDelete ?? master}
       canReorder={master || canPost}
       settings={master || canPost ? settingsFor(s) : undefined}
     />

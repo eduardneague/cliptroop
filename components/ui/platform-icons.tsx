@@ -55,3 +55,18 @@ export function FacebookIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * 1.41.0, "any platform" (the media kit's rates: the owner, "something that shows any platform, maybe all of them in a
+ * grid"): every platform's logo, two by two, in the room of one.
+ */
+export function AnyPlatformIcon({ className }: { className?: string }) {
+  return (
+    <span className={`inline-grid grid-cols-2 grid-rows-2 gap-[8%] flex-shrink-0 ${className ?? ""}`} role="img" aria-label="Any platform">
+      <YouTubeIcon className="w-full h-full" />
+      <InstagramIcon className="w-full h-full" />
+      <TikTokIcon className="w-full h-full" />
+      <FacebookIcon className="w-full h-full" />
+    </span>
+  );
+}

@@ -767,6 +767,16 @@ module.exports = {
   helpers: { day, at, people, members },
 };
 
+// 1.41.0: the media kit, a big library of videos (MOCK_LIBRARY=1) and who else deletes videos (kit.cjs: its flags).
+{
+  const K = require("./kit.cjs").kitFixtures({ TEAM, U, people, at });
+  Object.assign(module.exports.rpc, K.rpc);
+  Object.assign(module.exports.tables, K.tables);
+  module.exports.tables.analytics_content = [...module.exports.tables.analytics_content, ...K.library];
+  Object.assign(module.exports.tables.teams[0], K.teamDelete);
+  module.exports.missingTables = [...(module.exports.missingTables ?? []), ...K.missing];
+}
+
 // Outliers (1.27.0): outliers.cjs (its sample data is made on first use; see that file's flags).
 {
   const O = require("./outliers.cjs").outliersFixtures({ TEAM, U, people });

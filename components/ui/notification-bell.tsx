@@ -110,6 +110,8 @@ export type NotificationItem = {
     many?: boolean;
     niche?: string | null;
     best?: { id: string; title: string; mult: string } | null;
+    /** delete_access (1.41.0): what the owner let them delete. */
+    what?: "shorts" | "longs";
   } | null;
 };
 

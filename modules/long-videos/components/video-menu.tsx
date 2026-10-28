@@ -19,7 +19,8 @@ export const LONG_MOVABLE = STAGE_ORDER.filter((s) => s !== "done");
  * ⋯ on a long video in the list (1.27.5, masters: open it, or delete it). 1.40.0, as the shorts' ⋯ (the owner: "i want
  * this same logic to apply to long videos too"): everyone exports its script as a PDF or a Word file; masters also move
  * it to a step (a correction by hand, nobody is told, Undo in the toast) and delete it (DeleteVideoDialog: what it
- * holds, then its name typed). Sits above the card's or row's own link.
+ * holds, then its name typed). 1.41.0: deleting is also for whoever the team's owner lets delete long videos. Sits
+ * above the card's or row's own link.
  */
 export function VideoMenu({
   id,
@@ -28,6 +29,7 @@ export function VideoMenu({
   title,
   stage,
   isMaster,
+  canDelete = isMaster,
   className = "",
 }: {
   id: string;
@@ -36,6 +38,8 @@ export function VideoMenu({
   title: string;
   stage: PipelineStage;
   isMaster: boolean;
+  /** 1.41.0: masters, and whoever the team's owner lets delete long videos. */
+  canDelete?: boolean;
   className?: string;
 }) {
   const toast = useToast();
@@ -158,6 +162,10 @@ export function VideoMenu({
                   <span className="text-[11px] font-normal text-ink-faint truncate max-w-[6rem]">{STAGE_LABELS[stage]}</span>
                   <ChevronRightIcon className="w-3.5 h-3.5 text-ink-faint" />
                 </button>
+              </>
+            )}
+            {canDelete && (
+              <>
                 <div className="my-1 h-px bg-line/10" />
                 <button
                   type="button"
