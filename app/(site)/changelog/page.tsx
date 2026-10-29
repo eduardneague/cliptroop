@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/brand";
-import { CHANGELOG, KIND_LABEL, type ChangeKind, type Release } from "@/lib/changelog";
+import { PUBLIC_CHANGELOG, KIND_LABEL, type ChangeKind, type Release } from "@/lib/changelog";
 import { publicMetadata } from "@/lib/public-pages";
 import { PageHead, SitePage, textLink } from "@/components/site/site-chrome";
 
@@ -66,7 +66,7 @@ function Update({ r }: { r: Release }) {
 
 export default async function ChangelogPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const all = (await searchParams).all === "1";
-  const shown = all ? CHANGELOG : CHANGELOG.slice(0, LATEST);
+  const shown = all ? PUBLIC_CHANGELOG : PUBLIC_CHANGELOG.slice(0, LATEST);
   return (
     <SitePage current="/changelog">
       <PageHead
@@ -80,14 +80,14 @@ export default async function ChangelogPage({ searchParams }: { searchParams: Pr
         <p className="border-t border-line/15 pt-6 text-[15px] text-ink-soft">
           {all ? (
             <>
-              That&rsquo;s every update since {CHANGELOG[CHANGELOG.length - 1]?.version}.{" "}
+              That&rsquo;s every update since {PUBLIC_CHANGELOG[PUBLIC_CHANGELOG.length - 1]?.version}.{" "}
               <Link href="/changelog" className={textLink}>
                 Only the latest
               </Link>
             </>
           ) : (
             <>
-              The latest {shown.length} of {CHANGELOG.length} updates.{" "}
+              The latest {shown.length} of {PUBLIC_CHANGELOG.length} updates.{" "}
               <Link href="/changelog?all=1" className={textLink}>
                 Every update
               </Link>

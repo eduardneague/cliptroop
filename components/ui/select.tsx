@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "./icons";
 import { Leaves } from "./leaves";
+import { useUiWords } from "./ui-locale";
 
 export type SelectOption = {
   value: string;
@@ -30,7 +31,7 @@ export function Select({
   value,
   onChange,
   options,
-  placeholder = "Select…",
+  placeholder,
   emptyOption,
   disabled,
   searchable,
@@ -60,6 +61,7 @@ export function Select({
   fullWidth?: boolean;
 }) {
   const listId = useId();
+  const uw = useUiWords();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -278,7 +280,7 @@ export function Select({
               <span className={`truncate ${selected.value === "__none__" ? "text-ink-soft" : ""}`}>{selected.label}</span>
             </>
           ) : (
-            <span className="text-ink-soft truncate">{placeholder}</span>
+            <span className="text-ink-soft truncate">{placeholder ?? uw.select}</span>
           )}
         </span>
         <ChevronDownIcon
@@ -312,7 +314,7 @@ export function Select({
                       setQuery(e.target.value);
                       setActive(0);
                     }}
-                    placeholder="Type to filter…"
+                    placeholder={uw.typeToFilter}
                     className="flex-1 min-w-0 bg-transparent text-[13.5px] outline-none placeholder:text-ink-faint"
                     aria-controls={listId}
                     aria-activedescendant={visible[active] ? `${listId}-${active}` : undefined}
@@ -328,7 +330,7 @@ export function Select({
                 className="overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll p-1 outline-none"
                 style={{ maxHeight: pos.maxH - (useSearch ? 40 : 0) }}
               >
-                {visible.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-soft">No matches</p>}
+                {visible.length === 0 && <p className="px-3 py-3 text-[13px] text-ink-soft">{uw.noMatches}</p>}
                 {visible.map((o, i) => {
                   const header = o.group && o.group !== lastGroup ? o.group : null;
                   lastGroup = o.group;

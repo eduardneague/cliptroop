@@ -20,7 +20,7 @@ export type IconKey =
   | "users" | "settings" | "word" | "user" | "code" | "flag" | "lock" | "document" | "trash" | "plus"
   | "moon" | "sun" | "sound" | "bell" | "star" | "bug" | "lightbulb" | "logout" | "link" | "download"
   | "grid" | "list" | "clock" | "money" | "compass" | "alert" | "check" | "fill" | "retry" | "history"
-  | "eye" | "trophy" | "image" | "flame" | "outliers";
+  | "eye" | "trophy" | "image" | "flame" | "outliers" | "business";
 
 export type Entry = {
   id: string;
@@ -45,6 +45,8 @@ export type SearchContext = {
   /** Your roles in the team you're in. */
   roles: readonly string[];
   developer: boolean;
+  /** Business is on for the team and theirs to open (1.42.0). */
+  business?: boolean;
   hasTeam: boolean;
   profileHref: string | null;
   dark: boolean;
@@ -154,10 +156,22 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "word", kind: "page", title: "Daily word", trail: [], hint: "A five-letter word a day", words: "wordle game puzzle guess letters", icon: "word", href: "/word", boost: 0.02 });
   add({ id: "profile", kind: "page", title: "My profile", trail: [], hint: "Your public page", words: "me public page bio about", icon: "user", href: ctx.profileHref ?? undefined }, !!ctx.profileHref);
   add({ id: "profile.customize", kind: "setting", title: "Customize my profile", trail: ["My profile"], hint: "Showcases, frame, colours and background", words: "customise colours colors colour color frame ring xp bar glow level showcases widgets background about me picture", icon: "settings", href: ctx.profileHref ? `${ctx.profileHref}?edit=1` : undefined }, !!ctx.profileHref);
+  // 1.42.0: a PFA's registers, where a developer turned them on and they're the person's.
+  const business = team && !!ctx.business;
+  add({ id: "business", kind: "page", title: "Business", trail: [], hint: "The PFA's registers: cash book, fiscal register, inventory", words: "pfa registre registru contabilitate accounting books ledger firma company taxes anaf", icon: "business", href: "/business", boost: 0.04 }, business);
+  for (const [id, label, words] of [
+    ["cashbook", "Cash book", "registrul jurnal incasari plati receipts payments journal entries"],
+    ["fiscal", "Fiscal register", "registrul de evidenta fiscala venit net income expenses deductible declaratia unica d212"],
+    ["inventory", "Inventory", "registrul inventar inventar assets debts balances"],
+    ["assets", "Fixed assets", "mijloace fixe amortizare depreciation fisa mijlocului fix"],
+    ["settings", "Business settings", "cui pfa details opening balances sources close year access"],
+  ] as const) {
+    add({ id: `business.${id}`, kind: "tab", title: label, trail: ["Business"], words, icon: "business", href: `/business?tab=${id}` }, business);
+  }
   add({ id: "developer", kind: "page", title: "Developer", trail: [], hint: "Status, problems and usage of the whole app", words: "admin errors problems usage logs", icon: "code", href: "/developer" }, ctx.developer);
   add({ id: "setup", kind: "page", title: "App setup", trail: [], hint: "What to paste in Supabase, Google, Meta, TikTok and Vercel", words: "env environment keys secrets install", icon: "code", href: "/setup" }, ctx.developer);
-  for (const [id, label] of [["overview", "Overview"], ["usage", "Usage"], ["problems", "Problems"], ["status", "Status"]] as const) {
-    add({ id: `developer.${id}`, kind: "tab", title: label, trail: ["Developer"], words: id === "problems" ? "errors reports bugs" : id === "usage" ? "database storage space teams people" : "", icon: "code", href: `/developer${id === "overview" ? "" : `?tab=${id}`}` }, ctx.developer);
+  for (const [id, label] of [["overview", "Overview"], ["usage", "Usage"], ["problems", "Problems"], ["status", "Status"], ["features", "Features"]] as const) {
+    add({ id: `developer.${id}`, kind: "tab", title: label, trail: ["Developer"], words: id === "problems" ? "errors reports bugs" : id === "usage" ? "database storage space teams people" : id === "features" ? "business turn on teams feature flags" : "", icon: "code", href: `/developer${id === "overview" ? "" : `?tab=${id}`}` }, ctx.developer);
   }
   add({ id: "status", kind: "page", title: "Status", trail: [], hint: "Is everything working right now", words: "down outage working uptime incidents health", icon: "flag", href: "/status" });
   add({ id: "privacy", kind: "page", title: "Privacy policy", trail: [], words: "privacy data gdpr personal information", icon: "lock", href: "/privacy" });

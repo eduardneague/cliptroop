@@ -9,6 +9,7 @@ export const DEV_TABS = [
   { id: "problems", label: "Problems" },
   { id: "status", label: "Status" },
   { id: "speed", label: "Speed" },
+  { id: "features", label: "Features" },
 ] as const;
 export type DevTab = (typeof DEV_TABS)[number]["id"];
 export const devTab = (raw: string | null | undefined): DevTab => (DEV_TABS.some((t) => t.id === raw) ? (raw as DevTab) : "overview");
@@ -93,6 +94,31 @@ export function DevTabSkeleton({ tab }: { tab: DevTab }) {
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-7 w-full mb-2" />
           ))}
+        </div>
+      </div>
+    );
+  if (tab === "features")
+    return (
+      <div className="space-y-5" aria-hidden>
+        <div className={box}>
+          <Skeleton className="h-3 w-20 mb-3" />
+          <SkeletonLines lines={3} className="max-w-3xl" />
+          <div className="mt-4 flex gap-2">
+            <Skeleton className="h-9 w-72 rounded-lg" />
+            <Skeleton className="h-9 w-48 rounded-lg" />
+          </div>
+          <div className="mt-3 rounded-xl border border-line/10">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-line/10 last:border-none">
+                <Skeleton className="w-8 h-8 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className={`h-3.5 ${["w-32", "w-40", "w-28", "w-36", "w-24"][i]}`} />
+                  <Skeleton className="h-3 w-56 max-w-full" />
+                </div>
+                <Skeleton className="w-10 h-6 rounded-lg" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

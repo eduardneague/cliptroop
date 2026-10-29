@@ -62,6 +62,14 @@ screenshots. It never touches a real Supabase project.
 #    packages and a long note, MOCK_KIT_TEMPLATES=2 that many saved templates, MOCK_DELETE=maria:shorts,andrei:both
 #    whom the owner lets delete what (shorts, longs or both: Team → Danger zone), MOCK_DELETE_MANY=shorts,longs they
 #    delete several at once, MOCK_NO_0119=1 as before migration 0119 (no delete_shorts: the old way, Masters only),
+#    1.42.0 (business.cjs): MOCK_BUSINESS=1 Business on for the team, with a year and a half of a PFA's books (lei
+#    and USD, three fixed assets, an inventory at 31.12.2025, a closed 2025, documents, the history), MOCK_BUSINESS=fresh
+#    on with nothing set up (the setup card), MOCK_BUSINESS_ACCESS=maria:view,andrei:edit whom else the owner lets in
+#    (default maria:view), MOCK_NO_0120=1 as before migration 0120 (no Business tables: the page is a 404, Developer →
+#    Features says to run it); BNR's rates at /bnr/ (start the app with BNR_RATES_URL=http://127.0.0.1:54321/bnr/, as
+#    in 2.); to type into the books: MOCK_WRITES=business_entries,business_profiles,business_sources,business_assets,
+#    business_inventories,business_inventory_items,business_ref_lines,business_files,business_access,team_features,
+#    business_years (the browser's own uploads need Playwright's bypassCSP: the policy refuses plain http),
 #    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
 #    every 10 minutes for the busiest videos; 0084's 10-minute slots and top content work out the
 #    same way as the database), YouTube's impressions and CTR per day (Shorts and long videos apart),
@@ -77,7 +85,7 @@ node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy \
-SUPABASE_SERVICE_ROLE_KEY=dummy FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD npx next dev -p 3456
+SUPABASE_SERVICE_ROLE_KEY=dummy FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD BNR_RATES_URL=http://127.0.0.1:54321/bnr/ npx next dev -p 3456
 
 # 3. a signed-in screenshot (Playwright): path, file name, width, height, dark, full|view
 #    (with MOCK_OBJECTIVES=1 the analytics numbers run up to the real "now": better for Analytics shots)

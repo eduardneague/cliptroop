@@ -112,3 +112,35 @@ export async function deleteReport(id: string): Promise<{ error?: string }> {
   revalidatePath("/developer");
   return {};
 }
+
+/**
+ * Developer → Features (1.42.0): a feature only some teams get, turned on or off for one. Only the server's key
+ * writes team_features (migration 0120), here, after the developer check. The owner: "doar pentru echipe pe care eu le
+ * selectez din baza de date ca developer". Turned off, the team's data stays (nobody reads it until it's on again).
+ * The team's owner is told when it's turned on (unless that's you).
+ */
+export async function setTeamFeature(teamId: string, feature: string, on: boolean): Promise<{ error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(teamId) || feature !== "business" || typeof on !== "boolean") return { error: "Not found." };
+  const who = await requireDeveloper();
+  if ("error" in who) return { error: who.error };
+  const admin = createAdminClient();
+  const { data: team } = await admin.from("teams").select("id, name, owner_id, logo_url, color").eq("id", teamId).maybeSingle();
+  if (!team) return { error: "That team isn't there any more." };
+  const { data: was, error: readError } = await admin.from("team_features").select("feature").eq("team_id", teamId).eq("feature", feature).maybeSingle();
+  if (readError) return { error: /team_features|schema cache|does not exist/i.test(readError.message) ? "Run migration 0120 first." : "Couldn't read it." };
+  if (!!was === on) return {};
+  const { error } = on
+    ? await admin.from("team_features").insert({ team_id: teamId, feature, enabled_by: who.user.id })
+    : await admin.from("team_features").delete().eq("team_id", teamId).eq("feature", feature);
+  if (error && error.code !== "23505") return { error: "Couldn't save it." };
+  if (on && team.owner_id && team.owner_id !== who.user.id) {
+    await sendNotifications({
+      recipient_id: team.owner_id as string,
+      kind: "business_on",
+      body: `Business is on for ${team.name}: keep your PFA's registers in ${APP_NAME}.`,
+      metadata: { team: { name: team.name, logoUrl: team.logo_url ?? null, color: team.color ?? "#E8630D" }, href: "/business" },
+    });
+  }
+  revalidatePath("/developer");
+  return {};
+}

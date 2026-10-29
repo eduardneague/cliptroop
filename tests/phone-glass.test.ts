@@ -56,7 +56,7 @@ ok(/arm\(id, toastDuration\(\{ kind, action: !!opts\?\.action, given: opts\?\.du
 ok(/className="fixed inset-x-0 px-3 sm:left-auto/.test(toast), "on a phone the stack spans the screen…");
 ok(/max-w-\[420px\] mx-auto sm:mx-0/.test(toast), "…and a toast sits in its middle (it hugged the left on wider phones)");
 ok(/lift: phone \? "up" : "down"/.test(toast) && /onLift: \(dir, el\)/.test(toast), "a swipe up at the top of a phone, down at the bottom of a computer");
-ok(/aria-label="Dismiss"/.test(toast) && !/\[@media\(hover:hover\)\]:opacity-0/.test(toast), "the × is always there (it waited for the pointer)");
+ok(/aria-label=\{t\.closeLabel \?\? "Dismiss"\}/.test(toast) && !/\[@media\(hover:hover\)\]:opacity-0/.test(toast), "the × is always there (it waited for the pointer)");
 const toastCss = rule(css, ".toast-card");
 ok(!!toastCss && /touch-action: none/.test(toastCss), "a finger on a toast moves the toast, not the page");
 const swipe = read("components/ui/use-swipe-away.ts");

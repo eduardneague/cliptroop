@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { APP_DOMAIN, APP_NAME, COMPANY_NAME, CONTACT_EMAIL, MASCOT_NAME } from "@/lib/brand";
-import { CHANGELOG } from "@/lib/changelog";
+import { PUBLIC_CHANGELOG } from "@/lib/changelog";
 import { publicMetadata } from "@/lib/public-pages";
 import { Mascot } from "@/components/ui/mascot";
 import { FactList, PageHead, SiteCta, SitePage, SiteSection, textLink } from "@/components/site/site-chrome";
@@ -37,7 +37,7 @@ export default function AboutPage() {
       part: "Updates so far",
       name: (
         <>
-          {CHANGELOG.length},{" "}
+          {PUBLIC_CHANGELOG.length},{" "}
           <Link href="/changelog" className={textLink}>
             every one written up
           </Link>

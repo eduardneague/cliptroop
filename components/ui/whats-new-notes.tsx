@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { niceDate, WhatsNewLatest } from "./whats-new";
-import { CHANGELOG, KIND_LABEL, type ChangeKind, type Release } from "@/lib/changelog";
+import { CHANGELOG, forAudience, KIND_LABEL, type Audience, type ChangeKind, type Release } from "@/lib/changelog";
 
 /*
  * What's new's notes: every version's changes (lib/changelog.ts, over 100 KB
@@ -17,9 +17,9 @@ const KIND_STYLE: Record<ChangeKind, string> = {
   fixed: "bg-green/12 text-green",
 };
 
-/** The changelog: the latest update open, earlier ones folded. */
-export default function WhatsNewNotes() {
-  const [latest, ...earlier] = CHANGELOG;
+/** The changelog: the latest update open, earlier ones folded. Only the notes this person has (`audience`, 1.42.0). */
+export default function WhatsNewNotes({ audience = {} }: { audience?: Audience }) {
+  const [latest, ...earlier] = forAudience(CHANGELOG, audience);
   const [showAll, setShowAll] = useState(false);
   if (!latest) return <p className="text-[13px] text-ink-soft">No notes yet.</p>;
   return (

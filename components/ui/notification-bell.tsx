@@ -112,6 +112,8 @@ export type NotificationItem = {
     best?: { id: string; title: string; mult: string } | null;
     /** delete_access (1.41.0): what the owner let them delete. */
     what?: "shorts" | "longs";
+    /** business_access (1.42.0): let them change the registers too. */
+    edit?: boolean;
   } | null;
 };
 

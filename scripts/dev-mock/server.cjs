@@ -25,7 +25,12 @@ const WRITABLE = new Set(["daily_word_plays", ...String(process.env.MOCK_WRITES 
 // The fixtures are read again on every request; tables that remember writes keep their rows here.
 const stores = new Map();
 const tableRows = (F, name) => {
-  if (!WRITABLE.has(name)) return F.tables[name];
+  // (A table an RPC has written to keeps its rows too: business_years, 1.42.0.)
+  if (!WRITABLE.has(name) && !stores.has(name)) return F.tables[name];
+  if (!stores.has(name)) stores.set(name, [...(F.tables[name] ?? [])]);
+  return stores.get(name);
+};
+const storeOf = (F, name) => {
   if (!stores.has(name)) stores.set(name, [...(F.tables[name] ?? [])]);
   return stores.get(name);
 };
@@ -234,6 +239,21 @@ function answer(req, res, url, body) {
         time_last_update_utc: new Date(Date.now() - 6 * 3600e3).toUTCString(),
         rates: { USD: 1, EUR: 0.92, GBP: 0.79, RON: 4.58, CAD: 1.36, AUD: 1.52, CHF: 0.88, JPY: 149.5, INR: 83.4, BRL: 5.1, MXN: 17.9, PLN: 3.98, SEK: 10.6, NOK: 10.8, DKK: 6.86, HUF: 362, CZK: 23.1, TRY: 34.2, AED: 3.6725, ZAR: 18.4, MDL: 17.7, BGN: 1.8, RSD: 107.8, UAH: 41.2, KRW: 1380, CNY: 7.2, SGD: 1.34, NZD: 1.66, HKD: 7.8, ILS: 3.7 },
       });
+    // BNR's reference rates (1.42.0; start the app with BNR_RATES_URL=http://127.0.0.1:54321/bnr/): a year's banking days
+    // up to today, the last ten, or today's.
+    if (url.pathname.startsWith("/bnr/")) {
+      const { bnrXml } = require("./business.cjs");
+      const today = new Date().toISOString().slice(0, 10);
+      const y = /nbrfxrates(\d{4})\.xml$/.exec(url.pathname);
+      let xml = y ? bnrXml(Number(y[1]), today) : bnrXml(Number(today.slice(0, 4)), today);
+      if (!y) {
+        const cubes = xml.match(/<Cube date="[^"]+">[\s\S]*?<\/Cube>/g) ?? [];
+        const keep = url.pathname.endsWith("10days.xml") ? cubes.slice(-10) : cubes.slice(-1);
+        xml = xml.replace(/<Cube[\s\S]*<\/Cube>/, keep.join(""));
+      }
+      res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      return res.end(xml);
+    }
     if (url.pathname === "/auth/v1/user") return send(res, 200, F.user);
     if (url.pathname.startsWith("/auth/v1/")) return send(res, 200, {});
     if (url.pathname.startsWith("/storage/v1/")) {
@@ -297,9 +317,24 @@ function answer(req, res, url, body) {
       row.updated_at = now;
       return send(res, 200, [{ result: "ok", guesses: row.guesses, solved: row.solved, finished: done }]);
     }
+    // Closing, reopening, correcting a year of Business (0120's business_set_year), on the remembered years.
+    if (rpc && rpc[1] === "business_set_year") {
+      const b = body ? JSON.parse(body) : {};
+      const rows = storeOf(F, "business_years");
+      let row = rows.find((r) => r.team_id === b.p_team && r.year === b.p_year);
+      if (!row) rows.push((row = { team_id: b.p_team, year: b.p_year, closed_at: null, closed_by: null, rectified: false }));
+      if (b.p_closed === true || b.p_closed === false) {
+        row.closed_at = b.p_closed ? new Date().toISOString() : null;
+        row.closed_by = b.p_closed ? F.user.id : null;
+      }
+      if (b.p_rectified === true || b.p_rectified === false) row.rectified = b.p_rectified;
+      return send(res, 200, [{ year: row.year, closed_at: row.closed_at, closed_by: row.closed_by, rectified: row.rectified }]);
+    }
     if (rpc) {
       const v = F.rpc?.[rpc[1]];
-      const out = typeof v === "function" ? v(body ? JSON.parse(body) : {}) : v ?? null;
+      // (The fixture sees who's signed in and the remembered rows of business_access and team_features: 1.42.0's
+      // my_business_access, so Developer → Features turns Business on and off in the mock too.)
+      const out = typeof v === "function" ? v(body ? JSON.parse(body) : {}, { user: F.user, tables: { business_access: tableRows(F, "business_access") ?? [], team_features: tableRows(F, "team_features") ?? [] } }) : v ?? null;
       // An RPC fixture can answer like a raised exception: { __status: 400, __body: { code, message } }.
       if (out && typeof out === "object" && out.__status) return send(res, out.__status, out.__body);
       return send(res, 200, out);
@@ -311,22 +346,42 @@ function answer(req, res, url, body) {
       // Tables that remember writes (the daily word's plays, and any in MOCK_WRITES=a,b):
       // inserts are kept, updates change the rows they match.
       const writable = WRITABLE.has(t[1]);
+      const one = String(req.headers["accept"] || "").includes("vnd.pgrst.object");
+      // (1.42.0: .single() / .maybeSingle() on a write answer with the one row, as PostgREST does.)
+      const answerRows = (status, rows) => (one ? (rows.length ? send(res, status, rows[0]) : send(res, 406, { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned", details: "The result contains 0 rows", hint: null })) : send(res, status, rows));
       if (writable && req.method === "POST") {
-        const rows = [].concat(body ? JSON.parse(body) : []).map((r) => ({ id: require("crypto").randomUUID(), created_at: new Date().toISOString(), ...(t[1] === "profile_wallpapers" ? { user_id: F.user.id } : {}), ...r }));
-        tableRows(F, t[1]).push(...rows);
-        return send(res, 201, String(req.headers["accept"] || "").includes("vnd.pgrst.object") ? rows[0] : rows);
+        const now = new Date().toISOString();
+        const incoming = [].concat(body ? JSON.parse(body) : []);
+        // An upsert (on_conflict=…, Prefer: resolution=merge-duplicates) changes the row it meets instead of adding one.
+        const conflict = String(req.headers["prefer"] || "").includes("merge-duplicates") ? (url.searchParams.get("on_conflict") || "id").split(",") : null;
+        const table = tableRows(F, t[1]);
+        const out = [];
+        for (const r of incoming) {
+          const same = conflict ? table.find((x) => conflict.every((c) => r[c] !== undefined && String(x[c]) === String(r[c]))) : null;
+          if (same) {
+            Object.assign(same, r, { updated_at: now });
+            out.push(same);
+          } else {
+            // (A few columns the database fills in itself: who, and when Business was turned on, 1.42.0.)
+            const own = t[1] === "profile_wallpapers" ? { user_id: F.user.id } : t[1] === "team_features" ? { enabled_at: now } : {};
+            const row = { id: require("crypto").randomUUID(), created_at: now, updated_at: now, ...own, ...r };
+            table.push(row);
+            out.push(row);
+          }
+        }
+        return answerRows(201, out);
       }
       if (writable && req.method === "PATCH") {
         const hit = applyFilters(tableRows(F, t[1]), url.searchParams);
         const patch = body ? JSON.parse(body) : {};
-        for (const r of hit) Object.assign(r, patch);
-        return send(res, 200, hit);
+        for (const r of hit) Object.assign(r, patch, { updated_at: new Date().toISOString() });
+        return answerRows(200, hit);
       }
       if (writable && req.method === "DELETE") {
         const rows = tableRows(F, t[1]);
         const hit = applyFilters(rows, url.searchParams);
         for (const r of hit) rows.splice(rows.indexOf(r), 1);
-        return send(res, 200, hit);
+        return answerRows(200, hit);
       }
       // An update answers with the rows it matched (like "update … returning").
       if (req.method === "PATCH") return send(res, 200, applyFilters(F.tables[t[1]] ?? [], url.searchParams));

@@ -15,12 +15,31 @@
  * lib/changelog-meta.ts; a page's frame gets what it needs from
  * whatsNewFacts() below, worked out on the server.
  */
-import { compareVersions, isFeatureUpdateIn, seriesOf, type Release, type ReleaseHeadline } from "./changelog-meta";
+import { compareVersions, forAudience, isFeatureUpdateIn, seriesOf, type Audience, type Release, type ReleaseHeadline } from "./changelog-meta";
 
-export { compareVersions, KIND_LABEL } from "./changelog-meta";
-export type { Change, ChangeKind, Release, ReleaseHeadline } from "./changelog-meta";
+export { compareVersions, forAudience, KIND_LABEL } from "./changelog-meta";
+export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } from "./changelog-meta";
 
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.42.0",
+    date: "2026-10-29",
+    title: "Business: the PFA's registers",
+    // Only for the teams Business is turned on for (Developer → Features): nobody else sees these notes.
+    only: "business",
+    changes: [
+      { kind: "new", text: "Business: the PFA's three registers, kept here. The cash book (Registrul-jurnal de încasări și plăți), the fiscal register (Registrul de evidență fiscală) and the inventory (Registrul-inventar), with the fixed assets and their amortization. The team's owner always sees it, and chooses who else sees the registers or changes them too (Business → Settings → Access)." },
+      { kind: "new", text: "The cash book works like a spreadsheet: type a line straight in (Tab across, Enter adds it), click a cell and click again (or just type) to change it, use the arrows to move, and paste lines from Excel or Google Sheets. Every month is totalled with the balances after it, cash and bank apart." },
+      { kind: "new", text: "Money in another currency (AdSense in dollars, say) turns into lei at BNR's rate, which it asks BNR for: the last banking day's before the payment, as the rules say (or the day's own, if your accountant works that way). The amount in dollars and the rate go into the explanation." },
+      { kind: "new", text: "The fiscal register works itself out from the cash book and the fixed assets, a page for each income source: the income by its nature, the deductible expenses (protocol within 2%, a car's running costs at 50%, a car's amortization up to 1,500 lei a month) and the net income. Under it, what was left out and why. Lines for what isn't money (products a brand sent instead of paying) go there too." },
+      { kind: "new", text: "Fixed assets (5,000 lei or more from 2026): pick what it is from the catalogue for its code and useful life, choose straight-line, declining balance or accelerated, and see the plan year by year. Its card (Fișa mijlocului fix) downloads as a PDF or an Excel file." },
+      { kind: "new", text: "A new inventory starts from the books: the fixed assets in use, the cash on hand and the bank balance on that day. Add anything else line by line." },
+      { kind: "new", text: "Export the registers to Excel (with formulas, set up to print on A4 with the header on every page), to PDF to print and sign, or to CSV (the Romanian way or the standard way), in Romanian or English. Or everything at once, as a backup." },
+      { kind: "new", text: "A mistake is corrected the register's way, with a line that reverses it (storno). Close a year once its fiscal register is done: nothing in it changes until it's reopened. Attach the receipts and invoices to their lines. Every change stays in the history: who, when, what it was and what it became." },
+      { kind: "new", text: "The whole Business page in English or Romanian: the EN · RO switch at the top changes every tab, window and message to the registers' own Romanian terms (încasări și plăți, sold, stornare, mijloace fixe, amortizare), with amounts and days written the Romanian way (1.234,50 lei, 28.10.2026). This browser remembers it. Exports still start in Romanian, as ANAF's models are, and can be made in English." },
+      { kind: "new", text: "Developer → Features: Business turned on or off team by team. The team's owner gets a notification when it's on." },
+    ],
+  },
   {
     version: "1.41.0",
     date: "2026-10-28",
@@ -1438,10 +1457,17 @@ export function isFeatureUpdate(from: string | null, to: string) {
  * update card's words) and the versions of its series that brought something
  * new (whether there's a card to show).
  */
-export function whatsNewFacts(version: string): { current: ReleaseHeadline | null; newVersions: string[] } {
-  const r = CHANGELOG.find((x) => x.version === version);
+export function whatsNewFacts(version: string, audience: Audience = {}): { current: ReleaseHeadline | null; newVersions: string[]; latest: string | null } {
+  // 1.42.0: as this person sees the notes (an update about a feature their team doesn't have isn't theirs: no card,
+  // and What's new's dot waits for the newest update they do have notes for, `latest`).
+  const list = forAudience(CHANGELOG, audience);
+  const r = list.find((x) => x.version === version);
   return {
     current: r ? { version: r.version, title: r.title, ...(r.date ? { date: r.date } : {}) } : null,
-    newVersions: withNew(CHANGELOG.filter((x) => seriesOf(x.version) === seriesOf(version) && compareVersions(x.version, version) <= 0)),
+    newVersions: withNew(list.filter((x) => seriesOf(x.version) === seriesOf(version) && compareVersions(x.version, version) <= 0)),
+    latest: list.find((x) => compareVersions(x.version, version) <= 0)?.version ?? null,
   };
 }
+
+/** The notes everyone may read (the site's changelog): nothing about a feature only some teams have (1.42.0). */
+export const PUBLIC_CHANGELOG: Release[] = forAudience(CHANGELOG, {});

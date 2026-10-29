@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BOTTOM_ITEMS, DEVELOPER, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
+import { BOTTOM_ITEMS, MORE_ITEMS, moreItems as moreFor, navGroups } from "@/lib/nav-items";
 import { AppsIcon, ChevronRightIcon, LogoutIcon, SettingsIcon } from "./icons";
 import { ClipLogo } from "./clip-logo";
 import { openWhatsNew, SparkIcon } from "./whats-new";
@@ -33,6 +33,7 @@ const HINT: Record<string, string> = {
   "/analytics": "Every platform's numbers",
   "/objectives": "The team's goals and projections",
   "/team": "People, roles and defaults",
+  "/business": "The PFA's registers and exports",
   "/developer": "Status, usage and tools",
 };
 
@@ -41,9 +42,9 @@ function isActive(pathname: string, href: string) {
 }
 
 /** Desktop sidebar navigation, in groups, with the current section highlighted. */
-export function SidebarNav({ developer = false }: { developer?: boolean }) {
+export function SidebarNav({ developer = false, business = false }: { developer?: boolean; business?: boolean }) {
   const pathname = usePathname();
-  const groups = developer ? [...NAV_GROUPS, { label: "Developer", items: [DEVELOPER] }] : NAV_GROUPS;
+  const groups = navGroups({ business, developer });
   return (
     <nav className="flex flex-col select-none" aria-label="Main">
       {groups.map((g, gi) => (
@@ -81,13 +82,13 @@ export function SidebarNav({ developer = false }: { developer?: boolean }) {
  * a little on the way like iOS 26's tab bar; the tab's icon gives a small hop. With More's sheet open it rests on More,
  * and goes back if you close the sheet without going anywhere.
  */
-export function BottomNavItems({ developer = false }: { developer?: boolean }) {
+export function BottomNavItems({ developer = false, business = false }: { developer?: boolean; business?: boolean }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
   // The tab just pressed (before the address changes), and the one whose icon hops.
   const [pressed, setPressed] = useState<string | null>(null);
   const [hop, setHop] = useState<{ href: string; n: number } | null>(null);
-  const moreItems = developer ? [...MORE_ITEMS, DEVELOPER] : MORE_ITEMS;
+  const moreItems = moreFor({ business, developer });
   const moreActive = moreItems.some((i) => isActive(pathname, i.href)) || isActive(pathname, "/settings");
   // Close the sheet when you go somewhere; the address has caught up with the press.
   useEffect(() => {

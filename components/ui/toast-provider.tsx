@@ -6,13 +6,15 @@ import { motionReduced } from "./count-up";
 import { useSwipeAway } from "./use-swipe-away";
 import { toastDuration } from "@/lib/notification-optimism";
 import { belowWidth } from "@/lib/breakpoints";
+import { uiWords, useUiLang } from "./ui-locale";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 export type ToastAction = { label: string; onClick: () => void };
 /** sound: a different sound than the default (success/error), or false for none. */
-type ToastOptions = { action?: ToastAction; duration?: number; sound?: SoundName | false };
-type Toast = { id: number; kind: "success" | "error"; message: string; action?: ToastAction; leaving?: boolean };
+/** closeLabel: what its × says (1.42.0: "Închide" on a page set to Romanian; "Dismiss" otherwise). */
+type ToastOptions = { action?: ToastAction; duration?: number; sound?: SoundName | false; closeLabel?: string };
+type Toast = { id: number; kind: "success" | "error"; message: string; action?: ToastAction; closeLabel?: string; leaving?: boolean };
 type ToastAPI = {
   success: (message: string, opts?: ToastOptions) => void;
   error: (message: string, opts?: ToastOptions) => void;
@@ -64,7 +66,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const push = useCallback(
     (kind: Toast["kind"], message: string, opts?: ToastOptions) => {
       const id = ++idRef.current;
-      setToasts((t) => [...t, { id, kind, message, action: opts?.action }]);
+      setToasts((t) => [...t, { id, kind, message, action: opts?.action, closeLabel: opts?.closeLabel }]);
       const sound = opts?.sound ?? (kind === "error" ? "error" : "success");
       if (sound) sounds[sound]();
       // Toasts with an action stay long enough to actually use it.
@@ -187,8 +189,8 @@ function ToastCard({ t, onDismiss }: { t: Toast; onDismiss: () => void }) {
             <button
               type="button"
               onClick={onDismiss}
-              aria-label="Dismiss"
-              title="Dismiss"
+              aria-label={t.closeLabel ?? "Dismiss"}
+              title={t.closeLabel ?? "Dismiss"}
               className="-my-1 w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center opacity-70 hover:opacity-100 hover:bg-paper/15 focus-visible:opacity-100 transition-opacity"
             >
               <CloseIcon className="w-3.5 h-3.5" />
@@ -203,5 +205,11 @@ function ToastCard({ t, onDismiss }: { t: Toast; onDismiss: () => void }) {
 export function useToast(): ToastAPI {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error("useToast must be used within ToastProvider");
-  return ctx;
+  // A page in another language (1.42.0: Business in Romanian): its toasts' × says so too. In English, the same object.
+  const lang = useUiLang();
+  return useMemo<ToastAPI>(() => {
+    if (lang === "en") return ctx;
+    const closeLabel = uiWords(lang).dismiss;
+    return { success: (m, o) => ctx.success(m, { closeLabel, ...o }), error: (m, o) => ctx.error(m, { closeLabel, ...o }) };
+  }, [ctx, lang]);
 }

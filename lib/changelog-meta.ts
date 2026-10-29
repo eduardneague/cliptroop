@@ -6,7 +6,17 @@
  * labels) is here, and the server works out the rest (whatsNewFacts).
  */
 export type ChangeKind = "new" | "better" | "fixed";
-export type Change = { kind: ChangeKind; text: string };
+/**
+ * A feature only some teams get, turned on team by team in Developer → Features (1.42.0: Business). Notes about it are
+ * only for the people who have it: not in anyone else's What's new, and not on the site's changelog.
+ */
+export type Gated = "business";
+export type Change = {
+  kind: ChangeKind;
+  text: string;
+  /** Only for the people who have this feature. */
+  only?: Gated;
+};
 export type Release = {
   version: string;
   /** YYYY-MM-DD (left out when unknown). */
@@ -14,7 +24,25 @@ export type Release = {
   /** A few words: the headline of this update. */
   title: string;
   changes: Change[];
+  /** The whole update is about a feature only some teams have: nobody else sees it. */
+  only?: Gated;
 };
+/** What someone has, of the features only some teams get (left out: they don't). */
+export type Audience = Partial<Record<Gated, boolean>>;
+
+/**
+ * The notes as someone sees them: an update or a line about a feature they don't have is left out, and an update with
+ * nothing left goes too. `{}` is everyone's view (the site's changelog).
+ */
+export function forAudience(list: readonly Release[], audience: Audience): Release[] {
+  const out: Release[] = [];
+  for (const r of list) {
+    if (r.only && !audience[r.only]) continue;
+    const changes = r.changes.filter((c) => !c.only || !!audience[c.only]);
+    if (changes.length) out.push(changes.length === r.changes.length ? r : { ...r, changes });
+  }
+  return out;
+}
 /** What the frame knows about the version you're on: the update card's words. */
 export type ReleaseHeadline = Pick<Release, "version" | "title" | "date">;
 

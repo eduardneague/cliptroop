@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { CloseIcon } from "./icons";
 import { Leaves } from "./leaves";
+import { useUiWords } from "./ui-locale";
 
 /**
  * The app's popup window. Closes with Esc, the X, or a click outside.
@@ -31,6 +32,7 @@ export function Dialog({
   width?: string;
 }) {
   const titleId = useId();
+  const uw = useUiWords();
   const boxRef = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   // Set up once per opening: a parent that re-renders (live updates, a new
@@ -107,7 +109,7 @@ export function Dialog({
               type="button"
               data-close
               onClick={onClose}
-              aria-label="Close"
+              aria-label={uw.close}
               className="w-8 h-8 -mr-1.5 -mt-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
             >
               <CloseIcon className="w-4 h-4" />

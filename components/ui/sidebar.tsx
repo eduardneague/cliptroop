@@ -18,6 +18,7 @@ export function Sidebar({
   userColor,
   username,
   developer = false,
+  business = false,
 }: {
   teams: TeamSummary[];
   currentTeam: TeamSummary | null;
@@ -28,6 +29,8 @@ export function Sidebar({
   username: string | null;
   /** A developer account: the Developer page in the menu. */
   developer?: boolean;
+  /** Business is on for the team and theirs to open (1.42.0). */
+  business?: boolean;
 }) {
   return (
     <aside data-shell="sidebar" className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden side-scroll">
@@ -38,7 +41,7 @@ export function Sidebar({
         <WorkspaceSwitcher teams={teams} currentTeam={currentTeam} />
       </div>
 
-      <SidebarNav developer={developer} />
+      <SidebarNav developer={developer} business={business} />
 
       <div className="mt-auto">
         <WhatsNewButton variant="sidebar" className="mb-2" />

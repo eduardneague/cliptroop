@@ -38,14 +38,14 @@ export function MobileTopBar({
   );
 }
 
-export function MobileBottomNav({ developer = false }: { developer?: boolean }) {
+export function MobileBottomNav({ developer = false, business = false }: { developer?: boolean; business?: boolean }) {
   return (
     <nav
       data-shell="bottom-nav"
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface/95 backdrop-blur border-t border-line/10 flex"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <BottomNavItems developer={developer} />
+      <BottomNavItems developer={developer} business={business} />
     </nav>
   );
 }

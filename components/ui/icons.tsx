@@ -1091,3 +1091,14 @@ export function TemplateIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A briefcase with a ledger's line (1.42.0): Business, a PFA's registers. */
+export function BusinessIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="7" width="17" height="12.5" rx="2.5" />
+      <path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7" />
+      <path d="M3.5 12.25h17M10.5 12.25v1.5h3v-1.5" />
+    </Svg>
+  );
+}

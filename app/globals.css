@@ -2664,3 +2664,39 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 @media (hover: none) { .thumb-tile .thumb-caption { opacity: 1; transform: none; } }
 /* The panels' bar charts grow from the baseline once (each bar a little after the last). */
 .spike-bar > span { transform-origin: 50% 100%; animation: spike-grow 0.6s var(--ease-out) backwards; animation-delay: inherit; }
+
+/* ---------------------------------------------------------------------------
+   Business (1.42.0, modules/business): the cash book as a spreadsheet. Thin
+   lines between the cells, the header and the first column held while it
+   scrolls, the cell you're on outlined in amber (typing goes into it), each
+   month's total and balance rows set apart, the new line at the top tinted.
+   A tab comes in with a short fade; the month bars grow once. */
+.biz-tab-in { animation: fadein 0.22s var(--ease-out) both; }
+.biz-grid tbody tr { background: rgb(var(--surface)); }
+.biz-grid .biz-td {
+  padding: 0.45rem 0.625rem;
+  border-bottom: 1px solid rgb(var(--line) / 0.08);
+  vertical-align: top;
+}
+.biz-grid .biz-row:hover { background: color-mix(in srgb, rgb(var(--surface-2)) 55%, rgb(var(--surface))); }
+.biz-grid .biz-cell { cursor: cell; outline: none; position: relative; }
+.biz-grid .biz-cell:focus-visible,
+.biz-grid .biz-on {
+  box-shadow: inset 0 0 0 2px rgb(var(--amber) / 0.85);
+  border-radius: 3px;
+  background: rgb(var(--amber) / 0.06);
+}
+.biz-grid .biz-cell:has(.biz-input) { background: rgb(var(--surface)); box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.biz-grid .biz-input { font: inherit; color: inherit; padding: 0; min-width: 0; }
+.biz-grid .biz-row-total { background: rgb(var(--surface-2)); }
+.biz-grid .biz-row-total .biz-td { border-bottom-color: rgb(var(--line) / 0.12); }
+.biz-grid .biz-row-quiet { background: color-mix(in srgb, rgb(var(--surface-2)) 40%, rgb(var(--surface))); }
+.biz-grid .biz-row-year { background: rgb(var(--amber) / 0.1); }
+.biz-grid .biz-row-new { background: color-mix(in srgb, rgb(var(--amber)) 5%, rgb(var(--surface))); }
+.biz-grid .biz-row-new .biz-td { border-bottom: 1px solid rgb(var(--amber) / 0.25); vertical-align: middle; }
+.biz-grid .biz-month { background: rgb(var(--surface)); }
+.biz-grid .biz-reversed td:not(:first-child) { color: rgb(var(--ink-soft)); }
+.biz-grid thead th { background: rgb(var(--surface-2)); }
+.biz-grid-wrap { scrollbar-gutter: stable; }
+@keyframes biz-grow { from { transform: scaleY(0.04); } to { transform: none; } }
+.biz-bar { transform-origin: 50% 100%; animation: biz-grow 0.6s var(--ease-out) backwards; transition: height 0.35s var(--ease-out); }

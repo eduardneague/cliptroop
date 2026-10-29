@@ -32,6 +32,8 @@ type Props = {
   /** Your roles in the current team: what you're offered (the database still decides). */
   roles?: readonly string[];
   developer?: boolean;
+  /** Business is on for the team and theirs (1.42.0). */
+  business?: boolean;
 };
 
 export function GlobalSearch(props: Props) {

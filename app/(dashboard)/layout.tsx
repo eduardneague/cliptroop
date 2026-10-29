@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
+import { getBusinessAccess } from "@/modules/business/lib/server";
 import { kindColorCss } from "@/lib/kind-colors";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileTopBar, MobileBottomNav } from "@/components/ui/mobile-nav";
@@ -72,13 +73,15 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   // Everything the shell needs in ONE round trip: your profile (name, picture, colour theme, Clip's tour,
   // the glass look and the wallpaper, in one read since 1.32.1), teams (with their colours), the latest
   // notifications and your wallpapers (how bright each is).
-  const [shell, { teams, currentTeam, roles }, { data: notifications }, developer, { data: walls }] = await Promise.all([
+  const [shell, { teams, currentTeam, roles, business }, { data: notifications }, developer, { data: walls }] = await Promise.all([
     getShellProfile(supabase, user!.id),
-    // Your roles in the team you're in: the search bar offers what you can do (1.26.0).
-    getTeamsAndCurrent(supabase).then(async (t) => ({
-      ...t,
-      roles: t.currentTeam ? ((await getMembership(supabase, t.currentTeam.id).catch(() => null))?.roles ?? []) : [],
-    })),
+    // Your roles in the team you're in: the search bar offers what you can do (1.26.0). And whether Business is on
+    // for the team and yours to open (1.42.0: the menu shows it then), at the same time.
+    getTeamsAndCurrent(supabase).then(async (t) => {
+      if (!t.currentTeam) return { ...t, roles: [] as string[], business: false };
+      const [membership, biz] = await Promise.all([getMembership(supabase, t.currentTeam.id).catch(() => null), getBusinessAccess(supabase, t.currentTeam.id).catch(() => null)]);
+      return { ...t, roles: membership?.roles ?? [], business: !!biz?.access };
+    }),
     // The bell: the newest ones you haven't cleared (1.29.1).
     loadBell(supabase, user!.id),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
@@ -134,6 +137,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             userColor={resolvedColor}
             username={profile?.username ?? null}
             developer={developer}
+            business={business}
           />
           <div className="flex-1 min-w-0 flex flex-col">
             {/* Under the floating top bar (glass on a computer, 1.31.9; globals.css): what scrolls up under it blurs softly away. */}
@@ -164,6 +168,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                   currentTeamId={currentTeam?.id ?? null}
                   roles={roles}
                   developer={developer}
+                  business={business}
                 />
               </div>
               <div className="flex items-center justify-end gap-2 sm:gap-4">
@@ -196,11 +201,11 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 children
               )}
             </main>
-            <MobileBottomNav developer={developer} />
+            <MobileBottomNav developer={developer} business={business} />
           </div>
         </div>
         {/* The notes themselves load when the window opens: the frame gets this version's headline and whether there's news (1.32.2). */}
-        <WhatsNewHost hold={tourPending} {...whatsNewFacts(APP_VERSION)} />
+        <WhatsNewHost hold={tourPending} audience={{ business }} {...whatsNewFacts(APP_VERSION, { business })} />
         <TutorialHost pending={tourPending} />
         {/* Objectives (1.14.0): confetti and Clip for everyone looking when the team reaches one. */}
         <ConfettiHost />

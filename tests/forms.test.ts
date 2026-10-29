@@ -62,11 +62,13 @@ const NAVIGATES: Record<string, string> = {
   "modules/scripts/components/link-ui.tsx": "a link's web address (webUrl: https or http, no user:password)",
   "modules/scripts/lib/export-docx.ts": "an empty window for the print page",
   "components/search/search-palette.tsx": "a result: the app's own page (starts with one /)",
+  "modules/business/components/files-panel.tsx": "a document's signed link from the app's own server (https? only)",
 };
 const NAV = /window\.open\(|location\.(assign|replace)\(|location\.href\s*=(?!=)|window\.location\s*=(?!=)/;
 for (const f of code) if (NAV.test(bare(read(f)))) ok(f in NAVIGATES, `${f} opens an address in code: check it's a web one (or the app's own), then list it in NAVIGATES`);
 ok(/if \(webUrl\(href\)\) window\.open\(href, "_blank", "noopener,noreferrer"\);/.test(read("modules/scripts/components/link-ui.tsx")), "a script's link opens only if it's a web address");
 ok(/if \(!item\?\.href \|\| !\/\^\\\/\(\?!\[\/\\\\\]\)\/\.test\(item\.href\)\) return false;/.test(read("components/search/search-palette.tsx")), "search opens only the app's own pages");
+ok(/if \(!\/\^https\?:\\\/\\\/\/i\.test\(r\.url\)\) return void toast\.error/.test(read("modules/business/components/files-panel.tsx")), "a business document opens only from a web address");
 ok(!code.some((f) => /["'`]javascript:/i.test(bare(read(f)).replace(/React has blocked a javascript: URL/g, ""))), "no javascript: address anywhere in the app");
 
 // --- Pictures in scripts ------------------------------------------------------------------------------------------------

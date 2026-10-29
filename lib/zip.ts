@@ -52,10 +52,13 @@ export function uniqueNames(names: string[]): string[] {
   });
 }
 
-/** The zip's bytes. */
-export function zipFiles(entries: ZipEntry[]): Uint8Array {
+/**
+ * The zip's bytes. `paths` (1.42.0, a spreadsheet's parts: "xl/workbook.xml"…): the names are folders and files as
+ * given, not tidied into plain file names.
+ */
+export function zipFiles(entries: ZipEntry[], o: { paths?: boolean } = {}): Uint8Array {
   const enc = new TextEncoder();
-  const names = uniqueNames(entries.map((e) => e.name));
+  const names = o.paths ? entries.map((e) => e.name) : uniqueNames(entries.map((e) => e.name));
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;

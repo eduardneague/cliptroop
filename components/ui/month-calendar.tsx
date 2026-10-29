@@ -7,6 +7,7 @@ import { ArrowLeftIcon, ChevronRightIcon } from "./icons";
 import { PostedTick } from "./posted-tick";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 import { Leaves } from "./leaves";
+import { intlOf, useUiLang, useUiWords } from "./ui-locale";
 
 /*
  * THE calendar. Every month calendar in the app is this component (date
@@ -24,7 +25,6 @@ import { Leaves } from "./leaves";
 
 export type DayInfo = { count: number; limit: number } | null;
 
-const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const DAY_RX = /^\d{4}-\d{2}-\d{2}$/;
 // What's planned per visible 6 weeks, remembered while the page is open,
 // and the asks on their way (two calendars asking for the same weeks share one).
@@ -92,7 +92,7 @@ export function MonthCalendar({
   hrefFor,
   dayInfo,
   onClear,
-  clearLabel = "Clear date",
+  clearLabel,
   onEscape,
   autoFocus = false,
   fit = false,
@@ -118,6 +118,12 @@ export function MonthCalendar({
 }) {
   const router = useRouter();
   const confirmClear = useConfirmSafe();
+  // English everywhere, or the page's language (1.42.0: Business in Romanian).
+  const lang = useUiLang();
+  const w = useUiWords();
+  const loc = intlOf(lang);
+  const WEEKDAYS = w.weekdays;
+  const clearWord = clearLabel ?? w.clearDate;
   const [today, setToday] = useState("");
   const [cursor, setCursor] = useState("");
   // The month on screen. Only the arrows or the keyboard change it, never
@@ -271,13 +277,13 @@ export function MonthCalendar({
   return (
     <div ref={root} className={`relative flex flex-col ${fit ? "h-full min-h-0" : ""} ${className}`}>
       <div className={`flex items-center justify-between flex-shrink-0 ${fit ? "mb-1" : "mb-2"}`}>
-        <button type="button" onClick={() => go(addMonths(cursor, -1))} className={`${fit ? "w-7 h-7" : "w-8 h-8"} rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2`} aria-label="Previous month">
+        <button type="button" onClick={() => go(addMonths(cursor, -1))} className={`${fit ? "w-7 h-7" : "w-8 h-8"} rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2`} aria-label={w.prevMonth}>
           <ArrowLeftIcon className="w-4 h-4" />
         </button>
         <span className={`${fit ? "text-[13px]" : "text-[14px]"} font-semibold truncate`} aria-live="polite">
-          {monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+          {monthStart.toLocaleDateString(loc, { month: "long", year: "numeric" })}
         </span>
-        <button type="button" onClick={() => go(addMonths(cursor, 1))} className={`${fit ? "w-7 h-7" : "w-8 h-8"} rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2`} aria-label="Next month">
+        <button type="button" onClick={() => go(addMonths(cursor, 1))} className={`${fit ? "w-7 h-7" : "w-8 h-8"} rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2`} aria-label={w.nextMonth}>
           <ChevronRightIcon className="w-4 h-4" />
         </button>
       </div>
@@ -305,13 +311,13 @@ export function MonthCalendar({
             role="status"
           >
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5">
-              {parse(peek).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+              {parse(peek).toLocaleDateString(loc, { weekday: "short", month: "short", day: "numeric" })}
             </div>
             <ul className="space-y-1">
               {peekMeetings.map((m) => (
                 <li key={m.id} className={`flex items-center gap-2 text-[12.5px] ${m.cancelled ? "text-ink-soft line-through" : "text-ink"}`}>
                   <span className="w-2 h-2 rounded-[3px] flex-shrink-0 bg-violet" />
-                  <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="font-mono text-ink-faint text-[11px]">{new Date(m.at).toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" })}</span>
                   <span className="truncate">{m.t}</span>
                 </li>
               ))}
@@ -326,7 +332,7 @@ export function MonthCalendar({
               ))}
             </ul>
             {peekPlan.shorts.length + peekPlan.longs.length > 7 && (
-              <div className="text-[11.5px] text-ink-soft mt-1">and {peekPlan.shorts.length + peekPlan.longs.length - 7} more</div>
+              <div className="text-[11.5px] text-ink-soft mt-1">{w.andMore(peekPlan.shorts.length + peekPlan.longs.length - 7)}</div>
             )}
           </div>
         </Leaves>
@@ -339,7 +345,7 @@ export function MonthCalendar({
         key={viewMonth}
         ref={grid}
         role="grid"
-        aria-label={monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+        aria-label={monthStart.toLocaleDateString(loc, { month: "long", year: "numeric" })}
         onKeyDown={onGridKey}
         className={`grid grid-cols-7 gap-0.5 animate-[fadein_.25s_ease] ${fit ? "grid-rows-6 flex-1 min-h-0" : ""}`}
       >
@@ -364,9 +370,9 @@ export function MonthCalendar({
               tabIndex={isCursor ? 0 : -1}
               aria-selected={selected}
               aria-current={isToday ? "date" : undefined}
-              aria-label={`${parse(d).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}${
-                shortsN ? `, ${shortsN} short${shortsN === 1 ? "" : "s"}${limit ? ` of ${limit}` : ""}` : ""
-              }${longsN ? `, ${longsN} long video${longsN === 1 ? "" : "s"}` : ""}${meetingsN ? `, ${meetingsN} meeting${meetingsN === 1 ? "" : "s"}` : ""}`}
+              aria-label={`${parse(d).toLocaleDateString(loc, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}${shortsN ? `, ${w.shorts(shortsN, limit)}` : ""}${
+                longsN ? `, ${w.longs(longsN)}` : ""
+              }${meetingsN ? `, ${w.meetings(meetingsN)}` : ""}`}
               onClick={() => {
                 if (held.current) {
                   held.current = false;
@@ -439,17 +445,17 @@ export function MonthCalendar({
             }}
             className={`rounded-lg px-2.5 ${fit ? "h-7" : "h-8"} text-[12.5px] font-semibold text-amber hover:bg-amber/10`}
           >
-            Today
+            {w.today}
           </button>
           {onClear && value && (
             <button
               type="button"
               onClick={async () => {
-                if (await confirmClear({ ...CLEAR_DATE_CONFIRM, confirmLabel: clearLabel })) onClear();
+                if (await confirmClear(lang === "en" ? { ...CLEAR_DATE_CONFIRM, confirmLabel: clearWord } : { title: w.clearDateTitle, description: w.clearDateBody, confirmLabel: clearWord, cancelLabel: w.keepIt, danger: true })) onClear();
               }}
-              title={clearLabel}
+              title={clearWord}
               className={`rounded-lg px-2 ${fit ? "h-7" : "h-8"} text-[12.5px] font-semibold text-ink-soft hover:text-red hover:bg-red/10`}>
-              Clear
+              {w.clear}
             </button>
           )}
         </span>
@@ -461,6 +467,7 @@ export function MonthCalendar({
 
 /** planned · full · long — the key for the little squares under each day. */
 export function Legend({ compact = false, className = "" }: { compact?: boolean; className?: string }) {
+  const w = useUiWords();
   const item = (square: string, label: string) => (
     <span className="inline-flex items-center gap-1" title={compact ? label : undefined}>
       <span className={`w-[7px] h-[7px] rounded-[2px] ${square}`} />
@@ -469,18 +476,19 @@ export function Legend({ compact = false, className = "" }: { compact?: boolean;
   );
   return (
     <span className={`flex items-center ${compact ? "gap-1.5" : "gap-2"} text-[11px] text-ink-soft whitespace-nowrap ${className}`}>
-      {item("border-[1.5px] border-short", "planned")}
-      {item("bg-short", "full")}
-      {item("bg-long", "long")}
-      {item("bg-violet", "meeting")}
+      {item("border-[1.5px] border-short", w.planned)}
+      {item("bg-short", w.full)}
+      {item("bg-long", w.long)}
+      {item("bg-violet", w.meeting)}
     </span>
   );
 }
 
 /** The six weeks while they load: a shimmering square where each day goes. */
 function DaysSkeleton({ fit, busy = false }: { fit?: boolean; busy?: boolean }) {
+  const w = useUiWords();
   return (
-    <div className={`grid grid-cols-7 gap-0.5 ${fit ? "grid-rows-6 flex-1 min-h-0" : ""}`} {...(busy ? { role: "status", "aria-busy": true, "aria-label": "Loading the month" } : { "aria-hidden": true })}>
+    <div className={`grid grid-cols-7 gap-0.5 ${fit ? "grid-rows-6 flex-1 min-h-0" : ""}`} {...(busy ? { role: "status", "aria-busy": true, "aria-label": w.loadingMonth } : { "aria-hidden": true })}>
       {Array.from({ length: 42 }, (_, i) => (
         <span key={i} className={`${fit ? "min-h-0 h-full" : "h-10"} rounded-lg flex items-center justify-center`} aria-hidden>
           <span className="skeleton block w-[58%] h-[58%] max-w-7 max-h-7 rounded-md" />

@@ -784,3 +784,11 @@ module.exports = {
   Object.assign(module.exports.tables, O.tables);
   if (process.env.MOCK_OUTLIERS_ACCESS === "0") module.exports.tables.social_accounts = module.exports.tables.social_accounts.filter((a) => a.platform !== "youtube");
 }
+
+// 1.42.0: Business, a PFA's registers (business.cjs: its flags; MOCK_BUSINESS=1 turns it on).
+{
+  const B = require("./business.cjs").businessFixtures({ TEAM, U, people, at });
+  Object.assign(module.exports.rpc, B.rpc);
+  Object.assign(module.exports.tables, B.tables);
+  module.exports.missingTables = [...(module.exports.missingTables ?? []), ...B.missing];
+}

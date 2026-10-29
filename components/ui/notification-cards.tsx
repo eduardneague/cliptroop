@@ -369,6 +369,19 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>{m.actor?.name}</b> let you delete <b>{m.what === "longs" ? "long videos" : "shorts"}</b> in <b>{m.team?.name}</b>. They go for good, so take care.
         </>
       );
+    // 1.42.0: the owner let them see (or keep) the team's business registers; a developer turned Business on.
+    case "business_access":
+      return (
+        <>
+          <b>{m.actor?.name}</b> let you {m.edit ? "keep" : "see"} <b>{m.team?.name}</b>&rsquo;s business registers.
+        </>
+      );
+    case "business_on":
+      return (
+        <>
+          <b>Business</b> is on for <b>{m.team?.name}</b>: keep your PFA&rsquo;s registers here, and choose who else sees them.
+        </>
+      );
     case "app_alert":
       return (
         <>

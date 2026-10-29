@@ -8,7 +8,7 @@ import { Mascot } from "./mascot";
 import { CloseIcon } from "./icons";
 import { Skeleton, SkeletonLines } from "./skeleton";
 import { LaterBoundary, LaterFailed } from "./later-boundary";
-import { isFeatureUpdateIn, type ReleaseHeadline } from "@/lib/changelog-meta";
+import { compareVersions, isFeatureUpdateIn, type Audience, type ReleaseHeadline } from "@/lib/changelog-meta";
 import { APP_VERSION } from "@/lib/version";
 import { sounds } from "@/lib/sounds";
 import { Leaves } from "./leaves";
@@ -59,12 +59,21 @@ export function openWhatsNew() {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
-/** True when this device hasn't opened What's new since the current version. */
+/**
+ * The newest update this person has notes for (1.42.0: an update about a feature their team doesn't have isn't
+ * theirs). Told by the host (from the server); until then, this version.
+ */
+let newestShown = APP_VERSION;
+
+/** True when this device hasn't opened What's new since the newest update this person has notes for. */
 function useUnseen() {
   const [unseen, setUnseen] = useState(false);
   useEffect(() => {
     // (Every version has its notes: tests/bundle.test.ts checks the newest is package.json's.)
-    const check = () => setUnseen(read(SEEN) !== APP_VERSION);
+    const check = () => {
+      const seen = read(SEEN);
+      setUnseen(!seen || compareVersions(seen, newestShown) < 0);
+    };
     check();
     window.addEventListener(SEEN_EVENT, check);
     window.addEventListener("storage", check);
@@ -97,11 +106,30 @@ export function quietWhatsNewCard() {
 /**
  * `hold`: Clip's tour is about to start, so no update card this time.
  * `current` and `newVersions`: from the server (whatsNewFacts): the version
- * you're on, and the versions of its series that brought something new.
+ * you're on, and the versions of its series that brought something new;
+ * `latest`, the newest update with notes for this person; `audience`, the
+ * features only some teams get that they have (their notes show).
  */
-export function WhatsNewHost({ hold = false, current, newVersions }: { hold?: boolean; current: ReleaseHeadline | null; newVersions: readonly string[] }) {
+export function WhatsNewHost({
+  hold = false,
+  current,
+  newVersions,
+  latest = APP_VERSION,
+  audience = {},
+}: {
+  hold?: boolean;
+  current: ReleaseHeadline | null;
+  newVersions: readonly string[];
+  latest?: string | null;
+  audience?: Audience;
+}) {
   const [open, setOpen] = useState(false);
   const [card, setCard] = useState(false);
+  // Before the buttons look (their effects run after every render): the dot waits for notes that are theirs.
+  newestShown = latest ?? APP_VERSION;
+  useEffect(() => {
+    window.dispatchEvent(new Event(SEEN_EVENT));
+  }, [latest]);
   // What they hold, not the objects: the frame drawing again (router.refresh) doesn't start the card over.
   const knownVersion = current?.version ?? null;
   const newKey = newVersions.join(",");
@@ -141,7 +169,7 @@ export function WhatsNewHost({ hold = false, current, newVersions }: { hold?: bo
         {open && (
           <LaterBoundary name="What's new" fallback={({ load }) => <LaterFailed load={load} what="The notes" />}>
             <Suspense fallback={<NotesLoading current={current} />}>
-              <WhatsNewNotes />
+              <WhatsNewNotes audience={audience} />
             </Suspense>
           </LaterBoundary>
         )}

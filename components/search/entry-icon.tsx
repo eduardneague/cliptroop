@@ -3,6 +3,7 @@ import {
   AnalyticsIcon,
   BellIcon,
   BugIcon,
+  BusinessIcon,
   CalendarIcon,
   CheckIcon,
   ClockIcon,
@@ -93,6 +94,7 @@ const ICONS: Record<IconKey, IconComponent> = {
   trophy: TrophyIcon,
   image: ImageIcon,
   flame: FlameIcon,
+  business: BusinessIcon,
 };
 
 /** The icon for a page, setting or action of the search catalog. */

@@ -90,6 +90,7 @@ export function SearchPalette({
   currentTeamId,
   roles = NO_ROLES,
   developer = false,
+  business = false,
 }: {
   /** Close it (the header's GlobalSearch unmounts it). */
   onClose: () => void;
@@ -100,6 +101,8 @@ export function SearchPalette({
   /** Your roles in the current team: what you're offered (the database still decides). */
   roles?: readonly string[];
   developer?: boolean;
+  /** Business is on for the team and theirs (1.42.0). */
+  business?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -296,13 +299,14 @@ export function SearchPalette({
       buildCatalog({
         roles,
         developer,
+        business,
         hasTeam: !!currentTeamId,
         profileHref: profileHref({ username, userId }),
         dark,
         sounds: soundsOn,
         here,
       }).filter((e) => !e.id.startsWith("here.") || e.href?.split("?")[0] !== pathname || e.href?.includes("?")),
-    [roles, developer, currentTeamId, username, userId, dark, soundsOn, here, pathname]
+    [roles, developer, business, currentTeamId, username, userId, dark, soundsOn, here, pathname]
   );
   const byId = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog]);
 

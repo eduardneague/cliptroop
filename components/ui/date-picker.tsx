@@ -6,6 +6,7 @@ import { MonthCalendar, warmPlannedDays, type DayInfo } from "./month-calendar";
 import { CalendarIcon, CloseIcon } from "./icons";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
 import { Leaves } from "./leaves";
+import { intlOf, useUiLang, useUiWords, type UiLang } from "./ui-locale";
 
 export type { DayInfo };
 
@@ -21,10 +22,10 @@ export function DatePicker({
   dayInfo,
   triggerClassName,
   children,
-  ariaLabel = "Pick a date",
+  ariaLabel: ariaLabelProp,
   disabled,
   onClear,
-  clearLabel = "Clear date",
+  clearLabel,
 }: {
   value: string | null;
   onChange: (date: string) => void;
@@ -37,6 +38,8 @@ export function DatePicker({
   onClear?: () => void;
   clearLabel?: string;
 }) {
+  const w = useUiWords();
+  const ariaLabel = ariaLabelProp ?? w.pickDate;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ left: 0, top: 0, up: false });
   const btn = useRef<HTMLButtonElement>(null);
@@ -135,7 +138,7 @@ export function DatePicker({
                       }
                     : undefined
                 }
-                clearLabel={clearLabel}
+                clearLabel={clearLabel ?? w.clearDate}
               />
             </div>
           </Leaves>,
@@ -145,10 +148,10 @@ export function DatePicker({
   );
 }
 
-const niceDate = (d: string) => {
+const niceDate = (d: string, lang: UiLang = "en") => {
   const date = new Date(`${d}T00:00:00`);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  return date.toLocaleDateString(intlOf(lang), { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 };
 
 /**
@@ -160,8 +163,8 @@ export function DateChip({
   value,
   onChange,
   onClear,
-  placeholder = "Pick a date",
-  ariaLabel = "Pick a date",
+  placeholder,
+  ariaLabel,
   dayInfo,
   disabled,
   className = "",
@@ -177,6 +180,8 @@ export function DateChip({
 }) {
   const set = !!value;
   const confirmClear = useConfirmSafe();
+  const lang = useUiLang();
+  const w = useUiWords();
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <DatePicker
@@ -184,22 +189,22 @@ export function DateChip({
         onChange={onChange}
         onClear={onClear}
         dayInfo={dayInfo}
-        ariaLabel={ariaLabel}
+        ariaLabel={ariaLabel ?? w.pickDate}
         disabled={disabled}
         triggerClassName={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[12.5px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
           set ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"
         }`}
       >
         <CalendarIcon className={`w-3.5 h-3.5 ${set ? "text-amber" : ""}`} />
-        {value ? niceDate(value) : placeholder}
+        {value ? niceDate(value, lang) : (placeholder ?? w.pickDate)}
       </DatePicker>
       {set && onClear && !disabled && (
         <button
           type="button"
           onClick={async () => {
-            if (await confirmClear(CLEAR_DATE_CONFIRM)) onClear();
+            if (await confirmClear(lang === "en" ? CLEAR_DATE_CONFIRM : { title: w.clearDateTitle, description: w.clearDateBody, confirmLabel: w.clearDate, cancelLabel: w.keepIt, danger: true })) onClear();
           }}
-          aria-label="Clear date"
+          aria-label={w.clearDate}
           className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
           <CloseIcon className="w-3.5 h-3.5" />
         </button>

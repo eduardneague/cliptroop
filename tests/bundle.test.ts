@@ -5,7 +5,7 @@
 // static imports, as a bundler would, and fails when one of those comes back into every page.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { CHANGELOG, compareVersions, isFeatureUpdate, whatsNewFacts } from "../lib/changelog";
+import { CHANGELOG, PUBLIC_CHANGELOG, compareVersions, forAudience, isFeatureUpdate, whatsNewFacts } from "../lib/changelog";
 import { isFeatureUpdateIn, seriesOf } from "../lib/changelog-meta";
 import * as levels from "../lib/profile/levels";
 import * as progress from "../lib/profile/progress";
@@ -116,17 +116,19 @@ const scan = (d: string) => {
 };
 for (const d of ["app", "components", "lib", "modules"]) scan(d);
 for (const f of importers) ok(directive(read(f)) !== "use client" || f === "components/ui/whats-new-notes.tsx", `${f} is a client component reading the whole changelog: use lib/changelog-meta.ts, or whatsNewFacts() on the server`);
-ok(/<WhatsNewHost hold=\{tourPending\} \{\.\.\.whatsNewFacts\(APP_VERSION\)\} \/>/.test(read(layout)), "the layout hands What's new this version's headline and news");
+ok(/<WhatsNewHost hold=\{tourPending\} audience=\{\{ business \}\} \{\.\.\.whatsNewFacts\(APP_VERSION, \{ business \}\)\} \/>/.test(read(layout)), "the layout hands What's new this version's headline and news, as this person sees them");
 
 // --- The changelog itself ----------------------------------------------------------------------------------------------------
 ok(CHANGELOG[0]?.version === pkg.version, `the newest notes are this version's (${CHANGELOG[0]?.version} vs package.json ${pkg.version}): What's new's dot counts on it`);
 ok(CHANGELOG.every((r, i) => i === 0 || compareVersions(CHANGELOG[i - 1].version, r.version) > 0), "newest first, each version once");
 ok(CHANGELOG.every((r) => r.changes.length > 0 && r.title.trim().length > 0 && (!r.date || /^\d{4}-\d{2}-\d{2}$/.test(r.date))), "each has a title, its changes and a proper date");
-// What the frame is sent says the same as the whole list, for every update from any version to any other.
+// What the frame is sent says the same as the whole list, for every update from any version to any other (for someone
+// who has every feature: then nothing is left out).
+const EVERY = { business: true } as const;
 const versions = CHANGELOG.map((r) => r.version);
 let same = 0;
 for (const to of versions) {
-  const facts = whatsNewFacts(to);
+  const facts = whatsNewFacts(to, EVERY);
   ok(facts.current?.version === to && facts.newVersions.every((v) => seriesOf(v) === seriesOf(to)), `${to}: its headline, and only its own series`);
   for (const from of [null, "0.0.1", "9.9.9", "1.x", ...versions]) {
     if (isFeatureUpdateIn(from, to, facts.newVersions) === isFeatureUpdate(from, to)) same++;
@@ -135,6 +137,18 @@ for (const to of versions) {
 }
 ok(same > 1000, `the update card's rule, checked ${same} ways`);
 ok(whatsNewFacts("0.0.0").current === null && whatsNewFacts("0.0.0").newVersions.length === 0, "a version without notes: no card");
+// 1.42.0: notes about a feature only some teams have (Developer → Features) are only theirs.
+const gated = CHANGELOG.filter((r) => r.only || r.changes.some((c) => c.only));
+ok(gated.length > 0, "some notes are only for the teams with a feature (Business)");
+ok(PUBLIC_CHANGELOG.every((r) => !r.only && r.changes.every((c) => !c.only)) && PUBLIC_CHANGELOG.length === forAudience(CHANGELOG, {}).length, "the site's changelog has none of them");
+for (const r of gated.filter((x) => x.only)) {
+  const them = whatsNewFacts(r.version, { [r.only!]: true });
+  const others = whatsNewFacts(r.version);
+  ok(them.current?.version === r.version && them.latest === r.version, `${r.version}: its card and its dot, for the teams with ${r.only}`);
+  ok(others.current === null && others.latest !== r.version && !others.newVersions.includes(r.version), `${r.version}: nothing for everyone else (no card, no dot: their newest is ${others.latest})`);
+}
+for (const f of ["app/(site)/changelog/page.tsx", "app/(site)/about/page.tsx"]) ok(!/\bCHANGELOG\b/.test(read(f).replace(/PUBLIC_CHANGELOG/g, "")), `${f} reads the public notes only (PUBLIC_CHANGELOG)`);
+ok(/forAudience\(CHANGELOG, audience\)/.test(read("components/ui/whats-new-notes.tsx")), "What's new's window shows the notes this person has");
 ok(JSON.stringify(whatsNewFacts(pkg.version)).length < 600, "what every page is sent about it stays small");
 
 // --- Levels: on every page without the achievements ------------------------------------------------------------------------

@@ -114,7 +114,7 @@ const toasts = read("components/ui/toast-provider.tsx");
 ok(/const api = useMemo<ToastAPI>\(/.test(toasts), "the same toasts object every time (pages don't redo work when one comes or goes)");
 ok(/window\.setTimeout\(\(\) => remove\(id\), motionReduced\(\) \? 0 : LEAVE_MS\);/.test(toasts), "a toast slides out before it's gone (at once with motion off)");
 ok(/onPointerEnter=\{\(e\) => e\.pointerType === "mouse" && pause\(\)\}/.test(toasts) && /const ms = Math\.max\(1200, d\.left\);/.test(toasts), "they wait while you point at them");
-ok(/useSwipeAway\(\{/.test(toasts) && /aria-label="Dismiss"/.test(toasts), "swipe one away, or its X");
+ok(/useSwipeAway\(\{/.test(toasts) && /aria-label=\{t\.closeLabel \?\? "Dismiss"\}/.test(toasts), "swipe one away, or its X");
 
 // --- The look --------------------------------------------------------------------------------------------------------------
 const css = read("app/globals.css");
