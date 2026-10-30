@@ -22,6 +22,20 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.44.0",
+    date: "2026-10-30",
+    title: "Media kit: brands with their logos, titles of your own",
+    changes: [
+      { kind: "new", text: "Media kit → Brands and kind words: one list of brands, each with its logo, its name, what they said and who said it. With Quotes, every brand with a quote is a group on the page: its logo, its name and the quote under them, centred. As many go on a page as fit nicely: six when the quotes are a line or two, three when they're long, one or two bigger; the rest go on the next page." },
+      { kind: "new", text: "Media kit → Brand logos only: every brand's logo on a wall, no names, on white tiles in rows centred on the page (a shorter row between two longer ones), from three big ones to 48 small. A brand without a logo shows its name." },
+      { kind: "new", text: "Add logos picks several at once (or drop them on the list): each becomes a brand, named from its file. PNG, JPG, WebP or SVG; the empty margin round a logo is cut away, so every logo fills its tile the same way." },
+      { kind: "new", text: "Media kit: a page can have a title of your own (Page title → Custom): About us, At a glance, each platform's page and audience, the videos, the brands and the rates. Turn it off and the page has its usual title again; yours is kept for next time." },
+      { kind: "new", text: "Media kit → Cover → Title → Custom: a box where each line stays where you break it (Viverro, then Tech Design under it), as big as fits, up to four lines." },
+      { kind: "better", text: "Media kit: the last page ends with ClipTroop's logo and “Built with ClipTroop on” the day the kit was made, which links to ClipTroop. Contact → Built with ClipTroop turns it off. It replaces the line about where the numbers come from." },
+      { kind: "fixed", text: "Media kit: a cover photo with a long file name stays on the cover after saving (it could drop off)." },
+    ],
+  },
+  {
     version: "1.43.0",
     date: "2026-10-30",
     title: "Audience with Shorts, a full-screen player, controls of one height",

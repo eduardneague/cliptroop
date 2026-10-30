@@ -24,6 +24,18 @@ export type KitPeriod = (typeof KIT_PERIODS)[number]["id"];
 /** The pages, in the kit's order. */
 export const KIT_SECTIONS = ["cover", "about", "glance", "platforms", "audience", "videos", "partners", "rates", "contact"] as const;
 export type KitSection = (typeof KIT_SECTIONS)[number];
+/** 1.44.0: the pages that can have a title of their own, by their anchor (layout.ts): each platform's page and audience its own. */
+export const TITLE_PAGES = [
+  "cover",
+  "about",
+  "glance",
+  ...KIT_PLATFORMS.map((p) => `platform:${p}` as const),
+  ...KIT_PLATFORMS.map((p) => `audience:${p}` as const),
+  "videos",
+  "partners",
+  "rates",
+] as const;
+export type TitlePage = (typeof TITLE_PAGES)[number];
 export const KIT_SECTION_LABEL: Record<KitSection, string> = {
   cover: "Cover",
   about: "About us",
@@ -41,7 +53,24 @@ export type KitTheme = "light" | "dark";
 export type KitCover = "videos" | "photo" | "plain";
 
 export type RatePackage = { id: string; name: string; detail: string; platform: KitPlatform | "any"; price: number | null };
-export type Testimonial = { id: string; quote: string; by: string };
+
+// ---- 1.44.0: brands with their logos, the pages' own titles, Built with ClipTroop ------------------------------------
+// The owner (Oct 30 2026): "for the quotes page … groups, i want a logo, the name of the company, and the quote below it,
+// these will have to stay centered … or you should just be able to hit brand logos only and add like a lot of logos in a
+// cool way without the names, just the logos"; "turn the watermark into the cliptroop logo and says built with
+// cliptroop on "date", but also a toggle to turn it off"; "a text box for the title that will respect where i put it";
+// "for each page i want to be able to modify the title of the page with a custom one, make that a toggle too".
+
+/**
+ * A brand the team has worked with (1.44.0: the brand names and the three quotes of 1.37.0 became one list). Its logo
+ * is a picture in the media-kit bucket ("<team id>/<file>"); with quotes, a brand with a quote is a group on the page:
+ * its logo, its name, what they said and who said it; on the wall, its logo (its name where it has none).
+ */
+export type KitBrand = { id: string; name: string; logo: string | null; quote: string; by: string };
+/** The brands page: each brand with a quote as a group (logo, name, quote), or every brand's logo on a wall. */
+export type KitBrandsShow = "quotes" | "logos";
+/** A page's own title (shown while on; the words are kept while it's off). The cover's keeps its line breaks. */
+export type KitTitle = { on: boolean; text: string };
 
 // ---- 1.39.0: your own numbers, picked videos, the cover's grid ----------------------------------------------------------
 // The owner: "add the option to manually input data for everything too, auto is very nice, but sometimes you might want
@@ -146,9 +175,14 @@ export type MediaKitSettings = {
   /** Who watches, in your words (the Audience page). */
   audienceNote: string;
   rates: { show: boolean; currency: string; note: string; packages: RatePackage[] };
-  partners: string[];
-  testimonials: Testimonial[];
+  /** 1.44.0: the brands, in the kit's order, and how their page shows them. */
+  brands: KitBrand[];
+  brandsShow: KitBrandsShow;
   contact: { name: string; email: string; phone: string; website: string; cta: string };
+  /** 1.44.0: the pages' own titles, by page (TITLE_PAGES). */
+  titles: Partial<Record<TitlePage, KitTitle>>;
+  /** 1.44.0: ClipTroop's logo and "Built with ClipTroop on <day>" at the foot of the last page. */
+  builtWith: boolean;
   /** 1.39.0: platforms with no connection, added by hand (their numbers in manual.platforms). */
   extra: KitPlatform[];
   manual: KitManual;
@@ -171,11 +205,14 @@ export const LIMITS = {
   packageName: 60,
   packageDetail: 160,
   price: 10_000_000,
-  partners: 16,
-  partner: 40,
-  testimonials: 3,
+  /** 1.44.0: brands (a wall of up to 48 logos), each name, quote and who said it. */
+  brands: 48,
+  brandName: 60,
   quote: 280,
   by: 80,
+  /** A page's own title; the cover's, in up to four lines as they're broken. */
+  pageTitle: 60,
+  coverLines: 4,
   name: 80,
   email: 120,
   phone: 40,
@@ -223,9 +260,11 @@ export function defaultKitSettings(): MediaKitSettings {
     about: "",
     audienceNote: "",
     rates: { show: false, currency: "USD", note: "", packages: DEFAULT_PACKAGES.map((p) => ({ ...p })) },
-    partners: [],
-    testimonials: [],
+    brands: [],
+    brandsShow: "quotes",
     contact: { name: "", email: "", phone: "", website: "", cta: "" },
+    titles: {},
+    builtWith: true,
     extra: [],
     manual: { glance: emptyTotals(), platforms: {}, audience: {} },
     videoPicks: { on: false, list: [] },
@@ -297,6 +336,20 @@ export function isCoverPath(v: unknown, teamId?: string | null): v is string {
   const m = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[A-Za-z0-9._-]{1,80}$/.exec(v);
   return !!m && (!teamId || m[1] === teamId) && !v.includes("..");
 }
+
+/**
+ * The media-kit bucket's files a setup uses (any setup, as saved: it's read raw): its cover photo and (1.44.0) its
+ * brands' logos. To tidy away the ones nothing uses any more, and to sign links to the logos.
+ */
+export function kitFilesOf(s: unknown): string[] {
+  if (!isObj(s)) return [];
+  const out = new Set<string>();
+  if (typeof s.coverPath === "string") out.add(s.coverPath);
+  if (Array.isArray(s.brands)) for (const b of s.brands) if (isObj(b) && typeof b.logo === "string") out.add(b.logo);
+  return [...out];
+}
+/** The brands' logos a setup uses (each once). */
+export const brandLogos = (s: Pick<MediaKitSettings, "brands">) => [...new Set(s.brands.map((b) => b.logo).filter((p): p is string => !!p))];
 
 /** A number from a form or a save: finite, within [min, max], rounded to `dp` decimals; null for anything else. */
 export function num(v: unknown, min: number, max: number, dp = 0): number | null {
@@ -382,6 +435,68 @@ function readManual(v: unknown): KitManual {
   return { glance: readTotals(m.glance), platforms, audience };
 }
 
+/** An id kept once in a list (a made-up one when it's missing, wrong or taken). */
+function uniqueId(v: unknown, fallback: string, taken: Set<string>): string {
+  let id = typeof v === "string" && ID.test(v) ? v : fallback;
+  for (let k = 1; taken.has(id); k++) id = `${fallback.slice(0, 8)}x${k}`;
+  taken.add(id);
+  return id;
+}
+
+/**
+ * The brands (1.44.0), in their order: each with a name, a logo of the team's own folder or a quote (an empty one is
+ * left out), 48 at most. A setup from before 1.44.0 had brand names and up to three quotes with who said them: each
+ * becomes a brand of its own, the names first.
+ */
+function readBrands(r: Obj, teamId?: string | null): KitBrand[] {
+  const out: KitBrand[] = [];
+  const taken = new Set<string>();
+  const add = (x: Obj, fallback: string) => {
+    if (out.length >= LIMITS.brands) return;
+    const b = { name: cleanText(x.name, LIMITS.brandName), logo: isCoverPath(x.logo, teamId) ? x.logo : null, quote: cleanText(x.quote, LIMITS.quote, true), by: cleanText(x.by, LIMITS.by) };
+    if (b.name || b.logo || b.quote) out.push({ id: uniqueId(x.id, fallback, taken), ...b });
+  };
+  if (Array.isArray(r.brands)) {
+    r.brands.filter(isObj).forEach((x, i) => add(x, `b${i + 1}`));
+    return out;
+  }
+  if (Array.isArray(r.partners)) {
+    // Each once, whatever its case (the first spelling kept).
+    const seen = new Set<string>();
+    r.partners.forEach((p, i) => {
+      const name = cleanText(p, LIMITS.brandName);
+      if (!name || seen.has(name.toLowerCase())) return;
+      seen.add(name.toLowerCase());
+      add({ name }, `b${i + 1}`);
+    });
+  }
+  if (Array.isArray(r.testimonials)) r.testimonials.filter(isObj).forEach((t, i) => add({ id: t.id, quote: t.quote, by: t.by }, `t${i + 1}`));
+  return out;
+}
+
+/** The cover's own title (1.44.0): its lines as they're broken (each tidied, empty ones out), four at most. */
+export function coverTitleText(v: unknown): string {
+  return cleanText(v, LIMITS.title, true)
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, LIMITS.coverLines)
+    .join("\n");
+}
+
+/** The pages' own titles (1.44.0): known pages only, one line each (the cover's in its lines); an empty one that's off is left out. */
+function readTitles(v: unknown): Partial<Record<TitlePage, KitTitle>> {
+  const out: Partial<Record<TitlePage, KitTitle>> = {};
+  if (!isObj(v)) return out;
+  for (const k of TITLE_PAGES) {
+    const t = v[k];
+    if (!isObj(t)) continue;
+    const text = k === "cover" ? coverTitleText(t.text) : cleanText(t.text, LIMITS.pageTitle);
+    if (t.on === true || text) out[k] = { on: t.on === true, text };
+  }
+  return out;
+}
+
 export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitSettings {
   const d = defaultKitSettings();
   if (!isObj(raw)) return d;
@@ -412,30 +527,8 @@ export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitS
         .slice(0, LIMITS.packages)
     : d.rates.packages;
 
-  const tSeen = new Set<string>();
-  const testimonials: Testimonial[] = Array.isArray(r.testimonials)
-    ? r.testimonials
-        .filter(isObj)
-        .map((t, i) => {
-          let id = typeof t.id === "string" && ID.test(t.id) ? t.id : `t${i + 1}`;
-          while (tSeen.has(id)) id = `${id.slice(0, 10)}${i}`;
-          tSeen.add(id);
-          return { id, quote: cleanText(t.quote, LIMITS.quote, true), by: cleanText(t.by, LIMITS.by) };
-        })
-        .filter((t) => t.quote)
-        .slice(0, LIMITS.testimonials)
-    : d.testimonials;
-
-  const partners: string[] = [];
-  if (Array.isArray(r.partners)) {
-    const seen = new Set<string>();
-    for (const x of r.partners.map((v) => cleanText(v, LIMITS.partner))) {
-      // Each once, whatever its case (the first spelling kept).
-      if (!x || seen.has(x.toLowerCase()) || partners.length >= LIMITS.partners) continue;
-      seen.add(x.toLowerCase());
-      partners.push(x);
-    }
-  }
+  const brands = readBrands(r, teamId);
+  const brandsShow: KitBrandsShow = r.brandsShow === "logos" || r.brandsShow === "quotes" ? r.brandsShow : brands.length && !brands.some((b) => b.quote) ? "logos" : "quotes";
 
   const c = isObj(r.contact) ? r.contact : {};
   const email = cleanText(c.email, LIMITS.email);
@@ -464,8 +557,8 @@ export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitS
       note: cleanText(rr.note, LIMITS.rateNote, true),
       packages,
     },
-    partners,
-    testimonials,
+    brands,
+    brandsShow,
     contact: {
       name: cleanText(c.name, LIMITS.name),
       // A wrong email or website is kept as typed (the form says what's wrong); the kit leaves it out.
@@ -474,6 +567,8 @@ export function readKitSettings(raw: unknown, teamId?: string | null): MediaKitS
       website,
       cta: cleanText(c.cta, LIMITS.cta),
     },
+    titles: readTitles(r.titles),
+    builtWith: r.builtWith !== false,
     extra: Array.isArray(r.extra) ? [...new Set(r.extra.filter(isPlatform))] : [],
     manual: readManual(r.manual),
     videoPicks: readPicks(r.videoPicks, LIMITS.videoPicks),

@@ -116,9 +116,18 @@ function drawPage(lib: PdfLib, pdf: PDFDocument, page: PDFPage, p: Page, F: PdfF
         break;
       case "image": {
         const img = images.get(op.src);
+        if (img && op.fit === "contain") {
+          // A logo (1.44.0): whole, as big as fits, in the middle of its box. It came as a JPEG on white, the colour of
+          // the tile it sits on.
+          const scale = Math.min(op.w / img.width, op.h / img.height);
+          const dw = img.width * scale;
+          const dh = img.height * scale;
+          page.drawImage(img, { x: op.x + (op.w - dw) / 2, y: H - (op.y + (op.h - dh) / 2) - dh, width: dw, height: dh });
+          break;
+        }
         if (!img) {
-          // A picture that couldn't be had: its box, quietly.
-          page.drawSvgPath(roundRect(op.x, op.y, op.w, op.h, op.r ?? 0), { x: 0, y: H, color: col(lib, [128, 128, 128]), opacity: 0.12 });
+          // A picture that couldn't be had: its box, quietly (a logo's tile stays as it is).
+          if (op.fit !== "contain") page.drawSvgPath(roundRect(op.x, op.y, op.w, op.h, op.r ?? 0), { x: 0, y: H, color: col(lib, [128, 128, 128]), opacity: 0.12 });
           break;
         }
         // Cover the box: scaled to fill it, centred, the rest cut off.

@@ -7,10 +7,13 @@
  * the rest; numbers first, their words under them; hairlines between numbers rather than boxes. The one bold thing is
  * the cover: a wall of the channel's own best thumbnails running off the page (or a photo, or one big number).
  */
+import { APP_DOMAIN, APP_NAME } from "@/lib/brand";
+import { siteUrl } from "@/lib/public-pages";
 import { isVertical, addDaily, changePct, growthPct, ratePct, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "./numbers";
-import { KIT_PLATFORMS, KIT_PLATFORM_NAME, LIMITS, formatPrice, isEmail, websiteUrl, type KitCoverGrid, type KitPlatform, type MediaKitSettings, type RatePackage } from "./settings";
+import { KIT_PLATFORMS, KIT_PLATFORM_NAME, LIMITS, coverTitleText, formatPrice, isEmail, websiteUrl, type KitBrand, type KitCoverGrid, type KitPlatform, type MediaKitSettings, type RatePackage, type TitlePage } from "./settings";
 import { applyManual, kitTotals, pickedVideo, type Totals } from "./manual";
 import { kitPalette, type KitPalette } from "./theme";
+import { clipTroopMark } from "./mark";
 import {
   PAGE_H,
   PAGE_W,
@@ -37,7 +40,8 @@ const MX = 56;
 const TOP = 50;
 const CW = W - 2 * MX;
 
-export type KitImages = { logo: string | null; cover: string | null };
+/** The pictures the kit draws: the team's logo, the cover photo, and (1.44.0) each brand's logo, by its stored path. */
+export type KitImages = { logo: string | null; cover: string | null; brands?: Readonly<Record<string, string>> };
 export type Kit = { title: string; fileName: string; platforms: KitPlatform[]; pages: Page[] };
 
 type Ctx = {
@@ -124,6 +128,27 @@ function anyPlatformIcon(ops: Op[], c: Ctx, x: number, y: number, size: number) 
   const gap = Math.max(1.5, round(size * 0.1));
   const t = (size - gap) / 2;
   KIT_PLATFORMS.forEach((p, i) => platformIcon(ops, c, p, x + (i % 2) * (t + gap), y + Math.floor(i / 2) * (t + gap), t));
+}
+
+/**
+ * 1.44.0: a page's title, as the team set it (its own title, switched on, with words in it), else its usual one. The
+ * owner: "for each page i want to be able to modify the title of the page with a custom one, make that a toggle too".
+ */
+function titleOf(c: Pick<Ctx, "s">, page: TitlePage, usual: string): string {
+  const own = c.s.titles[page];
+  return own?.on && own.text.trim() ? own.text.trim() : usual;
+}
+
+/** The usual title of a page that can have its own (the form shows it beside the switch). The cover's is the kit's name. */
+export function usualTitle(page: TitlePage, s: Pick<MediaKitSettings, "videoPicks" | "brandsShow">): string {
+  if (page === "about") return "About us";
+  if (page === "glance") return "At a glance";
+  if (page === "videos") return s.videoPicks.on && s.videoPicks.list.length > 0 ? "Videos we're proud of" : "Our best videos";
+  if (page === "partners") return s.brandsShow === "logos" ? "Brands we’ve worked with" : "What brands say";
+  if (page === "rates") return "Working together";
+  if (page.startsWith("platform:")) return KIT_PLATFORM_NAME[page.slice(9) as KitPlatform];
+  if (page.startsWith("audience:")) return `Who watches on ${KIT_PLATFORM_NAME[page.slice(9) as KitPlatform]}`;
+  return "";
 }
 
 /** A slide's title row: the title (and an icon), something on the right, a line under it. Returns where content starts. */
@@ -280,29 +305,17 @@ function coverPage(c: Ctx): Page {
       .toUpperCase();
     text(ops, c, MX + 24, 82, initials || "M", "disp", 20, pal.onAccent, "center");
   }
-  // The name: as big as fits on two lines (a long one gets a third, smaller, rather than being cut).
-  let size = 62;
-  let titleLines = wrap(c.m, c.title, "disp", size, leftW, 2);
-  while (size > 34 && titleLines.some((l) => l.endsWith("…"))) {
-    size -= 2;
-    titleLines = wrap(c.m, c.title, "disp", size, leftW, 2);
-  }
-  if (titleLines.some((l) => l.endsWith("…"))) {
-    size = 40;
-    titleLines = wrap(c.m, c.title, "disp", size, leftW, 3);
-    while (size > 28 && titleLines.some((l) => l.endsWith("…"))) {
-      size -= 2;
-      titleLines = wrap(c.m, c.title, "disp", size, leftW, 3);
-    }
-  }
   const tag = s.tagline ? wrap(c.m, s.tagline, "reg", 15, leftW - 20, 3) : [];
   const t = c.totals;
-  // The block's height, so it sits in the middle of the room between the logo and the handles.
-  const titleH = size * 0.75 + (titleLines.length - 1) * size * 1.04;
   const tagH = tag.length ? 40 + (tag.length - 1) * 21 : 0;
   const numH = t.followers !== null ? 56 : 0;
   const roomTop = 128;
   const roomBottom = H - 112;
+  // The name, or (1.44.0) the cover's own title, broken where it was typed.
+  const own = s.titles.cover?.on ? coverTitleText(s.titles.cover.text) : "";
+  const { lines: titleLines, size } = coverTitle(c.m, c.title, own || null, roomBottom - roomTop - tagH - numH);
+  // The block's height, so it sits in the middle of the room between the logo and the handles.
+  const titleH = size * 0.75 + (titleLines.length - 1) * size * 1.04;
   let y = roomTop + Math.max(0, (roomBottom - roomTop - (titleH + tagH + numH)) / 2) + size * 0.75;
   y = lines(ops, c, MX, y, titleLines, "disp", size, pal.ink, size * 1.04);
   if (tag.length) y = lines(ops, c, MX, y + 40, tag, "reg", 15, pal.muted, 21);
@@ -354,6 +367,42 @@ function coverPage(c: Ctx): Page {
     bigPanel(ops, c, t);
   }
   return { w: W, h: H, bg: pal.paper, ops, label: "Cover", anchor: "cover" };
+}
+
+/** The cover's title column (its width). */
+const COVER_LEFT_W = 430;
+
+/**
+ * The cover's title as it's drawn, and its size. The kit's name: as big as fits on two lines (a long one gets a third,
+ * smaller, rather than being cut). 1.44.0, the cover's own title (the owner: "a text box for the title that will respect
+ * where i put it"): its lines as typed, as big as they fit, each on its own line, in `room` points of height; a line
+ * too long for the page even at the smallest size wraps there.
+ */
+export function coverTitle(m: Measure, name: string, own: string | null, room = Infinity): { lines: string[]; size: number } {
+  const leftW = COVER_LEFT_W;
+  const blockH = (z: number, n: number) => z * 0.75 + (n - 1) * z * 1.04;
+  if (own) {
+    const want = own.split("\n").filter((l) => l.trim());
+    const wide = (z: number) => want.every((l) => m.width(m.clean(l, "disp"), "disp", z) <= leftW + 0.01);
+    let z = 62;
+    while (z > 28 && (!wide(z) || blockH(z, want.length) > room)) z -= 2;
+    return { lines: wide(z) ? want : want.flatMap((l) => wrap(m, l, "disp", z, leftW, 3)), size: z };
+  }
+  let size = 62;
+  let lines = wrap(m, name, "disp", size, leftW, 2);
+  while (size > 34 && lines.some((l) => l.endsWith("…"))) {
+    size -= 2;
+    lines = wrap(m, name, "disp", size, leftW, 2);
+  }
+  if (lines.some((l) => l.endsWith("…"))) {
+    size = 40;
+    lines = wrap(m, name, "disp", size, leftW, 3);
+    while (size > 28 && lines.some((l) => l.endsWith("…"))) {
+      size -= 2;
+      lines = wrap(m, name, "disp", size, leftW, 3);
+    }
+  }
+  return { lines, size };
 }
 
 /** The kit's own videos for the cover, best first: the period's most viewed, then the best ever, then the rest of the
@@ -529,7 +578,7 @@ function aboutPage(c: Ctx): Page | null {
   }
   const blockH = (ls.length - 1) * size * 1.3 + size * 0.75;
   const y0 = Math.max(96, (H - blockH) / 2) + size * 0.4;
-  text(ops, c, MX, y0 - size * 1.3 - 6, "About us", "semi", 11, pal.accentText);
+  text(ops, c, MX, y0 - size * 1.3 - 6, titleOf(c, "about", "About us"), "semi", 11, pal.accentText);
   lines(ops, c, MX, y0, ls, "disp", size, pal.ink, size * 1.3);
   if (picture === "photo") ops.push({ t: "image", x: 660, y: 64, w: W - MX - 660, h: H - 128, src: c.images.cover!, r: 18 });
   else if (picture === "videos") {
@@ -545,7 +594,7 @@ function glancePage(c: Ctx): Page {
   const { pal, nums, ps } = c;
   const ops: Op[] = [];
   const names = ps.map((p) => KIT_PLATFORM_NAME[p.platform]);
-  const top = header(ops, c, "At a glance", { right: dayRange(nums.window.from, nums.window.to), sub: `${listWords(names)} together, over ${daysWords(nums.window.days)}.` });
+  const top = header(ops, c, titleOf(c, "glance", "At a glance"), { right: dayRange(nums.window.from, nums.window.to), sub: `${listWords(names)} together, over ${daysWords(nums.window.days)}.` });
   const t = c.totals;
   const d = nums.window.days;
   const items: { value: string; label: string; note: string | null; tone: "accent" | "muted" }[] = [];
@@ -600,7 +649,7 @@ function platformPage(c: Ctx, p: KitPlatformNumbers): Page {
   const { pal, nums } = c;
   const ops: Op[] = [];
   const name = KIT_PLATFORM_NAME[p.platform];
-  const top = header(ops, c, name, { icon: p.platform, right: p.handle, rightLink: p.url, sub: dayRange(nums.window.from, nums.window.to) });
+  const top = header(ops, c, titleOf(c, `platform:${p.platform}`, name), { icon: p.platform, right: p.handle, rightLink: p.url, sub: dayRange(nums.window.from, nums.window.to) });
   const d = nums.window.days;
   // Nothing for the right (no chart, no videos: a platform added by hand, 1.39.0): the numbers take the whole width.
   const alone = !p.chart && !p.daily.some((v) => v !== null) && !p.top.length;
@@ -676,7 +725,7 @@ function audiencePage(c: Ctx, p: KitPlatformNumbers): Page | null {
   const { pal } = c;
   const ops: Op[] = [];
   const name = KIT_PLATFORM_NAME[p.platform];
-  const top = header(ops, c, `Who watches on ${name}`, { icon: p.platform, right: a.who, sub: c.s.audienceNote || null });
+  const top = header(ops, c, titleOf(c, `audience:${p.platform}`, `Who watches on ${name}`), { icon: p.platform, right: a.who, sub: c.s.audienceNote || null });
   const leftW = 420;
   let y = top;
   // Women and men: two big numbers on one split bar.
@@ -752,7 +801,7 @@ function videosPage(c: Ctx): Page | null {
   if (!picked) list = list.slice(0, count);
   if (!list.length) return null;
   const ops: Op[] = [];
-  const top = header(ops, c, picked ? "Videos we're proud of" : "Our best videos", { right: picked ? null : ever ? "Most viewed ever" : `Most viewed, ${dayRange(nums.window.from, nums.window.to)}` });
+  const top = header(ops, c, titleOf(c, "videos", usualTitle("videos", s)), { right: picked ? null : ever ? "Most viewed ever" : `Most viewed, ${dayRange(nums.window.from, nums.window.to)}` });
   // Three across; one to three picked: as many as there are; four: two by two.
   const cols = list.length <= 3 ? list.length : list.length === 4 ? 2 : 3;
   const gap = 20;
@@ -774,53 +823,256 @@ function videosPage(c: Ctx): Page | null {
   return { w: W, h: H, bg: pal.paper, ops, label: "Best videos", anchor: "videos" };
 }
 
-function partnersPages(c: Ctx): Page[] {
-  const { pal, s } = c;
-  if (!s.partners.length && !s.testimonials.length) return [];
-  const pages: Page[] = [];
-  const quotes = (ops: Op[], y: number) => {
-    const n = s.testimonials.length;
-    const gap = 32;
-    const qw = (CW - gap * (n - 1)) / n;
-    const size = n === 1 ? 20 : n === 2 ? 16 : 14;
-    s.testimonials.forEach((q, i) => {
-      const x = MX + i * (qw + gap);
-      text(ops, c, x, y + 30, "“", "disp", 48, pal.accentText);
-      const ql = wrap(c.m, q.quote, "disp", size, qw, n === 1 ? 5 : 7);
-      const end = lines(ops, c, x, y + 52, ql, "disp", size, pal.ink, size * 1.32);
-      if (q.by) text(ops, c, x, end + 24, q.by, "semi", 10, pal.muted);
-    });
-  };
-  const tiles = (ops: Op[], y: number, names: string[]) => {
-    const cols = 4;
-    const gap = 14;
-    const tw = (CW - gap * (cols - 1)) / cols;
-    const th = 54;
-    names.forEach((nm, i) => {
-      const x = MX + (i % cols) * (tw + gap);
-      const ty = y + Math.floor(i / cols) * (th + gap);
-      ops.push({ t: "rect", x, y: ty, w: tw, h: th, r: 12, fill: pal.wash });
-      const size = fitSize(c.m, c.m.clean(nm, "semi"), "semi", 15, tw - 28, 9);
-      text(ops, c, x + tw / 2, ty + th / 2 + size * 0.36, nm, "semi", size, pal.ink, "center");
-    });
-    return y + Math.ceil(names.length / cols) * (th + gap) - gap;
-  };
-  if (s.partners.length) {
-    const ops: Op[] = [];
-    const top = header(ops, c, "Brands we’ve worked with");
-    const together = s.testimonials.length > 0 && s.partners.length <= 8;
-    const end = tiles(ops, top + 4, s.partners);
-    if (together) quotes(ops, end + 34);
-    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Brands", anchor: "partners" });
-    if (together) return pages;
+// ---- 1.44.0: the brands ------------------------------------------------------------------------------------------------
+// The owner: "for the quotes page … groups, i want a logo, the name of the company, and the quote below it, these will
+// have to stay centered. test however many of these can fit on a page nicely. or you should just be able to hit brand
+// logos only and add like a lot of logos in a cool way without the names, just the logos."
+
+/** Where a brand's logo is drawn: always on white (its tile, or the light page), as the PDF's JPEG of it is. */
+const LOGO_GROUND: Color = [255, 255, 255];
+
+/** A brand's logo as the kit has it (its picture's address), or null (none, or not to be had). */
+const logoOf = (c: Pick<Ctx, "images">, b: KitBrand) => (b.logo ? (c.images.brands?.[b.logo] ?? null) : null);
+
+/** A name's first letters ("Blue Heron Coffee": "BH"), for a brand without a logo. */
+const initialsOf = (name: string) =>
+  name
+    .split(/[\s&+/-]+/)
+    .filter((w) => /\p{L}|\p{N}/u.test(w))
+    .slice(0, 2)
+    .map((w) => Array.from(w.replace(/^[^\p{L}\p{N}]+/u, ""))[0] ?? "")
+    .join("")
+    .toUpperCase();
+
+/** The brands page(s): the quotes as groups, or every logo on a wall. None to show: no page. */
+function brandsPages(c: Ctx): Page[] {
+  const { s } = c;
+  if (s.brandsShow === "logos") {
+    const shown = s.brands.filter((b) => logoOf(c, b) || b.name);
+    return shown.length ? [logoWall(c, shown)] : [];
   }
-  if (s.testimonials.length) {
-    const ops: Op[] = [];
-    const top = header(ops, c, "What brands say");
-    quotes(ops, top + 20);
-    pages.push({ w: W, h: H, bg: pal.paper, ops, label: "Kind words", anchor: "partners" });
+  const quoted = s.brands.filter((b) => b.quote.trim());
+  return quoted.length ? quotePages(c, quoted) : [];
+}
+
+// -- The wall --
+
+/**
+ * Every brand's logo, on white tiles in rows set in the middle of the page (a row with one fewer sits between two
+ * full ones, like bricks), as big as the number of them allows: three big ones to 48 small. A brand without a logo
+ * shows its name in its tile instead.
+ */
+function logoWall(c: Ctx, list: KitBrand[]): Page {
+  const { pal } = c;
+  const ops: Op[] = [];
+  const top = header(ops, c, titleOf(c, "partners", "Brands we’ve worked with"));
+  const room = H - 54 - top;
+  const { counts, w, h, gap } = wallShape(list.length, room);
+  const total = counts.length * h + (counts.length - 1) * gap;
+  let y = top + Math.max(0, (room - total) * 0.46);
+  let i = 0;
+  for (const k of counts) {
+    let x = MX + (CW - (k * w + (k - 1) * gap)) / 2;
+    for (let j = 0; j < k; j++, i++) {
+      brandTile(ops, c, list[i], round(x), round(y), round(w), round(h));
+      x += w + gap;
+    }
+    y += h + gap;
   }
-  return pages;
+  return { w: W, h: H, bg: pal.paper, ops, label: "Brands", anchor: "partners" };
+}
+
+/**
+ * The wall's rows and tiles for `n` logos in `room` points of height: as few rows as give the biggest tiles (about
+ * twice as wide as tall, at most 220 wide); the longer rows first and every other, so the rows interlock.
+ */
+export function wallShape(n: number, room: number): { counts: number[]; w: number; h: number; gap: number } {
+  const gap = n <= 6 ? 18 : n <= 15 ? 14 : 10;
+  let best: { rows: number; w: number; h: number; area: number } | null = null;
+  for (let rows = 1; rows <= 8 && rows <= n; rows++) {
+    const k = Math.ceil(n / rows);
+    // Fewer rows hold them all: a row would be empty.
+    if (k * (rows - 1) >= n) continue;
+    let w = Math.min(n <= 3 ? 250 : 220, (CW - (k - 1) * gap) / k);
+    let h = w / 2;
+    const tall = (room - (rows - 1) * gap) / rows;
+    if (h > tall) {
+      h = tall;
+      w = Math.min(w, h * 2.6);
+    }
+    const area = w * h;
+    if (!best || area > best.area + 0.5) best = { rows, w, h, area };
+  }
+  const rows = best?.rows ?? 1;
+  return { counts: rowCounts(n, rows), w: best?.w ?? CW, h: best?.h ?? 80, gap };
+}
+
+/**
+ * `n` tiles in `rows` rows, as even as can be (some rows one longer), the longer ones placed so the wall is the same
+ * upside down where it can be (3 · 4 · 3, 4 · 3 · 4), and otherwise long and short take turns: of every way to place
+ * them (eight rows at most, so a few dozen), the most symmetrical, then the most alternating, then the first.
+ */
+export function rowCounts(n: number, rows: number): number[] {
+  const base = Math.floor(n / rows);
+  const extra = n % rows;
+  if (!extra) return Array.from({ length: rows }, () => base);
+  let best: { counts: number[]; score: number } | null = null;
+  for (let mask = 0; mask < 1 << rows; mask++) {
+    let bits = 0;
+    for (let r = 0; r < rows; r++) if (mask & (1 << r)) bits++;
+    if (bits !== extra) continue;
+    const counts = Array.from({ length: rows }, (_, r) => base + (mask & (1 << r) ? 1 : 0));
+    const mirror = counts.every((v, i) => v === counts[rows - 1 - i]) ? 1 : 0;
+    const turns = rows > 1 ? counts.slice(1).filter((v, i) => v !== counts[i]).length / (rows - 1) : 0;
+    const score = mirror + turns;
+    if (!best || score > best.score + 1e-9) best = { counts, score };
+  }
+  return best!.counts;
+}
+
+/** One brand on the wall: its logo, whole, on a white tile (a hairline round it on a light page), or its name. */
+function brandTile(ops: Op[], c: Ctx, b: KitBrand, x: number, y: number, w: number, h: number) {
+  const { pal } = c;
+  const light = pal.theme === "light";
+  ops.push({ t: "rect", x, y, w, h, r: round(Math.min(14, h * 0.22)), fill: LOGO_GROUND, ...(light ? { stroke: pal.hair, sw: 1 } : {}) });
+  const pad = Math.max(6, Math.min(18, h * 0.2));
+  const padX = Math.max(pad, w * 0.12);
+  const src = logoOf(c, b);
+  if (src) {
+    ops.push({ t: "image", x: round(x + padX), y: round(y + pad), w: round(w - 2 * padX), h: round(h - 2 * pad), src, fit: "contain" });
+    return;
+  }
+  // No logo: the name, in the kit's display face, on the white (the dark page's own colour as its ink).
+  const ink = light ? pal.ink : pal.paper;
+  const nm = c.m.clean(b.name, "disp");
+  const size = fitSize(c.m, nm, "disp", Math.min(22, h * 0.3), w - 2 * padX, 7);
+  const ls = wrap(c.m, b.name, "disp", size, w - 2 * padX, 2);
+  const lh = size * 1.12;
+  lines(ops, c, x + w / 2, y + h / 2 + size * 0.34 - ((ls.length - 1) * lh) / 2, ls, "disp", size, ink, lh, "center");
+}
+
+// -- Quotes --
+
+/** How a page of quotes looks with one, two or three groups side by side. */
+const QUOTE_LOOK = {
+  1: { colW: 600, gap: 0, size: 21, lh: 1.36, maxLines: 6, logoW: 200, logoH: 66, name: 13.5 },
+  2: { colW: 380, gap: 64, size: 16.5, lh: 1.38, maxLines: 8, logoW: 168, logoH: 56, name: 12.5 },
+  3: { colW: 252, gap: 46, size: 13, lh: 1.42, maxLines: 9, logoW: 140, logoH: 48, name: 11.5 },
+} as const;
+type QuoteLook = (typeof QUOTE_LOOK)[1 | 2 | 3];
+
+/** Side by side: one, two or three a row (four as two by two). */
+const quoteCols = (n: number): 1 | 2 | 3 => (n <= 1 ? 1 : n === 2 || n === 4 ? 2 : 3);
+
+/** What they said, without quote marks of its own (the page sets its own round it). */
+const bareQuote = (q: string) =>
+  q
+    .trim()
+    .replace(/^["“”„«»]+\s*/, "")
+    .replace(/\s*["“”„«»]+$/, "");
+
+type QuoteGroup = { b: KitBrand; mark: "logo" | "letters" | null; quote: string[]; by: string[]; h: number };
+
+/** A group laid out at a look: its lines and its height (from the top of its logo to the foot of its last line). */
+function quoteGroup(c: Ctx, b: KitBrand, look: QuoteLook, slot: boolean): QuoteGroup {
+  const mark = logoOf(c, b) ? "logo" : b.name ? "letters" : null;
+  const quote = wrap(c.m, `“${bareQuote(b.quote)}”`, "disp", look.size, look.colW, look.maxLines);
+  const by = b.by ? wrap(c.m, b.by, "reg", 9.5, look.colW, 2) : [];
+  let h = slot ? look.logoH + 16 : 0;
+  if (b.name) h += look.name + 16;
+  h += look.size * 0.8 + (quote.length - 1) * look.size * look.lh;
+  if (by.length) h += 20 + (by.length - 1) * 13;
+  return { b, mark, quote, by, h: h + 4 };
+}
+
+/**
+ * The quotes, a page of groups at a time, each group in the middle of its column: the brand's logo (its first letters
+ * where it has none), its name, what they said, who said it. As many to a page as fit (six at most: three by two), the
+ * pages evened out (seven: four and three); a page's rows in the middle of it.
+ */
+function quotePages(c: Ctx, list: KitBrand[]): Page[] {
+  const top = TOP + 56;
+  const room = H - 54 - top;
+  for (let per = Math.min(6, list.length); per >= 1; per--) {
+    const pages = Math.ceil(list.length / per);
+    // Evened out: the first pages take one more.
+    const sizes = Array.from({ length: pages }, (_, i) => Math.floor(list.length / pages) + (i < list.length % pages ? 1 : 0));
+    let at = 0;
+    const chunks = sizes.map((n) => list.slice(at, (at += n)));
+    const laid = chunks.map((chunk) => quoteRows(c, chunk));
+    if (per > 1 && laid.some((l) => l.height > room)) continue;
+    return laid.map((l) => quotePage(c, l, top, room));
+  }
+  return [];
+}
+
+/** A page's groups in rows (each row as tall as its tallest group), and the height of them all. */
+function quoteRows(c: Ctx, chunk: KitBrand[]) {
+  const cols = quoteCols(chunk.length);
+  const look = QUOTE_LOOK[cols];
+  // A logo's room above every name when any of them has a mark, so the names line up.
+  const slot = chunk.some((b) => logoOf(c, b) || b.name);
+  const groups = chunk.map((b) => quoteGroup(c, b, look, slot));
+  const rows: QuoteGroup[][] = [];
+  for (let i = 0; i < groups.length; i += cols) rows.push(groups.slice(i, i + cols));
+  const rowGap = 34;
+  const height = rows.reduce((t, r) => t + Math.max(...r.map((g) => g.h)), 0) + (rows.length - 1) * rowGap;
+  return { cols, look, slot, rows, rowGap, height };
+}
+
+function quotePage(c: Ctx, l: ReturnType<typeof quoteRows>, top: number, room: number): Page {
+  const { pal } = c;
+  const ops: Op[] = [];
+  header(ops, c, titleOf(c, "partners", "What brands say"));
+  const { look } = l;
+  let y = top + Math.max(0, (room - l.height) * 0.42);
+  for (const row of l.rows) {
+    const rowW = row.length * look.colW + (row.length - 1) * look.gap;
+    row.forEach((g, i) => drawQuote(ops, c, g, look, l.slot, MX + (CW - rowW) / 2 + i * (look.colW + look.gap) + look.colW / 2, y));
+    y += Math.max(...row.map((g) => g.h)) + l.rowGap;
+  }
+  return { w: W, h: H, bg: pal.paper, ops, label: "Kind words", anchor: "partners" };
+}
+
+/** A group, centred on `cx`, from `y` down. */
+function drawQuote(ops: Op[], c: Ctx, g: QuoteGroup, look: QuoteLook, slot: boolean, cx: number, y: number) {
+  const { pal } = c;
+  const light = pal.theme === "light";
+  if (slot && g.mark === "logo") {
+    // The logo whole, as big as its box allows. On a dark page, on a white tile of its own.
+    if (!light) ops.push({ t: "rect", x: round(cx - look.logoW / 2 - 12), y: round(y - 8), w: look.logoW + 24, h: look.logoH + 16, r: 12, fill: LOGO_GROUND });
+    ops.push({ t: "image", x: round(cx - look.logoW / 2), y: round(y), w: look.logoW, h: look.logoH, src: logoOf(c, g.b)!, fit: "contain" });
+  } else if (slot && g.mark === "letters") {
+    const d = Math.min(look.logoH, 52);
+    ops.push({ t: "circle", cx: round(cx), cy: round(y + look.logoH / 2), r: d / 2, fill: pal.wash });
+    text(ops, c, cx, y + look.logoH / 2 + d * 0.14, initialsOf(g.b.name) || "·", "disp", d * 0.4, pal.accentText, "center");
+  }
+  let yy = y + (slot ? look.logoH + 16 : 0);
+  if (g.b.name) {
+    yy += look.name;
+    text(ops, c, cx, yy, ellipsize(c.m, g.b.name, "semi", look.name, look.colW), "semi", look.name, pal.ink, "center");
+    yy += 16;
+  }
+  // What they said: centred lines, its quote marks in the accent.
+  yy += look.size * 0.8;
+  const lh = look.size * look.lh;
+  g.quote.forEach((ln, i) => {
+    const str = c.m.clean(ln, "disp");
+    const w = c.m.width(str, "disp", look.size);
+    let x = cx - w / 2;
+    let rest = str;
+    if (i === 0 && rest.startsWith("“")) {
+      x += text(ops, c, x, yy, "“", "disp", look.size, pal.accentText);
+      rest = rest.slice(1);
+    }
+    const close = i === g.quote.length - 1 && rest.endsWith("”");
+    if (close) rest = rest.slice(0, -1);
+    x += text(ops, c, x, yy, rest, "disp", look.size, pal.ink);
+    if (close) text(ops, c, x, yy, "”", "disp", look.size, pal.accentText);
+    yy += lh;
+  });
+  yy -= lh;
+  if (g.by.length) lines(ops, c, cx, yy + 20, g.by, "reg", 9.5, pal.muted, 13, "center");
 }
 
 /**
@@ -850,7 +1102,7 @@ function ratesPage(c: Ctx): Page {
   // Prices shown only when there's a package to price (nothing to buy: rates on request).
   const show = s.rates.show && n > 0;
   const priced = show && list.some((p) => p.price !== null);
-  const top = header(ops, c, "Working together", { right: priced ? `Prices in ${s.rates.currency}` : null });
+  const top = header(ops, c, titleOf(c, "rates", "Working together"), { right: priced ? `Prices in ${s.rates.currency}` : null });
   const limit = H - 48;
   const reqLines = show ? [] : wrap(c.m, s.rates.note || REQUEST_LINE, "reg", 12.5, 560, 3);
   const noteLines = show && s.rates.note ? wrap(c.m, s.rates.note, "reg", 10.5, CW, 2) : [];
@@ -954,42 +1206,26 @@ function contactPage(c: Ctx): Page {
   const site = websiteUrl(s.contact.website);
   if (site) row("Website", s.contact.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), site);
 
-  // Where the numbers come from (1.39.0: and which are the team's own; 1.41.0: and the picked videos' platforms).
-  const note = sourceNote(c, pickedFrom(c));
-  if (note) lines(ops, c, MX, H - 62, wrap(c.m, note, "reg", 9, leftW, 2), "reg", 9, pal.faint, 12.5);
+  // 1.44.0: the foot of the last page says it was built with ClipTroop, and when, beside its logo (the owner: "turn the
+  // watermark into the cliptroop logo and says built with cliptroop on "date", but also a toggle to turn it off"). It
+  // took the place of 1.37.0's line on where the numbers come from.
+  if (s.builtWith) builtWith(ops, c, MX, H - 58);
   return { w: W, h: H, bg: pal.paper, ops, label: "Contact", anchor: "contact" };
 }
 
-/**
- * The platforms of the videos picked for the best videos page, shown there with their numbers (1.41.0: they can come
- * from any platform the team has, not only the kit's own).
- */
-function pickedFrom(c: Pick<Ctx, "s">): KitPlatform[] {
-  const { s } = c;
-  if (!s.sections.videos || !s.videoPicks.on) return [];
-  const on = new Set(s.videoPicks.list.slice(0, LIMITS.videoPicks).map((v) => v.platform));
-  return KIT_PLATFORMS.filter((p) => on.has(p));
-}
+/** The day the kit was built, as the last page says it ("Oct 30, 2026"): the day its numbers were read. */
+export const builtOn = (nums: Pick<MediaKitNumbers, "generatedAt">) => shortDay(nums.generatedAt.slice(0, 10), true);
 
-/**
- * Where the kit's numbers come from, honestly: read from the platforms by ClipTroop, or typed in by the team (1.39.0:
- * a platform's numbers, the audience, the totals). `also`: other platforms whose numbers it shows (1.41.0: picked
- * videos from a platform the kit isn't about), read from them too. Null without numbers.
- */
-export function sourceNote(c: Pick<Ctx, "ps" | "nums" | "totals">, also: readonly KitPlatform[] = []): string | null {
-  const { ps, nums } = c;
-  if (!ps.length) return null;
-  const day = shortDay(nums.generatedAt.slice(0, 10), true);
-  const mine = new Set(ps.map((p) => p.platform));
-  const read = [...ps.filter((p) => !p.manual).map((p) => p.platform), ...KIT_PLATFORMS.filter((p) => !mine.has(p) && also.includes(p))].map((p) => KIT_PLATFORM_NAME[p]);
-  const own = [
-    ps.some((p) => p.manual) ? `${listWords(ps.filter((p) => p.manual).map((p) => `${KIT_PLATFORM_NAME[p.platform]}’s`))} numbers` : null,
-    ps.some((p) => p.manualAudience) ? "the audience figures" : null,
-    c.totals.manual && ps.length > 1 ? "the totals" : null,
-  ].filter((x): x is string => !!x);
-  if (!own.length) return `Every number in this kit comes straight from ${listWords(read)}, read by ClipTroop on ${day}.`;
-  const ours = `${listWords(own).charAt(0).toUpperCase()}${listWords(own).slice(1)} are our own count.`;
-  return read.length ? `${listWords(read.map((r) => `${r}’s`))} numbers come straight from the platform${read.length > 1 ? "s" : ""}, read by ClipTroop on ${day}. ${ours}` : ours;
+/** ClipTroop's logo and "Built with ClipTroop on <day>", its baseline at `base`; a link to ClipTroop's website. */
+function builtWith(ops: Op[], c: Ctx, x: number, base: number) {
+  const { pal } = c;
+  const size = 17;
+  ops.push(...clipTroopMark(x, base - 13, size));
+  let tx = x + size + 7;
+  tx += text(ops, c, tx, base, "Built with ", "reg", 9.5, pal.faint);
+  tx += text(ops, c, tx, base, APP_NAME, "semi", 9.5, pal.muted);
+  tx += text(ops, c, tx, base, ` on ${builtOn(c.nums)}`, "reg", 9.5, pal.faint);
+  ops.push({ t: "link", x, y: base - 15, w: round(tx - x), h: 20, url: siteUrl() || `https://app.${APP_DOMAIN}` });
 }
 
 /** Every page's footer: the kit's name on the left, the page on the right (not on the cover). */
@@ -1044,7 +1280,7 @@ export function buildKits(read: MediaKitNumbers, s: MediaKitSettings, m: Measure
       const v = videosPage(c);
       if (v) pages.push(v);
     }
-    if (s.sections.partners) pages.push(...partnersPages(c));
+    if (s.sections.partners) pages.push(...brandsPages(c));
     if (s.sections.rates) pages.push(ratesPage(c));
     if (s.sections.contact) pages.push(contactPage(c));
     footers(c, pages);

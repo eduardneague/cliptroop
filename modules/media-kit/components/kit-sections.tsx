@@ -10,6 +10,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { audienceFromRead, kitTotals, manualFromRead, totalsFromRead } from "../lib/manual";
 import { growthPct, ratePct, type KitAudience, type KitPlatformNumbers, type MediaKitNumbers } from "../lib/numbers";
 import { big, dayRange, pct, shortDay, signedPct } from "../lib/scene";
+import { builtOn, usualTitle } from "../lib/layout";
 import {
   KIT_PERIODS,
   KIT_PLATFORMS,
@@ -25,10 +26,14 @@ import {
   type ManualAudience,
   type ManualPlatform,
   type ManualTotals,
+  type KitTitle,
   type MediaKitSettings,
   type RatePackage,
+  type TitlePage,
 } from "../lib/settings";
-import { CURRENCY_OPTIONS, PartnersEditor, QuotesEditor, RatesEditor, TextArea, TextField } from "./kit-fields";
+import { ClipLogo } from "@/components/ui/clip-logo";
+import { APP_NAME } from "@/lib/brand";
+import { BrandsEditor, CURRENCY_OPTIONS, RatesEditor, TextArea, TextField, TitleField, Toggle, type BrandLogos } from "./kit-fields";
 import { AutoManual, ManualAudienceFields, ManualPlatformFields, ManualTotalsFields } from "./kit-manual";
 import { CoverGridPicker, VideoPicksField } from "./kit-video-picker";
 import { pageAnchorFor } from "./use-kit-sync";
@@ -65,7 +70,16 @@ export type KitForm = {
   photo: { url: string | null; uploading: boolean; add: (file: File | undefined) => void; remove: () => void };
   /** The wall the cover gets on Auto. */
   autoGrid: "shorts" | "longs" | "mixed";
+  /** 1.44.0: the brands' logos (their links, the ones going up, adding more). */
+  logos: BrandLogos;
+  /** 1.44.0: the cover's title as the kit's name breaks on it (the cover's own title starts from it). */
+  coverLines: string[];
 };
+
+/** 1.44.0: a page's own title, switched on or off, typed (kept while it's off). */
+function PageTitle({ f, page, label }: { f: KitForm; page: TitlePage; label?: string }) {
+  return <TitleField value={f.s.titles[page]} usual={usualTitle(page, f.s)} label={label} onChange={(t: KitTitle) => f.update((s) => ({ titles: { ...s.titles, [page]: t } }))} />;
+}
 
 // ---- A part --------------------------------------------------------------------------------------------------------
 
@@ -299,6 +313,14 @@ export function CoverPart({ f }: { f: KitForm }) {
   const few = picks.on && picks.list.length > 0 && picks.list.length <= 3;
   return (
     <Part f={f} anchor="cover" page="cover" title="Cover" hint="Your name, one line about you, and beside them your videos, a photo, or one big number.">
+      <TitleField
+        label="Title"
+        lines
+        value={s.titles.cover}
+        usual={f.coverLines.join(" ")}
+        start={f.coverLines.join("\n")}
+        onChange={(t) => f.update((cur) => ({ titles: { ...cur.titles, cover: t } }))}
+      />
       <TextField label="One line about the channel" value={s.tagline} onChange={(v) => set({ tagline: v })} max={LIMITS.tagline} placeholder="Slow travel, long roads and the people we meet on the way." hint="Under the name." />
       <div>
         <p className="text-[12.5px] font-semibold text-ink-soft mb-1.5">Beside your name</p>
@@ -381,6 +403,7 @@ export function AboutPart({ f }: { f: KitForm }) {
   const { s, set } = f;
   return (
     <Part f={f} anchor="about" page="about" title="About us" hint="Your own words, set big, beside your photo or a few of your videos.">
+      <PageTitle f={f} page="about" />
       <TextArea label="About us" value={s.about} onChange={(v) => set({ about: v })} max={LIMITS.about} placeholder="What you make, for whom, how often, and since when." hint={s.about ? undefined : "The page shows once there's something here."} rows={4} />
     </Part>
   );
@@ -417,6 +440,7 @@ export function GlancePart({ f }: { f: KitForm }) {
   const line = [auto.followers !== null ? `${big(auto.followers)} followers` : null, auto.views !== null ? `${big(auto.views)} views` : null, auto.engagementRate !== null ? `${pct(auto.engagementRate)} engagement` : null, auto.avgViews !== null ? `${big(auto.avgViews)} average views` : null].filter(Boolean).join(", ");
   return (
     <Part f={f} anchor="glance" page="glance" title="At a glance" hint="Every platform added up, with the views per day.">
+      <PageTitle f={f} page="glance" />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <AutoManual label="At a glance's numbers" manual={m.on} onChange={switchTo} autoLabel="Added up" />
       </div>
@@ -472,6 +496,9 @@ export function PlatformsPart({ f }: { f: KitForm }) {
                 )
               }
             >
+              <div className="mb-2.5">
+                <PageTitle f={f} page={`platform:${p}`} />
+              </div>
               {byHand || m.on ? (
                 <>
                   {byHand && <p className="text-[12px] text-ink-faint mb-3">Not connected: the page shows what you type here. An empty box is left off.</p>}
@@ -524,6 +551,9 @@ export function AudiencePart({ f }: { f: KitForm }) {
         const line = audienceLine(r?.audience ?? null);
         return (
           <Block key={p} f={f} anchor={`audience:${p}`} platform={p} aside={<AutoManual label={`Who watches on ${KIT_PLATFORM_NAME[p]}`} manual={m.on} onChange={(v) => switchTo(p, v)} />}>
+            <div className="mb-2.5">
+              <PageTitle f={f} page={`audience:${p}`} />
+            </div>
             {m.on ? (
               <ManualAudienceFields m={m} onChange={(next) => setM(p, next)} />
             ) : line ? (
@@ -544,6 +574,7 @@ export function VideosPart({ f }: { f: KitForm }) {
   const { s, set } = f;
   return (
     <Part f={f} anchor="videos" page="videos" title={s.videoPicks.on && s.videoPicks.list.length ? "Videos we're proud of" : "Best videos"} hint="The most viewed of the period, or the ones you pick.">
+      <PageTitle f={f} page="videos" />
       <VideoPicksField
         ariaLabel="Which videos to feature"
         picks={s.videoPicks}
@@ -566,12 +597,34 @@ export function VideosPart({ f }: { f: KitForm }) {
 
 // ---- Brands, rates, contact ------------------------------------------------------------------------------------------
 
+/**
+ * 1.44.0: the brands, as quotes (each brand with a quote: its logo, its name and what they said, centred, up to six a
+ * page) or as a wall of their logos (no names: the owner's "brand logos only").
+ */
 export function PartnersPart({ f }: { f: KitForm }) {
   const { s, set } = f;
+  const quoted = s.brands.filter((b) => b.quote.trim()).length;
   return (
     <Part f={f} anchor="partners" page="partners" title="Brands and kind words" hint="Who you've worked with, and what they said. The page shows when there's something on it.">
-      <PartnersEditor partners={s.partners} onChange={(partners) => set({ partners })} />
-      <QuotesEditor quotes={s.testimonials} onChange={(testimonials) => set({ testimonials })} />
+      <PageTitle f={f} page="partners" />
+      <div>
+        <p className="text-[12.5px] font-semibold text-ink-soft mb-1.5">Show</p>
+        <Segmented
+          ariaLabel="How the brands page shows them"
+          value={s.brandsShow}
+          onChange={(brandsShow) => set({ brandsShow })}
+          options={[
+            { value: "quotes", label: "Quotes" },
+            { value: "logos", label: "Brand logos only" },
+          ]}
+        />
+        <p className="text-[12px] text-ink-faint mt-1.5">
+          {s.brandsShow === "quotes"
+            ? `Each brand with a quote: its logo, its name and what they said, centred, up to six a page${quoted ? ` (${quoted} ${quoted === 1 ? "quote" : "quotes"} now)` : ""}.`
+            : "Every brand's logo on a wall, no names (a brand without a logo shows its name). Up to 48."}
+        </p>
+      </div>
+      <BrandsEditor brands={s.brands} show={s.brandsShow} onChange={(brands) => set({ brands })} logos={f.logos} />
     </Part>
   );
 }
@@ -588,6 +641,7 @@ export function RatesPart({ f }: { f: KitForm }) {
   };
   return (
     <Part f={f} anchor="rates" page="rates" title="Rates" hint="Show your prices, or say they're on request. Packages say what a sponsor can buy either way.">
+      <PageTitle f={f} page="rates" />
       <div className="flex items-center gap-3 flex-wrap">
         <Segmented ariaLabel="Prices or on request" value={s.rates.show ? "show" : "request"} onChange={(v) => set({ rates: { ...s.rates, show: v === "show" } })} options={[{ value: "show", label: "Show prices" }, { value: "request", label: "On request" }]} />
         {s.rates.show && (
@@ -614,6 +668,15 @@ export function ContactPart({ f }: { f: KitForm }) {
         <TextField label="Email" type="email" inputMode="email" value={s.contact.email} onChange={(v) => set({ contact: { ...s.contact, email: v } })} max={LIMITS.email} placeholder="partners@yourchannel.com" problem={emailProblem} />
         <TextField label="Phone" type="tel" inputMode="tel" value={s.contact.phone} onChange={(v) => set({ contact: { ...s.contact, phone: v } })} max={LIMITS.phone} placeholder="+40 712 345 678" />
         <TextField label="Website" inputMode="url" value={s.contact.website} onChange={(v) => set({ contact: { ...s.contact, website: v } })} max={LIMITS.website} placeholder="yourchannel.com" problem={siteProblem} />
+      </div>
+      {/* 1.44.0: the owner's "turn the watermark into the cliptroop logo and says built with cliptroop on "date", but also a toggle to turn it off". */}
+      <div className="flex items-center gap-3 rounded-xl border border-line/12 bg-surface-2/40 pl-3 pr-2.5 py-2.5">
+        <ClipLogo size={26} id="kit-built-with" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold">Built with {APP_NAME}</p>
+          <p className="text-[12px] text-ink-faint">{s.builtWith ? `${APP_NAME}'s logo and “Built with ${APP_NAME} on ${f.read ? builtOn(f.read) : "the day it's made"}” at the foot of this page.` : "Off: nothing at the foot of this page."}</p>
+        </div>
+        <Toggle on={s.builtWith} onChange={(builtWith) => set({ builtWith })} label={`Built with ${APP_NAME} on the last page`} />
       </div>
     </Part>
   );

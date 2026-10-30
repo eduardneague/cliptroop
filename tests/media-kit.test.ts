@@ -14,13 +14,15 @@
 // go into that template and just modify a few things … as many templates as i want" (media_kit_templates, 0118).
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_PACKAGES, LIMITS, cleanText, defaultKitSettings, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, sameSetup, templateName, templateSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, TEMPLATE_NAME_MAX, TEMPLATES_MAX, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
+import { DEFAULT_PACKAGES, LIMITS, TITLE_PAGES, brandLogos, cleanText, coverTitleText, defaultKitSettings, kitFilesOf, emptyManualAudience, emptyManualPlatform, emptyTotals, formatPrice, isCoverPath, isCurrency, isEmail, isOwnThumb, isWebsite, readKitSettings, sameSetup, templateName, templateSettings, videoKey, websiteUrl, KIT_AGES, KIT_SECTIONS, TEMPLATE_NAME_MAX, TEMPLATES_MAX, type KitBrand, type ManualPlatform, type MediaKitSettings } from "../modules/media-kit/lib/settings";
 import { applyManual, audienceFrom, audienceFromRead, kitTotals, manualFromRead, parseAmount, parsePoints, pickedVideo, pointsText, toPicked, totalsFromRead, withManual } from "../modules/media-kit/lib/manual";
 import { canMakeMediaKit, KIT_NO_ACCESS } from "../modules/media-kit/lib/access";
 import { pageAnchorFor } from "../modules/media-kit/components/use-kit-sync";
 import { addDaily, agesFrom, changePct, countriesFrom, gendersFrom, growthPct, isVertical, mean, profileUrl, ratePct, shares, sum, type KitPlatformNumbers, type KitVideo, type MediaKitNumbers } from "../modules/media-kit/lib/numbers";
 import { big, dayRange, fitSize, pct, roundRect, shortDay, signedPct, smoothPath, wrap, PAGE_H, PAGE_W, type Measure, type Op } from "../modules/media-kit/lib/scene";
-import { autoCoverGrid, buildKits, coverGridFor, kitFileName, packagesFor, sourceNote, totalsOf, type KitImages } from "../modules/media-kit/lib/layout";
+import { autoCoverGrid, builtOn, buildKits, coverGridFor, coverTitle, kitFileName, packagesFor, rowCounts, totalsOf, usualTitle, wallShape, type KitImages } from "../modules/media-kit/lib/layout";
+import { contentBox, kitUploadPath, nameFromFile } from "../modules/media-kit/lib/logo-file";
+import { clipTroopMark } from "../modules/media-kit/lib/mark";
 import { allOf, likeEscape, orValue, pickedKeys, readBrowse, searchTree, SHAPE_TREE, yearsSince, BROWSE_PAGE, KIT_SHAPES } from "../modules/media-kit/lib/browse";
 import { NUMBER_PAGES, pagesTouched, touches } from "../modules/media-kit/lib/touched";
 import { kitPalette } from "../modules/media-kit/lib/theme";
@@ -85,8 +87,11 @@ ok(r.title === "Northbound Adventures" && Array.from(r.tagline).length === LIMIT
 ok(r.rates.show && r.rates.currency === "EUR" && r.rates.packages.length === 3, `packages: an empty one dropped (${r.rates.packages.length})`);
 ok(r.rates.packages[0].price === 18000.46 && r.rates.packages[1].price === null && r.rates.packages[1].platform === "any" && r.rates.packages[2].price === LIMITS.price, "prices: cents, never negative, at most 10,000,000; unknown platform: any");
 ok(new Set(r.rates.packages.map((p) => p.id)).size === 3 && r.rates.packages.every((p) => /^[a-z0-9]{1,12}$/.test(p.id)), "package ids: unique, plain");
-ok(r.partners.length === LIMITS.partners && r.partners[0] === "GoPro" && r.partners.filter((p) => p.toLowerCase() === "gopro").length === 1, "brands: each once (any case), at most 16");
-ok(r.testimonials.length === 3 && r.testimonials[0].quote === "Great" && r.testimonials.every((t) => t.quote), "quotes: empty ones out, at most 3");
+// 1.44.0: a setup from before: its brand names and quotes become brands of their own, the names first.
+ok(r.brands.length === 36 && r.brands[0].name === "GoPro" && r.brands.filter((b) => b.name.toLowerCase() === "gopro").length === 1 && r.brands.every((b) => b.logo === null), `old brand names: each once (any case), as brands (${r.brands.length})`);
+ok(same(r.brands.filter((b) => b.quote).map((b) => [b.name, b.quote, b.by]), [["", "Great", "Sam"], ["", "Two", ""], ["", "Three", ""], ["", "Four", ""]]) && r.brandsShow === "quotes", "old quotes: each a brand with its quote and who said it (empty ones out; no more three at most); shown as quotes");
+ok(new Set(r.brands.map((b) => b.id)).size === r.brands.length && r.brands.every((b) => /^[a-z0-9]{1,12}$/.test(b.id)), "brand ids: unique, plain");
+ok(readKitSettings({ partners: ["GoPro"] }).brandsShow === "logos" && readKitSettings({}).brandsShow === "quotes" && readKitSettings({ partners: ["GoPro"], brandsShow: "quotes" }).brandsShow === "quotes", "old brand names only: the wall; a choice made: kept");
 ok(r.contact.email === "nope" && r.contact.website === "northbound.tv", "a wrong email is kept as typed (the form says so; the kit leaves it out)");
 ok(readKitSettings({ coverPath: "10000000-0000-4000-8000-0000000114b0/cover.jpg" }, TEAM).coverPath === null, "another team's photo: not kept");
 ok(!isCoverPath(`${TEAM}/..`, TEAM) && !isCoverPath(`${TEAM}/../x.jpg`, TEAM) && !isCoverPath(`${TEAM}/a/b.jpg`, TEAM) && !isCoverPath("cover.jpg") && isCoverPath(`${TEAM}/cover-1_x.webp`, TEAM), "a cover path is a file in the team's own folder");
@@ -178,15 +183,18 @@ const nums: MediaKitNumbers = {
 const full: MediaKitSettings = {
   ...defaultKitSettings(),
   about: "We make travel videos.",
-  partners: ["GoPro", "DJI"],
-  testimonials: [{ id: "q", quote: "Great to work with.", by: "Sam" }],
+  brands: [
+    { id: "g", name: "GoPro", logo: null, quote: "", by: "" },
+    { id: "d", name: "DJI", logo: null, quote: "", by: "" },
+    { id: "q", name: "", logo: null, quote: "Great to work with.", by: "Sam" },
+  ],
   rates: { show: true, currency: "EUR", note: "VAT not included.", packages: [{ id: "y", name: "Integration", detail: "60 seconds", platform: "youtube", price: 5000 }, { id: "i", name: "Reel", detail: "", platform: "instagram", price: null }, { id: "a", name: "Bundle", detail: "", platform: "any", price: 9000 }] },
   contact: { name: "Ed", email: "ed@northbound.tv", phone: "+40 712 345 678", website: "northbound.tv", cta: "" },
 };
 const images: KitImages = { logo: "/logo.png", cover: null };
 const texts = (ops: Op[]) => ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text").map((o) => o.s).join(" | ");
 const [one] = buildKits(nums, full, m, images);
-ok(same(one.pages.map((p) => p.label), ["Cover", "About us", "At a glance", "YouTube", "Instagram", "TikTok", "Audience: YouTube", "Audience: TikTok", "Best videos", "Brands", "Rates", "Contact"]), `one kit: ${one.pages.map((p) => p.label).join(", ")}`);
+ok(same(one.pages.map((p) => p.label), ["Cover", "About us", "At a glance", "YouTube", "Instagram", "TikTok", "Audience: YouTube", "Audience: TikTok", "Best videos", "Kind words", "Rates", "Contact"]), `one kit: ${one.pages.map((p) => p.label).join(", ")}`);
 ok(one.fileName === "Northbound media kit October 2026.pdf" && same(one.platforms, ["youtube", "instagram", "tiktok"]), "named for the team; every platform");
 const glance = texts(one.pages[2].ops);
 ok(/4\.5%/.test(glance) || /engagement rate/.test(glance), "At a glance: the engagement rate");
@@ -229,9 +237,8 @@ ok(!off.pages.some((p) => ["Cover", "Rates"].includes(p.label) || p.label.starts
 const request = buildKits(nums, { ...full, rates: { ...full.rates, show: false } }, m, images)[0];
 const rq = texts(request.pages.find((p) => p.label === "Rates")!.ops);
 ok(/Rates on request/.test(rq) && !/€/.test(rq) && /Integration/.test(rq), "on request: the packages, no prices, said big");
-ok(!buildKits(nums, { ...full, about: "" }, m, images)[0].pages.some((p) => p.label === "About us") && !buildKits(nums, { ...full, partners: [], testimonials: [] }, m, images)[0].pages.some((p) => /Brands|Kind words/.test(p.label)), "no words, no About us; no brands or quotes, no page for them");
-const many = buildKits(nums, { ...full, partners: Array.from({ length: 12 }, (_, i) => `Brand ${i}`) }, m, images)[0];
-ok(many.pages.some((p) => p.label === "Brands") && many.pages.some((p) => p.label === "Kind words"), "many brands and a quote: two pages");
+ok(!buildKits(nums, { ...full, about: "" }, m, images)[0].pages.some((p) => p.label === "About us") && !buildKits(nums, { ...full, brands: [] }, m, images)[0].pages.some((p) => /Brands|Kind words/.test(p.label)), "no words, no About us; no brands, no page for them");
+ok(!buildKits(nums, { ...full, brands: full.brands.map((b) => ({ ...b, quote: "" })) }, m, images)[0].pages.some((p) => p.anchor === "partners") && buildKits(nums, { ...full, brandsShow: "logos" }, m, images)[0].pages.filter((p) => p.label === "Brands").length === 1, "quotes without a quote: no page; the wall: one page");
 ok(buildKits(nums, { ...full, videos: 3 }, m, images)[0].pages.find((p) => p.label === "Best videos")!.ops.filter((o) => o.t === "image").length === 3, "three best videos");
 const fewVideos = { ...nums, platforms: nums.platforms.map((p) => ({ ...p, top: p.top.slice(0, 0) })) };
 ok(/Most viewed ever/.test(texts(buildKits(fewVideos, full, m, images)[0].pages.find((p) => p.label === "Best videos")!.ops)), "a period without videos: the best ever");
@@ -243,7 +250,7 @@ ok(!cover({ cover: "photo" }).some((o) => o.t === "image" && o.src === "/photo.j
 ok(/views in the last 28 days/.test(texts(cover({ cover: "plain" }))), "cover: one big number");
 ok(cover({}, { logo: null, cover: null }).some((o) => o.t === "text" && o.s === "N"), "no logo: the name's first letter on the accent");
 const empty = buildKits({ ...nums, platforms: [], allTime: [] }, full, m, images)[0];
-ok(same(empty.pages.map((p) => p.label), ["Cover", "About us", "Brands", "Rates", "Contact"]), `no numbers yet: still a kit (${empty.pages.map((p) => p.label).join(", ")})`);
+ok(same(empty.pages.map((p) => p.label), ["Cover", "About us", "Kind words", "Rates", "Contact"]), `no numbers yet: still a kit (${empty.pages.map((p) => p.label).join(", ")})`);
 const longTitle = buildKits(nums, { ...full, title: "Northbound Adventures and the Very Long Channel Name Here" }, m, images)[0];
 ok(!texts(longTitle.pages[0].ops).includes("…") || texts(longTitle.pages[0].ops).split("|").filter((x) => x.includes("Northbound") || x.includes("Name")).length >= 2, "a long name wraps rather than being cut");
 const dark = buildKits(nums, { ...full, theme: "dark" }, m, images)[0];
@@ -344,9 +351,6 @@ ok(/Videos we're proud of/.test(texts(vp.ops)) && !/Most viewed/.test(texts(vp.o
 const vpImgs = vp.ops.filter((o): o is Extract<Op, { t: "image" }> => o.t === "image").map((o) => o.src);
 ok(same(vpImgs, ["/t/tiktok3.jpg", "/t/youtube2.jpg", "/t/instagram4.jpg"]), `the picked videos, in their order (${vpImgs.join(" ")})`);
 ok(/497K views/.test(texts(vp.ops)) && !/(^|\| )1 views/.test(texts(vp.ops)), "with the freshest numbers (the pool's: 497K, not the 1 it had when picked)");
-const ytOnly = buildKits(poolNums, { ...full, platforms: ["youtube"], videoPicks: { on: true, list: picks } }, m, images)[0].pages.find((p) => p.anchor === "contact")!;
-const ytNone = buildKits(poolNums, { ...full, platforms: ["youtube"], sections: { ...full.sections, videos: false }, videoPicks: { on: true, list: picks } }, m, images)[0].pages.find((p) => p.anchor === "contact")!;
-ok(/comes straight from YouTube, Instagram and TikTok,/.test(texts(ytOnly.ops)) && /comes straight from YouTube,/.test(texts(ytNone.ops)), `a YouTube kit with picked TikToks and Reels: their platforms named where the numbers come from (not when the page is off)`);
 const fivePicked = buildKits(poolNums, { ...full, videos: 3, videoPicks: { on: true, list: [...wideFive()].map(toPicked) } }, m, images)[0].pages.find((p) => p.anchor === "videos")!;
 ok(fivePicked.ops.filter((o) => o.t === "image").length === 5, "picked: all of them, whatever the count for the most viewed");
 ok(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.label === "Best videos" && /Our best videos/.test(texts(buildKits(poolNums, { ...full, videoPicks: { on: true, list: [] } }, m, images)[0].pages.find((p) => p.anchor === "videos")!.ops)), "Pick on but nothing picked: the most viewed");
@@ -394,7 +398,7 @@ const manualS: MediaKitSettings = {
   },
 };
 const mk = buildKits(poolNums, manualS, m, images)[0];
-ok(same(mk.pages.map((p) => p.label), ["Cover", "About us", "At a glance", "YouTube", "Instagram", "TikTok", "Facebook", "Audience: YouTube", "Audience: TikTok", "Best videos", "Brands", "Rates", "Contact"]), `typed in: Facebook's page, TikTok's audience page (${mk.pages.map((p) => p.label).join(", ")})`);
+ok(same(mk.pages.map((p) => p.label), ["Cover", "About us", "At a glance", "YouTube", "Instagram", "TikTok", "Facebook", "Audience: YouTube", "Audience: TikTok", "Best videos", "Kind words", "Rates", "Contact"]), `typed in: Facebook's page, TikTok's audience page (${mk.pages.map((p) => p.label).join(", ")})`);
 const ytPage = texts(mk.pages.find((p) => p.anchor === "platform:youtube")!.ops);
 ok(/110K/.test(ytPage) && /Subscribers per month/.test(ytPage) && /Highest: 1\.5M/.test(ytPage) && !/Best day/.test(ytPage) && !/hours watched/.test(ytPage), "YouTube's page: the typed numbers, its own chart and its highest point, no hours (left empty)");
 ok(/3M/.test(texts(mk.pages[0].ops)) && /3M/.test(texts(mk.pages.find((p) => p.anchor === "glance")!.ops)) && /52M/.test(texts(mk.pages.find((p) => p.anchor === "glance")!.ops)) && /3M/.test(texts(mk.pages.find((p) => p.anchor === "contact")!.ops)), "At a glance's own numbers on it, the cover and the last page");
@@ -404,11 +408,8 @@ const cellXs = (pg: { ops: Op[] }) => pg.ops.filter((o): o is Extract<Op, { t: "
 const fbFull = buildKits(poolNums, { ...manualS, manual: { ...manualS.manual, platforms: { ...manualS.manual.platforms, facebook: { ...manualS.manual.platforms.facebook!, engagementRate: 3.3, avgViews: 120_000, posted: 9 } } } }, m, images)[0].pages.find((p) => p.anchor === "platform:facebook")!;
 ok(cellXs(fbFull).length === 4 && Math.max(...cellXs(fbFull)) > 600, `nothing to draw on its right (a platform by hand): its numbers across the page (${cellXs(fbFull).map(Math.round)})`);
 ok(Math.max(...cellXs(mk.pages.find((p) => p.anchor === "platform:instagram")!)) < 420, "with a chart and videos: two by two on the left");
-const note = sourceNote({ ps: applyManual(poolNums, manualS).platforms, nums: poolNums, totals: kitTotals(applyManual(poolNums, manualS).platforms, manualS.manual.glance) })!;
-ok(/Instagram’s and TikTok’s numbers come straight from the platforms, read by ClipTroop on Oct 27, 2026\./.test(note) && /YouTube’s and Facebook’s numbers, the audience figures and the totals are our own count\./.test(note), `the kit says which numbers are its own (${note})`);
-ok(sourceNote({ ps: nums.platforms, nums, totals: t0 }) === "Every number in this kit comes straight from YouTube, Instagram and TikTok, read by ClipTroop on Oct 27, 2026.", "all read: says so");
-ok(sourceNote({ ps: nums.platforms.filter((p) => p.platform === "youtube"), nums, totals: t0 }, ["facebook", "youtube"]) === "Every number in this kit comes straight from YouTube and Facebook, read by ClipTroop on Oct 27, 2026." && sourceNote({ ps: nums.platforms, nums, totals: t0 }, ["instagram"]) === sourceNote({ ps: nums.platforms, nums, totals: t0 }), "1.41.0: videos picked from another platform: its numbers are read from it too (said once)");
-ok(texts(mk.pages.find((p) => p.anchor === "contact")!.ops).includes("our own count"), "the note on the last page");
+// 1.44.0: the last page's note on where the numbers come from became "Built with ClipTroop on <day>" (with a switch).
+ok(!/straight from|our own count|read by ClipTroop/.test(texts(mk.pages.find((p) => p.anchor === "contact")!.ops)), "the last page no longer says where the numbers come from");
 const perPlatform = buildKits(poolNums, { ...manualS, split: "each" }, m, images);
 ok(perPlatform.every((k) => !texts(k.pages[0].ops).includes("3M")) && perPlatform[0].pages[0].ops.some((o) => o.t === "text" && o.s === "110K"), "a kit per platform: its own followers (At a glance's typed totals are for the kit of them all)");
 ok(!texts(buildKits(poolNums, { ...manualS, platforms: ["youtube"] }, m, images)[0].pages[0].ops).includes("3M"), "one platform chosen: no At a glance page, so its typed totals don't stand for the kit");
@@ -423,10 +424,10 @@ const actions = read("app/(dashboard)/analytics/media-kit-actions.ts");
 ok(/^"use server";/.test(actions) && !/export async function kitTeam/.test(actions) && !/export const/.test(actions), "server actions only (the team check isn't one; nothing else exported)");
 const loadFn = actions.slice(actions.indexOf("export async function loadMediaKitNumbers"), actions.indexOf("export async function saveMediaKit"));
 ok(/const team = await kitTeam\(supabase, teamId, user\.id\);\s+if \(!team\) return \{ error: KIT_NO_ACCESS \};/.test(loadFn), "numbers: only for the kit's people (Masters and the people they let in)");
-const saveFn = actions.slice(actions.indexOf("export async function saveMediaKit"), actions.indexOf("export async function mediaKitCoverLink"));
+const saveFn = actions.slice(actions.indexOf("export async function saveMediaKit"), actions.indexOf("/** The files the old setup used"));
 ok(/if \(!\(await mayMakeMediaKit\(supabase, teamId, user\.id\)\)\.ok\) return \{ error: KIT_NO_ACCESS \};/.test(saveFn) && /const settings = readKitSettings\(raw, teamId\);/.test(saveFn) && /upsert\(\{ team_id: teamId, settings \}, \{ onConflict: "team_id" \}\)/.test(saveFn), "saving: Masters and the people they let in, every field checked, one row per team");
 ok(/if \(error\.code === "42501"\) return \{ error: "Run migrations 0116 and 0117 first\." \};/.test(saveFn), "someone let in before 0116 and 0117: says which migrations to run");
-ok(/if \(old !== settings\.coverPath\) await tidyCover\(supabase, teamId, old\);/.test(saveFn), "a replaced photo is tidied away");
+ok(/await tidyFiles\(supabase, teamId, gone\(before\?\.settings, settings\)\);/.test(saveFn) && !/tidyCover/.test(actions), "a replaced photo or logo is tidied away (1.44.0: every file the setup stopped using)");
 ok(/if \(!UUID\.test\(teamId\) \|\| !isCoverPath\(path, teamId\)\) return/.test(actions) && /createSignedUrl\(path, 3600\)/.test(actions), "the photo's link: the team's own file, for an hour");
 // 1.41.0: the picker pages through every video (browseKitVideos), not 90 of them; the old search went.
 const browseFn = actions.slice(actions.indexOf("export async function browseKitVideos"), actions.indexOf("// ---- 1.40.0: who opens it"));
@@ -457,7 +458,7 @@ ok(/buildKits\(nums, readKitSettings\(deferred, props\.teamId\), measure, images
 ok(/if \(!props\.ready\) return;/.test(tab) && /await saveMediaKit\(props\.teamId, s\)/.test(tab) && !/canSave/.test(tab), "saved as you go, by everyone who opens it");
 ok(/only masters and the people they choose open it\. Ask a master to let you in\./.test(tab) && !/Partnerships role/.test(tab), "the locked card says who opens it and who to ask");
 ok(/await mediaKitCoverLink\(props\.teamId, coverPath\)/.test(tab) && /storedCover \? \(\(await renewCover\(\)\) \?\? coverUrl\)/.test(tab) && /const COVER_RENEW_MS = 45 \* 60_000;/.test(tab), "a stored photo's link is signed again before its hour is up, and for a download");
-ok(/createClient\(\)\.storage\.from\("media-kit"\)\.upload\(path, file/.test(tab) && /const path = `\$\{props\.teamId\}\/cover-/.test(tab), "the photo goes to the team's folder");
+ok(/createClient\(\)\.storage\.from\("media-kit"\)\.upload\(path, file/.test(tab) && /const path = kitUploadPath\(props\.teamId, "cover", file\.name,/.test(tab), "the photo goes to the team's folder (1.44.0: under a name short enough to be kept)");
 ok(/lg:sticky lg:top-\[calc\(var\(--shell-top,3\.5rem\)\+1rem\)\] lg:max-h-\[calc\(100dvh-var\(--shell-top,3\.5rem\)-2rem\)\]/.test(tab) && /lg:overscroll-contain/.test(tab), "the preview sticks under the app's top bar (not behind it) and keeps its scrolling to itself");
 ok(/bottom-\[calc\(env\(safe-area-inset-bottom\)\+5\.25rem\)\] md:bottom-6/.test(tab) && /lg:hidden fixed z-30/.test(tab), "a phone: the download in a bar of its own above the tab bar");
 ok(/admin\.storage\.from\("media-kit"\)\.list\(teamId\)/.test(read("app/(dashboard)/team/actions.ts")) && /admin\.storage\.from\("media-kit"\)\.remove\(kitFiles\.map\(\(f\) => `\$\{teamId\}\/\$\{f\.name\}`\)\)/.test(read("app/(dashboard)/team/actions.ts")), "a deleted team's kit photos go with it");
@@ -522,13 +523,13 @@ ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handl
   ok(/\.eq\("id", id\)\.eq\("team_id", teamId\)\.maybeSingle\(\)/.test(open) && /fromTemplate: id\.toLowerCase\(\)/.test(open) && /createSignedUrl\(settings\.coverPath, 3600\)/.test(open) && /if \(!data\) return \{ error: "That template was deleted\." \};/.test(open), "opening: the team's own template, noted as where the setup came from, with its photo's link");
   const update = fnBody(tpl, "updateMediaKitTemplate");
   ok(/\.update\(\{ settings \}\)\.eq\("id", id\)\.eq\("team_id", teamId\)\.eq\("updated_at", since\)/.test(update) && /Someone changed “\$\{before\.name\}” since you opened it\./.test(update), "updating: never over someone else's change made meanwhile");
-  ok(/const settings = templateSettings\(raw, teamId\);/.test(update) && /if \(old !== settings\.coverPath\) await tidyCover\(c\.supabase, teamId, old\);/.test(update), "updating: the setup checked; a photo it stopped using is tidied away");
+  ok(/const settings = templateSettings\(raw, teamId\);/.test(update) && /await tidyFiles\(c\.supabase, teamId, gone\(before\.settings, settings\)\);/.test(update), "updating: the setup checked; a photo (1.44.0: or logo) it stopped using is tidied away");
   ok(/const nm = templateName\(name\);/.test(fnBody(tpl, "renameMediaKitTemplate")) && /\.update\(\{ name: nm \}\)\.eq\("id", id\)\.eq\("team_id", teamId\)/.test(fnBody(tpl, "renameMediaKitTemplate")), "renaming: the name checked, the team's own template");
   const del = fnBody(tpl, "deleteMediaKitTemplate");
-  ok(/\.delete\(\)\.eq\("id", id\)\.eq\("team_id", teamId\)\.select\("settings"\)/.test(del) && /if \(gone\) await tidyCover\(c\.supabase, teamId, gone\.settings\?\.coverPath\);/.test(del), "deleting: the team's own template, and its photo if nothing else has it");
-  const tidy = actions.slice(actions.indexOf("async function tidyCover"), actions.indexOf("const noTemplatesYet"));
-  ok(/if \(!isCoverPath\(path, teamId\)\) return;/.test(tidy) && /from\("media_kit_settings"\)\.select\("team_id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy) && /from\("media_kit_templates"\)\.select\("id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy), "a photo is removed only once the setup and every template have stopped using it");
-  ok(/if \(kit\.error \|\| kit\.data\?\.length\) return;\s+if \(tpl\.error \? !noTemplatesYet\(tpl\.error\) : tpl\.data\?\.length\) return;\s+await supabase\.storage\.from\("media-kit"\)\.remove\(\[path\]\);/.test(tidy), "kept whenever that can't be told");
+  ok(/\.delete\(\)\.eq\("id", id\)\.eq\("team_id", teamId\)\.select\("settings"\)/.test(del) && /if \(deleted\) await tidyFiles\(c\.supabase, teamId, kitFilesOf\(deleted\.settings\)\);/.test(del), "deleting: the team's own template, and its photo and logos if nothing else has them");
+  const tidy = actions.slice(actions.indexOf("async function tidyFiles"), actions.indexOf("const noTemplatesYet"));
+  ok(/const mine = paths\.filter\(\(p\): p is string => isCoverPath\(p, teamId\)\);\s+if \(!mine\.length\) return;/.test(tidy) && /from\("media_kit_settings"\)\.select\("team_id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy) && /from\("media_kit_templates"\)\.select\("id"\)\.eq\("team_id", teamId\)\.eq\("settings->>coverPath", path\)/.test(tidy) && /from\("media_kit_templates"\)\.select\("id"\)\.eq\("team_id", teamId\)\.filter\("settings->brands", "cs", logo\)/.test(tidy), "a photo or a logo is removed only once the setup and every template have stopped using it");
+  ok(/if \(kitCover\.error \|\| kitLogo\.error \|\| kitCover\.data\?\.length \|\| kitLogo\.data\?\.length\) return null;\s+for \(const tpl of \[tplCover, tplLogo\]\) if \(tpl\.error \? !noTemplatesYet\(tpl\.error\) : tpl\.data\?\.length\) return null;/.test(tidy) && /if \(remove\.length\) await supabase\.storage\.from\("media-kit"\)\.remove\(remove\);/.test(tidy), "kept whenever that can't be told");
   const access = fnBody(actions, "setMediaKitAccess");
   ok(/supabase\.auth\.getUser\(\)/.test(access) && /if \(!membership\?\.roles\.includes\("master"\)\) return \{ error: "Only masters choose who opens the media kit\." \};/.test(access), "letting people in: Masters only");
   ok(/from\("media_kit_access"\)\.insert\(\{ team_id: teamId, user_id: userId \}\)/.test(access) && /from\("media_kit_access"\)\.delete\(\)\.eq\("team_id", teamId\)\.eq\("user_id", userId\)/.test(access), "letting in and taking away: one row");
@@ -544,7 +545,7 @@ ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handl
   ok(/title: `Delete “\$\{t\.name\}”\?`[\s\S]{0,260}danger: true/.test(tt), "deleting a template asks first");
   ok(/if \(e\.key === "Escape"\) \{\s+e\.preventDefault\(\);/.test(tt), "Esc while renaming leaves the name, not the window");
   ok(/if \(s\.fromTemplate === id\) set\(\{ fromTemplate: null \}\);/.test(tt), "the template on screen deleted: the setup stays, from no template");
-  ok(/<KitTemplates teamId=\{props\.teamId\}/.test(tab) && /\{props\.access && <KitAccess /.test(tab) && /<Fragment key=\{formKey\}>/.test(tab) && /coverSigned\.current = Date\.now\(\);\s+setCoverUrl\(cover\);\s+setS\(next\);\s+setFormKey\(\(k\) => k \+ 1\);/.test(tab), "the builder: templates for everyone, who's in for Masters; a template opened draws the form afresh with its photo");
+  ok(/<KitTemplates teamId=\{props\.teamId\}/.test(tab) && /\{props\.access && <KitAccess /.test(tab) && /<Fragment key=\{formKey\}>/.test(tab) && /coverSigned\.current = Date\.now\(\);\s+logosSigned\.current = Date\.now\(\);\s+setCoverUrl\(cover\);\s+setLogoUrls\(\(prev\) => \(\{ \.\.\.prev, \.\.\.logos \}\)\);\s+setS\(next\);\s+setFormKey\(\(k\) => k \+ 1\);/.test(tab), "the builder: templates for everyone, who's in for Masters; a template opened draws the form afresh with its photo (1.44.0: and its logos)");
   const ka = read("modules/media-kit/components/kit-access.tsx");
   ok(/const ok = await confirm\(/.test(ka) && /confirmLabel: "Take it away", danger: true/.test(ka) && /setMediaKitAccess\(teamId, p\.userId, !on\)/.test(ka) && /\{p\.master \? \(\s+<span className="text-\[12px\] text-ink-faint">Master<\/span>/.test(ka), "who's in: Masters always, a switch for the rest, asked first");
 
@@ -664,7 +665,7 @@ ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handl
   ok(/className="kit-page-busy" data-late=\{late \? "" : undefined\} style=\{[^\n]*\} aria-hidden>/.test(pageBusy) && /window\.setTimeout\(\(\) => setLate\(true\), 220\)/.test(pageBusy) && /<span>Updating<\/span>/.test(pageBusy) && /animation: kit-busy-in 0\.25s var\(--ease-out\) 0\.2s both;/.test(busyCss) && /rgb\(var\(--amber\) \/ 0\.6\)/.test(busyCss) && /background: rgb\(var\(--page-paper, var\(--surface\)\) \/ 0\.45\);/.test(busyCss) && /"--page-paper": `\$\{bg\[0\]\} \$\{bg\[1\]\} \$\{bg\[2\]\}`/.test(pageBusy) && /pointer-events: none;/.test(busyCss), "a page being updated: dimmed, a sweep and a tag in the theme's colour, a beat after the change");
   ok(/html\[data-motion="off"\] \.kit-page-busy:not\(\[data-late\]\) \{ visibility: hidden; \}/.test(css) && /html:not\(\[data-motion="on"\]\) \.kit-page-busy:not\(\[data-late\]\) \{ visibility: hidden; \}/.test(css), "animations off: still, and only once the beat has passed (no flash on every change)");
   ok(/const deferred = useLaidOut\(s\);/.test(tab) && !/useDeferredValue\(/.test(tab) && /const raf = requestAnimationFrame\(\(\) => \{\s+t = window\.setTimeout\(go, 0\);\s+\}\);/.test(tab) && /const fallback = window\.setTimeout\(go, 150\);/.test(tab), "the preview: laid out a beat after each change, after the next paint, never waiting on a save (React's deferred value drew with every server action in flight)");
-  ok(/const touched = useMemo\(\(\) => \(kits && deferred !== s \? pagesTouched\(deferred, s\) : null\), \[kits, deferred, s\]\);/.test(tab) && /const updating = \(p: Page\) => touches\(touched, p\.anchor\) \|\| \(reloading && touches\(NUMBER_PAGES, p\.anchor\)\) \|\| \(uploading && \(p\.anchor === "cover" \|\| p\.anchor === "about"\)\) \|\| picturesComing\(p\);/.test(tab) && /\{busy && <KitPageBusy bg=\{p\.bg\} \/>\}/.test(tab) && /aria-busy=\{busy \|\| undefined\}/.test(tab) && /className=\{`relative block w-full rounded-xl overflow-hidden/.test(tab), "the preview: each page says it's being updated while its change is drawn, other numbers come, a photo goes up or its new pictures load");
+  ok(/const touched = useMemo\(\(\) => \(kits && deferred !== s \? pagesTouched\(deferred, s\) : null\), \[kits, deferred, s\]\);/.test(tab) && /const updating = \(p: Page\) => touches\(touched, p\.anchor\) \|\| \(reloading && touches\(NUMBER_PAGES, p\.anchor\)\) \|\| \(uploading && \(p\.anchor === "cover" \|\| p\.anchor === "about"\)\) \|\| \(logosBusy\.size > 0 && p\.anchor === "partners"\) \|\| picturesComing\(p\);/.test(tab) && /\{busy && <KitPageBusy bg=\{p\.bg\} \/>\}/.test(tab) && /aria-busy=\{busy \|\| undefined\}/.test(tab) && /className=\{`relative block w-full rounded-xl overflow-hidden/.test(tab), "the preview: each page says it's being updated while its change is drawn, other numbers come, a photo goes up or its new pictures load");
   ok(/if \(s\.first\) \{\s+s\.first = false;\s+srcs\.forEach\(\(src\) => s\.done\.add\(src\)\);/.test(pageBusy) && /window\.setTimeout\(finish, PICTURE_WAIT_MS\)/.test(pageBusy) && /return \(page\) => !st\.current\.first && page\.ops\.some/.test(pageBusy), "pictures: waited on after a change only (the first layout's are the kit loading), never for ever");
   // Which pages a change redraws.
   const T = (patch: Partial<MediaKitSettings>) => pagesTouched(full, { ...full, ...patch });
@@ -676,20 +677,225 @@ ok(/window\.matchMedia\(minWidth\("lg"\)\)/.test(sync) && /Date\.now\(\) - handl
   ok(["platforms", "split", "extra", "sections", "theme", "accent", "title"].every((k) => T({ [k]: k === "split" ? (full.split === "each" ? "together" : "each") : k === "sections" ? { ...full.sections, rates: !full.sections.rates } : k === "theme" ? (full.theme === "dark" ? "light" : "dark") : k === "accent" ? "#123456" : k === "title" ? "Another name" : ["facebook"] } as Partial<MediaKitSettings>) === "all"), "the look, the channels, the kits, the pages in it, the kit's name: every page");
   const period = T({ period: full.period === "90d" ? "28d" : "90d" });
   ok(hit(period, ...[...NUMBER_PAGES].map((a) => a.replace("*", "tiktok"))) && miss(period, "rates", "partners"), "another period: every page drawn from the numbers (all but the rates and the brands)");
-  ok(hit(T({ videoPicks: { on: true, list: picks } }), "videos", "contact") && miss(T({ videoPicks: { on: true, list: picks } }), "cover", "about"), "picked videos: their page, and the last one (where the numbers come from)");
+  ok(hit(T({ videoPicks: { on: true, list: picks } }), "videos") && miss(T({ videoPicks: { on: true, list: picks } }), "cover", "about", "contact"), "picked videos: their page (1.44.0: the last page no longer names where the numbers come from)");
   ok(hit(T({ coverPicks: { on: true, list: picks } }), "cover", "about") && miss(T({ coverPicks: { on: true, list: picks } }), "videos"), "the cover's videos: the cover and About us (it shows them)");
   ok(hit(T({ about: "Something else." }), "about") && miss(T({ about: "Something else." }), "cover") && T({ about: "" }) === "all" && pagesTouched({ ...full, about: "" }, full) === "all", "About us: its page; gone or back: every page (they're numbered again)");
   const ytTyped = T({ manual: { ...full.manual, platforms: { ...full.manual.platforms, youtube: { ...emptyManualPlatform(), on: true, followers: 5 } } } });
   ok(hit(ytTyped, "platform:youtube", "glance", "cover", "contact") && miss(ytTyped, "platform:instagram", "audience:youtube", "rates"), "YouTube's numbers typed in: its page and the totals' pages");
   const tkAudience = T({ manual: { ...full.manual, audience: { ...full.manual.audience, tiktok: { ...emptyManualAudience(), on: true } } } });
-  ok(hit(tkAudience, "audience:tiktok", "contact") && miss(tkAudience, "audience:youtube", "platform:tiktok"), "TikTok's audience typed in: its page (and the note on the last)");
-  ok(hit(T({ partners: [...full.partners, "Sony"] }), "partners") && miss(T({ partners: [...full.partners, "Sony"] }), "rates") && T({ partners: [], testimonials: [] }) === "all", "brands: their page; none left: every page");
+  ok(hit(tkAudience, "audience:tiktok") && miss(tkAudience, "audience:youtube", "platform:tiktok", "contact"), "TikTok's audience typed in: its page");
+  const sony = { id: "s", name: "Sony", logo: null, quote: "", by: "" };
+  ok(hit(T({ brands: [...full.brands, sony] }), "partners") && miss(T({ brands: [...full.brands, sony] }), "rates") && T({ brands: [] }) === "all", "brands: their page; none left: every page");
+  ok(T({ brands: [...full.brands, { ...sony, quote: "Lovely" }] }) === "all" && T({ brandsShow: "logos" }) === "all" && hit(T({ brands: full.brands.map((b) => (b.id === "q" ? { ...b, by: "Samantha" } : b)) }), "partners"), "1.44.0: another quote (the quotes may take another page) or the other way to show them: every page; who said it: theirs");
+  ok(hit(T({ titles: { glance: { on: true, text: "Our numbers" } } }), "glance") && miss(T({ titles: { glance: { on: true, text: "Our numbers" } } }), "cover", "rates") && hit(T({ titles: { "platform:tiktok": { on: true, text: "TikTok, daily" } } }), "platform:tiktok") && hit(T({ titles: { cover: { on: true, text: "A\nB" } } }), "cover"), "1.44.0: a page's own title: that page");
+  ok(hit(T({ builtWith: false }), "contact") && miss(T({ builtWith: false }), "cover", "partners"), "1.44.0: Built with ClipTroop: the last page");
   ok(T({ contact: { ...full.contact, cta: "Hi" } }) !== "all" && hit(T({ contact: { ...full.contact, cta: "Hi" } }), "contact") && hit(T({ tagline: "New" }), "cover") && miss(T({ tagline: "New" }), "about") && hit(T({ audienceNote: "Mostly gamers" }), "audience:instagram"), "contact, tagline, the audience note: their own pages");
   ok(pagesTouched(full, { ...full, later: 1 } as unknown as MediaKitSettings) === "all" && T({ fromTemplate: "x" }) !== "all" && miss(T({ fromTemplate: "x" }), "cover"), "a part this doesn't know yet: every page; the template's id: none");
   ok(!touches(null, "cover") && touches("all", undefined) && !touches(new Set(["platform:*"]), "audience:youtube") && touches(new Set(["platform:*"]), "platform:facebook"), "touches: none, all, and the platform pages together");
   ok(/@media \(max-width: 639px\) \{\s+\.swipe-row \{/.test(read("app/globals.css")) && (picker.match(/swipe-row/g) ?? []).length === 2 && /flex items-center gap-2 flex-wrap sm:contents/.test(picker), "the picker on a phone: its platforms and kinds swiped (fading at the edge), the order and year whole, Picked under them when narrow");
   const fields = read("modules/media-kit/components/kit-fields.tsx");
   ok(/\{ value: "any", label: "Any platform", icon: <AnyPlatformIcon className="w-4 h-4" \/> \}/.test(fields) && /export function AnyPlatformIcon/.test(read("components/ui/platform-icons.tsx")), "the form: any platform shows all four too");
+}
+
+// --- 1.44.0: brands with their logos, the pages' own titles, Built with ClipTroop ---------------------------------------
+// The owner (Oct 30 2026): "for the quotes page … groups, i want a logo, the name of the company, and the quote below it,
+// these will have to stay centered. test however many of these can fit on a page nicely. or you should just be able to
+// hit brand logos only and add like a lot of logos in a cool way without the names, just the logos"; "turn the
+// watermark into the cliptroop logo and says built with cliptroop on "date", but also a toggle to turn it off"; "a text
+// box for the title that will respect where i put it"; "for each page i want to be able to modify the title of the page
+// with a custom one, make that a toggle too".
+{
+  const OTHER = "10000000-0000-4000-8000-0000000114b0";
+  const rb = readKitSettings(
+    {
+      brands: [
+        { id: "a", name: "  Paperfox  ", logo: `${TEAM}/logo-1-paperfox.webp`, quote: " Great \r\n team ", by: "Sam" },
+        { id: "a", name: "Dupe id" },
+        { name: "", logo: `${OTHER}/logo-2.png` },
+        { name: "", logo: `${TEAM}/../x.png`, quote: "" },
+        { name: "x".repeat(100), quote: "q".repeat(400), by: "b".repeat(200) },
+        "nope",
+        ...Array.from({ length: 60 }, (_, i) => ({ name: `Brand ${i}` })),
+      ],
+      brandsShow: "logos",
+      titles: {
+        cover: { on: true, text: " Viverro \n\n Tech   Design \n a \n b \n c " },
+        glance: { on: true, text: "Our numbers\nhere" },
+        "platform:youtube": { on: false, text: "YT" },
+        bogus: { on: true, text: "x" },
+        about: { on: true, text: "" },
+        rates: "nope",
+        videos: { on: false, text: "" },
+      },
+      builtWith: false,
+    },
+    TEAM
+  );
+  ok(rb.brands.length === LIMITS.brands && rb.brands[0].name === "Paperfox" && rb.brands[0].logo === `${TEAM}/logo-1-paperfox.webp` && rb.brands[0].quote === "Great\n team" && rb.brands[1].name === "Dupe id", `brands: tidied, 48 at most (${rb.brands.length})`);
+  ok(!rb.brands.some((b) => b.logo?.startsWith(OTHER) || b.logo?.includes("..")) && !rb.brands.some((b) => !b.name && !b.logo && !b.quote), "another team's logo (or a path out of the folder) isn't kept; a brand with nothing left goes");
+  ok(rb.brands[2].name.length === LIMITS.brandName && Array.from(rb.brands[2].quote).length === LIMITS.quote && rb.brands[2].by.length === LIMITS.by, "a brand's name, quote and who said it: kept to their sizes");
+  ok(new Set(rb.brands.map((b) => b.id)).size === rb.brands.length && rb.brands.every((b) => /^[a-z0-9]{1,12}$/.test(b.id)), "brand ids: unique (a taken one made new), plain");
+  ok(rb.brandsShow === "logos" && readKitSettings({ brands: [], brandsShow: "nope" }).brandsShow === "quotes", "how they show: Quotes or Brand logos only");
+  ok(rb.titles.cover?.text === "Viverro\nTech Design\na\nb" && rb.titles.cover.on, `the cover's own title: its lines as typed, tidied, four at most (${JSON.stringify(rb.titles.cover)})`);
+  ok(rb.titles.glance?.text === "Our numbers here" && rb.titles["platform:youtube"]?.on === false && rb.titles["platform:youtube"]?.text === "YT" && same(rb.titles.about, { on: true, text: "" }), "another page's: one line; off keeps its words; on with none kept (the page shows its usual)");
+  ok(!("bogus" in rb.titles) && !("rates" in rb.titles) && !("videos" in rb.titles), "only known pages; nothing to keep, nothing kept");
+  ok(rb.builtWith === false && defaultKitSettings().builtWith === true && readKitSettings({}).builtWith === true && same(defaultKitSettings().titles, {}) && same(defaultKitSettings().brands, []), "Built with ClipTroop: on unless switched off; no titles of their own, no brands to start with");
+  ok(coverTitleText("  a \n\n\n b  c \n") === "a\nb c" && coverTitleText(42) === "" && coverTitleText("1\n2\n3\n4\n5") === "1\n2\n3\n4", "the cover's lines tidied");
+  ok(same(TITLE_PAGES, ["cover", "about", "glance", "platform:youtube", "platform:instagram", "platform:tiktok", "platform:facebook", "audience:youtube", "audience:instagram", "audience:tiktok", "audience:facebook", "videos", "partners", "rates"]), "every page with a title of its own, by its anchor");
+  ok(same(kitFilesOf({ coverPath: `${TEAM}/c.jpg`, brands: [{ logo: `${TEAM}/l1.png` }, { logo: null }, { logo: `${TEAM}/l1.png` }, "x"] }), [`${TEAM}/c.jpg`, `${TEAM}/l1.png`]) && same(kitFilesOf(null), []) && same(brandLogos(rb).slice(0, 1), [`${TEAM}/logo-1-paperfox.webp`]), "a setup's files: its photo and its logos, each once");
+
+  // Quotes: groups of a logo, the name and what they said, in the middle of their columns, as many to a page as fit.
+  const brand = (i: number, quote: string, extra: Partial<KitBrand> = {}): KitBrand => ({ id: `b${i}`, name: `Brand ${i}`, logo: `${TEAM}/logo-${i}.png`, quote, by: `Person ${i}, Marketing`, ...extra });
+  const logoUrls = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`${TEAM}/logo-${i}.png`, `/l/${i}.png`]));
+  const withLogos: KitImages = { ...images, brands: logoUrls };
+  const SHORT = "Their audience actually buys what they recommend.";
+  const LONG = "We came for the reach and stayed for the care: every frame of the integration felt like their own idea, and their viewers treated it that way. Sales from the code beat our forecast by a third in the first two weeks.";
+  const quotePages = (list: KitBrand[], s: Partial<MediaKitSettings> = {}, imgs = withLogos) => buildKits(nums, { ...full, brands: list, brandsShow: "quotes", ...s }, m, imgs)[0].pages.filter((p) => p.anchor === "partners");
+  const groups = (pg: { ops: Op[] }) => pg.ops.filter((o) => o.t === "text" && /^Brand \d+$/.test(o.s)).length;
+  const six = quotePages(Array.from({ length: 6 }, (_, i) => brand(i, SHORT)));
+  ok(six.length === 1 && groups(six[0]) === 6, `six short quotes: one page, three by two (${six.map(groups)})`);
+  const sixLong = quotePages(Array.from({ length: 6 }, (_, i) => brand(i, LONG)));
+  ok(sixLong.length === 2 && same(sixLong.map(groups), [3, 3]), `six long ones: three a page (${sixLong.map(groups)})`);
+  const seven = quotePages(Array.from({ length: 7 }, (_, i) => brand(i, SHORT)));
+  ok(same(seven.map(groups), [4, 3]), `seven: the pages evened out (${seven.map(groups)})`);
+  ok(seven.every((p) => p.label === "Kind words") && /What brands say/.test(texts(seven[0].ops)) && /What brands say/.test(texts(seven[1].ops)), "each page of quotes has its title");
+  const lone = quotePages([brand(1, SHORT)])[0];
+  const centreOf = (o: Extract<Op, { t: "text" }>) => o.x + m.width(o.s, o.f, o.size) / 2;
+  const named = lone.ops.find((o): o is Extract<Op, { t: "text" }> => o.t === "text" && o.s === "Brand 1")!;
+  const said = lone.ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text" && o.f === "disp" && o.y > named.y);
+  const lineStarts = said.filter((o, i) => i === 0 || said[i - 1].y !== o.y);
+  ok(Math.abs(centreOf(named) - PAGE_W / 2) < 0.6 && lineStarts.every((o) => Math.abs(o.x + said.filter((x) => x.y === o.y).reduce((t, x) => t + m.width(x.s, x.f, x.size), 0) / 2 - PAGE_W / 2) < 0.6), "one quote: its name and every line in the middle of the page");
+  const logoImg = lone.ops.find((o): o is Extract<Op, { t: "image" }> => o.t === "image" && o.src === "/l/1.png")!;
+  ok(!!logoImg && logoImg.fit === "contain" && Math.abs(logoImg.x + logoImg.w / 2 - PAGE_W / 2) < 0.6 && logoImg.y + logoImg.h < named.y, "its logo above, whole, in the middle");
+  const marks = said.filter((o) => o.s === "“" || o.s === "”");
+  ok(marks.length === 2 && marks.every((o) => same(o.c, kitPalette(full.accent || nums.team.color, "light").accentText)) && !said.some((o) => o.s.includes("“") && o.s.length > 1), "its quote marks, ours, in the accent");
+  ok(/Person 1, Marketing/.test(texts(lone.ops)) && quotePages([brand(1, "“Already quoted.”")])[0].ops.filter((o) => o.t === "text" && (o.s === "“" || o.s === "”")).length === 2, "who said it under it; quote marks typed in aren't doubled");
+  const noLogo = quotePages([brand(1, SHORT, { name: "Blue Heron Coffee", logo: null })])[0];
+  ok(noLogo.ops.some((o) => o.t === "circle") && noLogo.ops.some((o) => o.t === "text" && o.s === "BH"), "a brand without a logo: its first letters in a circle");
+  ok(!quotePages([brand(1, SHORT, { name: "", logo: null, by: "Sam" })])[0].ops.some((o) => o.t === "circle" || o.t === "image"), "no logo and no name (an old quote): just the words");
+  const darkQ = buildKits(nums, { ...full, theme: "dark", brands: [brand(1, SHORT)] }, m, withLogos)[0].pages.find((p) => p.anchor === "partners")!;
+  const darkImg = darkQ.ops.find((o): o is Extract<Op, { t: "image" }> => o.t === "image")!;
+  ok(darkQ.ops.some((o) => o.t === "rect" && same(o.fill, [255, 255, 255]) && o.x <= darkImg.x && o.x + o.w >= darkImg.x + darkImg.w && o.y <= darkImg.y && o.y + o.h >= darkImg.y + darkImg.h), "on a dark page, a logo sits on white (the PDF's copy of it is on white)");
+  const missing = quotePages([brand(1, SHORT)], {}, images)[0];
+  ok(!missing.ops.some((o) => o.t === "image") && missing.ops.some((o) => o.t === "text" && o.s === "B1"), "a logo the kit can't have yet: its first letters meanwhile");
+
+  // The wall: every logo, no names, on white tiles, the rows in the middle, long and short rows taking turns.
+  const wall = (n: number, s: Partial<MediaKitSettings> = {}, imgs = withLogos) => buildKits(nums, { ...full, brands: Array.from({ length: n }, (_, i) => brand(i, "")), brandsShow: "logos", ...s }, m, imgs)[0].pages.filter((p) => p.anchor === "partners");
+  for (const n of [1, 3, 7, 10, 18, 30, 48]) {
+    const pg = wall(n);
+    const tiles = pg[0].ops.filter((o): o is Extract<Op, { t: "rect" }> => o.t === "rect" && same(o.fill, [255, 255, 255]));
+    const logos = pg[0].ops.filter((o): o is Extract<Op, { t: "image" }> => o.t === "image" && o.fit === "contain");
+    const top = Math.min(...tiles.map((t) => t.y));
+    const bottom = Math.max(...tiles.map((t) => t.y + t.h));
+    ok(pg.length === 1 && tiles.length === n && logos.length === n && logos.every((l) => tiles.some((t) => l.x >= t.x && l.x + l.w <= t.x + t.w && l.y >= t.y && l.y + l.h <= t.y + t.h)), `${n} logos: one page, each whole on its own tile`);
+    ok(top > 100 && bottom < PAGE_H - 48 && tiles.every((t) => t.x >= 56 - 0.5 && t.x + t.w <= PAGE_W - 56 + 0.5) && !/Brand \d/.test(texts(pg[0].ops)), `${n} logos: inside the page, under the title, no names (${Math.round(top)}–${Math.round(bottom)})`);
+  }
+  ok(/Brands we’ve worked with/.test(texts(wall(5)[0].ops)) && wall(5)[0].label === "Brands", "its title");
+  const named2 = wall(4, {}, images)[0];
+  ok(["Brand 0", "Brand 1", "Brand 2", "Brand 3"].every((nm) => named2.ops.some((o) => o.t === "text" && o.s === nm)) && !named2.ops.some((o) => o.t === "image"), "a brand without a logo (or whose logo can't be had yet): its name in its tile");
+  const darkWall = wall(3, { theme: "dark" }, images)[0];
+  const darkPal = kitPalette(full.accent || nums.team.color, "dark");
+  ok(darkWall.ops.filter((o) => o.t === "text" && /^Brand \d$/.test(o.s)).every((o) => o.t === "text" && same(o.c, darkPal.paper)) && contrast(darkPal.paper, [255, 255, 255]) >= 7 && contrast(kitPalette("#FACC15", "light").ink, [255, 255, 255]) >= 7, "a name on a white tile reads, dark page or light");
+  ok(wall(0).length === 0 && wall(3, { brands: [brand(1, "", { name: "", logo: null })] }).length === 0, "nothing to show: no wall");
+  ok(same(rowCounts(7, 3), [2, 3, 2]) && same(rowCounts(10, 3), [3, 4, 3]) && same(rowCounts(11, 3), [4, 3, 4]) && same(rowCounts(30, 5), [6, 6, 6, 6, 6]) && same(rowCounts(5, 2), [3, 2]), "rows: as even as can be, the same upside down where they can be, else taking turns");
+  const r48 = rowCounts(48, 7);
+  ok(r48.reduce((a, b) => a + b, 0) === 48 && same(r48, [...r48].reverse()) && r48[3] === 6, `48 in seven rows: the shorter one in the middle (${r48})`);
+  for (const n of [1, 2, 3, 4, 5, 9, 16, 25, 40, 48]) {
+    const sh = wallShape(n, 380);
+    const tall = sh.counts.length * sh.h + (sh.counts.length - 1) * sh.gap;
+    const widest = Math.max(...sh.counts) * sh.w + (Math.max(...sh.counts) - 1) * sh.gap;
+    ok(sh.counts.reduce((a, b) => a + b, 0) === n && tall <= 380.01 && widest <= 848.01 && sh.w / sh.h >= 1.4 && sh.w / sh.h <= 2.61 && sh.h >= 30, `${n} logos: the tiles fit, about twice as wide as tall (${sh.counts.join("·")}, ${Math.round(sh.w)}×${Math.round(sh.h)})`);
+  }
+
+  // The pages' own titles.
+  const tt = (titles: MediaKitSettings["titles"], s: Partial<MediaKitSettings> = {}) => buildKits(nums, { ...full, titles, ...s }, m, withLogos)[0].pages;
+  const own = tt({ about: { on: true, text: "Who we are" }, glance: { on: true, text: "The short version" }, "platform:youtube": { on: true, text: "Our YouTube" }, "audience:tiktok": { on: true, text: "TikTok's crowd" }, videos: { on: true, text: "Watch these" }, partners: { on: true, text: "Kind words" }, rates: { on: true, text: "Let's talk money" } });
+  const pageText = (pages: typeof own, a: string) => texts(pages.find((p) => p.anchor === a)!.ops);
+  ok(/Who we are/.test(pageText(own, "about")) && !/About us/.test(pageText(own, "about")), "About us: its own label");
+  ok(/The short version/.test(pageText(own, "glance")) && !/At a glance/.test(pageText(own, "glance")) && /Our YouTube/.test(pageText(own, "platform:youtube")) && /Instagram/.test(pageText(own, "platform:instagram")), "At a glance and a platform's page: their own titles (the others keep theirs)");
+  ok(/TikTok's crowd/.test(pageText(own, "audience:tiktok")) && /Who watches on YouTube/.test(pageText(own, "audience:youtube")) && /Watch these/.test(pageText(own, "videos")) && /Let's talk money/.test(pageText(own, "rates")) && !/Working together/.test(pageText(own, "rates")), "an audience, the videos and the rates: theirs");
+  ok(/Kind words/.test(pageText(own, "partners")) && !/What brands say/.test(pageText(own, "partners")) && /Kind words/.test(texts(tt({ partners: { on: true, text: "Kind words" } }, { brandsShow: "logos" }).find((p) => p.anchor === "partners")!.ops)), "the brands' page: its own title, as quotes or as the wall");
+  const offOrEmpty = tt({ glance: { on: false, text: "Hidden" }, rates: { on: true, text: "   " } });
+  ok(/At a glance/.test(pageText(offOrEmpty, "glance")) && !/Hidden/.test(pageText(offOrEmpty, "glance")) && /Working together/.test(pageText(offOrEmpty, "rates")), "switched off, or on with nothing typed: the usual title");
+  ok(usualTitle("glance", full) === "At a glance" && usualTitle("platform:tiktok", full) === "TikTok" && usualTitle("audience:youtube", full) === "Who watches on YouTube" && usualTitle("videos", full) === "Our best videos" && usualTitle("videos", { ...full, videoPicks: { on: true, list: picks } }) === "Videos we're proud of" && usualTitle("partners", full) === "What brands say" && usualTitle("partners", { ...full, brandsShow: "logos" }) === "Brands we’ve worked with" && usualTitle("rates", full) === "Working together" && usualTitle("about", full) === "About us", "the usual titles, as the form shows them");
+
+  // The cover's own title: broken where it was typed.
+  const coverOf = (s: Partial<MediaKitSettings>) => buildKits(nums, { ...full, title: "Viverro Tech Design", ...s }, m, images)[0].pages[0];
+  const big1 = (pg: { ops: Op[] }) => pg.ops.filter((o): o is Extract<Op, { t: "text" }> => o.t === "text" && o.f === "disp" && o.size >= 28 && !/\d/.test(o.s));
+  const ownA = big1(coverOf({ titles: { cover: { on: true, text: "Viverro\nTech Design" } } }));
+  const ownB = big1(coverOf({ titles: { cover: { on: true, text: "Viverro Tech\nDesign Thing" } } }));
+  ok(same(ownA.map((o) => o.s), ["Viverro", "Tech Design"]) && ownA[1].y > ownA[0].y && ownA[0].x === ownA[1].x, `the owner's first: "Viverro / Tech Design" (${ownA.map((o) => o.s).join(" / ")})`);
+  ok(same(ownB.map((o) => o.s), ["Viverro Tech", "Design Thing"]), `and the second: "Viverro Tech / Design Thing" (${ownB.map((o) => o.s).join(" / ")})`);
+  const auto = big1(coverOf({}));
+  ok(auto.map((o) => o.s).join(" ") === "Viverro Tech Design" && same(coverTitle(m, "Viverro Tech Design", null).lines, auto.map((o) => o.s)), "switched off: the kit's name, broken where it fits (what the form starts the box from)");
+  ok(same(big1(coverOf({ titles: { cover: { on: false, text: "A\nB" } } })).map((o) => o.s), auto.map((o) => o.s)), "off: its words are kept, not shown");
+  const four = coverTitle(m, "x", "One\nTwo\nThree\nFour", 300 - 82 - 56);
+  ok(four.lines.length === 4 && four.size < 62 && four.size * 0.75 + 3 * four.size * 1.04 <= 300 - 82 - 56, `four lines: smaller, so they fit in the room (${four.size})`);
+  const longLine = coverTitle(m, "x", "A".repeat(40), 300);
+  ok(longLine.size === 28 && longLine.lines.length > 1 && longLine.lines.every((l) => m.width(l, "disp", 28) <= 430.01), "a line too long even small: it wraps rather than running off");
+  const coverCut = coverOf({ titles: { cover: { on: true, text: "Viverro\nTech Design" } } });
+  ok(texts(buildKits(nums, { ...full, title: "Viverro Tech Design", titles: { cover: { on: true, text: "Viverro\nTech Design" } } }, m, images)[0].pages[1].ops).includes("Viverro Tech Design, media kit") && coverCut.ops.every((o) => o.t !== "text" || o.x + m.width(o.s, o.f, o.size) <= PAGE_W), "the foot of every page keeps the kit's name on one line");
+
+  // Built with ClipTroop on the last page, or nothing.
+  const last = (s: Partial<MediaKitSettings> = {}) => buildKits(nums, { ...full, ...s }, m, images)[0].pages.find((p) => p.anchor === "contact")!;
+  const lastText = texts(last().ops);
+  ok(/Built with  \| ClipTroop \|  on Oct 27, 2026/.test(lastText) && builtOn(nums) === "Oct 27, 2026", `the last page: "Built with ClipTroop on <day>" (${lastText.slice(lastText.indexOf("Built"), lastText.indexOf("Built") + 48)})`);
+  const amber = (o: Op) => o.t === "path" && same(o.fill, [232, 99, 13]);
+  ok(last().ops.filter(amber).length >= 10 && last().ops.some((o) => o.t === "link" && /^https:\/\//.test(o.url) && o.x === 56), "with ClipTroop's logo (its stripes), linking to ClipTroop's site");
+  ok(!/Built with/.test(texts(last({ builtWith: false }).ops)) && !last({ builtWith: false }).ops.some(amber), "switched off: nothing there");
+  const mk1 = clipTroopMark(10, 20, 84);
+  const pts = mk1.flatMap((o) => (o.t === "path" ? (o.d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number) : o.t === "circle" ? [o.cx, o.cy] : o.t === "rect" || o.t === "clip" ? [o.x, o.y] : []));
+  ok(mk1.length > 20 && !mk1.some((o) => JSON.stringify(o).includes("NaN")) && pts.every((v) => v >= 0 && v <= 110) && mk1.filter((o) => o.t === "clip").length === 1 && mk1.filter((o) => o.t === "unclip").length === 1, "ClipTroop's logo as drawing steps: in its box, one clip closed, nothing broken");
+  ok(mk1.every((o) => o.t !== "path" || !/[HVQAS]/.test(o.d)), "only straight lines and cubic curves (the PDF and the preview draw them alike)");
+
+  // Every word inside its page: many quotes, the wall, dark, titles of their own.
+  let outside3 = 0;
+  for (const k of [
+    ...buildKits(nums, { ...full, brands: Array.from({ length: 13 }, (_, i) => brand(i, i % 2 ? SHORT : LONG)), titles: { cover: { on: true, text: "Viverro\nTech Design\nand more\nthings" } } }, m, withLogos),
+    ...buildKits(nums, { ...full, theme: "dark", brandsShow: "logos", brands: Array.from({ length: 48 }, (_, i) => brand(i, "", { logo: i % 3 ? `${TEAM}/logo-${i}.png` : null, name: `A rather long brand name ${i}` })) }, m, withLogos),
+  ])
+    for (const pg of k.pages)
+      for (const o of pg.ops) if (o.t === "text" && (o.x < 0 || o.x + m.width(o.s, o.f, o.size) > PAGE_W + 0.5 || o.y < 0 || o.y > PAGE_H)) outside3++;
+  ok(outside3 === 0, `brands, quotes and titles: every word inside its page (${outside3} outside)`);
+
+  // A logo, made ready: its margin cut away; named from its file; kept under a name short enough.
+  const px = (w: number, h: number, bg: [number, number, number, number], ink: { x: number; y: number; w: number; h: number }, c: [number, number, number, number] = [20, 40, 200, 255]) => {
+    const a = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const inside = x >= ink.x && x < ink.x + ink.w && y >= ink.y && y < ink.y + ink.h;
+        a.set(inside ? c : bg, (y * w + x) * 4);
+      }
+    return a;
+  };
+  ok(same(contentBox(px(40, 30, [0, 0, 0, 0], { x: 7, y: 5, w: 20, h: 10 }), 40, 30), { x: 7, y: 5, w: 20, h: 10 }), "see-through margins: cut to what's drawn");
+  ok(same(contentBox(px(40, 30, [255, 255, 255, 255], { x: 3, y: 12, w: 30, h: 4 }), 40, 30), { x: 3, y: 12, w: 30, h: 4 }) && same(contentBox(px(40, 30, [250, 252, 255, 255], { x: 3, y: 12, w: 30, h: 4 }, [245, 250, 255, 255]), 40, 30), null), "white margins: cut too (a near-white mark on white: nothing drawn)");
+  const odd = px(10, 10, [255, 255, 255, 255], { x: 0, y: 0, w: 1, h: 1 }, [0, 0, 0, 255]);
+  ok(same(contentBox(odd, 10, 10), { x: 0, y: 0, w: 10, h: 10 }) && contentBox(px(5, 5, [0, 0, 0, 0], { x: 0, y: 0, w: 0, h: 0 }), 5, 5) === null && contentBox([], 0, 0) === null, "corners that don't agree: the whole picture; nothing drawn: none");
+  ok(nameFromFile("blue-heron_logo-2024.png") === "Blue heron" && nameFromFile("ACME_white.svg") === "ACME" && nameFromFile("logo.png") === "" && nameFromFile("Saltmarsh & Co (1).jpg") === "Saltmarsh & Co" && Array.from(nameFromFile(`${"x".repeat(90)}.png`)).length === 60, "a brand's name from its file's (words like logo, white or 2024 left out)");
+  const up = kitUploadPath(TEAM, "logo", `${"Șarpe ".repeat(30)}Logo Final.PNG`, "webp", 12, 1793353571241);
+  ok(isCoverPath(up, TEAM) && up.startsWith(`${TEAM}/logo-1793353571241-12-sarpe-`) && up.endsWith(".webp") && up.length - TEAM.length - 1 <= 80, `a long file name: stored under one short enough to be kept (${up.slice(TEAM.length + 1)})`);
+  ok(isCoverPath(kitUploadPath(TEAM, "cover", "IMG_20261030_123456789_HDR_from_the_camera_roll_of_my_phone.jpeg", "jpg"), TEAM), "a cover photo's long name too (it was dropped on saving, and the cover lost its photo)");
+
+  // The builder.
+  const kitSections = read("modules/media-kit/components/kit-sections.tsx");
+  for (const page of ['page="about"', 'page="glance"', "page={`platform:${p}`}", "page={`audience:${p}`}", 'page="videos"', 'page="partners"', 'page="rates"']) ok(kitSections.includes(`<PageTitle f={f} ${page} />`), `a title of its own for ${page}`);
+  ok(/<TitleField\s+label="Title"\s+lines\s+value=\{s\.titles\.cover\}\s+usual=\{f\.coverLines\.join\(" "\)\}\s+start=\{f\.coverLines\.join\("\\n"\)\}/.test(kitSections), "the cover's title: a box of lines, started from the name as it breaks");
+  ok(/\{ value: "quotes", label: "Quotes" \},\s+\{ value: "logos", label: "Brand logos only" \},/.test(kitSections) && /<BrandsEditor brands=\{s\.brands\} show=\{s\.brandsShow\}/.test(kitSections), "the brands: Quotes or Brand logos only, one list");
+  ok(/<Toggle on=\{s\.builtWith\} onChange=\{\(builtWith\) => set\(\{ builtWith \}\)\}/.test(kitSections) && /<ClipLogo size=\{26\} id="kit-built-with" \/>/.test(kitSections), "the last page's Built with ClipTroop: a switch, beside ClipTroop's logo");
+  const kitFields = read("modules/media-kit/components/kit-fields.tsx");
+  ok(/onChange\(\{ on: next, text: next && !text\.trim\(\) \? \(start \?\? usual\) : text \}\)/.test(kitFields) && /role="switch"/.test(kitFields), "switched on the first time, a title starts from the usual one");
+  ok(/multiple className="hidden"/.test(kitFields) && /onDrop=\{\(e\) => \{\s+setOver\(false\);\s+const fs = pictures\(e\.dataTransfer\.files\);/.test(kitFields) && /const LOGO_ACCEPT = "image\/png,image\/jpeg,image\/webp,image\/svg\+xml";/.test(kitFields), "logos: several at once, dropped too; PNG, JPG, WebP or SVG");
+  const tabSrc = read("modules/media-kit/components/media-kit-tab.tsx");
+  ok(/brands: logoUrls \}\), \[props\.logoUrl, coverUrl, deferred\.cover, logoUrls\]\)/.test(tabSrc) && /const brands = \(await renewLogos\(\)\) \?\? logoUrls;/.test(tabSrc) && /measure, \{ logo: props\.logoUrl, cover, brands \}\)/.test(tabSrc), "the preview and the download draw the logos (the download with fresh links)");
+  ok(/const ready = await prepareLogo\(file\);/.test(tabSrc) && /kitUploadPath\(props\.teamId, "logo", file\.name,/.test(tabSrc) && /setLogoUrls\(\(prev\) => \(\{ \.\.\.prev, \[path\]: URL\.createObjectURL\(ready\) \}\)\);\s+update\(/.test(tabSrc), "a logo: made ready, stored in the team's folder, drawn from its own copy straight away");
+  ok(/\(logosBusy\.size > 0 && p\.anchor === "partners"\)/.test(tabSrc), "while logos go up, the brands page says it's being updated");
+  const act = read("app/(dashboard)/analytics/media-kit-actions.ts");
+  const linksFn = act.slice(act.indexOf("export async function mediaKitLogoLinks"), act.indexOf("export async function mediaKitCoverLink"));
+  ok(/const mine = \[\.\.\.new Set\(paths\.filter\(\(p\) => isCoverPath\(p, teamId\)\)\)\]\.slice\(0, LIMITS\.brands\);/.test(linksFn) && /if \(!user\) return/.test(linksFn) && /signKitLogos\(supabase, mine\)/.test(linksFn) && !/createAdminClient/.test(linksFn), "the logos' links: the team's own files only, signed as the person");
+  ok(/filter\("settings->brands", "cs", logo\)/.test(act) && /\.eq\("settings->>coverPath", path\)/.test(act) && /tidyFiles\(c\.supabase, teamId, kitFilesOf\(deleted\.settings\)\)/.test(act) && /tidyFiles\(c\.supabase, teamId, gone\(before\.settings, settings\)\)/.test(act), "a logo nothing uses any more (the setup or a template) is tidied away, as the photo is");
+  ok(/signKitLogos\(c\.supabase, brandLogos\(settings\)\)/.test(act) && /return \{ settings, coverUrl, logoUrls, updatedAt/.test(act) && /signKitLogos\(supabase, brandLogos\(saved\)\)/.test(read("modules/media-kit/lib/gather.ts")), "a template opened, or the page: with its logos' links");
+  ok(/if \(img && op\.fit === "contain"\) \{\s+[\s\S]{0,200}const scale = Math\.min\(op\.w \/ img\.width, op\.h \/ img\.height\);/.test(read("modules/media-kit/lib/render-pdf.ts")) && /preserveAspectRatio="xMidYMid meet"/.test(read("modules/media-kit/components/kit-page-svg.tsx")), "a logo whole in the PDF and the preview alike");
 }
 
 if (fails) {

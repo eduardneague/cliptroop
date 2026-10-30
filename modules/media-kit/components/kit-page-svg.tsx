@@ -66,6 +66,11 @@ export function KitPageSvg({ page, className, title, links = true }: { page: Pag
         );
         break;
       case "image": {
+        if (op.fit === "contain") {
+          // A logo (1.44.0): whole, on whatever is under it (no grey while it loads).
+          push(<image key={key} href={op.src} x={op.x} y={op.y} width={op.w} height={op.h} preserveAspectRatio="xMidYMid meet" />);
+          break;
+        }
         const id = `${uid}-i${i}`;
         defs.push(
           <clipPath key={id} id={id}>

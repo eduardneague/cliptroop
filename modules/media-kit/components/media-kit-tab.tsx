@@ -5,18 +5,19 @@ import { DownloadIcon, ExpandIcon, LockIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
 import { createClient } from "@/lib/supabase/client";
-import { compressImage, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, isPictureType, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { pictureTooBig } from "@/lib/image/limits";
 import { downloadBytes } from "@/lib/pdf-kit";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { loadMediaKitNumbers, mediaKitCoverLink, saveMediaKit } from "@/app/(dashboard)/analytics/media-kit-actions";
-import { autoCoverGrid, buildKits, kitPlatforms, type Kit } from "../lib/layout";
+import { loadMediaKitNumbers, mediaKitCoverLink, mediaKitLogoLinks, saveMediaKit } from "@/app/(dashboard)/analytics/media-kit-actions";
+import { autoCoverGrid, buildKits, coverTitle, kitPlatforms, type Kit } from "../lib/layout";
+import { kitUploadPath, nameFromFile, prepareLogo } from "../lib/logo-file";
 import { applyManual } from "../lib/manual";
 import { loadKitMeasure } from "../lib/fonts";
 import { renderKitPdf } from "../lib/render-pdf";
 import type { Measure, Page } from "../lib/scene";
 import type { MediaKitNumbers } from "../lib/numbers";
-import { readKitSettings, type KitTemplateInfo, type MediaKitSettings } from "../lib/settings";
+import { brandLogos, LIMITS, newId, readKitSettings, type KitBrand, type KitTemplateInfo, type MediaKitSettings } from "../lib/settings";
 import { NUMBER_PAGES, pagesTouched, touches } from "../lib/touched";
 import type { KitPerson } from "../lib/access";
 import { KitPageSvg, KIT_FONT_CSS } from "./kit-page-svg";
@@ -53,6 +54,8 @@ export type MediaKitTabData =
       ready: boolean;
       saved: MediaKitSettings;
       coverUrl: string | null;
+      /** 1.44.0: an hour's links to the brands' logos, by their paths. */
+      logoUrls: Record<string, string>;
       /** The numbers for the saved period, sent after the page. */
       numbers: Promise<{ data?: MediaKitNumbers; error?: string }>;
       latest: string;
@@ -140,11 +143,53 @@ function Builder(props: BuilderProps) {
     };
   }, [storedCover, renewCover]);
 
-  // 1.40.0: a template opened (kit-templates.tsx): its setup on screen, with a fresh link to its photo. It's saved as
-  // the setup a moment later, as any change is; the numbers follow its period.
-  const replace = useCallback((next: MediaKitSettings, cover: string | null) => {
+  // 1.44.0: the brands' logos, the same way: signed for an hour (again before then, on coming back to the page, and for a
+  // download); one just added is drawn from its own copy (blob:). A logo with no link yet (another tab added it) is signed.
+  const [logoUrls, setLogoUrls] = useState<Record<string, string>>(props.logoUrls ?? {});
+  const logoUrlsNow = useRef(logoUrls);
+  logoUrlsNow.current = logoUrls;
+  const logosSigned = useRef(Date.now());
+  const logoPaths = useMemo(() => brandLogos(s), [s]);
+  const logoKey = logoPaths.join("|");
+  const renewLogos = useCallback(async (): Promise<Record<string, string> | null> => {
+    const have = logoUrlsNow.current;
+    const stored = logoPaths.filter((p) => !have[p]?.startsWith("blob:"));
+    const missing = stored.some((p) => !have[p]);
+    if (!stored.length || (!missing && Date.now() - logosSigned.current < COVER_RENEW_MS)) return null;
+    try {
+      const r = await mediaKitLogoLinks(props.teamId, stored);
+      if (r.error !== undefined) return null;
+      logosSigned.current = Date.now();
+      setLogoUrls((prev) => ({ ...prev, ...r.urls }));
+      return { ...logoUrlsNow.current, ...r.urls };
+    } catch {
+      return null;
+    }
+    // logoKey stands for logoPaths.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logoKey, props.teamId]);
+  useEffect(() => {
+    if (!logoPaths.length) return;
+    if (logoPaths.some((p) => !logoUrlsNow.current[p])) void renewLogos();
+    const renew = () => {
+      if (document.visibilityState === "visible") void renewLogos();
+    };
+    const t = window.setInterval(renew, 5 * 60_000);
+    document.addEventListener("visibilitychange", renew);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", renew);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logoKey, renewLogos]);
+
+  // 1.40.0: a template opened (kit-templates.tsx): its setup on screen, with a fresh link to its photo (1.44.0: and its
+  // logos). It's saved as the setup a moment later, as any change is; the numbers follow its period.
+  const replace = useCallback((next: MediaKitSettings, cover: string | null, logos: Record<string, string> = {}) => {
     coverSigned.current = Date.now();
+    logosSigned.current = Date.now();
     setCoverUrl(cover);
+    setLogoUrls((prev) => ({ ...prev, ...logos }));
     setS(next);
     setFormKey((k) => k + 1);
   }, []);
@@ -220,7 +265,7 @@ function Builder(props: BuilderProps) {
 
   // The kit(s), laid out a beat after each change (the form stays quick).
   const deferred = useLaidOut(s);
-  const images = useMemo(() => ({ logo: props.logoUrl, cover: deferred.cover === "photo" ? coverUrl : null }), [props.logoUrl, coverUrl, deferred.cover]);
+  const images = useMemo(() => ({ logo: props.logoUrl, cover: deferred.cover === "photo" ? coverUrl : null, brands: logoUrls }), [props.logoUrl, coverUrl, deferred.cover, logoUrls]);
   const kits = useMemo<Kit[] | null>(() => (nums && measure ? buildKits(nums, readKitSettings(deferred, props.teamId), measure, images) : null), [nums, measure, deferred, images, props.teamId]);
 
   // The platforms: read, and added by hand; the kit's own, with what's typed in laid over.
@@ -230,6 +275,9 @@ function Builder(props: BuilderProps) {
   const kitPs = useMemo(() => (applied ? kitPlatforms(applied, s) : []), [applied, s]);
   const autoGrid = useMemo(() => (nums ? autoCoverGrid(nums, deferred) : "shorts"), [nums, deferred]);
   const pages = useMemo(() => new Set((kits ?? []).flatMap((k) => k.pages.map((p) => p.anchor ?? ""))), [kits]);
+  // 1.44.0: the cover's title as the kit's name breaks on it (the cover's own title starts from it).
+  const kitName = s.title || props.teamName || "Our channel";
+  const coverLines = useMemo(() => (measure ? coverTitle(measure, kitName, null).lines : [kitName]), [measure, kitName]);
 
   async function uploadCover(original: File | undefined) {
     if (!original) return;
@@ -243,7 +291,8 @@ function Builder(props: BuilderProps) {
         toast.error("Use a JPG, PNG or WebP picture.");
         return;
       }
-      const path = `${props.teamId}/cover-${Date.now()}-${safeFileName(file.name)}`;
+      // 1.44.0: a name short enough to be kept (a long one was dropped on saving, and the cover lost its photo).
+      const path = kitUploadPath(props.teamId, "cover", file.name, file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg");
       const { error } = await createClient().storage.from("media-kit").upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type });
       if (error) {
         toast.error(props.ready ? "Couldn't add the photo. Check your connection and try again (for people a master let in, migrations 0116 and 0117 come first)." : "Run migration 0114 first.");
@@ -256,13 +305,57 @@ function Builder(props: BuilderProps) {
     }
   }
 
+  // 1.44.0: brands' logos. Several files at once (or dropped): a brand each, named from its file; one on a brand: its
+  // logo. Each is made ready first (its margin cut away: logo-file.ts), then stored in the team's folder; its row says
+  // it's going up, and so does the brands page.
+  const [logosBusy, setLogosBusy] = useState<ReadonlySet<string>>(new Set());
+  const busyLogo = (id: string, on: boolean) =>
+    setLogosBusy((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const sNow = useRef(s);
+  sNow.current = s;
+  async function addLogos(files: File[], brandId?: string) {
+    const pics = files.filter((f) => f.type.startsWith("image/"));
+    if (!pics.length) return toast.error("Pick a picture: PNG, JPG, WebP or SVG.");
+    const room = brandId ? 1 : Math.max(0, LIMITS.brands - s.brands.length);
+    if (!room) return toast.error(`A kit shows up to ${LIMITS.brands} brands. Remove one to add another.`);
+    if (pics.length > room) toast.error(`Only ${room} more ${room === 1 ? "brand fits" : "brands fit"} (${LIMITS.brands} at most): the first ${room} were added.`);
+    const jobs = pics.slice(0, room).map((file) => ({ file, id: brandId ?? newId() }));
+    if (!brandId) update((cur) => ({ brands: [...cur.brands, ...jobs.map(({ file, id }): KitBrand => ({ id, name: nameFromFile(file.name, LIMITS.brandName), logo: null, quote: "", by: "" }))] }));
+    jobs.forEach(({ id }) => busyLogo(id, true));
+    await Promise.all(
+      jobs.map(async ({ file, id }, i) => {
+        try {
+          const tooBig = pictureTooBig(file);
+          if (tooBig) return void toast.error(tooBig);
+          const ready = await prepareLogo(file);
+          if (!ready) return void toast.error(`Couldn't read ${file.name} as a picture. Try a PNG, JPG, WebP or SVG.`);
+          const path = kitUploadPath(props.teamId, "logo", file.name, ready.type === "image/webp" ? "webp" : "png", i);
+          const { error } = await createClient().storage.from("media-kit").upload(path, ready, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: ready.type });
+          if (error) return void toast.error(props.ready ? `Couldn't add ${file.name}. Check your connection and try again.` : "Run migration 0114 first.");
+          // Its brand taken out while it went up: nothing will use it.
+          if (!sNow.current.brands.some((b) => b.id === id)) return void createClient().storage.from("media-kit").remove([path]);
+          setLogoUrls((prev) => ({ ...prev, [path]: URL.createObjectURL(ready) }));
+          update((cur) => ({ brands: cur.brands.map((b) => (b.id === id ? { ...b, logo: path } : b)) }));
+        } finally {
+          busyLogo(id, false);
+        }
+      })
+    );
+  }
+
   async function download(which: number[]) {
     if (!nums || !measure || making) return;
     setMaking({ kit: which[0] ?? 0, step: "Starting…" });
     try {
-      // From the setup as it is now (not the preview's moment-old copy), with a live link to the photo.
+      // From the setup as it is now (not the preview's moment-old copy), with live links to the photo and the logos.
       const cover = s.cover !== "photo" ? null : storedCover ? ((await renewCover()) ?? coverUrl) : coverUrl;
-      const fresh = buildKits(nums, readKitSettings(s, props.teamId), measure, { logo: props.logoUrl, cover });
+      const brands = (await renewLogos()) ?? logoUrls;
+      const fresh = buildKits(nums, readKitSettings(s, props.teamId), measure, { logo: props.logoUrl, cover, brands });
       for (const i of which) {
         const kit = fresh[i];
         if (!kit) continue;
@@ -343,6 +436,8 @@ function Builder(props: BuilderProps) {
     see: wide ? null : see,
     photo: { url: coverUrl, uploading, add: (file) => void uploadCover(file), remove: () => (setCoverUrl(null), set({ coverPath: null, cover: "videos" })) },
     autoGrid,
+    logos: { urls: logoUrls, busy: logosBusy, add: (files, brandId) => void addLogos(files, brandId) },
+    coverLines,
   };
 
   const downloadLabel = making ? making.step : kitCount > 1 ? `Download ${kitCount} PDFs` : "Download PDF";
@@ -370,7 +465,7 @@ function Builder(props: BuilderProps) {
   const touched = useMemo(() => (kits && deferred !== s ? pagesTouched(deferred, s) : null), [kits, deferred, s]);
   const reloading = loadingNums && !!nums;
   const picturesComing = usePicturesComing(kits);
-  const updating = (p: Page) => touches(touched, p.anchor) || (reloading && touches(NUMBER_PAGES, p.anchor)) || (uploading && (p.anchor === "cover" || p.anchor === "about")) || picturesComing(p);
+  const updating = (p: Page) => touches(touched, p.anchor) || (reloading && touches(NUMBER_PAGES, p.anchor)) || (uploading && (p.anchor === "cover" || p.anchor === "about")) || (logosBusy.size > 0 && p.anchor === "partners") || picturesComing(p);
 
   const preview = (
     <div className="space-y-6" aria-busy={loadingNums || !measure || undefined}>

@@ -8,7 +8,7 @@ import { canMakeMediaKit, type KitPerson } from "./access";
 import { getAudienceBreakdowns } from "@/modules/analytics/lib/advanced";
 import { numbersVisibility, visibleRows } from "@/modules/analytics/lib/accounts";
 import { addDays, readCustom, todayIn, windowFor, type Window } from "@/modules/analytics/lib/ranges";
-import { KIT_PLATFORMS, readKitSettings, templateSettings, TEMPLATES_MAX, type KitPeriod, type KitPlatform, type KitTemplateInfo } from "./settings";
+import { KIT_PLATFORMS, brandLogos, readKitSettings, templateSettings, TEMPLATES_MAX, type KitPeriod, type KitPlatform, type KitTemplateInfo } from "./settings";
 import type { MediaKitTabData } from "../components/media-kit-tab";
 import { pickedKeys } from "./browse";
 import {
@@ -194,9 +194,16 @@ function audienceOf(p: KitPlatform, breakdowns: Breakdowns, a: Aud): KitAudience
   return { who: p === "youtube" ? "YouTube viewers" : `${p === "instagram" ? "Instagram" : p === "facebook" ? "Facebook" : "TikTok"} followers`, ages, genders, countries };
 }
 
+/** 1.44.0: an hour's links to the brands' logos, by their paths (the ones that can't be signed: none). */
+export async function signKitLogos(supabase: Supa, paths: string[]): Promise<Record<string, string>> {
+  if (!paths.length) return {};
+  const { data } = await supabase.storage.from("media-kit").createSignedUrls(paths, 3600);
+  return Object.fromEntries((data ?? []).filter((d) => d.path && d.signedUrl).map((d) => [d.path as string, d.signedUrl as string]));
+}
+
 /**
  * What Analytics → Media kit opens with: the saved setup (defaults before migration 0114, or before the first save),
- * an hour's link to its cover photo, and the numbers for its period, sent after the page. 1.40.0: the team's
+ * an hour's link to its cover photo (1.44.0: and its brands' logos), and the numbers for its period, sent after the page. 1.40.0: the team's
  * templates (newest change first; before migration 0118, none) and the one the setup was opened from, to tell whether
  * it's changed since; for Masters, the team and who of it they've let in (before migration 0117, nobody).
  */
@@ -222,7 +229,7 @@ export async function mediaKitData(
     byId: t.updated_by,
     by: t.updated_by ? (nameOf.get(t.updated_by) ?? null) : null,
   }));
-  const [base, coverUrl] = await Promise.all([
+  const [base, coverUrl, logoUrls] = await Promise.all([
     // The template it was opened from, as it is now (gone: none).
     saved.fromTemplate && templates.some((t) => t.id === saved.fromTemplate)
       ? supabase
@@ -238,6 +245,7 @@ export async function mediaKitData(
           .createSignedUrl(saved.coverPath, 3600)
           .then(({ data: signed }) => signed?.signedUrl ?? null)
       : Promise.resolve(null),
+    signKitLogos(supabase, brandLogos(saved)),
   ]);
   let access: KitPerson[] | null = null;
   if (me.master) {
@@ -264,6 +272,7 @@ export async function mediaKitData(
     ready: !error,
     saved,
     coverUrl,
+    logoUrls,
     numbers,
     latest,
     me: me.id,

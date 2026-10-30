@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { getMembership } from "@/lib/permissions/membership";
-import { gatherMediaKit, kitTeam, kitVideo, mayMakeMediaKit } from "@/modules/media-kit/lib/gather";
+import { gatherMediaKit, kitTeam, kitVideo, mayMakeMediaKit, signKitLogos } from "@/modules/media-kit/lib/gather";
 import { contentCols, contentItem } from "@/modules/analytics/lib/queries";
 import { numbersVisibility } from "@/modules/analytics/lib/accounts";
 import { searchWords } from "@/modules/analytics/lib/search-words";
@@ -12,6 +12,9 @@ import { KIT_NO_ACCESS } from "@/modules/media-kit/lib/access";
 import {
   readKitSettings,
   isCoverPath,
+  kitFilesOf,
+  brandLogos,
+  LIMITS,
   templateName,
   templateSettings,
   KIT_PERIODS,
@@ -73,28 +76,61 @@ export async function saveMediaKit(teamId: string, raw: unknown): Promise<Result
     if (error.code === "42501") return { error: "Run migrations 0116 and 0117 first." };
     return { error: "Couldn't save the media kit. Try again." };
   }
-  // The photo it had, if it's not the one now: removed, unless a template has it (the team's folder, its kit people's to tidy).
-  const old = (before?.settings as { coverPath?: unknown } | null)?.coverPath;
-  if (old !== settings.coverPath) await tidyCover(supabase, teamId, old);
+  // The photo and logos it had and doesn't now: removed, unless a template has them (the team's folder, its kit people's
+  // to tidy).
+  await tidyFiles(supabase, teamId, gone(before?.settings, settings));
   return { settings };
 }
 
+/** The files the old setup used and the new one doesn't. */
+const gone = (old: unknown, now: unknown) => {
+  const kept = new Set(kitFilesOf(now));
+  return kitFilesOf(old).filter((p) => !kept.has(p));
+};
+
 /**
- * A cover photo the setup and every template have stopped using: removed. Kept when anything still has it, and when
- * that can't be told (before migration 0118 there are no templates to ask).
+ * Kit files (a cover photo; 1.44.0, a brand's logo) the setup and every template have stopped using: removed. Each is
+ * kept when anything still has it, and when that can't be told (before migration 0118 there are no templates to ask).
  */
-async function tidyCover(supabase: Supa, teamId: string, path: unknown) {
-  if (!isCoverPath(path, teamId)) return;
-  const [kit, tpl] = await Promise.all([
-    supabase.from("media_kit_settings").select("team_id").eq("team_id", teamId).eq("settings->>coverPath", path).limit(1),
-    supabase.from("media_kit_templates").select("id").eq("team_id", teamId).eq("settings->>coverPath", path).limit(1),
-  ]);
-  if (kit.error || kit.data?.length) return;
-  if (tpl.error ? !noTemplatesYet(tpl.error) : tpl.data?.length) return;
-  await supabase.storage.from("media-kit").remove([path]);
+async function tidyFiles(supabase: Supa, teamId: string, paths: unknown[]) {
+  const mine = paths.filter((p): p is string => isCoverPath(p, teamId));
+  if (!mine.length) return;
+  const unused = await Promise.all(
+    mine.slice(0, LIMITS.brands + 1).map(async (path) => {
+      // A cover photo by its path; a logo by a brand that has it.
+      const logo = JSON.stringify([{ logo: path }]);
+      const [kitCover, kitLogo, tplCover, tplLogo] = await Promise.all([
+        supabase.from("media_kit_settings").select("team_id").eq("team_id", teamId).eq("settings->>coverPath", path).limit(1),
+        supabase.from("media_kit_settings").select("team_id").eq("team_id", teamId).filter("settings->brands", "cs", logo).limit(1),
+        supabase.from("media_kit_templates").select("id").eq("team_id", teamId).eq("settings->>coverPath", path).limit(1),
+        supabase.from("media_kit_templates").select("id").eq("team_id", teamId).filter("settings->brands", "cs", logo).limit(1),
+      ]);
+      if (kitCover.error || kitLogo.error || kitCover.data?.length || kitLogo.data?.length) return null;
+      for (const tpl of [tplCover, tplLogo]) if (tpl.error ? !noTemplatesYet(tpl.error) : tpl.data?.length) return null;
+      return path;
+    })
+  );
+  const remove = unused.filter((p): p is string => !!p);
+  if (remove.length) await supabase.storage.from("media-kit").remove(remove);
 }
 
 const noTemplatesYet = (e: { code?: string; message: string }) => e.code === "42P01" || e.code === "PGRST205" || /media_kit_templates/.test(e.message);
+
+/**
+ * 1.44.0: an hour's links to the brands' logos (to draw them in the preview and the PDF), by their paths: the team's
+ * own files only, signed as the person (the bucket's rules let only the kit's people have them).
+ */
+export async function mediaKitLogoLinks(teamId: string, paths: string[]): Promise<Result<{ urls: Record<string, string> }>> {
+  if (!UUID.test(teamId) || !Array.isArray(paths)) return { error: "Logos not found." };
+  const mine = [...new Set(paths.filter((p) => isCoverPath(p, teamId)))].slice(0, LIMITS.brands);
+  if (!mine.length) return { urls: {} };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  return { urls: await signKitLogos(supabase, mine) };
+}
 
 /** An hour's link to the cover photo (to draw it in the preview and the PDF). */
 export async function mediaKitCoverLink(teamId: string, path: string): Promise<Result<{ url: string }>> {
@@ -282,8 +318,8 @@ export async function createMediaKitTemplate(teamId: string, name: string, raw: 
   return { template: info(data as TemplateRow) };
 }
 
-/** A template's setup, to put on screen, with an hour's link to its cover photo. */
-export async function openMediaKitTemplate(teamId: string, id: string): Promise<Result<{ settings: MediaKitSettings; coverUrl: string | null; updatedAt: string }>> {
+/** A template's setup, to put on screen, with an hour's links to its cover photo and (1.44.0) its brands' logos. */
+export async function openMediaKitTemplate(teamId: string, id: string): Promise<Result<{ settings: MediaKitSettings; coverUrl: string | null; logoUrls: Record<string, string>; updatedAt: string }>> {
   if (!UUID.test(id)) return { error: "Template not found." };
   const c = await templateCaller(teamId);
   if ("error" in c) return { error: c.error };
@@ -291,12 +327,11 @@ export async function openMediaKitTemplate(teamId: string, id: string): Promise<
   if (error) return { error: noTemplatesYet(error) ? "Run migration 0118 first." : "Couldn't open the template. Try again." };
   if (!data) return { error: "That template was deleted." };
   const settings = { ...templateSettings(data.settings, teamId), fromTemplate: id.toLowerCase() };
-  let coverUrl: string | null = null;
-  if (settings.coverPath) {
-    const { data: signed } = await c.supabase.storage.from("media-kit").createSignedUrl(settings.coverPath, 3600);
-    coverUrl = signed?.signedUrl ?? null;
-  }
-  return { settings, coverUrl, updatedAt: data.updated_at as string };
+  const [coverUrl, logoUrls] = await Promise.all([
+    settings.coverPath ? c.supabase.storage.from("media-kit").createSignedUrl(settings.coverPath, 3600).then(({ data: signed }) => signed?.signedUrl ?? null) : Promise.resolve(null),
+    signKitLogos(c.supabase, brandLogos(settings)),
+  ]);
+  return { settings, coverUrl, logoUrls, updatedAt: data.updated_at as string };
 }
 
 /**
@@ -314,8 +349,7 @@ export async function updateMediaKitTemplate(teamId: string, id: string, raw: un
   const { data, error } = await c.supabase.from("media_kit_templates").update({ settings }).eq("id", id).eq("team_id", teamId).eq("updated_at", since).select(TEMPLATE_COLS).maybeSingle();
   if (error) return { error: templateProblem(error) };
   if (!data) return { error: `Someone changed “${before.name}” since you opened it. Open it again to see theirs, or save yours as a new template.` };
-  const old = (before.settings as { coverPath?: unknown } | null)?.coverPath;
-  if (old !== settings.coverPath) await tidyCover(c.supabase, teamId, old);
+  await tidyFiles(c.supabase, teamId, gone(before.settings, settings));
   return { template: info(data as TemplateRow) };
 }
 
@@ -332,14 +366,14 @@ export async function renameMediaKitTemplate(teamId: string, id: string, name: s
   return { template: info(data as TemplateRow) };
 }
 
-/** A template deleted (the setup on screen stays as it is); its cover photo too, if nothing else has it. */
+/** A template deleted (the setup on screen stays as it is); its cover photo and logos too, if nothing else has them. */
 export async function deleteMediaKitTemplate(teamId: string, id: string): Promise<Result> {
   if (!UUID.test(id)) return { error: "Template not found." };
   const c = await templateCaller(teamId);
   if ("error" in c) return { error: c.error };
   const { data, error } = await c.supabase.from("media_kit_templates").delete().eq("id", id).eq("team_id", teamId).select("settings");
   if (error) return { error: noTemplatesYet(error) ? "Run migration 0118 first." : "Couldn't delete the template. Try again." };
-  const gone = (data ?? [])[0] as { settings?: { coverPath?: unknown } } | undefined;
-  if (gone) await tidyCover(c.supabase, teamId, gone.settings?.coverPath);
+  const deleted = (data ?? [])[0] as { settings?: unknown } | undefined;
+  if (deleted) await tidyFiles(c.supabase, teamId, kitFilesOf(deleted.settings));
   return {};
 }

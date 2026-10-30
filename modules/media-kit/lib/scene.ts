@@ -14,8 +14,11 @@ export type Color = RGB;
 export type Op =
   | { t: "rect"; x: number; y: number; w: number; h: number; r?: number; fill?: Color; stroke?: Color; sw?: number; o?: number }
   | { t: "text"; x: number; y: number; s: string; f: FontKey; size: number; c: Color; o?: number }
-  /** A picture filling its box (cropped to it, like CSS object-fit: cover), its corners rounded by r. */
-  | { t: "image"; x: number; y: number; w: number; h: number; src: string; r?: number }
+  /**
+   * A picture filling its box (cropped to it, like CSS object-fit: cover), its corners rounded by r. 1.44.0: "contain"
+   * (a brand's logo): whole, as big as fits, in the middle of the box (what's around it is the page's, or its tile's).
+   */
+  | { t: "image"; x: number; y: number; w: number; h: number; src: string; r?: number; fit?: "contain" }
   /** An SVG path in page coordinates. */
   | { t: "path"; d: string; fill?: Color; stroke?: Color; sw?: number; o?: number; so?: number }
   | { t: "circle"; cx: number; cy: number; r: number; fill?: Color; stroke?: Color; sw?: number; o?: number }

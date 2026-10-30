@@ -46,8 +46,8 @@ export function KitTemplates({
   initial: KitTemplateInfo[];
   initialBase: TemplateBase | null;
   set: (patch: Partial<MediaKitSettings>) => void;
-  /** A template opened: its setup on screen, with its cover photo's link. */
-  replace: (settings: MediaKitSettings, coverUrl: string | null) => void;
+  /** A template opened: its setup on screen, with its cover photo's link (1.44.0: and its logos'). */
+  replace: (settings: MediaKitSettings, coverUrl: string | null, logoUrls: Record<string, string>) => void;
 }) {
   const toast = useToast();
   const [list, setList] = useState(initial);
@@ -127,10 +127,10 @@ export function KitTemplates({
             setBase({ id: t.id, settings: templateSettings(s, teamId), updatedAt: t.updatedAt });
             set({ fromTemplate: t.id });
           }}
-          onOpened={(t, settings, coverUrl, updatedAt) => {
+          onOpened={(t, settings, coverUrl, logoUrls, updatedAt) => {
             setList((l) => l.map((x) => (x.id === t.id ? { ...x, updatedAt } : x)));
             setBase({ id: t.id, settings: templateSettings(settings, teamId), updatedAt });
-            replace(settings, coverUrl);
+            replace(settings, coverUrl, logoUrls);
             setOpen(false);
           }}
           onRenamed={(t) => {
@@ -177,7 +177,7 @@ function TemplatesDialog({
   onUpdate: () => void;
   onClose: () => void;
   onSaved: (t: KitTemplateInfo) => void;
-  onOpened: (t: KitTemplateInfo, settings: MediaKitSettings, coverUrl: string | null, updatedAt: string) => void;
+  onOpened: (t: KitTemplateInfo, settings: MediaKitSettings, coverUrl: string | null, logoUrls: Record<string, string>, updatedAt: string) => void;
   onRenamed: (t: KitTemplateInfo) => void;
   onDeleted: (id: string) => void;
 }) {
@@ -235,7 +235,7 @@ function TemplatesDialog({
         if (r.error === "That template was deleted.") onDeleted(t.id);
         return;
       }
-      onOpened(t, r.settings, r.coverUrl, r.updatedAt);
+      onOpened(t, r.settings, r.coverUrl, r.logoUrls ?? {}, r.updatedAt);
       toast.success(again ? `Back to “${t.name}” as saved` : `“${t.name}” is on screen`);
     } catch {
       toast.error("Couldn't open the template. Check your connection and try again.");
