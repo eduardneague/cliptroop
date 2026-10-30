@@ -426,6 +426,12 @@ export default async function SetupPage() {
           ) : (
             <li className="text-ink-soft">Couldn&rsquo;t ask Supabase just now (it&rsquo;s read again each time this page opens).</li>
           )}
+          {/* 1.46.0: two-step sign-in's own key (the cookie and the email codes); without it the service key is used. */}
+          <li className={process.env.TWO_STEP_SECRET?.trim() ? "text-green" : "text-gold font-semibold"}>
+            {process.env.TWO_STEP_SECRET?.trim()
+              ? "✓ Two-step sign-in has its own key (TWO_STEP_SECRET)."
+              : "! Two-step sign-in uses the service key for now: set TWO_STEP_SECRET (a long random text) in Vercel. Supabase → Authentication → Multi-Factor: keep App Authenticator (TOTP) on."}
+          </li>
           <li className={turnstileOn() ? "text-green" : "text-gold font-semibold"}>
             {turnstileOn()
               ? "✓ The security check (Cloudflare Turnstile) is on for new accounts."

@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isPublicPath } from "@/lib/public-paths";
+import { TWO_STEP_COOKIE, emailDoneFor, twoStepApplies, twoStepNeed } from "@/lib/auth/two-step";
 import { sessionCookieOptions } from "./cookie-options";
 import { crossSiteWrite } from "@/lib/request-guard";
 import { buildCsp, cspHeaderName, newNonce, wantsCsp } from "@/lib/csp";
@@ -133,6 +134,30 @@ export async function updateSession(request: NextRequest) {
     const redirect = NextResponse.redirect(url);
     redirect.headers.set("Cache-Control", "private, no-store");
     return redirect;
+  }
+
+  // 1.46.0: two-step sign-in. Everyone has a second step (set up after making an account), and every sign-in types its
+  // code before the app opens. The database refuses the rest anyway (migration 0125); this sends people to the right
+  // page. TWO_STEP=off (an emergency only) turns this part off; the database's part stays.
+  if (user && !isPublicRoute && process.env.TWO_STEP !== "off" && twoStepApplies(request.nextUrl.pathname)) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const need = twoStepNeed({
+      app: aal?.nextLevel === "aal2",
+      email: (claims?.app_metadata as { two_step?: unknown } | undefined)?.two_step === "email",
+      aal2: aal?.currentLevel === "aal2" || claims?.aal === "aal2",
+      emailDone: await emailDoneFor(request.cookies.get(TWO_STEP_COOKIE)?.value, typeof claims?.session_id === "string" ? claims.session_id : null),
+    });
+    if (need !== "ok") {
+      const url = request.nextUrl.clone();
+      url.pathname = need === "verify" ? "/two-step" : "/two-step/setup";
+      url.search = "";
+      url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+      const redirect = NextResponse.redirect(url);
+      redirect.headers.set("Cache-Control", "private, no-store");
+      // Keep any refreshed session cookies.
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
+    }
   }
 
   // Forward the request with sanitized identity headers: any

@@ -58,9 +58,11 @@ const siteFiles = [
   "components/site/site-menu.tsx",
   "components/site/frames.tsx",
   "components/site/scenes.tsx",
-  "components/site/cut.tsx",
-  "components/site/cut-client.tsx",
+  "components/site/steps.tsx",
+  "components/site/steps-client.tsx",
   "components/site/platform-detail.tsx",
+  "components/site/pricing-plans.tsx",
+  "components/site/reveal.tsx",
   "components/landing/landing.tsx",
   "lib/site/plans.ts",
   "lib/site/platforms.ts",
@@ -73,31 +75,16 @@ for (const f of siteFiles) {
   ok(!/<script/.test(s), `${f}: no <script> (only the app's own, by its nonce)`);
 }
 
-// --- Platforms: exactly what the app asks for ------------------------------------------------------------------------
+// --- Platforms: what it does on each, never the access it's granted (1.46.0: the owner keeps that confidential) ------
 const prov = read("lib/social/providers.ts");
 const quoted = (s: string) => [...s.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-const arr = (name: string) => quoted(new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(prov)?.[1] ?? "");
-const short = (s: string) => s.replace("https://www.googleapis.com/auth/", "");
-const postScope = /export const FACEBOOK_POST_SCOPE = "([^"]+)"/.exec(prov)?.[1] ?? "";
-const statsBlock = /export const STATS_SCOPES[^=]*= \{([\s\S]*?)\n\};/.exec(prov)?.[1] ?? "";
-const statsOf = (p: string) => quoted(new RegExp(`${p}: \\[([^\\]]*)\\]`).exec(statsBlock)?.[1] ?? "").map(short);
-const base: Record<string, string[]> = {
-  youtube: arr("GOOGLE_SCOPES").map(short),
-  instagram: arr("IG_SCOPES"),
-  tiktok: arr("TIKTOK_SCOPES"),
-  facebook: [...arr("FB_SCOPES"), postScope],
-};
-ok(base.youtube.length === 2 && base.instagram.length === 2 && base.tiktok.length === 2 && base.facebook.length === 4 && postScope === "pages_manage_posts", "read the app's permission lists");
-ok(statsOf("youtube").length === 2 && statsOf("instagram").length === 1 && statsOf("tiktok").length === 2, "and its analytics ones");
+const scopes = [...prov.matchAll(/const (?:GOOGLE_SCOPES|IG_SCOPES|TIKTOK_SCOPES|FB_SCOPES) = \[([^\]]*)\]/g)].flatMap((m) => quoted(m[1])).map((x) => x.replace("https://www.googleapis.com/auth/", ""));
+ok(scopes.length >= 8, `read the app's permission lists (${scopes.length})`);
+const published = [...siteFiles, "app/(legal)/privacy/page.tsx", "app/(legal)/terms/page.tsx", "app/(legal)/data-deletion/page.tsx"].map(read).join("\n");
+for (const sc of scopes) ok(!published.includes(sc), `the website doesn't publish the permission "${sc}"`);
+ok(!/permissions: \[/.test(read("lib/site/platforms.ts")) && !/<Scope\b|Only with Analytics on/.test(read("components/site/platform-detail.tsx")), "no permissions table on the platforms' pages");
 ok(SITE_PLATFORMS.map((p) => p.id).join() === "tiktok,youtube,instagram,facebook", "the four platforms, TikTok first");
-for (const p of SITE_PLATFORMS) {
-  const shown = p.permissions.filter((x) => !x.analytics).map((x) => x.scope);
-  const shownStats = p.permissions.filter((x) => x.analytics).map((x) => x.scope);
-  ok(JSON.stringify([...shown].sort()) === JSON.stringify([...base[p.id]].sort()), `${p.name}: the permissions it always asks for are the page's (${base[p.id].join(", ")} / ${shown.join(", ")})`);
-  ok(JSON.stringify([...shownStats].sort()) === JSON.stringify([...statsOf(p.id)].sort()), `${p.name}: the analytics ones too (${statsOf(p.id).join(", ")} / ${shownStats.join(", ")})`);
-  ok(p.permissions.every((x) => x.use.length > 20), `${p.name}: each permission says what it's for`);
-  ok(p.posts.length >= 2 && p.account.length > 10 && p.reads.length > 10 && p.revoke.length > 10, `${p.name}: what you connect, what it posts and reads, how to take it back`);
-}
+for (const p of SITE_PLATFORMS) ok(p.posts.length >= 2 && p.account.length > 10 && p.reads.length > 10 && p.revoke.length > 10, `${p.name}: what you connect, what it posts and reads, how to take it back`);
 const tiktok = SITE_PLATFORMS.find((p) => p.id === "tiktok")!.posts.join(" ");
 for (const w of ["Direct Post", "no default", "comment", "duet", "stitch", "branded content", "Music Usage Confirmation", "name and picture"]) ok(tiktok.includes(w), `TikTok: says "${w}" (what TikTok's review checks)`);
 ok(PLATFORM_PROMISES.length === 4 && PLATFORM_PROMISES.some((x) => x.text.includes("AES-256-GCM")), "the four promises, sealing included");
@@ -116,9 +103,10 @@ for (const p of PLANS) {
 }
 ok(PLANS[0].monthly === 120 && PLANS[0].yearly === 100 && priceLabel(PLANS[1], true) === null, "Studio $120 or $100 yearly; Network priced with you");
 const pricingPage = read("app/(site)/pricing/page.tsx");
-ok(pricingPage.includes("Yearly, two months free") && pricingPage.includes("No free plan and no trial."), "the switch's words, and no free plan, said plainly");
-ok(/const SIZES = \[1, 3, 5, 10\];/.test(pricingPage) && /money\(\(studio\.monthly \?\? 0\) \* n\)/.test(pricingPage), "what a team pays, worked out from the plan's numbers");
-ok(/<Link href="\/signup"/.test(pricingPage), "Studio starts with Create an account");
+const pricingPlans = read("components/site/pricing-plans.tsx");
+ok(pricingPlans.includes("Yearly, two months free") && pricingPage.includes("No free plan and no trial."), "the switch's words, and no free plan, said plainly");
+ok(/<Tween value=\{each \* people\} format=\{f\} \/>/.test(pricingPlans) && /const each = \(yearly \? studio\.yearly : studio\.monthly\) \?\? 0;/.test(pricingPlans) && /max=\{MAX_PEOPLE\}/.test(pricingPlans), "what a team pays, worked out from the plan's numbers as you choose");
+ok(/<Link href="\/signup"/.test(pricingPlans) && /<PricingPlans plans=\{PLANS\}/.test(pricingPage), "Studio starts with Create an account");
 ok(EVERY_PLAN.length >= 3 && PRICING_FAQ.length >= 4 && PRICING_FAQ.every((f) => f.q.endsWith("?")), "every plan's list and the questions");
 const css = read("components/landing/landing.css");
 ok(/\.billing \.price-yearly,\s*\.billing:has\(#billing-yearly:checked\) \.price-monthly \{ display: none; \}/.test(css) && /\.billing:has\(#billing-yearly:checked\) \.price-yearly \{ display: inline; \}/.test(css), "monthly or yearly by CSS alone (no script)");
@@ -146,11 +134,13 @@ ok(isPublicPath("/features/scripts") && isPublicPath("/platforms/tiktok") && isB
 const sitemap = read("app/sitemap.ts");
 ok(/FEATURES\.map\(\(f\) => `\/features\/\$\{f\.slug\}`\)/.test(sitemap) && /SITE_PLATFORMS\.map\(\(p\) => `\/platforms\/\$\{p\.id\}`\)/.test(sitemap), "and they're in the sitemap");
 const landing = read("components/landing/landing.tsx");
-ok(/<Cut \/>/.test(landing) && /href=\{`\/features\/\$\{f\.slug\}`\}/.test(landing) && /href="\/signup"/.test(landing) && !/Invite only/.test(landing), "the home page: the cut, every feature linked, Create an account");
+ok(/<Steps \/>/.test(landing) && /href=\{`\/features\/\$\{f\.slug\}`\}/.test(landing) && /href="\/signup"/.test(landing) && !/Invite only/.test(landing), "the home page: the steps, every feature linked, Create an account");
 ok(/href="\/privacy"/.test(chrome) && /href="\/terms"/.test(chrome) && /The legal pages on every page, never behind a menu/.test(chrome), "Privacy and Terms on every page, outside any menu");
-const cutClient = read("components/site/cut-client.tsx");
-ok(/\{ passive: true \}/.test(cutClient) && /requestAnimationFrame\(update\)/.test(cutClient) && /matchMedia\("\(min-width: 1024px\)"\)/.test(cutClient), "the cut: follows the scroll, once a frame, on computers");
-ok(/html\[data-motion="off"\] \.cut-panel/.test(read("components/site/site.css")), "and its fades rest with animations off");
+const stepsClient = read("components/site/steps-client.tsx");
+ok(/role="tablist"/.test(stepsClient) && /role="tab"/.test(stepsClient) && /role="tabpanel"/.test(stepsClient) && /hidden=\{open !== i\}/.test(stepsClient), "the steps: tabs anyone can use, every step's words in the page");
+ok(/onAnimationEnd=\{\(\) => \{\s+if \(i === open\) go\(open \+ 1\);/.test(stepsClient) && /ArrowRight/.test(stepsClient), "moves on when its bar fills, and by the keyboard");
+const siteCss = read("components/site/site.css");
+ok(/\.steps:hover \.steps-fill\[data-state="on"\],?\s*\n?\s*\.steps:focus-within \.steps-fill\[data-state="on"\] \{ animation-play-state: paused; \}/.test(siteCss) && /html\[data-motion="off"\] \.steps-bar \{ visibility: hidden; \}/.test(siteCss), "it waits while you point at it, and never moves on by itself with animations off");
 
 // --- security.txt ----------------------------------------------------------------------------------------------------
 const NOW = Date.parse("2026-10-25T10:00:00Z");

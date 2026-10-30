@@ -52,8 +52,8 @@ export default function FeaturesPage() {
           const list = featuresIn(d.id);
           const Visual = VISUALS[list[0].visual];
           return (
-            <section key={d.id} id={d.id} aria-labelledby={`${d.id}-title`} className="scroll-mt-24 grid gap-8 lg:gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="lg:sticky lg:top-24 lg:self-start">
+            <section key={d.id} id={d.id} aria-labelledby={`${d.id}-title`} className="scroll-mt-24 grid gap-8 lg:grid-cols-12 lg:gap-12">
+              <div className="lg:col-span-5 lg:sticky lg:top-24 lg:self-start" data-reveal>
                 <div className="flex items-center gap-3 mb-4">
                   <span className="w-9 h-[7px] rounded-[3px] ld-stripes" aria-hidden />
                   <span className="ld-scene-mark text-[17px] text-amber">Reel {i + 1}</span>
@@ -68,11 +68,11 @@ export default function FeaturesPage() {
                   </div>
                 </Play>
               </div>
-              <ul className="border-b border-line/15">
-                {list.map((f) => (
-                  <li key={f.slug} className="border-t border-line/15">
+              <ul className="lg:col-span-7 border-b border-line/15">
+                {list.map((f, k) => (
+                  <li key={f.slug} className="border-t border-line/15" data-reveal style={{ ["--i" as string]: k }}>
                     <Link href={`/features/${f.slug}`} className="group grid grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 py-6 items-baseline">
-                      <span className="font-display text-[24px] sm:text-[28px] font-semibold leading-tight group-hover:text-amber transition-colors">{f.name}</span>
+                      <span className="site-row-title font-display text-[24px] sm:text-[28px] font-semibold leading-tight group-hover:text-amber">{f.name}</span>
                       <span className="ld-scene-mark text-[15px] text-ink-faint whitespace-nowrap">Scene {FEATURES.indexOf(f) + 1}</span>
                       <span className="col-span-2 text-[16px] leading-relaxed text-ink-soft max-w-[36rem]">{f.line}</span>
                     </Link>

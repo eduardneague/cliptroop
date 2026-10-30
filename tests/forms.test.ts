@@ -55,6 +55,7 @@ ok(!/<script|on\w+=/i.test(renderLiteMarkdown("<script>alert(1)</script> *x* `y`
 
 // --- Opening an address in code (React checks href and src itself; window.open and location don't) -------------------
 const NAVIGATES: Record<string, string> = {
+  "components/auth/two-step-forms.tsx": "after the code: `next`, made safe on the server (safeNext: the app's own pages only)",
   "app/api/social/[platform]/callback/route.ts": "the popup's way back: /team?… built with URLSearchParams, as JSON",
   "app/(dashboard)/videos/[id]/video-file.tsx": "a signed download link from the app's own server",
   "app/(dashboard)/team/connected-accounts.tsx": "the platform's sign-in address from the app's own server",

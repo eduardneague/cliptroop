@@ -22,6 +22,19 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.46.0",
+    date: "2026-10-30",
+    title: "Two-step sign-in, and a smoother website",
+    changes: [
+      { kind: "new", text: "Two-step sign-in for every account: after your password, a code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) or one sent by email. You set it up the first time you sign in after this update, or right after making an account; then every sign-in asks for it." },
+      { kind: "new", text: "Settings → Account → Two-step sign-in: see which way you use, and change it (another app, a new phone, or email instead)." },
+      { kind: "better", text: "Without the code, nothing of yours can be read or changed, not even through the database directly: a password alone isn't enough any more." },
+      { kind: "better", text: "The website: the home page's steps are now six named tabs you can click (they move on by themselves while you watch), pages fill the width evenly, and things ease into view as you scroll." },
+      { kind: "better", text: "Pricing, rebuilt: choose monthly or yearly and how many people, and see what your team pays at once; storage, side by side and the questions follow." },
+      { kind: "better", text: "Platforms: each platform's page says what ClipTroop does there, step by step; the list of permissions isn't shown any more." },
+    ],
+  },
+  {
     version: "1.45.0",
     date: "2026-10-30",
     title: "Open to everyone: sign up, plans with storage, a new website",

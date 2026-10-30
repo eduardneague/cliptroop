@@ -12,7 +12,7 @@ import { FactList, SiteCta, SitePage, btnMain, btnQuiet, textLink } from "@/comp
 
 /*
  * One platform, one page (1.45.0; TikTok first): what you connect, what ClipTroop posts there and how, what it reads
- * back, every permission with what it's for, and the promises that hold everywhere. The words are lib/site/platforms.ts,
+ * back, and the promises that hold everywhere (1.46.0: the access it's granted isn't listed). The words are lib/site/platforms.ts,
  * the same ones as on Platforms.
  */
 
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const p = platformOf((await params).slug);
   if (!p) return {};
   return {
-    ...publicMetadata(`/platforms/${p.id}`, `${APP_NAME} and ${p.name}`, `How ${APP_NAME} posts your team's approved shorts to ${p.name}, what it reads back for Analytics, and every permission it asks for.`),
+    ...publicMetadata(`/platforms/${p.id}`, `${APP_NAME} and ${p.name}`, `How ${APP_NAME} posts your team's approved shorts to ${p.name}, what it reads back for Analytics, and how to take access back.`),
     robots: { index: true, follow: true },
   };
 }
@@ -64,7 +64,7 @@ export default async function PlatformPage({ params }: { params: Promise<{ slug:
             </h1>
             <p className="mt-5 text-[17px] sm:text-[18px] leading-relaxed text-ink-soft max-w-[38rem]">
               {APP_NAME} posts the shorts your team approved to {p.name} at the time you chose, shows every step until it&rsquo;s live, and reads the account&rsquo;s numbers back
-              for Analytics. Here is exactly what it asks {p.name} for, and why.
+              for Analytics. Here is what it does there, step by step.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/signup" className={btnMain}>

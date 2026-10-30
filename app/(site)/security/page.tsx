@@ -44,7 +44,7 @@ const SECTIONS: { id: string; title: string; lead: string; items: { name: string
             A short goes out when someone on your team scheduled it or pressed Post now, never on its own. {APP_NAME} never comments, likes, follows or sends
             messages.{" "}
             <Link href="/platforms" className={textLink}>
-              What it asks each platform for
+              What it does on each platform
             </Link>
           </>
         ),

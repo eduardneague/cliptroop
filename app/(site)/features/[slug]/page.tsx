@@ -113,27 +113,31 @@ export default async function FeaturePage({ params }: { params: Promise<{ slug: 
           </aside>
         </header>
 
-        <Play className="mt-14 sm:mt-20">
-          <div className="max-w-3xl mx-auto">
-            <Visual />
-          </div>
-        </Play>
-
-        <section aria-labelledby="what-title" className="mt-20 sm:mt-28">
-          <h2 id="what-title" className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]">
-            What it does
-          </h2>
-          <div className="mt-8 divide-y divide-line/15 border-y border-line/15">
-            {f.sections.map((s) => (
-              <div key={s.title} className="py-7 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
-                <h3 className="font-display text-[22px] sm:text-[24px] font-semibold leading-snug">{s.title}</h3>
-                <p className="text-[16px] leading-relaxed text-ink-soft max-w-[40rem]">{s.text}</p>
+        {/* The demo beside what it does: the page's width, edge to edge. */}
+        <section aria-labelledby="what-title" className="mt-16 sm:mt-24 grid gap-10 lg:grid-cols-12 lg:gap-12">
+          <div className="lg:col-span-7">
+            <Play className="lg:sticky lg:top-24">
+              <div aria-hidden data-reveal>
+                <Visual />
               </div>
-            ))}
+            </Play>
+          </div>
+          <div className="lg:col-span-5">
+            <h2 id="what-title" className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]" data-reveal>
+              What it does
+            </h2>
+            <div className="mt-6 divide-y divide-line/15 border-y border-line/15">
+              {f.sections.map((s, i) => (
+                <div key={s.title} className="py-6" data-reveal style={{ ["--i" as string]: i }}>
+                  <h3 className="font-display text-[21px] sm:text-[23px] font-semibold leading-snug">{s.title}</h3>
+                  <p className="mt-2.5 text-[16px] leading-relaxed text-ink-soft">{s.text}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-        <section aria-labelledby="detail-title" className="mt-20 sm:mt-24">
+        <section aria-labelledby="detail-title" className="mt-20 sm:mt-28">
           <h2 id="detail-title" className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]">
             In detail
           </h2>
@@ -147,12 +151,12 @@ export default async function FeaturePage({ params }: { params: Promise<{ slug: 
             <h2 id="with-title" className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]">
               Works with
             </h2>
-            <ul className="mt-8 grid gap-x-10 sm:grid-cols-2">
-              {related.map((r) => (
-                <li key={r.slug} className="border-t border-line/15">
-                  <Link href={`/features/${r.slug}`} className="group block py-4">
-                    <span className="block font-semibold text-[16px] group-hover:text-amber">{r.name}</span>
-                    <span className="mt-1 block text-[15px] leading-relaxed text-ink-soft">{r.line}</span>
+            <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {related.map((r, i) => (
+                <li key={r.slug} data-reveal style={{ ["--i" as string]: i }}>
+                  <Link href={`/features/${r.slug}`} className="site-card group flex h-full flex-col rounded-[22px] border border-line/15 bg-surface p-5">
+                    <span className="font-display text-[21px] font-semibold group-hover:text-amber transition-colors">{r.name}</span>
+                    <span className="mt-2 text-[14.5px] leading-relaxed text-ink-soft">{r.line}</span>
                   </Link>
                 </li>
               ))}

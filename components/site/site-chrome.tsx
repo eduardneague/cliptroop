@@ -5,6 +5,8 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { HeaderScroll } from "@/components/landing/landing-client";
 import { SiteMenu } from "./site-menu";
 import "@/components/landing/landing.css";
+import "./site.css";
+import { Reveal } from "./reveal";
 
 /*
  * The website around the app (1.33.0): the home page, Features, Platforms,
@@ -54,7 +56,7 @@ export const SITE_FOOTER = [
 
 /** Buttons and links that look like them. */
 export const btn =
-  "inline-flex items-center justify-center rounded-xl font-semibold transition-[filter,background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
+  "site-btn inline-flex items-center justify-center rounded-xl font-semibold transition-[filter,background-color,border-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
 export const btnMain = `${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`;
 export const btnQuiet = `${btn} border border-line/20 px-5 h-12 text-[15px] hover:border-line/40 hover:bg-surface`;
 /** A link inside text. */
@@ -78,7 +80,7 @@ export function SiteHeader({ current }: { current?: string }) {
               key={l.href}
               href={l.href}
               aria-current={current === l.href ? "page" : undefined}
-              className={`rounded-lg px-3 h-9 inline-flex items-center hover:text-ink hover:bg-surface/70 ${current === l.href ? "text-ink font-semibold" : ""}`}
+              className={`site-nav-link relative rounded-lg px-3 h-9 inline-flex items-center hover:text-ink ${current === l.href ? "text-ink font-semibold" : ""}`}
             >
               {l.label}
             </Link>
@@ -164,40 +166,48 @@ export function SitePage({ current, flush, children }: { current?: string; flush
       <SiteHeader current={current} />
       <main id="page">{children}</main>
       <SiteFooter flush={flush} />
+      {/* 1.46.0: what comes into view rises in (components/site/reveal.tsx). */}
+      <Reveal />
     </div>
   );
 }
 
 /**
- * The top of a page: the clapper stripes, the title, one line about it. `children`: anything that belongs beside
- * the line (buttons).
+ * The top of a page: the clapper stripes, then the title and, beside it, a line about it with anything that belongs to
+ * it (buttons). 1.46.0: the two share the page's width (7 and 5 of 12 columns), so nothing leaves the right side empty.
  */
 export function PageHead({ title, lead, children }: { title: string; lead: React.ReactNode; children?: React.ReactNode }) {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-12 sm:pb-16">
-      <span className="block w-14 h-[7px] rounded-[3px] ld-stripes" aria-hidden />
-      <h1 className="mt-6 font-display font-semibold tracking-[-0.025em] leading-[1] text-[42px] sm:text-[60px] max-w-[16ch]">{title}</h1>
-      <p className="mt-5 text-[17px] sm:text-[18px] leading-relaxed text-ink-soft max-w-[40rem]">{lead}</p>
-      {children && <div className="mt-8 flex flex-wrap items-center gap-3">{children}</div>}
+      <span className="block w-14 h-[7px] rounded-[3px] ld-stripes site-stripe-in" aria-hidden />
+      <div className="mt-6 grid gap-6 lg:grid-cols-12 lg:gap-12 lg:items-end">
+        <h1 className="site-title-in lg:col-span-7 font-display font-semibold tracking-[-0.025em] leading-[1] text-[42px] sm:text-[60px] text-balance">{title}</h1>
+        <div className="site-lead-in lg:col-span-5 lg:pb-1.5">
+          <p className="text-[17px] sm:text-[18px] leading-relaxed text-ink-soft">{lead}</p>
+          {children && <div className="mt-6 flex flex-wrap items-center gap-3">{children}</div>}
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
  * A part of a page: its title (and a line about it) on the left, staying in view while you read the right; one column
- * on a phone.
+ * on a phone. 1.46.0: 4 and 8 of 12 columns, edge to edge with the rest of the page.
  */
 export function SiteSection({ id, title, lead, children }: { id?: string; title: string; lead?: React.ReactNode; children: React.ReactNode }) {
   const h = id ? `${id}-title` : undefined;
   return (
-    <section id={id} aria-labelledby={h} className="scroll-mt-24 max-w-6xl mx-auto px-4 sm:px-6 grid gap-8 lg:gap-14 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <div className="lg:sticky lg:top-24 lg:self-start">
+    <section id={id} aria-labelledby={h} className="scroll-mt-24 max-w-6xl mx-auto px-4 sm:px-6 grid gap-8 lg:grid-cols-12 lg:gap-12">
+      <div className="lg:col-span-4 lg:sticky lg:top-24 lg:self-start" data-reveal>
         <h2 id={h} className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]">
           {title}
         </h2>
-        {lead && <p className="mt-3 text-[16px] leading-relaxed text-ink-soft max-w-[28rem]">{lead}</p>}
+        {lead && <p className="mt-3 text-[16px] leading-relaxed text-ink-soft">{lead}</p>}
       </div>
-      <div>{children}</div>
+      <div className="lg:col-span-8" data-reveal>
+        {children}
+      </div>
     </section>
   );
 }
@@ -207,8 +217,8 @@ export function FactList({ items, columns = 2 }: { items: readonly { name: strin
   const cols = columns === 3 ? "sm:grid-cols-2 lg:grid-cols-3" : columns === 2 ? "sm:grid-cols-2" : "";
   return (
     <dl className={`grid gap-x-10 gap-y-6 ${cols}`}>
-      {items.map((x) => (
-        <div key={x.name} className="border-t border-line/15 pt-4">
+      {items.map((x, i) => (
+        <div key={x.name} className="border-t border-line/15 pt-4" data-reveal style={{ ["--i" as string]: i % 6 }}>
           <dt className="font-semibold text-[16px]">{x.name}</dt>
           <dd className="mt-1.5 text-[15px] leading-relaxed text-ink-soft">{x.text}</dd>
         </div>

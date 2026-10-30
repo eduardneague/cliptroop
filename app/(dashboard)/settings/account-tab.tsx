@@ -24,7 +24,7 @@ import { MovedHere } from "./moved-here";
  */
 
 /** Account: signing in, devices, the developer's pages, and the way into the Danger zone. */
-export function AccountOverview({ email, names, developer }: { email: string; names: string[]; developer: boolean }) {
+export function AccountOverview({ email, names, developer, twoStep = null }: { email: string; names: string[]; developer: boolean; twoStep?: "app" | "email" | null }) {
   return (
     <div className="space-y-6">
       {/* An old link to what moved (a bookmark of #report) goes where it is now. */}
@@ -32,6 +32,23 @@ export function AccountOverview({ email, names, developer }: { email: string; na
       <Group title={TEXT.signingIn}>
         <Row id="email" title={TEXT.email} text={TEXT.emailText} action={<span className="block text-[14px] font-semibold break-all sm:text-right">{email}</span>} />
         <PasswordSection email={email} names={names} />
+        {/* 1.46.0: the second step every sign-in takes. */}
+        <Row
+          id="two-step"
+          title="Two-step sign-in"
+          text={
+            twoStep === "app"
+              ? "A code from your authenticator app, each time you sign in."
+              : twoStep === "email"
+                ? `A code by email to ${email}, each time you sign in.`
+                : "Not set up yet: you'll be asked to the next time you sign in."
+          }
+          action={
+            <Link href="/two-step/setup?change=1" className={BTN}>
+              {twoStep ? "Change" : "Set it up"}
+            </Link>
+          }
+        />
       </Group>
 
       <Group id="sessions" title={TEXT.devices}>

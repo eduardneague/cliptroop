@@ -94,6 +94,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Account: the Developer and App setup pages, for the developer. Help & feedback: the report form
   // (with what you sent before). 1.34.2: each loads only on its own tab.
   const showAppSetup = tab === "account" && !danger ? await isDeveloper(user) : false;
+  // 1.46.0: the account's second step (Settings → Account → Two-step sign-in), from Supabase Auth itself.
+  const twoStep: "app" | "email" | null =
+    tab === "account" && !danger
+      ? await createClient()
+          .then((c) => c.auth.getUser())
+          .then(({ data: { user: u } }) =>
+            (u?.factors ?? []).some((f) => f.factor_type === "totp" && f.status === "verified")
+              ? ("app" as const)
+              : (u?.app_metadata as { two_step?: unknown } | undefined)?.two_step === "email"
+                ? ("email" as const)
+                : null,
+          )
+          .catch(() => null)
+      : null;
   const [accountTeam, sentReports] =
     tab === "help"
       ? await Promise.all([
@@ -354,6 +368,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             email={user?.email ?? profile?.email ?? ""}
             names={[profile?.full_name as string | null | undefined, profile?.username as string | null | undefined].filter((n): n is string => !!n)}
             developer={showAppSetup}
+            twoStep={twoStep}
           />
         ))}
       {tab === "help" && <HelpTab userId={user!.id} teamId={accountTeam} recent={sentReports} />}

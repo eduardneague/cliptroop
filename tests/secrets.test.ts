@@ -47,7 +47,8 @@ for (const [n, files] of names) {
   if (!SECRETS.test(n)) continue;
   for (const f of new Set(files)) {
     const s = read(f);
-    const serverOnly = /^import "server-only";/m.test(s) || /^\s*"use server";/.test(s) || /(^|\/)route\.ts$/.test(f) || f === "app/(dashboard)/setup/page.tsx";
+    // lib/auth/two-step.ts (1.46.0) runs in the middleware, where "server-only" can't be imported; no browser code imports it (checked below).
+    const serverOnly = /^import "server-only";/m.test(s) || /^\s*"use server";/.test(s) || /(^|\/)route\.ts$/.test(f) || f === "app/(dashboard)/setup/page.tsx" || f === "lib/auth/two-step.ts";
     ok(serverOnly, `${f} reads ${n}: it must be server-only`);
     ok(!/^\s*"use client";/.test(s), `${f} reads ${n} and is a browser file`);
   }
@@ -152,6 +153,13 @@ ok(!overLimit("t", "b", 40, 60_000, t0 + 42), "someone else: their own count");
 ok(!overLimit("t", "a", 40, 60_000, t0 + 61_000 + 41), "a minute later: fine again");
 ok(!overLimit("u", "a", 40, 60_000, t0 + 43), "another limit: its own count");
 
+{
+  const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+  const walk = (d: string): string[] => readdirSync(d).flatMap((x) => (statSync(`${d}/${x}`).isDirectory() ? (x === "node_modules" || x.startsWith(".") ? [] : walk(`${d}/${x}`)) : /\.tsx?$/.test(x) ? [`${d}/${x}`] : []));
+  const root = require("node:path").join(__dirname, "..") as string;
+  const clientFiles = ["app", "components", "modules", "lib"].flatMap((d) => walk(`${root}/${d}`)).filter((f) => /^\s*["']use client["']/.test(require("node:fs").readFileSync(f, "utf8")));
+  for (const f of clientFiles) ok(!/from "@\/lib\/auth\/two-step"/.test(require("node:fs").readFileSync(f, "utf8")), `${f}: browser code mustn't import lib/auth/two-step (it reads the cookie's key)`);
+}
 if (fails) {
   console.log(`${fails} failed`);
   process.exit(1);

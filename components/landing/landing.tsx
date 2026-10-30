@@ -2,7 +2,7 @@ import Link from "next/link";
 import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { Mascot } from "@/components/ui/mascot";
 import { btn, btnQuiet, SitePage, textLink } from "@/components/site/site-chrome";
-import { Cut } from "@/components/site/cut";
+import { Steps } from "@/components/site/steps";
 import { DEPTS, FEATURES, featuresIn } from "@/lib/site/features";
 import { SITE_PLATFORMS } from "@/lib/site/platforms";
 import { PLAN_FACTS, gbLabel, planPrice } from "@/lib/plans";
@@ -13,8 +13,8 @@ import "./landing.css";
 
 /*
  * The public home page: what new people and the platforms' reviewers see. A slate claps shut (the one big moment on
- * load); then the cut, one short's week of work as scenes beside an editing timeline whose playhead follows your
- * reading (1.45.0, components/site/cut.tsx); the phone; every feature as end credits, each with its own page; the
+ * load); then the steps, one short from the idea to its numbers, each step's words beside its demo (1.46.0,
+ * components/site/steps.tsx); the phone; every feature as end credits, each with its own page; the
  * platforms; the price, plainly; and the promises. Since 1.33.0 it's the front of the website (components/site).
  */
 
@@ -113,41 +113,35 @@ function Hero() {
   );
 }
 
-/** Every feature, as the end credits roll: department by department, each one a link to its page. */
+/** Every feature, as the cast list: department by department across the page, each one a link to its page. */
 function Credits() {
   return (
-    <section id="more" aria-labelledby="more-title" className="scroll-mt-16 max-w-5xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
-      <h2 id="more-title" className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">
-        The full cast
-      </h2>
-      <p className="mt-3 text-center text-[16px] text-ink-soft">
-        {FEATURES.length} parts of {APP_NAME}, in the order a video is made. Each has its own page.
-      </p>
-      <div className="mt-12 space-y-12">
-        {DEPTS.map((d) => (
-          <div key={d.id}>
-            <h3 className="text-center font-display text-[15px] font-semibold text-amber">{d.name}</h3>
-            <dl className="mt-4 space-y-3">
+    <section id="more" aria-labelledby="more-title" className="scroll-mt-16 max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+      <div className="grid gap-6 lg:grid-cols-12 lg:gap-12 lg:items-end" data-reveal>
+        <h2 id="more-title" className="lg:col-span-7 font-display text-[36px] sm:text-[52px] font-semibold leading-[1.02] tracking-[-0.02em]">
+          The full cast
+        </h2>
+        <p className="lg:col-span-5 text-[17px] leading-relaxed text-ink-soft">
+          {FEATURES.length} parts of {APP_NAME}, in the order a video is made. Each has its own page, and every plan has all of them.
+        </p>
+      </div>
+      <div className="mt-12 grid gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+        {DEPTS.map((d, i) => (
+          <div key={d.id} className="border-t-2 border-ink/80 pt-4" data-reveal style={{ ["--i" as string]: i % 4 }}>
+            <h3 className="ld-scene-mark text-[18px] text-amber">{d.name}</h3>
+            <ul className="mt-4 space-y-4">
               {featuresIn(d.id).map((f) => (
-                <div key={f.slug} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">
-                  <dt className="sm:text-right font-display text-[20px] sm:text-[22px] font-semibold">
-                    <Link href={`/features/${f.slug}`} className="hover:text-amber underline-offset-4 hover:underline decoration-2">
-                      {f.name}
-                    </Link>
-                  </dt>
-                  <span className="hidden sm:block ld-leader h-3" aria-hidden />
-                  <dd className="text-[15px] text-ink-soft leading-relaxed">{f.line}</dd>
-                </div>
+                <li key={f.slug}>
+                  <Link href={`/features/${f.slug}`} className="group block">
+                    <span className="site-link-quiet font-display text-[20px] font-semibold leading-tight group-hover:text-amber transition-colors">{f.name}</span>
+                    <span className="mt-1 block text-[14px] leading-relaxed text-ink-soft">{f.line}</span>
+                  </Link>
+                </li>
               ))}
-            </dl>
+            </ul>
           </div>
         ))}
       </div>
-      <p className="mt-12 text-center text-[15px]">
-        <Link href="/features" className={textLink}>
-          Every feature, department by department
-        </Link>
-      </p>
     </section>
   );
 }
@@ -162,7 +156,7 @@ function Platforms() {
             Posted from your own accounts
           </h2>
           <p className="mt-4 text-[16.5px] leading-relaxed text-ink-soft max-w-[32rem]">
-            Your team connects its accounts, and {APP_NAME} posts only what you approved, when you said. Each platform&rsquo;s page lists every permission it asks for, and why.
+            Your team connects its accounts, and {APP_NAME} posts only what you approved, when you said. Each platform&rsquo;s page says what it does there, step by step.
           </p>
         </div>
         <ul className="grid grid-cols-2 gap-3">
@@ -213,8 +207,8 @@ export function Landing() {
     <SitePage>
       <Hero />
 
-      {/* The production, as a week of work on an editing timeline. */}
-      <Cut />
+      {/* One short, step by step. */}
+      <Steps />
 
       {/* The phone. */}
       <section className="mt-28 sm:mt-36 bg-[rgb(43_33_24)] text-[rgb(246_240_228)] overflow-hidden">
@@ -237,17 +231,17 @@ export function Landing() {
       <Price />
 
       {/* Trust. */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
-        <div className="rounded-[26px] border border-line/10 bg-surface px-6 sm:px-10 py-8 sm:py-10 grid gap-6 md:grid-cols-[1fr_1fr]">
-          <div>
-            <h2 className="font-display text-[26px] font-semibold leading-tight">Your accounts stay yours</h2>
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28" data-reveal>
+        <div className="rounded-[28px] border border-line/10 bg-surface px-6 sm:px-10 py-9 sm:py-11 grid gap-8 md:grid-cols-12 md:gap-12">
+          <div className="md:col-span-5">
+            <h2 className="font-display text-[30px] sm:text-[36px] font-semibold leading-tight">Your accounts stay yours</h2>
             <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
               {APP_NAME} only posts what your team approves, to the accounts your team connects, and reads their numbers to show them back to you. Sign-ins are encrypted and never leave our server. Disconnect any account at any time.
             </p>
           </div>
-          <div className="text-[15px] leading-relaxed text-ink-soft md:border-l md:border-line/10 md:pl-8 space-y-3">
+          <div className="md:col-span-7 text-[15.5px] leading-relaxed text-ink-soft md:border-l md:border-line/10 md:pl-10 space-y-3">
             <p>
-              What it asks each platform for, and why:{" "}
+              What it does on each platform:{" "}
               <Link href="/platforms" className={textLink}>
                 Platforms
               </Link>
@@ -284,7 +278,7 @@ export function Landing() {
       </section>
 
       {/* That's a wrap. */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 text-center">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 text-center" data-reveal>
         <ClipOnView size={150} />
         <h2 className="mt-4 font-display text-[40px] sm:text-[60px] font-semibold leading-[1] tracking-[-0.025em]">That&rsquo;s a wrap.</h2>
         <p className="mt-4 text-[17px] text-ink-soft">{MASCOT_NAME} will show you around the first time you sign in.</p>

@@ -18,10 +18,11 @@ declare
   ];
 begin
   for r in
+    -- Only a permissive policy lets anyone write (0125's restrictive "two-step sign-in" only narrows).
     with writable as (
       select c.oid, c.relname,
-             exists (select 1 from pg_policy p where p.polrelid = c.oid and p.polcmd in ('a', '*')) as ins_rule,
-             exists (select 1 from pg_policy p where p.polrelid = c.oid and p.polcmd in ('w', '*')) as upd_rule
+             exists (select 1 from pg_policy p where p.polrelid = c.oid and p.polcmd in ('a', '*') and p.polpermissive) as ins_rule,
+             exists (select 1 from pg_policy p where p.polrelid = c.oid and p.polcmd in ('w', '*') and p.polpermissive) as upd_rule
         from pg_class c join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'public' and c.relkind in ('r', 'p')
     )

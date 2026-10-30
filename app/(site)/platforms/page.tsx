@@ -11,66 +11,42 @@ export const metadata: Metadata = {
   ...publicMetadata(
     "/platforms",
     "Platforms",
-    `How ${APP_NAME} posts to YouTube, TikTok, Instagram and Facebook from your team's own accounts: what it asks each platform for, and why.`
+    `How ${APP_NAME} posts to YouTube, TikTok, Instagram and Facebook from your team's own accounts: what it does on each, and how to take access back.`
   ),
   robots: { index: true, follow: true },
 };
 
 /**
- * Platforms (1.33.0): what ClipTroop does with each platform, every permission it asks for and what for, and how to
- * take access back. The content is lib/site/platforms.ts (the permissions there are the ones the app asks for).
+ * Platforms (1.33.0): what ClipTroop does with each platform and how to take access back; each has its own page too
+ * (1.45.0). The content is lib/site/platforms.ts. 1.46.0: the access each platform grants isn't listed (confidential).
  */
 export default function PlatformsPage() {
   return (
     <SitePage current="/platforms">
       <PageHead
         title="Your accounts, your posts"
-        lead={`${APP_NAME} posts your team's approved shorts to YouTube, TikTok, Instagram and Facebook from accounts your team connects, and reads their numbers back for Analytics. This page says exactly what it asks each platform for, and why.`}
+        lead={`${APP_NAME} posts your team's approved shorts to YouTube, TikTok, Instagram and Facebook from accounts your team connects, and reads their numbers back for Analytics. Here is what it does on each one, and how to take access back.`}
       />
 
-      {/* At a glance: a table on a computer; on a phone, where it wouldn't fit, the four platforms to jump to. */}
+      {/* The four, each to its own page. */}
       <section aria-labelledby="glance" className="max-w-6xl mx-auto px-4 sm:px-6">
-        <h2 id="glance" className="sr-only">At a glance</h2>
-        <ul className="md:hidden flex flex-wrap gap-2">
-          {SITE_PLATFORMS.map((p) => (
-            <li key={p.id}>
-              <a href={`#${p.id}`} className="inline-flex items-center gap-2 rounded-xl border border-line/15 px-3.5 h-10 text-[14px] hover:border-line/40 hover:bg-surface">
-                <PlatformIcon platform={p.id} className="w-4 h-4" />
-                {p.name}
-              </a>
+        <h2 id="glance" className="sr-only">The platforms</h2>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {SITE_PLATFORMS.map((p, i) => (
+            <li key={p.id} data-reveal style={{ ["--i" as string]: i }}>
+              <Link href={`/platforms/${p.id}`} className="site-card group flex h-full flex-col rounded-[22px] border border-line/15 bg-surface p-5">
+                <span className="flex items-center gap-3">
+                  <PlatformIcon platform={p.id} className="w-8 h-8" />
+                  <span className="font-display text-[23px] font-semibold group-hover:text-amber transition-colors">{p.name}</span>
+                </span>
+                <span className="mt-4 text-[14.5px] leading-relaxed text-ink-soft flex-1">{p.account}</span>
+                <span className="mt-4 text-[14px] font-semibold text-ink">
+                  {p.id === "youtube" ? "Shorts" : p.id === "facebook" ? "Reels on your Page" : p.id === "instagram" ? "Reels, shared to the feed" : "Videos, by Direct Post"}
+                </span>
+              </Link>
             </li>
           ))}
         </ul>
-        <div className="hidden md:block">
-          <table className="w-full text-left text-[15px]">
-            <thead>
-              <tr className="text-[13px] text-ink-faint">
-                <th className="pb-3 pr-6 font-semibold w-[22%]">Platform</th>
-                <th className="pb-3 pr-6 font-semibold">You connect</th>
-                <th className="pb-3 pr-6 font-semibold">{APP_NAME} posts</th>
-                <th className="pb-3 font-semibold">Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SITE_PLATFORMS.map((p) => (
-                <tr key={p.id} className="border-t border-line/10 align-top">
-                  <td className="py-4 pr-6">
-                    <a href={`#${p.id}`} className="inline-flex items-center gap-2.5 font-semibold hover:text-amber">
-                      <PlatformIcon platform={p.id} className="w-5 h-5" />
-                      {p.name}
-                    </a>
-                  </td>
-                  <td className="py-4 pr-6 text-ink-soft">{p.account}</td>
-                  <td className="py-4 pr-6 text-ink-soft">{p.id === "youtube" ? "Shorts" : p.id === "facebook" ? "Reels on your Page" : p.id === "instagram" ? "Reels" : "Videos, by Direct Post"}</td>
-                  <td className="py-4 text-ink-soft tabular-nums">
-                    {p.permissions.filter((x) => !x.analytics).length} to post
-                    {p.permissions.some((x) => x.analytics) && `, ${p.permissions.filter((x) => x.analytics).length} more for Analytics`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       {/* What holds everywhere: the page's one dark band. */}
