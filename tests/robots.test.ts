@@ -1,6 +1,8 @@
 // The platforms' robots must be able to read the public pages (Meta checks the
 // data deletion URL, Google the home page and privacy policy); everything else
 // stays closed. Longest-match rule, like Google and Meta apply robots.txt.
+import { FEATURES } from "../lib/site/features";
+import { SITE_PLATFORMS } from "../lib/site/platforms";
 import robots from "../app/robots";
 import sitemap from "../app/sitemap";
 
@@ -38,9 +40,27 @@ ok(r.sitemap === "https://app.cliptroop.com/sitemap.xml", "sitemap address (no d
 const urls = sitemap().map((x) => x.url);
 ok(
   urls.join() ===
-    ["", "features", "platforms", "pricing", "security", "changelog", "about", "contact", "privacy", "terms", "data-deletion"].map((p) => `https://app.cliptroop.com/${p}`).join(),
-  `sitemap lists the public pages, the home page and the website's first (${urls.join(" ")})`
+    [
+      "",
+      "features",
+      "platforms",
+      "pricing",
+      "security",
+      "changelog",
+      "about",
+      "contact",
+      "signup",
+      "privacy",
+      "terms",
+      "data-deletion",
+      ...FEATURES.map((f) => `features/${f.slug}`),
+      ...SITE_PLATFORMS.map((p) => `platforms/${p.id}`),
+    ]
+      .map((p) => `https://app.cliptroop.com/${p}`)
+      .join(),
+  `sitemap lists the public pages, the home page and the website's first, then every feature's and platform's page (${urls.join(" ")})`
 );
+for (const p of ["/features/scripts", "/features/media-kit", "/platforms/tiktok", "/signup"]) ok(allowed(p), `${p} is readable by robots`);
 
 if (fails) process.exit(1);
 console.log("robots ok");

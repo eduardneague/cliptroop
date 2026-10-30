@@ -553,6 +553,9 @@ html[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .gl
   html[data-glass-style="liquid"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"])::before,
   html[data-glass-style="liquid"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"])::after { display: none; }
 }
+/* 1.45.0: the light that follows the pointer, switched off (Preferences → Glass): none of it, on any pane or bar. */
+html[data-glass-style="liquid"][data-glass-light="off"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"], [data-shell="header"])::after,
+html[data-glass-style="liquid"][data-glass-light="off"] :is(.dash-board .dash-item, .glass-pane)::before { display: none; }
 
 /*
   Halo (1.29.3): soft glass with your colours glowing round its edges: a

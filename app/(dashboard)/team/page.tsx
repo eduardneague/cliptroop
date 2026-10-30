@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, ROLES } from "@/lib/permissions/roles";
+import { getTeamPlan, getTeamStorage } from "@/modules/plans/lib/server";
+import { StorageMeter } from "@/modules/plans/components/storage-meter";
+import { PLAN_FACTS, gbLabel } from "@/lib/plans";
 import type { RoleId } from "@/lib/permissions/roles";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { colorForId, displayName, initialsFor } from "@/lib/avatar";
@@ -82,6 +85,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     longFiles,
     deleteAccessRows,
     deleteRulesRow,
+    teamPlan,
+    teamStorage,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -135,6 +140,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     // reads every row (the others see their own); before 0119 both answer with an error and the panel says so.
     tab === "team" ? supabase.from("video_delete_access").select("user_id, shorts, longs").eq("team_id", currentTeam.id) : Promise.resolve(null),
     tab === "team" ? supabase.from("teams").select("delete_many_shorts, delete_many_longs").eq("id", currentTeam.id).maybeSingle() : Promise.resolve(null),
+    // 1.45.0: the team's plan and what its files take (0124).
+    tab === "team" ? getTeamPlan(supabase, currentTeam.id) : Promise.resolve(null),
+    tab === "team" ? getTeamStorage(supabase, currentTeam.id) : Promise.resolve(null),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -462,6 +470,22 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <p className="text-[12.5px] text-ink-faint">Only the master can change workspace branding.</p>
           )}
         </section>
+        {teamPlan?.plan ? (
+          // 1.45.0: the plan and the storage it gives (lib/plans.ts), against what the team's files take.
+          <section id="plan" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
+            <div className="flex items-baseline justify-between gap-3 mb-4">
+              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Plan and storage</h2>
+              <Link href="/plan" className="text-[12.5px] font-semibold text-amber hover:underline">
+                {userIsMaster ? "Change plan" : "See plans"}
+              </Link>
+            </div>
+            <p className="text-[14px] mb-4">
+              <b>{PLAN_FACTS[teamPlan.plan].name}</b>
+              <span className="text-ink-soft"> · {gbLabel(teamPlan.storageGb ?? PLAN_FACTS[teamPlan.plan].storageGb)} of storage for the team&rsquo;s files</span>
+            </p>
+            <StorageMeter usage={teamStorage ?? null} gb={teamPlan.storageGb} />
+          </section>
+        ) : null}
         {viewerIsOwner && (
           // 1.41.0: the owner's Danger zone: who else deletes videos (and how many at once), the ownership, the team itself.
           <section id="danger-zone" className="rounded-xl border border-red/20 bg-red/5 p-6 scroll-mt-20">

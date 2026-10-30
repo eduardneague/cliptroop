@@ -10,6 +10,7 @@ export const DEV_TABS = [
   { id: "status", label: "Status" },
   { id: "speed", label: "Speed" },
   { id: "features", label: "Features" },
+  { id: "plans", label: "Plans" },
 ] as const;
 export type DevTab = (typeof DEV_TABS)[number]["id"];
 export const devTab = (raw: string | null | undefined): DevTab => (DEV_TABS.some((t) => t.id === raw) ? (raw as DevTab) : "overview");
@@ -97,7 +98,7 @@ export function DevTabSkeleton({ tab }: { tab: DevTab }) {
         </div>
       </div>
     );
-  if (tab === "features")
+  if (tab === "features" || tab === "plans")
     return (
       <div className="space-y-5" aria-hidden>
         <div className={box}>

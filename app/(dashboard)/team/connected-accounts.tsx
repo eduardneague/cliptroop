@@ -39,6 +39,7 @@ const ORDER: Platform[] = ["youtube", "instagram", "tiktok", "facebook"];
 const ERRORS: Record<string, string> = {
   not_configured: "isn't set up on the server yet (missing app keys).",
   forbidden: "can only be connected by the master or a scheduler.",
+  no_plan: "can be connected once your team has a plan (the Plan page).",
   expired: `sign-in expired or came back to a different copy of ${APP_NAME}. Try again; if it keeps happening, open Setup check below.`,
   cancelled: "connection was cancelled.",
   refused: "refused the connection",

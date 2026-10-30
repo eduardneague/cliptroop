@@ -36,6 +36,7 @@ import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { SETTINGS_TABS, SettingsTabSkeleton, settingsTab, settingsView } from "./skeletons";
 import { AvatarImg } from "@/components/ui/avatar-img";
 import { AccountOverview, DangerZone, HelpTab } from "./account-tab";
+import { PreferenceJumps } from "./preference-jumps";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -288,18 +289,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {tab === "preferences" && (
         // 1.29.3: in four groups (mode and colours, glass, wallpaper, motion and sound), with a way to jump to each.
         <div className="space-y-6">
-          <nav aria-label="Preferences" className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
-            {[
-              ["#look", "Mode and colours"],
-              ["#glass", "Glass"],
-              ["#background", "Wallpaper"],
-              ["#motion", "Motion and sound"],
-            ].map(([href, label]) => (
-              <a key={href} href={href} className="whitespace-nowrap rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 transition-colors">
-                {label}
-              </a>
-            ))}
-          </nav>
+          <PreferenceJumps />
 
           <section id="look" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-24">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-4">Mode and colours</h2>

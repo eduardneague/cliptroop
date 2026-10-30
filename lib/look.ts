@@ -17,6 +17,8 @@ import { DEFAULT_CUSTOM, cleanColors, isWash, washVars, type WashId } from "./wa
  *  - sidebar: the side bar as see-through as the cards (else nearly solid)
  *  - level:   how see-through, 0 (solid) … 100 (nearly clear); 50 by default
  *  - wash, washColors: the colours behind the glass (lib/washes.ts, 1.29.2)
+ *  - light:   Liquid's light that follows the pointer over widgets, pop-ups
+ *             and bars (1.45.0: on by default; off, none of it is drawn)
  */
 
 export type GlassStyle = "simple" | "liquid" | "halo";
@@ -29,11 +31,13 @@ export type Look = {
   level: number;
   wash: WashId;
   washColors: [string, string, string];
+  /** 1.45.0: Liquid's light that follows the pointer (on unless switched off). */
+  light: boolean;
   /** False when the account can't keep the colours yet (a database before 0096): this device's own are used. */
   washStored?: false;
 };
 
-export const DEFAULT_LOOK: Look = { on: false, style: "simple", scope: "cards", sidebar: false, level: 50, wash: "theme", washColors: DEFAULT_CUSTOM };
+export const DEFAULT_LOOK: Look = { on: false, style: "simple", scope: "cards", sidebar: false, level: 50, wash: "theme", washColors: DEFAULT_CUSTOM, light: true };
 export const LOOK_KEY = "vp-look";
 /** 1.27.5 kept only "on" here; still read when there's no "vp-look" yet. */
 export const OLD_GLASS_KEY = "vp-glass";
@@ -52,6 +56,7 @@ export function readLook(raw: unknown): Look {
   const level = r.level ?? r.glass_level;
   const wash = r.wash ?? r.glass_wash;
   const colors = r.washColors ?? r.glass_wash_colors;
+  const light = r.light ?? r.glass_light;
   return {
     on: on === true,
     style: isGlassStyle(style) ? style : DEFAULT_LOOK.style,
@@ -60,6 +65,7 @@ export function readLook(raw: unknown): Look {
     level: clampLevel(level),
     wash: isWash(wash) ? wash : DEFAULT_LOOK.wash,
     washColors: cleanColors(colors),
+    light: light !== false,
   };
 }
 
@@ -74,6 +80,7 @@ export function cleanLookPatch(patch: unknown): Partial<Look> {
   if (typeof p.level === "number" && Number.isFinite(p.level)) out.level = clampLevel(p.level);
   if (isWash(p.wash)) out.wash = p.wash;
   if (Array.isArray(p.washColors)) out.washColors = cleanColors(p.washColors);
+  if (typeof p.light === "boolean") out.light = p.light;
   return out;
 }
 
@@ -87,6 +94,7 @@ export function lookColumns(p: Partial<Look>): Record<string, unknown> {
   if (p.level !== undefined) c.glass_level = p.level;
   if (p.wash !== undefined) c.glass_wash = p.wash === "theme" ? null : p.wash;
   if (p.washColors !== undefined) c.glass_wash_colors = p.washColors;
+  if (p.light !== undefined) c.glass_light = p.light;
   return c;
 }
 
@@ -102,6 +110,8 @@ export type LookAttributes = {
   glassWash?: "none" | "one" | "three";
   /** Solid (the slider at 0): no blur is worked out at all. */
   glassOpaque?: "on";
+  /** 1.45.0: Liquid's pointer light switched off. */
+  glassLight?: "off";
   /** --glass-level, 0–1. */
   level: string;
   /** The wash's colours ("r g b"), when it has its own. */
@@ -119,6 +129,7 @@ export function lookAttributes(l: Look): LookAttributes {
     ...(l.sidebar ? { glassSidebar: "clear" as const } : {}),
     ...(w.kind === "none" ? { glassWash: "none" as const } : w.kind === "one" ? { glassWash: "one" as const } : w.kind === "three" ? { glassWash: "three" as const } : {}),
     ...(l.level === 0 ? { glassOpaque: "on" as const } : {}),
+    ...(l.style === "liquid" && !l.light ? { glassLight: "off" as const } : {}),
     level: String(l.level / 100),
     ...(w.kind === "one"
       ? { vars: { "--wash-light": w.light, "--wash-dark": w.dark } }

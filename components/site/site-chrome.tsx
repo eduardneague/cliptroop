@@ -30,6 +30,8 @@ export const SITE_FOOTER = [
       { href: "/pricing", label: "Pricing" },
       { href: "/changelog", label: "Changelog" },
       { href: "/status", label: "Status" },
+      { href: "/signup", label: "Create an account" },
+      { href: "/login", label: "Sign in" },
     ],
   },
   {
@@ -84,10 +86,15 @@ export function SiteHeader({ current }: { current?: string }) {
         </nav>
         <span className="flex-1" />
         <ThemeToggle />
-        <Link href="/login" className={`${btn} bg-amber text-white px-4 h-10 text-[14px] hover:brightness-110`}>
+        <Link href="/login" className="hidden md:inline-flex items-center rounded-xl px-3 h-10 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface/70">
           Sign in
         </Link>
-        <SiteMenu links={SITE_NAV} current={current} />
+        {/* 1.45.0: anyone can make an account. */}
+        <Link href="/signup" className={`${btn} bg-amber text-white px-4 h-10 text-[14px] hover:brightness-110 whitespace-nowrap`}>
+          <span className="sm:hidden">Sign up</span>
+          <span className="hidden sm:inline">Create an account</span>
+        </Link>
+        <SiteMenu links={[...SITE_NAV, { href: "/login", label: "Sign in" }]} current={current} />
       </div>
       <HeaderScroll />
     </header>
@@ -125,8 +132,20 @@ export function SiteFooter({ flush = false }: { flush?: boolean }) {
           </nav>
         ))}
       </div>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10 text-[13px] text-ink-faint">
-        © {new Date().getFullYear()} {APP_NAME}. Made for the teams behind the videos.
+      {/* The legal pages on every page, never behind a menu (the platforms' reviews ask for that). */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-10 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-ink-faint">
+        <span>
+          © {new Date().getFullYear()} {APP_NAME}. Made for the teams behind the videos.
+        </span>
+        <Link href="/privacy" className="hover:text-ink underline-offset-2 hover:underline">
+          Privacy
+        </Link>
+        <Link href="/terms" className="hover:text-ink underline-offset-2 hover:underline">
+          Terms
+        </Link>
+        <Link href="/data-deletion" className="hover:text-ink underline-offset-2 hover:underline">
+          Data deletion
+        </Link>
       </div>
     </footer>
   );
@@ -199,8 +218,7 @@ export function FactList({ items, columns = 2 }: { items: readonly { name: strin
 }
 
 /** The page's ending: where to go next. */
-export function SiteCta({ title = "Bring your team", text, primary }: { title?: string; text: React.ReactNode; primary?: { href: string; label: string } }) {
-  const ask = askHref();
+export function SiteCta({ title = "Bring your team", text, primary = { href: "/signup", label: "Create an account" } }: { title?: string; text: React.ReactNode; primary?: { href: string; label: string } }) {
   return (
     <section className="max-w-6xl mx-auto px-4 sm:px-6 mt-24 sm:mt-32">
       <div className="rounded-[28px] bg-[rgb(43_33_24)] text-[rgb(246_240_228)] px-6 sm:px-12 py-12 sm:py-14 grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
@@ -210,15 +228,9 @@ export function SiteCta({ title = "Bring your team", text, primary }: { title?: 
           <p className="mt-4 text-[16px] leading-relaxed text-[rgb(246_240_228/0.75)]">{text}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          {primary ? (
-            <Link href={primary.href} className={btnMain}>
-              {primary.label}
-            </Link>
-          ) : (
-            <a href={ask} className={btnMain}>
-              Ask about an account
-            </a>
-          )}
+          <Link href={primary.href} className={btnMain}>
+            {primary.label}
+          </Link>
           <Link href="/login" className={`${btn} border border-[rgb(246_240_228/0.25)] px-5 h-12 text-[15px] text-[rgb(246_240_228)] hover:border-[rgb(246_240_228/0.5)]`}>
             Sign in
           </Link>

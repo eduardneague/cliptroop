@@ -51,7 +51,7 @@ export async function changePassword(input: { current: string; next: string }): 
       error:
         outcome === "busy"
           ? "Too many tries. Wait a few minutes and try again."
-          : outcome === "down"
+          : outcome === "down" || outcome === "captcha"
             ? "Couldn't check your password right now. Try again in a minute."
             : "Your current password isn't right.",
       field: "current",
@@ -152,7 +152,7 @@ export async function deleteAccount(input: { email: string; password: string }):
       error:
         outcome === "busy"
           ? "Too many tries. Wait a few minutes and try again."
-          : outcome === "down"
+          : outcome === "down" || outcome === "captcha"
             ? "Couldn't check your password right now. Try again in a minute."
             : "That password isn't right.",
     };

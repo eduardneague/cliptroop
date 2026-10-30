@@ -45,11 +45,13 @@ export function waitText(seconds: number): string {
 }
 
 /** What Supabase's answer to a password means: right, wrong, too many at once, not set up yet, or not reachable. */
-export type SignInOutcome = "ok" | "wrong" | "busy" | "unconfirmed" | "down";
+export type SignInOutcome = "ok" | "wrong" | "busy" | "unconfirmed" | "captcha" | "down";
 export function signInOutcome(error: { status?: number; code?: string; message?: string } | null | undefined): SignInOutcome {
   if (!error) return "ok";
   const text = `${error.code ?? ""} ${error.message ?? ""}`;
   if (error.status === 429 || /over_request_rate_limit|rate limit|too many/i.test(text)) return "busy";
+  // 1.45.0: Supabase's captcha (Turnstile) is on and the check is missing or used up: not a wrong password.
+  if (/captcha/i.test(text)) return "captcha";
   if (/email_not_confirmed|not confirmed/i.test(text)) return "unconfirmed";
   if (/invalid_credentials|invalid login credentials|invalid_grant/i.test(text) || error.status === 400) return "wrong";
   return "down";

@@ -22,7 +22,7 @@ export default function PrivacyPage() {
 
       <p>
         {APP_NAME} is a production planner for video teams, run by {COMPANY_NAME}. Teams use it to plan, write, review, schedule and publish their own
-        videos, and to see how those videos perform. Accounts are invitation only. This page explains what {APP_NAME} stores, why, who it&rsquo;s shared
+        videos, and to see how those videos perform. Anyone 18 or older can make an account. This page explains what {APP_NAME} stores, why, who it&rsquo;s shared
         with, and how to have it deleted.
       </p>
 
@@ -45,6 +45,7 @@ export default function PrivacyPage() {
           this, and none of it is about you.
         </li>
         <li><b>Devices for notifications:</b> if you turn on notifications, the address your browser gives us to deliver them, and a label like &ldquo;iPhone · Safari&rdquo;.</li>
+        <li><b>Your team&rsquo;s plan:</b> which plan it&rsquo;s on, the plan a Master asked for and the note they wrote with it, and how much storage the team&rsquo;s files take.</li>
         <li><b>Technical logs:</b> when something breaks, the error message, the page, and which account saw it, so it can be fixed.</li>
       </ul>
 
@@ -93,6 +94,7 @@ export default function PrivacyPage() {
         <li>LanguageTool: the writing suggestions in scripts, when they&rsquo;re on (the text being checked).</li>
         <li>Open-Meteo: the weather on your dashboard (only the place, rounded to about a kilometre, and the city names you search).</li>
         <li>GIPHY: the GIFs you search for in comments (the search words).</li>
+        <li>Cloudflare Turnstile: the security check when you create an account (signals from your browser that tell people from scripts; no cookies for advertising).</li>
       </ul>
 
       <H>Cookies and device storage</H>

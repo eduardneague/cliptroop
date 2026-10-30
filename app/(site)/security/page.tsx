@@ -92,8 +92,12 @@ const SECTIONS: { id: string; title: string; lead: string; items: { name: string
     lead: "Who gets in, and how a stolen or guessed password is kept from doing harm.",
     items: [
       {
-        name: "Invite only",
-        text: "Accounts are made by invitation from a team's Master. Nobody can make one on their own.",
+        name: "New accounts",
+        text: "Anyone can make an account, and it has to open its email before it can sign in. A new team sees only its plans until its plan is on, and the database refuses its files and connected accounts until then.",
+      },
+      {
+        name: "Joining a team",
+        text: "Only by invitation from one of its Masters, who chooses the person's roles. Nobody joins a team on their own.",
       },
       {
         name: "Passwords",

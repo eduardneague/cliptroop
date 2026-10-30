@@ -1,0 +1,36 @@
+/* ===========================================================================
+   The website's own pieces (1.45.0, components/site): the feature pages'
+   demos (scenes.tsx), the cut on the home page (cut.tsx) and the call sheet
+   on every feature page. Same rules as landing.css: a demo's loop runs only
+   while it's on screen ([data-ld-play][data-on] .ld-a), and with animations
+   off everything shows its finished frame.
+   ======================================================================== */
+
+/* Objectives: a ring fills to its share. */
+.st-ring { stroke-dasharray: var(--len) var(--len); stroke-dashoffset: var(--off); animation: st-ring 7s var(--ease-out) var(--d, 0s) infinite both; }
+@keyframes st-ring { 0%, 4% { stroke-dashoffset: var(--len); } 40%, 92% { stroke-dashoffset: var(--off); } 100% { stroke-dashoffset: var(--off); opacity: 0; } }
+
+/* Media kit: the pages fan out from the cover. */
+.st-fan { transform: rotate(var(--r)) translate(var(--x), var(--y)); animation: st-fan 7s var(--ease-spring) var(--d, 0s) infinite both; }
+@keyframes st-fan { 0%, 6% { transform: none; } 26%, 88% { transform: rotate(var(--r)) translate(var(--x), var(--y)); } 100% { transform: none; } }
+
+/* Your look: the themes take turns over the first one (which is what shows, still). */
+.st-theme { opacity: 0; animation: st-theme 12s linear var(--d, 0s) infinite both; }
+@keyframes st-theme { 0% { opacity: 0; } 3%, 24% { opacity: 1; } 27%, 100% { opacity: 0; } }
+
+/* The cut ------------------------------------------------------------------- */
+.cut { --p: 0; }
+.cut-panel { opacity: 0; transform: translateY(10px) scale(0.985); transition: opacity 0.4s var(--ease-out), transform 0.5s var(--ease-out); }
+.cut-panel[data-active] { opacity: 1; transform: none; }
+.cut-clip { background: color-mix(in srgb, var(--clip) 32%, transparent); color: rgb(var(--ld-chalk) / 0.75); transition: background-color 0.25s, color 0.25s, box-shadow 0.25s; }
+.cut-clip[data-active] { background: var(--clip); color: #fff; box-shadow: 0 0 0 1.5px rgb(var(--ld-chalk) / 0.6); }
+.cut-playhead { left: calc(var(--p) * 100%); }
+.cut-playhead::before { content: ""; position: absolute; top: -4px; left: 50%; width: 10px; height: 8px; transform: translateX(-50%); background: rgb(var(--amber)); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+html[data-motion="off"] .cut-panel, html[data-motion="off"] .cut-clip { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .cut-panel, html:not([data-motion="on"]) .cut-clip { transition: none; }
+}
+
+/* A feature page's call sheet: the facts a crew checks before the day. */
+.call-sheet { border: 1.5px solid rgb(var(--line) / 0.16); border-radius: 18px; }
+.call-sheet > div + div { border-top: 1px dashed rgb(var(--line) / 0.2); }

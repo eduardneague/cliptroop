@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isDeveloper } from "@/lib/errors";
 
 export type CreateTeamState = { error?: string } | undefined;
 
@@ -60,6 +62,19 @@ export async function createTeam(
       .single();
 
     if (!error && data) {
+      // 1.45.0: a team starts without a plan (its pages show the plans until ClipTroop sets one), except one a
+      // developer makes: ClipTroop's own, on Network at once. Before 0124 there's nothing to set (the error is ignored).
+      if (await isDeveloper({ id: user.id, email: user.email ?? null })) {
+        await createAdminClient()
+          .from("teams")
+          .update({ plan: "network", plan_set_at: new Date().toISOString() })
+          .eq("id", data.id)
+          .is("plan", null)
+          .then(
+            () => null,
+            () => null,
+          );
+      }
       redirect(`/dashboard`);
     }
     if (error && error.code !== "23505") {

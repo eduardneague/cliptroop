@@ -2,9 +2,9 @@
  * Who can make an account (1.31.14), as Supabase's sign-in service says
  * itself: GET <project>/auth/v1/settings (public, with the app's public key)
  * answers disable_signup, mailer_autoconfirm and external.anonymous_users.
- * Accounts here are made by invitation (Supabase → Authentication → Users →
- * Invite user); while "Allow new users to sign up" is on, anyone with the
- * public key can make one too, without the app. App setup, card 10.
+ * Since 1.45.0 anyone can make an account (the website's /signup page), so
+ * "Allow new users to sign up" is meant to be on, with Confirm email on and
+ * anonymous sign-ins off. App setup, card 10.
  */
 
 export type SignUpState = {

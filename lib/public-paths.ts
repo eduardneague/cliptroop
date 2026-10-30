@@ -8,11 +8,15 @@
  * is, /api/authors wouldn't be), so a new page can't become public by its
  * name. Pure.
  */
+import { FEATURES } from "./site/features";
+import { SITE_PLATFORMS } from "./site/platforms";
 
 const EXACT = new Set([
   // The home page (signs you in or sends you on).
   "/",
   "/login",
+  // Creating an account (1.45.0: anyone may).
+  "/signup",
   // Where the sign-in emails lead (invites, password resets): signs you in.
   "/welcome",
   // The pages the platforms' reviews check.
@@ -35,6 +39,11 @@ const EXACT = new Set([
   // The installed app's "you're offline" page (kept by the service worker).
   "/offline.html",
 ]);
+
+// 1.45.0: a page for every feature and every platform (/features/scripts, /platforms/tiktok), each by its own address
+// from the lists the pages are built from: never the whole folder, so a page added there later isn't public by its name.
+for (const f of FEATURES) EXACT.add(`/features/${f.slug}`);
+for (const p of SITE_PLATFORMS) EXACT.add(`/platforms/${p.id}`);
 
 const FOLDERS = [
   // Sign-in's own return address.

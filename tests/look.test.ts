@@ -10,7 +10,7 @@ const ok = (c: boolean, m: string) => {
   }
 };
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const rest = { wash: "theme", washColors: DEFAULT_CUSTOM };
+const rest = { wash: "theme", washColors: DEFAULT_CUSTOM, light: true };
 
 // Reading: a database row, a device's saved look, junk.
 ok(same(readLook(null), DEFAULT_LOOK), "nothing → the default");
@@ -83,6 +83,29 @@ ok(THEME_WASHES.every((w) => /^[a-z]{2,20}$/.test(w.id)) && BLENDS.every((b) => 
 ok(THEME_WASHES.every((w) => /^\d{1,3} \d{1,3} \d{1,3}$/.test(w.light) && /^\d{1,3} \d{1,3} \d{1,3}$/.test(w.dark)), "theme colours are r g b");
 ok(BLENDS.every((b) => b.colors.length === 3 && b.colors.every((c) => /^#[0-9a-f]{6}$/.test(c))), "blends: three #rrggbb colours");
 ok(washVars("theme", DEFAULT_CUSTOM).kind === "theme" && washVars("ink", DEFAULT_CUSTOM).kind === "one" && washVars("sunset", DEFAULT_CUSTOM).kind === "three", "washVars kinds");
+
+// 1.45.0: Liquid's light that follows the pointer, on or off (the owner: "a setting to be able to turn off the light
+// following your mouse across widgets and the app").
+ok(DEFAULT_LOOK.light === true && readLook({}).light === true && readLook({ glass_light: false }).light === false && readLook({ light: false }).light === false && readLook({ light: "no" }).light === true, "the pointer light: on unless switched off (a row or a device's look)");
+ok(same(cleanLookPatch({ light: false }), { light: false }) && same(cleanLookPatch({ light: "off" }), {}) && same(lookColumns({ light: false }), { glass_light: false }), "switching it: a yes or no, kept as glass_light");
+const liquidOff = lookAttributes({ ...DEFAULT_LOOK, on: true, style: "liquid", light: false });
+ok(liquidOff.glassLight === "off" && lookAttributes({ ...DEFAULT_LOOK, on: true, style: "liquid" }).glassLight === undefined && lookAttributes({ ...DEFAULT_LOOK, on: true, style: "simple", light: false }).glassLight === undefined && lookAttributes({ ...DEFAULT_LOOK, on: false, style: "liquid", light: false }).glassLight === undefined, "on <html> only when it's Liquid with the light off");
+{
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const root = require("node:path").join(__dirname, "..") as string;
+  const read = (f: string) => readFileSync(require("node:path").join(root, f), "utf8");
+  const css = read("app/globals.css");
+  ok(/html\[data-glass-style="liquid"\]\[data-glass-light="off"\] :is\(\.dash-board \.dash-item, \.glass-pane, \[data-shell="bottom-nav"\], \[data-shell="header"\]\)::after,\s*html\[data-glass-style="liquid"\]\[data-glass-light="off"\] :is\(\.dash-board \.dash-item, \.glass-pane\)::before \{ display: none; \}/.test(css), "off: no light on any pane, bar or the top bar");
+  ok(/if\(L\.style==='liquid'&&L\.light===false\)d\.dataset\.glassLight='off';/.test(read("app/layout.tsx")), "off before the page paints (the first-paint script)");
+  const glass = read("components/ui/glass.tsx");
+  ok(/root\.dataset\.glassLight === "off"/.test(glass) && /set\("glassLight", a\.glassLight\);/.test(glass) && /label="Light that follows the pointer"/.test(glass), "the listener rests when it's off; Preferences → Glass → Liquid has the switch");
+  const m123 = read("supabase/migrations/0123_glass_light.sql");
+  ok(/add column if not exists glass_light boolean not null default true;/.test(m123) && /grant update \(glass_light\) on profiles to authenticated;/.test(m123), "0123: on by default, each person's own to change");
+  const server = read("lib/look-server.ts");
+  ok(/select\(`\$\{SHELL_COLUMNS\}, glass_light`\)/.test(server) && /if \(error && \/glass_light\/\.test\(error\.message \?\? ""\)\)/.test(server) && /select\(`\$\{LOOK_COLUMNS\}, glass_light`\)/.test(server), "before 0123: the look is read without it (the light on), nothing else lost");
+  const jumps = read("app/(dashboard)/settings/preference-jumps.tsx");
+  ok(/e\.preventDefault\(\);/.test(jumps) && /el\.scrollIntoView\(\{ behavior: lessMotion\(\) \? "auto" : "smooth", block: "start" \}\);/.test(jumps) && /glowElement\(el\);/.test(jumps) && /history\.replaceState/.test(jumps) && /<PreferenceJumps \/>/.test(read("app/(dashboard)/settings/page.tsx")), "Preferences' jumps glide to their part (straight there with motion off) and it glows");
+}
 
 if (fails) {
   console.log(`${fails} failed`);

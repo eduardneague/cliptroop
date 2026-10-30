@@ -42,7 +42,9 @@ export async function login(
     case "busy":
       return { error: "Too many sign-ins right now. Try again in a minute." };
     case "unconfirmed":
-      return { error: "Open your invite email first to finish setting up your account." };
+      return { error: "Confirm your email first: open the email we sent you (your invite, or the one confirming your address)." };
+    // Supabase's own Captcha protection is meant to stay off (sign-ups are checked by ClipTroop, app/signup/actions.ts).
+    case "captcha":
     case "down":
       return { error: "Couldn't sign you in right now. Try again in a minute." };
   }

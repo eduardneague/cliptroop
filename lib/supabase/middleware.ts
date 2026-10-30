@@ -127,7 +127,7 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
-  if (user && request.nextUrl.pathname === "/login") {
+  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     const redirect = NextResponse.redirect(url);

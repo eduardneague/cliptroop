@@ -22,6 +22,20 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.45.0",
+    date: "2026-10-30",
+    title: "Open to everyone: sign up, plans with storage, a new website",
+    changes: [
+      { kind: "new", text: "Anyone can create an account now, on the website's Create an account page: your name, your email and a password, then a link to confirm the address. Next you name your team, and its masters choose its plan." },
+      { kind: "new", text: "Plans: Studio ($120 a person a month, or $100 billed yearly, with 50 GB of storage for the team) and Network for agencies with several teams (500 GB each, priced with you). There's no free plan or trial. A new team sees its plans until its plan is on: a master asks from the Plan page, and we write back by email." },
+      { kind: "new", text: "Team → Team → Plan and storage: your plan, and how much of its storage your files take, file type by file type (short and long videos, thumbnails, pictures in scripts, sketches, the media kit). Close to the limit, it says so." },
+      { kind: "new", text: "The website, rebuilt: a page for every feature (Shorts, Scripts, Review, Posting, Analytics, the Media kit, Outliers and the rest) and for each platform, a home page where one short's week of work plays along an editing timeline as you scroll, and a Pricing page that works out what a team pays." },
+      { kind: "new", text: "Settings → Preferences → Glass → Liquid: Light that follows the pointer, on or off. Off, cards and bars stay still under the pointer." },
+      { kind: "better", text: "Settings → Preferences: Mode and colours, Glass, Wallpaper and Motion and sound glide to their part of the page (straight there with animations off), and it glows for a moment." },
+      { kind: "better", text: "Sign in has Create an account next to it, and an account that hasn't confirmed its email is told to open the email we sent." },
+    ],
+  },
+  {
     version: "1.44.0",
     date: "2026-10-30",
     title: "Media kit: brands with their logos, titles of your own",

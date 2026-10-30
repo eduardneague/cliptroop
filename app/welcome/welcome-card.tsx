@@ -22,12 +22,13 @@ const COPY: Record<LinkType, { eyebrow: string; title: string; text: string; cta
     cta: "Let's set you up",
     next: "/set-password",
   },
+  // 1.45.0: the password was chosen on the sign-up form; next comes naming the team.
   signup: {
     eyebrow: "Almost there",
     title: "Confirm your email",
-    text: `Press the button to confirm your email and finish setting up ${APP_NAME}.`,
+    text: `Press the button to confirm your email. Next, you'll name your team.`,
     cta: "Confirm my email",
-    next: "/set-password",
+    next: "/dashboard",
   },
   recovery: {
     eyebrow: "Password reset",

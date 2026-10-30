@@ -1,72 +1,22 @@
 import Link from "next/link";
 import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { Mascot } from "@/components/ui/mascot";
-import { askHref, btn, btnQuiet, SitePage, textLink } from "@/components/site/site-chrome";
+import { btn, btnQuiet, SitePage, textLink } from "@/components/site/site-chrome";
+import { Cut } from "@/components/site/cut";
+import { DEPTS, FEATURES, featuresIn } from "@/lib/site/features";
+import { SITE_PLATFORMS } from "@/lib/site/platforms";
+import { PLAN_FACTS, gbLabel, planPrice } from "@/lib/plans";
+import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { ClipOnView, Play, Timecode } from "./landing-client";
-import { MeasureVignette, PhoneVignette, PipelineVignette, PlanVignette, PostVignette, ReviewVignette, ScriptVignette } from "./vignettes";
+import { PhoneVignette } from "./vignettes";
 import "./landing.css";
 
 /*
- * The public home page: what new people and the platforms' reviewers see.
- * A slate claps shut (the one big moment on load), then the production in
- * six scenes, each with a small live demo, then the rest as end credits.
- * Since 1.33.0 it's the front of the website: the same header and footer as
- * Features, Platforms, Pricing and the rest (components/site).
+ * The public home page: what new people and the platforms' reviewers see. A slate claps shut (the one big moment on
+ * load); then the cut, one short's week of work as scenes beside an editing timeline whose playhead follows your
+ * reading (1.45.0, components/site/cut.tsx); the phone; every feature as end credits, each with its own page; the
+ * platforms; the price, plainly; and the promises. Since 1.33.0 it's the front of the website (components/site).
  */
-
-const SCENES = [
-  {
-    id: "plan",
-    title: "Ideas become a schedule",
-    text: "Drop shorts into the queue and they're given a day by themselves, a few at a time, around your days off. Pin the ones that have to go out on a date. Long videos keep their own deadline.",
-    facts: ["One calendar for the whole team", "Daily limits and days off", "Drag a video to another day"],
-    Vignette: PlanVignette,
-  },
-  {
-    id: "script",
-    title: "Write it, then hand it on",
-    text: "Write the script together, comment on any line and sketch editing ideas right next to it. When it's ready, send it to review and then to staging. The next person is told it's their turn.",
-    facts: ["Comments and sketches on the script", "Script, review and staging", "Notified when it's your turn"],
-    Vignette: ScriptVignette,
-  },
-  {
-    id: "make",
-    title: "Everyone knows whose turn it is",
-    text: "Every short and long video moves through the same steps, with a person on each one. Mark your part done and it moves on, and the editor, reviewer or scheduler hears about it at the right moment.",
-    facts: ["A person on every step", "Tasks for today, for each person", "Late work stands out"],
-    Vignette: PipelineVignette,
-  },
-  {
-    id: "review",
-    title: "Notes on the exact frame",
-    text: "Upload a cut and the team watches it right in the browser. Pin a note to the second it's about, reply, upload the next version and compare. Approve it when it's right.",
-    facts: ["Notes pinned to a moment", "Every version kept to compare", "Approve, or send it back with a note"],
-    Vignette: ReviewVignette,
-  },
-  {
-    id: "post",
-    title: "Out everywhere, on time",
-    text: "Schedule each approved short for YouTube, Instagram, Facebook and TikTok from your team's own accounts, or post it everywhere right now. You see every step, and anything that goes wrong shows up on the Posting page.",
-    facts: ["YouTube, Instagram, Facebook and TikTok", "Scheduled or right now", "Problems explained, with a retry"],
-    Vignette: PostVignette,
-  },
-  {
-    id: "measure",
-    title: "See what worked",
-    text: "Views, watch time, followers and revenue from every platform, where your audience is, and how much the team made, side by side. It's all copied every morning.",
-    facts: ["Every platform in one place", "Audience by country", "Your team's output next to it"],
-    Vignette: MeasureVignette,
-  },
-] as const;
-
-const CREDITS = [
-  { part: "Meetings", name: "Agenda, notes and action items that land in each person's tasks" },
-  { part: "Your dashboard", name: "Widgets you arrange: today's tasks, the calendar, the weather, your numbers" },
-  { part: "Thumbnail Studio", name: "Thumbnail ideas side by side, so the team can pick the winner" },
-  { part: "Roles", name: "Masters, scripters, editors and schedulers each see what's theirs" },
-  { part: "Search", name: "Any video, script or person, with Ctrl K" },
-  { part: "Status", name: "A public page that says whether everything is running" },
-];
 
 /** The slate: claps shut on load, then Clip pops up beside it. */
 /** The hero's clapperboard (also used for the README and link-preview art). */
@@ -135,17 +85,27 @@ function Hero() {
         </h1>
         <div className="ld-hero-after">
           <p className="mt-6 text-[17px] sm:text-[18px] leading-relaxed text-ink-soft max-w-[34rem]">
-            {APP_NAME} is where your team plans, scripts, films, edits, reviews and posts its YouTube, Instagram, Facebook and TikTok videos. Everyone sees what&rsquo;s next and whose turn it is.
+            {APP_NAME} is where your team plans, scripts, films, edits, reviews and posts its YouTube, TikTok, Instagram and Facebook videos. Everyone sees what&rsquo;s next and whose turn it is.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link href="/login" className={`${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`}>
-              Sign in
+            <Link href="/signup" className={`${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`}>
+              Create an account
             </Link>
             <a href="#how" className={btnQuiet}>
               See how it works
             </a>
           </div>
-          <p className="mt-4 text-[13px] text-ink-faint">Invite only: your team&rsquo;s owner creates your account.</p>
+          <p className="mt-4 text-[13px] text-ink-faint">
+            Already on a team?{" "}
+            <Link href="/login" className={textLink}>
+              Sign in
+            </Link>
+            . New teams choose a plan:{" "}
+            <Link href="/pricing" className={textLink}>
+              pricing
+            </Link>
+            .
+          </p>
         </div>
       </div>
       <Slate />
@@ -153,29 +113,98 @@ function Hero() {
   );
 }
 
-function Scene({ n, scene, flip }: { n: number; scene: (typeof SCENES)[number]; flip: boolean }) {
-  const V = scene.Vignette;
+/** Every feature, as the end credits roll: department by department, each one a link to its page. */
+function Credits() {
   return (
-    <Play className="scroll-mt-24" id={scene.id}>
-      <article className={`grid gap-8 lg:gap-14 items-center lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] ${flip ? "lg:[&>*:first-child]:order-2" : ""}`}>
-        <div className="max-w-[32rem]">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="w-9 h-[7px] rounded-[3px] ld-stripes" aria-hidden />
-            <span className="ld-scene-mark text-[17px] text-amber">Scene {n}</span>
+    <section id="more" aria-labelledby="more-title" className="scroll-mt-16 max-w-5xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+      <h2 id="more-title" className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">
+        The full cast
+      </h2>
+      <p className="mt-3 text-center text-[16px] text-ink-soft">
+        {FEATURES.length} parts of {APP_NAME}, in the order a video is made. Each has its own page.
+      </p>
+      <div className="mt-12 space-y-12">
+        {DEPTS.map((d) => (
+          <div key={d.id}>
+            <h3 className="text-center font-display text-[15px] font-semibold text-amber">{d.name}</h3>
+            <dl className="mt-4 space-y-3">
+              {featuresIn(d.id).map((f) => (
+                <div key={f.slug} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">
+                  <dt className="sm:text-right font-display text-[20px] sm:text-[22px] font-semibold">
+                    <Link href={`/features/${f.slug}`} className="hover:text-amber underline-offset-4 hover:underline decoration-2">
+                      {f.name}
+                    </Link>
+                  </dt>
+                  <span className="hidden sm:block ld-leader h-3" aria-hidden />
+                  <dd className="text-[15px] text-ink-soft leading-relaxed">{f.line}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <h3 className="font-display text-[32px] sm:text-[40px] font-semibold leading-[1.05] tracking-[-0.02em]">{scene.title}</h3>
-          <p className="mt-4 text-[16px] leading-relaxed text-ink-soft">{scene.text}</p>
-          <ul className="mt-5 flex flex-wrap gap-2">
-            {scene.facts.map((f) => (
-              <li key={f} className="rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[13px] text-ink-soft">
-                {f}
-              </li>
-            ))}
-          </ul>
+        ))}
+      </div>
+      <p className="mt-12 text-center text-[15px]">
+        <Link href="/features" className={textLink}>
+          Every feature, department by department
+        </Link>
+      </p>
+    </section>
+  );
+}
+
+/** Where it posts: a page for each platform. */
+function Platforms() {
+  return (
+    <section aria-labelledby="platforms-title" className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14 lg:items-end">
+        <div>
+          <h2 id="platforms-title" className="font-display text-[34px] sm:text-[46px] font-semibold leading-[1.03] tracking-[-0.02em]">
+            Posted from your own accounts
+          </h2>
+          <p className="mt-4 text-[16.5px] leading-relaxed text-ink-soft max-w-[32rem]">
+            Your team connects its accounts, and {APP_NAME} posts only what you approved, when you said. Each platform&rsquo;s page lists every permission it asks for, and why.
+          </p>
         </div>
-        <V />
-      </article>
-    </Play>
+        <ul className="grid grid-cols-2 gap-3">
+          {SITE_PLATFORMS.map((p) => (
+            <li key={p.id}>
+              <Link href={`/platforms/${p.id}`} className="group flex items-center gap-3 rounded-2xl border border-line/15 bg-surface px-4 sm:px-5 h-[72px] hover:border-line/35">
+                <PlatformIcon platform={p.id} className="w-7 h-7 flex-shrink-0" />
+                <span className="font-display text-[20px] sm:text-[22px] font-semibold group-hover:text-amber">{p.name}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** The price, plainly. */
+function Price() {
+  const studio = PLAN_FACTS.studio;
+  return (
+    <section aria-labelledby="price-title" className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+      <div className="rounded-[28px] border border-line/15 bg-surface px-6 sm:px-10 py-9 sm:py-11 grid gap-8 md:grid-cols-[1.2fr_1fr] md:items-center">
+        <div>
+          <h2 id="price-title" className="font-display text-[30px] sm:text-[40px] font-semibold leading-[1.05] tracking-[-0.02em]">
+            One price a person, every feature
+          </h2>
+          <p className="mt-3 text-[16px] leading-relaxed text-ink-soft max-w-[34rem]">
+            {studio.name} is {planPrice("studio", false)} a person a month, or {planPrice("studio", true)} billed yearly, with {gbLabel(studio.storageGb)} of storage for the
+            team. Network, for agencies with several teams, is priced with you. There&rsquo;s no free plan and no trial.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3 md:justify-end">
+          <Link href="/pricing" className={`${btn} bg-amber text-white px-6 h-12 text-[15px] hover:brightness-110`}>
+            See pricing
+          </Link>
+          <Link href="/signup" className={btnQuiet}>
+            Create an account
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -184,22 +213,8 @@ export function Landing() {
     <SitePage>
       <Hero />
 
-      {/* The production, in order. */}
-      <section id="how" className="scroll-mt-16 relative">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="max-w-[40rem] mb-14 sm:mb-20">
-            <h2 className="font-display text-[36px] sm:text-[52px] font-semibold leading-[1.02] tracking-[-0.02em]">One video, start to finish</h2>
-            <p className="mt-4 text-[17px] leading-relaxed text-ink-soft">
-              Six scenes, the way video teams already work. Each person sees their part, and the next person knows the moment it&rsquo;s their turn.
-            </p>
-          </div>
-          <div className="space-y-24 sm:space-y-32">
-            {SCENES.map((s, i) => (
-              <Scene key={s.id} n={i + 1} scene={s} flip={i % 2 === 1} />
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* The production, as a week of work on an editing timeline. */}
+      <Cut />
 
       {/* The phone. */}
       <section className="mt-28 sm:mt-36 bg-[rgb(43_33_24)] text-[rgb(246_240_228)] overflow-hidden">
@@ -215,24 +230,11 @@ export function Landing() {
         </Play>
       </section>
 
-      {/* Everything else, as end credits. */}
-      <section id="more" className="scroll-mt-16 max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
-        <h2 className="ld-italic text-center text-[34px] sm:text-[44px] font-semibold tracking-[-0.01em]">Also starring</h2>
-        <dl className="mt-10 space-y-5 sm:space-y-4">
-          {CREDITS.map((c) => (
-            <div key={c.part} className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1.6fr)] sm:items-baseline">
-              <dt className="sm:text-right font-display text-[20px] sm:text-[22px] font-semibold">{c.part}</dt>
-              <span className="hidden sm:block ld-leader h-3" aria-hidden />
-              <dd className="text-[15px] text-ink-soft leading-relaxed">{c.name}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-10 text-center text-[15px]">
-          <Link href="/features" className={textLink}>
-            Every feature, scene by scene
-          </Link>
-        </p>
-      </section>
+      <Credits />
+
+      <Platforms />
+
+      <Price />
 
       {/* Trust. */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
@@ -285,23 +287,17 @@ export function Landing() {
       <section className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 text-center">
         <ClipOnView size={150} />
         <h2 className="mt-4 font-display text-[40px] sm:text-[60px] font-semibold leading-[1] tracking-[-0.025em]">That&rsquo;s a wrap.</h2>
-        <p className="mt-4 text-[17px] text-ink-soft">
-          {MASCOT_NAME} will show you around the first time you sign in.
-        </p>
+        <p className="mt-4 text-[17px] text-ink-soft">{MASCOT_NAME} will show you around the first time you sign in.</p>
         <div className="mt-8 flex flex-wrap justify-center items-center gap-3">
-          <Link href="/login" className={`${btn} bg-amber text-white px-7 h-12 text-[15px] hover:brightness-110`}>
+          <Link href="/signup" className={`${btn} bg-amber text-white px-7 h-12 text-[15px] hover:brightness-110`}>
+            Create an account
+          </Link>
+          <Link href="/login" className={btnQuiet}>
             Sign in
           </Link>
-          <a href={askHref()} className={btnQuiet}>
-            Ask about an account
-          </a>
         </div>
         <p className="mt-4 text-[13px] text-ink-faint">
-          No account yet? Your team&rsquo;s owner can invite you, or see{" "}
-          <Link href="/pricing" className={textLink}>
-            the plans
-          </Link>
-          .
+          Joining a team? Open the invite it sent you.
         </p>
       </section>
     </SitePage>

@@ -117,7 +117,7 @@ export default function AboutPage() {
         </dl>
       </section>
 
-      <SiteCta text={`${APP_NAME} is invite only while we open it up team by team. Tell us about your channels and your team, and we'll set you up.`} />
+      <SiteCta text={`Create an account, name your team after your channel and choose its plan. Your team opens as soon as it's on.`} />
     </SitePage>
   );
 }

@@ -37,7 +37,8 @@ for (const f of code) {
 ok(names.size > 20, `found the settings the code reads (${names.size})`);
 
 // Built into the browser: never a secret.
-const PUBLIC_OK = new Set(["NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY"]);
+// Public by design: the database's anonymous key, the push key, and Turnstile's site key (1.45.0: the browser shows the check with it).
+const PUBLIC_OK = new Set(["NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "NEXT_PUBLIC_TURNSTILE_SITE_KEY"]);
 for (const n of names.keys()) if (n.startsWith("NEXT_PUBLIC_") && !PUBLIC_OK.has(n)) ok(!/SECRET|PRIVATE|SERVICE|TOKEN|PASSWORD|_KEY$/.test(n), `${n}: a NEXT_PUBLIC_ name reaches every browser, so it must not be a secret`);
 
 // Every module that reads a secret is server-only: a route, a server action file, or `import "server-only"`.

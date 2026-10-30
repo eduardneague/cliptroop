@@ -8,6 +8,7 @@ import { APP_DOMAIN, APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { CopyField, EmailPreview } from "./setup-client";
 import { readSignUpState } from "@/lib/auth/sign-up-settings";
+import { turnstileOn } from "@/lib/auth/turnstile-verify";
 import { measureServerSpeed } from "@/lib/server-speed";
 import { distanceOf, SUPABASE_REGIONS, VERCEL_REGIONS } from "@/lib/regions";
 
@@ -403,9 +404,8 @@ export default async function SetupPage() {
         title="Supabase: who can make an account"
         intro={
           <p>
-            Accounts are made by invitation (Authentication → Users → <b>Invite user</b>). Supabase also takes a sign-up from anyone who has the app&rsquo;s public key
-            (every browser that opens the app has it) unless sign-ups are off, and that account could then make teams of its own. Same project → Authentication →{" "}
-            <b>Sign In / Providers</b>.
+            1.45.0: anyone can make an account on the website&rsquo;s <b>Create an account</b> page (/signup), then a team; a team without a plan sees only the plans
+            until you set one (Developer → Plans). Same project → Authentication → <b>Sign In / Providers</b>.
           </p>
         }
       >
@@ -413,8 +413,8 @@ export default async function SetupPage() {
         <ul className="text-[13px] space-y-1.5" aria-label="What Supabase says now">
           {signUp ? (
             <>
-              <li className={signUp.open ? "text-red font-semibold" : "text-green"}>
-                {signUp.open ? "✗ Anyone can make an account: turn off Allow new users to sign up." : "✓ Only the people you invite can make an account."}
+              <li className={signUp.open ? "text-green" : "text-red font-semibold"}>
+                {signUp.open ? "✓ New accounts can be made (the Create an account page works)." : "✗ Sign-ups are off: the Create an account page can't make accounts. Turn on Allow new users to sign up."}
               </li>
               <li className={signUp.noEmailCheck ? "text-red font-semibold" : "text-green"}>
                 {signUp.noEmailCheck ? "✗ A new account works without its email being checked: turn on Confirm email." : "✓ A new account has to open its email first."}
@@ -426,11 +426,17 @@ export default async function SetupPage() {
           ) : (
             <li className="text-ink-soft">Couldn&rsquo;t ask Supabase just now (it&rsquo;s read again each time this page opens).</li>
           )}
+          <li className={turnstileOn() ? "text-green" : "text-gold font-semibold"}>
+            {turnstileOn()
+              ? "✓ The security check (Cloudflare Turnstile) is on for new accounts."
+              : "! No security check on new accounts yet: set NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (Cloudflare → Turnstile → Add site)."}
+          </li>
         </ul>
         <Where>
-          <b>User Signups</b>: <b>Allow new users to sign up</b> off, <b>Allow anonymous sign-ins</b> off, <b>Confirm email</b> on. Save. Inviting from Authentication →
-          Users keeps working (it isn&rsquo;t a sign-up): invite yourself a test address afterwards to be sure. Turn sign-ups back on only when the app has its own sign-up
-          page.
+          <b>User Signups</b>: <b>Allow new users to sign up</b> on, <b>Allow anonymous sign-ins</b> off, <b>Confirm email</b> on. Save. Leave{" "}
+          <b>Attack Protection → Captcha protection</b> off: the app checks new accounts with Turnstile itself, and Supabase&rsquo;s own captcha would also stop sign-ins
+          and Settings&rsquo; password checks, which don&rsquo;t send it. Paste the <b>Confirm signup</b> email from card 4 if you haven&rsquo;t. Inviting from
+          Authentication → Users keeps working.
         </Where>
       </Section>
 

@@ -28,8 +28,8 @@ function Spinner() {
 }
 
 /**
- * Sign in (and "Forgot password?"). Accounts are made by the team owner,
- * so there's no sign-up. Goes back to the page you were sent from (?next=).
+ * Sign in (and "Forgot password?"). New here: Create an account (/signup,
+ * 1.45.0); joining a team: its invite. Goes back to the page you were sent from (?next=).
  * Desktop: the slate with Clip on the left, the form on the right.
  */
 export default function LoginPage() {
@@ -243,7 +243,14 @@ export default function LoginPage() {
                     {pending && <Spinner />}
                     {pending ? "Signing in…" : "Sign in"}
                   </button>
-                  <p className="text-[13px] text-ink-faint text-center pt-2">No account? Your team&rsquo;s owner creates it and sends you an invite.</p>
+                  {/* 1.45.0: anyone can make an account; someone joining a team still gets an invite from it. */}
+                  <p className="text-[13px] text-ink-faint text-center pt-2">
+                    New to {APP_NAME}?{" "}
+                    <Link href="/signup" className="font-semibold text-amber hover:underline">
+                      Create an account
+                    </Link>
+                    . Joining a team? Open the invite it sent you.
+                  </p>
                 </form>
               ) : resetSent ? (
                 <div className="space-y-5" role="status">

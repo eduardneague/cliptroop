@@ -15,6 +15,7 @@ import { ProblemsTab } from "./problems";
 import { StatusTab } from "./status-tab";
 import { SpeedTab } from "./speed";
 import { FeaturesTab } from "./features";
+import { PlansTab } from "./plans";
 
 export const metadata: Metadata = { title: "Developer" };
 export const dynamic = "force-dynamic";
@@ -25,8 +26,8 @@ export const dynamic = "force-dynamic";
  * Everyone else gets a 404. Tabs: Overview (a dashboard of the rest),
  * Usage (database, storage, every team and person), Problems (reports and
  * errors), Status (every check in full), Speed (real visitors' Web Vitals,
- * 1.32.4), Features (what only some teams get: Business, 1.42.0). Only the
- * open tab is loaded.
+ * 1.32.4), Features (what only some teams get: Business, 1.42.0), Plans (each
+ * team's plan and storage, 1.45.0). Only the open tab is loaded.
  */
 export default async function DeveloperPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await getCachedUser();
@@ -66,6 +67,7 @@ export default async function DeveloperPage({ searchParams }: { searchParams: Pr
             {tab === "status" && <StatusTab />}
             {tab === "speed" && <SpeedTab />}
             {tab === "features" && <FeaturesTab />}
+            {tab === "plans" && <PlansTab />}
           </PendingSwap>
         </div>
       </PendingNav>

@@ -8,7 +8,7 @@
 
 const waiting = new Set<string>();
 
-function lessMotion() {
+export function lessMotion() {
   const m = document.documentElement.dataset.motion;
   if (m === "off") return true;
   if (m === "on") return false;
@@ -19,11 +19,19 @@ export function flashElement(el: HTMLElement) {
   if (el.dataset.flash) return; // already glowing
   const tall = el.getBoundingClientRect().height > window.innerHeight * 0.6;
   el.scrollIntoView({ behavior: lessMotion() ? "auto" : "smooth", block: tall ? "start" : "center" });
+  glowElement(el);
+}
+
+const glows = new WeakMap<HTMLElement, number[]>();
+/** The glow alone (1.45.0: Preferences' jumps scroll there themselves); a second one starts it over. */
+export function glowElement(el: HTMLElement) {
+  for (const t of glows.get(el) ?? []) window.clearTimeout(t);
   el.dataset.flash = "on";
-  window.setTimeout(() => {
+  const off = window.setTimeout(() => {
     el.dataset.flash = "off";
-    window.setTimeout(() => delete el.dataset.flash, 700);
+    glows.set(el, [window.setTimeout(() => delete el.dataset.flash, 700)]);
   }, 1600);
+  glows.set(el, [off]);
 }
 
 /**

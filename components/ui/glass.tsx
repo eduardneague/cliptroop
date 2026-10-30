@@ -33,7 +33,7 @@ function deviceLook(): Look {
 function applyLook(l: Look) {
   const root = document.documentElement;
   const a = lookAttributes(l);
-  const set = (k: "glass" | "glassStyle" | "glassScope" | "glassSidebar" | "glassWash" | "glassOpaque", v: string | undefined) => {
+  const set = (k: "glass" | "glassStyle" | "glassScope" | "glassSidebar" | "glassWash" | "glassOpaque" | "glassLight", v: string | undefined) => {
     if (v) root.dataset[k] = v;
     else delete root.dataset[k];
   };
@@ -43,6 +43,7 @@ function applyLook(l: Look) {
   set("glassSidebar", a.glassSidebar);
   set("glassWash", a.glassWash);
   set("glassOpaque", a.glassOpaque);
+  set("glassLight", a.glassLight);
   root.style.setProperty("--glass-level", a.level);
   for (const k of WASH_VARS) {
     const v = a.vars?.[k];
@@ -84,8 +85,8 @@ const LIT = ".dash-item, .glass-pane, [data-shell='bottom-nav'], [data-shell='he
  * the widget, pop-up or tab bar under the pointer lights up where the
  * pointer is (--mx / --my on that pane, in its own coordinates), in your
  * colours (globals.css). One listener for the page, a frame at a time, one
- * pane touched; nothing when the look isn't Liquid, on touch, or when
- * motion is off.
+ * pane touched; nothing when the look isn't Liquid, on touch, when motion is
+ * off, or (1.45.0) when the light is switched off in Preferences → Glass.
  */
 function LiquidLight() {
   useEffect(() => {
@@ -103,7 +104,7 @@ function LiquidLight() {
       pane.style.setProperty("--my", `${Math.round(y - r.top)}px`);
     };
     const onMove = (e: PointerEvent) => {
-      if (root.dataset.glassStyle !== "liquid" || e.pointerType === "touch") return;
+      if (root.dataset.glassStyle !== "liquid" || root.dataset.glassLight === "off" || e.pointerType === "touch") return;
       if (root.dataset.motion === "off" || (root.dataset.motion !== "on" && reduce.matches)) return;
       pane = e.target instanceof Element ? (e.target.closest(LIT) as HTMLElement | null) : null;
       if (!pane) return;
@@ -331,6 +332,16 @@ export function GlassSettings({ initial }: { initial: Look }) {
             </div>
             <Segments label="Side bar" value={look.sidebar ? "clear" : "solid"} options={[{ v: "solid", label: "Solid" }, { v: "clear", label: "See-through" }]} onChange={(v) => change({ sidebar: v === "clear" })} />
           </div>
+          {look.style === "liquid" && (
+            // 1.45.0, the owner: "a setting to be able to turn off the light following your mouse across widgets and the app".
+            <div className={row}>
+              <div>
+                <div className="text-[12.5px] font-semibold">Light that follows the pointer</div>
+                <div className="text-[11.5px] text-ink-faint">{look.light ? "The edge of the card, menu or bar you point at lights up where the pointer is." : "Off: cards and bars stay still under the pointer."}</div>
+              </div>
+              <Segments label="Light that follows the pointer" value={look.light ? "on" : "off"} options={[{ v: "off", label: "Off" }, { v: "on", label: "On" }]} onChange={(v) => change({ light: v === "on" }, v === "on" ? "Pointer light on" : "Pointer light off")} />
+            </div>
+          )}
           <label className="block mt-4 pt-4 border-t border-line/10">
             <span className="flex items-center justify-between text-[12.5px] font-semibold mb-1">
               <span>How see-through</span>

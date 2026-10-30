@@ -66,6 +66,7 @@ function functionsOf(src: string) {
  */
 const LEFT_TO_THE_DATABASE: Record<string, string> = {
   "app/login/actions.ts#login": "signing in itself (with its own limits, 1.31.6)",
+  "app/signup/actions.ts#signUp": "creating an account (1.45.0): for people not signed in yet; the form's checks, Turnstile and Supabase's own limits, and the person's client (no service key)",
   "app/(dashboard)/videos/view-mode-actions.ts#setViewMode": "a preference cookie only (grid or table)",
   "app/(dashboard)/shorts/view-mode-actions.ts#setShortsViewMode": "a preference cookie only (grid or table)",
   "app/(dashboard)/notification-actions.ts#markNotificationRead": "the person's own client: RLS lets only the recipient touch a notification",

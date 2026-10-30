@@ -42,6 +42,11 @@ import { LookScreenHost } from "@/components/ui/look-screen";
 import { HashFlash } from "@/components/ui/hash-flash";
 import { WebVitals } from "@/components/web-vitals";
 import { OverflowMarquee } from "@/components/ui/overflow-marquee";
+import { getTeamPlan } from "@/modules/plans/lib/server";
+import { PlanGateBoundary } from "@/modules/plans/components/plan-gate";
+import type { PlanInfo } from "@/modules/plans/components/plan-chooser";
+import { isMaster } from "@/lib/permissions/roles";
+import type { RoleId } from "@/lib/permissions/roles";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -74,14 +79,19 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   // Everything the shell needs in ONE round trip: your profile (name, picture, colour theme, Clip's tour,
   // the glass look and the wallpaper, in one read since 1.32.1), teams (with their colours), the latest
   // notifications and your wallpapers (how bright each is).
-  const [shell, { teams, currentTeam, roles, business }, { data: notifications }, developer, { data: walls }] = await Promise.all([
+  const [shell, { teams, currentTeam, roles, business, plan }, { data: notifications }, developer, { data: walls }] = await Promise.all([
     getShellProfile(supabase, user!.id),
     // Your roles in the team you're in: the search bar offers what you can do (1.26.0). And whether Business is on
     // for the team and yours to open (1.42.0: the menu shows it then), at the same time.
+    // 1.45.0: and its plan (a team made by someone who signed up on the website has none until ClipTroop sets it).
     getTeamsAndCurrent(supabase).then(async (t) => {
-      if (!t.currentTeam) return { ...t, roles: [] as string[], business: false };
-      const [membership, biz] = await Promise.all([getMembership(supabase, t.currentTeam.id).catch(() => null), getBusinessAccess(supabase, t.currentTeam.id).catch(() => null)]);
-      return { ...t, roles: membership?.roles ?? [], business: !!biz?.access };
+      if (!t.currentTeam) return { ...t, roles: [] as string[], business: false, plan: null };
+      const [membership, biz, plan] = await Promise.all([
+        getMembership(supabase, t.currentTeam.id).catch(() => null),
+        getBusinessAccess(supabase, t.currentTeam.id).catch(() => null),
+        getTeamPlan(supabase, t.currentTeam.id),
+      ]);
+      return { ...t, roles: membership?.roles ?? [], business: !!biz?.access, plan };
     }),
     // The bell: the newest ones you haven't cleared (1.29.1).
     loadBell(supabase, user!.id),
@@ -102,6 +112,21 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   const resolvedEmail = profile?.email ?? user?.email ?? "";
   const resolvedAvatar = profile?.avatar_url ?? null;
   const resolvedColor = colorForId(user!.id);
+  // A team without a plan: its plans in place of its pages (PlanGateBoundary). Never for developer accounts.
+  const gate: PlanInfo | null =
+    currentTeam && plan && plan.known && !plan.plan && !developer
+      ? {
+          teamId: currentTeam.id,
+          teamName: currentTeam.name,
+          master: isMaster(roles as RoleId[]),
+          email: resolvedEmail,
+          plan: null,
+          storageGb: null,
+          requested: plan.requested,
+          requestedAt: plan.requestedAt,
+          note: plan.note,
+        }
+      : null;
 
   // The sidebar now always renders, team or not — WorkspaceSwitcher
   // itself shows a "Create your team" prompt in place of a real
@@ -198,10 +223,10 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 // data-dash-bg: glass over it, and the bars, read the picture (globals.css); drawn once, it stays put between pages.
                 <div data-dash-bg className="contents wall-tone">
                   <EverywhereBackdrop bg={everywhere} />
-                  {children}
+                  <PlanGateBoundary gate={gate}>{children}</PlanGateBoundary>
                 </div>
               ) : (
-                children
+                <PlanGateBoundary gate={gate}>{children}</PlanGateBoundary>
               )}
             </main>
             <MobileBottomNav developer={developer} business={business} />

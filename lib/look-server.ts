@@ -12,11 +12,10 @@ import { clampLuma } from "./wallpapers";
  * own choice.
  */
 export async function getLook(supabase: SupabaseClient, userId: string): Promise<Look | null> {
-  const full = await supabase
-    .from("profiles")
-    .select("glass_ui, glass_style, glass_scope, glass_sidebar, glass_level, glass_wash, glass_wash_colors")
-    .eq("id", userId)
-    .maybeSingle();
+  // 1.45.0: with the pointer light (0123); before it, the light is on.
+  const lit = await supabase.from("profiles").select(`${LOOK_COLUMNS}, glass_light`).eq("id", userId).maybeSingle();
+  if (!lit.error) return lit.data ? readLook(lit.data) : null;
+  const full = await supabase.from("profiles").select(LOOK_COLUMNS).eq("id", userId).maybeSingle();
   if (!full.error) return full.data ? readLook(full.data) : null;
   const mid = await supabase.from("profiles").select("glass_ui, glass_style, glass_scope, glass_sidebar, glass_level").eq("id", userId).maybeSingle();
   if (!mid.error) return mid.data ? { ...readLook(mid.data), washStored: false } : null;
@@ -24,6 +23,8 @@ export async function getLook(supabase: SupabaseClient, userId: string): Promise
   if (old.error || !old.data) return null;
   return { ...readLook(old.data), washStored: false };
 }
+
+const LOOK_COLUMNS = "glass_ui, glass_style, glass_scope, glass_sidebar, glass_level, glass_wash, glass_wash_colors";
 
 export type EverywhereBackground = { url: string; video: boolean; dim: number; luma: number | null };
 
@@ -55,7 +56,9 @@ export type ShellProfile = {
  * by one, as before.
  */
 export async function getShellProfile(supabase: SupabaseClient, userId: string): Promise<ShellProfile | null | undefined> {
-  const { data, error } = await supabase.from("profiles").select(SHELL_COLUMNS).eq("id", userId).maybeSingle();
+  // 1.45.0: with the pointer light (0123); a database before it reads the rest as before (the light on).
+  let { data, error } = await supabase.from("profiles").select(`${SHELL_COLUMNS}, glass_light`).eq("id", userId).maybeSingle();
+  if (error && /glass_light/.test(error.message ?? "")) ({ data, error } = await supabase.from("profiles").select(SHELL_COLUMNS).eq("id", userId).maybeSingle());
   if (error) return null;
   if (!data) return undefined;
   const r = data as unknown as Record<string, unknown>;

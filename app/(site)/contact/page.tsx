@@ -5,7 +5,7 @@ import { publicMetadata } from "@/lib/public-pages";
 import { PageHead, SitePage, textLink } from "@/components/site/site-chrome";
 
 export const metadata: Metadata = {
-  ...publicMetadata("/contact", "Contact", `How to reach the people behind ${APP_NAME}: an account for your team, help with the app, your data or a security problem.`),
+  ...publicMetadata("/contact", "Contact", `How to reach the people behind ${APP_NAME}: a plan for your team, help with the app, your data or a security problem.`),
   robots: { index: true, follow: true },
 };
 
@@ -20,8 +20,8 @@ type Topic = { name: string; tell: string; subject?: string; also?: { href: stri
 
 const TOPICS: Topic[] = [
   {
-    name: "An account for your team",
-    tell: "Your channels, how many people make your videos and where you post them. We set your team up and invite its owner.",
+    name: "A plan for your team",
+    tell: "Anyone can create an account and choose a plan in the app. For Network, or anything about a plan or an invoice, tell us your channels, how many people make your videos and where you post them.",
     subject: `${APP_NAME} for our team`,
     also: { href: "/pricing", label: "The plans" },
   },
@@ -56,7 +56,7 @@ export default function ContactPage() {
     <SitePage current="/contact">
       <PageHead
         title="Talk to us"
-        lead="An account for your team, a question about the app, your data or a security problem: write to us and a person answers."
+        lead="A plan for your team, a question about the app, your data or a security problem: write to us and a person answers."
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
