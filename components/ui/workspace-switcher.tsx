@@ -2,12 +2,12 @@
 
 import { ChevronDownIcon, CheckIcon } from "./icons";
 
-import { useState, useRef, useEffect, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import Link from "next/link";
 import { switchTeam } from "../../app/(dashboard)/actions";
 import type { TeamSummary } from "@/lib/teams";
 import { AvatarImg } from "@/components/ui/avatar-img";
-import { Leaves } from "./leaves";
+import { AnchoredMenu } from "./anchored-menu";
 
 function initials(name: string) {
   return name
@@ -44,17 +44,8 @@ export function WorkspaceSwitcher({
 }) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  const btn = useRef<HTMLButtonElement>(null);
+  const [width, setWidth] = useState(208);
 
   if (!currentTeam) {
     return (
@@ -72,10 +63,20 @@ export function WorkspaceSwitcher({
     );
   }
 
+  // 1.43.0: the list opens at the top of the page (AnchoredMenu), glass like every other menu. It used to open inside the
+  // side bar, where the glass look can't blur what's behind a box (the bar is its own pane): the menu's items and the
+  // bar's (Dashboard, RESEARCH) showed through each other (the owner: "contrast here on liquid glass is bad").
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        ref={btn}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          setWidth(Math.max(200, btn.current?.offsetWidth ?? 208));
+          setOpen((o) => !o);
+        }}
         className="w-full flex items-center gap-2.5 rounded-lg border border-line/10 bg-surface-2 px-2.5 py-2 text-left hover:border-line/20 transition-colors"
       >
         <TeamAvatar team={currentTeam} size="md" />
@@ -84,22 +85,23 @@ export function WorkspaceSwitcher({
             {currentTeam.name}
           </span>
         </span>
-        <ChevronDownIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
+        <ChevronDownIcon className={`w-4 h-4 text-ink-faint flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && (
-        <Leaves>
-          <div className="pop-menu origin-top absolute top-[calc(100%+6px)] left-0 right-0 rounded-lg border border-line/10 bg-surface shadow-lg p-1.5 z-40">
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={width} align="left" label="Teams" className="glass-floor">
+          <div className="p-1.5">
             {teams.map((t) => (
               <button
                 key={t.id}
+                type="button"
+                role="menuitem"
                 onClick={() => {
                   setOpen(false);
                   startTransition(() => {
                     switchTeam(t.id);
                   });
                 }}
-                className="w-full flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-surface-2 transition-colors"
+                className="w-full flex items-center gap-2.5 rounded-lg px-2 h-9 text-left hover:bg-surface-2 transition-colors"
               >
                 <TeamAvatar team={t} size="sm" />
                 <span className="text-[13px] font-medium flex-1 truncate">
@@ -113,8 +115,9 @@ export function WorkspaceSwitcher({
             <div className="border-t border-line/10 mt-1 pt-1">
               <Link
                 href="/teams/new"
+                role="menuitem"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-2 transition-colors text-[13px] font-medium text-ink-soft"
+                className="flex items-center gap-2.5 rounded-lg px-2 h-9 hover:bg-surface-2 transition-colors text-[13px] font-medium text-ink-soft"
               >
                 <span className="w-5 h-5 rounded border border-dashed border-ink-faint flex items-center justify-center text-[11px] flex-shrink-0">
                   +
@@ -123,8 +126,7 @@ export function WorkspaceSwitcher({
               </Link>
             </div>
           </div>
-        </Leaves>
-      )}
+      </AnchoredMenu>
     </div>
   );
 }

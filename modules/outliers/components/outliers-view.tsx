@@ -338,12 +338,12 @@ function Shell(props: OutliersViewProps) {
               <p className="text-[14px] text-ink-soft">{summary}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={roll} disabled={rolling} className={`${ICON_BTN} sm:w-auto sm:px-3 sm:gap-1.5 h-10 text-[13px] font-semibold`} title="Open a random big outlier">
+              <button type="button" onClick={roll} disabled={rolling} className={`${ICON_BTN} !w-10 sm:!w-auto sm:px-3 sm:gap-1.5 !h-10 text-[13px] font-semibold`} title="Open a random big outlier">
                 <DiceIcon className={`w-[18px] h-[18px] ${rolling ? "animate-spin" : ""}`} />
                 <span className="hidden sm:inline">Random</span>
               </button>
               {(ctx.canManage || n?.explore) && (
-                <button type="button" onClick={collect} disabled={collecting} className={`${ICON_BTN} h-10 w-10`} title="Collect now: the next channels and videos, in the background">
+                <button type="button" onClick={collect} disabled={collecting} className={`${ICON_BTN} !h-10 !w-10`} title="Collect now: the next channels and videos, in the background">
                   <RetryIcon className={`w-[18px] h-[18px] ${collecting || exploreKicked ? "animate-spin" : ""}`} />
                 </button>
               )}
@@ -351,7 +351,7 @@ function Shell(props: OutliersViewProps) {
                 type="button"
                 onClick={() => setSettings({ open: true, tab: "alerts" })}
                 onPointerEnter={() => preload("settings")}
-                className={`${ICON_BTN} h-10 w-10`}
+                className={`${ICON_BTN} !h-10 !w-10`}
                 title="Outlier settings: alerts and hidden channels"
                 aria-label="Outlier settings"
               >
@@ -387,7 +387,7 @@ function Shell(props: OutliersViewProps) {
                 )}
               </div>
               {ctx.canManage ? (
-                <button type="button" onClick={() => setNicheDialog({ open: true, niche: null })} className={`${BTN_MAIN} h-10 px-5 self-start md:self-auto flex-shrink-0`}>
+                <button type="button" onClick={() => setNicheDialog({ open: true, niche: null })} className={`${BTN_MAIN} !h-10 px-5 self-start md:self-auto flex-shrink-0`}>
                   Add your niche
                 </button>
               ) : (
@@ -435,13 +435,14 @@ function Shell(props: OutliersViewProps) {
                 onEdit={(x) => setNicheDialog({ open: true, niche: x })}
               />
               {current && !current.explore && ctx.canManage && (
-                <button type="button" onClick={() => setNicheDialog({ open: true, niche: current })} onPointerEnter={() => preload("niche")} aria-label={`Change ${current.name}`} title="Change this niche: keywords, channels, languages" className={`${ICON_BTN} h-10 w-10 flex-shrink-0`}>
+                <button type="button" onClick={() => setNicheDialog({ open: true, niche: current })} onPointerEnter={() => preload("niche")} aria-label={`Change ${current.name}`} title="Change this niche: keywords, channels, languages" className={`${ICON_BTN} !h-10 !w-10 flex-shrink-0`}>
                   <EditIcon className="w-4 h-4" />
                 </button>
               )}
             </div>
             <Segmented
               ariaLabel="Long videos or Shorts"
+              size="lg"
               value={kind}
               onChange={(k) => go({ kind: k })}
               options={[

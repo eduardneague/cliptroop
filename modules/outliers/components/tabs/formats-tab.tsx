@@ -283,7 +283,7 @@ function FormatDetail({ row, inSheet = false }: { row: Row; inSheet?: boolean })
         ))}
       </div>
 
-      <Link href={nav.href({ tab: "ideas", params: { lock: f.id } })} className={`${BTN_MAIN} mt-4 w-full h-10`}>
+      <Link href={nav.href({ tab: "ideas", params: { lock: f.id } })} className={`${BTN_MAIN} mt-4 w-full !h-10`}>
         Write it for {ctx.niche?.name ?? "my niche"}
       </Link>
 

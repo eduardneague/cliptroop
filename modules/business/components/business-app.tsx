@@ -22,6 +22,7 @@ import { AssetsTab } from "./assets-view";
 import { SettingsTab } from "./settings-view";
 import { SetupCard } from "./setup-card";
 import { EntryDialog } from "./entry-dialog";
+import { EntryActivity } from "./use-entries";
 import { ExportDialog } from "./export-dialog";
 import { secondary } from "./ui";
 
@@ -96,7 +97,7 @@ export function BusinessApp({
     if (/^(Business|Contabilitate)( · |$)/.test(t)) document.title = `${W.title[l]}${rest >= 0 ? t.slice(rest) : ""}`;
   }, []);
   const w = useMemo(() => pick(W, lang), [lang]);
-  const [entryWin, setEntryWin] = useState<{ entry: Entry | null; draft: Partial<Entry> | null; reverse: boolean } | null>(null);
+  const [entryWin, setEntryWin] = useState<{ entry: Entry | null; draft: Partial<Entry> | null; reverse: boolean; files: File[] } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [goingYear, startYear] = useTransition();
   const [pendingYear, setPendingYear] = useState<number | null>(null);
@@ -155,7 +156,7 @@ export function BusinessApp({
       setPeople: (fn) => setPeopleState((p) => (p ? fn(p) : p)),
       goTab,
       goYear,
-      openEntry: (o) => setEntryWin({ entry: o.entry ?? null, draft: o.draft ?? null, reverse: !!o.reverse }),
+      openEntry: (o) => setEntryWin({ entry: o.entry ?? null, draft: o.draft ?? null, reverse: !!o.reverse, files: o.files ?? [] }),
     }),
     [teamId, teamName, me, access, year, data.years, today, data.prior, s, closed, lang, setLang, people, goTab, goYear]
   );
@@ -169,7 +170,9 @@ export function BusinessApp({
   return (
     <Ctx.Provider value={value}>
       <UiLocale value={lang}>
-      <div lang={lang} className="px-4 sm:px-6 xl:px-8 py-6 sm:py-8 max-w-[1480px] mx-auto space-y-5">
+      <EntryActivity>
+      {/* 1.43.0 (the owner: "for the business page, id like to use the entire width of the page"): no width cap. */}
+      <div lang={lang} className="px-4 sm:px-6 xl:px-8 py-6 sm:py-8 w-full space-y-5">
         <header className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <h1 className="font-display text-[28px] font-semibold">{w.title}</h1>
@@ -273,8 +276,9 @@ export function BusinessApp({
           </div>
         )}
       </div>
-      {entryWin && <EntryDialog key={entryWin.entry?.id ?? "new"} entry={entryWin.entry} draft={entryWin.draft} reverse={entryWin.reverse} onClose={() => setEntryWin(null)} />}
+      {entryWin && <EntryDialog key={entryWin.entry?.id ?? "new"} entry={entryWin.entry} draft={entryWin.draft} reverse={entryWin.reverse} files={entryWin.files} onClose={() => setEntryWin(null)} />}
       {exporting && <ExportDialog onClose={() => setExporting(false)} />}
+      </EntryActivity>
       </UiLocale>
     </Ctx.Provider>
   );

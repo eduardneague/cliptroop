@@ -62,7 +62,7 @@ export function Mult({ score, projected, size = "md", on = false, className = ""
  * this one in its heat colour, a dashed line at the channel's usual. A real
  * outlier towers over its neighbours; a "usual" video sits among them.
  */
-export function Spike({ peers, at, score, width = 64, height = 22, className = "", reserve = false }: { peers: number[] | null; at: number | null; score: number | null; width?: number; height?: number; className?: string; reserve?: boolean }) {
+export function Spike({ peers, at, score, width = 64, height = 22, className = "", reserve = false, onDark = false }: { peers: number[] | null; at: number | null; score: number | null; width?: number; height?: number; className?: string; reserve?: boolean; /** 1.43.0: over a picture (the headline Short): light bars. */ onDark?: boolean }) {
   // Without the channel's other videos there's nothing to draw (a list may keep the room for it).
   if (!peers || peers.length < 2 || at === null || at < 0 || at >= peers.length) return reserve ? <span className={`flex-shrink-0 ${className}`} style={{ width, height }} aria-hidden /> : null;
   const n = peers.length;
@@ -79,9 +79,9 @@ export function Spike({ peers, at, score, width = 64, height = 22, className = "
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className={`spike flex-shrink-0 ${className}`} role="img" aria-label={`Next to its channel's videos: ${multText(score)} its usual`}>
       {peers.map((v, i) => {
         const bh = scale(v);
-        return <rect key={i} x={i * (bw + gap)} y={height - bh} width={bw} height={bh} rx={1} fill={i === at ? h.solid : "rgb(var(--ink) / 0.16)"} style={{ animationDelay: `${i * 22}ms` }} />;
+        return <rect key={i} x={i * (bw + gap)} y={height - bh} width={bw} height={bh} rx={1} fill={i === at ? h.solid : onDark ? "rgb(255 255 255 / 0.32)" : "rgb(var(--ink) / 0.16)"} style={{ animationDelay: `${i * 22}ms` }} />;
       })}
-      <line x1={0} x2={width} y1={uy} y2={uy} stroke="rgb(var(--ink) / 0.35)" strokeWidth={1} strokeDasharray="2 2" />
+      <line x1={0} x2={width} y1={uy} y2={uy} stroke={onDark ? "rgb(255 255 255 / 0.6)" : "rgb(var(--ink) / 0.35)"} strokeWidth={1} strokeDasharray="2 2" />
     </svg>
   );
 }

@@ -13,6 +13,7 @@ import { categoryLabel, regimeLabel } from "../lib/kinds";
 import { formatLei, parseAmount } from "../lib/money";
 import type { RefLine } from "../lib/types";
 import { upsert, useBusiness, useWords, without } from "./context";
+import { RectifyInfo, RegisterInfo } from "./register-info";
 import { Badge, Field, Money, Note, Switch, card, field, h2, primary, quiet, secondary } from "./ui";
 
 /*
@@ -20,6 +21,9 @@ import { Badge, Field, Money, Note, Switch, card, field, h2, primary, quiet, sec
  * assets: for every income source, the gross income by its nature, the deductible expenses by theirs (protocol within
  * 2%, amortization, a sold asset's rest), and the net income or loss. Its own lines for what isn't money (income in
  * kind, a correction); the year's "Rectificare"; and what's left out, and why.
+ *
+ * 1.43.0: what the register is, behind the ⓘ at its top right, and what Rectificare means, behind the ⓘ beside it
+ * (register-info.tsx; the owner: "rectificare la fel, am nevoie de un info să știu ce înseamnă și ce fac cu el").
  */
 
 const W = words({
@@ -33,6 +37,8 @@ const W = words({
   rectified: { en: "Marked as a correction (Rectificare)", ro: "Marcat ca rectificare" },
   notRectified: { en: "Not a correction any more", ro: "Nu mai este rectificare" },
   rectifyLabel: { en: "A correction (Rectificare)", ro: "Rectificare" },
+  rectifyOff: { en: "Only for a register that corrects one already done.", ro: "Doar pentru un registru care corectează unul deja întocmit." },
+  rectifyOn: { en: "This year's register is a correction: its export says so.", ro: "Registrul acestui an e rectificativ: exportul are mențiunea „Rectificare: Da”." },
   norma: {
     en: "Income norm (normă de venit): only the income part is kept (OMFP 3254/2017, art. 1 (2)). The expenses below are left out.",
     ro: "Normă de venit: se completează numai partea de venituri (OMFP 3254/2017, art. 1 alin. (2)). Cheltuielile nu se iau în calcul.",
@@ -103,17 +109,24 @@ export function FiscalTab() {
 
   return (
     <div className="space-y-4">
-      <section className={`${card} p-4 sm:p-5 flex items-start justify-between gap-4 flex-wrap`}>
-        <div className="min-w-0 max-w-2xl">
-          <h2 className="font-display text-[20px] font-semibold">
-            {w.title} · {b.year}
-          </h2>
-          <p className="mt-1 text-[13px] text-ink-soft leading-relaxed">{w.intro(b.year)}</p>
+      <section className={`${card} p-4 sm:p-5`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 max-w-3xl">
+            <h2 className="font-display text-[20px] font-semibold">
+              {w.title} · {b.year}
+            </h2>
+            <p className="mt-1 text-[13px] text-ink-soft leading-relaxed">{w.intro(b.year)}</p>
+          </div>
+          <RegisterInfo register="fiscal" />
         </div>
-        <label className="flex items-center gap-2 text-[13px] font-semibold">
-          <Switch on={!!ys?.rectified} onChange={(v) => void rectify(v)} label={w.rectifyLabel} disabled={!b.edit || busy} />
-          Rectificare
-        </label>
+        <div className="mt-3.5 pt-3 border-t border-line/10 flex items-center gap-x-2 gap-y-1 flex-wrap">
+          <label className="flex items-center gap-2 text-[13px] font-semibold">
+            <Switch on={!!ys?.rectified} onChange={(v) => void rectify(v)} label={w.rectifyLabel} disabled={!b.edit || busy} />
+            Rectificare
+          </label>
+          <RectifyInfo />
+          <span className="text-[12px] text-ink-faint">{ys?.rectified ? w.rectifyOn : w.rectifyOff}</span>
+        </div>
       </section>
       {b.s.profile.regime === "norma" && <Note>{w.norma}</Note>}
       {b.s.profile.vat === "payer" && <Note>{w.vat}</Note>}

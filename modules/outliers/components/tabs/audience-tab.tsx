@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Dialog } from "@/components/ui/dialog";
-import { CheckIcon, ChevronDownIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, PlusIcon, SearchIcon, ShortsIcon, VideoIcon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast-provider";
 import { addChannelsToNiche, nicheFromChannels } from "@/app/(dashboard)/outliers/actions";
 import { audienceList, type AudienceSort } from "../../lib/audience";
 import { compact } from "../../lib/filters";
 import { countryName, langName } from "../../lib/regions";
-import type { AudienceChannel, NicheInfo } from "../../lib/types";
+import type { AudienceChannel, AudienceExample, NicheInfo } from "../../lib/types";
 import type { AudienceTabData } from "../../lib/view";
-import { BTN, BTN_MAIN, ChannelAvatar, EmptyNote, FIELD, LABEL, NicheDot, PeopleIcon, SourceNote, Thumb, TimeAgo } from "../bits";
+import { BTN, BTN_MAIN, ChannelAvatar, EmptyNote, FIELD, LABEL, Mult, NicheDot, PeopleIcon, SourceNote, Thumb, TimeAgo } from "../bits";
 import { ChannelMenu, type MenuItem } from "../card-menu";
 import { useOutliers, useOutliersBlocked } from "../context";
 import { useShellNav } from "../shell-nav";
@@ -212,7 +212,7 @@ export function AudienceTab({ data }: { data: AudienceTabData }) {
               setPicked(new Set());
             }}
             aria-pressed={selecting}
-            className={`${BTN} h-10 ${selecting ? "!border-amber/50 !bg-amber/10 !text-ink" : ""}`}
+            className={`${BTN} !h-10 ${selecting ? "!border-amber/50 !bg-amber/10 !text-ink" : ""}`}
             title="Pick several, then add them to a niche or make a niche of them"
           >
             {selecting ? "Done" : "Select"}
@@ -383,15 +383,7 @@ function AudienceCard({
         </div>
       </div>
 
-      {c.top.length > 0 && (
-        <div className="mt-4 grid grid-cols-3 gap-2" aria-label="Its videos that sent you viewers">
-          {c.top.slice(0, 3).map((id) => (
-            <button key={id} type="button" onClick={() => ctx.openVideo(id)} tabIndex={selecting ? -1 : 0} title="Open this video" className="relative aspect-video rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 hover:ring-line/40 transition-shadow">
-              <Thumb id={id} kind="long" sizes="(min-width: 1536px) 140px, (min-width: 1024px) 160px, 30vw" />
-            </button>
-          ))}
-        </div>
-      )}
+      <AudienceVideos c={c} selecting={selecting} />
 
       <div className="mt-auto pt-4 flex items-center gap-2 flex-wrap">
         {niches.map((n) => (
@@ -405,6 +397,62 @@ function AudienceCard({
         {add && !selecting && <AddButton c={c} add={add} niches={niches} />}
       </div>
     </li>
+  );
+}
+
+/**
+ * The channel's videos on its card (1.43.0, the owner: "i dont just want to see long videos as examples from each
+ * channel, id like to see shorts as well and more video examples in there, not just 1 or two, have like 5 or 6 per
+ * channel"): its best long videos and Shorts (0122), each in its own shape, the kind being looked at first; the ones
+ * that sent your videos viewers marked. Three long ones and four Shorts when it has both, more of the one it has.
+ * Before 0122: the videos that sent viewers, as before.
+ */
+function AudienceVideos({ c, selecting }: { c: AudienceChannel; selecting: boolean }) {
+  const ctx = useOutliers();
+  const ex: AudienceExample[] = c.examples?.length ? c.examples : c.top.map((id) => ({ id, kind: "long", title: "", views: null, score: null, at: null, sent: true }));
+  const longs = ex.filter((x) => x.kind === "long");
+  const shorts = ex.filter((x) => x.kind === "short");
+  const both = longs.length > 0 && shorts.length > 0;
+  const groups: { kind: "long" | "short"; list: AudienceExample[] }[] = [
+    { kind: "long" as const, list: longs.slice(0, both ? 3 : 6) },
+    { kind: "short" as const, list: shorts.slice(0, both ? 4 : 8) },
+  ].filter((g) => g.list.length);
+  if (ctx.kind === "short") groups.reverse();
+  if (!groups.length) return null;
+  return (
+    <div className="mt-4 space-y-3">
+      {groups.map((g) => (
+        <div key={g.kind} aria-label={g.kind === "short" ? "Its Shorts" : "Its long videos"}>
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+            {g.kind === "short" ? <ShortsIcon className="w-3.5 h-3.5" /> : <VideoIcon className="w-3.5 h-3.5" />}
+            {g.kind === "short" ? "Shorts" : "Videos"}
+          </p>
+          <div className={`grid gap-2 ${g.kind === "short" ? "grid-cols-4" : "grid-cols-3"}`}>
+            {g.list.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                onClick={() => ctx.openVideo(x.id)}
+                tabIndex={selecting ? -1 : 0}
+                title={x.title ? `${x.title}${x.sent ? " · sent your videos viewers" : ""}` : "Open this video"}
+                aria-label={x.title ? `Open “${x.title}”` : "Open this video"}
+                className={`aud-video group/ex relative rounded-lg overflow-hidden bg-surface-2 ring-1 ring-line/10 hover:ring-line/40 transition-shadow ${g.kind === "short" ? "aspect-[9/16]" : "aspect-video"}`}
+              >
+                <Thumb id={x.id} kind={g.kind} sizes={g.kind === "short" ? "110px" : "(min-width: 1536px) 140px, (min-width: 1024px) 160px, 30vw"} />
+                <span className="absolute inset-x-0 bottom-0 h-9 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" aria-hidden />
+                {x.score !== null && <Mult score={x.score} size="sm" on className="absolute top-1 left-1 origin-top-left scale-[0.82]" />}
+                {x.views !== null && <span className="absolute left-1.5 bottom-1 text-[10.5px] font-semibold text-white tabular-nums drop-shadow">{compact(x.views)}</span>}
+                {x.sent && (
+                  <span className="absolute right-1 bottom-1 w-[18px] h-[18px] rounded-full bg-violet text-white flex items-center justify-center shadow" aria-hidden>
+                    <PeopleIcon className="w-2.5 h-2.5" />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

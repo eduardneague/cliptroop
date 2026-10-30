@@ -6,6 +6,7 @@ import { Leaves } from "@/components/ui/leaves";
 import { CheckIcon, ChevronDownIcon, CloseIcon, MinusIcon } from "@/components/ui/icons";
 import { useMenuKeyboard } from "@/lib/hooks/use-menu-keyboard";
 import { sounds } from "@/lib/sounds";
+import { useUiWords } from "./ui-locale";
 
 /*
  * Picking several things on a list at once (1.38.0 for the shorts table; 1.40.0 shared, for the shorts and the long
@@ -113,17 +114,19 @@ export function ListPicker({ ids, bar, children }: { ids: string[]; bar: React.R
   );
 }
 
-/** "Select" / "Done", beside the cards-or-table switch. `what`: "shorts", "long videos". */
+/** "Select" / "Done", beside the cards-or-table switch. `what`: "shorts", "long videos" (1.43.0: in the page's language,
+ * "operațiuni" on a Romanian Business page). */
 export function PickButton({ what, hint }: { what: string; hint: string }) {
   const p = usePick();
+  const uw = useUiWords();
   if (!p) return null;
   return (
     <button
       type="button"
-      aria-label={p.on ? "Done selecting" : `Select ${what}`}
+      aria-label={p.on ? uw.pickDoneSelecting : uw.pickSelectWhat(what)}
       onClick={() => (p.on ? p.stop() : p.start())}
-      title={p.on ? "Done (Esc)" : hint}
-      className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border h-[38px] px-2.5 sm:px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+      title={p.on ? uw.pickDoneEsc : hint}
+      className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg border h-9 px-2.5 sm:px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
         p.on ? "border-amber/50 bg-amber/10 text-amber" : "border-line/15 text-ink-soft hover:text-ink hover:bg-surface-2"
       }`}
     >
@@ -134,7 +137,7 @@ export function PickButton({ what, hint }: { what: string; hint: string }) {
           <CheckIcon className="w-2.5 h-2.5" />
         </span>
       )}
-      <span className={p.on ? "" : "hidden sm:inline"}>{p.on ? "Done" : "Select"}</span>
+      <span className={p.on ? "" : "hidden sm:inline"}>{p.on ? uw.pickDone : uw.pickStart}</span>
     </button>
   );
 }
@@ -222,8 +225,26 @@ export type BarBusy = { text: string; progress?: number } | null;
  * The bar at the foot while picking: how many ("3 shorts selected"), all or none, the list's own actions (or what's
  * being done, with how far along), Done.
  */
-export function PickBar({ total, one, many, busy, label, children }: { total: number; one: string; many: string; busy: BarBusy; label: string; children: React.ReactNode }) {
+export function PickBar({
+  total,
+  one,
+  many,
+  busy,
+  label,
+  selected,
+  children,
+}: {
+  total: number;
+  one: string;
+  many: string;
+  busy: BarBusy;
+  label: string;
+  /** How many are picked, said whole (1.43.0: "3 operațiuni selectate"); else "<n> <one|many> selected". */
+  selected?: (n: number) => string;
+  children: React.ReactNode;
+}) {
   const p = usePick()!;
+  const uw = useUiWords();
   const n = p.picked.size;
   const all = n === total && n > 0;
   return createPortal(
@@ -239,7 +260,7 @@ export function PickBar({ total, one, many, busy, label, children }: { total: nu
               {n}
             </span>
             {/* A phone has room for the number only (read out in full). */}
-            <span className="text-[13px] font-semibold whitespace-nowrap max-sm:sr-only">{`${n === 1 ? one : many} selected`}</span>
+            <span className="text-[13px] font-semibold whitespace-nowrap max-sm:sr-only">{selected ? selected(n) : `${n === 1 ? one : many} selected`}</span>
           </span>
           <button
             type="button"
@@ -248,11 +269,11 @@ export function PickBar({ total, one, many, busy, label, children }: { total: nu
             className="rounded-lg px-2 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 whitespace-nowrap disabled:opacity-40"
           >
             {all ? (
-              "Clear"
+              uw.pickClear
             ) : (
               <>
-                <span className="sm:hidden">All</span>
-                <span className="hidden sm:inline">{`Select all ${total}`}</span>
+                <span className="sm:hidden">{uw.pickAll}</span>
+                <span className="hidden sm:inline">{uw.pickAllOf(total)}</span>
               </>
             )}
           </button>
@@ -265,7 +286,7 @@ export function PickBar({ total, one, many, busy, label, children }: { total: nu
           ) : (
             children
           )}
-          <button type="button" onClick={p.stop} aria-label="Done picking" title="Done (Esc)" className="w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+          <button type="button" onClick={p.stop} aria-label={uw.pickDonePicking} title={uw.pickDoneEsc} className="w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
             <CloseIcon className="w-4 h-4" />
           </button>
         </div>
@@ -344,18 +365,19 @@ export function BarMenu({ label, short, open, onOpen, disabled, items }: { label
 
 /** Delete, in the bar: red, an icon on a phone. */
 export function BarDelete({ onClick, disabled, icon, hint }: { onClick: () => void; disabled?: boolean; icon: React.ReactNode; /** 1.41.0: why it can't go now (one at a time): it looks off, says so as its tooltip, and a press says it too. */ hint?: string | null }) {
+  const uw = useUiWords();
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={hint ? `Delete. ${hint}` : "Delete"}
+      aria-label={hint ? uw.pickDeleteWhy(hint) : uw.pickDelete}
       aria-disabled={hint ? true : undefined}
       title={hint ?? undefined}
       className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 h-9 text-[13px] font-semibold text-red border border-red/30 hover:bg-red/10 disabled:opacity-40 disabled:hover:bg-transparent whitespace-nowrap ${hint ? "opacity-40 hover:bg-transparent" : ""}`}
     >
       {icon}
-      <span className="max-sm:hidden">Delete</span>
+      <span className="max-sm:hidden">{uw.pickDelete}</span>
     </button>
   );
 }

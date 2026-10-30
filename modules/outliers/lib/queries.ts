@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/avatar";
 import { forKind, mergeFormats, exampleIds, type Insights, type KindInsights } from "./insights";
 import type { TemplateStat } from "./skeleton";
-import type { AudienceData, AudiencePair, BlockedChannel, ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, Verdict, VideoDetail, VideoPage } from "./types";
+import type { AudienceData, AudienceExample, AudiencePair, BlockedChannel, ChannelDetail, ChannelRowData, Folder, IdeasData, MiniVideo, NicheInfo, OutlierSettings, OutlierVideo, Overview, SavedIdea, SavedItem, Verdict, VideoDetail, VideoPage } from "./types";
 
 /*
  * Reading Outliers for the pages (1.27.0), as the person: the database
@@ -367,6 +367,14 @@ export async function getChannelDetail(teamId: string, id: string): Promise<Chan
   };
 }
 
+/** An audience channel's videos on its card (0122; nothing before it). */
+export function audienceExamples(raw: unknown): AudienceExample[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Row[])
+    .filter((x) => typeof x?.id === "string" && /^[A-Za-z0-9_-]{11}$/.test(x.id as string) && (x.kind === "long" || x.kind === "short"))
+    .map((x) => ({ id: String(x.id), kind: x.kind as "long" | "short", title: String(x.title ?? ""), views: num(x.views), score: num(x.score), at: str(x.at), sent: x.sent === true }));
+}
+
 /** The channels the team's viewers also watch (and when that was worked out). */
 export async function getAudience(teamId: string): Promise<AudienceData> {
   const supabase = await createClient();
@@ -392,6 +400,7 @@ export async function getAudience(teamId: string): Promise<AudienceData> {
       top: (r.top as string[] | null) ?? [],
       tracked: r.tracked === true,
       niches: (r.niches as string[] | null) ?? [],
+      examples: audienceExamples(r.examples),
     })),
   };
 }

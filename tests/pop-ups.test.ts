@@ -71,7 +71,6 @@ const POPUPS = [
   "components/ui/role-pills.tsx",
   "components/ui/mention-input.tsx",
   "components/ui/emoji-picker.tsx",
-  "components/ui/workspace-switcher.tsx",
   "components/ui/lightbox.tsx",
   "components/ui/image-lightbox.tsx",
   "components/ui/whats-new.tsx",
@@ -104,6 +103,8 @@ for (const f of POPUPS) {
   ok(/<Leaves[\s>]/.test(s) && /import \{ Leaves \} from "(\.\/leaves|@\/components\/ui\/leaves)";/.test(s), `${f}: leaves the way it came (<Leaves>)`);
   ok(new RegExp(`\\b(${parts.join("|")})\\b`).test(s), `${f}: its moving parts say how they move`);
 }
+// 1.43.0: the team switcher opens its list in AnchoredMenu (above), so it leaves the way that does.
+ok(/import \{ AnchoredMenu \} from "\.\/anchored-menu";/.test(read("components/ui/workspace-switcher.tsx")) && /<AnchoredMenu /.test(read("components/ui/workspace-switcher.tsx")), "components/ui/workspace-switcher.tsx: its list is an AnchoredMenu (leaves the way it came)");
 // The way in and out live in the pop-* classes only: the old one-way entrances stay on what grows inside a page
 // (a panel opening in place, a note appearing), never on something that floats over it.
 const IN_PAGE: Record<string, string> = {

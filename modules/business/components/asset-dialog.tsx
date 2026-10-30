@@ -277,10 +277,10 @@ export function AssetDialog({ asset, onClose }: { asset: Asset | null; onClose: 
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={w.boughtOn}>
-            <DateChip value={d.acquired_on} onChange={(v) => set("acquired_on", v)} ariaLabel={w.boughtOn} disabled={!editable || busy} />
+            <DateChip value={d.acquired_on} onChange={(v) => set("acquired_on", v)} ariaLabel={w.boughtOn} disabled={!editable || busy} size="field" />
           </Field>
           <Field label={w.inUseFrom} hint={w.inUseHint}>
-            <DateChip value={d.in_service_on} onChange={(v) => set("in_service_on", v)} ariaLabel={w.inUseFrom} disabled={!editable || busy} />
+            <DateChip value={d.in_service_on} onChange={(v) => set("in_service_on", v)} ariaLabel={w.inUseFrom} disabled={!editable || busy} size="field" />
           </Field>
           <Field label={w.entryValue} problem={d.value && value == null ? w.amountProblem : null}>
             <input className={`${field} text-right tabular-nums`} value={d.value} onChange={(e) => set("value", e.target.value)} inputMode="decimal" placeholder={w.zero} />
@@ -301,6 +301,7 @@ export function AssetDialog({ asset, onClose }: { asset: Asset | null; onClose: 
           >
             <Segmented
               ariaLabel={w.method}
+              size="lg"
               value={d.method}
               onChange={(v) => set("method", v)}
               options={(["linear", "degressive", "accelerated"] as const).map((m) => ({ value: m, label: methodLabel(m, b.lang).replace(/ \(.*\)$/, "") }))}
@@ -313,7 +314,7 @@ export function AssetDialog({ asset, onClose }: { asset: Asset | null; onClose: 
           {d.disposed && (
             <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
               <Field label={w.on}>
-                <DateChip value={d.disposed_on} onChange={(v) => set("disposed_on", v)} ariaLabel={w.leftOnAria} disabled={!editable || busy} />
+                <DateChip value={d.disposed_on} onChange={(v) => set("disposed_on", v)} ariaLabel={w.leftOnAria} disabled={!editable || busy} size="field" />
               </Field>
               <Field label={w.how} hint={w.howHint}>
                 <input className={field} value={d.disposal_note} onChange={(e) => set("disposal_note", e.target.value)} maxLength={300} placeholder={w.howPlaceholder} />

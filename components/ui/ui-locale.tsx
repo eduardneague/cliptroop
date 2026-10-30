@@ -40,6 +40,18 @@ export type UiWords = {
   select: string;
   typeToFilter: string;
   noMatches: string;
+  /** Picking several on a list (components/ui/list-pick.tsx, 1.43.0: Business too). */
+  pickStart: string;
+  pickDone: string;
+  pickDoneEsc: string;
+  pickSelectWhat: (what: string) => string;
+  pickDoneSelecting: string;
+  pickClear: string;
+  pickAll: string;
+  pickAllOf: (n: number) => string;
+  pickDonePicking: string;
+  pickDelete: string;
+  pickDeleteWhy: (why: string) => string;
 };
 
 const WORDS: Record<UiLang, UiWords> = {
@@ -68,6 +80,17 @@ const WORDS: Record<UiLang, UiWords> = {
     select: "Select…",
     typeToFilter: "Type to filter…",
     noMatches: "No matches",
+    pickStart: "Select",
+    pickDone: "Done",
+    pickDoneEsc: "Done (Esc)",
+    pickSelectWhat: (what: string) => `Select ${what}`,
+    pickDoneSelecting: "Done selecting",
+    pickClear: "Clear",
+    pickAll: "All",
+    pickAllOf: (n: number) => `Select all ${n}`,
+    pickDonePicking: "Done picking",
+    pickDelete: "Delete",
+    pickDeleteWhy: (why: string) => `Delete. ${why}`,
   },
   ro: {
     close: "Închide",
@@ -94,6 +117,17 @@ const WORDS: Record<UiLang, UiWords> = {
     select: "Alege…",
     typeToFilter: "Scrie ca să cauți…",
     noMatches: "Nimic potrivit",
+    pickStart: "Selectează",
+    pickDone: "Gata",
+    pickDoneEsc: "Gata (Esc)",
+    pickSelectWhat: (what: string) => `Selectează ${what}`,
+    pickDoneSelecting: "Gata cu selecția",
+    pickClear: "Deselectează",
+    pickAll: "Tot",
+    pickAllOf: (n: number) => `Selectează tot (${n})`,
+    pickDonePicking: "Gata cu selecția",
+    pickDelete: "Șterge",
+    pickDeleteWhy: (why: string) => `Șterge. ${why}`,
   },
 };
 

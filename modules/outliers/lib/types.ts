@@ -205,7 +205,14 @@ export type AudienceChannel = {
   tracked: boolean;
   /** The team's niches it's one of the own channels of. */
   niches: string[];
+  /**
+   * 1.43.0 (0122): its best videos of each kind, long ones and Shorts (up to 6 each, the ones that sent the team viewers
+   * first); empty before 0122 (the card falls back to `top`).
+   */
+  examples: AudienceExample[];
 };
+/** One of an audience channel's videos on its card (1.43.0). */
+export type AudienceExample = { id: string; kind: "long" | "short"; title: string; views: number | null; score: number | null; at: string | null; sent: boolean };
 export type AudienceData = { at: string | null; note: string | null; rows: AudienceChannel[] };
 
 export type SavedItem = {

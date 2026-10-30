@@ -6,7 +6,7 @@ import { lookUpChannels } from "@/app/(dashboard)/outliers/actions";
 import type { FoundChannel } from "@/modules/outliers/lib/requests";
 import { compact } from "../lib/filters";
 import { countryName } from "../lib/regions";
-import { BTN, ChannelAvatar } from "./bits";
+import { ChannelAvatar } from "./bits";
 import { useOutliers } from "./context";
 
 /*
@@ -81,15 +81,28 @@ export function ChannelFinder({
           e.preventDefault();
           find(false);
         }}
-        className="flex items-center gap-2"
+        // 1.43.0: Find sits inside the box, one piece with it (the owner: "this part with find and done is very oddly
+        // designed"); Enter finds too.
+        className="relative"
       >
-        <label className="relative flex-1 min-w-0">
+        <label className="block">
           <span className="sr-only">Find a channel</span>
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} autoComplete="off" data-autofocus={autoFocus || undefined} className="w-full rounded-xl border border-line/15 bg-surface pl-9 pr-3 h-10 text-[14px] outline-none focus:ring-2 focus:ring-amber" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} autoComplete="off" data-autofocus={autoFocus || undefined} className="w-full rounded-xl border border-line/15 bg-surface pl-9 pr-24 h-11 text-[14px] outline-none focus:ring-2 focus:ring-amber" />
         </label>
-        <button type="submit" disabled={q.trim().length < 2 || !!busy} className={`${BTN} h-10 px-4 text-ink`}>
-          {busy === "find" ? "Finding…" : "Find"}
+        <button
+          type="submit"
+          disabled={q.trim().length < 2 || !!busy}
+          className="absolute right-1.5 top-1.5 bottom-1.5 inline-flex items-center gap-1.5 rounded-lg bg-amber px-3.5 text-[13px] font-semibold text-white transition-[filter,background-color,color] hover:brightness-110 disabled:bg-surface-2 disabled:text-ink-faint disabled:hover:brightness-100"
+        >
+          {busy === "find" ? (
+            <>
+              <span className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden />
+              Finding
+            </>
+          ) : (
+            "Find"
+          )}
         </button>
       </form>
       {error && (

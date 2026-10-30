@@ -276,7 +276,7 @@ export function PostingDashboard({
                       aria-checked={view === v}
                       title={v === "table" ? "Table" : "Grid"}
                       onClick={() => setView(v)}
-                      className={`w-9 h-8 rounded-md flex items-center justify-center transition-colors ${view === v ? "bg-surface-2 text-ink shadow-[inset_0_0_0_1px_rgb(var(--line)/0.15)]" : "text-ink-faint hover:text-ink"}`}
+                      className={`w-9 h-[34px] rounded-md flex items-center justify-center transition-colors ${view === v ? "bg-surface-2 text-ink shadow-[inset_0_0_0_1px_rgb(var(--line)/0.15)]" : "text-ink-faint hover:text-ink"}`}
                     >
                       {v === "table" ? <ListIcon className="w-4 h-4" /> : <GridIcon className="w-4 h-4" />}
                       <span className="sr-only">{v === "table" ? "Table" : "Grid"}</span>

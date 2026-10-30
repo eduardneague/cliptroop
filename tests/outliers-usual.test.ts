@@ -49,7 +49,13 @@ ok(nums.longMedian !== null && nums.longMedian !== 100, `the channel's usual now
 // --- Where it shows ---------------------------------------------------------------------------------------------------------
 const panel = read("modules/outliers/components/video-panel.tsx");
 ok(/const then = usualThen\(v\)/.test(panel) && /sub=\{usual \? `usual \$\{compact\(usual\)\}`/.test(panel), "the video panel's Views tile shows the usual it's measured against");
-ok(/function ScoreNote/.test(panel) && /the median views of the \{kind\} the channel posted just before it/.test(panel), "and says how the × is worked out");
+ok(/function ScoreMath/.test(panel) && /the median views of the \{kind\} the channel posted just before it/.test(panel), "and says how the × is worked out");
+// 1.43.0 (the owner: "i dont want to see the mathematical equation, i want to only be able to see it if i like hover over
+// an icon there, i'd like the usual views to be in () -> so x its usual (1.5M) above and make the multiplier number
+// bigger"): the tile says "× its usual (…)" with an ⓘ, the × is bigger, and the sum shows on hover (or focus) only.
+ok(/× its usual\{usual \? <span className="tabular-nums font-medium"> \(\{compact\(usual\)\}\)<\/span> : null\}/.test(panel), "the tile: × its usual (the usual in brackets)");
+ok(/tip=\{<ScoreMath /.test(panel) && /<HoverTip/.test(panel), "the sum behind a hover card, not under the tiles");
+ok(/text-\[40px\] sm:text-\[44px\]/.test(panel), "and the × bigger");
 ok(/usualsDiffer\(then, now\)/.test(panel), "with the usual now too when it moved");
 ok(/<BarsChart bars=\{bars\} usual=\{usual\}/.test(panel), "the bars' dashed line is that same usual");
 const card = read("modules/outliers/components/video-card.tsx");

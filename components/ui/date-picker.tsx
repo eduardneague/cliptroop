@@ -168,6 +168,7 @@ export function DateChip({
   dayInfo,
   disabled,
   className = "",
+  size = "bar",
 }: {
   value: string | null;
   onChange: (date: string) => void;
@@ -177,6 +178,8 @@ export function DateChip({
   dayInfo?: (date: string) => DayInfo;
   disabled?: boolean;
   className?: string;
+  /** 1.43.0: as tall as what's beside it: 36 px in a toolbar ("bar"), 40 px among a form's fields ("field"). */
+  size?: "bar" | "field";
 }) {
   const set = !!value;
   const confirmClear = useConfirmSafe();
@@ -191,7 +194,7 @@ export function DateChip({
         dayInfo={dayInfo}
         ariaLabel={ariaLabel ?? w.pickDate}
         disabled={disabled}
-        triggerClassName={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[12.5px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+        triggerClassName={`inline-flex items-center gap-1.5 rounded-lg border px-3 ${size === "field" ? "h-10 text-[13px]" : "h-9 text-[12.5px]"} font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
           set ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"
         }`}
       >

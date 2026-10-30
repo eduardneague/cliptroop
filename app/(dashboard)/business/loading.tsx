@@ -4,7 +4,10 @@ import { BUSINESS_TABS } from "@/modules/business/components/tabs";
 import { BusinessTabSkeleton } from "@/modules/business/components/skeletons";
 import { LANG_COOKIE, langOf } from "@/modules/business/lib/i18n";
 
-/** Business (1.42.0): the title, the year and Export, the tabs, then the Overview's cards (in the page's language). */
+/**
+ * Business (1.42.0): the title, the year and Export, the tabs, then the Overview's cards (in the page's language).
+ * 1.43.0: as wide as the page (the page has no width cap now).
+ */
 export default async function Loading() {
   let lang = langOf(null);
   try {
@@ -13,7 +16,7 @@ export default async function Loading() {
     /* drawn ahead of a request: English */
   }
   return (
-    <SkeletonPage width="max-w-[1480px]" className="px-4 sm:px-6 xl:px-8 py-6 sm:py-8 space-y-5">
+    <SkeletonPage width="max-w-none" className="px-4 sm:px-6 xl:px-8 py-6 sm:py-8 space-y-5">
       <header className="flex items-start justify-between gap-3 flex-wrap" aria-hidden>
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-[28px] font-semibold">{lang === "ro" ? "Contabilitate" : "Business"}</h1>

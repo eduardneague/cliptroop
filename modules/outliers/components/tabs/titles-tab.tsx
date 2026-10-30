@@ -151,7 +151,7 @@ export function TitlesTab({ data }: { data: TitlesData }) {
               )}
             </div>
             <div className="mt-2 flex items-center gap-3 text-[12px] text-ink-faint flex-wrap">
-              <button type="button" onClick={() => findSimilar()} disabled={len < 10 || finding || asked === title.trim()} className={`${BTN} h-8 text-ink`} title={len < 10 ? "Type a longer title first" : "The outliers here worded most like it"}>
+              <button type="button" onClick={() => findSimilar()} disabled={len < 10 || finding || asked === title.trim()} className={`${BTN} !h-8 text-ink`} title={len < 10 ? "Type a longer title first" : "The outliers here worded most like it"}>
                 <SearchIcon className="w-3.5 h-3.5" />
                 {finding ? "Finding…" : "Find outliers like it"}
               </button>

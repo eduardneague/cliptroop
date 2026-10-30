@@ -144,7 +144,7 @@ export function SearchTab({ data }: { data: SearchData }) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={`Search ${ctx.niche ? ctx.niche.name : "every niche"}: titles, tags, channels`}
-              className="w-full rounded-xl border border-line/15 bg-surface pl-11 pr-10 h-11 text-[14.5px] outline-none focus:ring-2 focus:ring-amber"
+              className="w-full rounded-xl border border-line/15 bg-surface pl-11 pr-10 h-10 text-[14.5px] outline-none focus:ring-2 focus:ring-amber"
               enterKeyHint="search"
             />
             {q && (
@@ -161,7 +161,7 @@ export function SearchTab({ data }: { data: SearchData }) {
               </button>
             )}
           </label>
-          <button type="submit" className={`${BTN_MAIN} h-11 px-4 rounded-xl`}>
+          <button type="submit" className={`${BTN_MAIN} !h-10 px-4 rounded-xl`}>
             Search
           </button>
         </form>
@@ -169,7 +169,8 @@ export function SearchTab({ data }: { data: SearchData }) {
           <div className="w-[11.5rem] sm:w-[13rem]">
             <Select value={sort} onChange={(v) => apply(f, (v as Sort) ?? "score")} options={SORTS.map((s) => ({ value: s.id, label: s.label }))} ariaLabel="Sort by" />
           </div>
-          <LayoutSwitch value={layout} onChange={setLayout} />
+          {/* 1.43.0: one height across the row (40 px): the search box, Search, the sort and this. */}
+          <LayoutSwitch value={layout} onChange={setLayout} size="lg" />
         </div>
       </div>
 

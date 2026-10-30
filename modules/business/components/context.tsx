@@ -53,8 +53,8 @@ export type BusinessCtx = {
   /** Another tab, or another year (the books for it come from the server). */
   goTab: (tab: string) => void;
   goYear: (year: number) => void;
-  /** The entry window: a new entry (with what's known), or one to change. */
-  openEntry: (o: { entry?: Entry | null; draft?: Partial<Entry> | null; reverse?: boolean }) => void;
+  /** The entry window: a new entry (with what's known, and 1.43.0 documents chosen for it already), or one to change. */
+  openEntry: (o: { entry?: Entry | null; draft?: Partial<Entry> | null; reverse?: boolean; files?: File[] }) => void;
 };
 
 export const Ctx = createContext<BusinessCtx | null>(null);

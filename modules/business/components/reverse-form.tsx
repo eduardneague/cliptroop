@@ -45,7 +45,7 @@ export function ReverseForm({ entry, onDone, onCancel }: { entry: Entry; onDone:
       <Note>{w.stays(formatDay(entry.entry_date, b.lang), formatLei(entry.amount, b.lang), entry.direction === "in", entry.channel === "cash")}</Note>
       <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
         <Field label={w.day} problem={preview.ok ? null : preview.error}>
-          <DateChip value={day} onChange={setDay} ariaLabel={w.day} />
+          <DateChip value={day} onChange={setDay} ariaLabel={w.day} size="field" />
         </Field>
         <Field label={w.explanation}>
           <input className={field} value={words} onChange={(e) => setWords(e.target.value)} maxLength={300} />

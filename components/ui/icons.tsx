@@ -1102,3 +1102,45 @@ export function BusinessIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** What it means (1.43.0): an i in a circle (Business's guides, an outlier's × worked out). */
+export function InfoIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.75" />
+      <path d="M12 11v5.25" />
+      <path d="M12 7.75h.01" strokeWidth={2.4} />
+    </Svg>
+  );
+}
+
+/** A bank (1.43.0, the BNR rate's button): a pediment, four columns, the steps. */
+export function BankIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3.5 9.25 12 4l8.5 5.25" />
+      <path d="M4.5 9.25h15" />
+      <path d="M6.5 11.5v5.5M10.25 11.5v5.5M13.75 11.5v5.5M17.5 11.5v5.5" />
+      <path d="M4 19.25h16M3 21h18" />
+    </Svg>
+  );
+}
+
+/** Leave full screen (1.43.0): the corners turned in. */
+export function ShrinkIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 8h3a2 2 0 0 0 2-2V3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M21 16h-3a2 2 0 0 0-2 2v3" />
+    </Svg>
+  );
+}
+
+/** A tag (1.43.0: what several entries are, set at once). */
+export function TagIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3.75 12.6V4.75a1 1 0 0 1 1-1h7.85a1 1 0 0 1 .7.3l7.1 7.1a1.5 1.5 0 0 1 0 2.1l-7.15 7.15a1.5 1.5 0 0 1-2.1 0l-7.1-7.1a1 1 0 0 1-.3-.7Z" />
+      <path d="M8.25 8.25h.01" strokeWidth={2.6} />
+    </Svg>
+  );
+}

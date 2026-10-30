@@ -36,12 +36,13 @@ export type Layout = "table" | "cards";
 export const LAYOUTS = ["table", "cards"] as const;
 
 /** Table or Cards (the words hide on phones; the icons stay). */
-export function LayoutSwitch({ value, onChange, className = "" }: { value: Layout; onChange: (v: Layout) => void; className?: string }) {
+export function LayoutSwitch({ value, onChange, className = "", size = "md" }: { value: Layout; onChange: (v: Layout) => void; className?: string; /** 1.43.0: as tall as the row it's in. */ size?: "sm" | "md" | "lg" }) {
   return (
     <Segmented<Layout>
       ariaLabel="Show as"
       value={value}
       onChange={onChange}
+      size={size}
       className={className}
       options={[
         {

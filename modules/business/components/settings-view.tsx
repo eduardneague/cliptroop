@@ -229,7 +229,8 @@ function Sources() {
           <div className="w-[17rem] max-w-full">
             <Select value={category} onChange={(v) => v && setCategory(v as SourceCategory)} options={categoryOptions(b.lang)} ariaLabel={w.itsCategory} fullWidth />
           </div>
-          <button type="submit" className={secondary} disabled={busy === "new" || !name.trim()}>
+          {/* As tall as the name's field and the category beside it (40 px). */}
+          <button type="submit" className={`${secondary} !h-10`} disabled={busy === "new" || !name.trim()}>
             <PlusIcon className="w-4 h-4" />
             {w.add}
           </button>

@@ -22,6 +22,31 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.43.0",
+    date: "2026-10-30",
+    title: "Audience with Shorts, a full-screen player, controls of one height",
+    changes: [
+      { kind: "new", text: "Outliers → Audience: each channel's card shows up to 6 of its long videos and 6 of its Shorts (it showed one or two long videos), the ones that sent you viewers first, then its biggest outliers." },
+      { kind: "better", text: "Outliers: a video's player goes full screen. Press F, or Full screen under it; Esc, or the button in its corner, comes back." },
+      { kind: "better", text: "Outliers → a video: the × tile reads × its usual, with the usual in brackets, and its number is bigger. The sum behind it shows when you point at the tile (or its ⓘ) instead of sitting under the tiles." },
+      { kind: "better", text: "Outliers → The biggest outliers, Shorts: the headline Short is a full poster, its × at the top, its title, channel and views at the bottom." },
+      { kind: "better", text: "Outliers → Saved: Shorts stand in the middle of their folder instead of off to one side. A niche's channels: Find sits inside the search box, and Add channels / Done is one button at the top." },
+      { kind: "better", text: "Buttons, search boxes, dropdowns and filter rows that sit together are one height across the app (36 px in toolbars, 40 px in forms): none taller than what's beside it." },
+      { kind: "new", text: "Words cut short with … in a dropdown, a menu or a list slide into view while you point at them (or reach them with the arrow keys), and back when you move on." },
+      { kind: "fixed", text: "The team switcher on liquid glass opens its list over the page, solid enough to read over the side bar's links." },
+      { kind: "better", text: "Business uses the page's whole width.", only: "business" },
+      { kind: "new", text: "Cash book: a new line is typed above the table, apart from it. Pick money in or out and bank or cash, then the day, the document (attach its files with the paperclip beside it), what it was and the amount; what it is gets guessed from the words. Enter adds it, and it lights up where it landed in the table. Every field opens the whole entry window with what you typed.", only: "business" },
+      { kind: "new", text: "Cash book: Select (or the box that shows over a line's number when you point at it) picks lines, Shift a run of them. Then set what they are or their income source together, copy them for Excel, or remove them.", only: "business" },
+      { kind: "better", text: "Cash book: a change typed into the table shows it's on its way (a light across the line, a spinner in the cell), then flashes green with a tick. One that couldn't be saved shakes red and is back as it was. A removed line is struck through and slides off, as shorts do, and the lines under it glide up.", only: "business" },
+      { kind: "better", text: "A line's ⋯ menu: Edit first, every item with its icon, Remove apart at the end, in red. The paperclip on a line now only adds documents, straight away (dropping a file on the line works too); they're all in the line's window.", only: "business" },
+      { kind: "better", text: "The entry window: Attach sits right beside the document (it's optional), and a new entry's documents go up as soon as it's added. The amount and its currency are one box, the partner beside it. BNR's rate: the button carries a bank mark and BNR, a ring turns while BNR is asked, and the rate rolls into its box.", only: "business" },
+      { kind: "better", text: "Inventory, easier to follow: each group opens with its name, how many lines and its total, and a + that adds a line straight into it; Add a line sits at the top of the sheet; at the bottom, what it owns, what it owes and the difference side by side. Lines can be picked to move them to another group or remove them.", only: "business" },
+      { kind: "new", text: "Every register (the cash book, the fiscal register, the inventory, the fixed assets) has an ⓘ at its top right: what it is and what it's for, in a few words, then More details, a window of tabs: in short, how it's kept, worked examples for a creator's PFA, how this page does it, the rules, and the sources it was checked against. Rectificare has its own ⓘ: what it means and what to do, step by step.", only: "business" },
+      { kind: "fixed", text: "The PFA's activity (CAEN) takes up to 500 characters over several lines: a code with its name, or several codes.", only: "business" },
+      { kind: "fixed", text: "Fixed assets: a card's PDF and Excel buttons sit side by side on one line, each with its icon. Date boxes in Business's windows are as tall as the fields beside them.", only: "business" },
+    ],
+  },
+  {
     version: "1.42.0",
     date: "2026-10-29",
     title: "Business: the PFA's registers",

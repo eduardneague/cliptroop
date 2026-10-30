@@ -392,7 +392,7 @@ export function ProjectionEditor({
               {DEADLINE_PRESETS.map((d) => {
                 const day = addMonths(today, d.months);
                 return (
-                  <button key={d.label} type="button" onClick={() => setDeadline(day)} aria-pressed={deadline === day} className={`rounded-lg px-3 h-8 text-[12px] font-semibold border transition-colors ${deadline === day ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}>
+                  <button key={d.label} type="button" onClick={() => setDeadline(day)} aria-pressed={deadline === day} className={`rounded-lg px-3 h-9 text-[12.5px] font-semibold border transition-colors ${deadline === day ? "bg-ink text-paper border-ink" : "border-line/15 text-ink-soft hover:text-ink"}`}>
                     {d.label}
                   </button>
                 );

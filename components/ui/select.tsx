@@ -2,9 +2,22 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { startMarquee, stopMarquee } from "@/lib/overflow-marquee";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "./icons";
 import { Leaves } from "./leaves";
 import { useUiWords } from "./ui-locale";
+
+/**
+ * How tall a "field" Select is (1.43.0, the owner: "some buttons or filters are thicker than the other things around
+ * it… make everything the same size where it's needed"): `field` 40 px, as the form fields it sits with; `bar` 36 px,
+ * as the buttons, search boxes and choice rows of a toolbar; `compact` 32 px, inside a card's or a widget's header.
+ */
+export type SelectSize = "field" | "bar" | "compact";
+const SIZES: Record<SelectSize, string> = {
+  field: "h-10 px-3 text-[14px]",
+  bar: "h-9 px-3 text-[13px]",
+  compact: "h-8 px-2.5 text-[12.5px]",
+};
 
 export type SelectOption = {
   value: string;
@@ -41,6 +54,7 @@ export function Select({
   className = "",
   menuMinWidth = 220,
   fullWidth = false,
+  size = "field",
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -59,6 +73,8 @@ export function Select({
   menuMinWidth?: number;
   /** Stretch a compact trigger to fill its container (e.g. a table cell). */
   fullWidth?: boolean;
+  /** The "field" variant's height: 40 px in forms, 36 px in toolbars ("bar"), 32 px in a card's header ("compact"). */
+  size?: SelectSize;
 }) {
   const listId = useId();
   const uw = useUiWords();
@@ -67,6 +83,9 @@ export function Select({
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const typeahead = useRef({ text: "", at: 0 });
+  // 1.43.0: the option the arrow keys reach slides its cut-short words into view (the pointer does it by itself).
+  const viaKeys = useRef(false);
+  const keyed = useRef<Element | null>(null);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -120,8 +139,9 @@ export function Select({
     setPos({ left, top: up ? r.top - 6 : r.bottom + 6, width, up, maxH });
   }, [menuMinWidth]);
 
-  function openMenu() {
+  function openMenu(keys = false) {
     if (disabled) return;
+    viaKeys.current = keys;
     place();
     setQuery("");
     const i = allOptions.findIndex((o) => o.value === selectedKey);
@@ -130,6 +150,8 @@ export function Select({
   }
 
   function close(focusTrigger = true) {
+    if (keyed.current) stopMarquee(keyed.current);
+    keyed.current = null;
     setOpen(false);
     if (focusTrigger) triggerRef.current?.focus();
   }
@@ -165,10 +187,17 @@ export function Select({
     return () => document.removeEventListener("pointerdown", onDown);
   }, [open, useSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep the active option in view.
+  // Keep the active option in view (reached by the keys: its words slide if they're cut short).
   useEffect(() => {
     if (!open) return;
-    listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: "nearest" });
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+    if (keyed.current && keyed.current !== el) stopMarquee(keyed.current);
+    keyed.current = null;
+    if (el && viaKeys.current) {
+      keyed.current = el;
+      startMarquee(el);
+    }
   }, [active, open]);
 
   useEffect(() => {
@@ -186,6 +215,7 @@ export function Select({
   }
 
   function onMenuKey(e: React.KeyboardEvent) {
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key) || (!useSearch && e.key.length === 1)) viaKeys.current = true;
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
@@ -238,7 +268,7 @@ export function Select({
   function onTriggerKey(e: React.KeyboardEvent) {
     if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
       e.preventDefault();
-      openMenu();
+      openMenu(true);
     }
   }
 
@@ -249,7 +279,7 @@ export function Select({
         } ${className}`
       : variant === "inline"
       ? `group inline-flex items-center gap-1.5 max-w-full ${fullWidth ? "w-full" : ""} rounded-md -mx-1.5 px-1.5 py-1 text-left hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-60 disabled:hover:bg-transparent ${className}`
-      : `w-full min-w-0 inline-flex items-center gap-2 rounded-lg border bg-surface px-3 h-10 text-[14px] text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-60 ${
+      : `w-full min-w-0 inline-flex items-center gap-2 rounded-lg border bg-surface ${SIZES[size]} text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-60 ${
           open ? "border-amber ring-2 ring-amber/40" : "border-line/15 hover:border-line/30"
         } ${className}`;
 
@@ -262,7 +292,7 @@ export function Select({
         ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => (open ? close() : openMenu())}
+        onClick={() => (open ? close() : openMenu(false))}
         onKeyDown={onTriggerKey}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -349,7 +379,10 @@ export function Select({
                         role="option"
                         aria-selected={isSel}
                         aria-disabled={o.disabled || undefined}
-                        onMouseMove={() => !o.disabled && active !== i && setActive(i)}
+                        onMouseMove={() => {
+                          viaKeys.current = false;
+                          if (!o.disabled && active !== i) setActive(i);
+                        }}
                         onClick={() => pick(o)}
                         className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] cursor-pointer select-none ${
                           o.disabled ? "opacity-45 cursor-not-allowed" : isActive ? "bg-surface-2" : ""

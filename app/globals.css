@@ -426,6 +426,9 @@ html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane {
   -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
   backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
 }
+/* 1.43.0: a menu over busy words (the team switcher over the side bar's links) is never clearer than 82 %. */
+html[data-glass] .bg-surface.glass-pane.glass-floor { --tw-bg-opacity: max(var(--glass-pop), 0.82); }
+html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane.glass-floor { --tw-bg-opacity: max(var(--glass-pop), var(--wall-floor), 0.82); }
 /*
   Over a dimmed page (dialogs, "Are you sure?", the search palette, the
   phone's menu): in light mode the glass shows the page about as bright as
@@ -2669,8 +2672,9 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
    Business (1.42.0, modules/business): the cash book as a spreadsheet. Thin
    lines between the cells, the header and the first column held while it
    scrolls, the cell you're on outlined in amber (typing goes into it), each
-   month's total and balance rows set apart, the new line at the top tinted.
-   A tab comes in with a short fade; the month bars grow once. */
+   month's total and balance rows set apart. A tab comes in with a short
+   fade; the month bars grow once. (1.43.0: the new line is typed above the
+   table, entry-composer.tsx, no longer in a first row of it.) */
 .biz-tab-in { animation: fadein 0.22s var(--ease-out) both; }
 .biz-grid tbody tr { background: rgb(var(--surface)); }
 .biz-grid .biz-td {
@@ -2692,11 +2696,197 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
 .biz-grid .biz-row-total .biz-td { border-bottom-color: rgb(var(--line) / 0.12); }
 .biz-grid .biz-row-quiet { background: color-mix(in srgb, rgb(var(--surface-2)) 40%, rgb(var(--surface))); }
 .biz-grid .biz-row-year { background: rgb(var(--amber) / 0.1); }
-.biz-grid .biz-row-new { background: color-mix(in srgb, rgb(var(--amber)) 5%, rgb(var(--surface))); }
-.biz-grid .biz-row-new .biz-td { border-bottom: 1px solid rgb(var(--amber) / 0.25); vertical-align: middle; }
 .biz-grid .biz-month { background: rgb(var(--surface)); }
 .biz-grid .biz-reversed td:not(:first-child) { color: rgb(var(--ink-soft)); }
 .biz-grid thead th { background: rgb(var(--surface-2)); }
 .biz-grid-wrap { scrollbar-gutter: stable; }
 @keyframes biz-grow { from { transform: scaleY(0.04); } to { transform: none; } }
 .biz-bar { transform-origin: 50% 100%; animation: biz-grow 0.6s var(--ease-out) backwards; transition: height 0.35s var(--ease-out); }
+
+/* ---------------------------------------------------------------------------
+   1.43.0. An outlier's player full screen (F, or Full screen under it): the
+   whole screen, no corners; a still picture keeps its whole frame. */
+.player-box:fullscreen { border-radius: 0; box-shadow: none; aspect-ratio: auto; max-width: none; width: 100%; height: 100%; background: #000; }
+.player-box:fullscreen > button img { object-fit: contain; }
+.player-box:not(:hover) .player-leave { opacity: 0.55; }
+
+/* ---------------------------------------------------------------------------
+   1.43.0. Business: the cash book's lines as they change (the owner: "vreau
+   animație de loading când modifici ceva direct în tabele"). On its way to the
+   server, a light sweeps across the line (one light for the whole line: the
+   cells share the screen's coordinates) and the cell that changed spins;
+   saved, the line flashes green and the cell shows a tick; refused, it shakes
+   red (it's back as it was). A line just added glows amber where it landed. */
+.biz-spin {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+  border: 2px solid rgb(var(--ink-faint) / 0.35); border-top-color: rgb(var(--amber));
+  animation: biz-spin 0.7s linear infinite;
+}
+.biz-spin-on-amber { border-color: rgb(255 255 255 / 0.4); border-top-color: #fff; }
+@keyframes biz-spin { to { transform: rotate(360deg); } }
+.biz-grid .biz-saving > td {
+  background-image: linear-gradient(100deg, transparent 0%, rgb(var(--amber) / 0.11) 42%, rgb(var(--amber) / 0.2) 50%, rgb(var(--amber) / 0.11) 58%, transparent 100%);
+  background-size: 46vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: biz-sweep 1.1s linear infinite;
+}
+@keyframes biz-sweep { from { background-position: -46vw 0; } to { background-position: 100vw 0; } }
+/* In the cell's top corner (its right one; an amount's left), on a round patch of the row's ground, so it never
+   sits on the words. */
+.biz-grid .biz-cell-busy::after,
+.biz-grid .biz-cell-saved::after {
+  content: ""; position: absolute; top: 9px; right: 5px; pointer-events: none;
+}
+.biz-grid .biz-cell-busy.text-right::after,
+.biz-grid .biz-cell-saved.text-right::after { right: auto; left: 5px; }
+.biz-grid .biz-cell-busy::after {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgb(var(--ink-faint) / 0.35); border-top-color: rgb(var(--amber));
+  background: rgb(var(--surface)); box-shadow: 0 0 0 3px rgb(var(--surface));
+  animation: biz-spin 0.7s linear infinite;
+}
+.biz-grid .biz-cell-saved::after {
+  width: 6px; height: 11px; margin-top: -1px;
+  border: solid rgb(var(--green)); border-width: 0 2.25px 2.25px 0;
+  transform: rotate(45deg);
+  animation: biz-tick 1.1s var(--ease-out) both;
+}
+@keyframes biz-tick {
+  0% { opacity: 0; transform: rotate(45deg) scale(0.4); }
+  18% { opacity: 1; transform: rotate(45deg) scale(1.15); }
+  30% { transform: rotate(45deg) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(45deg) scale(1); }
+}
+.biz-saved > td { animation: biz-saved 1.1s var(--ease-out); }
+@keyframes biz-saved { 0%, 25% { background-color: rgb(var(--green) / 0.16); } 100% { background-color: transparent; } }
+.biz-failed > td { animation: biz-failed 0.9s var(--ease-out); }
+@keyframes biz-failed {
+  0% { background-color: rgb(var(--red) / 0.16); transform: translateX(0); }
+  12% { transform: translateX(-6px); }
+  28% { transform: translateX(5px); }
+  44% { transform: translateX(-3px); }
+  60% { transform: translateX(2px); }
+  76% { transform: translateX(0); }
+  100% { background-color: transparent; }
+}
+.biz-fresh > td { animation: biz-fresh 1.8s var(--ease-out); }
+@keyframes biz-fresh {
+  0% { background-color: rgb(var(--amber) / 0.22); opacity: 0; transform: translateY(-6px); }
+  14% { opacity: 1; transform: none; }
+  100% { background-color: transparent; }
+}
+/* The sticky first cell keeps its own ground while the line flashes (the table scrolls under it). */
+.biz-grid .biz-saved > td:first-child,
+.biz-grid .biz-failed > td:first-child,
+.biz-grid .biz-fresh > td:first-child { background-clip: padding-box; }
+
+/* Picking lines (1.43.0): on hover a line's number gives way to an empty box (a
+   click starts picking with it); while picking, the whole line is the box,
+   picked ones tinted amber with a bar on their left, and the line's own
+   buttons step back. A file dragged over a line lights it (dropped: attached). */
+/* (The number's cell is sticky: that already holds the box over it.) */
+.biz-no-pick, .biz-tick {
+  position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 0.5rem; background: transparent; cursor: pointer;
+}
+.biz-inv .biz-tick { align-items: center; padding-top: 0; }
+.biz-no-pick { opacity: 0; transition: opacity 0.15s ease; }
+.biz-grid .biz-row:hover .biz-no-pick, .biz-no-pick:focus-visible { opacity: 1; }
+.biz-grid .biz-row:hover .biz-no-num { visibility: hidden; }
+.biz-tick:focus-visible, .biz-no-pick:focus-visible { outline: none; }
+.biz-tick:focus-visible .pick-box, .biz-no-pick:focus-visible .pick-box { box-shadow: 0 0 0 2px rgb(var(--amber) / 0.5); }
+.biz-tick .pick-box { animation: pick-pop 0.22s var(--ease-spring) both; }
+button.biz-tick:not(:disabled):active, button.biz-no-pick:not(:disabled):active { scale: none; }
+.biz-picking, .biz-picking .biz-cell { cursor: pointer; }
+.biz-picking:hover > td { background-color: rgb(var(--ink) / 0.025); }
+.biz-picking.is-picked > td { background-color: color-mix(in srgb, rgb(var(--amber)) 9%, rgb(var(--surface))); }
+.biz-picking.is-picked > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.biz-picking .biz-act { pointer-events: none; opacity: 0.3; }
+.biz-act { transition: opacity 0.15s ease; }
+.biz-drop > td { background-color: rgb(var(--amber) / 0.1); }
+.biz-drop > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.biz-drop > td:not(:first-child) { box-shadow: inset 0 1px 0 rgb(var(--amber) / 0.5), inset 0 -1px 0 rgb(var(--amber) / 0.5); }
+
+/* A line's paperclip: it only adds documents (1.43.0); its count beside it. */
+.biz-clip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  height: 28px; min-width: 28px; padding: 0 4px; border-radius: 6px;
+  color: rgb(var(--ink-faint) / 0.6); transition: color 0.15s ease, background-color 0.15s ease;
+}
+.biz-clip:hover { color: rgb(var(--ink)); background: rgb(var(--surface-2)); }
+.biz-clip.has-files { color: rgb(var(--ink-soft)); }
+.biz-clip:disabled { cursor: progress; }
+.biz-clip-n {
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgb(var(--amber)); color: #fff; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1;
+  animation: pick-pop 0.26s var(--ease-spring) both;
+}
+
+/* The box a new line is typed in, above the table: a file dragged over it lights it. */
+.biz-composer { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.biz-composer.is-drop { border-color: rgb(var(--amber)); box-shadow: 0 0 0 3px rgb(var(--amber) / 0.18); }
+
+/* The inventory (1.43.0): each group a block, its first row its name, count
+   and total (debts in red: taken off); the line being typed tinted. */
+.biz-inv-group > td { background: color-mix(in srgb, rgb(var(--surface-2)) 70%, rgb(var(--surface))); border-top: 1px solid rgb(var(--line) / 0.12); }
+.biz-inv-group > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber) / 0.75); }
+.biz-inv-group.is-owed > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--red) / 0.7); }
+.biz-inv-row > td { border-top: 1px solid rgb(var(--line) / 0.07); }
+.biz-inv-row:hover > td { background-color: rgb(var(--surface-2) / 0.45); }
+.biz-inv-row > td:nth-child(2) { padding-left: 1.25rem; }
+.biz-inv-edit > td { background: rgb(var(--amber) / 0.06); border-top: 1px solid rgb(var(--amber) / 0.3); border-bottom: 1px solid rgb(var(--amber) / 0.3); }
+.biz-inv-edit { animation: fadein 0.18s var(--ease-out) both; }
+
+/* A register's guide: each tab comes in softly. */
+.biz-guide { animation: biz-guide-in 0.22s var(--ease-out) both; }
+@keyframes biz-guide-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* BNR's rate in the entry window (1.43.0, the owner: "la cursul BNR când apăs
+   pe buton vreau un logo cu BNR acolo și o animație frumoasă de loading"): a
+   bank mark and "BNR" on the button; asking, a ring turns around the mark and
+   the rate's box shimmers; the rate then rolls in, digit after digit. */
+.biz-bnr {
+  display: inline-flex; align-items: center; gap: 0.5rem; height: 2.5rem; padding: 0 0.875rem 0 0.375rem;
+  border-radius: 0.75rem; border: 1px solid rgb(var(--line) / 0.2); background: rgb(var(--surface));
+  font-size: 13px; font-weight: 600; color: rgb(var(--ink)); white-space: nowrap;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.biz-bnr:hover:not(:disabled) { border-color: rgb(var(--blue) / 0.45); background: rgb(var(--blue) / 0.05); }
+.biz-bnr:disabled { opacity: 0.6; }
+.biz-bnr.is-busy:disabled { opacity: 1; cursor: progress; border-color: rgb(var(--blue) / 0.35); background: rgb(var(--blue) / 0.04); }
+.biz-bnr-mark {
+  position: relative; width: 28px; height: 28px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgb(var(--blue) / 0.12); color: rgb(var(--blue));
+}
+.biz-bnr-word {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; line-height: 1;
+  padding: 4px 6px; border-radius: 6px; background: rgb(var(--blue)); color: #fff;
+}
+.biz-bnr.is-busy .biz-bnr-mark::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 999px;
+  border: 2px solid transparent; border-top-color: rgb(var(--blue)); border-right-color: rgb(var(--blue) / 0.35);
+  animation: biz-spin 0.8s linear infinite;
+}
+.biz-bnr.is-busy .biz-bnr-mark svg { animation: biz-bnr-pulse 1.1s ease-in-out infinite; }
+@keyframes biz-bnr-pulse { 50% { transform: scale(0.8); opacity: 0.55; } }
+.biz-rate-wait {
+  position: absolute; inset: 1px; border-radius: 11px; pointer-events: none; overflow: hidden;
+  background: linear-gradient(100deg, transparent 25%, rgb(var(--blue) / 0.1) 45%, rgb(var(--blue) / 0.18) 50%, rgb(var(--blue) / 0.1) 55%, transparent 75%) rgb(var(--surface));
+  background-size: 220% 100%; animation: biz-wait 1.1s linear infinite;
+}
+.biz-rate-wait::after {
+  content: ""; position: absolute; right: 14px; top: 50%; width: 58px; height: 10px; margin-top: -5px;
+  border-radius: 4px; background: rgb(var(--ink) / 0.09);
+}
+@keyframes biz-wait { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+.biz-rate-roll {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; overflow: hidden;
+  padding: 0 0.875rem; pointer-events: none; font-size: 14px; font-variant-numeric: tabular-nums; color: rgb(var(--ink));
+}
+.biz-rate-roll > span { display: inline-block; white-space: pre; animation: biz-roll 0.5s var(--ease-spring) both; }
+@keyframes biz-roll { from { opacity: 0; transform: translateY(80%); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+.biz-rate-ok { animation: pick-pop 0.3s var(--ease-spring) both; }

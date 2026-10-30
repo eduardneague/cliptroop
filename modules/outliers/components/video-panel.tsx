@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ExternalIcon } from "@/components/ui/icons";
+import { ExternalIcon, InfoIcon } from "@/components/ui/icons";
+import { HoverTip } from "@/components/ui/hover-tip";
 import { LineChart } from "@/modules/analytics/components/charts";
 import { loadVideoDetail, loadVideos, similarOutliers } from "@/app/(dashboard)/outliers/actions";
 import { compact, duration } from "../lib/filters";
@@ -177,27 +178,34 @@ export function VideoPanel({ id, initial }: { id: string; initial: VideoDetail |
 }
 
 /**
- * How its × is worked out, in one line under the numbers (1.31.8): the video's views ÷ the median views of the
- * channel's videos just before it. When the channel's usual has moved a lot since (it grew, or slowed), both are
- * said, so "14M views, usual 5.6M, 3.3×" isn't a puzzle: 14M ÷ 4.2M (its usual then) = 3.3×.
+ * How its × is worked out (1.31.8: a line under the numbers): the video's views ÷ the median views of the channel's
+ * videos just before it. When the channel's usual has moved a lot since (it grew, or slowed), both are said, so "14M
+ * views, usual 5.6M, 3.3×" isn't a puzzle: 14M ÷ 4.2M (its usual then) = 3.3×. 1.43.0 (the owner: "i dont want to see
+ * the mathematical equation, i want to only be able to see it if i like hover over an icon there… and if i hover over
+ * the x its usual, i can see the math equation too"): it's the card that shows over "× its usual", not a paragraph.
  */
-function ScoreNote({ v, short, then, now, own }: { v: VideoDetail["video"]; short: boolean; then: number | null; now: number | null; own: boolean }) {
-  if (!then || !v.views || v.score === null) return null;
+function ScoreMath({ v, short, then, now, own }: { v: VideoDetail["video"]; short: boolean; then: number | null; now: number | null; own: boolean }) {
   const kind = short ? "Shorts" : "videos";
+  const heading = v.projected !== null && v.score !== null && v.projected > v.score * 1.15;
   return (
-    <p className="rounded-xl bg-surface-2/60 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-soft">
-      <span className="font-semibold text-ink">
-        {multText(v.score)} = {compact(v.views)} views ÷ {compact(then)}
-      </span>
-      , the median views of the {kind} the channel posted just before it (up to 30).
-      {usualsDiffer(then, now) && now ? (
+    <span className="block space-y-1.5">
+      <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-faint">How it&rsquo;s worked out</span>
+      {then && v.views && v.score !== null ? (
         <>
-          {" "}
-          Its {kind} {now > then ? "get more now" : "get fewer now"}: about {compact(now)} each.
+          <span className="block font-display text-[17px] leading-snug font-semibold text-ink tabular-nums">
+            {multText(v.score)} = {compact(v.views)} ÷ {compact(then)}
+          </span>
+          <span className="block">
+            Its {compact(v.views)} views, divided by {compact(then)}: the median views of the {kind} the channel posted just before it (up to 30).
+            {usualsDiffer(then, now) && now ? ` Its ${kind} ${now > then ? "get more now" : "get fewer now"}: about ${compact(now)} each.` : ""}
+          </span>
         </>
-      ) : null}
-      {own ? " Engaged views come from your own YouTube Analytics." : " YouTube shares engaged views only with a channel's owner, so ClipTroop has them for your own videos only."}
-    </p>
+      ) : (
+        <span className="block">Its views divided by the median views of the {kind} the channel posted just before it. Not enough of them yet to say.</span>
+      )}
+      {heading && <span className="block">Heading for {multText(v.projected)}: a video this young usually has only part of its views yet (an estimate).</span>}
+      <span className="block text-[11.5px] text-ink-faint">{own ? "Engaged views come from your own YouTube Analytics." : "YouTube shares engaged views only with a channel's owner, so ClipTroop has them for your own videos only."}</span>
+    </span>
   );
 }
 
@@ -233,17 +241,26 @@ function VideoSide({ d }: { d: VideoDetail }) {
         </p>
       </div>
       <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
-        <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }} title={BAND_LABEL[band(v.score)]}>
-          <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
-              {multText(v.score)}
+        {/* 1.43.0: its usual in brackets, the multiplier bigger; how it's worked out shows over it (the ⓘ, or anywhere on it). */}
+        <HoverTip
+          as="div"
+          tip={<ScoreMath v={v} short={short} then={then} now={usualNow} own={!!d.own} />}
+          className="score-tile group/score rounded-xl px-3.5 py-3 min-w-0 cursor-help outline-none focus-visible:ring-2 focus-visible:ring-amber"
+          style={{ background: h.soft }}
+        >
+          <div className="flex items-center gap-1 text-[11.5px] font-semibold text-ink-soft min-w-0">
+            <span className="truncate">
+              × its usual{usual ? <span className="tabular-nums font-medium"> ({compact(usual)})</span> : null}
             </span>
+            <InfoIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60 group-hover/score:opacity-100 transition-opacity" />
           </div>
-          <div className="mt-1 text-[11.5px] text-ink-soft truncate">
-            {v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : then && v.views ? `${compact(v.views)} ÷ ${compact(then)}` : BAND_LABEL[band(v.score)]}
+          <div className="mt-1.5 font-display text-[40px] sm:text-[44px] leading-[0.95] font-semibold tracking-tight mult tabular-nums" style={{ color: h.text }}>
+            {multText(v.score)}
           </div>
-        </div>
+          <div className="mt-1.5 text-[11.5px] text-ink-soft truncate">
+            {v.projected !== null && v.score !== null && v.projected > v.score * 1.15 ? `heading for ${multText(v.projected)}` : BAND_LABEL[band(v.score)]}
+          </div>
+        </HoverTip>
         <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} title={then ? "Its usual: the median views of the channel's videos just before this one" : undefined} />
         <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} sub={v.statsAt ? <>counted <TimeAgo iso={v.statsAt} /></> : undefined} />
         <Tile label="Engagement" value={eng === null ? "–" : `${eng.toFixed(1)}%`} sub="likes + comments per view" title="(Likes + comments) ÷ views" />
@@ -263,7 +280,6 @@ function VideoSide({ d }: { d: VideoDetail }) {
           <Tile label="Posted" value={<span className="text-[18px]"><TimeAgo iso={v.publishedAt} /></span>} sub={new Date(v.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} />
         )}
       </div>
-      <ScoreNote v={v} short={short} then={then} now={usualNow} own={!!d.own} />
     </>
   );
 }

@@ -260,7 +260,7 @@ function PreviewYours({ rows }: { rows: OutlierVideo[] }) {
           <div className="flex flex-wrap items-center gap-2">
             <Segmented ariaLabel="Screen" size="sm" value={view} onChange={setView} options={[{ value: "home", label: "Computer" }, { value: "mobile", label: "Phone" }]} />
             <Segmented ariaLabel="Theme" size="sm" value={theme} onChange={setTheme} options={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
-            <button type="button" onClick={() => setSpot((s) => (s + 3) % 8)} className={`${BTN} h-8`} title="Put it somewhere else on the page">
+            <button type="button" onClick={() => setSpot((s) => (s + 3) % 8)} className={`${BTN} !h-8`} title="Put it somewhere else on the page">
               <ShuffleIcon className="w-3.5 h-3.5" />
               Move it
             </button>

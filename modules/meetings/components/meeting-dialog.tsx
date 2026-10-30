@@ -140,7 +140,7 @@ export function MeetingDialog({
         <div>
           <span className={label}>When</span>
           <div className="flex items-center gap-2 flex-wrap">
-            <DateChip value={day} onChange={setDay} ariaLabel="Meeting day" />
+            <DateChip value={day} onChange={setDay} ariaLabel="Meeting day" size="field" />
             <div className="w-32">
               <Select value={time} onChange={(v) => v && setTime(v)} options={timeOptions} ariaLabel="Start time" menuMinWidth={140} />
             </div>

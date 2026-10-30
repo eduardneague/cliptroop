@@ -139,7 +139,7 @@ export function IdeasTab({ data }: { data: IdeasTabData }) {
                   </button>
                 )}
               </span>
-              <button type="submit" className={`${BTN} h-10 text-ink`} disabled={topicText.trim() === lockTopic.trim()}>
+              <button type="submit" className={`${BTN} !h-10 text-ink`} disabled={topicText.trim() === lockTopic.trim()}>
                 Find
               </button>
             </form>

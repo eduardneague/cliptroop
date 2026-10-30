@@ -1,13 +1,16 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { Dialog } from "@/components/ui/dialog";
 import { DateChip } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
+import { BarDelete, BarMenu, ListPicker, PickBar, PickButton, RowPick, TickBox, usePick, type BarBusy } from "@/components/ui/list-pick";
 import { CheckIcon, CloseIcon, EditIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
+import { itemsAway, rowsBefore, rowsGlide, tableRowsAway } from "@/lib/remove-animation";
 import { createInventory, deleteInventory, deleteItem, saveItem, updateInventory } from "@/app/(dashboard)/business/actions";
 import { nEn, nRo, words } from "../lib/i18n";
 import { orderItems, totals } from "../lib/inventory";
@@ -15,6 +18,7 @@ import { INVENTORY_KINDS, ITEM_GROUPS, groupLabel, inventoryKindLabel, isLiabili
 import { formatDay, formatLei, parseAmount, yearOf } from "../lib/money";
 import type { Inventory, InventoryItem } from "../lib/types";
 import { upsert, useBusiness, useWords, without } from "./context";
+import { RegisterHead } from "./register-info";
 import { Empty, Field, Money, Note, SwitchRow, area, card, danger, field, primary, quiet, secondary } from "./ui";
 
 /*
@@ -22,6 +26,13 @@ import { Empty, Field, Money, Note, SwitchRow, area, card, danger, field, primar
  * the start of the activity, every 31 December, and when it ends. A new one starts from the books (the fixed assets in
  * use, the cash, the bank balance); the rest is added line by line: equipment under the threshold, stocks, what's
  * still to be collected or paid.
+ *
+ * 1.43.0 (the owner: "design-ul la inventar este foarte greu de urmărit în mare parte, poate modifici puțin partea de
+ * jos cu total elemente, adaugă un rând butonul nu se află unde trebuie exact"): each group is a block that opens with
+ * its name, how many lines and its total (no separate total row under it) and a + that adds a line straight into it;
+ * Add a line sits at the top of the sheet, by its name; the totals at the bottom are three figures side by side (what
+ * it owns, what it owes, the difference). Lines can be picked (moved to another group, removed); a saved line flashes
+ * green, a removed one is struck through and slides off. The tab opens with its name and the ⓘ (register-info.tsx).
  */
 
 const W = words({
@@ -90,6 +101,26 @@ const W = words({
     ro: "Se tipăresc sub inventar (cine a inventariat, listele de inventariere anexate…).",
   },
   total: { en: "Total", ro: "Total" },
+  addTo: { en: (g: string) => `Add a line to ${g}`, ro: (g: string) => `Adaugă un rând la ${g}` },
+  linesN: { en: (n: number) => nEn(n, "line", "lines"), ro: (n: number) => nRo(n, "rând", "rânduri") },
+  takenOff: { en: "taken off", ro: "se scade" },
+  itemsWord: { en: "lines", ro: "rânduri" },
+  pickHint: { en: "Pick lines: move them to another group or remove them", ro: "Selectează rânduri: mută-le în altă grupă sau șterge-le" },
+  pickLine: { en: (n: number) => `Select line ${n}`, ro: (n: number) => `Selectează rândul ${n}` },
+  oneLine: { en: "line", ro: "rând" },
+  manyLines: { en: "lines", ro: "rânduri" },
+  barLabel: { en: "Picked lines", ro: "Rânduri selectate" },
+  selectedN: { en: (n: number) => `${n} selected`, ro: (n: number) => `${n} ${n === 1 ? "selectat" : "selectate"}` },
+  moveTo: { en: "Move to", ro: "Mută în" },
+  moving: { en: (n: number) => `Moving ${nEn(n, "line", "lines")}…`, ro: (n: number) => `Se mută ${nRo(n, "rând", "rânduri")}…` },
+  moved: { en: (n: number) => `${nEn(n, "line", "lines")} moved`, ro: (n: number) => `Mutate: ${nRo(n, "rând", "rânduri")}` },
+  allThere: { en: "All there", ro: "Deja acolo" },
+  removeLines: { en: (n: number) => `Remove ${nEn(n, "line", "lines")}?`, ro: (n: number) => `Ștergi ${nRo(n, "rând", "rânduri")}?` },
+  removeLinesBody: { en: "They go from this inventory.", ro: "Dispar din acest inventar." },
+  removeN: { en: (n: number) => `Remove ${n}`, ro: (n: number) => `Șterge ${n}` },
+  removing: { en: (n: number) => `Removing ${nEn(n, "line", "lines")}…`, ro: (n: number) => `Se șterg ${nRo(n, "rând", "rânduri")}…` },
+  removedN: { en: (n: number) => `${nEn(n, "line", "lines")} removed`, ro: (n: number) => `Șterse: ${nRo(n, "rând", "rânduri")}` },
+  removeInv: { en: "Remove the inventory", ro: "Șterge inventarul" },
 });
 
 export function InventoryTab() {
@@ -106,23 +137,26 @@ export function InventoryTab() {
 
   return (
     <div className="space-y-3">
+      <RegisterHead
+        register="inventory"
+        aside={
+          writable && (
+            <button type="button" className={mine.length ? secondary : primary} onClick={() => setCreating(true)}>
+              <PlusIcon className="w-4 h-4" />
+              {w.newInventory}
+            </button>
+          )
+        }
+      />
       {b.s.profile.regime === "norma" && <Note>{w.norma}</Note>}
-      <div className="flex items-center gap-2 flex-wrap">
-        {mine.length > 0 && (
-          <Segmented
-            ariaLabel={w.inventory}
-            value={inv?.id ?? ""}
-            onChange={setPick}
-            options={mine.map((i) => ({ value: i.id, label: formatDay(i.taken_on, b.lang), title: inventoryKindLabel(i.kind, b.lang) }))}
-          />
-        )}
-        {writable && (
-          <button type="button" className={mine.length ? secondary : primary} onClick={() => setCreating(true)}>
-            <PlusIcon className="w-4 h-4" />
-            {w.newInventory}
-          </button>
-        )}
-      </div>
+      {mine.length > 1 && (
+        <Segmented
+          ariaLabel={w.inventory}
+          value={inv?.id ?? ""}
+          onChange={setPick}
+          options={mine.map((i) => ({ value: i.id, label: formatDay(i.taken_on, b.lang), title: inventoryKindLabel(i.kind, b.lang) }))}
+        />
+      )}
       {inv ? (
         <InventorySheet
           key={inv.id}
@@ -212,7 +246,7 @@ function NewInventory({ onClose, onMade }: { onClose: () => void; onMade: (i: In
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={w.day} problem={taken.has(day) ? w.dayTaken : null}>
-            <DateChip value={day} onChange={(d) => setDay(d)} ariaLabel={w.dayAria} />
+            <DateChip value={day} onChange={(d) => setDay(d)} ariaLabel={w.dayAria} size="field" />
           </Field>
           <Field label={w.kind}>
             <Select
@@ -241,19 +275,51 @@ const draftOf = (it: InventoryItem, lang: Lang): ItemDraft => ({
   value: formatLei(it.value, lang),
   document: it.document,
 });
+/** A new line's draft, in a group. */
+const blank = (g: ItemGroup): ItemDraft => ({ item_group: g, name: "", quantity: g === "cash" || g === "bank" || g === "receivable" || g === "debt" ? "" : "1", unit: g === "cash" || g === "bank" || g === "receivable" || g === "debt" ? "" : "buc.", value: "", document: "" });
 /** The groups to pick from: in English, with the register's Romanian name under each. */
 const groupOptions = (lang: Lang) => ITEM_GROUPS.map((g) => ({ value: g, label: groupLabel(g, lang), hint: lang === "en" ? groupLabel(g, "ro") : undefined }));
 
+/** Where a new line is being typed: at the top of the sheet, or at the end of its group. */
+type NewAt = "top" | ItemGroup;
+
 function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory; writable: boolean; warnings: string[]; onRemoved: () => void }) {
+  const b = useBusiness();
+  const items = useMemo(() => orderItems(b.s.items.filter((i) => i.inventory_id === inv.id)), [b.s.items, inv.id]);
+  return (
+    <ListPicker ids={items.map((i) => i.id)} bar={writable ? <InventoryPickBar items={items} /> : null}>
+      <SheetBody inv={inv} items={items} writable={writable} warnings={warnings} onRemoved={onRemoved} />
+    </ListPicker>
+  );
+}
+
+function SheetBody({ inv, items, writable, warnings, onRemoved }: { inv: Inventory; items: InventoryItem[]; writable: boolean; warnings: string[]; onRemoved: () => void }) {
   const b = useBusiness();
   const w = useWords(W);
   const toast = useToast();
   const confirm = useConfirm();
-  const items = useMemo(() => orderItems(b.s.items.filter((i) => i.inventory_id === inv.id)), [b.s.items, inv.id]);
+  const p = usePick();
+  const picking = !!p?.on;
   const t = useMemo(() => totals(items), [items]);
   const [edit, setEdit] = useState<ItemDraft | null>(null);
+  const [newAt, setNewAt] = useState<NewAt>("top");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(inv.note);
+  // A line just saved: it flashes green for a moment.
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return;
+    const x = setTimeout(() => setFlash(null), 1100);
+    return () => clearTimeout(x);
+  }, [flash]);
+  useEffect(() => {
+    if (picking) setEdit(null);
+  }, [picking]);
+
+  function startNew(at: NewAt) {
+    setNewAt(at);
+    setEdit(blank(at === "top" ? "inventory_item" : at));
+  }
 
   async function save() {
     if (!edit) return;
@@ -266,20 +332,15 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
       if (r.error !== undefined) return void toast.error(r.error);
       b.patch((s) => ({ ...s, items: upsert(s.items, r.item) }));
       setEdit(null);
+      setFlash(r.item.id);
     } finally {
       setBusy(false);
     }
   }
-  /** True once it's gone. */
+  /** True once it's gone: struck through and off, the lines under it gliding up (back, if the server says no). */
   async function del(it: InventoryItem) {
     if (!(await confirm({ title: w.removeLine, description: it.name, confirmLabel: w.remove, cancelLabel: w.cancel, danger: true }))) return false;
-    const r = await deleteItem(b.teamId, it.id);
-    if (r.error !== undefined) {
-      toast.error(r.error);
-      return false;
-    }
-    b.patch((s) => ({ ...s, items: without(s.items, [it.id]) }));
-    return true;
+    return removeItems([it], b, toast);
   }
   async function saveNote() {
     if (note === inv.note) return;
@@ -345,38 +406,45 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
     </div>
   );
 
+  // On a computer: the line's fields across its row (each box 36 px), ✓ saves, × leaves it.
+  const box = "w-full h-9 rounded-lg border border-line/15 bg-surface px-3 text-[13px] outline-none focus:ring-2 focus:ring-amber";
   const editorRow = (d: ItemDraft) => (
-    <tr className="border-t border-line/10 bg-amber/5">
-      <td className="px-3 py-2" />
-      <td className="px-2 py-2" colSpan={2}>
-        <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
-          <Select value={d.item_group} onChange={(v) => v && setEdit((x) => (x ? { ...x, item_group: v as ItemGroup } : x))} options={groupOptions(b.lang)} ariaLabel={w.group} fullWidth />
-          <input className={field} value={d.name} onChange={(e) => setEdit((x) => (x ? { ...x, name: e.target.value } : x))} placeholder={w.whatCounted} maxLength={300} data-autofocus />
+    <tr className="biz-inv-edit" data-flip={d.id ?? "new"}>
+      <td className="pl-4 pr-2 py-2 text-ink-faint">
+        <PlusIcon className="w-3.5 h-3.5 text-amber" />
+      </td>
+      <td className="px-2 py-2">
+        <div className="grid gap-2 grid-cols-[12rem_minmax(0,1fr)]">
+          <Select value={d.item_group} onChange={(v) => v && setDraft("item_group", v as ItemGroup)} options={groupOptions(b.lang)} ariaLabel={w.group} size="bar" fullWidth />
+          <input className={box} value={d.name} onChange={(e) => setDraft("name", e.target.value)} placeholder={w.whatCounted} maxLength={300} autoFocus onKeyDown={(e) => e.key === "Enter" && void save()} />
         </div>
       </td>
       <td className="px-2 py-2">
         <div className="flex gap-1.5">
-          <input className={`${field} w-20 text-right tabular-nums`} value={d.quantity} onChange={(e) => setEdit((x) => (x ? { ...x, quantity: e.target.value } : x))} placeholder={w.qty} inputMode="decimal" aria-label={w.quantity} />
-          <input className={`${field} w-20`} value={d.unit} onChange={(e) => setEdit((x) => (x ? { ...x, unit: e.target.value } : x))} placeholder="buc." maxLength={20} aria-label={w.unit} />
+          <input className={`${box} w-[4.5rem] text-right tabular-nums`} value={d.quantity} onChange={(e) => setDraft("quantity", e.target.value)} placeholder={w.qty} inputMode="decimal" aria-label={w.quantity} onKeyDown={(e) => e.key === "Enter" && void save()} />
+          <input className={`${box} w-[4.5rem]`} value={d.unit} onChange={(e) => setDraft("unit", e.target.value)} placeholder="buc." maxLength={20} aria-label={w.unit} onKeyDown={(e) => e.key === "Enter" && void save()} />
         </div>
       </td>
       <td className="px-2 py-2">
-        <input className={field} value={d.document} onChange={(e) => setEdit((x) => (x ? { ...x, document: e.target.value } : x))} placeholder="Factură 12" maxLength={160} aria-label={w.document} />
+        <input className={box} value={d.document} onChange={(e) => setDraft("document", e.target.value)} placeholder="Factură 12" maxLength={160} aria-label={w.document} onKeyDown={(e) => e.key === "Enter" && void save()} />
       </td>
       <td className="px-2 py-2">
-        <input className={`${field} text-right tabular-nums`} value={d.value} onChange={(e) => setEdit((x) => (x ? { ...x, value: e.target.value } : x))} placeholder={w.zero} inputMode="decimal" aria-label={w.valueInLei} onKeyDown={(e) => e.key === "Enter" && void save()} />
+        <input className={`${box} text-right tabular-nums`} value={d.value} onChange={(e) => setDraft("value", e.target.value)} placeholder={w.zero} inputMode="decimal" aria-label={w.valueInLei} onKeyDown={(e) => e.key === "Enter" && void save()} />
       </td>
-      <td className="px-2 py-2 whitespace-nowrap text-right">
-        <button type="button" className={quiet} onClick={() => void save()} disabled={busy} aria-label={w.saveLine}>
-          <CheckIcon className="w-4 h-4 text-green" />
-        </button>
-        <button type="button" className={quiet} onClick={() => setEdit(null)} disabled={busy} aria-label={w.cancel}>
-          <CloseIcon className="w-4 h-4" />
-        </button>
+      <td className="pl-2 pr-4 py-2">
+        <div className="flex items-center justify-end gap-1">
+          <button type="button" className="w-9 h-9 rounded-lg bg-green/12 text-green hover:bg-green/20 inline-flex items-center justify-center disabled:opacity-60" onClick={() => void save()} disabled={busy} aria-label={w.saveLine}>
+            {busy ? <span className="biz-spin" aria-hidden /> : <CheckIcon className="w-4 h-4" />}
+          </button>
+          <button type="button" className="w-9 h-9 rounded-lg text-ink-soft hover:text-ink hover:bg-surface-2 inline-flex items-center justify-center" onClick={() => setEdit(null)} disabled={busy} aria-label={w.cancel}>
+            <CloseIcon className="w-4 h-4" />
+          </button>
+        </div>
       </td>
     </tr>
   );
 
+  const adding = edit && !edit.id ? newAt : null;
   return (
     <div className="space-y-3">
       {warnings.map((x) => (
@@ -390,102 +458,131 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
             <p className="text-[15px] font-semibold">
               {w.inventoryOn} {formatDay(inv.taken_on, b.lang)}
             </p>
-            <p className="text-[12.5px] text-ink-soft">{inventoryKindLabel(inv.kind, b.lang)}</p>
+            <p className="text-[12.5px] text-ink-soft">
+              {inventoryKindLabel(inv.kind, b.lang)} · {w.linesN(items.length)}
+            </p>
           </div>
-          {writable && (
-            <button type="button" className={danger} onClick={onRemoved}>
-              <TrashIcon className="w-4 h-4" />
-              {w.remove}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {writable && items.length > 0 && <PickButton what={w.itemsWord} hint={w.pickHint} />}
+            {writable && (
+              <button type="button" className={primary} onClick={() => startNew("top")} disabled={picking}>
+                <PlusIcon className="w-4 h-4" />
+                {w.addLine}
+              </button>
+            )}
+            {writable && (
+              <button type="button" className={`${secondary} !px-0 w-9 hover:!text-red hover:!border-red/40`} onClick={onRemoved} aria-label={w.removeInv} title={w.removeInv}>
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto hidden md:block">
-          <table className="w-full text-[13px] min-w-[760px]">
+          <table className="biz-inv w-full text-[13px] min-w-[820px]">
+            <colgroup>
+              <col className="w-[3.75rem]" />
+              <col />
+              <col className="w-[10rem]" />
+              <col className="w-[13rem]" />
+              <col className="w-[10rem]" />
+              <col className="w-[6.5rem]" />
+            </colgroup>
             <thead>
               <tr className="bg-surface-2 text-[10.5px] text-ink-faint uppercase tracking-wide">
-                <th className="px-3 py-2 text-left w-12">{w.no}</th>
-                <th className="px-2 py-2 text-left" colSpan={2}>
+                <th scope="col" className="pl-4 pr-2 py-2 text-left">
+                  {w.no}
+                </th>
+                <th scope="col" className="px-2 py-2 text-left">
                   {w.items}
                 </th>
-                <th className="px-2 py-2 text-right w-[180px]">{w.quantity}</th>
-                <th className="px-2 py-2 text-left w-[180px]">{w.document}</th>
-                <th className="px-2 py-2 text-right w-[150px]">{w.inventoryValue}</th>
-                <th className="px-2 py-2 w-[84px]" />
+                <th scope="col" className="px-2 py-2 text-right">
+                  {w.quantity}
+                </th>
+                <th scope="col" className="px-2 py-2 text-left">
+                  {w.document}
+                </th>
+                <th scope="col" className="px-2 py-2 text-right">
+                  {w.inventoryValue}
+                </th>
+                <th scope="col" className="pl-2 pr-4 py-2" />
               </tr>
             </thead>
             <tbody>
+              {adding === "top" && editorRow(edit!)}
               {t.groups.map((g) => (
-                <GroupRows key={g.group} group={g.group} total={g.total}>
+                <Fragment key={g.group}>
+                  <GroupHead group={g.group} total={g.total} count={g.count} writable={writable && !picking} onAdd={() => startNew(g.group)} />
                   {items
                     .filter((it) => it.item_group === g.group)
                     .map((it) => {
                       if (edit?.id === it.id) return <Fragment key={it.id}>{editorRow(edit)}</Fragment>;
+                      const on = !!p?.picked.has(it.id);
                       return (
-                        <tr key={it.id} className="border-t border-line/10 hover:bg-surface-2/40">
-                          <td className="px-3 py-2 tabular-nums text-ink-faint">{numbers.get(it.id)}</td>
-                          <td className="px-2 py-2" colSpan={2}>
-                            {it.name}
+                        <tr
+                          key={it.id}
+                          data-item-id={it.id}
+                          data-flip={it.id}
+                          className={`biz-inv-row ${flash === it.id ? "biz-saved" : ""} ${picking ? "biz-picking" : ""} ${picking && on ? "is-picked" : ""}`}
+                          onClick={picking ? (e) => p!.toggle(it.id, e.shiftKey) : undefined}
+                        >
+                          <td className="pl-4 pr-2 py-2.5 tabular-nums text-ink-faint relative">
+                            {picking ? (
+                              <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={on}
+                                aria-label={w.pickLine(numbers.get(it.id) ?? 0)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  p!.toggle(it.id, e.shiftKey);
+                                }}
+                                className="biz-tick"
+                              >
+                                <TickBox state={on} />
+                              </button>
+                            ) : (
+                              numbers.get(it.id)
+                            )}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-ink-soft">{qtyText(it)}</td>
-                          <td className="px-2 py-2 text-ink-soft truncate max-w-[180px]">{it.document}</td>
-                          <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                          <td className="px-2 py-2.5">
+                            <span data-row-title="">{it.name}</span>
+                          </td>
+                          <td className="px-2 py-2.5 text-right tabular-nums text-ink-soft whitespace-nowrap">{qtyText(it)}</td>
+                          <td className="px-2 py-2.5 text-ink-soft">
+                            <span className="block truncate max-w-[13rem]" title={it.document}>
+                              {it.document}
+                            </span>
+                          </td>
+                          <td className={`px-2 py-2.5 text-right tabular-nums font-semibold ${isLiability(it.item_group) ? "text-red" : ""}`}>
                             <Money value={it.value} />
                           </td>
-                          <td className="px-2 py-2 text-right whitespace-nowrap">
+                          <td className="pl-2 pr-4 py-2">
                             {writable && (
-                              <>
-                                <button type="button" className={quiet} onClick={() => setEdit(draftOf(it, b.lang))} aria-label={w.change(it.name)}>
+                              <div className="biz-act flex items-center justify-end gap-0.5">
+                                <button type="button" className={`${quiet} !px-0 w-8`} onClick={() => setEdit(draftOf(it, b.lang))} aria-label={w.change(it.name)} title={w.change(it.name)}>
                                   <EditIcon className="w-3.5 h-3.5" />
                                 </button>
-                                <button type="button" className={`${quiet} hover:text-red`} onClick={() => void del(it)} aria-label={w.removeIt(it.name)}>
+                                <button type="button" className={`${quiet} !px-0 w-8 hover:!text-red`} onClick={() => void del(it)} aria-label={w.removeIt(it.name)} title={w.removeIt(it.name)}>
                                   <TrashIcon className="w-3.5 h-3.5" />
                                 </button>
-                              </>
+                              </div>
                             )}
                           </td>
                         </tr>
                       );
                     })}
-                </GroupRows>
+                  {adding === g.group && editorRow(edit!)}
+                </Fragment>
               ))}
-              {edit && !edit.id && editorRow(edit)}
+              {/* A new line in a group that has none yet. */}
+              {adding && adding !== "top" && !t.groups.some((g) => g.group === adding) && editorRow(edit!)}
               {!items.length && !edit && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-[13px] text-ink-soft">
+                  <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-ink-soft">
                     {w.noLines}
                   </td>
                 </tr>
               )}
-              <tr className="border-t border-line/15 bg-surface-2/60 font-semibold">
-                <td className="px-3 py-2" />
-                <td className="px-2 py-2" colSpan={4}>
-                  {w.totalAssets}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  <Money value={t.owned} />
-                </td>
-                <td />
-              </tr>
-              <tr className="border-t border-line/10 bg-surface-2/60 font-semibold">
-                <td className="px-3 py-2" />
-                <td className="px-2 py-2" colSpan={4}>
-                  {w.totalDebts}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  <Money value={t.owed} />
-                </td>
-                <td />
-              </tr>
-              <tr className="border-t border-line/10 bg-amber/10 font-bold">
-                <td className="px-3 py-2" />
-                <td className="px-2 py-2" colSpan={4}>
-                  {w.difference}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  <Money value={t.net} />
-                </td>
-                <td />
-              </tr>
             </tbody>
           </table>
         </div>
@@ -508,11 +605,16 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
                     edit?.id === it.id ? (
                       <li key={it.id}>{phoneEditor(edit)}</li>
                     ) : (
-                      <li key={it.id} className="border-t border-line/10">
-                        <button type="button" disabled={!writable} onClick={() => setEdit(draftOf(it, b.lang))} className="w-full flex items-start gap-3 px-4 py-2.5 text-left enabled:active:bg-surface-2">
-                          <span className="w-5 flex-shrink-0 pt-px text-[12px] text-ink-faint tabular-nums">{numbers.get(it.id)}</span>
+                      <li key={it.id} data-item-id={it.id} className="relative border-t border-line/10">
+                        <RowPick id={it.id} label={w.pickLine(numbers.get(it.id) ?? 0)} />
+                        <button type="button" disabled={!writable || picking} onClick={() => setEdit(draftOf(it, b.lang))} className="w-full flex items-start gap-3 px-4 py-2.5 text-left enabled:active:bg-surface-2">
+                          <span data-row-num="" className="w-5 flex-shrink-0 pt-px text-[12px] text-ink-faint tabular-nums">
+                            {numbers.get(it.id)}
+                          </span>
                           <span className="flex-1 min-w-0">
-                            <span className="block text-[13.5px] leading-snug">{it.name}</span>
+                            <span data-row-title="" className="block text-[13.5px] leading-snug">
+                              {it.name}
+                            </span>
                             {(qtyText(it) || it.document) && <span className="block mt-0.5 text-[11.5px] text-ink-faint">{[qtyText(it), it.document].filter(Boolean).join(" · ")}</span>}
                           </span>
                           <span className="text-[13.5px] font-semibold tabular-nums whitespace-nowrap">
@@ -528,35 +630,33 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
           })}
           {edit && !edit.id && phoneEditor(edit)}
           {!items.length && !edit && <p className="px-4 py-8 text-center text-[13px] text-ink-soft">{w.noLines}</p>}
-          <dl className="bg-surface-2/60 px-4 py-2.5 space-y-1 text-[13px] tabular-nums">
-            <div className="flex justify-between gap-3 font-semibold">
-              <dt>{w.totalAssets}</dt>
-              <dd>
-                <Money value={t.owned} />
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3 font-semibold">
-              <dt>{w.totalDebts}</dt>
-              <dd>
-                <Money value={t.owed} />
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3 font-bold">
-              <dt>{w.difference}</dt>
-              <dd>
-                <Money value={t.net} />
-              </dd>
-            </div>
-          </dl>
         </div>
-        {writable && !edit && (
-          <div className="px-4 py-3 border-t border-line/10">
-            <button type="button" className={secondary} onClick={() => setEdit({ item_group: "inventory_item", name: "", quantity: "1", unit: "buc.", value: "", document: "" })}>
-              <PlusIcon className="w-4 h-4" />
-              {w.addLine}
-            </button>
+        {/* The bottom line: what it owns, what it owes, and the difference, side by side. */}
+        <div className="biz-inv-sum grid sm:grid-cols-3 border-t border-line/15">
+          <div className="px-4 py-3">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{w.totalAssets}</p>
+            <p className="mt-1 font-display text-[20px] font-semibold tabular-nums leading-none">
+              <Money value={t.owned} />
+              <span className="ml-1 text-[12px] font-sans font-normal text-ink-faint">lei</span>
+            </p>
           </div>
-        )}
+          <div className="px-4 py-3 max-sm:border-t sm:border-l border-line/10">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
+              {w.totalDebts} <span className="normal-case tracking-normal font-semibold">({w.takenOff})</span>
+            </p>
+            <p className={`mt-1 font-display text-[20px] font-semibold tabular-nums leading-none ${t.owed ? "text-red" : ""}`}>
+              <Money value={t.owed} />
+              <span className="ml-1 text-[12px] font-sans font-normal text-ink-faint">lei</span>
+            </p>
+          </div>
+          <div className="px-4 py-3 max-sm:border-t sm:border-l border-line/10 bg-amber/10">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">{w.difference}</p>
+            <p className="mt-1 font-display text-[22px] font-bold tabular-nums leading-none">
+              <Money value={t.net} />
+              <span className="ml-1 text-[12px] font-sans font-normal text-ink-faint">lei</span>
+            </p>
+          </div>
+        </div>
       </section>
       <Field label={w.notes} hint={w.notesHint}>
         <textarea className={area} rows={2} value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => void saveNote()} maxLength={500} disabled={!writable} />
@@ -565,29 +665,137 @@ function InventorySheet({ inv, writable, warnings, onRemoved }: { inv: Inventory
   );
 }
 
-function GroupRows({ group, total, children }: { group: ItemGroup; total: number; children: React.ReactNode }) {
+/** A group's first row: its name (what's owed: taken off), how many lines, its total, and + to add a line to it. */
+function GroupHead({ group, total, count, writable, onAdd }: { group: ItemGroup; total: number; count: number; writable: boolean; onAdd: () => void }) {
   const b = useBusiness();
   const w = useWords(W);
+  const owed = isLiability(group);
   return (
-    <>
-      <tr className="border-t border-line/10 bg-surface-2/40">
-        <td className="px-3 py-1.5" />
-        <td className="px-2 py-1.5 text-[11.5px] font-bold uppercase tracking-wide text-ink-soft" colSpan={6}>
-          {groupLabel(group, b.lang)}
-          {isLiability(group) && <span className="ml-1.5 normal-case tracking-normal font-semibold text-ink-faint">{w.owed}</span>}
-        </td>
-      </tr>
-      {children}
-      <tr className="border-t border-line/10">
-        <td className="px-3 py-1.5" />
-        <td className="px-2 py-1.5 text-[12.5px] text-ink-soft" colSpan={4}>
-          {w.total}: {groupLabel(group, b.lang).toLowerCase()}
-        </td>
-        <td className="px-2 py-1.5 text-right tabular-nums text-[12.5px] font-semibold">
-          <Money value={total} />
-        </td>
-        <td />
-      </tr>
-    </>
+    <tr className={`biz-inv-group ${owed ? "is-owed" : ""}`} data-flip={`g:${group}`}>
+      <td className="pl-4 pr-2 py-2" />
+      <td className="px-2 py-2" colSpan={3}>
+        <span className="text-[11.5px] font-bold uppercase tracking-wide text-ink">{groupLabel(group, b.lang)}</span>
+        <span className="ml-2 text-[11.5px] text-ink-faint">
+          {w.linesN(count)}
+          {owed ? ` · ${w.takenOff}` : ""}
+        </span>
+      </td>
+      <td className={`px-2 py-2 text-right tabular-nums font-bold ${owed ? "text-red" : ""}`}>
+        <Money value={total} />
+      </td>
+      <td className="pl-2 pr-4 py-1.5 text-right">
+        {writable && (
+          <button type="button" onClick={onAdd} className="biz-act w-8 h-8 rounded-lg inline-flex items-center justify-center text-ink-soft hover:text-amber hover:bg-amber/10" aria-label={w.addTo(groupLabel(group, b.lang))} title={w.addTo(groupLabel(group, b.lang))}>
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Lines leave the sheet the way the cash book's do: struck through and off, the ones under them gliding up; they come
+ * back if the server says no. True when every one went.
+ */
+async function removeItems(list: InventoryItem[], b: ReturnType<typeof useBusiness>, toast: ReturnType<typeof useToast>): Promise<boolean> {
+  const ids = list.map((x) => x.id);
+  const shown = ids.flatMap((id) => Array.from(document.querySelectorAll<HTMLElement>(`[data-item-id="${CSS.escape(id)}"]`))).filter((el) => el.getClientRects().length > 0);
+  const rows = shown.filter((el): el is HTMLTableRowElement => el instanceof HTMLTableRowElement);
+  const anim = rows.length ? tableRowsAway(rows) : itemsAway(shown);
+  if (anim) {
+    await anim.out;
+    if (!rows.length) await anim.collapse();
+  }
+  const body = rows[0]?.parentElement ?? null;
+  const before = body ? rowsBefore(body) : null;
+  flushSync(() => b.patch((s) => ({ ...s, items: without(s.items, ids) })));
+  if (body && before) void rowsGlide(body, before);
+  const failed: InventoryItem[] = [];
+  for (const it of list) {
+    try {
+      const r = await deleteItem(b.teamId, it.id);
+      if (r.error !== undefined) {
+        failed.push(it);
+        toast.error(r.error);
+      }
+    } catch {
+      failed.push(it);
+    }
+  }
+  if (failed.length) b.patch((s) => ({ ...s, items: failed.reduce((l, it) => upsert(l, it), s.items) }));
+  return !failed.length;
+}
+
+/** The bar while lines are picked: move them to another group, remove them. */
+function InventoryPickBar({ items }: { items: InventoryItem[] }) {
+  const b = useBusiness();
+  const w = useWords(W);
+  const p = usePick()!;
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [busy, setBusy] = useState<BarBusy>(null);
+  const [menu, setMenu] = useState(false);
+  const chosen = items.filter((i) => p.picked.has(i.id));
+  const n = chosen.length;
+
+  async function moveTo(g: ItemGroup) {
+    setMenu(false);
+    const todo = chosen.filter((i) => i.item_group !== g);
+    if (!todo.length) return;
+    setBusy({ text: w.moving(todo.length), progress: 0 });
+    let done = 0;
+    let ok = 0;
+    try {
+      for (const it of todo) {
+        const r = await saveItem(b.teamId, { ...it, item_group: g });
+        done++;
+        setBusy({ text: w.moving(todo.length), progress: done / todo.length });
+        if (r.error !== undefined) {
+          toast.error(r.error);
+          continue;
+        }
+        ok++;
+        b.patch((s) => ({ ...s, items: upsert(s.items, r.item) }));
+      }
+      if (ok) toast.success(w.moved(ok));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeAll() {
+    if (!n) return;
+    const ok = await confirm({ title: w.removeLines(n), description: w.removeLinesBody, confirmLabel: n === 1 ? w.remove : w.removeN(n), cancelLabel: w.cancel, danger: true });
+    if (!ok) return;
+    setBusy({ text: w.removing(n) });
+    try {
+      if (await removeItems(chosen, b, toast)) toast.success(w.removedN(n), { sound: false });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <PickBar total={items.length} one={w.oneLine} many={w.manyLines} busy={busy} label={w.barLabel} selected={w.selectedN}>
+      <BarMenu
+        label={w.moveTo}
+        open={menu}
+        onOpen={setMenu}
+        disabled={!n}
+        items={ITEM_GROUPS.map((g) => {
+          const go = chosen.filter((i) => i.item_group !== g).length;
+          return {
+            key: g,
+            label: groupLabel(g, b.lang),
+            hint: go === n ? undefined : go ? `${go}/${n}` : w.allThere,
+            icon: <span className={`w-2 h-2 mx-[3px] rounded-[3px] ${isLiability(g) ? "bg-red/70" : "bg-amber/70"}`} aria-hidden />,
+            disabled: !go,
+            onPick: () => void moveTo(g),
+          };
+        })}
+      />
+      <BarDelete onClick={() => void removeAll()} disabled={!n} icon={<TrashIcon className="w-4 h-4" />} />
+    </PickBar>
   );
 }

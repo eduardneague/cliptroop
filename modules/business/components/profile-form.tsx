@@ -11,7 +11,7 @@ import { vatLabel, type Lang } from "../lib/kinds";
 import { formatLei, parseAmount } from "../lib/money";
 import type { Profile } from "../lib/types";
 import { useLang, useWords } from "./context";
-import { Field, SwitchRow, field, primary } from "./ui";
+import { Field, SwitchRow, area, field, primary } from "./ui";
 
 /*
  * Business (1.42.0): the PFA, as its registers' header says it (name, CUI, Trade Register number, address, activity),
@@ -37,7 +37,8 @@ const W = words({
   regNo: { en: "Trade Register no.", ro: "Nr. Registrul Comerțului" },
   regHint: { en: "Like F40/1234/2025.", ro: "De exemplu F40/1234/2025." },
   caen: { en: "Activity (CAEN)", ro: "Activitatea (cod CAEN)" },
-  caenHint: { en: "5911, 7311, 6020… and its words.", ro: "5911, 7311, 6020… și denumirea." },
+  caenHint: { en: "5911, 7311, 6020… and its words; several codes too.", ro: "5911, 7311, 6020… și denumirea; mai multe coduri, dacă ai." },
+  caenCount: { en: (n: number) => `(${n}/500)`, ro: (n: number) => `(${n}/500)` },
   address: { en: "Registered address (sediul profesional)", ro: "Sediul profesional" },
   taxed: { en: "How it's taxed", ro: "Sistemul de impozitare" },
   normaHint: {
@@ -151,8 +152,9 @@ export function ProfileForm({
           <Field label={w.regNo} hint={w.regHint}>
             <input className={field} value={d.reg_no} onChange={(e) => set("reg_no", e.target.value)} maxLength={40} />
           </Field>
-          <Field label={w.caen} hint={w.caenHint}>
-            <input className={field} value={d.caen} onChange={(e) => set("caen", e.target.value)} maxLength={80} />
+          {/* 1.43.0 (the owner: "la activitatea CAEN există limită de caractere"): up to 500, over as many lines as it takes. */}
+          <Field label={w.caen} hint={`${w.caenHint} ${w.caenCount(d.caen.length)}`} className="sm:col-span-2">
+            <textarea className={`${area} min-h-[4.25rem] resize-y`} rows={2} value={d.caen} onChange={(e) => set("caen", e.target.value)} maxLength={500} />
           </Field>
           <Field label={w.address} className="sm:col-span-2">
             <input className={field} value={d.address} onChange={(e) => set("address", e.target.value)} maxLength={300} autoComplete="street-address" />
@@ -163,6 +165,7 @@ export function ProfileForm({
           <Field label={w.taxed} hint={d.regime === "norma" ? w.normaHint : w.realHint}>
             <Segmented
               ariaLabel={w.taxed}
+              size="lg"
               value={d.regime}
               onChange={(v) => set("regime", v)}
               options={[
@@ -181,7 +184,7 @@ export function ProfileForm({
             />
           </Field>
           <Field label={w.started} hint={w.startedHint}>
-            <DateChip value={d.activity_start} onChange={(v) => set("activity_start", v)} onClear={disabled ? undefined : () => set("activity_start", null)} placeholder={w.pickDay} ariaLabel={w.started} disabled={disabled || busy} />
+            <DateChip value={d.activity_start} onChange={(v) => set("activity_start", v)} onClear={disabled ? undefined : () => set("activity_start", null)} placeholder={w.pickDay} ariaLabel={w.started} disabled={disabled || busy} size="field" />
           </Field>
         </div>
 
@@ -192,7 +195,7 @@ export function ProfileForm({
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label={w.firstDay}>
-              <DateChip value={d.opening_date} onChange={(v) => set("opening_date", v)} onClear={disabled ? undefined : () => set("opening_date", null)} placeholder={w.fromStart} ariaLabel={w.firstDayAria} disabled={disabled || busy} />
+              <DateChip value={d.opening_date} onChange={(v) => set("opening_date", v)} onClear={disabled ? undefined : () => set("opening_date", null)} placeholder={w.fromStart} ariaLabel={w.firstDayAria} disabled={disabled || busy} size="field" />
             </Field>
             <Field label={w.cash} problem={cash == null ? w.amountLike : null}>
               <input className={`${field} text-right tabular-nums`} value={d.opening_cash} onChange={(e) => set("opening_cash", e.target.value)} inputMode="decimal" placeholder={w.zero} />

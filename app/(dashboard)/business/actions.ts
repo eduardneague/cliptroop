@@ -103,7 +103,8 @@ export async function saveProfile(teamId: string, raw: Partial<Record<keyof Prof
     cui: str(raw.cui, 20).replace(/\s+/g, "").toUpperCase(),
     reg_no: str(raw.reg_no, 40).toUpperCase(),
     address: str(raw.address, 300),
-    caen: str(raw.caen, 80),
+    // 1.43.0: up to 500 characters (migration 0121; 80 before it): a code with its name, or several.
+    caen: str(raw.caen, 500),
     regime: (REGIMES as readonly string[]).includes(raw.regime as string) ? (raw.regime as string) : "real",
     vat: (VAT_STATES as readonly string[]).includes(raw.vat as string) ? (raw.vat as string) : "none",
     activity_start: dayOrNull(raw.activity_start),
@@ -133,6 +134,8 @@ export async function saveProfile(teamId: string, raw: Partial<Record<keyof Prof
     if ([...closed].some((y) => y >= first)) return { error: m.openingClosed };
   }
   const { data, error } = await c.supabase.from("business_profiles").upsert(row, { onConflict: "team_id" }).select(PROFILE_COLS).single();
+  // A database without 0121 still holds the activity to 80 characters: said so, nothing cut.
+  if (error && error.code === "23514" && /caen/i.test(error.message) && row.caen.length > 80) return { error: m.caenLong };
   if (error) return { error: problem(m, error, m.saveDetails) };
   return { profile: toProfile(data as Record<string, unknown>) };
 }

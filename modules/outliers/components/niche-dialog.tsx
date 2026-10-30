@@ -338,12 +338,17 @@ export function NicheDialog({
               </p>
               <p className="text-[12px] text-ink-soft">They always count. The best way to tell ClipTroop what you mean.</p>
             </div>
-            {!finding && (
-              <button type="button" onClick={() => setFinding(true)} className={`${BTN} flex-shrink-0 text-ink`}>
-                <PlusIcon className="w-4 h-4" />
-                Add channels
-              </button>
-            )}
+            {/* 1.43.0: one button that turns into Done while channels are being added (Done used to be a word under
+                the search, on its own). */}
+            <button
+              type="button"
+              onClick={() => setFinding((f) => !f)}
+              aria-expanded={finding}
+              className={`${BTN} flex-shrink-0 ${finding ? "!border-amber/50 !bg-amber/10 !text-ink" : "text-ink"}`}
+            >
+              {finding ? <CheckIcon className="w-4 h-4 text-amber" /> : <PlusIcon className="w-4 h-4" />}
+              {finding ? "Done" : "Add channels"}
+            </button>
           </div>
           {loaded === false && <p className="text-[12.5px] text-ink-faint">Its channels couldn&rsquo;t be loaded, so they stay as they are.</p>}
           {skeletons > 0 && (
@@ -406,13 +411,8 @@ export function NicheDialog({
           )}
           {q && !matches.length && <p className="text-[12.5px] text-ink-faint">None of its channels is called &ldquo;{find.trim()}&rdquo;.</p>}
           {finding && (
-            <div className="rounded-xl bg-surface-2/50 p-3">
+            <div className="rounded-xl border border-line/10 bg-surface-2/50 p-3 animate-[fadein_.18s_ease]">
               <ChannelFinder picked={new Set(channels.map((c) => c.id))} onPick={pick} autoFocus />
-              <div className="mt-2 flex justify-end">
-                <button type="button" onClick={() => setFinding(false)} className="text-[12.5px] font-semibold text-ink-soft hover:text-ink">
-                  Done
-                </button>
-              </div>
             </div>
           )}
           <div className="flex items-start gap-3 pt-1">

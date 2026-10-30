@@ -41,6 +41,7 @@ import { XpCheersHost } from "@/modules/profile/components/xp-cheers-host";
 import { LookScreenHost } from "@/components/ui/look-screen";
 import { HashFlash } from "@/components/ui/hash-flash";
 import { WebVitals } from "@/components/web-vitals";
+import { OverflowMarquee } from "@/components/ui/overflow-marquee";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -123,6 +124,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
         <GlassSync look={look} />
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+        {/* 1.43.0: words cut short with "…" in a list, menu or dropdown slide into view while pointed at. */}
+        <OverflowMarquee />
         {/* Keeps this device's push notifications working after logging in again. */}
         <PushKeeper userId={user!.id} deviceHash={(await cookies()).get(PUSH_COOKIE)?.value ?? null} />
         {/* The team's colours for shorts and long videos, everywhere. */}

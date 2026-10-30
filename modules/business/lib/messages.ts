@@ -41,6 +41,10 @@ export const MSG = words({
   },
   openingClosed: { en: "The opening balances carry into a closed year. Reopen it first.", ro: "Soldurile inițiale se reportează într-un an închis. Redeschide-l mai întâi." },
   saveDetails: { en: "Couldn't save the details. Try again.", ro: "Datele nu s-au putut salva. Încearcă din nou." },
+  caenLong: {
+    en: "The activity is longer than this database takes (80 characters): run migration 0121, then save again.",
+    ro: "Activitatea e mai lungă decât acceptă baza de date (80 de caractere): rulează migrarea 0121, apoi salvează din nou.",
+  },
   // Income sources.
   sourceName: { en: "Give the source a name (“Content creation”, “Copyright”…).", ro: "Dă un nume sursei („Creare de conținut”, „Drepturi de autor”…)." },
   saveSource: { en: "Couldn't save the source. Try again.", ro: "Sursa nu s-a putut salva. Încearcă din nou." },

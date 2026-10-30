@@ -14,7 +14,7 @@ const ok = (c: boolean, m: string) => {
 const read = (p: string) => readFileSync(join(__dirname, "..", p), "utf8");
 
 const panel = read("modules/outliers/components/video-panel.tsx");
-const body = panel.slice(panel.indexOf("export function VideoPanel"), panel.indexOf("function ScoreNote"));
+const body = panel.slice(panel.indexOf("export function VideoPanel"), panel.indexOf("function ScoreMath"));
 ok(
   /\) : d && v \? \(\s*(\/\/[^\n]*\n\s*)?<VideoTop video=\{v\} side=\{<VideoSide d=\{d\} \/>\}>\s*<VideoRest d=\{d\} \/>\s*<\/VideoTop>\s*\) : preview \? \(\s*<VideoTop video=\{preview\} busy side=\{<PreviewSide v=\{preview\} \/>\}>/.test(body),
   "loading and loaded: the same VideoTop in the same place, so its player stays (and keeps playing)"

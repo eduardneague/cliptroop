@@ -28,6 +28,7 @@ export function AnchoredMenu({
   children,
   label,
   role = "menu",
+  className = "",
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,6 +41,8 @@ export function AnchoredMenu({
   label?: string;
   /** "dialog" for a box of choices that isn't a list of commands (Search's filter pills, 1.30.0). */
   role?: "menu" | "dialog";
+  /** More classes on the box (1.43.0: "glass-floor", never clearer than 82 % over a busy bar). */
+  className?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<MenuPlace | null>(null);
@@ -123,7 +126,7 @@ export function AnchoredMenu({
         ref={panel}
         role={role}
         aria-label={label}
-        className={`pop-menu glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain ${pos.up ? "origin-bottom" : "origin-top"}`}
+        className={`pop-menu glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain ${pos.up ? "origin-bottom" : "origin-top"} ${className}`}
         style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
       >
         {children}

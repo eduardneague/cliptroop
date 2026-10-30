@@ -75,7 +75,7 @@ export function SwitchRow({ on, onChange, label, hint, disabled }: { on: boolean
   );
 }
 
-export function Badge({ children, tone = "plain", title }: { children: React.ReactNode; tone?: "plain" | "amber" | "green" | "red" | "blue" | "violet"; title?: string }) {
+export function Badge({ children, tone = "plain", title, className = "" }: { children: React.ReactNode; tone?: "plain" | "amber" | "green" | "red" | "blue" | "violet"; title?: string; className?: string }) {
   const tones = {
     plain: "bg-surface-2 text-ink-soft",
     amber: "bg-amber/12 text-amber",
@@ -85,7 +85,7 @@ export function Badge({ children, tone = "plain", title }: { children: React.Rea
     violet: "bg-violet/10 text-violet",
   } as const;
   return (
-    <span title={title} className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${tones[tone]}`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${tones[tone]} ${className}`}>
       {children}
     </span>
   );

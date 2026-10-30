@@ -270,7 +270,7 @@ export function ChannelsTab({ data, onEditNiche }: { data: ChannelsData; onEditN
           </button>
         </form>
         <div className="w-[12rem]">
-          <Select value={data.sort} onChange={(v) => go({ sort: (v as ChannelSort) ?? "rate" })} options={CHANNEL_SORTS.map((s) => ({ value: s.id, label: s.label }))} ariaLabel="Sort channels" />
+          <Select value={data.sort} onChange={(v) => go({ sort: (v as ChannelSort) ?? "rate" })} options={CHANNEL_SORTS.map((s) => ({ value: s.id, label: s.label }))} ariaLabel="Sort channels" size="bar" />
         </div>
         <LayoutSwitch value={layout} onChange={setLayout} className="hidden sm:inline-flex" />
         {!own && ctx.canManage && (
@@ -301,7 +301,7 @@ export function ChannelsTab({ data, onEditNiche }: { data: ChannelsData; onEditN
                   </span>
                 </button>
                 {own && ctx.canManage && (
-                  <button type="button" onClick={() => addOne(c).then(() => setLook((l) => (l ? { ...l, rows: l.rows.filter((x) => x.id !== c.id) } : l)))} className={`${BTN} h-8 px-2.5 text-[12.5px]`} title={`One of ${own.name}'s channels: it always counts`}>
+                  <button type="button" onClick={() => addOne(c).then(() => setLook((l) => (l ? { ...l, rows: l.rows.filter((x) => x.id !== c.id) } : l)))} className={`${BTN} !h-8 px-2.5 text-[12.5px]`} title={`One of ${own.name}'s channels: it always counts`}>
                     <PlusIcon className="w-3.5 h-3.5" />
                     Add
                   </button>

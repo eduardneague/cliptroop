@@ -282,3 +282,105 @@ export function pageAway(page: HTMLElement): Away {
   });
   return { out, collapse: () => Promise.resolve(), restore };
 }
+
+/** A color of the theme, for an animation's frames (a variable can't be read inside them everywhere). */
+function themeColor(name: string, alpha: number): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
+  return v ? `rgb(${v} / ${alpha})` : `rgba(220, 38, 38, ${alpha})`;
+}
+
+/**
+ * 1.43.0: rows of a real table (<tr>: the cash book) on their way out, as rowAway draws them: tinted red, a red line
+ * through the title, off to the left. A table row can't shrink its height away, and isn't a box things can be placed
+ * in on every browser, so each cell is tinted (a shadow inside it, over its background and under its words) and slides
+ * on its own, and the line is drawn in the title's own cell. The gap closes once the table is drawn without them: take
+ * rowsBefore() first, then rowsGlide() (collapse does nothing here).
+ */
+export function tableRowsAway(rows: HTMLTableRowElement[]): Away | null {
+  if (!rows.length) return null;
+  const ours: Animation[] = [];
+  const extra: HTMLElement[] = [];
+  const cellsOf = (r: HTMLTableRowElement) => Array.from(r.cells) as HTMLElement[];
+  const restore = () => {
+    ours.forEach((a) => a.cancel());
+    extra.forEach((e) => e.remove());
+    if (!motionReduced()) rows.forEach((r) => cellsOf(r).forEach((c) => c.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: EASE_OUT })));
+  };
+  if (motionReduced()) {
+    const fades = rows.flatMap((r) =>
+      cellsOf(r).map((c) => {
+        const a = c.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" });
+        ours.push(a);
+        return done(a);
+      })
+    );
+    return { out: Promise.all(fades).then(() => undefined), collapse: () => Promise.resolve(), restore };
+  }
+  const clear = themeColor("red", 0);
+  const tint = themeColor("red", 0.09);
+  const step = Math.min(60, 360 / rows.length);
+  const outs = rows.map((row, i) => {
+    const delay = i * step;
+    const cells = cellsOf(row);
+    // 1. Tinted red, and a line drawn through the title.
+    cells.forEach((c) => ours.push(c.animate([{ boxShadow: `inset 0 0 0 999px ${clear}` }, { boxShadow: `inset 0 0 0 999px ${tint}` }], { duration: 180, delay, fill: "both" })));
+    const title = row.querySelector<HTMLElement>("[data-row-title]");
+    const host = title?.closest<HTMLElement>("td, th");
+    let drawn: Promise<void> = new Promise((r) => setTimeout(r, delay + 200));
+    if (title && host) {
+      if (getComputedStyle(host).position === "static") host.style.position = "relative";
+      const { lines, anim } = strike(host, title, 2, 210, delay);
+      extra.push(...lines);
+      drawn = anim;
+    }
+    // 2. Off to the left, fading and softening, every cell together.
+    return drawn.then(() => {
+      if (i === 0) sounds.remove();
+      return Promise.all(
+        cells.map((c) => {
+          const slide = c.animate(
+            [
+              { transform: "translateX(0)", opacity: 1, filter: "blur(0)" },
+              { transform: "translateX(-56px)", opacity: 0, filter: "blur(2px)" },
+            ],
+            { duration: 280, easing: EASE_IN, fill: "forwards" }
+          );
+          ours.push(slide);
+          return done(slide);
+        })
+      ).then(() => undefined);
+    });
+  });
+  return { out: Promise.all(outs).then(() => undefined), collapse: () => Promise.resolve(), restore };
+}
+
+/** 1.43.0: where each row of a list is now (its [data-flip] name → its top), before it's drawn again without some. */
+export function rowsBefore(body: HTMLElement): Map<string, number> {
+  const at = new Map<string, number>();
+  body.querySelectorAll<HTMLElement>(":scope > [data-flip]").forEach((el) => at.set(el.dataset.flip!, el.getBoundingClientRect().top));
+  return at;
+}
+
+/**
+ * …then each glides from where it was to where it is (the rows under the ones that left move up into the gap). Only
+ * what can be seen moves (`clip`: the box that scrolls them); a table row moves cell by cell.
+ */
+export function rowsGlide(body: HTMLElement, before: Map<string, number>, clip?: Element | null): Promise<void> {
+  if (motionReduced()) return Promise.resolve();
+  const view = (clip ?? document.documentElement).getBoundingClientRect();
+  const top = Math.max(0, view.top);
+  const bottom = Math.min(window.innerHeight, view.bottom);
+  const jobs: Promise<void>[] = [];
+  body.querySelectorAll<HTMLElement>(":scope > [data-flip]").forEach((el) => {
+    const was = before.get(el.dataset.flip!);
+    if (was === undefined) return;
+    const r = el.getBoundingClientRect();
+    const dy = was - r.top;
+    if (Math.abs(dy) < 1) return;
+    // Not on screen on the way: nobody sees it move.
+    if (Math.max(r.bottom, r.bottom + dy) < top || Math.min(r.top, r.top + dy) > bottom) return;
+    const parts = el instanceof HTMLTableRowElement ? (Array.from(el.cells) as HTMLElement[]) : [el];
+    parts.forEach((p) => jobs.push(done(p.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 320, easing: EASE_IN_OUT }))));
+  });
+  return Promise.all(jobs).then(() => undefined);
+}

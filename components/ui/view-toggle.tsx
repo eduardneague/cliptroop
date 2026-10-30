@@ -7,7 +7,8 @@ import { usePendingNav } from "./pending-nav";
  * Cards / table (1.27.5): the choice is remembered (a cookie, as before)
  * and the list answers at once with the other view's skeleton
  * (<PendingSwap>, keys "grid" / "table") until it's there. Without
- * JavaScript the form still goes through the server.
+ * JavaScript the form still goes through the server. 1.43.0: 36 px tall, as
+ * the Select and Filters buttons beside it.
  */
 export function ViewToggle({
   value,
@@ -48,7 +49,7 @@ export function ViewToggle({
               }
               go(hrefs[mode], mode);
             }}
-            className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${value === mode ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"}`}
+            className={`w-[30px] h-[30px] rounded-md flex items-center justify-center transition-colors ${value === mode ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"}`}
           >
             {mode === "grid" ? <GridIcon className="w-[15px] h-[15px]" /> : <ListIcon className="w-[15px] h-[15px]" />}
           </button>

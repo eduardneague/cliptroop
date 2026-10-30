@@ -261,10 +261,10 @@ function KeywordDetail({ k, data, onPick, inSheet = false }: { k: KeywordStat; d
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Link href={nav.href({ tab: "ideas", params: { topic: k.k } })} className={`${BTN_MAIN} h-10`}>
+        <Link href={nav.href({ tab: "ideas", params: { topic: k.k } })} className={`${BTN_MAIN} !h-10`}>
           Ideas about it
         </Link>
-        <Link href={nav.href({ tab: "search", params: { q: k.k } })} className={`${BTN} h-10`}>
+        <Link href={nav.href({ tab: "search", params: { q: k.k } })} className={`${BTN} !h-10`}>
           Search it
         </Link>
       </div>

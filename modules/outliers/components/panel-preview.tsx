@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { PlayIcon } from "@/components/ui/icons";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ExpandIcon, InfoIcon, PlayIcon, ShrinkIcon } from "@/components/ui/icons";
 import { compact, duration } from "../lib/filters";
 import { BAND_LABEL, band, multText, usualThen } from "../lib/scores";
 import type { OutlierVideo } from "../lib/types";
@@ -88,12 +88,18 @@ export function PreviewSide({ v }: { v: OutlierVideo }) {
         </p>
       </div>
       <div className={`grid gap-2.5 ${short ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
-        <div className="rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }}>
-          <div className="text-[11.5px] font-semibold text-ink-soft truncate">× its usual</div>
-          <div className="mt-1 font-display text-[28px] leading-none font-semibold mult" style={{ color: h.text }}>
+        {/* As the loaded panel's (1.43.0): its usual in brackets, the multiplier big, how it's worked out once it's in. */}
+        <div className="score-tile rounded-xl px-3.5 py-3 min-w-0" style={{ background: h.soft }}>
+          <div className="flex items-center gap-1 text-[11.5px] font-semibold text-ink-soft min-w-0">
+            <span className="truncate">
+              × its usual{usual ? <span className="tabular-nums font-medium"> ({compact(usual)})</span> : null}
+            </span>
+            <InfoIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+          </div>
+          <div className="mt-1.5 font-display text-[40px] sm:text-[44px] leading-[0.95] font-semibold tracking-tight mult tabular-nums" style={{ color: h.text }}>
             {multText(v.score)}
           </div>
-          <div className="mt-1 text-[11.5px] text-ink-soft truncate">{then && v.views ? `${compact(v.views)} ÷ ${compact(then)}` : BAND_LABEL[band(v.score)]}</div>
+          <div className="mt-1.5 text-[11.5px] text-ink-soft truncate">{BAND_LABEL[band(v.score)]}</div>
         </div>
         <Tile label="Views" value={compact(v.views)} sub={usual ? `usual ${compact(usual)}` : undefined} />
         <Tile label="Views per hour" value={v.vph ? compact(v.vph) : "–"} />
@@ -173,12 +179,34 @@ export function ChannelLoadingBody({ pre }: { pre: { title: string; avatar: stri
  */
 const pressed = new Map<string, ReturnType<typeof setTimeout> | null>();
 
-/** The video: its thumbnail with a play button, then YouTube's player once pressed. */
+/** Full screen works in this browser (an iPhone's Safari only puts a video itself full screen: YouTube's own button). */
+const noop = () => () => {};
+const canFull = () => typeof document !== "undefined" && !!document.fullscreenEnabled && typeof HTMLElement.prototype.requestFullscreen === "function";
+
+/** Typing somewhere (a box, a menu, a window over the panel): F is a letter there, not full screen. */
+function typing(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return true;
+  return !!document.querySelector('[role="menu"], [role="listbox"], [role="alertdialog"], [role="dialog"][aria-modal="true"]:not([data-outliers-panel])');
+}
+
+/**
+ * The video: its thumbnail with a play button, then YouTube's player once pressed.
+ *
+ * 1.43.0, full screen (the owner: "i cant full screen videos from here, i want to be able to press f or hit full screen
+ * on the video… sometimes you can, but sometimes the youtube playback just doesnt let you"): YouTube's own F and
+ * button only work once its player has the keyboard (a click inside it), and its button only with full screen allowed
+ * to it by name. Now F works from anywhere in the panel (and starts the video if it hadn't), a Full screen button sits
+ * under the player, and the player is allowed full screen outright. Esc or F again leaves it.
+ */
 export function Player({ id, short, title }: { id: string; short: boolean; title: string }) {
   const [on, setOn] = useState(() => ({ id, play: pressed.has(id) }));
   // Another video in the same place: its picture first (unless it was just playing).
   if (on.id !== id) setOn({ id, play: pressed.has(id) });
   const play = on.id === id && on.play;
+  const box = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  const fullOk = useSyncExternalStore(noop, canFull, () => false);
   useEffect(() => {
     if (!play) return;
     const later = pressed.get(id);
@@ -191,25 +219,82 @@ export function Player({ id, short, title }: { id: string; short: boolean; title
       );
     };
   }, [play, id]);
+  useEffect(() => {
+    const changed = () => setFull(!!box.current && document.fullscreenElement === box.current);
+    document.addEventListener("fullscreenchange", changed);
+    return () => document.removeEventListener("fullscreenchange", changed);
+  }, []);
+  const toggleFull = useCallback(() => {
+    const el = box.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+      return;
+    }
+    // Full screen and playing in one go (the picture would be a still otherwise).
+    setOn({ id, play: true });
+    void el.requestFullscreen?.({ navigationUI: "hide" }).catch(() => {});
+  }, [id]);
+  // F, from anywhere in the panel (YouTube's own F answers while its player has the keyboard).
+  useEffect(() => {
+    if (!fullOk) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key !== "f" && e.key !== "F") || e.metaKey || e.ctrlKey || e.altKey || e.repeat || e.defaultPrevented) return;
+      if (!box.current?.isConnected || typing(e)) return;
+      e.preventDefault();
+      toggleFull();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [fullOk, toggleFull]);
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-black ring-1 ring-line/10 ${short ? "aspect-[9/16] w-full max-w-[300px] mx-auto sm:mx-0" : "aspect-video w-full"}`}>
-      {play ? (
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-          className="absolute inset-0 w-full h-full"
-        />
-      ) : (
-        <button type="button" onClick={() => setOn({ id, play: true })} className="group/play absolute inset-0" aria-label={`Play “${title}”`}>
-          <Thumb id={id} kind={short ? "short" : "long"} eager sizes="(min-width: 900px) 800px, 100vw" />
-          <span className="absolute inset-0 bg-black/10 group-hover/play:bg-black/25 transition-colors" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-11 rounded-xl bg-[#ff0033] flex items-center justify-center shadow-lg transition-transform group-hover/play:scale-105">
-            <PlayIcon className="w-6 h-6 text-white" />
-          </span>
-        </button>
+    <div className={short ? "w-full max-w-[300px] mx-auto sm:mx-0" : "w-full"}>
+      <div ref={box} data-player="" className={`player-box relative overflow-hidden rounded-2xl bg-black ring-1 ring-line/10 ${short ? "aspect-[9/16] w-full" : "aspect-video w-full"}`}>
+        {play ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&playsinline=1&fs=1`}
+            title={title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="absolute inset-0 w-full h-full"
+          />
+        ) : (
+          <button type="button" onClick={() => setOn({ id, play: true })} className="group/play absolute inset-0" aria-label={`Play “${title}”`}>
+            <Thumb id={id} kind={short ? "short" : "long"} eager sizes="(min-width: 900px) 800px, 100vw" />
+            <span className="absolute inset-0 bg-black/10 group-hover/play:bg-black/25 transition-colors" />
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-11 rounded-xl bg-[#ff0033] flex items-center justify-center shadow-lg transition-transform group-hover/play:scale-105">
+              <PlayIcon className="w-6 h-6 text-white" />
+            </span>
+          </button>
+        )}
+        {full && (
+          <button
+            type="button"
+            onClick={toggleFull}
+            aria-label="Leave full screen"
+            title="Leave full screen (F or Esc)"
+            className="player-leave absolute top-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-lg bg-black/60 text-white px-2.5 h-8 text-[12.5px] font-semibold backdrop-blur-sm hover:bg-black/75"
+          >
+            <ShrinkIcon className="w-4 h-4" />
+            Esc
+          </button>
+        )}
+      </div>
+      {fullOk && (
+        <div className="mt-2 flex items-center justify-end gap-2 text-[12px] text-ink-faint">
+          <button
+            type="button"
+            onClick={toggleFull}
+            aria-keyshortcuts="F"
+            title="Full screen (F)"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-2.5 h-8 font-semibold text-ink-soft hover:text-ink hover:border-line/30 hover:bg-surface-2/60 transition-colors"
+          >
+            <ExpandIcon className="w-3.5 h-3.5" />
+            Full screen
+            <kbd className="ml-0.5 rounded border border-line/20 px-1 font-sans text-[10.5px] leading-[16px] text-ink-faint">F</kbd>
+          </button>
+        </div>
       )}
     </div>
   );

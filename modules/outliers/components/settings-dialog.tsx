@@ -83,7 +83,7 @@ export function SettingsDialog({ teamId, open, onClose, settings, canEdit, tab: 
                         </span>
                       )}
                     </span>
-                    <button type="button" onClick={() => unhide(b.id)} className={`${BTN} h-8`}>
+                    <button type="button" onClick={() => unhide(b.id)} className={`${BTN} !h-8`}>
                       Show again
                     </button>
                   </li>

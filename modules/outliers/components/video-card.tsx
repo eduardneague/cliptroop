@@ -69,20 +69,35 @@ export function VideoCard({ v, eager = false, hideChannel = false }: { v: Outlie
 }
 
 /** A Short's card: tall, like YouTube's Shorts shelf. */
-export function ShortCard({ v, eager = false }: { v: OutlierVideo; eager?: boolean }) {
+export function ShortCard({ v, eager = false, staged = false }: { v: OutlierVideo; eager?: boolean; /** 1.43.0: centred on a soft wash of its own picture, as wide as the card (Saved). */ staged?: boolean }) {
   const { openVideo, openChannel } = useOutliersNav();
+  const thumb = (
+    <div className="relative">
+      <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-[9/16] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
+        <Thumb id={v.id} kind="short" eager={eager} sizes="(min-width: 1400px) 200px, 40vw" tint={v.colors?.[0]} />
+        <Mult score={v.score} projected={v.projected} on className="absolute top-2 left-2" />
+        <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
+        <span className="absolute left-2 bottom-2 text-[12.5px] font-semibold text-white tabular-nums drop-shadow">{compact(v.views)} views</span>
+      </button>
+      <CardMenu v={v} overlay />
+      <SaveButton videoId={v.id} overlay />
+    </div>
+  );
   return (
     <article className="group relative flex flex-col min-w-0">
-      <div className="relative">
-        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-[9/16] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 transition-shadow hover:ring-line/30 focus-visible:ring-2 focus-visible:ring-amber">
-          <Thumb id={v.id} kind="short" eager={eager} sizes="(min-width: 1400px) 200px, 40vw" tint={v.colors?.[0]} />
-          <Mult score={v.score} projected={v.projected} on className="absolute top-2 left-2" />
-          <span className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" aria-hidden />
-          <span className="absolute left-2 bottom-2 text-[12.5px] font-semibold text-white tabular-nums drop-shadow">{compact(v.views)} views</span>
-        </button>
-        <CardMenu v={v} overlay />
-        <SaveButton videoId={v.id} overlay />
-      </div>
+      {staged ? (
+        // The card's width, the Short in the middle on a blur of itself (the owner: "it doesnt fill the entire space, at
+        // least center the shorts").
+        <div className="short-stage relative isolate rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10">
+          <span aria-hidden className="absolute inset-0 -z-10 pointer-events-none">
+            <Thumb id={v.id} kind="short" sizes="120px" tint={v.colors?.[0]} className="scale-[2.6] blur-2xl saturate-150 opacity-70" />
+          </span>
+          <span aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-black/5 via-transparent to-black/20 pointer-events-none" />
+          <div className="relative mx-auto w-[58%] max-w-[220px] py-3.5">{thumb}</div>
+        </div>
+      ) : (
+        thumb
+      )}
       <h3 className="mt-2 text-[13px] font-semibold leading-snug line-clamp-2">
         <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/30 underline-offset-2">
           {v.title}
@@ -279,12 +294,13 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
   const h = heat(v.score);
   // The usual its × is measured against (1.31.8), so the line under it adds up.
   const usual = usualThen(v) ?? v.channel.usual;
+  if (short) return <FeatureShort v={v} usual={usual} />;
   return (
-    <article className={`group relative grid rounded-2xl border border-line/10 bg-surface overflow-hidden min-w-0 h-full ${short ? "grid-cols-[minmax(0,42%)_minmax(0,1fr)]" : "sm:grid-rows-[auto_1fr]"}`}>
+    <article className="group relative grid rounded-2xl border border-line/10 bg-surface overflow-hidden min-w-0 h-full sm:grid-rows-[auto_1fr]">
       <div className="relative">
-        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className={`relative block w-full overflow-hidden bg-surface-2 ${short ? "h-full aspect-[9/16]" : "aspect-video"}`}>
+        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full overflow-hidden bg-surface-2 aspect-video">
           <Thumb id={v.id} kind={v.kind} eager sizes="(min-width: 1180px) 50vw, 100vw" tint={v.colors?.[0]} />
-          {!short && <DurationChip secs={v.durationS} />}
+          <DurationChip secs={v.durationS} />
         </button>
         <CardMenu v={v} overlay />
         <SaveButton videoId={v.id} overlay />
@@ -297,7 +313,7 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
               {multText(v.score)}
             </div>
           </div>
-          <Spike peers={v.peers} at={v.peerI} score={v.score} width={short ? 96 : 150} height={short ? 40 : 52} />
+          <Spike peers={v.peers} at={v.peerI} score={v.score} width={150} height={52} />
         </div>
         <h3 className="mt-3 font-display text-[19px] sm:text-[22px] leading-[1.2] font-semibold line-clamp-3 text-balance">
           <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/25 underline-offset-[3px]">
@@ -320,5 +336,98 @@ export function FeatureCard({ v }: { v: OutlierVideo }) {
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * The headline Short (1.43.0; the owner: "biggest outlier shorts looks like this, awful design, make it better": a tall
+ * picture squeezed into a column and cut at the sides, the words in a narrow strip with empty space under them). From a
+ * tablet up it's a poster: the Short fills the two-by-two place, its multiplier as a big badge, the spike, the title
+ * and the channel over a dark fade at the foot. On a phone the Short keeps its own shape beside its numbers.
+ */
+function FeatureShort({ v, usual }: { v: OutlierVideo; usual: number | null }) {
+  const { openVideo, openChannel } = useOutliersNav();
+  const h = heat(v.score);
+  const meta = (
+    <>
+      <span className="tabular-nums font-semibold">{compact(v.views)}</span> views
+      {usual ? <> vs {compact(usual)} usual</> : null} · <TimeAgo iso={v.publishedAt} />
+    </>
+  );
+  return (
+    <>
+      {/* Phones: the Short beside its numbers, on a soft wash of itself. */}
+      <article className="sm:hidden group relative isolate flex gap-3.5 rounded-2xl border border-line/10 bg-surface p-3 overflow-hidden min-w-0">
+        <span aria-hidden className="absolute inset-0 -z-10 opacity-[0.16] pointer-events-none">
+          <Thumb id={v.id} kind="short" sizes="120px" tint={v.colors?.[0]} className="scale-[2.6] blur-2xl saturate-150" />
+        </span>
+        <div className="relative w-[42%] max-w-[190px] flex-shrink-0">
+          <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="relative block w-full aspect-[9/16] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10">
+            <Thumb id={v.id} kind="short" eager sizes="45vw" tint={v.colors?.[0]} />
+          </button>
+          <CardMenu v={v} overlay />
+          <SaveButton videoId={v.id} overlay />
+        </div>
+        <div className="min-w-0 flex-1 flex flex-col py-1">
+          <div className="text-[11px] font-semibold text-ink-faint leading-tight">× its channel&rsquo;s usual</div>
+          <div className="mt-1 font-display font-bold leading-none mult text-[46px] tracking-tight" style={{ color: h.text }}>
+            {multText(v.score)}
+          </div>
+          <Spike peers={v.peers} at={v.peerI} score={v.score} width={104} height={34} className="mt-2" />
+          <h3 className="mt-3 font-display text-[17px] leading-[1.22] font-semibold line-clamp-3 [overflow-wrap:anywhere]">
+            <button type="button" onClick={() => openVideo(v.id, v)} className="text-left hover:underline decoration-ink/25 underline-offset-[3px]">
+              {v.title}
+            </button>
+          </h3>
+          <div className="mt-auto pt-3 min-w-0 text-[12px]">
+            <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="block font-semibold truncate hover:underline max-w-full">
+              {v.channel.title}
+            </button>
+            <span className="block text-ink-faint truncate">{meta}</span>
+          </div>
+        </div>
+      </article>
+
+      {/* From a tablet up: a poster of the Short; its multiplier at the top, where it's seen first, the title and the channel
+          at the foot. */}
+      <article className="feature-short hidden sm:block group relative isolate h-full min-h-[440px] rounded-2xl overflow-hidden bg-black ring-1 ring-line/10 min-w-0">
+        <button type="button" onClick={() => openVideo(v.id, v)} aria-label={`Open “${v.title}”`} className="absolute inset-0 block">
+          <Thumb id={v.id} kind="short" eager sizes="(min-width: 1400px) 420px, 50vw" tint={v.colors?.[0]} className="transition-transform duration-500 group-hover:scale-[1.03]" />
+          <span aria-hidden className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/0 via-45% to-black/90" />
+        </button>
+        <CardMenu v={v} overlay />
+        <SaveButton videoId={v.id} overlay />
+        <div className="absolute left-0 top-0 p-5 text-white pointer-events-none">
+          <div className="text-[11.5px] font-semibold text-white/80 drop-shadow">× its channel&rsquo;s usual</div>
+          <span
+            className="mult mt-1.5 inline-flex items-center rounded-xl px-3 h-[60px] font-display font-bold text-[48px] leading-none tracking-tight shadow-[0_6px_24px_rgb(0_0_0/0.35)]"
+            style={{ background: h.solid, color: h.on }}
+          >
+            {multText(v.score)}
+          </span>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 p-5 text-white pointer-events-none">
+          <h3 className="font-display text-[22px] leading-[1.18] font-semibold line-clamp-3 text-balance drop-shadow-[0_1px_8px_rgb(0_0_0/0.5)]">
+            <button type="button" onClick={() => openVideo(v.id, v)} className="pointer-events-auto text-left hover:underline decoration-white/40 underline-offset-[3px]">
+              {v.title}
+            </button>
+          </h3>
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0 pointer-events-auto">
+              <button type="button" onClick={() => openChannel(v.channelId, v.channel)} aria-label={`Open ${v.channel.title}`} className="rounded-full ring-2 ring-white/25 flex-shrink-0">
+                <ChannelAvatar src={v.channel.avatar} title={v.channel.title} size={32} />
+              </button>
+              <div className="min-w-0 text-[12.5px]">
+                <button type="button" onClick={() => openChannel(v.channelId, v.channel)} className="block max-w-full font-semibold truncate hover:underline">
+                  {v.channel.title}
+                </button>
+                <span className="block text-white/75 truncate">{meta}</span>
+              </div>
+            </div>
+            <Spike peers={v.peers} at={v.peerI} score={v.score} width={96} height={36} onDark className="flex-shrink-0" />
+          </div>
+        </div>
+      </article>
+    </>
   );
 }

@@ -279,9 +279,7 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
     <li className="rounded-2xl border border-line/10 bg-surface p-3 flex flex-col min-w-0">
       {item.kind === "video" && item.video ? (
         item.video.kind === "short" ? (
-          <div className="max-w-[200px]">
-            <ShortCard v={item.video} />
-          </div>
+          <ShortCard v={item.video} staged />
         ) : (
           <VideoCard v={item.video} />
         )
@@ -433,22 +431,22 @@ function SavedIdeaBody({ item }: { item: SavedItem }) {
       {idea.hook && <p className="mt-2 text-[12.5px] text-ink-soft border-l-2 border-amber/50 pl-2.5 leading-relaxed">{idea.hook}</p>}
       <div className="mt-3 flex items-center gap-1.5 flex-wrap">
         {item.projectId ? (
-          <Link href={`/videos/${item.projectId}`} className={`${BTN} h-8 text-[12.5px]`}>
+          <Link href={`/videos/${item.projectId}`} className={`${BTN} !h-8 text-[12.5px]`}>
             <VideoIcon className="w-3.5 h-3.5 text-long" />
             Started: open the video
           </Link>
         ) : item.shortId ? (
-          <Link href={`/shorts/${item.shortId}`} className={`${BTN} h-8 text-[12.5px]`}>
+          <Link href={`/shorts/${item.shortId}`} className={`${BTN} !h-8 text-[12.5px]`}>
             <ShortsIcon className="w-3.5 h-3.5 text-short" />
             Started: open the Short
           </Link>
         ) : (
           <>
-            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "short" : "long")} className={`${BTN_MAIN} h-8 text-[12.5px]`}>
+            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "short" : "long")} className={`${BTN_MAIN} !h-8 text-[12.5px]`}>
               {idea.kind === "short" ? <ShortsIcon className="w-3.5 h-3.5" /> : <VideoIcon className="w-3.5 h-3.5" />}
               {busy ? "Opening…" : idea.kind === "short" ? "Start a Short" : "Start a video"}
             </button>
-            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "long" : "short")} className={`${BTN} h-8 text-[12.5px]`}>
+            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "long" : "short")} className={`${BTN} !h-8 text-[12.5px]`}>
               {idea.kind === "short" ? "As a long video" : "As a Short"}
             </button>
           </>

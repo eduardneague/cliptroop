@@ -10,11 +10,16 @@ import { formatDay, formatLei, sumLei } from "../lib/money";
 import type { Asset } from "../lib/types";
 import { useBusiness, useWords } from "./context";
 import { AssetDialog } from "./asset-dialog";
+import { RegisterHead } from "./register-info";
 import { Badge, Empty, Money, Note, card, primary, quiet } from "./ui";
 
 /*
  * Business (1.42.0): the fixed assets, with this year's amortization (what the fiscal register takes), what's
  * amortized by 31 December and what's left. Each one's card (Fișa mijlocului fix) opens to change it, and downloads.
+ *
+ * 1.43.0: the tab opens with its name and the ⓘ (what a fixed asset is, depreciation, worked examples:
+ * register-info.tsx), New fixed asset beside it; a row's PDF and Excel sit side by side on one line, each with its icon
+ * (the owner: "these two buttons aren't perfectly aligned": the one with an icon sat on its icon's baseline).
  */
 
 const W = words({
@@ -91,15 +96,18 @@ export function AssetsTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        {b.edit && (
-          <button type="button" className={primary} onClick={() => setOpen("new")}>
-            <PlusIcon className="w-4 h-4" />
-            {w.newAsset}
-          </button>
-        )}
-        <p className="text-[12.5px] text-ink-soft max-w-2xl">{w.threshold(formatLei(ASSET_THRESHOLD(2026), b.lang, { decimals: 0 }))}</p>
-      </div>
+      <RegisterHead
+        register="assets"
+        aside={
+          b.edit && (
+            <button type="button" className={primary} onClick={() => setOpen("new")}>
+              <PlusIcon className="w-4 h-4" />
+              {w.newAsset}
+            </button>
+          )
+        }
+      />
+      <p className="text-[12.5px] text-ink-soft max-w-3xl leading-relaxed">{w.threshold(formatLei(ASSET_THRESHOLD(2026), b.lang, { decimals: 0 }))}</p>
       {!rows.length ? (
         <Empty
           title={w.emptyTitle}
@@ -129,7 +137,7 @@ export function AssetsTab() {
                 <th className="px-2 py-2 text-right">{w.deductible}</th>
                 <th className="px-2 py-2 text-right">{w.by3112}</th>
                 <th className="px-2 py-2 text-right">{w.left}</th>
-                <th className="px-2 py-2 text-right w-[150px]" />
+                <th className="px-2 py-2 text-right w-[190px]" />
               </tr>
             </thead>
             <tbody>
@@ -159,20 +167,24 @@ export function AssetsTab() {
                   <td className="px-2 py-2.5 text-right tabular-nums text-ink-soft">
                     <Money value={y.remaining} />
                   </td>
-                  <td className="px-2 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    {files.get(a.id) ? (
-                      <span className="inline-flex items-center gap-0.5 text-[11.5px] text-ink-faint mr-1" title={w.documents}>
-                        <PaperclipIcon className="w-3.5 h-3.5" />
-                        {files.get(a.id)}
-                      </span>
-                    ) : null}
-                    <button type="button" className={quiet} onClick={() => void card_(a, "pdf")} disabled={!!busy} title={w.pdfTitle}>
-                      <DownloadIcon className="w-3.5 h-3.5" />
-                      {busy === `${a.id}:pdf` ? "…" : "PDF"}
-                    </button>
-                    <button type="button" className={quiet} onClick={() => void card_(a, "xlsx")} disabled={!!busy} title={w.xlsxTitle}>
-                      {busy === `${a.id}:xlsx` ? "…" : "Excel"}
-                    </button>
+                  <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    {/* One row of boxes of the same height, centred on each other. */}
+                    <div className="flex items-center justify-end gap-1">
+                      {files.get(a.id) ? (
+                        <span className="inline-flex items-center gap-0.5 h-8 px-1 text-[11.5px] text-ink-faint" title={w.documents}>
+                          <PaperclipIcon className="w-3.5 h-3.5" />
+                          {files.get(a.id)}
+                        </span>
+                      ) : null}
+                      <button type="button" className={`${quiet} border border-line/15`} onClick={() => void card_(a, "pdf")} disabled={!!busy} title={w.pdfTitle}>
+                        {busy === `${a.id}:pdf` ? <span className="biz-spin" aria-hidden /> : <DownloadIcon className="w-3.5 h-3.5" />}
+                        PDF
+                      </button>
+                      <button type="button" className={`${quiet} border border-line/15`} onClick={() => void card_(a, "xlsx")} disabled={!!busy} title={w.xlsxTitle}>
+                        {busy === `${a.id}:xlsx` ? <span className="biz-spin" aria-hidden /> : <DownloadIcon className="w-3.5 h-3.5" />}
+                        Excel
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
