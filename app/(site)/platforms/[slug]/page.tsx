@@ -27,7 +27,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const p = platformOf((await params).slug);
   if (!p) return {};
   return {
-    ...publicMetadata(`/platforms/${p.id}`, `${APP_NAME} and ${p.name}`, `How ${APP_NAME} posts your team's approved shorts to ${p.name}, what it reads back for Analytics, and how to take access back.`),
+    ...publicMetadata(
+      `/platforms/${p.id}`,
+      `${APP_NAME} and ${p.name}`,
+      `How ${APP_NAME} posts your team's approved shorts to ${p.name}, ${p.numbers ? "what it reads back for Analytics" : "what it reads"}, and how to take access back.`
+    ),
     robots: { index: true, follow: true },
   };
 }
@@ -63,8 +67,8 @@ export default async function PlatformPage({ params }: { params: Promise<{ slug:
               Posting to {p.name}, from your team&rsquo;s own account
             </h1>
             <p className="mt-5 text-[17px] sm:text-[18px] leading-relaxed text-ink-soft max-w-[38rem]">
-              {APP_NAME} posts the shorts your team approved to {p.name} at the time you chose, shows every step until it&rsquo;s live, and reads the account&rsquo;s numbers back
-              for Analytics. Here is what it does there, step by step.
+              {APP_NAME} posts the shorts your team approved to {p.name} at the time you chose{p.numbers ? ", shows every step until it’s live, and reads the account’s numbers back for Analytics" : " and shows every step until it’s live"}. Here
+              is what it does there, step by step.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/signup" className={btnMain}>
@@ -98,10 +102,12 @@ export default async function PlatformPage({ params }: { params: Promise<{ slug:
         <section aria-labelledby="numbers-title" className="mt-20 sm:mt-28 grid gap-10 lg:gap-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-center">
           <div>
             <h2 id="numbers-title" className="font-display text-[30px] sm:text-[38px] font-semibold leading-[1.05] tracking-[-0.02em]">
-              {p.name}&rsquo;s numbers, next to the rest
+              {p.numbers ? `${p.name}’s numbers, next to the rest` : "What your team made, counted"}
             </h2>
             <p className="mt-4 text-[16px] leading-relaxed text-ink-soft max-w-[34rem]">
-              With Analytics on, {p.name} sits beside your other platforms: one total or each on its own, every video counted, next to what your team made.
+              {p.numbers
+                ? `With Analytics on, ${p.name} sits beside your other platforms: one total or each on its own, every video counted, next to what your team made.`
+                : `The shorts your team posts to ${p.name} still count in Analytics' production numbers: what your team made and posted. ${APP_NAME} doesn't read ${p.name}'s own numbers.`}
             </p>
             <p className="mt-5 text-[15px]">
               <Link href="/features/analytics" className={textLink}>

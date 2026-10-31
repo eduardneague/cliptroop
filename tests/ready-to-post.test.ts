@@ -35,6 +35,8 @@ ok(same(slotOf(new Date(2026, 9, 27, 16, 9).toISOString()), { date: "2026-10-27"
 
 // --- The card ----------------------------------------------------------------------------------------------------------
 const panel = read("app/(dashboard)/shorts/[id]/schedule-panel.tsx");
+// 1.47.0: the TikTok part has its own file.
+const tiktokCard = read("app/(dashboard)/shorts/[id]/tiktok-fields.tsx");
 ok(/const \[whenMode, setWhenMode\] = useState<"soon" \| "team" \| "custom">\(\(\) => firstWhen\(plannedDate\)\);/.test(panel), "When starts from the short's planned day");
 ok(/const whenOf = \(p: Platform\) => \(whenMode === "soon" \? soon : whenMode === "team" \? teamSlot\(plannedDate, defaultTimes\[p\]\) : when\[p\]\);/.test(panel), "the team's own posting times are used (they were passed in and ignored)");
 ok(!/when\[p\]\.(date|time)/.test(panel), "every check, the review and what's sent go through whenOf");
@@ -44,7 +46,7 @@ ok(/if \(mode === "custom" && whenMode !== "custom"\) setWhen\(/.test(panel), "c
 ok(/options: \{ caption: captionOf\("instagram"\) \}/.test(panel) && /options: \{ \.\.\.tt, caption: captionOf\("tiktok"\) \}/.test(panel) && /options: \{ caption: captionOf\("facebook"\) \}/.test(panel), "one caption for Instagram, TikTok and Facebook, unless one has its own");
 ok(/if \(p === "instagram"\) setIg\(\{ caption: shared \}\);/.test(panel), "its own caption starts from the shared one");
 ok(/caption=\{captionFor\("tiktok"\)\}/.test(panel) && !/<span className=\{label\}>Caption<\/span>\s*<textarea value=\{v\.caption\}/.test(panel), "TikTok's caption is the card's (still there to edit, as TikTok asks)");
-ok(/Posting to <b className="text-ink">\{creator\.nickname\}<\/b>/.test(panel) && /Who can see this video/.test(panel) && /placeholder="Choose…"/.test(panel) && /Disclose commercial content/.test(panel) && /Music Usage Confirmation/.test(panel), "TikTok's review asks for these, all still on the card");
+ok(/Posting to <b className="text-ink">\{creator\.nickname\}<\/b>/.test(panel + tiktokCard) && /Who can see this video/.test(tiktokCard) && /placeholder="Choose…"/.test(tiktokCard) && /Disclose commercial content/.test(tiktokCard) && /Music Usage Confirmation/.test(tiktokCard), "TikTok's review asks for these, all still on the card");
 // 1.34.5, the owner: the row of tiles over the card was "useless … we can already see what's posted from the ones below".
 ok(!/showTiles|tileFor|jump\(p\)|Where it's posted|postedCount/.test(panel), "no row of tiles (or count) over the card");
 ok(/<PlatformMark platform=\{p\} posted=\{postedOn\(p\)\} className="w-8 h-8 rounded-lg" tick="md" \/>/.test(panel), "each platform's own row: its logo, ticked when it's posted");

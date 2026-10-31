@@ -22,6 +22,19 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.47.0",
+    date: "2026-10-31",
+    title: "TikTok posting, exactly as TikTok asks",
+    changes: [
+      { kind: "better", text: "Posting to TikTok uses TikTok's own words: the label your video will get (“Promotional content” or “Paid partnership”), why Only me is off for branded content, and the agreement to TikTok's Branded Content Policy and Music Usage Confirmation, on the card and again right before you post." },
+      { kind: "better", text: "With commercial content on, Post now and Schedule wait until you say whether it promotes you, someone else or both. Ticking Branded content while Only me is picked clears it, so you choose again." },
+      { kind: "better", text: "If TikTok won't take a post from the account right now, the card stops and says so, with Try again. It also says how long the account's videos may be, and that TikTok can take a few minutes to show a post." },
+      { kind: "better", text: "TikTok now fetches the video itself from a private copy that's removed once it has it, as TikTok asks of apps that keep your videos. Until that's set up, ClipTroop sends the file, as before." },
+      { kind: "better", text: "After posting, the card says plainly when a TikTok post is private, and why. A TikTok post that failed starts over when you press Try again." },
+      { kind: "fixed", text: "The website says exactly what ClipTroop reads from TikTok: your profile's name and picture, nothing else." },
+    ],
+  },
+  {
     version: "1.46.0",
     date: "2026-10-30",
     title: "Two-step sign-in, and a smoother website",

@@ -12,7 +12,6 @@ import { Select } from "@/components/ui/select";
 import { DateChip } from "@/components/ui/date-picker";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
-import { Switch } from "@/modules/short-videos/components/short-type";
 import { Segmented } from "@/components/ui/segmented";
 import { AnalyticsIcon, ChevronDownIcon, ClockIcon, CloseIcon, EditIcon, ExternalIcon, ListIcon, PostingIcon } from "@/components/ui/icons";
 import { Dialog } from "@/components/ui/dialog";
@@ -35,6 +34,7 @@ import {
   type ScheduleEntry,
 } from "./schedule-actions";
 import { AvatarImg } from "@/components/ui/avatar-img";
+import { TIKTOK_PRIVACY, TT_BRANDED_NOT_PRIVATE, TT_DISCLOSE_NEEDED, TT_PROCESSING, TikTokDeclaration, TikTokFields, ttDisclosureMissing } from "./tiktok-fields";
 
 type Platform = "youtube" | "instagram" | "tiktok" | "facebook";
 const NAME: Record<Platform, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" };
@@ -74,13 +74,6 @@ export type PostInfo = {
 export type PostEvent = { id: number; postId: string; kind: string; message: string; at: string };
 /** Platforms marked posted on the short (by hand or automatically). */
 export type ManualPost = { platform: string; url: string | null; postedAt: string };
-
-const TIKTOK_PRIVACY: Record<string, string> = {
-  PUBLIC_TO_EVERYONE: "Everyone",
-  MUTUAL_FOLLOW_FRIENDS: "Friends",
-  FOLLOWER_OF_CREATOR: "Followers",
-  SELF_ONLY: "Only me",
-};
 
 // Every 15 minutes: 00:00, 00:15, 00:30 …
 const TIMES = Array.from({ length: 96 }, (_, i) => {
@@ -342,6 +335,8 @@ function SchedulePanelLive({
   });
   const [creator, setCreator] = useState<CreatorInfo | null>(null);
   const [creatorError, setCreatorError] = useState<string | null>(null);
+  // Asking TikTok again (after "this account can't post right now, try again later").
+  const [creatorTry, setCreatorTry] = useState(0);
   const captionOf = (p: CaptionPlatform) => (own[p] ? (p === "instagram" ? ig.caption : p === "tiktok" ? tt.caption : fb.caption) : shared);
   function ownCaption(p: CaptionPlatform, on: boolean) {
     if (on) {
@@ -359,13 +354,24 @@ function SchedulePanelLive({
   const needsTikTok = formPlatforms.includes("tiktok");
   useEffect(() => {
     if (!needsTikTok || creator) return;
+    let alive = true;
     void getTikTokCreatorInfo(teamId).then((r) => {
+      if (!alive) return;
       if (r.error !== undefined) setCreatorError(r.error);
       else setCreator(r.info);
     });
-  }, [needsTikTok, creator, teamId]);
+    return () => {
+      alive = false;
+    };
+  }, [needsTikTok, creator, teamId, creatorTry]);
+  const askTikTokAgain = () => {
+    setCreatorError(null);
+    setCreatorTry((n) => n + 1);
+  };
 
   const chosen = formPlatforms.filter((p) => include[p]);
+  // TikTok: commercial content on with neither kind ticked = Post now and Schedule stay off (TikTok's guidelines).
+  const disclosureMissing = chosen.includes("tiktok") && ttDisclosureMissing(tt);
   const tooLong = !!(creator?.maxDurationSec && videoDuration && videoDuration > creator.maxDurationSec);
   // Too long (or short) for a platform: that one can't be scheduled (the server checks too).
   const blocked = lengthNotes(videoDuration, platforms).filter((n) => n.level === "block");
@@ -383,8 +389,8 @@ function SchedulePanelLive({
     if (chosen.includes("tiktok")) {
       if (!creator) return creatorError ?? "Loading your TikTok account…";
       if (!tt.privacy) return "Choose who can see the TikTok post.";
-      if (tt.commercial && !tt.yourBrand && !tt.brandedContent) return "For commercial content, tick Your brand, Branded content or both.";
-      if (tt.commercial && tt.brandedContent && tt.privacy === "SELF_ONLY") return "Branded content can't be private on TikTok.";
+      if (ttDisclosureMissing(tt)) return TT_DISCLOSE_NEEDED;
+      if (tt.commercial && tt.brandedContent && tt.privacy === "SELF_ONLY") return TT_BRANDED_NOT_PRIVATE;
       if (tooLong) return `TikTok allows up to ${creator.maxDurationSec}s for this account.`;
     }
     const misfit = blocked.find((n) => chosen.includes(n.platform as Platform));
@@ -639,7 +645,7 @@ function SchedulePanelLive({
                     {whenMode === "custom" && !sameTime && formPlatforms.length > 1 && <When value={when[p]} onChange={(v) => setWhen((s) => ({ ...s, [p]: v }))} />}
                     {p === "youtube" && <YouTubeFields v={yt} set={setYt} />}
                     {p === "instagram" && captionFor("instagram")}
-                    {p === "tiktok" && <TikTokFields v={tt} set={setTt} creator={creator} error={creatorError} tooLong={tooLong} caption={captionFor("tiktok")} />}
+                    {p === "tiktok" && <TikTokFields v={tt} set={setTt} creator={creator} error={creatorError} onRetry={askTikTokAgain} tooLong={tooLong} caption={captionFor("tiktok")} />}
                     {p === "facebook" && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
@@ -664,6 +670,8 @@ function SchedulePanelLive({
             <p className="min-w-0 flex-1 text-[12.5px] leading-snug" aria-live="polite">
               {chosen.length === 0 ? (
                 <span className="text-ink-soft">Turn on at least one platform.</span>
+              ) : disclosureMissing ? (
+                <span className="font-semibold text-amber">TikTok: {TT_DISCLOSE_NEEDED}</span>
               ) : (
                 <>
                   <b className="font-semibold">{chosen.length === 1 ? "1 post" : `${chosen.length} posts`}</b>
@@ -671,13 +679,14 @@ function SchedulePanelLive({
                 </>
               )}
             </p>
-            <div className="flex gap-2">
+            {/* The title sits on the wrapper too: some browsers show no tooltip on a disabled button. */}
+            <div className="flex gap-2" title={disclosureMissing ? TT_DISCLOSE_NEEDED : undefined}>
               <button
                 type="button"
                 onClick={() => submit(true)}
-                disabled={pending || chosen.length === 0}
-                title="Ignore the times: post it right away"
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber/50 bg-amber/[0.08] text-amber font-bold px-3 sm:px-4 h-10 text-[13.5px] hover:bg-amber hover:text-white disabled:opacity-50"
+                disabled={pending || chosen.length === 0 || disclosureMissing}
+                title={disclosureMissing ? TT_DISCLOSE_NEEDED : "Ignore the times: post it right away"}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber/50 bg-amber/[0.08] text-amber font-bold px-3 sm:px-4 h-10 text-[13.5px] hover:bg-amber hover:text-white disabled:opacity-50 disabled:hover:bg-amber/[0.08] disabled:hover:text-amber disabled:cursor-not-allowed"
               >
                 <PostingIcon className="w-4 h-4" />
                 Post {chosen.length > 1 ? "all " : ""}now
@@ -685,8 +694,9 @@ function SchedulePanelLive({
               <button
                 type="button"
                 onClick={() => submit(false)}
-                disabled={pending || chosen.length === 0}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber text-white font-bold px-3 sm:px-5 h-10 text-[13.5px] hover:brightness-105 disabled:opacity-50"
+                disabled={pending || chosen.length === 0 || disclosureMissing}
+                title={disclosureMissing ? TT_DISCLOSE_NEEDED : undefined}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-amber text-white font-bold px-3 sm:px-5 h-10 text-[13.5px] hover:brightness-105 disabled:opacity-50 disabled:hover:brightness-100 disabled:cursor-not-allowed"
               >
                 Schedule{chosen.length > 1 ? ` ${chosen.length} posts` : ""}
               </button>
@@ -865,7 +875,15 @@ function SchedulePanelLive({
             );
           })}
         </ul>
-        {chosen.includes("tiktok") && <p className="mt-3 text-[11.5px] text-ink-soft">The video will be posted to TikTok with the settings you chose.</p>}
+        {/* TikTok: the declaration right before the button that sends it (TikTok's guidelines). */}
+        {chosen.includes("tiktok") && (
+          <div className="mt-3 space-y-1">
+            <TikTokDeclaration branded={tt.commercial && tt.brandedContent} />
+            <p className="text-[11.5px] text-ink-soft">
+              {nowMode ? "It goes to TikTok when you press Post now." : "It goes to TikTok at the time you chose, once you press Schedule."} {TT_PROCESSING}
+            </p>
+          </div>
+        )}
       </Dialog>
 
       {canManage && remaining.length > 0 && (
@@ -1032,125 +1050,6 @@ function KidsSetting({ value, onChange }: { value: boolean; onChange: (v: boolea
   );
 }
 
-type TikTokState = {
-  caption: string;
-  privacy: string;
-  allowComments: boolean;
-  allowDuet: boolean;
-  allowStitch: boolean;
-  commercial: boolean;
-  yourBrand: boolean;
-  brandedContent: boolean;
-};
-
-function TikTokFields({
-  v,
-  set,
-  creator,
-  error,
-  tooLong,
-  caption,
-}: {
-  v: TikTokState;
-  set: (fn: (s: TikTokState) => TikTokState) => void;
-  creator: CreatorInfo | null;
-  error: string | null;
-  tooLong: boolean;
-  /** The caption: the shared one, or TikTok's own (1.34.3). */
-  caption: React.ReactNode;
-}) {
-  if (error) return <p className="text-[12.5px] text-red">{error}</p>;
-  if (!creator) {
-    return (
-      <div className="space-y-2" role="status" aria-label="Loading your TikTok account">
-        <div className="skeleton h-9 w-48 rounded-lg" />
-        <div className="skeleton h-20 w-full rounded-lg" />
-      </div>
-    );
-  }
-  const check = (key: "allowComments" | "allowDuet" | "allowStitch", text: string, disabled: boolean) => (
-    <label className={`inline-flex items-center gap-1.5 text-[13px] ${disabled ? "opacity-50" : "cursor-pointer"}`} title={disabled ? "Turned off in this account's TikTok settings" : undefined}>
-      <input type="checkbox" disabled={disabled} checked={!disabled && v[key]} onChange={(e) => set((s) => ({ ...s, [key]: e.target.checked }))} className="accent-[rgb(var(--amber))]" />
-      {text}
-    </label>
-  );
-  const brandedPrivate = v.commercial && v.brandedContent && v.privacy === "SELF_ONLY";
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
-        <AvatarImg src={creator.avatarUrl} className="w-6 h-6 rounded-full object-cover" />
-        Posting to <b className="text-ink">{creator.nickname}</b>
-      </div>
-      {tooLong && <p className="text-[12.5px] text-red">This account can post videos up to {creator.maxDurationSec} seconds.</p>}
-      {caption}
-      <div className="w-56">
-        <span className={label}>Who can see this video</span>
-        <Select
-          value={v.privacy || null}
-          onChange={(x) => x && set((s) => ({ ...s, privacy: x }))}
-          options={creator.privacyOptions.map((o) => ({
-            value: o,
-            label: TIKTOK_PRIVACY[o] ?? o,
-            disabled: o === "SELF_ONLY" && v.commercial && v.brandedContent,
-          }))}
-          placeholder="Choose…"
-          ariaLabel="Who can see this video"
-        />
-      </div>
-      <div>
-        <span className={label}>Allow users to</span>
-        <div className="flex flex-wrap gap-4">
-          {check("allowComments", "Comment", creator.commentDisabled)}
-          {check("allowDuet", "Duet", creator.duetDisabled)}
-          {check("allowStitch", "Stitch", creator.stitchDisabled)}
-        </div>
-      </div>
-      <div className="rounded-lg border border-line/10 p-3 space-y-2">
-        <Switch
-          checked={v.commercial}
-          onChange={(on) => set((s) => ({ ...s, commercial: on, yourBrand: on ? s.yourBrand : false, brandedContent: on ? s.brandedContent : false }))}
-          label="Disclose commercial content"
-          hint="Turn on if this video promotes yourself, a brand, product or service."
-        />
-        {v.commercial && (
-          <div className="pl-[52px] space-y-1.5">
-            <label className="flex items-start gap-2 text-[13px] cursor-pointer">
-              <input type="checkbox" checked={v.yourBrand} onChange={(e) => set((s) => ({ ...s, yourBrand: e.target.checked }))} className="mt-0.5 accent-[rgb(var(--amber))]" />
-              <span>
-                Your brand
-                <span className="block text-[11.5px] text-ink-soft">Promoting yourself or your own business. Labelled &ldquo;Promotional content&rdquo;.</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-[13px] cursor-pointer">
-              <input type="checkbox" checked={v.brandedContent} onChange={(e) => set((s) => ({ ...s, brandedContent: e.target.checked }))} className="mt-0.5 accent-[rgb(var(--amber))]" />
-              <span>
-                Branded content
-                <span className="block text-[11.5px] text-ink-soft">Promoting another brand or a third party. Labelled &ldquo;Paid partnership&rdquo;.</span>
-              </span>
-            </label>
-            {brandedPrivate && <p className="text-[12px] text-red">Branded content can&rsquo;t be private. Pick another privacy option.</p>}
-          </div>
-        )}
-      </div>
-      <p className="text-[11.5px] text-ink-soft">
-        By posting, you agree to TikTok&rsquo;s{" "}
-        <a className="underline" href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noopener noreferrer">
-          Music Usage Confirmation
-        </a>
-        {v.commercial && v.brandedContent && (
-          <>
-            {" "}and{" "}
-            <a className="underline" href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noopener noreferrer">
-              Branded Content Policy
-            </a>
-          </>
-        )}
-        . It can take a few minutes for the post to appear on your profile.
-      </p>
-    </div>
-  );
-}
-
 type StepView = { label: string; state: "done" | "current" | "todo" | "failed" | "late"; detail?: string | null; at?: string | null };
 
 function useNow(ms = 30_000) {
@@ -1216,12 +1115,24 @@ function stepsFor(post: PostInfo, events: PostEvent[], now: number): StepView[] 
             : `${name} can't hold scheduled posts, so ${APP_NAME} keeps it and sends it at ${when}.`
           : null, at: at(["scheduled", "rescheduled"]) },
     {
-      label: post.platform === "tiktok" ? `Uploaded to TikTok at ${when}` : `Sent to ${name} at ${when}`,
+      label: `Sent to ${name} at ${when}`,
       state: bad(1, current),
       detail: current === 1 ? errDetail(post.status === "uploading" ? `${post.progress}% uploaded` : `Sends ${countdown(post.scheduledAt, now)}`) : null,
       at: current > 1 ? at(["started", "uploaded"]) : null,
     },
-    { label: `${name} processes it`, state: bad(2, current), detail: current === 2 ? errDetail("Usually takes under a minute") : null },
+    {
+      label: `${name} processes it`,
+      state: bad(2, current),
+      detail:
+        current === 2
+          ? errDetail(
+              post.platform === "tiktok"
+                ? // 1.47.0: TikTok fetches the file itself; until it has all of it, how much it has.
+                  `${post.progress > 0 && post.progress < 100 ? `TikTok is fetching the video (${post.progress}%). ` : ""}${TT_PROCESSING}`
+                : "Usually takes under a minute"
+            )
+          : null,
+    },
     { label: "Published", state: current === 4 ? "done" : "todo", detail: current === 4 ? post.note : null, at: at(["published"]) },
   ];
 }

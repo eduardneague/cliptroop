@@ -15,6 +15,11 @@ export type SitePlatform = {
   posts: string[];
   /** What it reads back. */
   reads: string;
+  /**
+   * Whether ClipTroop reads the account's numbers for Analytics today (1.47.0: TikTok doesn't yet; its sign-in asks
+   * only for the profile and posting, so the website says only that).
+   */
+  numbers: boolean;
   /** Taking access back on the platform's side too. */
   revoke: string;
 };
@@ -25,12 +30,13 @@ export const SITE_PLATFORMS: SitePlatform[] = [
     name: "TikTok",
     account: "A TikTok account, connected with TikTok's own sign-in (Login Kit).",
     posts: [
-      "Your team's approved shorts, as TikTok posts, through TikTok's Content Posting API (Direct Post). The video goes from our server straight to TikTok.",
-      "Before each post, ClipTroop asks TikTok what this account allows and shows it: the account's name and picture, the privacy choices TikTok offers it (you pick one, there's no default), whether people can comment, duet and stitch, and the post's length limit.",
-      "If the video promotes a brand, you say so: your own brand, or branded content for someone else, as TikTok asks. You agree to TikTok's Music Usage Confirmation before anything is posted.",
-      "At the time you chose, ClipTroop sends it, then follows it until TikTok says it's live or why it isn't. The Posting page shows each step.",
+      "Your team's approved shorts, as TikTok posts, through TikTok's Content Posting API (Direct Post). Nothing is sent until someone on your team presses Post now, or schedules it for a time they pick.",
+      "Before each post, ClipTroop asks TikTok what this account allows and shows it: the account's name and picture, the privacy choices TikTok offers it (you pick one, there's no default), whether people can comment, duet and stitch (all off until you tick them), and the post's length limit. You can watch the exact video first.",
+      "If the video promotes something, you say so: your own brand, or branded content for someone else, with the label TikTok will show. You agree to TikTok's Music Usage Confirmation (and its Branded Content Policy, for branded content) before anything is posted. ClipTroop never adds a watermark or its name to your video.",
+      "At that moment TikTok fetches the video from a private copy that's removed once TikTok has it, and ClipTroop follows the post until TikTok says it's live or why it isn't. The Posting page shows each step; TikTok can take a few minutes to show it on your profile.",
     ],
-    reads: "Your profile's name and picture, and, with analytics on, the account's follower and like counts and your public videos' numbers.",
+    reads: "Your TikTok profile's name and picture, to show which account you're posting to. Nothing else: ClipTroop doesn't read your TikTok videos or numbers.",
+    numbers: false,
     revoke: "You can also remove ClipTroop from the apps connected to your account, in TikTok's settings.",
   },
   {
@@ -42,6 +48,7 @@ export const SITE_PLATFORMS: SitePlatform[] = [
       "A short scheduled for later is uploaded as private with its publish time, and YouTube publishes it itself at that moment. Moving or cancelling it in ClipTroop changes it on YouTube.",
     ],
     reads: "The channel's name and picture, and, with analytics on, its videos' views, watch time, subscribers and estimated revenue from YouTube Analytics.",
+    numbers: true,
     revoke: "You can also remove ClipTroop from your Google Account's third-party connections.",
   },
   {
@@ -53,6 +60,7 @@ export const SITE_PLATFORMS: SitePlatform[] = [
       "At the time you chose, Instagram fetches the video from a private link that stops working after two hours, then ClipTroop publishes it once Instagram has processed it. The Posting page shows each step.",
     ],
     reads: "The account's name and picture, and, with analytics on, its Reels' views, reach and interactions and its followers.",
+    numbers: true,
     revoke: "You can also remove ClipTroop from the apps and websites in Instagram's settings.",
   },
   {
@@ -64,6 +72,7 @@ export const SITE_PLATFORMS: SitePlatform[] = [
       "At the time you chose, Facebook fetches the video from a private link (or ClipTroop sends the file itself), then ClipTroop publishes it and follows it until it's live. The Posting page shows each step.",
     ],
     reads: "The Page's name and picture, its Reels' views and interactions, its followers and its earnings, for Analytics.",
+    numbers: true,
     revoke: "You can also remove ClipTroop from the business integrations in Facebook's settings.",
   },
 ];

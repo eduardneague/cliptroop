@@ -161,7 +161,15 @@ async function runOne(row: Claimed, deadline: number, sent?: Set<string>) {
     } else {
       await admin
         .from("social_posts")
-        .update({ status: "failed", attempts, last_error: err.message, locked_until: null, updated_at: new Date().toISOString() })
+        .update({
+          status: "failed",
+          attempts,
+          last_error: err.message,
+          locked_until: null,
+          updated_at: new Date().toISOString(),
+          // Failed for good on the platform's side: Try again starts over (1.47.0).
+          ...(err.restart ? { step: "start", state: {}, progress: 0 } : {}),
+        })
         .eq("id", post.id);
       await event(post.id, post.team_id, "failed", err.message);
       await notify(post, false, err.message);

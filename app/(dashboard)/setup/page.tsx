@@ -11,6 +11,7 @@ import { readSignUpState } from "@/lib/auth/sign-up-settings";
 import { turnstileOn } from "@/lib/auth/turnstile-verify";
 import { measureServerSpeed } from "@/lib/server-speed";
 import { distanceOf, SUPABASE_REGIONS, VERCEL_REGIONS } from "@/lib/regions";
+import { PULL_BUCKET, pullPrefix } from "@/lib/social/tiktok-pull";
 
 export const metadata: Metadata = { title: "App setup" };
 export const dynamic = "force-dynamic";
@@ -320,6 +321,18 @@ export default async function SetupPage() {
           <b>Basic information</b> (Terms of Service URL, Privacy Policy URL, Web/Desktop URL) and <b>URL properties</b> → Verify → Domain {domain} (TikTok shows a TXT
           record: add it the same way).
         </Where>
+        {/* 1.47.0: TikTok fetches each post's video itself (PULL_FROM_URL), from an address verified for the app. */}
+        {pullPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL) ? (
+          <>
+            <CopyField label="TikTok: the address it fetches videos from (URL prefix)" value={pullPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL)!} hint="TikTok → URL properties" />
+            <Where>
+              TikTok fetches each post&rsquo;s video from here (TikTok&rsquo;s guidelines ask for that when the file is already on our servers). Verify it once in each version of
+              the TikTok app you post with (Sandbox now; Production too once approved): TikTok for Developers → your app → <b>URL properties</b> → Verify properties →{" "}
+              <b>URL prefix</b> → paste it → download TikTok&rsquo;s file → Supabase → Storage → <b>{PULL_BUCKET}</b> → Upload it there as it is (top level, same name) →
+              back in TikTok, Verify. Until then {APP_NAME} sends the file to TikTok itself, as before, and the post&rsquo;s history says so. Needs migration 0126.
+            </Where>
+          </>
+        ) : null}
       </Section>
 
       <Section

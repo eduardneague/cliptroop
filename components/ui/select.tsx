@@ -29,6 +29,8 @@ export type SelectOption = {
   /** Consecutive options with the same group get one header. */
   group?: string;
   disabled?: boolean;
+  /** Shown on hover (why it's off, say). */
+  title?: string;
 };
 
 /**
@@ -379,6 +381,7 @@ export function Select({
                         role="option"
                         aria-selected={isSel}
                         aria-disabled={o.disabled || undefined}
+                        title={o.title}
                         onMouseMove={() => {
                           viaKeys.current = false;
                           if (!o.disabled && active !== i) setActive(i);
