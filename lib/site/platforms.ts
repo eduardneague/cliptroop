@@ -16,8 +16,8 @@ export type SitePlatform = {
   /** What it reads back. */
   reads: string;
   /**
-   * Whether ClipTroop reads the account's numbers for Analytics today (1.47.0: TikTok doesn't yet; its sign-in asks
-   * only for the profile and posting, so the website says only that).
+   * Whether ClipTroop reads the account's numbers for Analytics (1.47.0; every platform since 1.47.1, when TikTok's
+   * stats permissions went into its review). False makes the platform's page say it doesn't.
    */
   numbers: boolean;
   /** Taking access back on the platform's side too. */
@@ -35,8 +35,8 @@ export const SITE_PLATFORMS: SitePlatform[] = [
       "If the video promotes something, you say so: your own brand, or branded content for someone else, with the label TikTok will show. You agree to TikTok's Music Usage Confirmation (and its Branded Content Policy, for branded content) before anything is posted. ClipTroop never adds a watermark or its name to your video.",
       "At that moment TikTok fetches the video from a private copy that's removed once TikTok has it, and ClipTroop follows the post until TikTok says it's live or why it isn't. The Posting page shows each step; TikTok can take a few minutes to show it on your profile.",
     ],
-    reads: "Your TikTok profile's name and picture, to show which account you're posting to. Nothing else: ClipTroop doesn't read your TikTok videos or numbers.",
-    numbers: false,
+    reads: "Your profile's name and picture (to show which account you're posting to), the account's follower, like and video counts, and your public videos' views, likes, comments and shares, for Analytics. Never your private videos or your messages.",
+    numbers: true,
     revoke: "You can also remove ClipTroop from the apps connected to your account, in TikTok's settings.",
   },
   {

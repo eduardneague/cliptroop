@@ -162,7 +162,7 @@ export function ObjectivesVignette() {
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3">
         <Ring pct={1} label="Shorts posted" value="14/14" delay={0.3} reached />
-        <Ring pct={0.78} label="Views on YouTube" value="78%" delay={0.7} />
+        <Ring pct={0.78} label="Views on TikTok" value="78%" delay={0.7} />
         <Ring pct={0.5} label="Long videos this month" value="2/4" delay={1.1} />
       </div>
       <div className="ld-a ld-stamp absolute right-5 top-14 rounded-lg border-2 border-green text-green px-2.5 py-1 font-display text-[18px] font-semibold" style={d(0)}>
@@ -340,7 +340,7 @@ export function DashboardVignette() {
             <path d="M0 26 L16 22 L32 24 L48 15 L64 17 L80 8 L100 4" fill="none" stroke="rgb(var(--amber))" strokeWidth="2.5" strokeLinejoin="round" />
           </svg>
           <div className="flex gap-1.5 text-ink-soft">
-            {(["youtube", "instagram", "facebook"] as const).map((p) => (
+            {(["youtube", "tiktok", "instagram", "facebook"] as const).map((p) => (
               <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />
             ))}
           </div>

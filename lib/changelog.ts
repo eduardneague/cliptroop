@@ -22,6 +22,14 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.47.1",
+    date: "2026-10-31",
+    title: "TikTok's numbers, said plainly",
+    changes: [
+      { kind: "fixed", text: "The website's TikTok page lists exactly what ClipTroop reads for Analytics: the account's follower, like and video counts and your public videos' views, likes, comments and shares. Never your private videos or messages." },
+    ],
+  },
+  {
     version: "1.47.0",
     date: "2026-10-31",
     title: "TikTok posting, exactly as TikTok asks",
@@ -31,7 +39,6 @@ export const CHANGELOG: Release[] = [
       { kind: "better", text: "If TikTok won't take a post from the account right now, the card stops and says so, with Try again. It also says how long the account's videos may be, and that TikTok can take a few minutes to show a post." },
       { kind: "better", text: "TikTok now fetches the video itself from a private copy that's removed once it has it, as TikTok asks of apps that keep your videos. Until that's set up, ClipTroop sends the file, as before." },
       { kind: "better", text: "After posting, the card says plainly when a TikTok post is private, and why. A TikTok post that failed starts over when you press Try again." },
-      { kind: "fixed", text: "The website says exactly what ClipTroop reads from TikTok: your profile's name and picture, nothing else." },
     ],
   },
   {

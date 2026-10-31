@@ -367,15 +367,15 @@ export const FEATURES: SiteFeature[] = [
     name: "Analytics",
     dept: "measure",
     title: "Every platform’s numbers, side by side",
-    line: "Views, watch time, followers and revenue from YouTube, Instagram and Facebook, every video counted.",
-    lead: "Views, watch time, followers and revenue from YouTube, Instagram and Facebook, one total or each on its own, next to what your team made. Every video counts, and the newest are read every few minutes. (TikTok’s numbers aren’t read yet: ClipTroop only posts there.)",
+    line: "Views, watch time, followers and revenue from all four platforms, every video counted.",
+    lead: "Views, watch time, followers and revenue from YouTube, TikTok, Instagram and Facebook, one total or each on its own, next to what your team made. Every video counts, and the newest are read every few minutes.",
     visual: "measure",
     who: ["Masters", "Everyone they let see it"],
     where: "Analytics, in the menu",
     sections: [
       {
         title: "Every video, not only the newest",
-        text: "All your YouTube uploads, every Instagram post and every Facebook Reel. Click a day on Views per day to see every video that got views that day, on every platform.",
+        text: "All your YouTube uploads, every public TikTok, every Instagram post and every Facebook Reel. Click a day on Views per day to see every video that got views that day, on every platform.",
       },
       {
         title: "Deeper when you want it",

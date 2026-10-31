@@ -1,6 +1,6 @@
 // 1.47.0: what TikTok's review and its Direct Post audit check. TikTok's Content Sharing Guidelines word the post
 // screen's notices, ask for PULL_FROM_URL when the file is already on our servers, and keep posts from an unaudited
-// app private; the website says only what the TikTok sign-in asks for (the profile, and posting).
+// app private; the website says only what the TikTok sign-in asks for (the profile, posting, and since 1.47.1 the stats).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PULL_BUCKET, PULL_FOLDER, PULL_INIT_FALLBACK, PULL_KEEP_HOURS, PULL_STATUS_FALLBACK, isPullPath, pullPath, pullPrefix } from "../lib/social/tiktok-pull";
@@ -63,14 +63,14 @@ ok(/title=\{o\.title\}/.test(read("components/ui/select.tsx")), "a menu option c
 const actions = read("app/(dashboard)/shorts/[id]/schedule-actions.ts");
 ok(/const CANT_POST_NOW: Record<string, string> = \{/.test(actions) && (actions.match(/CANT_POST_NOW\[e\.code\]/g) ?? []).length >= 4, "the post screen and the checks say 'try again later'");
 
-// --- The website says what the sign-in asks for --------------------------------------------------------------------------
+// --- The website says what the sign-in asks for (1.47.1: posting and the stats permissions) -------------------------------
 const tiktok = SITE_PLATFORMS.find((x) => x.id === "tiktok")!;
-ok(tiktok.numbers === false && /doesn't read your TikTok videos or numbers/.test(tiktok.reads), "TikTok: only the profile's name and picture are read");
-ok(SITE_PLATFORMS.filter((x) => x.id !== "tiktok").every((x) => x.numbers), "the others read numbers");
+ok(SITE_PLATFORMS.every((x) => x.numbers), "every platform's numbers are read, TikTok's too (user.info.stats, video.list)");
+ok(/name and picture/.test(tiktok.reads) && /follower, like and video counts/.test(tiktok.reads) && /public videos' views, likes, comments and shares/.test(tiktok.reads) && /Never your private videos/.test(tiktok.reads), "TikTok: exactly what the two stats permissions give (video.list is public videos only)");
 ok(tiktok.posts.some((t) => /fetches the video from a private copy/.test(t)) && tiktok.posts.some((t) => /never adds a watermark/.test(t)), "how the video gets there, and no watermark");
 const analytics = FEATURES.find((f) => f.slug === "analytics")!;
-ok(!/TikTok,|every TikTok|all four/.test(`${analytics.line} ${analytics.lead} ${analytics.sections.map((s) => s.text).join(" ")}`), "Analytics doesn't claim TikTok's numbers");
-ok(!read("components/site/scenes.tsx").includes('label="Views on TikTok"'), "nor does its picture");
+ok(/YouTube, TikTok, Instagram and Facebook/.test(analytics.lead) && /every public TikTok/.test(analytics.sections.map((x) => x.text).join(" ")), "Analytics names TikTok, and only its public videos");
+ok(/tiktok: \["user\.info\.stats", "video\.list"\],/.test(read("lib/social/providers.ts")), "the stats permissions ClipTroop asks TikTok for are exactly those two (with tiktok in SOCIAL_STATS_PLATFORMS)");
 
 if (fails) {
   console.log(`${fails} failed`);
