@@ -199,6 +199,10 @@ export function passwordSaveError(
   if (/reauthentication_needed|requires reauthentication/i.test(text)) return "For your safety, sign in again before changing your password.";
   if (/current_password_(required|mismatch)|current password required/i.test(text)) return "Your current password isn't right.";
   if (error.status === 429 || /over_request_rate_limit|rate limit|too many/i.test(text)) return "Too many tries right now. Wait a minute and try again.";
+  // 1.49.0: an account with an authenticator app may only change its password from a sign-in that typed the app's
+  // code (Supabase: "AAL2 session is required to update email or password when MFA is enabled", a 401). It read as
+  // "Your link has expired".
+  if (/insufficient_aal|aal2 session is required|\baal2\b/i.test(text)) return "Your account has two-step sign-in with an app: type the code from your app first.";
   if (/session_not_found|session_expired|AuthSessionMissing|auth session missing|jwt expired|not authenticated/i.test(text) || error.status === 401 || error.status === 403) {
     return from === "link" ? "Your link has expired. Ask for a new one." : "Your session expired. Sign in again.";
   }

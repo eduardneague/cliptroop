@@ -41,7 +41,7 @@ ok(!/background: \{/.test(compress), "no unused preset left");
 // --- Every place a picture is picked ------------------------------------------------------------------------------------
 const pickers: [string, RegExp][] = [
   ["app/(dashboard)/settings/use-avatar-upload.tsx", /pictureTooBig\(original\)/],
-  ["app/set-password/page.tsx", /pictureTooBig\(file\)/],
+  ["components/onboarding/account-setup.tsx", /pictureTooBig\(file\)/],
   ["app/(dashboard)/team/team-logo-uploader.tsx", /pictureTooBig\(original\)/],
   ["app/(dashboard)/videos/[id]/thumbnail-uploader.tsx", /pictureTooBig\(original, "thumbnail"\)/],
   ["modules/studio/components/studio.tsx", /pictureTooBig\(file, "thumbnail"\)/],

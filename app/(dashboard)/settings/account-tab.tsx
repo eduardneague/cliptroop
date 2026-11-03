@@ -8,6 +8,7 @@ import { APP_NAME } from "@/lib/brand";
 import { ACCOUNT_HREF, BTN, CARD, DANGER_HREF, Group, H2, Row, TEXT } from "./account-parts";
 import { PasswordSection } from "./password-section";
 import { SignOutElsewhere } from "./sign-out-elsewhere";
+import { TwoStepOff } from "./two-step-off";
 import { DeleteAccount, type AccountTeam } from "./delete-account";
 import { FeedbackForm, type SentReport } from "./feedback-form";
 import { MovedHere } from "./moved-here";
@@ -32,21 +33,30 @@ export function AccountOverview({ email, names, developer, twoStep = null }: { e
       <Group title={TEXT.signingIn}>
         <Row id="email" title={TEXT.email} text={TEXT.emailText} action={<span className="block text-[14px] font-semibold break-all sm:text-right">{email}</span>} />
         <PasswordSection email={email} names={names} />
-        {/* 1.46.0: the second step every sign-in takes. */}
+        {/* 1.46.0: a second step at every sign-in; optional since 1.49.0 (on here, or in the onboarding). */}
         <Row
           id="two-step"
           title="Two-step sign-in"
           text={
             twoStep === "app"
-              ? "A code from your authenticator app, each time you sign in."
+              ? "On: a code from your authenticator app, each time you sign in."
               : twoStep === "email"
-                ? `A code by email to ${email}, each time you sign in.`
-                : "Not set up yet: you'll be asked to the next time you sign in."
+                ? `On: a code by email to ${email}, each time you sign in.`
+                : "Off. Turn it on and signing in also asks for a code from an app or your email, so a stolen password alone isn't enough."
           }
           action={
-            <Link href="/two-step/setup?change=1" className={BTN}>
-              {twoStep ? "Change" : "Set it up"}
-            </Link>
+            twoStep ? (
+              <span className="flex flex-wrap gap-2 sm:justify-end">
+                <Link href="/two-step/setup?change=1" className={BTN}>
+                  Change
+                </Link>
+                <TwoStepOff />
+              </span>
+            ) : (
+              <Link href="/two-step/setup?change=1" className={BTN}>
+                Turn it on
+              </Link>
+            )
           }
         />
       </Group>

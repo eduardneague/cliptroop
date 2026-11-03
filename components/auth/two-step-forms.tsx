@@ -10,7 +10,7 @@ import { appFromNowOn, sendTwoStepCode, verifyTwoStepCode } from "@/app/two-step
 
 /*
  * Two-step sign-in's two screens (1.46.0): typing this sign-in's code (TwoStepVerify) and setting a way up
- * (TwoStepSetup: the first time, which everyone does after making an account, or Settings → Account → Change).
+ * (TwoStepSetup: from the onboarding or Settings → Account; optional since 1.49.0, so it has a "Not now").
  * An authenticator app goes through Supabase from the browser (enroll, the QR code, challenge and verify: the session
  * becomes aal2); email codes go through app/two-step/actions.ts. Leaving goes by a full load, so the next page sees the
  * new sign-in at once.
@@ -59,10 +59,15 @@ function CodeInput({ value, onChange, onComplete, id, label }: { value: string; 
   );
 }
 
-function Foot({ lost }: { lost?: boolean }) {
+function Foot({ lost, skip }: { lost?: boolean; skip?: string | null }) {
   return (
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-[13px] text-ink-faint">
-      {lost ? (
+      {skip ? (
+        // 1.49.0: two-step sign-in is optional. A full load, like every way out of these screens.
+        <a href={skip} className="font-semibold text-ink-soft hover:text-ink">
+          Not now
+        </a>
+      ) : lost ? (
         <span>
           Lost your phone?{" "}
           <Link href="/contact" className="font-semibold text-ink-soft hover:text-ink">
@@ -180,7 +185,7 @@ export function TwoStepVerify({ method, factorId, email, next }: { method: "app"
 
 type Enrolled = { id: string; qr: string; secret: string };
 
-export function TwoStepSetup({ email, current, change, next }: { email: string; current: "app" | "email" | null; change: boolean; next: string }) {
+export function TwoStepSetup({ email, current, change, next, skip = null }: { email: string; current: "app" | "email" | null; change: boolean; next: string; skip?: string | null }) {
   const [way, setWay] = useState<"app" | "email" | null>(null);
   const [enrolled, setEnrolled] = useState<Enrolled | null>(null);
   const [code, setCode] = useState("");
@@ -273,8 +278,8 @@ export function TwoStepSetup({ email, current, change, next }: { email: string; 
         </span>
         <h1 className="mt-5 font-display text-[30px] sm:text-[34px] font-semibold leading-tight">Two-step sign-in is on</h1>
         <p className="mt-2 text-[15px] text-ink-soft leading-relaxed">
-          {way === "app" ? "From now on, signing in asks for the code from your app." : `From now on, signing in sends a code to ${sentTo ?? email}.`} You can change it in
-          Settings → Account.
+          {way === "app" ? "From now on, signing in asks for the code from your app." : `From now on, signing in sends a code to ${sentTo ?? email}.`} You can change it or
+          turn it off in Settings → Account.
         </p>
         <button type="button" onClick={() => window.location.assign(next)} className={`${btnMain} mt-7`}>
           Continue to {APP_NAME}
@@ -289,7 +294,7 @@ export function TwoStepSetup({ email, current, change, next }: { email: string; 
       <p className="mt-2 text-[15px] text-ink-soft leading-relaxed">
         {change
           ? `You use ${current === "email" ? "email codes" : "an authenticator app"} now. Pick the way you want instead (or set up your app on a new phone).`
-          : `Every ${APP_NAME} account signs in in two steps: your password, then a code only you can get. Choose how you'll get it.`}
+          : `Optional, and the safest way to sign in: your password, then a code only you can get, so a stolen password alone isn't enough. Choose how you'll get it.`}
       </p>
 
       {!way && (
@@ -399,7 +404,7 @@ export function TwoStepSetup({ email, current, change, next }: { email: string; 
           Choose another way
         </button>
       )}
-      <Foot />
+      <Foot skip={skip} />
     </div>
   );
 }

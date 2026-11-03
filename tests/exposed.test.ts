@@ -86,7 +86,7 @@ for (const t of ["image/png", "application/pdf", "video/mp4", "text/plain"]) ok(
 ok(/contentType: storedTypeFor\(file\.type\)/.test(read("app/(dashboard)/videos/[id]/notes-panel.tsx")), "comment attachments go up with that type");
 const compress = read("lib/image/compress.ts");
 ok(/if \(file\.type === "image\/svg\+xml"\) return \(await rasterizeSvg\(file, opts\)\) \?\? file;/.test(compress), "an SVG becomes a PNG before it's uploaded");
-for (const f of ["app/(dashboard)/settings/use-avatar-upload.tsx", "app/set-password/page.tsx", "app/(dashboard)/team/team-logo-uploader.tsx", "app/(dashboard)/videos/[id]/thumbnail-uploader.tsx", "modules/scripts/components/use-script-images.ts"])
+for (const f of ["app/(dashboard)/settings/use-avatar-upload.tsx", "components/onboarding/account-setup.tsx", "app/(dashboard)/team/team-logo-uploader.tsx", "app/(dashboard)/videos/[id]/thumbnail-uploader.tsx", "modules/scripts/components/use-script-images.ts"])
   ok(/isPictureType\(file\.type\)/.test(read(f)), `${f}: checks it's a picture before it goes up`);
 
 if (fails) {

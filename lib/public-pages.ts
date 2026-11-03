@@ -11,7 +11,7 @@ export const PUBLIC_PAGES = ["/features", "/platforms", "/pricing", "/security",
  * follow the person's choice. A string, so the root layout's first-paint
  * script can use it too.
  */
-export const BRAND_PAGES_RE = "^/(login|signup|reset-password|set-password|welcome|status|privacy|terms|data-deletion|features|platforms|pricing|security|changelog|about|contact)?(/|$)";
+export const BRAND_PAGES_RE = "^/(login|signup|reset-password|set-password|get-started|welcome|status|privacy|terms|data-deletion|features|platforms|pricing|security|changelog|about|contact)?(/|$)";
 export const isBrandPage = (path: string) => new RegExp(BRAND_PAGES_RE).test(path);
 
 /** The site's public address (for robots.txt and the sitemap). */
