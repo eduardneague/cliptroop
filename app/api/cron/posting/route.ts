@@ -1,5 +1,5 @@
+import { cronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { runDuePosts } from "@/lib/social/worker";
 import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
 import { watchHealth } from "@/lib/health-watch";
@@ -33,16 +33,9 @@ import { runOutliersJob } from "@/modules/outliers/lib/collector";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function authorized(header: string | null) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || secret.length < 16 || !header) return false;
-  const a = Buffer.from(header);
-  const b = Buffer.from(`Bearer ${secret}`);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 async function handle(request: Request) {
-  if (!authorized(request.headers.get("authorization"))) {
+  if (!cronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = request.method === "POST" ? ((await request.json().catch(() => null)) as { status?: unknown; job?: unknown; team?: unknown; platform?: unknown; retry?: unknown; live?: unknown; explore?: unknown } | null) : null;

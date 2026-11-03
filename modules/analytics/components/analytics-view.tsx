@@ -5,6 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DownloadIcon, LockIcon } from "@/components/ui/icons";
+import { TabOverflow } from "@/components/ui/tab-overflow";
 import { useToast } from "@/components/ui/toast-provider";
 import { syncAnalyticsNow } from "@/app/(dashboard)/analytics/actions";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -27,6 +28,7 @@ import { InsightsTab } from "./tabs/insights-tab";
 import { ProductionTab } from "./tabs/production-tab";
 import { ADV_VIEWS, type AdvView } from "./advanced/views";
 import { AdvancedTab } from "./advanced/advanced-tab";
+import type { MediaKitTabData } from "@/modules/media-kit/components/media-kit-tab";
 
 /*
  * Analytics (1.20.0): tabs instead of one long page, like YouTube Studio.
@@ -38,6 +40,11 @@ import { AdvancedTab } from "./advanced/advanced-tab";
 // The export for Claude comes with its button. (The Advanced tab is no longer loaded apart: next/dynamic
 // gave its icons other ids on the server than in the browser, a hydration mismatch.)
 const ClaudeExport = dynamic(() => import("../export/claude-export").then((m) => m.ClaudeExport), { ssr: false });
+// The media kit's builder (1.37.0): only in the browser (its preview measures with the PDF's own fonts), loaded with its tab.
+const MediaKitTab = dynamic(() => import("@/modules/media-kit/components/media-kit-tab").then((m) => m.MediaKitTab), {
+  ssr: false,
+  loading: () => <div className="skeleton h-[60vh] w-full rounded-2xl" aria-hidden />,
+});
 
 export type AnalyticsData =
   | { tab: "overview"; overview: Overview; insights: Promise<InsightsPreview> }
@@ -47,7 +54,8 @@ export type AnalyticsData =
   | { tab: "realtime"; status: PlatformStatus[] }
   | { tab: "insights"; insights: Insights }
   | { tab: "advanced"; advanced: AdvancedData; view: AdvView | null }
-  | { tab: "revenue"; revenue: Revenue };
+  | { tab: "revenue"; revenue: Revenue }
+  | { tab: "mediakit"; kit: MediaKitTabData };
 
 const TAB_LABEL: Record<TabId, string> = {
   overview: "Overview",
@@ -58,8 +66,9 @@ const TAB_LABEL: Record<TabId, string> = {
   insights: "Insights",
   advanced: "Advanced",
   production: "Production",
+  mediakit: "Media kit",
 };
-const TAB_ORDER: TabId[] = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production"];
+const TAB_ORDER: TabId[] = ["overview", "content", "audience", "realtime", "revenue", "insights", "advanced", "production", "mediakit"];
 
 export function AnalyticsView({
   teamId,
@@ -70,6 +79,7 @@ export function AnalyticsView({
   canSync,
   catchingUp = false,
   revenueAllowed,
+  kitAllowed = false,
   latest,
   earliest,
   data,
@@ -83,6 +93,8 @@ export function AnalyticsView({
   /** The morning copy was missed and a catch-up just started (this page refreshes itself when it's likely done). */
   catchingUp?: boolean;
   revenueAllowed: boolean;
+  /** The media kit: Masters and the people they let in (1.40.0). */
+  kitAllowed?: boolean;
   /** The last day with numbers (the range bar's custom panel). */
   latest: string;
   /** The first day with numbers (Lifetime). */
@@ -281,13 +293,15 @@ export function AnalyticsView({
       ]);
     }
   }
-  const canExport = !["realtime", "insights"].includes(data.tab) && !(data.tab === "revenue" && !data.revenue.allowed);
+  const canExport = !["realtime", "insights", "mediakit"].includes(data.tab) && !(data.tab === "revenue" && !data.revenue.allowed);
 
   const when =
     data.tab === "realtime"
       ? "the last 48 hours, live"
       : data.tab === "insights"
         ? "every video"
+        : data.tab === "mediakit"
+          ? "a deck of your numbers for sponsors"
         : data.tab === "overview" && data.overview.hourly
           ? "the last 48 hours"
           : `${niceDay(w.from, true)} – ${niceDay(w.to, true)}`;
@@ -344,16 +358,18 @@ export function AnalyticsView({
         )}
       </div>
 
-      <nav className="flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
+      <nav className="relative flex items-center gap-0.5 border-b border-line/15 overflow-x-auto no-scrollbar -mx-4 px-3 sm:mx-0 sm:px-0 mb-4" aria-label="Analytics">
         {TAB_ORDER.map((id) => {
           const on = id === (pending?.tab ?? data.tab);
-          const locked = id === "revenue" && !revenueAllowed;
+          // Revenue: the people who see it. The media kit: Masters and the people they let in (1.40.0).
+          const locked = (id === "revenue" && !revenueAllowed) || (id === "mediakit" && !kitAllowed);
           return (
             <Link
               key={id}
               href={href({ tab: id })}
               scroll={false}
               aria-current={on ? "page" : undefined}
+              data-label={TAB_LABEL[id]}
               onClick={() => {
                 if (on) return;
                 setPending({ tab: id });
@@ -369,10 +385,11 @@ export function AnalyticsView({
               )}
               {TAB_LABEL[id]}
               {locked && <LockIcon className="w-3.5 h-3.5 text-ink-faint" />}
-              <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+              <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
             </Link>
           );
         })}
+        <TabOverflow />
       </nav>
 
       {/* One row of filters: they scope everything below. */}
@@ -455,6 +472,7 @@ export function AnalyticsView({
           />
         )}
         {data.tab === "revenue" && <RevenueTab r={data.revenue} compare={compare} teamId={teamId} />}
+        {data.tab === "mediakit" && <MediaKitTab data={data.kit} />}
       </div>
       {claudeOpen && <ClaudeExport teamId={teamId} teamName={teamName} range={range === "48h" ? "7d" : range} span={range === "custom" || range === "lifetime" ? { from: w.from, to: w.to } : null} platform={advPlatform} revenueAllowed={revenueAllowed} onClose={() => setClaudeOpen(false)} />}
     </div>

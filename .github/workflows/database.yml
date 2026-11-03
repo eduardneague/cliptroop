@@ -23,6 +23,10 @@ on:
         description: "baseline only: the last migration this database already has"
         default: "0062"
 
+# 1.31.0: the token this job gets can only read the code (it never writes to the repository).
+permissions:
+  contents: read
+
 # One run per database at a time, never cancelled halfway.
 concurrency:
   group: database-${{ github.event_name == 'push' && (github.ref_name == 'main' && 'production' || 'staging') || inputs.target }}
@@ -39,6 +43,8 @@ jobs:
       DB_URL: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.PRODUCTION_DB_URL || (github.event_name == 'push' && secrets.STAGING_DB_URL) || (inputs.target == 'production' && secrets.PRODUCTION_DB_URL || secrets.STAGING_DB_URL) }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Install the Supabase CLI
         run: |
           curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin supabase
@@ -54,7 +60,12 @@ jobs:
 
       - name: Baseline (mark migrations already run by hand)
         if: env.ACTION == 'baseline'
-        run: SUPABASE_BIN=supabase bash scripts/db/baseline.sh "$DB_URL" "${{ inputs.baseline_through }}"
+        # 1.31.0: what was typed reaches the script as a variable, never as part of the script itself.
+        env:
+          BASELINE_THROUGH: ${{ inputs.baseline_through }}
+        run: |
+          case "$BASELINE_THROUGH" in [0-9][0-9][0-9][0-9]) ;; *) echo "::error::baseline_through must be 4 digits, like 0062."; exit 1 ;; esac
+          SUPABASE_BIN=supabase bash scripts/db/baseline.sh "$DB_URL" "$BASELINE_THROUGH"
 
       - name: Migrations on ${{ env.TARGET }}
         run: |

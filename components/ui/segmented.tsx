@@ -4,6 +4,11 @@
  * A row of choices where one is on (filters, views). Rounded squares in a
  * rounded-square tray, counts beside the labels, arrow keys move between
  * them (it's a radio group).
+ *
+ * 1.43.0: the tray is as tall as the controls beside it: 36 px ("md", like
+ * buttons, search boxes and a toolbar's Select), 32 px ("sm", beside small
+ * links in a section's header), 40 px ("lg", beside 40 px fields: Outliers'
+ * niche picker). It was 38 and 34, a little off everywhere.
  */
 export function Segmented<T extends string>({
   value,
@@ -17,7 +22,7 @@ export function Segmented<T extends string>({
   options: { value: T; label: React.ReactNode; count?: number; disabled?: boolean; title?: string; tone?: "coral" | "green" }[];
   onChange: (v: T) => void;
   ariaLabel: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   const move = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -46,7 +51,7 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             title={o.title}
             onClick={() => onChange(o.value)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 ${size === "sm" ? "h-7 text-[12px]" : "h-8 text-[12.5px]"} font-semibold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-default ${
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 ${size === "sm" ? "h-[26px] text-[12px]" : size === "lg" ? "h-[34px] px-3 text-[13px]" : "h-[30px] text-[12.5px]"} font-semibold whitespace-nowrap transition-colors disabled:opacity-40 disabled:cursor-default ${
               on ? "bg-surface-2 text-ink shadow-[inset_0_0_0_1px_rgb(var(--line)/0.14)]" : "text-ink-soft hover:text-ink hover:bg-surface-2/60"
             }`}
           >

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { band, BAND_LABEL, multText, type Band } from "../lib/scores";
+import { createContext, useContext, useState, useSyncExternalStore } from "react";
+import { band, BAND_LABEL, multText } from "../lib/scores";
+import { HEAT, heat } from "../lib/heat";
 import { ago, compact, duration } from "../lib/filters";
 import { avatarAt, thumbUrl } from "../lib/ingest";
 import { FORMAT_BY_ID } from "../lib/formats";
@@ -12,44 +13,39 @@ import { OutliersIcon } from "@/components/ui/icons";
  * Outliers' small pieces (1.27.0): the multiplier in its heat colour, the
  * spike (a channel's videos as bars, this one towering or not), thumbnails
  * at the right size, channel pictures, times that never break hydration.
- *
- * Heat: about usual is quiet; 2–5× blue, 5–10× violet, 10–25× the app's
- * amber, 25× and up red. The same scale everywhere a score shows.
+ * The heat scale itself is in lib/heat.ts (1.29.9).
  */
 
-export const HEAT: Record<Band, { solid: string; soft: string; text: string }> = {
-  none: { solid: "rgb(var(--ink-faint))", soft: "rgb(var(--ink) / 0.06)", text: "rgb(var(--ink-faint))" },
-  below: { solid: "rgb(var(--ink-faint))", soft: "rgb(var(--ink) / 0.06)", text: "rgb(var(--ink-faint))" },
-  usual: { solid: "rgb(var(--ink-soft))", soft: "rgb(var(--ink) / 0.08)", text: "rgb(var(--ink-soft))" },
-  good: { solid: "rgb(var(--blue))", soft: "rgb(var(--blue) / 0.14)", text: "rgb(var(--blue))" },
-  great: { solid: "rgb(var(--violet))", soft: "rgb(var(--violet) / 0.14)", text: "rgb(var(--violet))" },
-  huge: { solid: "rgb(var(--amber))", soft: "rgb(var(--amber) / 0.15)", text: "rgb(var(--amber))" },
-  viral: { solid: "rgb(var(--red))", soft: "rgb(var(--red) / 0.14)", text: "rgb(var(--red))" },
-};
-export const heat = (score: number | null | undefined) => HEAT[band(score)];
+export { HEAT, heat, type Heat } from "../lib/heat";
 
 const MULT_TITLE = "Views ÷ the channel's usual views (the median of its videos of the same kind just before this one). Worked out by ClipTroop from YouTube's public counts.";
 
-/** The multiplier as a badge: solid in its heat colour from 2×, quiet below. `on`: over a picture. */
+/**
+ * The multiplier as a badge: solid in its heat colour from 2× (yellow, then
+ * green; 25× and up with a glow), a light wash below that (red under its
+ * usual). `on`: over a picture (1.29.0: bigger and bolder everywhere, with a
+ * shadow so it reads on any thumbnail).
+ */
 export function Mult({ score, projected, size = "md", on = false, className = "" }: { score: number | null; projected?: number | null; size?: "sm" | "md" | "lg"; on?: boolean; className?: string }) {
   const b = band(score);
   const h = HEAT[b];
   const hot = b === "good" || b === "great" || b === "huge" || b === "viral";
   const heading = projected !== null && projected !== undefined && score !== null && projected > score * 1.15 && projected >= 2;
-  const sz = size === "lg" ? "h-8 px-2.5 text-[17px]" : size === "sm" ? "h-[22px] px-1.5 text-[12px]" : "h-6 px-2 text-[13.5px]";
+  const sz = size === "lg" ? "h-9 px-3 text-[20px]" : size === "sm" ? "h-6 px-1.5 text-[13.5px]" : "h-7 px-2 text-[16px]";
+  const glow = b === "viral" ? `0 0 0 1.5px rgb(var(--m-green) / 0.45), 0 0 16px rgb(var(--m-green) / 0.4)${on ? ", 0 2px 8px rgb(0 0 0 / 0.35)" : ""}` : undefined;
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <span
         title={`${BAND_LABEL[b]}. ${MULT_TITLE}`}
-        className={`mult inline-flex items-center rounded-md font-display font-semibold leading-none ${sz} ${on && !hot ? "bg-black/60 text-white backdrop-blur-sm" : ""}`}
-        style={hot ? { background: h.solid, color: "#fff" } : on ? undefined : { background: h.soft, color: h.text }}
+        className={`mult inline-flex items-center rounded-md font-display font-bold leading-none tracking-tight ${sz} ${on ? "shadow-[0_2px_8px_rgb(0_0_0/0.35)]" : ""} ${on && !hot ? "bg-black/65 text-white backdrop-blur-sm" : ""}`}
+        style={hot ? { background: h.solid, color: h.on, boxShadow: glow } : on ? undefined : { background: h.soft, color: h.text }}
       >
         {multText(score)}
       </span>
       {heading && (
         <span
           title="Where it's heading: a video this young usually has only part of its views yet. An estimate, worked out by ClipTroop."
-          className={`mult inline-flex items-center gap-0.5 rounded-md px-1.5 font-display font-semibold leading-none ${size === "sm" ? "h-[22px] text-[11.5px]" : "h-6 text-[12.5px]"} ${on ? "bg-black/60 text-white backdrop-blur-sm" : "bg-surface-2 text-ink-soft"}`}
+          className={`mult inline-flex items-center gap-0.5 rounded-md px-1.5 font-display font-semibold leading-none ${size === "sm" ? "h-6 text-[12.5px]" : "h-7 text-[13.5px]"} ${on ? "bg-black/65 text-white backdrop-blur-sm shadow-[0_2px_8px_rgb(0_0_0/0.35)]" : "bg-surface-2 text-ink-soft"}`}
         >
           <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M2 6h7M6.5 3 9.5 6l-3 3" />
@@ -66,7 +62,7 @@ export function Mult({ score, projected, size = "md", on = false, className = ""
  * this one in its heat colour, a dashed line at the channel's usual. A real
  * outlier towers over its neighbours; a "usual" video sits among them.
  */
-export function Spike({ peers, at, score, width = 64, height = 22, className = "", reserve = false }: { peers: number[] | null; at: number | null; score: number | null; width?: number; height?: number; className?: string; reserve?: boolean }) {
+export function Spike({ peers, at, score, width = 64, height = 22, className = "", reserve = false, onDark = false }: { peers: number[] | null; at: number | null; score: number | null; width?: number; height?: number; className?: string; reserve?: boolean; /** 1.43.0: over a picture (the headline Short): light bars. */ onDark?: boolean }) {
   // Without the channel's other videos there's nothing to draw (a list may keep the room for it).
   if (!peers || peers.length < 2 || at === null || at < 0 || at >= peers.length) return reserve ? <span className={`flex-shrink-0 ${className}`} style={{ width, height }} aria-hidden /> : null;
   const n = peers.length;
@@ -83,9 +79,9 @@ export function Spike({ peers, at, score, width = 64, height = 22, className = "
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className={`spike flex-shrink-0 ${className}`} role="img" aria-label={`Next to its channel's videos: ${multText(score)} its usual`}>
       {peers.map((v, i) => {
         const bh = scale(v);
-        return <rect key={i} x={i * (bw + gap)} y={height - bh} width={bw} height={bh} rx={1} fill={i === at ? h.solid : "rgb(var(--ink) / 0.16)"} style={{ animationDelay: `${i * 22}ms` }} />;
+        return <rect key={i} x={i * (bw + gap)} y={height - bh} width={bw} height={bh} rx={1} fill={i === at ? h.solid : onDark ? "rgb(255 255 255 / 0.32)" : "rgb(var(--ink) / 0.16)"} style={{ animationDelay: `${i * 22}ms` }} />;
       })}
-      <line x1={0} x2={width} y1={uy} y2={uy} stroke="rgb(var(--ink) / 0.35)" strokeWidth={1} strokeDasharray="2 2" />
+      <line x1={0} x2={width} y1={uy} y2={uy} stroke={onDark ? "rgb(255 255 255 / 0.6)" : "rgb(var(--ink) / 0.35)"} strokeWidth={1} strokeDasharray="2 2" />
     </svg>
   );
 }
@@ -285,8 +281,18 @@ export function Trend({ mom, n, className = "" }: { mom: number; n?: number; cla
   );
 }
 
-/** A quiet "nothing here" with what to do next. */
-export function EmptyNote({ title, children, action, className = "" }: { title: string; children?: React.ReactNode; action?: React.ReactNode; className?: string }) {
+/** The niche whose first channels and videos are being found right now (its name), else null (1.29.9). */
+export const FindingCtx = createContext<string | null>(null);
+
+/**
+ * A quiet "nothing here" with what to do next. `finding`: it's empty because
+ * the niche has no videos yet; while they're being found it says so instead
+ * (1.29.9: it said "No videos match" while a new niche filled in), with
+ * `findingAction` under it and, with `ghost`, faint cards to come.
+ */
+export function EmptyNote({ title, children, action, className = "", finding = false, findingAction, ghost = false }: { title: string; children?: React.ReactNode; action?: React.ReactNode; className?: string; finding?: boolean; findingAction?: React.ReactNode; ghost?: boolean }) {
+  const filling = useContext(FindingCtx);
+  if (finding && filling) return <FindingNote name={filling} action={findingAction} ghost={ghost} className={className} />;
   return (
     <div className={`rounded-2xl border border-dashed border-line/20 px-5 py-8 text-center ${className}`}>
       <div className="mx-auto mb-3 w-10 h-10 rounded-xl bg-surface-2 flex items-center justify-center text-ink-faint">
@@ -299,6 +305,37 @@ export function EmptyNote({ title, children, action, className = "" }: { title: 
   );
 }
 
+/** Channels and videos on their way: a niche filling in (the page looks again by itself). */
+export function FindingNote({ name, action, ghost = false, className = "" }: { name: string; action?: React.ReactNode; ghost?: boolean; className?: string }) {
+  return (
+    <div data-finding-note className={className}>
+      <div className="rounded-2xl border border-blue/25 bg-blue/[0.045] px-5 py-9 text-center" role="status">
+        <div className="relative mx-auto mb-4 w-12 h-12" aria-hidden>
+          <span className="absolute inset-0 rounded-full border-2 border-blue/15 border-t-blue animate-spin" />
+          <span className="absolute inset-[7px] rounded-full bg-blue/10 text-blue flex items-center justify-center">
+            <OutliersIcon className="w-[18px] h-[18px]" />
+          </span>
+        </div>
+        <p className="text-[15px] font-semibold text-balance">Finding channels and videos for {name}…</p>
+        <p className="mt-1 text-[12.5px] text-ink-soft max-w-md mx-auto">This page updates by itself as they come in. It usually takes a few minutes.</p>
+        {action && <div className="mt-4 flex justify-center gap-2 flex-wrap">{action}</div>}
+      </div>
+      {ghost && (
+        <div className="mt-5 grid gap-x-4 gap-y-6 grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [mask-image:linear-gradient(to_bottom,black_30%,transparent)]" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => (
+            // Two rows at every width.
+            <div key={i} className={i >= 6 ? "hidden xl:block" : i >= 4 ? "hidden lg:block" : i >= 2 ? "hidden min-[480px]:block" : ""}>
+              <div className="skeleton aspect-video rounded-xl" />
+              <div className="skeleton mt-2.5 h-4 w-4/5 rounded-md" />
+              <div className="skeleton mt-1.5 h-3 w-1/2 rounded-md" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The page's buttons: quiet by default, amber when it's the main one. */
 export const BTN = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-line/15 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-line/30 hover:bg-surface-2/60 transition-colors disabled:opacity-50 disabled:pointer-events-none";
 export const BTN_MAIN = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber px-3.5 h-9 text-[13px] font-semibold text-white hover:brightness-110 transition-[filter] disabled:opacity-60 disabled:pointer-events-none";
@@ -307,3 +344,105 @@ export const ICON_BTN = "inline-flex items-center justify-center rounded-lg bord
 /** Form fields (the app's own: New long video's). */
 export const FIELD = "w-full rounded-xl border border-line/15 bg-surface px-3.5 h-11 text-[14px] outline-none focus:ring-2 focus:ring-amber transition-shadow";
 export const LABEL = "block text-[12px] font-semibold text-ink-soft mb-1.5";
+
+/**
+ * A thumbnail's brightness or colourfulness (stored 0–255) as a percentage:
+ * brightness 0% is black and 100% white; colourfulness 0% is grey and 100%
+ * pure colour (1.29.0: they were shown 100 times too big).
+ */
+export const pct255 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round((Math.min(255, Math.max(0, v)) / 255) * 100));
+export const BRIGHTNESS_HELP = "How light the picture is overall: 0% is black, 100% is white. Most thumbnails sit between 30% and 60%.";
+export const COLOURFUL_HELP = "How vivid its colours are: 0% is black and white, 100% is pure colour. Most thumbnails sit between 25% and 55%.";
+
+/** Three dots (a card's menu). */
+export function DotsIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <circle cx="5.5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="18.5" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+/** An eye with a line through it (hide a channel). */
+export function EyeOffIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M3.5 4.5 20.5 19.5" />
+      <path d="M9.9 6.1A9.6 9.6 0 0 1 12 5.9c4.6 0 7.9 3.3 9.2 6.1-.5 1.1-1.3 2.3-2.4 3.4" />
+      <path d="M6.6 7.7C4.8 8.9 3.5 10.5 2.8 12c1.3 2.8 4.6 6.1 9.2 6.1 1.6 0 3-.4 4.3-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
+/** A gear (Outlier settings). */
+export function GearIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" />
+      <path d="M19.4 13.6c.1-.5.1-1.1.1-1.6s0-1.1-.1-1.6l2-1.6-2-3.4-2.4.9c-.8-.7-1.8-1.3-2.8-1.6L13.8 2h-3.6l-.4 2.7c-1 .3-2 .9-2.8 1.6l-2.4-.9-2 3.4 2 1.6c-.1.5-.1 1.1-.1 1.6s0 1.1.1 1.6l-2 1.6 2 3.4 2.4-.9c.8.7 1.8 1.3 2.8 1.6l.4 2.7h3.6l.4-2.7c1-.3 2-.9 2.8-1.6l2.4.9 2-3.4-2-1.6Z" />
+    </svg>
+  );
+}
+
+/** Two people (the Audience tab). */
+export function PeopleIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3.2 19.5c.6-3.2 3-5.2 5.8-5.2s5.2 2 5.8 5.2" />
+      <path d="M15.6 5.6a3 3 0 0 1 0 5.8M17.6 14.6c1.7.6 2.9 2.2 3.2 4.9" />
+    </svg>
+  );
+}
+
+/** An on/off switch (1.29.0: a niche's "Only your channels", made for kids). */
+export function Toggle({ on, onChange, disabled = false, label, title }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string; title?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={`relative w-11 h-6 rounded-lg flex-shrink-0 transition-colors disabled:opacity-50 disabled:cursor-default ${on ? "bg-amber" : "bg-line/25"}`}
+    >
+      <span className={`absolute top-0.5 left-0 w-5 h-5 rounded-md bg-white shadow transition-transform ${on ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+    </button>
+  );
+}
+
+/** Why a channel found by a niche's keywords counts there or doesn't (1.29.0). */
+export const VERDICTS: Record<"ok" | "topic" | "lang" | "region" | "kids" | "unchecked", { label: string; help: string; tone: string }> = {
+  ok: { label: "Fits", help: "Its videos are about this niche, in its language, from where it takes creators.", tone: "bg-green/10 text-green" },
+  topic: { label: "Off topic", help: "Its videos aren't about this niche's keywords or channels.", tone: "bg-line/10 text-ink-soft" },
+  lang: { label: "Other language", help: "Most of its videos are in a language this niche doesn't take.", tone: "bg-line/10 text-ink-soft" },
+  region: { label: "Other country", help: "It's from a country this niche doesn't take creators from.", tone: "bg-line/10 text-ink-soft" },
+  kids: { label: "Made for kids", help: "Most of its videos are made for kids.", tone: "bg-line/10 text-ink-soft" },
+  unchecked: { label: "Checking", help: "Checked within the hour: until then it doesn't count.", tone: "bg-blue/10 text-blue" },
+};
+
+/** A channel's place in a niche, as a small label: one of yours, found and fits, or why not. */
+export function FitChip({ c, className = "" }: { c: { group: boolean; counted: boolean; verdict: string | null; hidden: boolean; pending: boolean; source?: string | null }; className?: string }) {
+  const base = `inline-flex items-center gap-1 rounded-md px-1.5 h-5 text-[11px] font-bold whitespace-nowrap ${className}`;
+  if (c.pending)
+    return (
+      <span className={`${base} bg-blue/10 text-blue`} title="Its videos are being read now. Scores show within a few minutes.">
+        <span className="w-2.5 h-2.5 rounded-full border-[1.5px] border-blue/30 border-t-blue animate-spin" aria-hidden />
+        Reading
+      </span>
+    );
+  if (c.hidden) return <span className={`${base} bg-line/10 text-ink-faint`} title="Taken out of this niche by your team.">Removed</span>;
+  if (c.group) return <span className={`${base} bg-amber/12 text-amber`} title={c.source === "audience" ? "One of this niche's own channels (from the channels your viewers watch). It always counts." : "One of this niche's own channels. It always counts."}>Yours</span>;
+  const v = VERDICTS[(c.verdict && c.verdict in VERDICTS ? c.verdict : "unchecked") as keyof typeof VERDICTS];
+  if (c.counted) return <span className={`${base} ${VERDICTS.ok.tone}`} title={`Found by the niche's keywords. ${VERDICTS.ok.help}`}>Found</span>;
+  return (
+    <span className={`${base} ${v.tone}`} title={v.help}>
+      {v.label}
+    </span>
+  );
+}

@@ -7,6 +7,8 @@ import { requestOwnershipTransfer, cancelOwnershipTransfer } from "./actions";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { colorForId, initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
+import { Leaves } from "@/components/ui/leaves";
 
 type Candidate = { userId: string; name: string; avatarUrl: string | null };
 
@@ -116,12 +118,7 @@ export function TransferOwnership({
                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
                 style={{ background: colorForId(selected.userId) }}
               >
-                {selected.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img loading="lazy" decoding="async" src={selected.avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  initialsFor(selected.name)
-                )}
+                <AvatarImg src={selected.avatarUrl} fallback={initialsFor(selected.name)} />
               </span>
               <span className="font-semibold flex-1 truncate">{selected.name}</span>
             </>
@@ -132,32 +129,29 @@ export function TransferOwnership({
         </button>
 
         {open && (
-          <div className="absolute top-[calc(100%+6px)] left-0 right-0 min-w-[220px] rounded-lg border border-line/10 bg-surface shadow-lg p-1 z-40 max-h-64 overflow-y-auto styled-scroll">
-            {candidates.map((c) => (
-              <button
-                key={c.userId}
-                type="button"
-                onClick={() => {
-                  setSelected(c);
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-surface-2 transition-colors"
-              >
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
-                  style={{ background: colorForId(c.userId) }}
+          <Leaves>
+            <div className="pop-menu origin-top absolute top-[calc(100%+6px)] left-0 right-0 min-w-[220px] rounded-lg border border-line/10 bg-surface shadow-lg p-1 z-40 max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll">
+              {candidates.map((c) => (
+                <button
+                  key={c.userId}
+                  type="button"
+                  onClick={() => {
+                    setSelected(c);
+                    setOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-surface-2 transition-colors"
                 >
-                  {c.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img loading="lazy" decoding="async" src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    initialsFor(c.name)
-                  )}
-                </span>
-                <span className="text-[13px] font-medium truncate">{c.name}</span>
-              </button>
-            ))}
-          </div>
+                  <span
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden"
+                    style={{ background: colorForId(c.userId) }}
+                  >
+                    <AvatarImg src={c.avatarUrl} fallback={initialsFor(c.name)} />
+                  </span>
+                  <span className="text-[13px] font-medium truncate">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          </Leaves>
         )}
       </div>
 

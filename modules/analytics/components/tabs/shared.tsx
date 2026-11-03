@@ -6,6 +6,7 @@ import { CloseIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { Mascot } from "@/components/ui/mascot";
 import type { Audience, PlatformStatus } from "../../lib/queries";
+import { csvText } from "@/lib/csv";
 
 /*
  * The pieces the Analytics tabs share (1.20.0): platform names and colours,
@@ -46,11 +47,8 @@ export const fmtDays = (n: number | null) => (n === null ? "–" : n < 10 ? n.to
 export const fmtPct = (n: number | null) => (n === null ? "–" : `${Math.round(n)}`);
 
 export function csvDownload(name: string, rows: (string | number | null)[][]) {
-  const esc = (v: string | number | null) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const blob = new Blob(["﻿" + rows.map((r) => r.map(esc).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  // Text a spreadsheet would run as a formula stays text (lib/csv.ts, 1.31.15).
+  const blob = new Blob([csvText(rows)], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;

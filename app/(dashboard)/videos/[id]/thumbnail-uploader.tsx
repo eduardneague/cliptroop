@@ -2,7 +2,8 @@
 
 import { CloseIcon } from "@/components/ui/icons";
 
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { pictureTooBig } from "@/lib/image/limits";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -38,13 +39,19 @@ export function ThumbnailUploader({
         failed++;
         continue;
       }
-      if (original.size > 25 * 1024 * 1024) {
-        toast.error("Keep each image under 25MB.");
+      const tooBig = pictureTooBig(original, "thumbnail");
+      if (tooBig) {
+        toast.error(tooBig);
         failed++;
         continue;
       }
 
       const file = await compressImage(original, IMAGE_PRESETS.thumbnail);
+      if (!isPictureType(file.type)) {
+        toast.error(`${original.name}: Use a picture: PNG, JPG, WebP or GIF.`);
+        failed++;
+        continue;
+      }
       const path = `${projectId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("thumbnails")

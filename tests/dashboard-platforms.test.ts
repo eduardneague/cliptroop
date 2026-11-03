@@ -1,0 +1,65 @@
+// 1.34.4: the dashboard's Followers widget draws the new followers of each day (bars), with the platforms as filters
+// under it; Upcoming shorts shows each short's platforms and filters by platform. Both save the choice with the
+// dashboard.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { followerGains, sumSeries } from "../modules/analytics/lib/followers";
+import { CATALOG } from "../modules/dashboard/layout";
+
+let fails = 0;
+const ok = (c: boolean, m: string) => {
+  if (!c) {
+    fails++;
+    console.log("FAIL", m);
+  }
+};
+const root = join(__dirname, "..");
+const read = (p: string) => readFileSync(join(root, p), "utf8");
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+// --- New followers per day ------------------------------------------------------------------------------------------
+ok(same(followerGains(4, null, { gained: [10, null, 5, 0], lost: [2, null, null, 3] }), [8, null, 5, -3]), "gained − lost where the platform says (YouTube, Facebook)");
+ok(same(followerGains(4, [100, 104, 104, 101]), [null, 4, 0, -3]), "else the change in the count");
+ok(same(followerGains(5, [100, null, null, 109, 110]), [null, null, null, 9, 1]), "a gap's change lands on the day after it (the days add up to the whole change)");
+ok(same(followerGains(3, [null, 50, 55]), [null, null, 5]), "the first count has nothing to compare with");
+ok(same(followerGains(3), [null, null, null]) && same(followerGains(2, undefined, null), [null, null]), "no counts: nothing");
+ok(same(followerGains(3, [1, 2, 3], { gained: [5, 5, 5], lost: [0, 0, 0] }), [5, 5, 5]), "the platform's own gained and lost win over the counts");
+ok(same(sumSeries([[1, null, 3], [2, null, null]], 3), [3, null, 3]), "several platforms: each day's sum, none where none has a number");
+ok(same(sumSeries([], 2), [null, null]), "no platforms: nothing");
+
+// --- Followers --------------------------------------------------------------------------------------------------------
+const w = read("modules/dashboard/components/analytics-widgets.tsx");
+const fol = w.slice(w.indexOf("export function FollowersWidget"), w.indexOf("// Top videos of the last 28 days."));
+ok(/const per = sel\.map\(\(p\) => \(\{ p, gains: followerGains\(a\.days\.length, a\.followersDaily\?\.\[p\], a\.followersFlow\?\.\[p\]\) \}\)\);/.test(fol) && /const gains = sumSeries\(\s*per\.map\(\(x\) => x\.gains\),/.test(fol), "the bars: the picked platforms' new followers each day");
+ok(/<GainBars days=\{a\.days\} values=\{gains\}/.test(fol) && !/AreaGraph|followersLine/.test(w), "bars, not the running total's flat line (gone)");
+// 1.34.5: the filters and the saved pick are shared with Views (PlatformChips, usePlatformPick).
+ok(/<PlatformChips\s+list=\{list\}\s+shown=\{shown\}\s+onPick=\{choose\}/.test(fol) && /const \[pick, choose\] = usePlatformPick\(settings, onSettings\);/.test(fol) && /<FilterChips label="Platform"/.test(w) && /onSettings\?\.\(\{ platform: v \}\);/.test(w), "the platforms are filters, the choice saved with the dashboard");
+ok(/const shown: P \| "all" = pick !== "all" && list\.includes\(pick\) \? pick : "all";/.test(fol), "a saved platform with no counts any more: every platform");
+ok(/const total = count\(sel\);/.test(fol) && /a\.perPlatform\[p\]\?\.followersNet/.test(fol), "the number and its change follow the filter");
+ok(/lostColor=\{shown === "youtube" \? "rgb\(var\(--ink\) \/ 0\.35\)" : undefined\}/.test(fol), "a lost day stays visible on YouTube's own red");
+const bars = w.slice(w.indexOf("function GainBars"), w.indexOf("export function FollowersWidget"));
+ok(/const zero = \(neg \/ range\) \* 100;/.test(bars) && /<DayTip host=\{bind\.ref\}/.test(bars) && /role="img" aria-label=\{`New followers per day/.test(bars), "a day that lost followers goes below the line; each day says its number (a popup since 1.34.5); screen readers get the sum");
+
+// --- Upcoming shorts ----------------------------------------------------------------------------------------------------
+// (1.35.1: Followers' chips, an editor filter and "Only": tests/dashboard-upcoming.test.ts has the rest.)
+const t = read("modules/dashboard/components/team-widgets.tsx");
+const up = t.slice(t.indexOf("export function UpcomingShortsWidget"), t.indexOf("export function UpcomingLongsWidget"));
+ok(/<FilterChips label="Platform" options=\{platformOptions\} value=\{platform\} onPick=\{pickPlatform\} counts=\{counted\} tight=\{tight\} \/>/.test(up) && /const n = count\(p, editor\);/.test(up), "platforms as filters, each with how many of these shorts you see when you pick it");
+ok(/const pass = \(s: UpcomingShort, p: PlatformPick, e: EditorPick\) => goesTo\(s\.platforms, p, only\) && editedBy\(editorsOfShort\(s\), e\);/.test(up) && /const list = items\.filter\(\(s\) => pass\(s, platform, editor\)\);/.test(up), "only Instagram's, or only TikTok's…");
+ok(/<PlatformMark key=\{p\} platform=\{p\} posted=\{s\.posted\.includes\(p\)\}/.test(up), "each short's platforms, a tick where it's out already");
+ok(/useSaved<PlatformPick>\(isPlatform\(settings\?\.platform\) \? settings!\.platform : "all", "platform", onSettings\)/.test(up) && /text=\{nothingFor\(\s*"shorts",/.test(up), "saved; nothing for a platform says so");
+const q = read("modules/dashboard/lib/queries.ts");
+ok(/\.select\("id, entry_number, title, planned_date, stage, platforms, short_video_posts\(platform\), editor:/.test(q) && /\.limit\(30\),/.test(q), "the query brings the platforms, the posted ones, and enough for one platform's list");
+ok(/platforms: \(\(r\.platforms as string\[\] \| null\) \?\? \[\]\)/.test(q) && /posted: \(\(r\.short_video_posts as \{ platform: string \}\[\] \| null\) \?\? \[\]\)\.map\(\(x\) => x\.platform\)/.test(q), "and passes them on");
+
+// --- Saved with the dashboard -----------------------------------------------------------------------------------------
+ok(same(CATALOG.followers.settings, { platform: "all" }) && same(CATALOG.upcomingShorts.settings, { platform: "all", only: false, editor: "all" }), "both start on every platform");
+const studio = read("modules/dashboard/components/studio.tsx");
+ok(/const HAS_SETTINGS: WidgetType\[\] = \[[^\]]*"followers", "upcomingShorts", "upcomingLongs"\]/.test(studio) && /w\.type === "followers"\) return platformRow;/.test(studio) && /\{shorts && platformRow\}/.test(studio), "both have the settings gear, with the platform picker");
+ok(/<UpcomingShortsWidget items=\{data\.upcomingShorts\} settings=\{w\.settings\} onSettings=\{update\} \/>/.test(studio) && /<FollowersWidget teamId=\{data\.teamId\} settings=\{w\.settings\} onSettings=\{update\} \/>/.test(studio), "the board passes their settings and saves the changes");
+
+if (fails) {
+  console.log(`${fails} FAILED`);
+  process.exit(1);
+}
+console.log("dashboard platforms ok");

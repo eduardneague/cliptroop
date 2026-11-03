@@ -42,7 +42,16 @@ export function ShortStepSkeleton({ step, current }: { step: ShortStage; current
             </section>
           )}
           {posting && <PostingSkeleton />}
-          {(step === "script" || step === "editing") && (
+          {/* 1.36.0: Filming's card (mark it filmed, or who filmed it). */}
+          {step === "filming" && (
+            <section className={`rounded-2xl border p-4 sm:p-5 ${viewing ? "border-line/10 bg-surface" : "border-amber/40 bg-amber/[0.06]"}`}>
+              <h2 className={`text-[12px] font-bold uppercase tracking-wide mb-3 ${viewing ? "text-ink-soft" : "text-amber"}`}>Filming</h2>
+              <Skeleton className="h-3.5 w-72 max-w-full mb-3" />
+              <Skeleton className="h-10 w-full rounded-xl mb-3" />
+              <Skeleton className="h-11 w-56 rounded-xl" />
+            </section>
+          )}
+          {(step === "script" || step === "filming" || step === "editing") && (
             <Card title="Script" prominent={step === "script" && !viewing}>
               <SkeletonLines lines={3} className="mb-3" />
               <div className="flex items-center justify-between gap-3">
@@ -51,7 +60,7 @@ export function ShortStepSkeleton({ step, current }: { step: ShortStage; current
               </div>
             </Card>
           )}
-          {step !== "script" && (
+          {step !== "script" && step !== "filming" && (
             <Card title="Video" prominent={step === "editing" && !viewing}>
               <Skeleton className="h-4 w-40 mb-1.5" />
               <Skeleton className="h-3 w-56 max-w-full mb-3" />

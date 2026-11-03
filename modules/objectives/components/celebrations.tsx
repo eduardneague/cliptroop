@@ -250,7 +250,7 @@ export function ObjectiveCelebrations({ teamId }: { teamId: string | null }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-soft">
-              <span className="relative inline-flex w-[22px] h-[22px] items-center justify-center rounded-md overflow-hidden" style={{ background: "rgb(245 197 66 / 0.22)", color: "#b8860b" }}>
+              <span className="relative inline-flex w-[22px] h-[22px] items-center justify-center rounded-md overflow-hidden" style={{ background: "rgb(245 197 66 / 0.22)", color: "rgb(var(--gold-text))" }}>
                 <TrophyIcon className="obj-trophy w-4 h-4" />
                 <span className="obj-shine absolute inset-y-0 w-2 bg-white/80 opacity-0" aria-hidden />
               </span>
@@ -313,7 +313,7 @@ function StreakCard({ s, more, leaving, onStay, onClose }: { s: WinStreak; more:
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#e2620e]">{first ? "Streak started!" : best ? "New best streak!" : "Win streak!"}</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#b54800] dark:text-[#f0782a]">{first ? "Streak started!" : best ? "New best streak!" : "Win streak!"}</div>
           <div className="mt-1 font-display text-[19px] font-semibold leading-tight">
             {s.current} {unitWord(s.unit, s.current)} in a row
           </div>

@@ -8,6 +8,7 @@ import { encryptToken } from "@/lib/social/crypto";
 import { logSocial } from "@/lib/social/tokens";
 import { POPUP_COOKIE } from "@/lib/social/popup";
 import { adoptAccount } from "@/modules/analytics/lib/accounts";
+import { newNonce } from "@/lib/csp";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +22,25 @@ type Result = { ok: boolean; platform: string | null; error?: string; message?: 
  */
 function popupPage(result: Result, fallback: string) {
   const json = JSON.stringify({ type: "vp-social", ...result }).replace(/</g, "\\u003c");
+  // Its own policy (1.31.16): its one script (by nonce) and its style, nothing else.
+  const nonce = newNonce();
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${APP_NAME}</title>
 <style>body{margin:0;height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:#edeee7;color:#14110c}@media (prefers-color-scheme:dark){body{background:#120f0b;color:#f0ece3}}p{margin:0;padding:24px;text-align:center}</style></head>
 <body><p>${result.ok ? "Connected. You can close this window." : "That didn&rsquo;t work. You can close this window."}</p>
-<script>
+<script nonce="${nonce}">
 (function(){var r=${json};
 try{var bc=new BroadcastChannel("vp-social");bc.postMessage(r);bc.close();}catch(e){}
 try{localStorage.setItem("vp-social",JSON.stringify(Object.assign({t:Date.now()},r)));}catch(e){}
 try{if(window.opener)window.opener.postMessage(r,location.origin);}catch(e){}
 setTimeout(function(){window.close();setTimeout(function(){location.replace(${JSON.stringify(fallback)});},500);},250);})();
 </script></body></html>`;
-  const res = new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" } });
+  const res = new NextResponse(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "private, no-store",
+      "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    },
+  });
   res.cookies.set(POPUP_COOKIE, "", { path: "/api/social", maxAge: 0 });
   return res;
 }

@@ -7,6 +7,7 @@ import { actorMeta, sendNotifications } from "@/lib/notify";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 import { displayName } from "@/lib/avatar";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
+import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
 
 type SaveResult =
   | { ok: true; version: number; updatedAt: string }
@@ -114,11 +115,83 @@ export async function deleteDoc(id: string): Promise<DocResult> {
 }
 
 /** "Copy from…": another document's content (the editor applies it and saves). */
-export async function getDocContent(id: string): Promise<DocResult<{ content: Record<string, unknown> }>> {
+export async function getDocContent(id: string): Promise<DocResult<{ content: Record<string, unknown>; comments: number }>> {
+  if (!UUID_RX.test(id)) return { error: "Not found." };
   const supabase = await createClient();
-  const { data } = await supabase.from("scripts").select("content").eq("id", id).maybeSingle();
+  const [{ data }, { count }] = await Promise.all([
+    supabase.from("scripts").select("content").eq("id", id).maybeSingle(),
+    // How many comments and editing ideas it has (1.27.5: "Copy from…" asks whether to bring them).
+    supabase.from("script_comments").select("id", { count: "exact", head: true }).eq("script_id", id).is("resolved_at", null),
+  ]);
   if (!data) return { error: "Not found." };
-  return { content: (data.content as Record<string, unknown>) ?? {} };
+  return { content: (data.content as Record<string, unknown>) ?? {}, comments: count ?? 0 };
+}
+
+/**
+ * Comments and editing ideas from one document of a video into another
+ * (1.27.5): with "Ready for review / staging" when the text went over, and
+ * "Copy from…" when you say so. Each keeps its author, date and whether it
+ * was resolved; its drawing is copied into the new document's folder (every
+ * comment has its own file, deleted with it). Ones already there aren't
+ * copied twice. The database checks who's asking (migration 0092).
+ */
+async function copyComments(supabase: Awaited<ReturnType<typeof createClient>>, from: string, to: string): Promise<DocResult<{ copied: number }>> {
+  if (!UUID_RX.test(from) || !UUID_RX.test(to) || from === to) return { error: "Document not found." };
+  const [{ data: rows, error }, { data: target }] = await Promise.all([
+    supabase.from("script_comments").select("id, sketch_path").eq("script_id", from),
+    supabase.from("scripts").select("id, team_id").eq("id", to).maybeSingle(),
+  ]);
+  if (error) return { error: "Couldn't read the comments." };
+  if (!target) return { error: "Document not found." };
+  if (!rows?.length) return { copied: 0 };
+  if (!(await mayComment(supabase, to))) return { error: NOT_ON_SCRIPT };
+
+  // Drawings first, each to the id its copy will have (the database checks the folder).
+  const admin = createAdminClient();
+  const bucket = admin.storage.from(SKETCH_BUCKET);
+  const items = await Promise.all(
+    rows.map(async (r) => {
+      const newId = crypto.randomUUID();
+      const path = (r.sketch_path as string | null) ?? null;
+      let sketch: string | null = null;
+      if (path && SKETCH_RX.test(path)) {
+        const dest = `${target.team_id}/${target.id}/${newId}.png`;
+        const { error: e } = await bucket.copy(path, dest);
+        if (!e) {
+          sketch = dest;
+          // (The editable drawing too, when there is one.)
+          await bucket.copy(path.replace(/\.png$/, ".json"), dest.replace(/\.png$/, ".json"));
+        }
+      }
+      return { id: r.id as string, new_id: newId, sketch: !!sketch, dest: sketch };
+    })
+  );
+  const { data, error: rpcError } = await supabase.rpc("script_copy_comments", {
+    p_from: from,
+    p_to: to,
+    p_items: items.map(({ id, new_id, sketch }) => ({ id, new_id, sketch })),
+  });
+  const made = new Set(((data as string[] | null) ?? []).map(String));
+  // Drawings of comments that weren't copied (already there, or it failed) go again.
+  const extra = items.filter((x) => x.dest && !made.has(x.new_id)).flatMap((x) => [x.dest!, x.dest!.replace(/\.png$/, ".json")]);
+  if (extra.length) await bucket.remove(extra);
+  if (rpcError) return { error: /script_copy_comments|does not exist|schema cache/i.test(rpcError.message ?? "") ? "Run migration 0092 first." : rpcError.message || "Couldn't copy the comments." };
+  return { copied: made.size };
+}
+
+/** "Copy from…" (1.27.5): the other document's comments and editing ideas come too. */
+export async function copyCommentsFrom(from: string, to: string): Promise<DocResult<{ copied: number }>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const r = await copyComments(supabase, from, to);
+  if (r.error === undefined) {
+    const { data } = await supabase.from("scripts").select("short_video_id, long_video_id").eq("id", to).maybeSingle();
+    refreshDocs({ short: data?.short_video_id as string | null, long: data?.long_video_id as string | null });
+  }
+  return r;
 }
 
 const SKETCH_RX = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/i;
@@ -407,16 +480,50 @@ export async function setScriptPeople(input: { scriptId?: string; teamId?: strin
  * copies the text into the next document when it's still empty and logs it;
  * then the next step's people get a notification and an email.
  */
-export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; notified: number }>> {
+/**
+ * Why a document can't be sent on again yet (1.35.2), or null: it was sent and the next step isn't done since
+ * (`handOffLocked`). Reads the video's flow documents and their hand-offs.
+ */
+async function handOffWait(supabase: Awaited<ReturnType<typeof createClient>>, scriptId: string): Promise<string | null> {
+  const { data: doc } = await supabase.from("scripts").select("id, step, short_video_id, long_video_id").eq("id", scriptId).maybeSingle();
+  const step = doc?.step as string | null | undefined;
+  if (!doc || (step !== "write" && step !== "review")) return null;
+  const video = doc.short_video_id ? { col: "short_video_id", id: doc.short_video_id as string } : doc.long_video_id ? { col: "long_video_id", id: doc.long_video_id as string } : null;
+  if (!video) return null;
+  const { data: docs } = await supabase.from("scripts").select("id, step").eq(video.col, video.id).in("step", ["review", "staging"]);
+  const review = (docs ?? []).find((d) => d.step === "review")?.id as string | undefined;
+  const staging = (docs ?? []).find((d) => d.step === "staging")?.id as string | undefined;
+  const ids = [scriptId, review, staging].filter((x): x is string => !!x);
+  const { data: rows } = await supabase.from("script_handoffs").select("script_id, to_step, created_at").in("script_id", ids).order("created_at", { ascending: false }).limit(60);
+  const last = (f: (r: { script_id: string; to_step: string }) => boolean) => ((rows ?? []) as { script_id: string; to_step: string; created_at: string }[]).find(f)?.created_at ?? null;
+  const locked = handOffLocked({
+    step,
+    sentAt: last((r) => r.script_id === scriptId && r.to_step !== "done"),
+    nextSentAt: review ? last((r) => r.script_id === review && r.to_step === "staging") : null,
+    doneAt: staging ? last((r) => r.script_id === staging && r.to_step === "done") : null,
+  });
+  return locked ? `Already sent to ${step === "write" ? "review" : "staging"}. ${LOCK_WAIT[step]}` : null;
+}
+
+export async function handOffScript(scriptId: string, copy: boolean): Promise<DocResult<{ nextId: string; nextName: string; copied: boolean; comments: number; notified: number }>> {
   if (!UUID_RX.test(scriptId)) return { error: "Document not found." };
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
+  // 1.35.2: not again while the next step is still at it (the button is greyed out then too).
+  const wait = await handOffWait(supabase, scriptId);
+  if (wait) return { error: wait };
   const { data, error } = await supabase.rpc("script_hand_off", { p_script: scriptId, p_copy: !!copy });
   if (error || !data) return { error: flowError(error?.message) };
   const r = data as { next_id: string; next_name: string; next_step: "review" | "staging"; name: string; copied: boolean; team: string; short: string | null; long: string | null; recipients: string[] };
+  // The text went over: its comments and editing ideas go with it (1.27.5).
+  let comments = 0;
+  if (r.copied) {
+    const c = await copyComments(supabase, scriptId, r.next_id);
+    if (c.error === undefined) comments = c.copied;
+  }
   refreshDocs({ short: r.short, long: r.long });
 
   const recipients = (r.recipients ?? []).filter((id) => UUID_RX.test(id));
@@ -460,7 +567,7 @@ export async function handOffScript(scriptId: string, copy: boolean): Promise<Do
       );
     }
   }
-  return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, notified: recipients.length };
+  return { nextId: r.next_id, nextName: r.next_name, copied: !!r.copied, comments, notified: recipients.length };
 }
 
 /**

@@ -24,7 +24,7 @@ function SortTable<T extends { id: string }>({ rows, cols, initial, empty }: { r
   }, [rows, cols, sort]);
   if (!rows.length) return <p className="text-[13px] text-ink-soft">{empty}</p>;
   return (
-    <div className="overflow-x-auto -mx-4 px-4">
+    <div className="overflow-x-auto overscroll-x-contain -mx-4 px-4">
       <table className="w-full min-w-[760px] text-[12.5px]">
         <thead>
           <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-ink-faint">

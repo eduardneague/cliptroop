@@ -1,17 +1,21 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
+import { SHORTS_VIEW_COOKIE } from "@/modules/short-videos/lib/view-mode";
+import { ShortCardsSkeleton, ShortTableSkeleton } from "@/modules/short-videos/components/list-skeletons";
 import NewShortLoading from "./new/loading";
 import ShortLoading from "./[id]/loading";
 import { Skeleton, SkeletonPage } from "@/components/ui/skeleton";
 import { SHORT_STAGES, SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 
-const WIDE =
-  "md:grid-cols-[40px_minmax(0,1fr)_120px_60px_64px] lg:grid-cols-[40px_minmax(0,1fr)_160px_120px_60px_64px] xl:grid-cols-[44px_minmax(0,1fr)_160px_120px_150px_64px] 2xl:grid-cols-[48px_minmax(0,1fr)_140px_160px_120px_150px_64px] gap-3";
-const COLS = `grid grid-cols-[36px_minmax(0,1fr)_auto] ${WIDE}`;
+const noop = () => () => {};
+/** The view picked last (the cookie the list reads too): the table unless it's the cards. */
+const savedView = () => (new RegExp(`(?:^|; )${SHORTS_VIEW_COOKIE}=grid(?:;|$)`).test(document.cookie) ? "grid" : "table");
 
-/** Shorts list: the title, the step filters and the table, rows shimmering. */
+/** Shorts list: the title, the step filters and the table (or the cards, if picked last), shimmering. */
 function ListSkeleton() {
+  const view = useSyncExternalStore(noop, savedView, () => "table");
   return (
     <SkeletonPage width="max-w-[1500px]">
       <div className="flex items-start justify-between gap-6 mb-6 flex-wrap" aria-hidden>
@@ -37,34 +41,7 @@ function ListSkeleton() {
       </div>
       <Skeleton className="-mt-3 mb-6 h-8 w-24 rounded-lg" />
 
-      <div className="rounded-xl border border-line/10 bg-surface overflow-hidden" aria-hidden>
-        <div className={`hidden md:grid ${WIDE} px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint`}>
-          <span className="text-right">#</span>
-          <span>Title</span>
-          <span className="hidden 2xl:block">Planned</span>
-          <span className="hidden lg:block">Editor</span>
-          <span>Status</span>
-          <span>Posted</span>
-          <span />
-        </div>
-        {Array.from({ length: 10 }, (_, i) => (
-          <div key={i} className={`${COLS} items-center px-3 py-3 border-t border-line/10`}>
-            <Skeleton className="h-3 w-5 justify-self-end" />
-            <div className="min-w-0 space-y-1.5">
-              <Skeleton className={`h-3.5 ${["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-[45%]"][i % 5]}`} />
-              <Skeleton className="h-2.5 w-28" />
-            </div>
-            <Skeleton className="hidden 2xl:block h-3 w-20" />
-            <div className="hidden lg:flex items-center gap-2">
-              <Skeleton className="w-6 h-6 rounded-full" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-            <Skeleton className="hidden md:block h-6 w-20 rounded-lg" />
-            <Skeleton className="hidden md:block h-5 w-12" />
-            <Skeleton className="h-7 w-14 rounded-lg justify-self-end md:justify-self-start" />
-          </div>
-        ))}
-      </div>
+      {view === "grid" ? <ShortCardsSkeleton /> : <ShortTableSkeleton />}
     </SkeletonPage>
   );
 }

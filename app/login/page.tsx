@@ -28,8 +28,8 @@ function Spinner() {
 }
 
 /**
- * Sign in (and "Forgot password?"). Accounts are made by the team owner,
- * so there's no sign-up. Goes back to the page you were sent from (?next=).
+ * Sign in (and "Forgot password?"). New here: Create an account (/signup,
+ * 1.45.0); joining a team: its invite. Goes back to the page you were sent from (?next=).
  * Desktop: the slate with Clip on the left, the form on the right.
  */
 export default function LoginPage() {
@@ -51,6 +51,8 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false);
   const [resetPending, setResetPending] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  // Just deleted their account (1.28.0, Settings → Account).
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -58,6 +60,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     // "Get a new reset link" (from an expired reset email) opens the reset form.
     if (params.get("reset") === "1") setMode("forgot");
+    setDeleted(params.get("deleted") === "1");
     setNext(params.get("next") ?? "");
   }, []);
 
@@ -200,10 +203,35 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  {deleted && !state?.error && (
+                    <p role="status" className="rounded-xl border border-line/15 bg-surface-2 px-3 py-2.5 text-[13.5px] text-ink-soft">
+                      Your account was deleted. Thanks for everything you made here.
+                    </p>
+                  )}
                   {state?.error && (
                     <p role="alert" className="flex items-start gap-2 rounded-xl border border-red/30 bg-red/[0.07] px-3 py-2.5 text-[13.5px] text-red font-medium">
                       <AlertIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      {state.error}
+                      <span>
+                        {state.error}
+                        {/* Too many wrong tries: a new password is the way in meanwhile. */}
+                        {state.wait && (
+                          <>
+                            {" "}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMode("forgot");
+                                setResetEmail((r) => r || email);
+                                setResetSent(false);
+                                setResetError(null);
+                              }}
+                              className="font-bold underline underline-offset-2 hover:no-underline"
+                            >
+                              Reset your password
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </p>
                   )}
 
@@ -215,7 +243,14 @@ export default function LoginPage() {
                     {pending && <Spinner />}
                     {pending ? "Signing in…" : "Sign in"}
                   </button>
-                  <p className="text-[13px] text-ink-faint text-center pt-2">No account? Your team&rsquo;s owner creates it and sends you an invite.</p>
+                  {/* 1.45.0: anyone can make an account; someone joining a team still gets an invite from it. */}
+                  <p className="text-[13px] text-ink-faint text-center pt-2">
+                    New to {APP_NAME}?{" "}
+                    <Link href="/signup" className="font-semibold text-amber hover:underline">
+                      Create an account
+                    </Link>
+                    . Joining a team? Open the invite it sent you.
+                  </p>
                 </form>
               ) : resetSent ? (
                 <div className="space-y-5" role="status">

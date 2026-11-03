@@ -62,7 +62,11 @@ const OBJ_LAYOUT = { v: 2, fill: false, sounds: true, widgets: [
   { id: "w-clock", type: "clock", x: 0, y: OH, w: 2, h: 2, settings: { h24: true, secondHand: true } },
   { id: "w-posting", type: "posting", x: 2, y: OH, w: 3, h: 3 },
 ] };
-const prof = (i) => ({ ...people[i], palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
+// MOCK_GLASS=1: the glass look (1.28.0: MOCK_GLASS_STYLE=liquid, MOCK_GLASS_SCOPE=everywhere, MOCK_GLASS_SIDEBAR=1,
+// MOCK_GLASS_LEVEL=0..100); MOCK_DASH_BG=jpg|gif|webm|mp4: a dashboard background of that kind (1.27.5; the file:
+// MOCK_DASH_BG_FILE, else a drawn picture), MOCK_DASH_BG_DIM=0..80.
+const DASH_BG = process.env.MOCK_DASH_BG;
+const prof = (i) => ({ ...people[i], glass_ui: process.env.MOCK_GLASS === "1", glass_style: process.env.MOCK_GLASS_STYLE || "simple", glass_scope: process.env.MOCK_GLASS_SCOPE || "cards", glass_sidebar: process.env.MOCK_GLASS_SIDEBAR === "1", glass_level: Number(process.env.MOCK_GLASS_LEVEL ?? 50), dashboard_bg_on: !!DASH_BG, dashboard_bg_path: DASH_BG ? `${people[i].id}/1761000000000-dusk.${DASH_BG}` : null, dashboard_bg_dim: Number(process.env.MOCK_DASH_BG_DIM ?? 30), palette: process.env.MOCK_PALETTE || null, currency: process.env.MOCK_CURRENCY || null, animations_enabled: true, sounds_enabled: false, dashboard_layout: process.env.MOCK_LAYOUT === "all" ? ALL_LAYOUT : process.env.MOCK_LAYOUT === "objectives" ? OBJ_LAYOUT : process.env.MOCK_LAYOUT === "streak" ? STREAK_LAYOUT : process.env.MOCK_LAYOUT ? LAYOUT : null, created_at: "2026-01-10T10:00:00Z", bio: null, banner_url: null, tutorial_done_at: process.env.MOCK_TOUR === "1" ? null : "2026-01-11T10:00:00Z" });
 const roles = [["master"], ["scripter", "editor"], ["editor"], ["publisher", "reviewer"]];
 const members = people.map((p, i) => ({
   id: `bbbbbbbb-0000-4000-8000-00000000000${i + 1}`,
@@ -74,6 +78,8 @@ const members = people.map((p, i) => ({
   member_roles: roles[i].map((role) => ({ role })),
   profiles: prof(i),
   profile: prof(i),
+  // The team itself (the profile page's Invite to team names it).
+  teams: { id: TEAM, name: "Viverro Main", color: "#e8630d", logo_url: null },
 }));
 const team = {
   id: TEAM,
@@ -156,6 +162,15 @@ const scriptDocs = [
   doc("dd000000-0000-4000-8000-000000000003", "Staging", 3, "staging", ""),
   doc("dd000000-0000-4000-8000-000000000004", "Version 4", 4, null, ""),
 ];
+// MOCK_SCRIPT=/path/to/doc.json (the editor's JSON): the first short's Script is that document, e.g. a long
+// one to check the PDF export (1.27.5). With MOCK_COMMENTS=many it gets a comment or editing idea on every
+// third paragraph.
+const SCRIPT_DOC = process.env.MOCK_SCRIPT ? JSON.parse(require("fs").readFileSync(process.env.MOCK_SCRIPT, "utf8")) : null;
+const blockText = (n) => (n.text ?? "") + (n.content ?? []).map(blockText).join("");
+if (SCRIPT_DOC) {
+  const text = (SCRIPT_DOC.content ?? []).map(blockText).join("\n");
+  Object.assign(scriptDocs[0], { content: SCRIPT_DOC, content_text: text, word_count: text.split(/\s+/).filter(Boolean).length });
+}
 
 // ---- Analytics (0058)
 let seed = 11;
@@ -432,11 +447,62 @@ function sampleNotifications() {
   }));
 }
 
+// A profile's numbers (profile_stats' answer): a busy year for edu, less for the others.
+function sampleProfileStats(user) {
+  const i = U.indexOf(user);
+  // Radu (MOCK_STRANGER): public, nothing finished yet (MOCK_PRIVATE=radu: private).
+  if (i < 0) return user === "aaaaaaaa-0000-4000-8000-000000000021" && process.env.MOCK_PRIVATE !== "radu" ? { xp: 0, tasks: 0, on_time: 0, dated: 0, videos: 0, teams: 0, first_at: null, last_at: null, by: {}, ranks: {}, team_dates: {}, levels: {}, streak: { best: 0, current: 0, dates: {} }, days: {} } : null;
+  if (i === 1 && process.env.MOCK_PRIVATE === "maria" && ME !== 1) return null;
+  const scale = [1, 0.55, 0.3, 0.12][i];
+  const days = {};
+  const now = Date.now();
+  let seed = 7 + i * 13;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  for (let d = 0; d < 372; d++) {
+    const r = rnd();
+    const n = r < 0.45 * (1 - scale * 0.5) ? 0 : Math.max(1, Math.round(r * 6 * scale));
+    if (n && !(d > 0 && d < 4 && i > 0)) days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] = n;
+  }
+  for (let d = 0; d < 5; d++) days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] = days[new Date(now - d * 86400e3).toISOString().slice(0, 10)] || 1 + (d % 2);
+  const at = (daysAgo) => new Date(now - daysAgo * 86400e3).toISOString();
+  const by = { script: Math.round(46 * scale), edit: Math.round(58 * scale), film: Math.round(6 * scale), research: Math.round(9 * scale), review: Math.round(41 * scale), package: Math.round(7 * scale), publish: Math.round(16 * scale), action: Math.round(12 * scale) };
+  const tasks = Object.values(by).reduce((a, b) => a + b, 0);
+  const ranks = { all: {} };
+  for (const r of [1, 5, 10, 25, 50, 100, 250]) if (tasks >= r) ranks.all[r] = at(360 - Math.min(355, r * 1.3));
+  for (const [c, n] of Object.entries(by)) { ranks[c] = {}; for (const r of [1, 5, 10, 25, 50]) if (n >= r) ranks[c][r] = at(340 - Math.min(330, r * 5 + c.length * 3)); }
+  const onTime = Math.round(tasks * 0.71);
+  ranks.ontime = {}; for (const r of [1, 5, 10, 25, 50, 100]) if (onTime >= r) ranks.ontime[r] = at(350 - Math.min(345, r * 2));
+  const xp = [5460, 2380, 905, 210][i];
+  const levelDates = {}; for (const [l, need] of [[5, 500], [10, 1000], [20, 3000], [25, 4500], [50, 15000]]) if (xp >= need) levelDates[l] = at(300 - l * 6);
+  const videos = Math.round(tasks * 0.42);
+  // 1.29.6 (0100): steps finished early, at night and at dawn; videos worked on, dated. MOCK_STATS_OLD=1: a database before 0100.
+  const marks = (n, list, from) => ({ n, at: Object.fromEntries(list.filter((m) => m <= n).map((m, k) => [m, at(from - k * 40)])) });
+  const more = process.env.MOCK_STATS_OLD ? undefined : {
+    early: marks(Math.round(tasks * 0.2), [1, 10, 50], 330),
+    night: marks(i === 0 ? 3 : 0, [1], 150),
+    dawn: marks(i < 2 ? 1 : 0, [1], 90),
+    videos: marks(videos, [10, 25, 50, 100], 300),
+  };
+  return {
+    xp, tasks, on_time: onTime, dated: Math.round(tasks * 0.9), videos, teams: i === 0 ? 2 : 1,
+    first_at: at(365), last_at: at(0), by, ranks, team_dates: i === 0 ? { 2: at(120) } : {}, levels: levelDates,
+    streak: { best: [19, 9, 4, 2][i], current: [5, 2, 1, 1][i], dates: i < 3 ? { 3: at(300), ...(i < 2 ? { 7: at(200) } : {}), ...(i === 0 ? { 14: at(150) } : {}) } : {} },
+    days,
+    ...(more ? { more } : {}),
+  };
+}
+
 module.exports = {
   TEAM,
   U,
   user: { id: U[ME], aud: "authenticated", role: "authenticated", email: people[ME].email, app_metadata: {}, user_metadata: {}, created_at: "2026-01-10T10:00:00Z" },
   rpc: {
+    // Profiles (1.28.0): someone's numbers (MOCK_PRIVATE=maria: hers are private, so null for anyone else).
+    profile_stats: (b) => sampleProfileStats(b.p_user),
+    // Clip's XP cheers (1.29.7): your XP and XP bar colour (MOCK_PROFILE_COLORS' second).
+    my_progress: () => ({ xp: sampleProfileStats(U[ME])?.xp ?? 0, bar: (process.env.MOCK_PROFILE_COLORS || "").split(",")[1] || "level" }),
+    // Someone's teams as you may see them: the sample team for its members.
+    get_visible_teams: (b) => (U.includes(b.target_user_id) ? [{ id: TEAM, name: team.name, color: team.color, logo_url: team.logo_url ?? null }] : []),
     can_view_revenue: true,
     // Realtime (0083): views per hour and per video from the live counts.
     analytics_live_hours: (b) => LIVE.hours(b),
@@ -503,6 +569,8 @@ module.exports = {
     ],
     // MOCK_NO_COMMENT=1: the sample user isn't on the script (reads comments, can't add them).
     can_comment_script: !process.env.MOCK_NO_COMMENT,
+    // Comments copied with their document (0092): every one asked for is copied (their new ids).
+    script_copy_comments: (b) => (Array.isArray(b.p_items) ? b.p_items.map((x) => x.new_id) : []),
     is_master_of: ME === 0,
     record_app_error: { id: "ffffffff-0000-4000-8000-000000000009", count: 1, alert: false },
     // "Ready for review / staging" (0062): Script → Review → Staging of short #231.
@@ -535,7 +603,10 @@ module.exports = {
   },
   tables: {
     teams: [team],
-    profiles: people.map((_, i) => prof(i)),
+    // MOCK_STRANGER=1: someone on none of the sample user's teams (/u/radu: Invite to team, 1.27.5).
+    profiles: people.map((_, i) => prof(i)).concat(
+      process.env.MOCK_STRANGER ? [{ id: "aaaaaaaa-0000-4000-8000-000000000021", username: "radu", full_name: "Radu Ionescu", email: "radu@example.com", avatar_url: null, color: "#0f766e", bio: "Editor in Cluj: long videos, colour and sound.", banner_url: null, created_at: "2026-03-02T10:00:00Z", teams_visible: true }] : []
+    ),
     team_members: members,
     notifications: process.env.MOCK_NOTIFS === "0" ? [] : sampleNotifications(),
     role_colors: [],
@@ -570,7 +641,18 @@ module.exports = {
     package_entries: packageEntries,
     scripts: [...scriptDocs, ...ADV.scripts],
     // MOCK_COMMENTS=1: comments on short #231's Script, two of them on words rewritten since.
-    script_comments: process.env.MOCK_COMMENTS
+    script_comments: process.env.MOCK_COMMENTS === "many" && SCRIPT_DOC
+      ? (SCRIPT_DOC.content ?? [])
+          .map(blockText)
+          .map((t, i) => ({ t: t.trim().split(/\s+/).slice(0, 4).join(" "), i }))
+          .filter((x, k) => x.t.length > 8 && k % 3 === 0)
+          .map(({ t, i }, k) => ({
+            id: `cm000000-0000-4000-8000-${String(100 + k).padStart(12, "0")}`, kind: k % 2 ? "edit_idea" : "comment", quote: t, occurrence: 0,
+            body: k % 2 ? `B-roll here (paragraph ${i + 1})` : `Can we tighten this? (paragraph ${i + 1})`, created_at: at(-3, k), resolved_at: null, author_id: U[k % 3],
+            sketch_path: null, sketch_w: null, sketch_h: null, script_id: "dd000000-0000-4000-8000-000000000001", team_id: TEAM,
+            author: { username: people[k % 3]?.username ?? null, full_name: people[k % 3]?.full_name ?? null, email: null, avatar_url: null },
+          }))
+      : process.env.MOCK_COMMENTS
       ? [
           ["cm000000-0000-4000-8000-000000000001", "comment", "three stalls, three prices", 0, "Can we show the prices on screen as they say them?", U[1], at(-2, 11)],
           ["cm000000-0000-4000-8000-000000000002", "edit_idea", "follow for part two", 0, "Freeze frame + the part two title card here", U[2], at(-1, 15)],
@@ -632,12 +714,31 @@ module.exports = {
       user_id: U[0], day: new Date(Date.now() - d * 86400e3).toISOString().slice(0, 10), puzzle: 10 - d, guesses: ["crane", "slate", "trace", "brace"].slice(0, 2 + (d % 3)), solved: d !== 5,
       finished_at: new Date(Date.now() - d * 86400e3).toISOString(), updated_at: new Date(Date.now() - d * 86400e3).toISOString(),
     })),
-    meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: at(1, 11), duration_min: 30, location: null, link: null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
+    // MOCK_MEETING=soon: the sample meeting in 3 hours from the real "now", with a video link (the Next meeting widget, its answers).
+    meetings: [{ id: "cccccccc-0000-4000-8000-000000000001", team_id: TEAM, title: "Weekly planning", starts_at: process.env.MOCK_MEETING === "soon" ? new Date(Date.now() + 3 * 3600e3).toISOString() : at(1, 11), duration_min: 30, location: null, link: process.env.MOCK_MEETING === "soon" ? "https://meet.example.com/weekly" : null, agenda: "Plan next week", notes: "", status: "scheduled", created_by: U[0] }],
+    meeting_attendees: process.env.MOCK_MEETING === "soon" ? U.map((u, i) => ({ meeting_id: "cccccccc-0000-4000-8000-000000000001", user_id: u, rsvp: i === 0 ? "pending" : i === 3 ? "maybe" : "yes" })) : [],
     meeting_actions: [
       { id: "ca000000-0000-4000-8000-000000000001", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Send the sponsor the draft cut", owner_id: U[0], done_at: null, created_by: U[0], team_id: TEAM, created_at: at(-1, 10), due_date: day(2), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
       { id: "ca000000-0000-4000-8000-000000000002", meeting_id: "cccccccc-0000-4000-8000-000000000001", text: "Book the bakery for filming", owner_id: U[0], done_at: at(-1, 15), created_by: U[1], team_id: TEAM, created_at: at(-2, 10), due_date: day(-1), meetings: { title: "Weekly planning", starts_at: at(1, 11) } },
     ],
     todos: [],
+    // Profile pages (1.28.0): MOCK_PROFILE_FRAME=orbit (edu's frame, default glow), MOCK_PRIVATE=maria (hers private),
+    // MOCK_PROFILE_BG=1 (edu's background: his wallpaper in use). 1.29.5: MOCK_PROFILE_COLORS="theme,#30a46c,off"
+    // (edu's frame, XP bar and glow colours; default the level's).
+    profile_pages: [
+      { user_id: U[0], public: true, bio: "Making videos about food, history and fake iPhones.", layout: null, frame: process.env.MOCK_PROFILE_FRAME || "glow", bg_path: process.env.MOCK_PROFILE_BG && DASH_BG ? `${U[0]}/1761000000000-dusk.${DASH_BG}` : null, bg_luma: Number(process.env.MOCK_WALL_LUMA ?? 22),
+        ...(([frame_color = "level", bar_color = "level", glow_color = "level"]) => ({ frame_color, bar_color, glow_color }))((process.env.MOCK_PROFILE_COLORS || "").split(",").filter(Boolean)) },
+      { user_id: U[1], public: process.env.MOCK_PRIVATE !== "maria", bio: "Scripts and voice-overs.", layout: null, frame: "duo", bg_path: null, bg_luma: null, frame_color: "level", bar_color: "level", glow_color: "level" },
+    ],
+    // Saved wallpapers (1.28.0): with MOCK_DASH_BG, the one in use plus MOCK_WALLPAPERS=2|3 in all (default 1);
+    // MOCK_WALL_LUMA=0..100 how bright the one in use is (default 22: a dusk; "null": not measured yet).
+    profile_wallpapers: DASH_BG
+      ? [
+          { id: "fd000000-0000-4000-8000-000000000001", user_id: U[0], path: `${U[0]}/1761000000000-dusk.${DASH_BG}`, luma: process.env.MOCK_WALL_LUMA === "null" ? null : Number(process.env.MOCK_WALL_LUMA ?? 22), created_at: "2026-10-01T10:00:00Z" },
+          { id: "fd000000-0000-4000-8000-000000000002", user_id: U[0], path: `${U[0]}/1761000000001-meadow.jpg`, luma: 78, created_at: "2026-10-02T10:00:00Z" },
+          { id: "fd000000-0000-4000-8000-000000000003", user_id: U[0], path: `${U[0]}/1761000000002-city.webm`, luma: 35, created_at: "2026-10-03T10:00:00Z" },
+        ].slice(0, Math.max(1, Math.min(3, Number(process.env.MOCK_WALLPAPERS || 1))))
+      : [],
     tasks: [
       { id: "ta000000-0000-4000-8000-000000000001", kind: "meeting", item_id: "ca000000-0000-4000-8000-000000000001", stage: "action", state: "active", due_date: day(2), team_id: TEAM, user_id: U[0], completed_at: null },
       { id: "ta000000-0000-4000-8000-000000000002", kind: "script", item_id: "dd000000-0000-4000-8000-000000000002", stage: "review", state: "active", due_date: null, team_id: TEAM, user_id: U[0], completed_at: null },
@@ -666,10 +767,28 @@ module.exports = {
   helpers: { day, at, people, members },
 };
 
+// 1.41.0: the media kit, a big library of videos (MOCK_LIBRARY=1) and who else deletes videos (kit.cjs: its flags).
+{
+  const K = require("./kit.cjs").kitFixtures({ TEAM, U, people, at });
+  Object.assign(module.exports.rpc, K.rpc);
+  Object.assign(module.exports.tables, K.tables);
+  module.exports.tables.analytics_content = [...module.exports.tables.analytics_content, ...K.library];
+  Object.assign(module.exports.tables.teams[0], K.teamDelete);
+  module.exports.missingTables = [...(module.exports.missingTables ?? []), ...K.missing];
+}
+
 // Outliers (1.27.0): outliers.cjs (its sample data is made on first use; see that file's flags).
 {
   const O = require("./outliers.cjs").outliersFixtures({ TEAM, U, people });
   Object.assign(module.exports.rpc, O.rpc);
   Object.assign(module.exports.tables, O.tables);
   if (process.env.MOCK_OUTLIERS_ACCESS === "0") module.exports.tables.social_accounts = module.exports.tables.social_accounts.filter((a) => a.platform !== "youtube");
+}
+
+// 1.42.0: Business, a PFA's registers (business.cjs: its flags; MOCK_BUSINESS=1 turns it on).
+{
+  const B = require("./business.cjs").businessFixtures({ TEAM, U, people, at });
+  Object.assign(module.exports.rpc, B.rpc);
+  Object.assign(module.exports.tables, B.tables);
+  module.exports.missingTables = [...(module.exports.missingTables ?? []), ...B.missing];
 }

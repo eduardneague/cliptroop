@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Leaves } from "./leaves";
 
 const EMOJI = [
   "😀","😂","😅","😊","😉","😍","🤔","😎","😢","😭","😡","🥳","👍","👎","👏","🙌",
@@ -32,21 +33,23 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
         🙂
       </button>
       {open && (
-        <div className="absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5">
-          {EMOJI.map((e, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => {
-                onSelect(e);
-                setOpen(false);
-              }}
-              className="w-7 h-7 rounded-md flex items-center justify-center text-[16px] hover:bg-surface-2"
-            >
-              {e}
-            </button>
-          ))}
-        </div>
+        <Leaves>
+          <div className="pop-menu origin-bottom-right absolute bottom-[calc(100%+6px)] right-0 z-30 w-64 max-h-52 overflow-y-auto overflow-x-hidden styled-scroll rounded-lg border border-line/10 bg-surface shadow-lg p-2 grid grid-cols-8 gap-0.5">
+            {EMOJI.map((e, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  onSelect(e);
+                  setOpen(false);
+                }}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-[16px] hover:bg-surface-2"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </Leaves>
       )}
     </div>
   );

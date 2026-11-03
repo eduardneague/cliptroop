@@ -17,9 +17,20 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files — never commit real secrets
-.env*.local
-.env
+# env files: never commit real secrets. Every .env file is ignored (.env,
+# .env.local, .env.production, .env.staging…), except the example (1.31.0).
+.env*
+!.env.example
+
+# keys and certificates (1.31.0): private keys, Apple .p8 keys, keystores,
+# Google service account files
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+service-account*.json
 
 # vercel
 .vercel

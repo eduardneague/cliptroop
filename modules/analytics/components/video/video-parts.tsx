@@ -388,7 +388,7 @@ const dayGran = (n: number) => (n > 120 ? "month" : n > 45 ? "week" : "day");
 export function DayBarsChart({ title, days, values, format, color = MINE, height = 180 }: { title: string; days: string[]; values: Num[]; format: (n: number | null) => string; color?: string; height?: number }) {
   const buckets = bucketDays(days, dayGran(days.length));
   const r = rollup(values, buckets);
-  return <StackedColumns ariaLabel={title} labels={buckets.map((b) => b.label)} tips={buckets.map((b) => b.tip)} series={[{ key: "v", label: title, color, values: r.map((v) => v ?? 0) }]} format={format} height={height} />;
+  return <StackedColumns ariaLabel={title} labels={buckets.map((b) => b.label)} tips={buckets.map((b) => b.tip)} series={[{ key: "v", label: title, color, values: r }]} format={format} height={height} />;
 }
 
 /**

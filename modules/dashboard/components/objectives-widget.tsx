@@ -6,7 +6,7 @@ import { Mascot } from "@/components/ui/mascot";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
 import { useNewObjective } from "@/modules/objectives/components/new-objective";
 import { useLiveBoard } from "@/modules/objectives/components/use-live-board";
-import { Meter, Rings, StatusPill, useWhen, type Ring } from "@/modules/objectives/components/parts";
+import { fitRingText, Meter, ringHole, Rings, StatusPill, useWhen, type Ring } from "@/modules/objectives/components/parts";
 import { progressWords } from "@/modules/objectives/components/objective-card";
 import { colorVar, formatAmount } from "@/modules/objectives/lib/metrics";
 import { PERIODS, timeLeft, type PeriodKind } from "@/modules/objectives/lib/periods";
@@ -158,21 +158,25 @@ export function ObjectivesWidget({ teamId, settings }: { teamId: string; setting
       : strip
         ? Math.max(56, Math.min(H - 4, 110))
         : Math.max(72, Math.min(H - 6, Math.round(W * 0.4), 190));
+  // The words in the middle fit the hole, however many digits (1.28.0).
+  const hole = ringHole(ringSize, rings.length);
+  const middle = list.length === 1 ? formatAmount(list[0].metric, list[0].current.value) : `${reachedCount}/${list.length}`;
+  const middleSize = fitRingText(middle, hole, list.length === 1 ? Math.max(13, ringSize * 0.17) : Math.max(13, ringSize * (rings.length > 2 ? 0.13 : 0.16)));
   const center = (
     <div className="leading-none">
       {list.length === 1 ? (
         <>
-          <div className="font-display font-semibold tabular-nums" style={{ fontSize: Math.max(13, ringSize * 0.17) }}>
-            {formatAmount(list[0].metric, list[0].current.value)}
+          <div className="font-display font-semibold tabular-nums" style={{ fontSize: middleSize }}>
+            {middle}
           </div>
-          {ringSize >= 84 && <div className="text-[10.5px] text-ink-faint mt-1">of {formatAmount(list[0].metric, list[0].current.target)}</div>}
+          {ringSize >= 84 && hole >= 56 && <div className="text-[10.5px] text-ink-faint mt-1">of {formatAmount(list[0].metric, list[0].current.target)}</div>}
         </>
       ) : (
         <>
-          <div className="font-display font-semibold tabular-nums" style={{ fontSize: Math.max(13, ringSize * (rings.length > 2 ? 0.13 : 0.16)) }}>
-            {reachedCount}/{list.length}
+          <div className="font-display font-semibold tabular-nums" style={{ fontSize: middleSize }}>
+            {middle}
           </div>
-          {ringSize >= 96 && <div className="text-[10.5px] text-ink-faint mt-1">reached</div>}
+          {ringSize >= 96 && hole >= 56 && <div className="text-[10.5px] text-ink-faint mt-1">reached</div>}
         </>
       )}
     </div>

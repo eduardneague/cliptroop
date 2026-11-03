@@ -6,10 +6,8 @@ import { useAction } from "@/lib/hooks/use-action";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { Select } from "@/components/ui/select";
 import { MAX_LONG_VIDEO_MB, formatBytes, sizeLabel } from "@/modules/review/lib/limits";
-import { LONG_MEDIA_KEEP_CHOICES, STUDIO_KEEP_CHOICES, type LongMediaKeepDays, type StudioKeepDays } from "@/lib/media-keep";
+import { KEEP_OPTIONS, keepLabel, keepsLess, keepValue, parseKeep, type KeepSetting } from "@/lib/media-keep";
 
-const longLabel = (d: number) => LONG_MEDIA_KEEP_CHOICES.find((c) => c.days === d)?.label ?? `${d} days`;
-const studioLabel = (d: number | null) => (d === null ? "Keep them" : STUDIO_KEEP_CHOICES.find((c) => c.days === d)?.label ?? `${d} days`);
 
 /**
  * Team → Defaults → Long videos (masters, 1.25.0): review the edit in
@@ -65,27 +63,29 @@ export function LongFilesForms({
 }: {
   teamId: string;
   ready: boolean;
-  longDays: LongMediaKeepDays;
-  studioDays: StudioKeepDays | null;
+  longDays: KeepSetting;
+  studioDays: KeepSetting;
   files: number;
   bytes: number;
   thumbs: number;
 }) {
-  const [long, setLong] = useState<LongMediaKeepDays>(longDays);
-  const [studio, setStudio] = useState<StudioKeepDays | null>(studioDays);
+  const [long, setLong] = useState<KeepSetting>(longDays);
+  const [studio, setStudio] = useState<KeepSetting>(studioDays);
   const confirm = useConfirm();
-  const saveLong = useAction(updateLongMediaKeepDays, { success: (_t, d) => `Long video files now stay ${longLabel(d)} after posting` });
+  const saveLong = useAction(updateLongMediaKeepDays, {
+    success: (_t, d) => (d === null ? "Long video files are kept after posting now" : `Long video files now stay ${keepLabel(d)} after posting`),
+  });
   const saveStudio = useAction(updateStudioKeepDays, {
-    success: (_t, d) => (d === null ? "Thumbnail Studio now keeps every thumbnail" : `Thumbnails that didn't win now go ${studioLabel(d)} after posting`),
+    success: (_t, d) => (d === null ? "Thumbnail Studio now keeps every thumbnail" : `Thumbnails that didn't win now go ${keepLabel(d)} after posting`),
   });
 
-  async function pickLong(next: LongMediaKeepDays) {
+  async function pickLong(next: KeepSetting) {
     if (next === long) return;
-    if (next < long) {
+    if (next !== null && keepsLess(next, long)) {
       const ok = await confirm({
-        title: `Keep long video files for ${longLabel(next)}?`,
-        description: `Tonight, the edits of long videos posted more than ${longLabel(next)} ago are deleted. They can't be brought back. The videos themselves stay.`,
-        confirmLabel: `Keep for ${longLabel(next)}`,
+        title: `Keep long video files for ${keepLabel(next)}?`,
+        description: `Tonight, the edits of long videos posted more than ${keepLabel(next)} ago are deleted. They can't be brought back. The videos themselves stay.`,
+        confirmLabel: `Keep for ${keepLabel(next)}`,
         danger: true,
       });
       if (!ok) return;
@@ -95,13 +95,13 @@ export function LongFilesForms({
     if (!(await saveLong.run(teamId, next))) setLong(before);
   }
 
-  async function pickStudio(next: StudioKeepDays | null) {
+  async function pickStudio(next: KeepSetting) {
     if (next === studio) return;
-    if (next !== null && (studio === null || next < studio)) {
+    if (next !== null && keepsLess(next, studio)) {
       const ok = await confirm({
-        title: `Delete thumbnails that didn't win after ${studioLabel(next)}?`,
-        description: `Tonight, Thumbnail Studio's thumbnails that didn't win are deleted for long videos posted more than ${studioLabel(next)} ago. They can't be brought back. The winners always stay.`,
-        confirmLabel: `After ${studioLabel(next)}`,
+        title: `Delete thumbnails that didn't win after ${keepLabel(next)}?`,
+        description: `Tonight, Thumbnail Studio's thumbnails that didn't win are deleted for long videos posted more than ${keepLabel(next)} ago. They can't be brought back. The winners always stay.`,
+        confirmLabel: `After ${keepLabel(next)}`,
         danger: true,
       });
       if (!ok) return;
@@ -122,9 +122,12 @@ export function LongFilesForms({
           </div>
           <div className="w-40 flex-shrink-0">
             <Select
-              value={String(long)}
-              onChange={(v) => v && void pickLong(Number(v) as LongMediaKeepDays)}
-              options={LONG_MEDIA_KEEP_CHOICES.map((c) => ({ value: String(c.days), label: c.label }))}
+              value={keepValue(long)}
+              onChange={(v) => {
+                const next = v ? parseKeep(v) : undefined;
+                if (next !== undefined) void pickLong(next);
+              }}
+              options={KEEP_OPTIONS}
               ariaLabel="Delete long video files after posting"
               disabled={saveLong.pending}
             />
@@ -149,9 +152,12 @@ export function LongFilesForms({
           </div>
           <div className="w-40 flex-shrink-0">
             <Select
-              value={studio === null ? "keep" : String(studio)}
-              onChange={(v) => v && void pickStudio(v === "keep" ? null : (Number(v) as StudioKeepDays))}
-              options={[...STUDIO_KEEP_CHOICES.map((c) => ({ value: String(c.days), label: c.label })), { value: "keep", label: "Keep them" }]}
+              value={keepValue(studio)}
+              onChange={(v) => {
+                const next = v ? parseKeep(v) : undefined;
+                if (next !== undefined) void pickStudio(next);
+              }}
+              options={KEEP_OPTIONS}
               ariaLabel="Delete thumbnails that didn't win"
               disabled={saveStudio.pending}
             />

@@ -12,6 +12,7 @@ import {
   PlayIcon,
   SoundIcon,
 } from "./player-icons";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export type Marker = {
   id: string;
@@ -168,12 +169,7 @@ export function Timeline({
           >
             {m.author ? (
               <span className="flex w-5 h-5 rounded-full overflow-hidden text-[8.5px] font-bold text-white items-center justify-center" style={{ background: m.author.color }}>
-                {m.author.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.author.avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  m.author.name.slice(0, 1).toUpperCase()
-                )}
+                <AvatarImg src={m.author.avatarUrl} fallback={m.author.name.slice(0, 1).toUpperCase()} />
               </span>
             ) : (
               <span className={`block w-2.5 h-2.5 rounded-[3px] ${m.resolved ? "bg-white/40" : "bg-amber"}`} />

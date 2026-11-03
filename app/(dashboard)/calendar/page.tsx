@@ -7,6 +7,7 @@ import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
 import { SHORT_STAGE_LABELS } from "@/modules/short-videos/lib/constants";
 import { CalendarView, type CalItem } from "./calendar-view";
 import { getShortSettings, listDayLimits, listShorts, listTeamPeople } from "@/modules/short-videos/lib/queries";
+import { studioThumb } from "@/lib/picture-size";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -96,15 +97,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const longIds = (longs ?? []).map((l) => l.id as string);
   const [{ data: winners }, { data: longPosts }, { data: assigned }] = longIds.length
     ? await Promise.all([
-        supabase.from("package_entries").select("project_id, thumbnail_storage_path, position").in("project_id", longIds).eq("is_winner", true).order("position"),
+        supabase.from("package_entries").select("id, project_id, position").in("project_id", longIds).eq("is_winner", true).not("thumbnail_storage_path", "is", null).order("position"),
         supabase.from("long_video_posts").select("project_id, platform").in("project_id", longIds),
         supabase.from("project_assignees").select("project_id, stage, team_member_id").in("project_id", longIds),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }];
-  const thumbPath = new Map<string, string>();
-  for (const w of winners ?? []) if (w.thumbnail_storage_path && !thumbPath.has(w.project_id as string)) thumbPath.set(w.project_id as string, w.thumbnail_storage_path as string);
-  const { data: signed } = thumbPath.size ? await supabase.storage.from("package-thumbs").createSignedUrls([...thumbPath.values()], 3600) : { data: [] };
-  const urlOf = new Map((signed ?? []).filter((x) => x.path && x.signedUrl).map((x) => [x.path as string, x.signedUrl as string]));
+  // The winning thumbnail at an address that never changes (1.32.3): no signed link for every long video of the month
+  // on every visit; the picture loads when a video's details open (up to 240 px wide there: 640).
+  const winnerOf = new Map<string, string>();
+  for (const w of (winners ?? []) as { id: string; project_id: string }[]) if (!winnerOf.has(w.project_id)) winnerOf.set(w.project_id, w.id);
   const personOf = new Map(people.map((p) => [p.memberId, p]));
   const postsByShort = new Map<string, CalItem["posts"]>();
   for (const p of posts ?? []) {
@@ -156,7 +157,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       postedPlatforms: (longPosts ?? []).filter((x) => x.project_id === l.id).map((x) => x.platform as string),
       editor: null,
       posts: [],
-      thumb: thumbPath.has(l.id as string) ? urlOf.get(thumbPath.get(l.id as string)!) ?? null : null,
+      thumb: winnerOf.has(l.id as string) ? studioThumb(winnerOf.get(l.id as string)!, 640) : null,
       assignees: (assigned ?? [])
         .filter((a) => a.project_id === l.id)
         .map((a) => {

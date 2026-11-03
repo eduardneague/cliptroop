@@ -23,6 +23,7 @@ export function ShortSettingsForm({
   const [rollForward, setRollForward] = useState(settings.rollForward);
   const [defaultType, setDefaultType] = useState(settings.defaultType);
   const [timezone, setTimezone] = useState(settings.timezone);
+  const [filmer, setFilmer] = useState(settings.defaultFilmer);
   const [editor, setEditor] = useState(settings.defaultEditor);
   const [reviewer, setReviewer] = useState(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState(settings.defaultScheduler);
@@ -44,6 +45,7 @@ export function ShortSettingsForm({
     rollForward !== settings.rollForward ||
     defaultType !== settings.defaultType ||
     timezone !== settings.timezone ||
+    filmer !== settings.defaultFilmer ||
     editor !== settings.defaultEditor ||
     reviewer !== settings.defaultReviewer ||
     scheduler !== settings.defaultScheduler ||
@@ -61,7 +63,8 @@ export function ShortSettingsForm({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-5 sm:grid-cols-3">
+      {/* 1.29.1: as many columns as fit (the card is half the page on wide screens), never squeezed past their contents. */}
+      <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
         <div>
           <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Shorts per day</div>
           <div className="inline-flex items-center rounded-lg border border-line/15 overflow-hidden">
@@ -143,10 +146,15 @@ export function ShortSettingsForm({
 
       <div>
         <div className="text-[11.5px] font-semibold text-ink-soft mb-1.5">Default people for new shorts</div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-x-4 gap-y-3 grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))]">
           <div>
             <div className="text-[11px] text-ink-faint mb-1">Scripter</div>
             <PersonSelect kind="scripter" people={people} value={scripter} onChange={setScripter} />
+          </div>
+          {/* 1.36.0: who films new shorts. */}
+          <div>
+            <div className="text-[11px] text-ink-faint mb-1">Filmer</div>
+            <PersonSelect kind="filmer" people={people} value={filmer} onChange={setFilmer} />
           </div>
           <div>
             <div className="text-[11px] text-ink-faint mb-1">Editor</div>
@@ -174,6 +182,7 @@ export function ShortSettingsForm({
               rollForward,
               defaultType,
               timezone,
+              defaultFilmer: filmer,
               defaultEditor: editor,
               defaultReviewer: reviewer,
               defaultScheduler: scheduler,

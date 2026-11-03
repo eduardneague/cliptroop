@@ -1,6 +1,8 @@
 import { CheckIcon, DocumentIcon, ShortsIcon, TargetIcon, TrendIcon, VideoIcon } from "@/components/ui/icons";
 import { colorVar } from "@/modules/objectives/lib/metrics";
 import { initialsFor } from "@/lib/avatar";
+import { AvatarImg } from "@/components/ui/avatar-img";
+import { onFill } from "@/lib/contrast";
 
 type TeamLike = { name: string; color: string; logo_url: string | null };
 
@@ -8,14 +10,9 @@ export function TeamBadge({ team, size = "w-8 h-8 text-[10.5px]" }: { team: Team
   return (
     <span
       className={`${size} rounded-lg flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
-      style={{ background: team.color }}
+      style={{ background: team.color, color: onFill(team.color) }}
     >
-      {team.logo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img loading="lazy" decoding="async" src={team.logo_url} alt="" className="w-full h-full object-cover" />
-      ) : (
-        team.name.slice(0, 2).toUpperCase()
-      )}
+      <AvatarImg src={team.logo_url} fallback={team.name.slice(0, 2).toUpperCase()} />
     </span>
   );
 }
@@ -34,14 +31,9 @@ export function PersonAvatar({
   return (
     <span
       className={`${size} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
-      style={{ background: color }}
+      style={{ background: color, color: onFill(color) }}
     >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img loading="lazy" decoding="async" src={avatarUrl} alt="" className="w-full h-full object-cover" />
-      ) : (
-        initialsFor(name)
-      )}
+      <AvatarImg src={avatarUrl} fallback={initialsFor(name)} />
     </span>
   );
 }

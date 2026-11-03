@@ -23,6 +23,7 @@ import {
   type FeedbackKind,
 } from "@/lib/feedback";
 import { submitFeedback } from "./feedback-actions";
+import { stillSrc } from "@/lib/video-still";
 
 type Item = { id: string; file: File; url: string; video: boolean; type: string; sent: number; state: "ready" | "uploading" | "uploaded" | "failed"; path?: string; broken?: boolean };
 export type SentReport = { id: string; kind: FeedbackKind; message: string; status: "new" | "done"; createdAt: string; files: number };
@@ -155,22 +156,32 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
     setPhase("edit");
   }
 
-  async function uploadOne(it: Item, token: string): Promise<string> {
+  async function uploadOne(it: Item, token: string): Promise<{ path: string; type: string; size: number }> {
     const { Upload } = await import("tus-js-client");
     if (cancelled.current) throw new Error("cancelled");
-    const path = `${userId}/${uid()}-${safeFileName(it.file.name)}`;
+    // A picture goes up made small (1.31.3): a screenshot of a few MB becomes a few hundred KB.
+    let file = it.file;
+    let type = it.type;
+    if (!it.video && type.startsWith("image/")) {
+      const { compressImage, IMAGE_PRESETS } = await import("@/lib/image/compress");
+      file = await compressImage(it.file, IMAGE_PRESETS.attachment);
+      type = mediaType(file);
+      if (file !== it.file) patch(it.id, { file, type });
+    }
+    if (cancelled.current) throw new Error("cancelled");
+    const path = `${userId}/${uid()}-${safeFileName(file.name)}`;
     return new Promise((resolve, reject) => {
-      const tus = new Upload(it.file, {
+      const tus = new Upload(file, {
         endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,
         retryDelays: [0, 1500, 4000, 8000],
         headers: { authorization: `Bearer ${token}`, "x-upsert": "false" },
         uploadDataDuringCreation: true,
         removeFingerprintOnSuccess: true,
         chunkSize: UPLOAD_CHUNK_BYTES,
-        metadata: { bucketName: FEEDBACK_BUCKET, objectName: path, contentType: it.type, cacheControl: "3600" },
+        metadata: { bucketName: FEEDBACK_BUCKET, objectName: path, contentType: type, cacheControl: "3600" },
         onProgress: (bytes) => patch(it.id, { sent: bytes }),
         onError: (err) => reject(err),
-        onSuccess: () => resolve(path),
+        onSuccess: () => resolve({ path, type, size: file.size }),
       });
       upload.current = { tus, reject };
       tus.start();
@@ -202,6 +213,8 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
 
     const list = items;
     const paths = new Map<string, string>();
+    // What actually went up (a picture is smaller than what was picked).
+    const sentAs = new Map<string, { type: string; size: number }>();
     if (list.some((i) => !i.path)) {
       const {
         data: { session },
@@ -218,9 +231,10 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
         }
         patch(it.id, { state: "uploading", sent: 0 });
         try {
-          const p = await uploadOne(it, session.access_token);
-          patch(it.id, { state: "uploaded", path: p, sent: it.file.size });
-          paths.set(it.id, p);
+          const up = await uploadOne(it, session.access_token);
+          patch(it.id, { state: "uploaded", path: up.path, sent: up.size });
+          paths.set(it.id, up.path);
+          sentAs.set(it.id, { type: up.type, size: up.size });
         } catch (e) {
           upload.current = null;
           if (cancelled.current) {
@@ -244,7 +258,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
       r = await submitFeedback({
         kind: kind!,
         message: text,
-        files: list.map((it) => ({ path: paths.get(it.id)!, name: it.file.name, type: it.type, size: it.file.size })),
+        files: list.map((it) => ({ path: paths.get(it.id)!, name: it.file.name, type: sentAs.get(it.id)?.type ?? it.type, size: sentAs.get(it.id)?.size ?? it.file.size })),
         teamId,
         context: {
           page: (() => {
@@ -462,7 +476,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                         {it.broken ? (
                           <span className="absolute inset-0 grid place-items-center text-ink-faint">{it.video ? <PlayIcon className="w-6 h-6" /> : <ImageIcon className="w-6 h-6" />}</span>
                         ) : it.video ? (
-                          <video src={it.url} muted playsInline preload="metadata" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
+                          <video src={stillSrc(it.url)} muted playsInline preload="metadata" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={it.url} alt="" className="w-full h-full object-cover" onError={() => patch(it.id, { broken: true })} />
@@ -522,7 +536,7 @@ export function FeedbackForm({ userId, teamId, recent }: { userId: string; teamI
                 )}
               </ul>
               <p className="mt-2 text-[11.5px] text-ink-faint">
-                Up to {FEEDBACK_MAX_FILES}, 25 MB each. <span className="hidden sm:inline">Drop them here or paste a screenshot.</span>
+                Up to {FEEDBACK_MAX_FILES}: pictures up to 5 MB, videos up to 25 MB. <span className="hidden sm:inline">Drop them here or paste a screenshot.</span>
               </p>
               <input
                 ref={fileInput}

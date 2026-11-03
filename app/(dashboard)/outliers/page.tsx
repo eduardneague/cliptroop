@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { after } from "next/server";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
@@ -9,9 +10,12 @@ import { FORMAT_BY_ID, FORMATS } from "@/modules/outliers/lib/formats";
 import { forKind, toModel, type KindInsights } from "@/modules/outliers/lib/insights";
 import { suggestKeywords } from "@/modules/outliers/lib/keywords";
 import { hash } from "@/modules/outliers/lib/corpus";
+import { runOutliersJob } from "@/modules/outliers/lib/collector";
+import { FIT_VERSION, teamLanguage } from "@/modules/outliers/lib/fit";
 import {
   accessStatus,
   crossInsights,
+  getAudience,
   getChannelDetail,
   getOverview,
   getSaved,
@@ -24,7 +28,7 @@ import {
   readVideos,
 } from "@/modules/outliers/lib/queries";
 import type { Kind, VideoPage } from "@/modules/outliers/lib/types";
-import { PERIOD_DAYS, readChannelSort, readPeriod, readTab, type Period, type TabData } from "@/modules/outliers/lib/view";
+import { PERIOD_DAYS, readChannelSort, readOnly, readPeriod, readTab, type Period, type TabData } from "@/modules/outliers/lib/view";
 import { OutliersView } from "@/modules/outliers/components/outliers-view";
 
 export const metadata: Metadata = { title: "Outliers" };
@@ -65,6 +69,15 @@ export default async function OutliersPage({ searchParams }: { searchParams: Pro
 
   // A niche's numbers for this kind (every niche together when none is picked), once per request.
   const insights = cache(async (): Promise<KindInsights | null> => (nicheId ? forKind(await nicheInsights(supabase, nicheId), kind) : crossInsights(supabase, teamId, kind, null)));
+
+  // A niche of the team not checked with the current fit yet (just after an update): checked now, in the background.
+  const unchecked = overview.niches.find((n) => n.fitV < FIT_VERSION && n.groupN + n.foundN + n.outN > 0);
+  if (unchecked)
+    after(async () => {
+      try {
+        await runOutliersJob({ team: teamId, niche: unchecked.id, budgetMs: 45_000 });
+      } catch {}
+    });
 
   const v = one(sp.v);
   const c = one(sp.c);
@@ -116,11 +129,12 @@ export default async function OutliersPage({ searchParams }: { searchParams: Pro
       case "channels": {
         const sort = readChannelSort(one(sp.csort));
         const q = (one(sp.cq) ?? "").trim().slice(0, 80);
-        const onlyRaw = one(sp.only);
-        const only = onlyRaw === "tracked" || onlyRaw === "hidden" ? onlyRaw : "all";
-        const r = await readChannels(supabase, teamId, nicheId, { ...(q ? { q } : {}), ...(only === "tracked" ? { tracked: true } : {}), ...(only === "hidden" ? { hidden: true } : {}) }, sort, 60, 0);
+        const only = readOnly(one(sp.only));
+        const r = await readChannels(supabase, teamId, nicheId, { ...(q ? { q } : {}), only, ...(only === "tracked" ? { tracked: true } : {}), ...(only === "hidden" ? { hidden: true } : {}) }, sort, 60, 0);
         return { tab, rows: r.rows, total: r.total, sort, q, only };
       }
+      case "audience":
+        return { tab, audience: await getAudience(teamId), youtube: access.youtube };
       case "titles": {
         const [local, cross] = await Promise.all([insights(), crossInsights(supabase, teamId, kind, nicheId)]);
         return { tab, local: toModel(local), cross: cross ? { formats: cross.formats, numbers: cross.numbers } : null, title: (one(sp.t) ?? "").slice(0, 120), compare: [] };
@@ -139,19 +153,36 @@ export default async function OutliersPage({ searchParams }: { searchParams: Pro
       default: {
         const period = readPeriod(one(sp.period));
         const days = PERIOD_DAYS[period];
-        const [best, rising, small, tracked, ins] = await Promise.all([
-          readVideos(supabase, teamId, nicheId, { kind, days, min_score: 1.5 }, "score", kind === "short" ? 18 : 12),
-          readVideos(supabase, teamId, nicheId, { kind, days: 4 }, "projected", 10),
+        // Enough to fill whole rows at every width (1.29.0: more of them).
+        const want = kind === "short" ? 25 : 17;
+        const [firstBest, rising, small, tracked, ins] = await Promise.all([
+          readVideos(supabase, teamId, nicheId, { kind, days, min_score: 1.5 }, "score", want),
+          readVideos(supabase, teamId, nicheId, { kind, days: 7 }, "projected", 16),
           readVideos(supabase, teamId, nicheId, { kind, days: 120, max_subs: 100_000, min_score: 4 }, "score", 6),
           overview.tracked.length ? readVideos(supabase, teamId, null, { kind, scope: "tracked", days: 30 }, "newest", kind === "short" ? 14 : 10) : Promise.resolve(EMPTY),
           insights(),
         ]);
+        // Too few in the stretch picked: a longer one, and the page says so.
+        let best = firstBest;
+        let widened: Period | null = null;
+        if (best.rows.length < want / 2) {
+          for (const p of ["month", "year"] as Period[]) {
+            if (PERIOD_DAYS[p] <= days) continue;
+            const more = await readVideos(supabase, teamId, nicheId, { kind, days: PERIOD_DAYS[p], min_score: 1.5 }, "score", want);
+            if (more.rows.length > best.rows.length) {
+              best = more;
+              widened = p;
+            }
+            if (best.rows.length >= want / 2) break;
+          }
+        }
         return {
           tab: "home",
           period,
+          widened,
           best,
           // Only the ones already beating their channel (or heading there).
-          rising: rising.rows.filter((x) => (x.projected ?? x.score ?? 0) >= 1.5),
+          rising: rising.rows.filter((x) => (x.projected ?? x.score ?? 0) >= 1.3).slice(0, 10),
           small: small.rows,
           tracked: tracked.rows,
           formats: (ins?.formats ?? []).filter((x) => x.n >= 3).slice(0, 8),
@@ -171,12 +202,15 @@ export default async function OutliersPage({ searchParams }: { searchParams: Pro
     }
   };
 
-  const [data, initialVideo, initialChannel, suggest] = await Promise.all([
+  const [data, initialVideo, initialChannel, titles] = await Promise.all([
     loadTab(),
     v && VIDEO.test(v) ? getVideoDetail(teamId, v) : Promise.resolve(null),
     !v && c && CHANNEL.test(c) ? getChannelDetail(teamId, c) : Promise.resolve(null),
-    canManage ? ownTitles(supabase, teamId).then((t) => suggestKeywords(t)) : Promise.resolve([]),
+    canManage ? ownTitles(supabase, teamId) : Promise.resolve([] as string[]),
   ]);
+  const suggest = canManage ? suggestKeywords(titles) : [];
+  // The team's own language: a new niche's languages start from it.
+  const teamLang = overview.niches.find((n) => n.teamLang)?.teamLang ?? (titles.length ? teamLanguage(titles) : null);
 
   return (
     <OutliersView
@@ -195,6 +229,9 @@ export default async function OutliersPage({ searchParams }: { searchParams: Pro
       settings={overview.settings}
       access={access}
       suggest={suggest}
+      teamLang={teamLang}
+      blocked={overview.blocked}
+      audienceN={overview.audienceN}
       initialVideoId={v && VIDEO.test(v) ? v : null}
       initialVideo={initialVideo}
       initialChannelId={!v && c && CHANNEL.test(c) ? c : null}

@@ -149,7 +149,7 @@ function ErrorItem({ e, who }: { e: ErrorRow; who?: string }) {
             <details className="mt-1.5">
               <summary className="cursor-pointer select-none text-[12px] font-semibold text-ink-soft hover:text-ink">Details</summary>
               {e.digest && <div className="mt-1 text-[11.5px] text-ink-faint font-mono">digest {e.digest} (search for it in the Vercel logs)</div>}
-              {e.stack && <pre className="mt-1 max-h-64 overflow-auto rounded-lg bg-paper/70 border border-line/10 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap break-words">{e.stack}</pre>}
+              {e.stack && <pre className="mt-1 max-h-64 overflow-auto styled-scroll rounded-lg bg-paper/70 border border-line/10 p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap break-words">{e.stack}</pre>}
             </details>
           )}
         </span>

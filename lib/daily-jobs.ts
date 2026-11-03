@@ -1,6 +1,7 @@
 import "server-only";
 import { cleanupPostedLongMedia, cleanupPostedMedia, cleanupStudioThumbs } from "@/lib/media-cleanup";
 import { refreshExpiring } from "@/lib/social/tokens";
+import { cleanupPullCopies } from "@/lib/social/publishers/tiktok";
 import { syncAllTeams, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
 import { pruneJobRuns } from "@/lib/job-runs";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,10 +27,12 @@ export async function runCleanupJob() {
   const media = await attempt(cleanupPostedMedia);
   const longMedia = await attempt(cleanupPostedLongMedia);
   const studio = await attempt(cleanupStudioThumbs);
+  // Copies TikTok fetched its posts from (1.47.0): normally gone within minutes; any left after 6 hours.
+  const tiktokCopies = await cleanupPullCopies().catch(() => -1);
   // Keep connected accounts signed in (Instagram lasts 60 days, TikTok a year).
   const tokens = await refreshExpiring().catch(() => ({ refreshed: 0, failed: -1 }));
   await pruneJobRuns(createAdminClient());
-  return { ok: !("error" in media) && !("error" in longMedia) && !("error" in studio), job: "cleanup" as const, media, longMedia, studio, tokens };
+  return { ok: !("error" in media) && !("error" in longMedia) && !("error" in studio), job: "cleanup" as const, media, longMedia, studio, tiktokCopies, tokens };
 }
 
 const PLATFORMS = ["youtube", "instagram", "tiktok", "facebook"] as const;

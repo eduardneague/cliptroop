@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
+import { getBusinessAccess } from "@/modules/business/lib/server";
 import { kindColorCss } from "@/lib/kind-colors";
 import { Sidebar } from "@/components/ui/sidebar";
 import { MobileTopBar, MobileBottomNav } from "@/components/ui/mobile-nav";
@@ -12,9 +13,13 @@ import { ToastProvider } from "@/components/ui/toast-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { GlobalSearch } from "@/components/search/global-search";
-import { APP_CHANNEL, APP_VERSION_LABEL } from "@/lib/version";
+import { APP_CHANNEL, APP_VERSION, APP_VERSION_LABEL } from "@/lib/version";
+import { whatsNewFacts } from "@/lib/changelog";
 import { MotionSync } from "@/components/ui/motion";
 import { PaletteSync } from "@/components/ui/palette";
+import { GlassSync } from "@/components/ui/glass";
+import { everywhereFrom, getEverywhereBackground, getLook, getShellProfile } from "@/lib/look-server";
+import { EverywhereBackdrop } from "@/modules/dashboard/components/backdrop";
 import { SoundSync } from "@/components/ui/sound-sync";
 import { WhatsNewHost } from "@/components/ui/whats-new";
 import { TutorialHost } from "@/components/tutorial/tutorial";
@@ -22,7 +27,7 @@ import { Brand } from "@/components/ui/clip-logo";
 import Link from "next/link";
 import { displayName, colorForId } from "@/lib/avatar";
 import { LogoutButton } from "@/components/ui/logout-button";
-import { NOTIFICATION_SELECT } from "@/lib/notification-select";
+import { loadBell } from "@/lib/notification-select";
 import { cookies } from "next/headers";
 import { PushKeeper } from "@/components/pwa";
 import { PUSH_COOKIE } from "@/lib/push/guard";
@@ -31,8 +36,17 @@ import { AppSplash } from "@/components/ui/app-splash";
 import { isDeveloper } from "@/lib/errors";
 import { NavProgress } from "@/components/ui/nav-progress";
 import { ConfettiHost } from "@/components/ui/confetti";
-import { ObjectiveCelebrations } from "@/modules/objectives/components/celebrations";
+import { ObjectiveCelebrationsHost } from "@/modules/objectives/components/celebrations-host";
+import { XpCheersHost } from "@/modules/profile/components/xp-cheers-host";
+import { LookScreenHost } from "@/components/ui/look-screen";
 import { HashFlash } from "@/components/ui/hash-flash";
+import { WebVitals } from "@/components/web-vitals";
+import { OverflowMarquee } from "@/components/ui/overflow-marquee";
+import { getTeamPlan } from "@/modules/plans/lib/server";
+import { PlanGateBoundary } from "@/modules/plans/components/plan-gate";
+import type { PlanInfo } from "@/modules/plans/components/plan-chooser";
+import { isMaster } from "@/lib/permissions/roles";
+import type { RoleId } from "@/lib/permissions/roles";
 
 // Every route under here reads the session and shows per-user data —
 // this must never be statically optimized or cached at the Next.js
@@ -62,31 +76,35 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   // into the catch-all 404 route. Never assume; send them to login.
   if (!user) redirect("/login");
 
-  // Everything the shell needs in ONE round trip: profile (with the colour
-  // theme), teams (with their colours) and the latest notifications.
-  const [{ data: profile }, { teams, currentTeam, roles }, { data: notifications }, tour, developer] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette")
-      .eq("id", user!.id)
-      .single(),
-    // Your roles in the team you're in: the search bar offers what you can do (1.26.0).
-    getTeamsAndCurrent(supabase).then(async (t) => ({
-      ...t,
-      roles: t.currentTeam ? ((await getMembership(supabase, t.currentTeam.id).catch(() => null))?.roles ?? []) : [],
-    })),
-    supabase
-      .from("notifications")
-      .select(NOTIFICATION_SELECT)
-      .eq("recipient_id", user!.id)
-      .order("created_at", { ascending: false })
-      .limit(25),
-    // Clip's tour: on its own, so a database without 0069 just skips it.
-    supabase.from("profiles").select("tutorial_done_at").eq("id", user!.id).maybeSingle(),
+  // Everything the shell needs in ONE round trip: your profile (name, picture, colour theme, Clip's tour,
+  // the glass look and the wallpaper, in one read since 1.32.1), teams (with their colours), the latest
+  // notifications and your wallpapers (how bright each is).
+  const [shell, { teams, currentTeam, roles, business, plan }, { data: notifications }, developer, { data: walls }] = await Promise.all([
+    getShellProfile(supabase, user!.id),
+    // Your roles in the team you're in: the search bar offers what you can do (1.26.0). And whether Business is on
+    // for the team and yours to open (1.42.0: the menu shows it then), at the same time.
+    // 1.45.0: and its plan (a team made by someone who signed up on the website has none until ClipTroop sets it).
+    getTeamsAndCurrent(supabase).then(async (t) => {
+      if (!t.currentTeam) return { ...t, roles: [] as string[], business: false, plan: null };
+      const [membership, biz, plan] = await Promise.all([
+        getMembership(supabase, t.currentTeam.id).catch(() => null),
+        getBusinessAccess(supabase, t.currentTeam.id).catch(() => null),
+        getTeamPlan(supabase, t.currentTeam.id),
+      ]);
+      return { ...t, roles: membership?.roles ?? [], business: !!biz?.access, plan };
+    }),
+    // The bell: the newest ones you haven't cleared (1.29.1).
+    loadBell(supabase, user!.id),
     // Developer accounts get the Developer page in the menu (no database call when DEVELOPER_EMAILS is set).
     isDeveloper(user),
+    supabase.from("profile_wallpapers").select("path, luma").eq("user_id", user!.id),
   ]);
-  const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
+  // A database older than one of those columns (before 0098): each part on its own, as before.
+  const legacy = shell === null ? await legacyShell(supabase, user!.id) : null;
+  const profile = shell ?? legacy?.profile ?? null;
+  const tourPending = shell ? shell.tourPending : !!legacy?.tourPending;
+  const look = shell ? shell.look : (legacy?.look ?? null);
+  const everywhere = shell ? everywhereFrom(supabase, user!.id, shell.bg, (walls ?? []) as { path: string; luma: number | null }[]) : (legacy?.everywhere ?? null);
   const teamColors = currentTeam ? { short_color: currentTeam.shortColor, long_color: currentTeam.longColor } : null;
   const paletteRow = profile ? { palette: (profile as { palette?: string | null }).palette ?? null } : null;
 
@@ -94,6 +112,21 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   const resolvedEmail = profile?.email ?? user?.email ?? "";
   const resolvedAvatar = profile?.avatar_url ?? null;
   const resolvedColor = colorForId(user!.id);
+  // A team without a plan: its plans in place of its pages (PlanGateBoundary). Never for developer accounts.
+  const gate: PlanInfo | null =
+    currentTeam && plan && plan.known && !plan.plan && !developer
+      ? {
+          teamId: currentTeam.id,
+          teamName: currentTeam.name,
+          master: isMaster(roles as RoleId[]),
+          email: resolvedEmail,
+          plan: null,
+          storageGb: null,
+          requested: plan.requested,
+          requestedAt: plan.requestedAt,
+          note: plan.note,
+        }
+      : null;
 
   // The sidebar now always renders, team or not — WorkspaceSwitcher
   // itself shows a "Create your team" prompt in place of a real
@@ -106,13 +139,18 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       <ConfirmProvider>
         {/* A thin bar the moment you click a link, until the page is there. */}
         <NavProgress />
+        {/* Real visitors' speed (1.32.4): this load's Web Vitals, sent when the page is hidden (Developer → Speed). */}
+        <WebVitals />
         {/* "…#sounds" in the address: that part of the page scrolls into view and glows (1.26.0). */}
         <Suspense fallback={null}>
           <HashFlash />
         </Suspense>
         <MotionSync pref={(profile?.animations_enabled as boolean | null) ?? null} />
         {paletteRow && <PaletteSync palette={(paletteRow.palette as string | null) ?? null} />}
+        <GlassSync look={look} />
         <SoundSync on={(profile?.sounds_enabled as boolean | null | undefined) !== false} />
+        {/* 1.43.0: words cut short with "…" in a list, menu or dropdown slide into view while pointed at. */}
+        <OverflowMarquee />
         {/* Keeps this device's push notifications working after logging in again. */}
         <PushKeeper userId={user!.id} deviceHash={(await cookies()).get(PUSH_COOKIE)?.value ?? null} />
         {/* The team's colours for shorts and long videos, everywhere. */}
@@ -127,12 +165,15 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
             userColor={resolvedColor}
             username={profile?.username ?? null}
             developer={developer}
+            business={business}
           />
           <div className="flex-1 min-w-0 flex flex-col">
+            {/* Under the floating top bar (glass on a computer, 1.31.9; globals.css): what scrolls up under it blurs softly away. */}
+            <div data-shell="edge" aria-hidden />
             {/* Three columns on desktop so the search bar sits in the true
                 middle of the top bar: [brand] [search] [actions]. On phones:
                 brand on the left, search icon + actions on the right. */}
-            <header className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,22rem)_1fr] lg:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
+            <header data-shell="header" className="h-14 grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_minmax(0,22rem)_1fr] lg:grid-cols-[1fr_minmax(0,30rem)_1fr] items-center gap-2 sm:gap-4 border-b border-line/10 px-4 sm:px-6 sticky top-0 bg-paper/90 backdrop-blur z-20">
               <span className="flex items-center gap-2 min-w-0">
                 <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="md:hidden">
                   <Brand className="[&_.font-display]:text-[15px]" />
@@ -140,7 +181,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 {/* Staging only: so it's always obvious you're not on the real app. */}
                 {APP_CHANNEL === "E" && (
                   <span
-                    className="rounded-md border border-amber/50 bg-amber/15 text-amber px-1.5 py-0.5 text-[10px] font-bold tracking-[0.12em]"
+                    className="rounded-md border border-amber/50 [background-color:color-mix(in_srgb,rgb(var(--amber))_10%,rgb(var(--surface)))] text-amber px-1.5 py-0.5 text-[10px] font-bold tracking-[0.12em]"
                     title={`Experimental build ${APP_VERSION_LABEL}`}
                   >
                     EXPERIMENTAL
@@ -155,6 +196,7 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                   currentTeamId={currentTeam?.id ?? null}
                   roles={roles}
                   developer={developer}
+                  business={business}
                 />
               </div>
               <div className="flex items-center justify-end gap-2 sm:gap-4">
@@ -175,16 +217,44 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
               userAvatarUrl={resolvedAvatar}
               userColor={resolvedColor}
             />
-            <main className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
-            <MobileBottomNav developer={developer} />
+            {/* overflow-x-clip (1.31.9): nothing in a page can make it wider than the screen and slide sideways on a phone. */}
+            <main className="flex-1 min-w-0 overflow-x-clip pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+              {everywhere ? (
+                // data-dash-bg: glass over it, and the bars, read the picture (globals.css); drawn once, it stays put between pages.
+                <div data-dash-bg className="contents wall-tone">
+                  <EverywhereBackdrop bg={everywhere} />
+                  <PlanGateBoundary gate={gate}>{children}</PlanGateBoundary>
+                </div>
+              ) : (
+                <PlanGateBoundary gate={gate}>{children}</PlanGateBoundary>
+              )}
+            </main>
+            <MobileBottomNav developer={developer} business={business} />
           </div>
         </div>
-        <WhatsNewHost hold={tourPending} />
+        {/* The notes themselves load when the window opens: the frame gets this version's headline and whether there's news (1.32.2). */}
+        <WhatsNewHost hold={tourPending} audience={{ business }} {...whatsNewFacts(APP_VERSION, { business })} />
         <TutorialHost pending={tourPending} />
         {/* Objectives (1.14.0): confetti and Clip for everyone looking when the team reaches one. */}
         <ConfettiHost />
-        <ObjectiveCelebrations teamId={currentTeam?.id ?? null} />
+        {/* 1.29.8: Clip covers a new colour theme, light or dark, or glass look while it's put on. */}
+        <LookScreenHost />
+        <ObjectiveCelebrationsHost teamId={currentTeam?.id ?? null} />
+        {/* 1.29.7: Clip's "+40 XP" when one of your steps is done, and his level up card. */}
+        <XpCheersHost userId={user!.id} profileHref={`/u/${encodeURIComponent(profile?.username ?? user!.id)}`} />
       </ConfirmProvider>
     </ToastProvider>
   );
+}
+
+/** Before 0098: the frame's parts read one by one, each skipped when its migration hasn't run (0069 the tour, 0092 / 0093 the look). */
+async function legacyShell(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const [{ data: profile }, tour, look, everywhere] = await Promise.all([
+    supabase.from("profiles").select("username, full_name, email, avatar_url, animations_enabled, sounds_enabled, palette").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("tutorial_done_at").eq("id", userId).maybeSingle(),
+    getLook(supabase, userId),
+    getEverywhereBackground(supabase, userId),
+  ]);
+  const tourPending = !tour.error && !!tour.data && !(tour.data as { tutorial_done_at: string | null }).tutorial_done_at;
+  return { profile, tourPending, look, everywhere };
 }

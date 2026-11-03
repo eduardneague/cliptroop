@@ -1059,3 +1059,88 @@ export function ShuffleIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** A painter's palette (1.29.5): a profile's colours. */
+export function PaletteIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.75-.8 1.75-1.7 0-.45-.17-.83-.44-1.13-.27-.3-.43-.68-.43-1.12 0-.94.76-1.7 1.7-1.7h2a3.9 3.9 0 0 0 3.9-3.9c0-4.1-3.8-7.45-8.48-7.45Z" />
+      <circle cx="7.6" cy="11.6" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="14.6" cy="7.6" r="1.1" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+/** A photo camera (1.29.5): change a picture. (CameraIcon is a video camera.) */
+export function PhotoIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M4.5 8.5a1.5 1.5 0 0 1 1.5-1.5h2.2l1.6-2.2h4.4l1.6 2.2H18a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 19H6a1.5 1.5 0 0 1-1.5-1.5Z" />
+      <circle cx="12" cy="12.8" r="3.3" />
+    </Svg>
+  );
+}
+
+/** A page laid out, a heading across and a column (1.40.0): the media kit's templates. */
+export function TemplateIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.75" y="4.25" width="16.5" height="15.5" rx="2.5" />
+      <path d="M3.75 9.25h16.5M10 9.25v10.5" />
+    </Svg>
+  );
+}
+
+/** A briefcase with a ledger's line (1.42.0): Business, a PFA's registers. */
+export function BusinessIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="7" width="17" height="12.5" rx="2.5" />
+      <path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7" />
+      <path d="M3.5 12.25h17M10.5 12.25v1.5h3v-1.5" />
+    </Svg>
+  );
+}
+
+/** What it means (1.43.0): an i in a circle (Business's guides, an outlier's × worked out). */
+export function InfoIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.75" />
+      <path d="M12 11v5.25" />
+      <path d="M12 7.75h.01" strokeWidth={2.4} />
+    </Svg>
+  );
+}
+
+/** A bank (1.43.0, the BNR rate's button): a pediment, four columns, the steps. */
+export function BankIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3.5 9.25 12 4l8.5 5.25" />
+      <path d="M4.5 9.25h15" />
+      <path d="M6.5 11.5v5.5M10.25 11.5v5.5M13.75 11.5v5.5M17.5 11.5v5.5" />
+      <path d="M4 19.25h16M3 21h18" />
+    </Svg>
+  );
+}
+
+/** Leave full screen (1.43.0): the corners turned in. */
+export function ShrinkIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3 8h3a2 2 0 0 0 2-2V3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M21 16h-3a2 2 0 0 0-2 2v3" />
+    </Svg>
+  );
+}
+
+/** A tag (1.43.0: what several entries are, set at once). */
+export function TagIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3.75 12.6V4.75a1 1 0 0 1 1-1h7.85a1 1 0 0 1 .7.3l7.1 7.1a1.5 1.5 0 0 1 0 2.1l-7.15 7.15a1.5 1.5 0 0 1-2.1 0l-7.1-7.1a1 1 0 0 1-.3-.7Z" />
+      <path d="M8.25 8.25h.01" strokeWidth={2.6} />
+    </Svg>
+  );
+}

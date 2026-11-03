@@ -1,11 +1,13 @@
 "use client";
 
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { pictureTooBig } from "@/lib/image/limits";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateTeamLogo } from "./actions";
 import { useToast } from "@/components/ui/toast-provider";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function TeamLogoUploader({
   teamId,
@@ -30,13 +32,19 @@ export function TeamLogoUploader({
       toast.error("Only image files are allowed.");
       return;
     }
-    if (original.size > 25 * 1024 * 1024) {
-      toast.error("Keep it under 25MB.");
+    const tooBig = pictureTooBig(original);
+    if (tooBig) {
+      toast.error(tooBig);
       return;
     }
     setBusy(true);
 
     const file = await compressImage(original, IMAGE_PRESETS.logo);
+    if (!isPictureType(file.type)) {
+      toast.error("Use a picture: PNG, JPG, WebP or GIF.");
+      setBusy(false);
+      return;
+    }
     const path = `${teamId}/logo-${Date.now()}-${safeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage
       .from("team-logos")
@@ -63,12 +71,7 @@ export function TeamLogoUploader({
         className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-xl flex-shrink-0 overflow-hidden"
         style={{ background: color }}
       >
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img loading="lazy" decoding="async" src={logoUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initials
-        )}
+        <AvatarImg src={logoUrl} fallback={initials} />
       </div>
       <button
         onClick={() => inputRef.current?.click()}

@@ -11,7 +11,7 @@ import type { RangeId, Window } from "../../lib/ranges";
 import type { OvKey, OvMetric, OvTopResult, Overview } from "../../lib/overview";
 import type { InsightsPreview } from "../../lib/insights";
 import type { ContentItem } from "../../lib/queries";
-import { addSeries, bucketDays, change, combineRates, defaultGran, gransFor, rollup, runningTotal, total, weightedAvg, type Gran, type Num, type TrendBucket } from "../../lib/trend-math";
+import { addReported, addSeries, bucketDays, change, combineRates, defaultGran, gransFor, reportedUntil, rollup, runningTotal, total, weightedAvg, type Gran, type Num, type TrendBucket } from "../../lib/trend-math";
 import { hourRange } from "../../lib/live-math";
 import { ago } from "../../lib/ago";
 import { scoreText } from "../../lib/scores";
@@ -96,14 +96,23 @@ const CARDS: OvKey[] = ["views", "watch", "followers", "engagement", "impression
 type Lines = "together" | "platform" | "kind";
 
 /** One metric for some platforms, put together (rates weighted). */
-function combine(m: OvMetric, ps: P[], rate: boolean, which: "now" | "prev"): { values: Num[]; weights: Num[] | null } {
+/**
+ * Every platform's numbers together. `reported` (the charts, 1.29.0): only
+ * up to the last point every platform has reported, so the line ends there
+ * ("No data yet" after) instead of dropping while YouTube's last days come
+ * in. The headline numbers add up everything there is.
+ */
+function combine(m: OvMetric, ps: P[], rate: boolean, which: "now" | "prev", o: { reported?: boolean } = {}): { values: Num[]; weights: Num[] | null } {
   const list = ps.filter((p) => m.per[p]);
   if (!list.length) return { values: [], weights: null };
   if (rate) {
     const r = combineRates(list.map((p) => ({ values: m.per[p]![which], weights: m.weights?.[p]?.[which] ?? m.per[p]![which].map(() => 1) })));
-    return { values: r.values, weights: r.weights };
+    if (!o.reported) return { values: r.values, weights: r.weights };
+    const cut = reportedUntil(list.map((p) => m.per[p]![which]));
+    return { values: r.values.map((v, i) => (i > cut ? null : v)), weights: r.weights.map((v, i) => (i > cut ? null : v)) };
   }
-  return { values: addSeries(list.map((p) => m.per[p]![which])), weights: null };
+  const series = list.map((p) => m.per[p]![which]);
+  return { values: o.reported ? addReported(series) : addSeries(series), weights: null };
 }
 const headline = (values: Num[], weights: Num[] | null, rate: boolean) => (rate ? weightedAvg(values, weights ?? values.map(() => 1)) : total(values));
 /**
@@ -387,7 +396,7 @@ function KpiCard({ m, ps, meta, on, compare, onPick }: { m: OvMetric; ps: P[]; m
             {flat ? "same" : meta.rate ? `${Math.abs(delta).toFixed(1)} pts` : `${Math.abs(delta) >= 10 ? Math.round(Math.abs(delta)) : Math.abs(delta).toFixed(1)}%`}
           </span>
         )}
-        {days ? <span className="ml-auto text-[10.5px] font-semibold text-ink-faint whitespace-nowrap">{days}</span> : <Spark values={now.values} on={on} />}
+        {days ? <span className="ml-auto text-[10.5px] font-semibold text-ink-faint whitespace-nowrap">{days}</span> : <Spark values={combine(m, ps, !!meta.rate, "now", { reported: true }).values} on={on} />}
       </span>
     </button>
   );
@@ -496,7 +505,7 @@ function TrendChart({
       ...(m.split.live ? [{ key: "live", label: "Live streams", color: LIVE_COLOR, values: shape(m.split.live.now, m.split.wLive?.now ?? null) }] : []),
     ];
   } else {
-    const a = combine(m, ps, rate, "now");
+    const a = combine(m, ps, rate, "now", { reported: true });
     const b = combine(m, ps, rate, "prev");
     const color = withData.length === 1 ? PLATFORM[withData[0]].color : TOTAL_COLOR;
     series = [{ key: "total", label: meta.label, color, values: shape(a.values, a.weights), est: estFor(withData) }];
@@ -525,7 +534,7 @@ function TrendChart({
 
   // Every point as a stretch of time with the chart's numbers there, for the dialog (any number, any grouping).
   const pickPoints = (): PeriodPoint[] => {
-    const all = combine(m, ps, rate, "now");
+    const all = combine(m, ps, rate, "now", { reported: true });
     const tot = rollup(all.values, buckets, rate ? (all.weights ?? undefined) : undefined);
     const per = new Map(withData.map((p) => [p, rollup(m.per[p]!.now, buckets, rate ? (m.weights?.[p]?.now ?? undefined) : undefined)]));
     const est = hours ? estFor(withData) : undefined;
@@ -623,7 +632,7 @@ function TrendChart({
             ariaLabel={`${meta.label} per day`}
             labels={buckets.map((b) => b.label)}
             tips={buckets.map((b) => b.tip)}
-            series={(rate || mode !== "platform" ? series.slice(0, 1) : series).map((x) => ({ key: x.key, label: x.label, color: x.color, values: x.values.map((v) => v ?? 0) }))}
+            series={(rate || mode !== "platform" ? series.slice(0, 1) : series).map((x) => ({ key: x.key, label: x.label, color: x.color, values: x.values }))}
             format={meta.format}
             showTotal={!rate && mode === "platform" && series.length > 1}
             height={280}
@@ -1057,7 +1066,7 @@ function YouTubeKinds({ m, points, compare, words, channel, lifetime }: { m: OvM
             ariaLabel={view === "share" ? `Each kind's share of YouTube views per ${unit}` : `YouTube views per ${unit}: ${names}`}
             labels={buckets.map((b) => b.label)}
             tips={buckets.map((b) => b.tip)}
-            series={kinds.map((k, i) => ({ key: k.key, label: k.label, color: k.color, values: view === "share" ? buckets.map((_, bi) => sharesAt(bi)[i]) : rolled[i].map((v) => v ?? 0) }))}
+            series={kinds.map((k, i) => ({ key: k.key, label: k.label, color: k.color, values: view === "share" ? buckets.map((_, bi) => sharesAt(bi)[i]) : rolled[i] }))}
             format={view === "share" ? fmtPct : fmtCompact}
             showTotal={view !== "share"}
             height={240}

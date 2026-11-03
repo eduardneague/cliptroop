@@ -22,13 +22,14 @@ export default function PrivacyPage() {
 
       <p>
         {APP_NAME} is a production planner for video teams, run by {COMPANY_NAME}. Teams use it to plan, write, review, schedule and publish their own
-        videos, and to see how those videos perform. Accounts are invitation only. This page explains what {APP_NAME} stores, why, who it&rsquo;s shared
+        videos, and to see how those videos perform. Anyone 18 or older can make an account. This page explains what {APP_NAME} stores, why, who it&rsquo;s shared
         with, and how to have it deleted.
       </p>
 
       <H>What we store</H>
       <ul className="list-disc pl-6 space-y-1.5">
-        <li><b>Your account:</b> email address, name, username, profile picture, your preferences (theme, sounds, currency) and the teams you belong to.</li>
+        <li><b>Your account:</b> email address, name, username, profile picture, your preferences (theme, sounds, currency, the glass look, and up to three wallpapers if you upload them), your profile page (bio, showcases, picture frame, background, and whether it&rsquo;s public or private) and the teams you belong to.</li>
+        <li><b>Your profile&rsquo;s level and achievements:</b> worked out from the steps you finish on videos (when, what kind, whether by their date). A public profile shows them to everyone signed in to {APP_NAME}; a private one shows others only your name and picture.</li>
         <li><b>Your team&rsquo;s work:</b> video plans, titles, scripts and research, comments, notes, sketches, thumbnails, uploaded video files, meetings, tasks and to-dos.</li>
         <li>
           <b>Connected social accounts</b> (YouTube, Instagram, TikTok, Facebook Pages): the account&rsquo;s ID, name, username and picture, which permissions were
@@ -44,6 +45,7 @@ export default function PrivacyPage() {
           this, and none of it is about you.
         </li>
         <li><b>Devices for notifications:</b> if you turn on notifications, the address your browser gives us to deliver them, and a label like &ldquo;iPhone · Safari&rdquo;.</li>
+        <li><b>Your team&rsquo;s plan:</b> which plan it&rsquo;s on, the plan a Master asked for and the note they wrote with it, and how much storage the team&rsquo;s files take.</li>
         <li><b>Technical logs:</b> when something breaks, the error message, the page, and which account saw it, so it can be fixed.</li>
       </ul>
 
@@ -65,7 +67,8 @@ export default function PrivacyPage() {
         and Google&rsquo;s use of your data is covered by the <A href="https://policies.google.com/privacy">Google Privacy Policy</A>. With your permission{" "}
         {APP_NAME} uploads videos, changes or cancels the ones it scheduled, and reads YouTube Analytics (including revenue when allowed) for the connected channel.
         Outliers also reads public videos and channels to show which ones do far better than usual; the scores, formats, keywords and ideas it shows are worked
-        out by {APP_NAME}, not by YouTube.
+        out by {APP_NAME}, not by YouTube. From the connected channel&rsquo;s YouTube Analytics it also lists the channels whose videos send viewers to
+        yours, for your team only.
       </p>
       <p>
         {APP_NAME}&rsquo;s use and transfer of information received from Google APIs adheres to the{" "}
@@ -88,6 +91,10 @@ export default function PrivacyPage() {
         <li>Resend: sending emails.</li>
         <li>Google (YouTube), Meta (Instagram, Facebook) and TikTok: the platforms your team connects, when publishing or reading statistics.</li>
         <li>Push services of your browser (Apple, Google, Mozilla, Microsoft): to deliver notifications you turned on. Messages are encrypted for your device.</li>
+        <li>LanguageTool: the writing suggestions in scripts, when they&rsquo;re on (the text being checked).</li>
+        <li>Open-Meteo: the weather on your dashboard (only the place, rounded to about a kilometre, and the city names you search).</li>
+        <li>GIPHY: the GIFs you search for in comments (the search words).</li>
+        <li>Cloudflare Turnstile: the security check when you create an account (signals from your browser that tell people from scripts; no cookies for advertising).</li>
       </ul>
 
       <H>Cookies and device storage</H>
@@ -100,12 +107,13 @@ export default function PrivacyPage() {
       <ul className="list-disc pl-6 space-y-1.5">
         <li>Everything travels encrypted (HTTPS). Platform sign-in tokens are encrypted at rest and only ever used by our server, never sent to a browser.</li>
         <li>Uploaded videos are private; viewing them uses links that expire.</li>
+        <li>Profile pictures, wallpapers and profile backgrounds are shown from a fixed address, like on most sites: anyone with that address can see the file, so don&rsquo;t use them for anything private.</li>
         <li>Database rules check every request against the person&rsquo;s team and role.</li>
       </ul>
 
       <H>How long we keep it</H>
       <ul className="list-disc pl-6 space-y-1.5">
-        <li>Uploaded video files are deleted after the video is posted everywhere: after 1, 2 or 3 weeks or 1 month, as the team chooses (2 weeks unless it changes that).</li>
+        <li>Uploaded video files are deleted after the video is posted everywhere: from 1 day to 1 year after, as the team chooses (2 weeks unless it changes that), or kept until someone deletes them if the team chooses never.</li>
         <li>Sign-in tokens are deleted the moment an account is disconnected.</li>
         <li>Public YouTube videos and channels (Outliers) are read again from YouTube or deleted within 30 days, as YouTube&rsquo;s rules ask.</li>
         <li>Notification devices are removed when you turn them off, log out on that device, or the browser stops accepting messages.</li>
@@ -114,7 +122,9 @@ export default function PrivacyPage() {
 
       <H>Your rights and choices</H>
       <p>
-        You can see and change your profile in Settings, disconnect any social account in Team → Connected accounts, and turn notifications off per device. You can ask for a
+        You can see and change your profile in Settings, make it private, disconnect any social account in Team → Connected accounts, and turn notifications off per device. You can delete
+        your account yourself in Settings → Account once you&rsquo;ve left your teams: your profile, files and settings are deleted at once, and what you made on a team stays with it
+        without your name. You can also ask for a
         copy of your data, a correction, or its deletion: see <Link href="/data-deletion" className="underline">Data deletion</Link> or write to <Contact />. We answer within 30 days.
       </p>
 

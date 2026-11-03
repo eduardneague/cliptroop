@@ -1,7 +1,7 @@
 "use client";
 
 import { Ago } from "@/components/ui/ago";
-import { compressImage, IMAGE_PRESETS, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
+import { compressImage, IMAGE_PRESETS, safeFileName, storedTypeFor, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CommentDeleteButton } from "./comment-delete-button";
@@ -15,6 +15,9 @@ import { useToast } from "@/components/ui/toast-provider";
 import { createClient } from "@/lib/supabase/client";
 import type { MentionTarget } from "@/lib/mentions";
 import type { RoleId } from "@/lib/permissions/roles";
+import { AvatarImg } from "@/components/ui/avatar-img";
+import { Leaves } from "@/components/ui/leaves";
+import { onFill } from "@/lib/contrast";
 
 export type AttachmentDisplay = {
   id: string;
@@ -184,7 +187,7 @@ export function NotesPanel({
         const path = `${projectId}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
         const { error } = await supabase.storage
           .from("comment-attachments")
-          .upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: file.type || undefined });
+          .upload(path, file, { cacheControl: UPLOAD_CACHE_CONTROL, contentType: storedTypeFor(file.type) });
         if (error) {
           toast.error(`Couldn't upload ${file.name}.`);
           continue;
@@ -224,14 +227,9 @@ export function NotesPanel({
           >
             <span
               className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0 mt-0.5 overflow-hidden"
-              style={{ background: c.avatarColor }}
+              style={{ background: c.avatarColor, color: onFill(c.avatarColor) }}
             >
-              {c.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img loading="lazy" decoding="async" src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                initialsFor(c.name)
-              )}
+              <AvatarImg src={c.avatarUrl} fallback={initialsFor(c.name)} />
             </span>
             <div className="text-[12.5px] min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -320,41 +318,43 @@ export function NotesPanel({
             <ExpandIcon className="w-[15px] h-[15px]" />
           </button>
         </div>
-        <div ref={listRef} className="space-y-3 mb-3 pr-2 max-h-[360px] overflow-y-auto styled-scroll">
+        <div ref={listRef} className="space-y-3 mb-3 pr-2 max-h-[360px] overflow-y-auto overflow-x-hidden styled-scroll">
           {renderItems()}
         </div>
         {renderComposer()}
       </div>
 
       {expanded && (
-        <div
-          className="fixed inset-0 z-[250] flex items-center justify-center bg-black/55 backdrop-blur-[2px] p-4 sm:p-8"
-          onClick={() => setExpanded(false)}
-        >
+        <Leaves>
           <div
-            className="w-full max-w-2xl h-full max-h-[85vh] rounded-2xl bg-surface border border-line/10 shadow-2xl flex flex-col animate-[modalin_.15s_ease]"
-            onClick={(e) => e.stopPropagation()}
+            className="pop-fade fixed inset-0 z-[250] flex items-center justify-center bg-black/55 backdrop-blur-[2px] p-4 sm:p-8"
+            onClick={() => setExpanded(false)}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-line/10 flex-shrink-0">
-              <div className="font-display font-semibold text-[16px]">
-                Notes & Q&A · {stageLabel}
+            <div
+              className="w-full max-w-2xl h-full max-h-[85vh] rounded-2xl bg-surface border border-line/10 shadow-2xl flex flex-col pop-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-line/10 flex-shrink-0">
+                <div className="font-display font-semibold text-[16px]">
+                  Notes & Q&A · {stageLabel}
+                </div>
+                <button
+                  onClick={() => setExpanded(false)}
+                  className="text-ink-soft hover:text-ink transition-colors"
+                  aria-label="Close"
+                >
+                  <CloseIcon className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setExpanded(false)}
-                className="text-ink-soft hover:text-ink transition-colors"
-                aria-label="Close"
-              >
-                <CloseIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <div ref={expandedListRef} className="flex-1 overflow-y-auto styled-scroll px-5 py-4 space-y-3">
-              {renderItems()}
-            </div>
-            <div className="px-5 py-4 border-t border-line/10 flex-shrink-0">
-              {renderComposer()}
+              <div ref={expandedListRef} className="flex-1 overflow-y-auto overflow-x-hidden styled-scroll px-5 py-4 space-y-3">
+                {renderItems()}
+              </div>
+              <div className="px-5 py-4 border-t border-line/10 flex-shrink-0">
+                {renderComposer()}
+              </div>
             </div>
           </div>
-        </div>
+        </Leaves>
       )}
       {lightbox && (
         <ImageLightbox url={lightbox.url} alt={lightbox.name} onClose={() => setLightbox(null)} />

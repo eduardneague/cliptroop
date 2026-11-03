@@ -3,7 +3,10 @@
 // insights), the explore niches, what teammates and outsiders can read, the
 // daily budget, tracked-channel alerts, live searches (and their limits),
 // adding a channel by its link, a video's fresh numbers, thumbnails, and
-// YouTube's 30 days. Run through scripts/e2e/run.sh.
+// YouTube's 30 days; since 1.29.0 also which found channels count (a cooking
+// channel with one phone video doesn't), finding channels by name or handle,
+// a niche's own channels ("only these"), and a channel the team hid.
+// Run through scripts/e2e/run.sh.
 import { createHmac } from "node:crypto";
 import { execSync } from "node:child_process";
 import { encode } from "jpeg-js";
@@ -158,7 +161,7 @@ const rest = (path: string, who: string) => JSON.parse(execSync(`curl -s "http:/
 
 async function main() {
   const { runOutliersJob } = await import("../../modules/outliers/lib/collector");
-  const { liveSearch, addChannelByRef, refreshVideo } = await import("../../modules/outliers/lib/requests");
+  const { liveSearch, addChannelByRef, refreshVideo, findChannels, addToNiche } = await import("../../modules/outliers/lib/requests");
   const TEAM = "10000000-0000-4000-8000-0000000000a7";
   const OTHER = "10000000-0000-4000-8000-0000000000b7";
   const M = "00000000-0000-4000-8000-0000000000a7";
@@ -198,8 +201,9 @@ async function main() {
   const reviewScore = Number(one(`select avg(score) from yt_videos where title like '%Review%'`));
   ok(fakeScore > reviewScore * 2, `the fake videos are the outliers (${fakeScore.toFixed(2)} vs ${reviewScore.toFixed(2)})`);
   ok(Number(one(`select relevance from outlier_niche_channels where niche_id = '${NICHE}' and channel_id = '${cid(1)}'`)) > 0.3, "a phone channel is about the niche");
-  const cook = one(`select coalesce(relevance::text, 'null') from outlier_niche_channels where niche_id = '${NICHE}' and channel_id = '${COOK.id}'`);
-  ok(cook === "null" || Number(cook) < 0.15, `the cooking channel isn't (${cook})`);
+  // 1.29.0: it doesn't count (not checked until its uploads are read, then off topic).
+  const cook = one(`select coalesce(verdict, 'not checked') from outlier_niche_channels where niche_id = '${NICHE}' and channel_id = '${COOK.id}'`);
+  ok(cook !== "ok", `the cooking channel isn't (${cook})`);
   ok(one(`select insights is not null from outlier_niches where id = '${NICHE}'`) === "t", "insights saved");
   // Long videos and Shorts each have their own (the combined set only when one kind has too few).
   const fmt = `coalesce(insights->'long', insights->'all')->'formats'->0->>'id'`;
@@ -243,6 +247,11 @@ async function main() {
   ok(new Set(keys).size === keys.length && r2.searches <= 3, `searches spread out (${r2.searches} this time, ${keys.length} done)`);
   ok(calls.filter((c) => c === "search").length - before === r2.searches, "and counted");
   ok(Number(one(`select count(*) from outlier_niche_channels where niche_id = '${NICHE}' and source = 'featured'`)) >= 1, `featured channels joined (${one(`select count(*) from outlier_niche_channels where niche_id = '${NICHE}' and source = 'featured'`)})`);
+  // 1.29.0: once its uploads are read, the cooking channel is judged on them: off topic, not counted.
+  for (let i = 0; i < 3 && one(`select scanned_at is not null from yt_channels where id = '${COOK.id}'`) !== "t"; i++) await runOutliersJob({ team: TEAM });
+  const cook2 = one(`select coalesce(verdict, 'not checked') || ' ' || coalesce(relevance::text, '') from outlier_niche_channels where niche_id = '${NICHE}' and channel_id = '${COOK.id}'`);
+  ok(one(`select scanned_at is not null from yt_channels where id = '${COOK.id}'`) === "t" && cook2.startsWith("topic"), `read, the cooking channel is off topic (${cook2})`);
+  ok(Number(one(`select count(*) from outlier_niche_channels where niche_id = '${NICHE}' and verdict = 'ok' and channel_id <> '${COOK.id}'`)) >= 10, "the phone channels fit");
 
   console.log("\n— Explore niches");
   const ex = await runOutliersJob({ explore: true });
@@ -287,6 +296,25 @@ async function main() {
   ok(await refreshVideo(TEAM, vid(1, 0, "L")), "a video's numbers refreshed");
   ok(Number(one(`select views from yt_videos where id = '${vid(1, 0, "L")}'`)) === VIDEOS.find((v) => v.id === vid(1, 0, "L"))!.views, "to YouTube's count");
   ok(!(await refreshVideo(TEAM, vid(1, 0, "L"))), "not again within 6 hours");
+
+  console.log("\n— Finding channels, a niche's own channels, hiding one (1.29.0)");
+  const byName = await findChannels(TEAM, M, "Phone Lab 7");
+  ok(!("error" in byName) && byName.rows.some((c) => c.id === cid(7)), "found by its name among the collected");
+  const byHandle = await findChannels(TEAM, M, "phonelab9");
+  ok(!("error" in byHandle) && byHandle.rows[0]?.id === cid(9), "a name tried as its @handle comes first");
+  const picked = await addToNiche(TEAM, NICHE, [cid(14)], { userId: M });
+  ok(!("error" in picked) && one(`select source from outlier_niche_channels where niche_id = '${NICHE}' and channel_id = '${cid(14)}'`) === "manual", "picked: one of the niche's own");
+  const own = rpc("outliers_channels", { p_team: TEAM, p_niche: NICHE, p_f: { only: "group" }, p_sort: "rate", p_limit: 50, p_offset: 0 }, E) as { id: string; grp: boolean; counted: boolean }[];
+  ok(own.some((c) => c.id === cid(14) && c.grp && c.counted), "listed as the niche's own, and it counts");
+  sql(`update outlier_niches set only_group = true where id = '${NICHE}'`);
+  const onlyOwn = rpc("outliers_videos", { p_team: TEAM, p_niche: NICHE, p_f: {}, p_sort: "score", p_limit: 200, p_offset: 0 }, E) as { channel_id: string }[];
+  ok(onlyOwn.length > 0 && onlyOwn.every((v) => v.channel_id === cid(14) || v.channel_id === cid(15)), `only its own channels' videos (${onlyOwn.length})`);
+  sql(`update outlier_niches set only_group = false where id = '${NICHE}'`);
+  execSync(`curl -s -X POST "http://127.0.0.1:54399/rest/v1/outlier_blocked" -H "Content-Type: application/json" -H "${as(E)}" -d '{"team_id":"${TEAM}","channel_id":"${cid(1)}","title":"Phone Lab 1"}'`);
+  ok(one(`select added_by from outlier_blocked where team_id = '${TEAM}' and channel_id = '${cid(1)}'`) === E, "an editor hid a channel");
+  const shown = rpc("outliers_videos", { p_team: TEAM, p_niche: NICHE, p_f: {}, p_sort: "score", p_limit: 200, p_offset: 0 }, M) as { channel_id: string }[];
+  ok(shown.length > 0 && !shown.some((v) => v.channel_id === cid(1)), "its videos are gone for the whole team");
+  sql(`delete from outlier_blocked where team_id = '${TEAM}'`);
 
   console.log("\n— YouTube's 30 days, and the budget");
   sql(`update yt_videos set fetched_at = now() - interval '31 days' where id = '${vid(90, 5, "L")}'`);

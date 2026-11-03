@@ -1,6 +1,7 @@
 "use client";
 
 import { SHORT_TYPES, SHORT_TYPE_META, type ShortType } from "../lib/constants";
+import { wordColor } from "@/lib/word-color";
 
 /** Small colored tag. Filler shows nothing unless `showFiller`. */
 export function ShortTypeTag({ type, showFiller = false }: { type: ShortType; showFiller?: boolean }) {
@@ -11,7 +12,7 @@ export function ShortTypeTag({ type, showFiller = false }: { type: ShortType; sh
     <span
       className="inline-flex items-center rounded-md px-1.5 py-[1px] text-[10.5px] font-bold uppercase tracking-wide whitespace-nowrap"
       // Text blends toward the main ink color: lighter on dark, darker on light.
-      style={{ color: `color-mix(in srgb, ${c} 65%, rgb(var(--ink)))`, background: `color-mix(in srgb, ${c} 16%, transparent)` }}
+      style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 16%, transparent)` }}
     >
       {meta.short}
     </span>
@@ -110,7 +111,7 @@ export function ShortTypeBadge({ type }: { type: ShortType }) {
       aria-label={meta.label}
       className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[11.5px] font-extrabold flex-shrink-0"
       style={{
-        color: `color-mix(in srgb, ${meta.color} 65%, rgb(var(--ink)))`,
+        color: wordColor(meta.color),
         background: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${meta.color} 35%, transparent)`,
       }}

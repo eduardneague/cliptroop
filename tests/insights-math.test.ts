@@ -1,5 +1,5 @@
 // Insights (1.20.0, lib/insights-math.ts): what changed lately, the best time to post, tips.
-import { bestTimes, breakoutAlerts, ctrAlert, followerAlerts, gapAlerts, momentumAlerts, slumpAlerts, allAlerts, slotName, tipFor, type InsightVideo } from "../modules/analytics/lib/insights-math";
+import { allBestTimes, bestTimes, heatVideos, breakoutAlerts, ctrAlert, followerAlerts, gapAlerts, momentumAlerts, slumpAlerts, allAlerts, slotName, tipFor, type InsightVideo } from "../modules/analytics/lib/insights-math";
 import type { Finding } from "../modules/analytics/lib/patterns";
 
 let fails = 0;
@@ -72,6 +72,19 @@ const h = bestTimes(heatVids, { platform: "youtube", kind: "short", now });
 ok(!!h && h.cells.length === 42 && h.considered === 14, `7 × 6 cells from the settled videos only (got ${h?.considered})`);
 ok(h?.best.length === 1 && slotName(h.best[0]) === "Tuesdays 16–20" && h.best[0].median === 2.5, `the best slot (got ${h?.best.map((c) => slotName(c))})`);
 ok(bestTimes(heatVids.slice(0, 5), { platform: "youtube", kind: "short", now }) === null, "fewer than 12 videos: nothing yet");
+// Every platform together (1.27.5).
+{
+  const yt = Array.from({ length: 8 }, (_, i) => vid({ daysAgo: 8 + i, weekday: 1, hour: 17, score: 2 }));
+  const tt = Array.from({ length: 8 }, (_, i) => vid({ platform: "tiktok", daysAgo: 8 + i, weekday: 1, hour: 18, score: 1.6 }));
+  const longs = Array.from({ length: 13 }, (_, i) => vid({ kind: "long", daysAgo: 9 + i, weekday: 5, hour: 10, score: 1 }));
+  const r = allBestTimes([...yt, ...tt, ...longs], [{ platform: "youtube", kind: "short" }, { platform: "tiktok", kind: "short" }, { platform: "youtube", kind: "long" }], now);
+  ok(r.heat.length === 2 && r.heat[0].platform === "all" && r.heat[0].kind === "short", `every platform's shorts first (got ${r.heat.map((h) => h.platform + ":" + h.kind)})`);
+  ok(r.heat[0].considered === 16 && r.heat[0].platforms.join() === "youtube,tiktok", "both platforms' shorts in it, though neither has 12 of its own");
+  ok(r.heat[0].best.length === 1 && slotName(r.heat[0].best[0]) === "Tuesdays 16–20" && r.heat[0].best[0].median === 1.8, "their best slot together");
+  ok(r.heat[1].platform === "youtube" && r.heat[1].kind === "long", "long videos of one platform only: just its own map (no \"every platform\" copy)");
+  ok(r.waiting.length === 2 && r.waiting.every((w) => w.have === 8 && w.kind === "short"), "the platforms still short of their own map, with how many they have");
+  ok(heatVideos([...yt, vid({ daysAgo: 2 })], { platform: "all", kind: "short", now }).length === 8, "videos under a week old don't count yet");
+}
 
 // Tips.
 const f = (id: string, tone: Finding["tone"] = "good"): Finding => ({ id, tone, strength: "hint", title: "", detail: "", ratio: 1.5, groups: [], examples: [] });

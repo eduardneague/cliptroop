@@ -25,47 +25,101 @@ const WRITABLE = new Set(["daily_word_plays", ...String(process.env.MOCK_WRITES 
 // The fixtures are read again on every request; tables that remember writes keep their rows here.
 const stores = new Map();
 const tableRows = (F, name) => {
-  if (!WRITABLE.has(name)) return F.tables[name];
+  // (A table an RPC has written to keeps its rows too: business_years, 1.42.0.)
+  if (!WRITABLE.has(name) && !stores.has(name)) return F.tables[name];
+  if (!stores.has(name)) stores.set(name, [...(F.tables[name] ?? [])]);
+  return stores.get(name);
+};
+const storeOf = (F, name) => {
   if (!stores.has(name)) stores.set(name, [...(F.tables[name] ?? [])]);
   return stores.get(name);
 };
 
-function applyFilters(rows, params) {
+/** One PostgREST test on one row's column (`not` turns it round). */
+function testOp(row, k, not, op, raw) {
+  const x = row[k];
+  let r;
+  if (op === "eq") r = String(x) === raw;
+  else if (op === "neq") r = String(x) !== raw;
+  else if (op === "in") r = raw.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")).includes(String(x));
+  else if (op === "is") r = raw === "null" ? x === null || x === undefined : String(x) === raw;
+  else if (op === "gte") r = x !== null && x !== undefined && String(x) >= raw;
+  else if (op === "lte") r = x !== null && x !== undefined && String(x) <= raw;
+  else if (op === "gt") r = x !== null && x !== undefined && String(x) > raw;
+  else if (op === "lt") r = x !== null && x !== undefined && String(x) < raw;
+  else if (op === "like" || op === "ilike") {
+    // PostgREST patterns: % or * any run, _ one character, \ escapes.
+    let re = "";
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === "\\" && i + 1 < raw.length) re += raw[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      else if (ch === "%" || ch === "*") re += ".*";
+      else if (ch === "_") re += ".";
+      else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    r = x !== null && x !== undefined && new RegExp(`^${re}$`, op === "ilike" ? "is" : "s").test(String(x));
+  } else r = true;
+  return not ? !r : r;
+}
+
+/** A logic tree's parts: commas at its own level (not inside brackets or a "quoted, value"). */
+function splitTop(s) {
+  const out = [];
+  let depth = 0;
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quoted) {
+      if (ch === "\\" && i + 1 < s.length) {
+        cur += ch + s[++i];
+        continue;
+      }
+      if (ch === '"') quoted = false;
+      cur += ch;
+      continue;
+    }
+    if (ch === '"') quoted = true;
+    else if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "," && depth === 0 && !quoted) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const unquote = (v) => (/^".*"$/s.test(v) ? v.slice(1, -1).replace(/\\(.)/g, "$1") : v);
+/** 1.41.0: or=(…) / and=(…) logic trees (nested, not., quoted values), as PostgREST reads them. */
+function evalTree(expr, row) {
+  const m = /^(not\.)?(or|and)\((.*)\)$/s.exec(expr.trim());
+  if (m) {
+    const parts = splitTop(m[3]);
+    const r = m[2] === "or" ? parts.some((p) => evalTree(p, row)) : parts.every((p) => evalTree(p, row));
+    return m[1] ? !r : r;
+  }
+  const f = /^([a-z0-9_]+)\.(not\.)?(eq|neq|in|is|gte|lte|gt|lt|like|ilike)\.(.*)$/s.exec(expr.trim());
+  if (!f) return true;
+  return testOp(row, f[1], !!f[2], f[3], unquote(f[4]));
+}
+
+/** The rows a request's filters and order let through, and (1.41.0) how many before its page (count=exact). */
+function filterRows(rows, params) {
   let out = rows;
   for (const [k, v] of params) {
-    if (["select", "order", "limit", "offset", "on_conflict", "columns", "or", "and"].includes(k)) continue;
+    if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(k)) continue;
+    if (k === "or" || k === "and") {
+      out = out.filter((row) => evalTree(`${k}${v}`, row));
+      continue;
+    }
     if (k.includes(".")) continue; // filters on embedded tables: ignore
     const m = /^(not\.)?(eq|neq|in|is|gte|lte|gt|lt|like|ilike)\.(.*)$/.exec(v);
     if (!m) continue;
     const [, not, op, raw] = m;
     const has = out.length && Object.prototype.hasOwnProperty.call(out[0], k);
     if (!has) continue;
-    const test = (row) => {
-      const x = row[k];
-      let r;
-      if (op === "eq") r = String(x) === raw;
-      else if (op === "neq") r = String(x) !== raw;
-      else if (op === "in") r = raw.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/^"|"$/g, "")).includes(String(x));
-      else if (op === "is") r = raw === "null" ? x === null || x === undefined : String(x) === raw;
-      else if (op === "gte") r = x !== null && String(x) >= raw;
-      else if (op === "lte") r = x !== null && String(x) <= raw;
-      else if (op === "gt") r = x !== null && String(x) > raw;
-      else if (op === "lt") r = x !== null && String(x) < raw;
-      else if (op === "like" || op === "ilike") {
-        // PostgREST patterns: % or * any run, _ one character, \ escapes.
-        let re = "";
-        for (let i = 0; i < raw.length; i++) {
-          const ch = raw[i];
-          if (ch === "\\" && i + 1 < raw.length) re += raw[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          else if (ch === "%" || ch === "*") re += ".*";
-          else if (ch === "_") re += ".";
-          else re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        }
-        r = x !== null && x !== undefined && new RegExp(`^${re}$`, op === "ilike" ? "is" : "s").test(String(x));
-      } else r = true;
-      return not ? !r : r;
-    };
-    out = out.filter(test);
+    out = out.filter((row) => testOp(row, k, !!not, op, raw));
   }
   // order=col.desc.nullslast,col2.asc (columns of the row itself; embedded ones are ignored).
   const order = params.get("order");
@@ -92,11 +146,14 @@ function applyFilters(rows, params) {
         return 0;
       });
   }
+  const total = out.length;
   const offset = Number(params.get("offset") || 0);
   const limit = params.get("limit");
   if (offset || limit) out = out.slice(offset, limit ? offset + Number(limit) : undefined);
-  return out;
+  return { rows: out, total };
 }
+const applyFilters = (rows, params) => filterRows(rows, params).rows;
+
 /** A flat sample picture: a "thumbnail" (16:9, a big word) or a channel picture (square). */
 function sampleImage(res, p) {
   let h = 0;
@@ -112,6 +169,29 @@ function sampleImage(res, p) {
   res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600", "Access-Control-Allow-Origin": "*" });
   res.end(svg);
 }
+/** MOCK_DASH_BG_FILE=/path/to/file (.jpg .png .webp .gif .mp4 .webm): the dashboard background; else a drawn dusk sky. */
+function sampleBackground(req, res) {
+  const file = process.env.MOCK_DASH_BG_FILE;
+  if (!file || !fs.existsSync(file)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22184a"/><stop offset=".55" stop-color="#c45262"/><stop offset="1" stop-color="#faaa5c"/></linearGradient><radialGradient id="g" cx=".3" cy=".35" r=".4"><stop offset="0" stop-color="#ffc878" stop-opacity=".7"/><stop offset="1" stop-color="#ffc878" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="900" fill="url(#s)"/><rect width="1600" height="900" fill="url(#g)"/><path d="M0 700 Q 300 620 600 690 T 1200 670 T 1600 690 V900 H0Z" fill="#1c1228"/></svg>`;
+    res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "max-age=3600", "Access-Control-Allow-Origin": "*" });
+    return res.end(svg);
+  }
+  const ext = file.split(".").pop().toLowerCase();
+  const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", avif: "image/avif", gif: "image/gif", mp4: "video/mp4", webm: "video/webm" }[ext] || "application/octet-stream";
+  const size = fs.statSync(file).size;
+  const m = /bytes=(\d*)-(\d*)/.exec(String(req.headers.range || ""));
+  const head = { "Content-Type": type, "Accept-Ranges": "bytes", "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=3600" };
+  if (!m) {
+    res.writeHead(200, { ...head, "Content-Length": size });
+    return req.method === "HEAD" ? res.end() : fs.createReadStream(file).pipe(res);
+  }
+  const start = m[1] ? Number(m[1]) : Math.max(0, size - Number(m[2]));
+  const end = m[1] && m[2] ? Math.min(size - 1, Number(m[2])) : size - 1;
+  res.writeHead(206, { ...head, "Content-Length": end - start + 1, "Content-Range": `bytes ${start}-${end}/${size}` });
+  return req.method === "HEAD" ? res.end() : fs.createReadStream(file, { start, end }).pipe(res);
+}
+
 // Resumable uploads (TUS, what Supabase Storage speaks): id → { length, offset, name }.
 /** MOCK_VIDEO=/path/to/file.mp4 (or .webm): the file every signed review-videos link plays (with Range support). */
 function sampleVideo(req, res) {
@@ -159,6 +239,21 @@ function answer(req, res, url, body) {
         time_last_update_utc: new Date(Date.now() - 6 * 3600e3).toUTCString(),
         rates: { USD: 1, EUR: 0.92, GBP: 0.79, RON: 4.58, CAD: 1.36, AUD: 1.52, CHF: 0.88, JPY: 149.5, INR: 83.4, BRL: 5.1, MXN: 17.9, PLN: 3.98, SEK: 10.6, NOK: 10.8, DKK: 6.86, HUF: 362, CZK: 23.1, TRY: 34.2, AED: 3.6725, ZAR: 18.4, MDL: 17.7, BGN: 1.8, RSD: 107.8, UAH: 41.2, KRW: 1380, CNY: 7.2, SGD: 1.34, NZD: 1.66, HKD: 7.8, ILS: 3.7 },
       });
+    // BNR's reference rates (1.42.0; start the app with BNR_RATES_URL=http://127.0.0.1:54321/bnr/): a year's banking days
+    // up to today, the last ten, or today's.
+    if (url.pathname.startsWith("/bnr/")) {
+      const { bnrXml } = require("./business.cjs");
+      const today = new Date().toISOString().slice(0, 10);
+      const y = /nbrfxrates(\d{4})\.xml$/.exec(url.pathname);
+      let xml = y ? bnrXml(Number(y[1]), today) : bnrXml(Number(today.slice(0, 4)), today);
+      if (!y) {
+        const cubes = xml.match(/<Cube date="[^"]+">[\s\S]*?<\/Cube>/g) ?? [];
+        const keep = url.pathname.endsWith("10days.xml") ? cubes.slice(-10) : cubes.slice(-1);
+        xml = xml.replace(/<Cube[\s\S]*<\/Cube>/, keep.join(""));
+      }
+      res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      return res.end(xml);
+    }
     if (url.pathname === "/auth/v1/user") return send(res, 200, F.user);
     if (url.pathname.startsWith("/auth/v1/")) return send(res, 200, {});
     if (url.pathname.startsWith("/storage/v1/")) {
@@ -180,6 +275,16 @@ function answer(req, res, url, body) {
       }
       // Removing files (storage.remove): accepted.
       if (req.method === "DELETE" && url.pathname.startsWith("/storage/v1/object/")) return send(res, 200, []);
+      // Plain uploads (storage.upload, e.g. a picture pasted into a script) and copies: accepted
+      // (MOCK_UPLOAD_FAIL=1: refused); public files answer with a generated sample picture.
+      if (url.pathname === "/storage/v1/object/copy" && req.method === "POST") return send(res, 200, { Key: (body ? JSON.parse(body).destinationKey : "") ?? "" });
+      if ((req.method === "POST" || req.method === "PUT") && /^\/storage\/v1\/object\/(?!sign\/|public\/|upload\/)[^/]+\/.+/.test(url.pathname)) {
+        if (process.env.MOCK_UPLOAD_FAIL) return send(res, 413, { statusCode: "413", error: "Payload too large", message: "The object exceeded the maximum allowed size" });
+        return send(res, 200, { Key: decodeURIComponent(url.pathname.replace("/storage/v1/object/", "")), Id: Math.random().toString(36).slice(2) });
+      }
+      // A dashboard background (1.27.5): MOCK_DASH_BG_FILE (a picture, GIF or video), else a generated dusk.
+      if (url.pathname.startsWith("/storage/v1/object/public/dashboard-backgrounds/")) return sampleBackground(req, res);
+      if (url.pathname.startsWith("/storage/v1/object/public/")) return sampleImage(res, decodeURIComponent(url.pathname));
       // Batch signing (createSignedUrls): links to generated sample images below.
       if (req.method === "POST" && /\/object\/sign\/[^/]+\/?$/.test(url.pathname)) {
         const bucket = url.pathname.split("/sign/")[1].replace(/\/$/, "");
@@ -212,37 +317,81 @@ function answer(req, res, url, body) {
       row.updated_at = now;
       return send(res, 200, [{ result: "ok", guesses: row.guesses, solved: row.solved, finished: done }]);
     }
+    // Closing, reopening, correcting a year of Business (0120's business_set_year), on the remembered years.
+    if (rpc && rpc[1] === "business_set_year") {
+      const b = body ? JSON.parse(body) : {};
+      const rows = storeOf(F, "business_years");
+      let row = rows.find((r) => r.team_id === b.p_team && r.year === b.p_year);
+      if (!row) rows.push((row = { team_id: b.p_team, year: b.p_year, closed_at: null, closed_by: null, rectified: false }));
+      if (b.p_closed === true || b.p_closed === false) {
+        row.closed_at = b.p_closed ? new Date().toISOString() : null;
+        row.closed_by = b.p_closed ? F.user.id : null;
+      }
+      if (b.p_rectified === true || b.p_rectified === false) row.rectified = b.p_rectified;
+      return send(res, 200, [{ year: row.year, closed_at: row.closed_at, closed_by: row.closed_by, rectified: row.rectified }]);
+    }
     if (rpc) {
       const v = F.rpc?.[rpc[1]];
-      const out = typeof v === "function" ? v(body ? JSON.parse(body) : {}) : v ?? null;
+      // (The fixture sees who's signed in and the remembered rows of business_access and team_features: 1.42.0's
+      // my_business_access, so Developer → Features turns Business on and off in the mock too.)
+      const out = typeof v === "function" ? v(body ? JSON.parse(body) : {}, { user: F.user, tables: { business_access: tableRows(F, "business_access") ?? [], team_features: tableRows(F, "team_features") ?? [] } }) : v ?? null;
       // An RPC fixture can answer like a raised exception: { __status: 400, __body: { code, message } }.
       if (out && typeof out === "object" && out.__status) return send(res, out.__status, out.__body);
       return send(res, 200, out);
     }
     const t = /^\/rest\/v1\/([a-z0-9_]+)$/.exec(url.pathname);
+    // A table a migration hasn't made yet (fixtures' missingTables, e.g. MOCK_NO_0119=1): PostgREST's own answer.
+    if (t && (F.missingTables ?? []).includes(t[1])) return send(res, 404, { code: "PGRST205", message: `Could not find the table 'public.${t[1]}' in the schema cache`, details: null, hint: null });
     if (t) {
       // Tables that remember writes (the daily word's plays, and any in MOCK_WRITES=a,b):
       // inserts are kept, updates change the rows they match.
       const writable = WRITABLE.has(t[1]);
+      const one = String(req.headers["accept"] || "").includes("vnd.pgrst.object");
+      // (1.42.0: .single() / .maybeSingle() on a write answer with the one row, as PostgREST does.)
+      const answerRows = (status, rows) => (one ? (rows.length ? send(res, status, rows[0]) : send(res, 406, { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned", details: "The result contains 0 rows", hint: null })) : send(res, status, rows));
       if (writable && req.method === "POST") {
-        const rows = [].concat(body ? JSON.parse(body) : []).map((r) => ({ created_at: new Date().toISOString(), ...r }));
-        tableRows(F, t[1]).push(...rows);
-        return send(res, 201, rows);
+        const now = new Date().toISOString();
+        const incoming = [].concat(body ? JSON.parse(body) : []);
+        // An upsert (on_conflict=…, Prefer: resolution=merge-duplicates) changes the row it meets instead of adding one.
+        const conflict = String(req.headers["prefer"] || "").includes("merge-duplicates") ? (url.searchParams.get("on_conflict") || "id").split(",") : null;
+        const table = tableRows(F, t[1]);
+        const out = [];
+        for (const r of incoming) {
+          const same = conflict ? table.find((x) => conflict.every((c) => r[c] !== undefined && String(x[c]) === String(r[c]))) : null;
+          if (same) {
+            Object.assign(same, r, { updated_at: now });
+            out.push(same);
+          } else {
+            // (A few columns the database fills in itself: who, and when Business was turned on, 1.42.0.)
+            const own = t[1] === "profile_wallpapers" ? { user_id: F.user.id } : t[1] === "team_features" ? { enabled_at: now } : {};
+            const row = { id: require("crypto").randomUUID(), created_at: now, updated_at: now, ...own, ...r };
+            table.push(row);
+            out.push(row);
+          }
+        }
+        return answerRows(201, out);
       }
       if (writable && req.method === "PATCH") {
         const hit = applyFilters(tableRows(F, t[1]), url.searchParams);
         const patch = body ? JSON.parse(body) : {};
-        for (const r of hit) Object.assign(r, patch);
-        return send(res, 200, hit);
+        for (const r of hit) Object.assign(r, patch, { updated_at: new Date().toISOString() });
+        return answerRows(200, hit);
+      }
+      if (writable && req.method === "DELETE") {
+        const rows = tableRows(F, t[1]);
+        const hit = applyFilters(rows, url.searchParams);
+        for (const r of hit) rows.splice(rows.indexOf(r), 1);
+        return answerRows(200, hit);
       }
       // An update answers with the rows it matched (like "update … returning").
       if (req.method === "PATCH") return send(res, 200, applyFilters(F.tables[t[1]] ?? [], url.searchParams));
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, req.method === "POST" ? 201 : 200, []);
       const table = t[1];
       if (!F.tables[table] && process.env.MOCK_LOG) console.log("   (no fixture for", table + ")");
-      let rows = applyFilters(tableRows(F, table) ?? [], url.searchParams);
+      const found = filterRows(tableRows(F, table) ?? [], url.searchParams);
+      let rows = found.rows;
       const range = req.headers["range"];
-      const total = rows.length;
+      const total = found.total;
       if (range) {
         const [a, b] = String(range).split("-").map(Number);
         rows = rows.slice(a, b + 1);

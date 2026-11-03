@@ -306,6 +306,46 @@ function outliersFixtures({ TEAM, U, people }) {
           niches: [NICHE],
         };
       },
+      // 1.43.0 (0122): the channels the team's viewers also watch, each with its videos: up to 6 long ones and 6
+      // Shorts, the ones that sent viewers first, then the biggest outliers.
+      outliers_audience: () => {
+        const D = d();
+        if (empty) return { at: null, note: null, rows: [] };
+        const chans = [...D.channels.values()].slice(0, 9);
+        return {
+          at: new Date(Date.now() - 5 * 3600e3).toISOString(),
+          note: null,
+          rows: chans.map((c, i) => {
+            const vs = D.byChannel.get(c.id) ?? [];
+            const top = vs.filter((v) => v.kind === "long").slice(-2).map((v) => v.id);
+            const pick = (kind) =>
+              vs
+                .filter((v) => v.kind === kind)
+                .map((v) => ({ v, sent: top.includes(v.id) }))
+                .sort((a, b) => Number(b.sent) - Number(a.sent) || (b.v.score ?? 0) - (a.v.score ?? 0))
+                .slice(0, 6);
+            const examples = [...pick("long"), ...pick("short")].map(({ v, sent }) => ({ id: v.id, kind: v.kind, title: String(v.title).slice(0, 80), views: v.views, score: v.score, at: v.published_at, sent }));
+            return {
+              id: c.id,
+              views: 420 - i * 37,
+              videos: 3 + (i % 4),
+              ours: 2 + (i % 3),
+              top,
+              title: c.title,
+              handle: c.handle,
+              avatar: c.avatar_url,
+              subs: c.subscribers,
+              country: c.country ?? null,
+              lang: c.main_lang ?? null,
+              long_median: c.long_median,
+              short_median: c.short_median,
+              tracked: D.tracked.includes(c.id),
+              niches: i < 3 ? [NICHE] : [],
+              examples,
+            };
+          }),
+        };
+      },
       outliers_channel: (b) => {
         const D = d();
         const c = D.channels.get(b.p_channel);

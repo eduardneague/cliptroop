@@ -141,6 +141,23 @@ export const BAND_LABEL: Record<Band, string> = {
   viral: "25× or more",
 };
 
+/**
+ * The usual a video's score is measured against (1.31.8): its views ÷ its score, which is the median views of the
+ * channel's videos of its kind posted just before it (the score keeps that number fixed as the views move,
+ * collector.ts → refreshVideos). Not the channel's usual now: a channel that grew since makes that one bigger, so
+ * "14M views, usual 5.6M, 3.3×" didn't add up (14M ÷ 4.2M then = 3.3×). Null without a score or views.
+ */
+export function usualThen(v: { views: number | null; score: number | null }): number | null {
+  if (v.views === null || v.score === null || !Number.isFinite(v.views) || !Number.isFinite(v.score) || v.score <= 0 || v.views <= 0) return null;
+  return Math.round(v.views / v.score);
+}
+
+/** Whether two usuals are far enough apart to say both (more than 15% from each other). */
+export function usualsDiffer(then: number | null, now: number | null): boolean {
+  if (!then || !now) return false;
+  return Math.abs(now - then) / Math.min(now, then) > 0.15;
+}
+
 /** "3.4×", "12×", "0.6×". */
 export function multText(score: number | null | undefined): string {
   if (score === null || score === undefined || !Number.isFinite(score)) return "–";

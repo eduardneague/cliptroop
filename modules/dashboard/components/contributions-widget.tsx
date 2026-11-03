@@ -5,21 +5,26 @@ import Link from "next/link";
 import { Dialog } from "@/components/ui/dialog";
 import { KindIcon } from "@/components/ui/kind-icon";
 import type { Done } from "../lib/queries";
+import { doneEarly, earlyText } from "../lib/done-early";
 import { localDay } from "./tasks-widget";
 import { CountUp } from "@/components/ui/count-up";
 import { WordIcon } from "@/components/ui/icons";
+import { onScrollFree, scrollLocked } from "@/lib/hooks/use-scroll-lock";
 
 const LEVEL_MIX = [0, 30, 55, 78, 100];
 const level = (n: number) => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 6 ? 3 : 4);
 export { CONTRIB_COLORS } from "../layout";
+import { contribColor } from "../layout";
 
 /** GitHub-style grid: one square per day, more finished tasks (and the daily word) = more intense. */
 export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; teamId: string; settings?: Record<string, unknown> }) {
-  const color = (settings?.color as string) || "#22c55e";
+  const color = contribColor(settings?.color);
   const scope = (settings?.scope as string) === "team" ? "team" : "all";
   const [open, setOpen] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // Squares fit the card both ways (8–16px); very narrow cards scroll instead.
+  // 1.29.1: not while a popup is open (a day's list): nothing behind it grows
+  // or shrinks; it measures again once the popup is gone.
   const [cell, setCell] = useState(10);
   useEffect(() => {
     const el = scroller.current;
@@ -30,9 +35,15 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
       setCell(Math.max(8, Math.min(16, byWidth, byHeight)));
     };
     fit();
-    const ro = new ResizeObserver(fit);
+    const ro = new ResizeObserver(() => {
+      if (!scrollLocked()) fit();
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    const off = onScrollFree(fit);
+    return () => {
+      ro.disconnect();
+      off();
+    };
   }, []);
   const step = cell + 3;
 
@@ -171,22 +182,27 @@ export function ContributionsWidget({ done, teamId, settings }: { done: Done[]; 
       >
         {open && (byDay.get(open)?.length ? (
           <ul className="space-y-1">
-            {byDay.get(open)!.map((d) => (
-              <li key={d.id}>
-                <Link href={d.href} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-surface-2">
-                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${d.kind === "word" ? "bg-green/12 text-green" : "bg-surface-2"}`}>
-                    {d.kind === "word" ? <WordIcon className="w-4 h-4" /> : <KindIcon kind={d.kind} className="w-4 h-4" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[14px] font-semibold truncate">{d.action}</span>
-                    <span className="block text-[12.5px] text-ink-soft truncate">
-                      {d.kind === "word" ? "Counts as a contribution" : d.kind === "meeting" ? <><span className="text-ink-faint">From</span> {d.title}</> : <><span className="font-mono text-ink-faint">#{d.number}</span> {d.title}</>}
+            {byDay.get(open)!.map((d) => {
+              // 1.35.2: finished before the day it was due.
+              const early = doneEarly(d.at, d.due, localDay);
+              return (
+                <li key={d.id}>
+                  <Link href={d.href} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-surface-2">
+                    <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${d.kind === "word" ? "bg-green/12 text-green" : "bg-surface-2"}`}>
+                      {d.kind === "word" ? <WordIcon className="w-4 h-4" /> : <KindIcon kind={d.kind} className="w-4 h-4" />}
                     </span>
-                  </span>
-                  <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                </Link>
-              </li>
-            ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-semibold truncate">{d.action}</span>
+                      <span className="block text-[12.5px] text-ink-soft truncate">
+                        {d.kind === "word" ? "Counts as a contribution" : d.kind === "meeting" ? <><span className="text-ink-faint">From</span> {d.title}</> : <><span className="font-mono text-ink-faint">#{d.number}</span> {d.title}</>}
+                      </span>
+                      {early && d.due && <span className="block text-[12px] font-semibold text-green truncate">{earlyText(early, d.due)}</span>}
+                    </span>
+                    <span className="text-[12px] text-ink-faint">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-[13.5px] text-ink-soft">Nothing finished that day.</p>

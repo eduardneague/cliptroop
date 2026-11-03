@@ -1,11 +1,16 @@
 # Automatic checks on every update: a push to any branch, and every pull
-# request. A red ✗ next to the commit means something below failed; Vercel
-# still deploys, so look before merging staging into main.
+# request. A red ✗ next to the commit means something below failed. Vercel
+# still deploys after most of them, so look before merging staging into main;
+# a known vulnerability stops the build itself, on Vercel too (1.31.7).
 name: CI
 
 on:
   push:
   pull_request:
+
+# 1.31.0: the token these jobs get can only read the code (they never write to the repository).
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,6 +23,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -38,6 +45,24 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ci-service
           NEXT_TELEMETRY_DISABLED: "1"
 
+  audit:
+    # 1.31.7: the vulnerability gate (scripts/audit.mjs), the same check `npm run build` runs first on Vercel, so a
+    # version with a known vulnerability never deploys. Red ✗ = a package has a known problem: what the app ships
+    # from moderate up, the build tools from high up. The log says which and how to fix it
+    # (docs/DEVELOPMENT.md → Vulnerability gate).
+    name: Known vulnerabilities (the build stops on them)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Vulnerability gate (npm audit, both kinds of package)
+        run: node scripts/audit.mjs
+
   migrations:
     name: Migrations apply from scratch
     runs-on: ubuntu-24.04
@@ -56,6 +81,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Postgres client
         run: command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
       - name: Run every migration on an empty database (and the newest one twice), then the access checks

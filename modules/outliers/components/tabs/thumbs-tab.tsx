@@ -10,7 +10,7 @@ import { multText } from "../../lib/scores";
 import { hasColorFamily, similarThumbs } from "../../lib/similar";
 import type { OutlierVideo } from "../../lib/types";
 import type { Period, ThumbsData } from "../../lib/view";
-import { BTN, EmptyNote, FIELD, Mult, SectionHead, SourceNote, Thumb } from "../bits";
+import { BRIGHTNESS_HELP, BTN, COLOURFUL_HELP, EmptyNote, FIELD, Mult, pct255, SectionHead, SourceNote, Thumb } from "../bits";
 import { useOutliersNav, useOutliers } from "../context";
 import { useShellNav } from "../shell-nav";
 
@@ -60,13 +60,17 @@ export function ThumbsTab({ data }: { data: ThumbsData }) {
                 { value: "year", label: "Year" },
               ]}
             />
-            <div className="relative flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {/* The colours wrap when there's no room (1.30.1: nothing slides sideways, and the picked one's ring shows whole). */}
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Colour">
               <button type="button" aria-pressed={!family} onClick={() => setFamily(null)} className={`flex-shrink-0 rounded-lg border px-2.5 h-8 text-[12.5px] font-semibold ${!family ? "border-amber/60 bg-amber/12" : "border-line/15 text-ink-soft hover:text-ink"}`}>
                 Every colour
               </button>
-              {(families.length ? families.map((f) => f.id) : Object.keys(FAMILY_HEX)).map((id) => (
-                <button key={id} type="button" aria-pressed={family === id} aria-label={id} title={id} onClick={() => setFamily(family === id ? null : id)} className={`flex-shrink-0 w-8 h-8 rounded-lg ring-offset-2 ring-offset-paper border border-line/15 ${family === id ? "ring-2 ring-ink" : ""}`} style={{ background: FAMILY_HEX[id] }} />
-              ))}
+              {(families.length ? families.map((f) => f.id) : Object.keys(FAMILY_HEX)).map((id) => {
+                const name = id[0].toUpperCase() + id.slice(1);
+                return (
+                  <button key={id} type="button" aria-pressed={family === id} aria-label={name} title={name} onClick={() => setFamily(family === id ? null : id)} className={`flex-shrink-0 w-8 h-8 rounded-lg ring-offset-2 ring-offset-paper border border-line/15 transition-transform hover:scale-105 ${family === id ? "ring-2 ring-ink" : ""}`} style={{ background: FAMILY_HEX[id] }} />
+                );
+              })}
             </div>
           </div>
           {like && (
@@ -96,11 +100,11 @@ export function ThumbsTab({ data }: { data: ThumbsData }) {
               )}
             </>
           ) : (
-            <EmptyNote title={family ? "No outliers in that colour here" : "No outlier thumbnails yet"} />
+            <EmptyNote title={family ? "No outliers in that colour here" : "No outlier thumbnails yet"} finding={!family} />
           )}
         </section>
 
-        <aside className="min-w-0 space-y-4 xl:sticky xl:top-[4.5rem] xl:self-start">
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)] xl:self-start">
           {data.colors ? <ColorFacts c={data.colors} onPick={setFamily} picked={family} /> : <EmptyNote title="Colours show up once thumbnails are read" />}
         </aside>
       </div>
@@ -160,19 +164,22 @@ function ColorFacts({ c, onPick, picked }: { c: NonNullable<ThumbsData["colors"]
       <dl className="mt-4 grid grid-cols-2 gap-2.5 text-[12px]">
         {(
           [
-            ["Brightness", c.lum],
-            ["Colourfulness", c.sat],
+            ["Brightness", c.lum, BRIGHTNESS_HELP],
+            ["Colourfulness", c.sat, COLOURFUL_HELP],
           ] as const
-        ).map(([label, v]) => (
-          <div key={label} className="rounded-xl bg-surface-2/60 px-3 py-2.5">
-            <dt className="text-ink-faint">{label}</dt>
+        ).map(([label, v, help]) => (
+          <div key={label} className="rounded-xl bg-surface-2/60 px-3 py-2.5" title={help}>
+            <dt className="text-ink-faint underline decoration-dotted decoration-line/40 underline-offset-2 cursor-help w-fit">{label}</dt>
             <dd className="mt-0.5">
-              <span className="font-display text-[18px] font-semibold tabular-nums">{v.out !== null ? `${Math.round(v.out * 100)}%` : "–"}</span>
-              <span className="text-ink-faint"> outliers · {v.all !== null ? `${Math.round(v.all * 100)}%` : "–"} all</span>
+              <span className="font-display text-[18px] font-semibold tabular-nums">{pct255(v.out) !== null ? `${pct255(v.out)}%` : "–"}</span>
+              <span className="text-ink-faint"> outliers · {pct255(v.all) !== null ? `${pct255(v.all)}%` : "–"} all</span>
             </dd>
           </div>
         ))}
       </dl>
+      <p className="mt-2.5 text-[11.5px] text-ink-faint leading-snug">
+        Brightness: how light the picture is (0% black, 100% white). Colourfulness: how vivid its colours are (0% grey, 100% pure colour). The middle thumbnail of the outliers, next to the middle one of all.
+      </p>
     </div>
   );
 }
@@ -253,7 +260,7 @@ function PreviewYours({ rows }: { rows: OutlierVideo[] }) {
           <div className="flex flex-wrap items-center gap-2">
             <Segmented ariaLabel="Screen" size="sm" value={view} onChange={setView} options={[{ value: "home", label: "Computer" }, { value: "mobile", label: "Phone" }]} />
             <Segmented ariaLabel="Theme" size="sm" value={theme} onChange={setTheme} options={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
-            <button type="button" onClick={() => setSpot((s) => (s + 3) % 8)} className={`${BTN} h-8`} title="Put it somewhere else on the page">
+            <button type="button" onClick={() => setSpot((s) => (s + 3) % 8)} className={`${BTN} !h-8`} title="Put it somewhere else on the page">
               <ShuffleIcon className="w-3.5 h-3.5" />
               Move it
             </button>

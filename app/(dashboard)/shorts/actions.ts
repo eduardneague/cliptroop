@@ -16,6 +16,9 @@ import {
   type Platform,
   type ShortStage,
 } from "@/modules/short-videos/lib/constants";
+import { hasShortFilming } from "@/modules/short-videos/lib/queries";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { mayDelete, noDeleteText, NO_DELETE } from "@/lib/permissions/delete-rules";
 
 /**
  * Every change to a short goes through here. The database (RLS + the
@@ -139,6 +142,8 @@ export async function createShort(input: {
   editorMemberId: string | null;
   reviewerMemberId: string | null;
   schedulerMemberId: string | null;
+  /** 1.36.0: who films it (leave out for the team default). */
+  filmerMemberId?: string | null;
   platforms: Platform[];
   caption: string;
   /** Leave out to use the team default. */
@@ -166,14 +171,16 @@ export async function createShort(input: {
   const caption = captionEnabled ? String(input.caption ?? "").trim().slice(0, 5000) || null : null;
   const shortType = isShortType(input.shortType) ? input.shortType : undefined;
 
+  // 1.36.0: the filmer once migration 0113 is in (before it the column isn't there to read or write).
+  const filming = await hasShortFilming();
   const [membership, settings] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     supabase
       .from("teams")
-      .select("default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id")
+      .select("default_short_editor_member_id, default_short_reviewer_member_id, default_short_scheduler_member_id" + (filming ? ", default_short_filmer_member_id" : ""))
       .eq("id", currentTeam.id)
       .maybeSingle()
-      .then((r) => r.data),
+      .then((r) => r.data as Record<string, unknown> | null),
   ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
@@ -183,12 +190,19 @@ export async function createShort(input: {
 
   // Masters choose (the form starts from the team defaults); anyone else
   // gets the team defaults the master set up.
+  const defaultFilmer = (settings?.default_short_filmer_member_id as string | null) ?? null;
   const people = master
-    ? { editor: input.editorMemberId || null, reviewer: input.reviewerMemberId || null, scheduler: input.schedulerMemberId || null }
+    ? {
+        editor: input.editorMemberId || null,
+        reviewer: input.reviewerMemberId || null,
+        scheduler: input.schedulerMemberId || null,
+        filmer: input.filmerMemberId === undefined ? defaultFilmer : input.filmerMemberId || null,
+      }
     : {
         editor: (settings?.default_short_editor_member_id as string | null) ?? null,
         reviewer: (settings?.default_short_reviewer_member_id as string | null) ?? null,
         scheduler: (settings?.default_short_scheduler_member_id as string | null) ?? null,
+        filmer: defaultFilmer,
       };
 
   const { data, error } = await supabase
@@ -202,6 +216,7 @@ export async function createShort(input: {
       editor_member_id: people.editor,
       reviewer_member_id: people.reviewer,
       scheduler_member_id: people.scheduler,
+      ...(filming ? { filmer_member_id: people.filmer } : {}),
       platforms,
       caption,
       caption_enabled: captionEnabled,
@@ -337,11 +352,13 @@ export async function updateShortDetails(
 // Editor assignment (master)
 // ---------------------------------------------------------------------------
 
-type PersonRole = "editor" | "reviewer" | "scheduler";
-const PERSON_COLUMN: Record<PersonRole, "editor_member_id" | "reviewer_member_id" | "scheduler_member_id"> = {
+type PersonRole = "editor" | "reviewer" | "scheduler" | "filmer";
+const PERSON_COLUMN: Record<PersonRole, "editor_member_id" | "reviewer_member_id" | "scheduler_member_id" | "filmer_member_id"> = {
   editor: "editor_member_id",
   reviewer: "reviewer_member_id",
   scheduler: "scheduler_member_id",
+  // 1.36.0 (0113).
+  filmer: "filmer_member_id",
 };
 
 /** Master: set who edits / reviews / posts a short. Notifies the new person. */
@@ -353,7 +370,11 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
   const short = await loadShort(supabase, id);
   if (!short) return { error: "Short not found." };
   const column = PERSON_COLUMN[role];
-  if ((short[column] ?? null) === (memberId ?? null)) return {};
+  if (role === "filmer") {
+    if (!(await hasShortFilming())) return { error: "Run migration 0113 first." };
+    const { data: f } = await supabase.from("short_videos").select("filmer_member_id").eq("id", id).maybeSingle();
+    if (((f?.filmer_member_id as string | null) ?? null) === (memberId ?? null)) return {};
+  } else if ((short[column as keyof ShortRow] ?? null) === (memberId ?? null)) return {};
 
   const { error } = await supabase.from("short_videos").update({ [column]: memberId }).eq("id", id);
   if (error) return { error: friendlyDbError(error, "Couldn't change that. Try again.") };
@@ -365,7 +386,9 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
     const now =
       role === "editor" && short.stage === "editing"
         ? ". It's ready to edit."
-        : role === "reviewer" && short.stage === "review"
+        : role === "filmer" && short.stage === "filming"
+          ? ". It's ready to film."
+          : role === "reviewer" && short.stage === "review"
           ? ". It's waiting for your review."
           : role === "scheduler" && short.stage === "ready"
             ? ". It's ready to post."
@@ -377,7 +400,7 @@ export async function assignShortPerson(id: string, role: PersonRole, memberId: 
       metadata: {
         actor,
         ...shortMeta(short),
-        roleLabel: role === "editor" ? "editor" : role === "reviewer" ? "reviewer" : "scheduler",
+        roleLabel: role,
         readyToEdit: role === "editor" && short.stage === "editing",
         suffix: now,
       },
@@ -431,28 +454,83 @@ async function setStage(
   return {};
 }
 
-export async function sendShortToEditing(id: string): Promise<Result> {
+/**
+ * 1.36.0: Script → Filming (the master, as Script → Editing was): its filmer hears it's theirs, or, with nobody set to
+ * film it, every filmer on the team (any of them can mark it filmed then).
+ */
+export async function sendShortToFilming(id: string): Promise<Result> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
 
   const short = await loadShort(supabase, id);
   if (!short) return { error: "Short not found." };
-  if (!short.editor_member_id) return { error: "Assign an editor first." };
+  if (!(await hasShortFilming())) return { error: "Run migrations 0112 and 0113 first." };
 
-  const res = await setStage(supabase, id, "script", "editing", { review_note: null });
+  const res = await setStage(supabase, id, "script", "filming", { review_note: null });
   if (res.error) return res;
 
-  const editorId = await editorUserId(supabase, short.editor_member_id);
-  const actor = await actorMeta(supabase, user.id);
-  await notifyMany([editorId], user.id, (recipient_id) => ({
+  const { data: f } = await supabase.from("short_videos").select("filmer_member_id").eq("id", id).maybeSingle();
+  const [filmerId, actor] = await Promise.all([editorUserId(supabase, (f?.filmer_member_id as string | null) ?? null), actorMeta(supabase, user.id)]);
+  const recipients = filmerId ? [filmerId] : await teamUsersWithRoles(supabase, short.team_id, ["filmer"]);
+  await notifyMany(recipients, user.id, (recipient_id) => ({
     recipient_id,
     short_id: id,
-    kind: "short_editing",
+    kind: "short_filming",
     metadata: { actor, ...shortMeta(short) },
-    body: `#${short.entry_number} "${short.title}" is ready for you to edit.`,
+    body: `#${short.entry_number} "${short.title}" is ready for you to film.`,
   }));
 
   revalidateShort(id, "stage");
+  return {};
+}
+
+/**
+ * 1.36.0: filmed (its filmer, any filmer when nobody is set, or the master): Filming → Editing, with when, who and
+ * where the footage is (`short_mark_filmed`, 0113). Its editor hears it's theirs now; with no editor yet, the masters,
+ * so someone picks one.
+ */
+export async function markShortFilmed(id: string, folder: string): Promise<Result> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  const short = await loadShort(supabase, id);
+  if (!short) return { error: "Short not found." };
+  const path = String(folder ?? "").trim();
+  if (path.length > 500) return { error: "Keep the footage folder under 500 characters." };
+
+  const { error } = await supabase.rpc("short_mark_filmed", { p_short: id, p_path: path || null });
+  if (error) {
+    if (error.code === "PGRST202" || /short_mark_filmed/.test(error.message)) return { error: "Run migration 0113 first." };
+    if (error.code === "P0002") return { error: "Short not found." };
+    return { error: friendlyDbError(error, "Couldn't mark it filmed. Try again.") };
+  }
+
+  const [editorId, actor] = await Promise.all([editorUserId(supabase, short.editor_member_id), actorMeta(supabase, user.id)]);
+  const recipients = editorId ? [editorId] : await teamUsersWithRoles(supabase, short.team_id, ["master"]);
+  await notifyMany(recipients, user.id, (recipient_id) => ({
+    recipient_id,
+    short_id: id,
+    kind: "short_filmed",
+    metadata: { actor, ...shortMeta(short), folder: path || null, toEditor: !!editorId },
+    body: editorId
+      ? `${actor.name} filmed #${short.entry_number} "${short.title}". It's ready for you to edit.`
+      : `${actor.name} filmed #${short.entry_number} "${short.title}". It needs an editor.`,
+  }));
+
+  revalidateShort(id, "stage");
+  return {};
+}
+
+/** 1.36.0: where the footage is (the filmer, the editor, a scheduler or the master can correct it). */
+export async function setShortFootagePath(id: string, folder: string | null): Promise<Result> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const path = String(folder ?? "").trim();
+  if (path.length > 500) return { error: "Keep the footage folder under 500 characters." };
+  const { data, error } = await supabase.from("short_videos").update({ footage_path: path || null }).eq("id", id).select("id");
+  if (error) return { error: friendlyDbError(error, "Couldn't save that. Try again.") };
+  if (!data || data.length === 0) return { error: "Short not found." };
+  revalidateShort(id);
   return {};
 }
 
@@ -567,12 +645,137 @@ export async function moveShortStage(id: string, to: ShortStage): Promise<Result
   if (short.stage === "posted") return { error: "This short is posted and locked. Un-mark a platform to reopen it." };
   if (short.stage === to) return {};
   if (to === "editing" && !short.editor_member_id) return { error: "Assign an editor first." };
+  // 1.36.0: before migrations 0112 and 0113 the database has no Filming step.
+  if (to === "filming" && !(await hasShortFilming())) return { error: "Run migrations 0112 and 0113 first." };
 
   const res = await setStage(supabase, id, short.stage, to);
   if (res.error) return res;
 
   revalidateShort(id, "stage");
   return {};
+}
+
+export type StageMove = { id: string; to: ShortStage };
+export type StageMoves = {
+  moved: { id: string; number: number; from: ShortStage; to: ShortStage }[];
+  failed: { id: string; number: number | null; error: string }[];
+};
+
+/**
+ * 1.38.0: shorts moved to a step from the list, one (the row's ⋯) or many (picked together), as the master's Move to
+ * on a short's page: a correction, nobody is notified, Posted only comes by itself. Each move on its own (one that
+ * can't go doesn't stop the others) and each says where it came from, so Undo puts it back.
+ */
+export async function moveShortsStage(moves: StageMove[]): Promise<Result<StageMoves>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!Array.isArray(moves) || moves.length === 0) return { moved: [], failed: [] };
+  if (moves.length > 200) return { error: "Move at most 200 shorts at once." };
+  if (!moves.every((m) => m && typeof m.id === "string" && /^[0-9a-f-]{36}$/i.test(m.id) && isShortStage(m.to)))
+    return { error: "Couldn't move those shorts. Refresh and try again." };
+  if (moves.some((m) => m.to === "posted")) return { error: "Posted is set automatically once every platform is marked posted." };
+
+  const ids = [...new Set(moves.map((m) => m.id))];
+  const { data: rows } = await supabase.from("short_videos").select("id, team_id, entry_number, stage, editor_member_id").in("id", ids);
+  const filming = moves.some((m) => m.to === "filming") ? await hasShortFilming() : true;
+
+  const out: StageMoves = { moved: [], failed: [] };
+  const teams = new Set<string>();
+  for (const m of moves) {
+    const s = (rows ?? []).find((r) => r.id === m.id);
+    const number = (s?.entry_number as number | undefined) ?? null;
+    const fail = (error: string) => out.failed.push({ id: m.id, number, error });
+    if (!s) {
+      fail("Not found.");
+      continue;
+    }
+    const from = s.stage as ShortStage;
+    if (from === m.to) continue;
+    if (from === "posted") {
+      fail("Posted and locked. Un-mark a platform to reopen it.");
+      continue;
+    }
+    if (m.to === "editing" && !s.editor_member_id) {
+      fail("Needs an editor first.");
+      continue;
+    }
+    if (m.to === "filming" && !filming) {
+      fail("Run migrations 0112 and 0113 first.");
+      continue;
+    }
+    const res = await setStage(supabase, m.id, from, m.to);
+    if (res.error) {
+      fail(res.error);
+      continue;
+    }
+    out.moved.push({ id: m.id, number: number ?? 0, from, to: m.to });
+    teams.add(s.team_id as string);
+  }
+  if (out.moved.length) {
+    revalidateShort();
+    for (const m of out.moved) revalidatePath(`/shorts/${m.id}`);
+    for (const t of teams) queueObjectivesSync(t);
+  }
+  return out;
+}
+
+/** 1.40.0: what deleting several shorts did: the ones gone, and the ones that couldn't go (and why). */
+export type ShortsDeleted = { deleted: { id: string; number: number }[]; failed: { id: string; number: number | null; error: string }[] };
+
+/**
+ * 1.41.0: shorts deleted through the database's delete_shorts (0119): Masters as always, and the people the team's
+ * owner lets delete shorts, one at a time or several when the team lets them (the database decides, short by short).
+ * Before 0119 (no such function yet): straight from the table, Masters only (0026's rule), as before.
+ */
+async function removeShorts(supabase: Awaited<ReturnType<typeof createClient>>, ids: string[]): Promise<{ gone: Set<string> } | { error: string }> {
+  const { data, error } = await supabase.rpc("delete_shorts", { p_ids: ids });
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883" || /delete_shorts/.test(error.message)) {
+      const old = await supabase.from("short_videos").delete().in("id", ids).select("id");
+      if (old.error) return { error: friendlyDbError(old.error, "Couldn't delete. Try again.") };
+      return { gone: new Set((old.data ?? []).map((r) => r.id as string)) };
+    }
+    return { error: friendlyDbError(error, "Couldn't delete. Try again.") };
+  }
+  return { gone: new Set(((data ?? []) as { short_id: string }[]).map((r) => r.short_id)) };
+}
+
+/**
+ * 1.40.0: several shorts deleted at once, from the list's selection (the owner: "i want to be able to delete as well
+ * from the select thing"), after the list has asked (pick-shorts.tsx). Masters, and (1.41.0) the people the owner lets
+ * delete shorts when the team lets them delete several (delete-rules.ts; the database checks each short too: 0119);
+ * the other auto-scheduled shorts re-date to close the gaps as they do for one. At most 200 at once.
+ */
+export async function deleteShorts(ids: string[]): Promise<Result<ShortsDeleted>> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  if (!Array.isArray(ids) || ids.length === 0) return { deleted: [], failed: [] };
+  if (ids.length > 200) return { error: "Delete at most 200 shorts at once." };
+  if (!ids.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) return { error: "Couldn't delete those shorts. Refresh and try again." };
+  const wanted = [...new Set(ids)];
+  const { data } = await supabase.from("short_videos").select("id, team_id, entry_number").in("id", wanted);
+  const rows = data ?? [];
+  // What each team lets this person do (the team is the short's own, never one the browser sent), and how many of
+  // that team's shorts are asked for at once.
+  const teams = [...new Set(rows.map((r) => r.team_id as string))];
+  const rights = new Map(await Promise.all(teams.map(async (t) => [t, await getDeleteRights(supabase, t, user.id)] as const)));
+  const countIn = (team: string) => rows.filter((x) => x.team_id === team).length;
+  const asked = rows.filter((r) => mayDelete(rights.get(r.team_id as string) ?? NO_DELETE, "short", countIn(r.team_id as string)));
+  const removed = asked.length ? await removeShorts(supabase, asked.map((r) => r.id as string)) : { gone: new Set<string>() };
+  if ("error" in removed) return { error: removed.error };
+  const gone = removed.gone;
+  const out: ShortsDeleted = { deleted: [], failed: [] };
+  for (const id of wanted) {
+    const r = rows.find((x) => x.id === id);
+    const number = (r?.entry_number as number | undefined) ?? null;
+    if (gone.has(id)) out.deleted.push({ id, number: number ?? 0 });
+    else out.failed.push({ id, number, error: r ? noDeleteText(rights.get(r.team_id as string) ?? NO_DELETE, "short", countIn(r.team_id as string)) : "Not found." });
+  }
+  if (out.deleted.length) {
+    revalidateShort();
+    for (const t of new Set(rows.filter((r) => gone.has(r.id as string)).map((r) => r.team_id as string))) queueObjectivesSync(t);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -630,7 +833,7 @@ export async function setShortPostUrl(id: string, platform: Platform, url: strin
 }
 
 // ---------------------------------------------------------------------------
-// Delete (master)
+// Delete (masters, and 1.41.0 the people the owner lets: delete-rules.ts)
 // ---------------------------------------------------------------------------
 
 export async function deleteShort(
@@ -638,6 +841,7 @@ export async function deleteShort(
 ): Promise<Result<{ vacated?: { teamId: string; day: string; keep: number } }>> {
   const { supabase, user } = await requireUser();
   if (!user) return { error: "Your session expired. Sign in again." };
+  if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return { error: "Short not found." };
 
   // Note the day it leaves (and how many stay there) BEFORE deleting, so
   // the toast can offer "keep this day at N" instead of pulling the next
@@ -647,6 +851,9 @@ export async function deleteShort(
     .select("team_id, planned_date, stage")
     .eq("id", id)
     .maybeSingle();
+  if (!before) return { error: "Short not found." };
+  const rights = await getDeleteRights(supabase, before.team_id as string, user.id);
+  if (!mayDelete(rights, "short", 1)) return { error: noDeleteText(rights, "short") };
 
   // How many shorts that day had, counted BEFORE the queue refills the gap.
   let dayCount = 0;
@@ -659,9 +866,9 @@ export async function deleteShort(
     dayCount = count ?? 0;
   }
 
-  const { data, error } = await supabase.from("short_videos").delete().eq("id", id).select("id");
-  if (error) return { error: friendlyDbError(error, "Couldn't delete. Try again.") };
-  if (!data || data.length === 0) return { error: "Only the master can delete shorts." };
+  const removed = await removeShorts(supabase, [id]);
+  if ("error" in removed) return { error: removed.error };
+  if (!removed.gone.has(id)) return { error: noDeleteText(rights, "short") };
 
   let vacated: { teamId: string; day: string; keep: number } | undefined;
   const today = new Date().toISOString().slice(0, 10);

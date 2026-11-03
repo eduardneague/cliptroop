@@ -7,6 +7,13 @@ import { readFileSync } from "node:fs";
 const version = (JSON.parse(readFileSync("./package.json", "utf8")) as { version: string }).version;
 const channel = process.env.VERCEL_ENV === "production" ? "P" : process.env.VERCEL_ENV ? "E" : "D";
 const commit = (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7);
+const supabaseHost = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
+  } catch {
+    return "";
+  }
+})();
 
 const nextConfig: NextConfig = {
   // No "X-Powered-By: Next.js" on answers: nothing to tell about what runs the app.
@@ -16,7 +23,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_CHANNEL: channel,
     NEXT_PUBLIC_APP_COMMIT: commit,
   },
-  // Security headers on every page, and the service worker always fresh.
+  // Security headers on every page, and the service worker always fresh. (The Content Security Policy
+  // is the middleware's: it carries a new nonce for every page, lib/csp.ts.)
   async headers() {
     return [
       {
@@ -26,8 +34,17 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // Nobody can show the app inside their own page (clickjacking).
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=(), usb=()" },
+          // Only what the app uses (the weather's location); nothing it doesn't (1.31.16: more of them listed).
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(self), payment=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), display-capture=(), browsing-topics=()",
+          },
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          // Another site's window can't reach into the app's (1.31.16); windows the app opens itself (a
+          // platform's sign-in) still answer it.
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+          // No old plugin (Flash, Acrobat) may read the app's answers from another site.
+          { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
         ],
       },
       {
@@ -39,13 +56,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 1.31.1: the image resizer (/_next/image) takes pictures from this app's own Supabase only, not
+  // from any *.supabase.co project (anyone's pictures, resized on this app's bill).
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "*.supabase.co",
-      },
-    ],
+    remotePatterns: supabaseHost ? [{ protocol: "https", hostname: supabaseHost }] : [],
   },
 };
 

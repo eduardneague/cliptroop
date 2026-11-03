@@ -1,3 +1,4 @@
+import { overLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 /*
@@ -51,6 +52,8 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return new Response("Sign in first", { status: 401 });
+  // A page shows a few dozen at most (1.31.13): enough for a long list, not a loop fetching the platforms through us.
+  if (overLimit("thumb", user.id, 600, 60_000)) return new Response("Too many pictures at once", { status: 429, headers: { "Retry-After": "30" } });
   // Read as the person: only their own teams' videos come back.
   const { data } = await supabase.from("analytics_content").select("thumbnail_url").eq("team_id", team).eq("platform", platform).eq("external_id", id).maybeSingle();
   if (!data) return new Response("Not found", { status: 404 });

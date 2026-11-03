@@ -8,13 +8,14 @@ import { isMaster, roleAllowsStage, ROLES } from "@/lib/permissions/roles";
 import type { PipelineStage, RoleId } from "@/lib/permissions/roles";
 import { STAGE_LABELS, STAGE_ORDER, STAGE_STATE_COLOR, stageState } from "@/modules/long-videos/lib/stages";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { colorForId, displayName } from "@/lib/avatar";
+import { colorForId, displayName, PALETTE } from "@/lib/avatar";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { buildMentionCatalog } from "@/lib/mentions";
 import { CheckIcon, ArrowLeftIcon } from "@/components/ui/icons";
 import { AdvanceStageButton, RegressStageButton } from "./advance-button";
 import { AssigneeRow, ScriptersRow } from "./assignee-row";
 import { LongVideoSettings } from "./settings-dialog";
+import { LongTitle } from "./long-title";
 import { TitleList } from "./title-list";
 import { ThumbnailUploader } from "./thumbnail-uploader";
 import { InlineEditable } from "./inline-editable";
@@ -22,6 +23,7 @@ import { ExpectedDateEditor } from "./expected-date-editor";
 import { TypeThemeEditor } from "./type-theme-editor";
 import { NotesPanel } from "./notes-panel";
 import { DeleteProjectButton } from "./delete-project-button";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import { postComment } from "./actions";
 import type { Metadata } from "next";
 import { getProject } from "@/modules/long-videos/lib/queries";
@@ -38,6 +40,8 @@ import { setLongScripter } from "./actions";
 import { listNotes, listVersions, type ReviewNote, type VideoVersion } from "@/modules/review/lib/queries";
 import { VideoCard } from "@/modules/review/components/video-card";
 import { LongVideoFile } from "./video-file";
+import { DEFAULT_LONG_MEDIA_KEEP_DAYS, readKeep } from "@/lib/media-keep";
+import { studioThumb } from "@/lib/picture-size";
 
 // The steps ARE the tabs.
 const TABS: PipelineStage[] = STAGE_ORDER;
@@ -95,6 +99,7 @@ export default async function ProjectDetailPage({
     longVersions,
     longNotes,
     { data: reviewDefaults },
+    deleteRights,
   ] = await Promise.all([
     getMembership(supabase, teamId),
     getRoleColors(supabase, teamId),
@@ -135,11 +140,13 @@ export default async function ProjectDetailPage({
     getLongScript(id),
     listTeamPeople(teamId),
     // Package: the Studio's winner (or first variation) for the summary card.
-    supabase.from("package_entries").select("title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
+    supabase.from("package_entries").select("id, title, thumbnail_storage_path, is_winner").eq("project_id", id).order("position"),
     videoTab ? listVersions(id, "long") : Promise.resolve([] as VideoVersion[]),
     tab === "edit" || tab === "review" ? listNotes(id, "long") : Promise.resolve([] as ReviewNote[]),
     // Its own query: long_media_keep_days arrives with 0089.
     supabase.from("teams").select("long_in_app_review, long_media_keep_days").eq("id", teamId).maybeSingle(),
+    // 1.41.0: masters, and whoever the team's owner lets delete long videos.
+    getDeleteRights(supabase, teamId),
   ]);
   // Reviewed in ClipTroop: the video's own choice, else the team's (Team → Defaults).
   const inAppReview = (project.in_app_review as boolean | null) ?? !!reviewDefaults?.long_in_app_review;
@@ -159,9 +166,9 @@ export default async function ProjectDetailPage({
   const winner = winners[0] ?? null;
   // Up to 3 winners (A/B test); otherwise the first variation.
   const cardRows = winners.length ? winners : (packageRows ?? []).slice(0, 1);
-  const cardPaths = cardRows.map((r) => r.thumbnail_storage_path as string | null).filter((x): x is string => !!x);
-  const { data: cardSigned } = cardPaths.length ? await supabase.storage.from("package-thumbs").createSignedUrls(cardPaths, 3600) : { data: [] };
-  const cardUrls = (cardSigned ?? []).map((d) => d.signedUrl).filter(Boolean) as string[];
+  // At addresses that never change, 640 px wide (1.32.3): the card shows them 96 to 160 px wide (the whole width on a
+  // phone); no signed links made on every visit.
+  const cardUrls = cardRows.filter((r) => !!r.thumbnail_storage_path).map((r) => studioThumb(r.id as string, 640));
 
   const userIsMaster = isMaster(membership?.roles ?? []);
   const myRoles = membership?.roles ?? [];
@@ -170,7 +177,8 @@ export default async function ProjectDetailPage({
   const showVideo = inAppReview || longVersions.length > 0;
   const scripterIds = (scripterRows ?? []).map((r) => r.team_member_id as string);
 
-  const memberColors = ["#E8630D", "#178C7C", "#3159C9", "#6B4FD6", "#B84070", "#B4890E", "#2B9757"];
+  // The avatars' colours (1.35.0: one list, lib/avatar.ts, white initials readable on each).
+  const memberColors = PALETTE;
   const membersById = new Map(
     (teamMembers ?? []).map((m, i) => {
       const profile = m.profiles as unknown as { username: string | null; full_name: string | null; email: string | null; avatar_url: string | null } | null;
@@ -273,19 +281,21 @@ export default async function ProjectDetailPage({
         Long videos
       </Link>
 
-      {/* Title row: number + title, delete tucked away on the right */}
+      {/* Title row: number + title (click it to rename, 1.33.1), delete tucked away on the right */}
       <div className="flex items-start gap-3 mb-1.5">
-        <h1 className="flex-1 min-w-0 font-display text-[26px] sm:text-3xl font-semibold leading-tight">
-          <span className="font-mono text-[15px] sm:text-[17px] font-semibold text-ink-faint align-middle mr-2 tabular-nums">
-            #{project.entry_number}
-          </span>
-          {project.title}
-        </h1>
-        {userIsMaster && (
+        <LongTitle
+          projectId={id}
+          number={project.entry_number}
+          title={project.title}
+          canEdit={userIsMaster || canActOnStage(membership, project.stage as PipelineStage)}
+        />
+        {(userIsMaster || deleteRights.longs) && (
           <div className="flex-shrink-0 pt-0.5 flex items-center gap-1">
+            {userIsMaster && (
             <LongVideoSettings
               projectId={id}
               teamId={teamId}
+              title={project.title}
               videoType={project.video_type ?? []}
               theme={project.theme ?? ""}
               subtheme={project.subtheme}
@@ -304,6 +314,7 @@ export default async function ProjectDetailPage({
                 ])
               )}
             />
+            )}
             <DeleteProjectButton projectId={id} teamId={teamId} projectTitle={project.title} />
           </div>
         )}
@@ -594,7 +605,7 @@ export default async function ProjectDetailPage({
                   projectId={id}
                   video={postFile}
                   approved={postFile.id === approvedVersionId}
-                  keepDays={(reviewDefaults?.long_media_keep_days as number | undefined) ?? 7}
+                  keepDays={readKeep(reviewDefaults ? reviewDefaults.long_media_keep_days : undefined, DEFAULT_LONG_MEDIA_KEEP_DAYS)}
                   keep={!!project.keep_media}
                   canKeep={userIsMaster || myRoles.includes("publisher")}
                 />

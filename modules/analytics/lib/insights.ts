@@ -10,7 +10,7 @@ import { hooksFor, localParts } from "./advanced";
 import { readCurve, summarize, type RetentionPoint } from "./retention";
 import { outlierScores } from "./scores";
 import { dailySeries, total, weightedAvg, type DailyRow } from "./trend-math";
-import { allAlerts, bestTimes, breakoutAlerts, ctrAlert, followerAlerts, gapAlerts, momentumAlerts, slumpAlerts, type Alert, type Heat, type InsightVideo } from "./insights-math";
+import { allAlerts, allBestTimes, breakoutAlerts, ctrAlert, followerAlerts, gapAlerts, momentumAlerts, slumpAlerts, type Alert, type Heat, type InsightVideo } from "./insights-math";
 
 /*
  * Analytics → Insights (1.20.0): every hint in one place. What changed
@@ -27,7 +27,10 @@ export type Insights = {
   /** Each platform's shorts (and long videos) with enough to compare, most videos first. */
   patterns: Patterns[];
   cross: Finding | null;
+  /** Best time to post: every platform together first (1.27.5), then each platform's own. */
   heat: Heat[];
+  /** Platforms with videos but not enough yet for a map of their own (they're in "every platform" already). */
+  heatWaiting: { platform: Platform; kind: PatternKind; have: number }[];
   status: PlatformStatus[];
   /** Videos looked at. */
   videos: number;
@@ -120,11 +123,11 @@ export async function getInsights(teamId: string, tz: string, o: { light?: boole
     weekday: v.weekday ?? null,
   }));
   const now = Date.now();
-  const heat: Heat[] = [];
-  for (const p of patterns) {
-    const h = bestTimes(iv, { platform: p.platform, kind: p.kind, now });
-    if (h) heat.push(h);
-  }
+  const { heat, waiting: heatWaiting } = allBestTimes(
+    iv,
+    patterns.map((p) => ({ platform: p.platform, kind: p.kind })),
+    now
+  );
 
   // What changed: the days up to yesterday (today's numbers come tomorrow morning).
   const dRows = visibleRows(daily, vis);
@@ -140,7 +143,7 @@ export async function getInsights(teamId: string, tz: string, o: { light?: boole
     : null;
   const alerts = allAlerts([momentum, breakoutAlerts(iv, now), slumpAlerts(iv, now), gapAlerts(iv, now), [ctr], followers], 10);
 
-  return { alerts, patterns, cross: crossPlatform(pv), heat, status, videos: pv.length };
+  return { alerts, patterns, cross: crossPlatform(pv), heat, heatWaiting, status, videos: pv.length };
 }
 
 /** The Overview's few hints: the biggest alerts and the clearest findings (without hooks or retention: quick). */

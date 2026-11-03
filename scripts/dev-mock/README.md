@@ -18,6 +18,19 @@ screenshots. It never touches a real Supabase project.
 #    MOCK_DELAY=1500 every answer that many ms late (to see the loading screens),
 #    MOCK_FEEDBACK_FAIL=1 sending a report fails (hourly limit), MOCK_UPLOAD_FAIL=1 report files are refused (413)
 #    MOCK_TOUR=1 the sample user hasn't seen Clip's tour yet (it starts on the dashboard),
+#    1.27.5: MOCK_SCRIPT=/path/doc.json the first script's document (a TipTap JSON), MOCK_COMMENTS=many comments on every
+#    third paragraph of it, MOCK_MEETING=soon the sample meeting 3 hours from the real "now" (Next meeting's answers),
+#    MOCK_STRANGER=1 someone on none of the sample user's teams (/u/radu: Invite to team), MOCK_GLASS=1 the glass look,
+#    MOCK_DASH_BG=jpg|gif|webm|mp4 a dashboard background of that kind (MOCK_DASH_BG_FILE=/path/to/file serves it, else a
+#    drawn dusk; MOCK_DASH_BG_DIM=0..80); uploads (storage.upload) and copies are accepted, MOCK_UPLOAD_FAIL=1 refuses them,
+#    1.28.0: MOCK_GLASS_STYLE=liquid, MOCK_GLASS_SCOPE=everywhere, MOCK_GLASS_SIDEBAR=1, MOCK_GLASS_LEVEL=0..100 (with
+#    MOCK_GLASS=1); MOCK_WALLPAPERS=1..3 saved wallpapers and MOCK_WALL_LUMA=0..100|null how bright the one in use is (with
+#    MOCK_DASH_BG); MOCK_PROFILE_FRAME=glow|orbit|… edu's picture frame, MOCK_PROFILE_BG=1 his wallpaper behind his profile,
+#    1.29.5: MOCK_PROFILE_COLORS="theme,#30a46c,off" his frame, XP bar and glow colours (default the level's),
+#    1.29.6: MOCK_STATS_OLD=1 profile_stats as before 0100 (no early, night, dawn or dated videos),
+#    1.29.7: my_progress answers edu's XP (no realtime here, so Clip's "+XP" doesn't pop up in the mock),
+#    MOCK_PRIVATE=maria|radu that profile is private; profile_stats and get_visible_teams answer from the fixtures;
+#    MOCK_WRITES=profile_wallpapers,profiles remembers adding, switching and removing wallpapers (deletes too),
 #    MOCK_USER=2 (3, 4) signed in as Maria (Andrei, Ioana), not a master (set it for shot.cjs too),
 #    MOCK_NOTIFS=0 no notifications (otherwise 13 over the last 12 days, for the bell and its History),
 #    MOCK_FILES=1 an uploaded video on every short past Script (the Video files card shows the total),
@@ -43,6 +56,20 @@ screenshots. It never touches a real Supabase project.
 #    `npx tsx scripts/dev-mock/make-outliers.ts` (writes scripts/dev-mock/.outliers.json, git-ignored; restart
 #    the server after), MOCK_OUTLIERS_EMPTY=1 the team has no niche yet (Explore and the setup card),
 #    MOCK_OUTLIERS_NEW=1 its niche was just added (collecting), MOCK_OUTLIERS_ACCESS=0 no way to read YouTube
+#    1.41.0 (kit.cjs): MOCK_LIBRARY=1 about 1,500 more videos on every platform since 2021 (Shorts, Reels, TikToks,
+#    long videos, live streams, posts) for the media kit's picker (MOCK_LIBRARY=200: that many), MOCK_KIT=owner the
+#    owner's media kit (a YouTube kit, the "tester" Instagram package at 555 EUR, Show prices), MOCK_KIT=eight eight
+#    packages and a long note, MOCK_KIT_TEMPLATES=2 that many saved templates, MOCK_DELETE=maria:shorts,andrei:both
+#    whom the owner lets delete what (shorts, longs or both: Team → Danger zone), MOCK_DELETE_MANY=shorts,longs they
+#    delete several at once, MOCK_NO_0119=1 as before migration 0119 (no delete_shorts: the old way, Masters only),
+#    1.42.0 (business.cjs): MOCK_BUSINESS=1 Business on for the team, with a year and a half of a PFA's books (lei
+#    and USD, three fixed assets, an inventory at 31.12.2025, a closed 2025, documents, the history), MOCK_BUSINESS=fresh
+#    on with nothing set up (the setup card), MOCK_BUSINESS_ACCESS=maria:view,andrei:edit whom else the owner lets in
+#    (default maria:view), MOCK_NO_0120=1 as before migration 0120 (no Business tables: the page is a 404, Developer →
+#    Features says to run it); BNR's rates at /bnr/ (start the app with BNR_RATES_URL=http://127.0.0.1:54321/bnr/, as
+#    in 2.); to type into the books: MOCK_WRITES=business_entries,business_profiles,business_sources,business_assets,
+#    business_inventories,business_inventory_items,business_ref_lines,business_files,business_access,team_features,
+#    business_years (the browser's own uploads need Playwright's bypassCSP: the policy refuses plain http),
 #    Always on: Analytics' realtime (live.cjs: the last ~56 hours of counts around the real "now",
 #    every 10 minutes for the busiest videos; 0084's 10-minute slots and top content work out the
 #    same way as the database), YouTube's impressions and CTR per day (Shorts and long videos apart),
@@ -58,7 +85,7 @@ node scripts/dev-mock/server.cjs
 
 # 2. the app pointed at it (dummy keys, NEVER the real .env.local; sample exchange rates)
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy \
-SUPABASE_SERVICE_ROLE_KEY=dummy FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD npx next dev -p 3456
+SUPABASE_SERVICE_ROLE_KEY=dummy FX_RATES_URL=http://127.0.0.1:54321/fx/latest/USD BNR_RATES_URL=http://127.0.0.1:54321/bnr/ npx next dev -p 3456
 
 # 3. a signed-in screenshot (Playwright): path, file name, width, height, dark, full|view
 #    (with MOCK_OBJECTIVES=1 the analytics numbers run up to the real "now": better for Analytics shots)
@@ -76,8 +103,9 @@ node scripts/dev-mock/outliers-shot.cjs /tmp/shots "" --size=phone [--dark] [--v
 - `fixtures.cjs`: the sample team, people, shorts, long videos and
   analytics numbers. Rows carry every embedded relation the pages select,
   so one row answers any query on its table.
-- `server.cjs`: understands `eq/neq/in/is/gte/lte/gt/lt` filters on plain
-  columns, `limit` / `offset` (`.range()` paging), Range headers and
+- `server.cjs`: understands `eq/neq/in/is/gte/lte/gt/lt/like/ilike` filters on plain
+  columns, `or=` / `and=` logic trees (nested, `not.`, quoted values: `.or()`; 1.41.0),
+  `count=exact` (the total before the page, in Content-Range), `limit` / `offset` (`.range()` paging), Range headers and
   single-row requests; writes are accepted and ignored (an update answers with
   the rows its filters match, like `update … returning`); `/storage/v1/bucket` lists one bucket; `rpc/*` answers from
   `fixtures.rpc`. Filters on embedded tables are ignored on purpose. Signed

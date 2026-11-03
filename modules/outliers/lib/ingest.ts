@@ -1,4 +1,5 @@
 import { detectFormats, FORMAT_VERSION, traitBits } from "./formats";
+import { tagRegion } from "./regions";
 import { guessLang } from "./text";
 
 /*
@@ -118,6 +119,8 @@ export function videoRow(v: YtVideoItem, hint: "short" | "long" | null = null, n
     tags: tags.length ? tags : null,
     category: num(s.categoryId),
     lang: langCode(s.defaultAudioLanguage) ?? langCode(s.defaultLanguage) ?? guessLang(`${title} ${description.slice(0, 160)}`),
+    // "en-IN" → IN (1.29.0): where its creators likely are.
+    lang_region: tagRegion(s.defaultAudioLanguage) ?? tagRegion(s.defaultLanguage),
     published_at: s.publishedAt,
     duration_s: isoSeconds(v.contentDetails?.duration),
     kind: kindOf(v, hint),

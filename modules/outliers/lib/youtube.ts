@@ -15,7 +15,9 @@ import { CHANNEL_ID, VIDEO_ID, type YtChannelItem, type YtVideoItem } from "./in
  * one call of its own bucket.
  */
 
+/** What a call takes from (the explore niches' own: xunits, xsearch, 1.29.0). */
 export type Bucket = "search" | "units" | "stats";
+export type QuotaBucket = Bucket | "xunits" | "xsearch";
 export type Access = { kind: "key"; key: string } | { kind: "oauth"; token: string; accountId: string; teamId: string };
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -58,20 +60,27 @@ export async function outliersAccess(teamId: string | null): Promise<Access | nu
 /**
  * Takes one call from a bucket, within `caps` (the most that may be used
  * today, all servers together) and `local` (the most this run may use).
+ * `explore`: searches and units come from the explore niches' own buckets.
  */
-export function spender(admin: Admin, caps: Record<Bucket, number>, local: Record<Bucket, number>) {
+export function spender(admin: Admin, caps: Record<Bucket, number>, local: Record<Bucket, number>, o: { explore?: boolean } = {}) {
   const used: Record<Bucket, number> = { search: 0, units: 0, stats: 0 };
+  const real = (b: Bucket): QuotaBucket => (o.explore && b === "units" ? "xunits" : o.explore && b === "search" ? "xsearch" : b);
   const take = async (bucket: Bucket): Promise<boolean> => {
     if (used[bucket] >= local[bucket]) return false;
-    const { data, error } = await admin.rpc("outlier_take", { p_bucket: bucket, p_n: 1, p_cap: caps[bucket] });
+    const { data, error } = await admin.rpc("outlier_take", { p_bucket: real(bucket), p_n: 1, p_cap: caps[bucket] });
     if (error || typeof data !== "number" || data < 0) return false;
     used[bucket]++;
     return true;
   };
-  /** YouTube said the project's quota is gone: nothing more from that bucket today, anywhere. */
+  /** YouTube said the project's quota is gone: nothing more from that bucket today, anywhere (the explore one too). */
   const exhaust = async (bucket: Bucket) => {
     used[bucket] = local[bucket];
-    await admin.from("outlier_quota").upsert({ day: quotaDay(), bucket, used: caps[bucket] }, { onConflict: "day,bucket" });
+    const rows: { day: string; bucket: QuotaBucket; used: number }[] = [{ day: quotaDay(), bucket, used: Math.max(caps[bucket], 100_000) }];
+    if (bucket === "units") rows.push({ day: quotaDay(), bucket: "xunits", used: 100_000 });
+    if (bucket === "search") rows.push({ day: quotaDay(), bucket: "xsearch", used: 100_000 });
+    const { error } = await admin.from("outlier_quota").upsert(rows, { onConflict: "day,bucket" });
+    // Before 0094 there are no explore buckets: at least the shared one.
+    if (error) await admin.from("outlier_quota").upsert(rows.slice(0, 1), { onConflict: "day,bucket" });
   };
   return { take, exhaust, used };
 }
@@ -185,11 +194,25 @@ export class YouTube {
     return ((body?.items ?? []) as YtChannelItem[])[0] ?? null;
   }
 
-  /** The newest `max` (≤ 50) videos of a playlist; null when the playlist doesn't exist. */
+  /** The newest `max` videos of a playlist (50 a page, 1 unit each; 1.29.0: up to 4 pages); null when the playlist doesn't exist. */
   async playlist(id: string, max = 50): Promise<string[] | null> {
-    const body = await this.get("playlistItems", { part: "contentDetails", playlistId: id, maxResults: String(Math.min(50, Math.max(1, max))) }, "units");
-    if (!body) return null;
-    return ((body.items ?? []) as { contentDetails?: { videoId?: string } }[]).map((i) => i.contentDetails?.videoId).filter((x): x is string => !!x && VIDEO_ID.test(x));
+    const out: string[] = [];
+    let page: string | undefined;
+    for (let i = 0; i < 4 && out.length < max; i++) {
+      const body = await this.get("playlistItems", { part: "contentDetails", playlistId: id, maxResults: String(Math.min(50, Math.max(1, max - out.length))), pageToken: page }, "units");
+      if (!body) return i === 0 ? null : out;
+      out.push(...((body.items ?? []) as { contentDetails?: { videoId?: string } }[]).map((it) => it.contentDetails?.videoId).filter((x): x is string => !!x && VIDEO_ID.test(x)));
+      page = (body.nextPageToken as string | undefined) ?? undefined;
+      if (!page) break;
+    }
+    return [...new Set(out)];
+  }
+
+  /** Channels by name (one search): their ids, the best matches first. */
+  async searchChannels(q: string, max = 10): Promise<string[]> {
+    const body = await this.get("search", { part: "id", type: "channel", maxResults: String(Math.min(25, Math.max(1, max))), q, safeSearch: "moderate" }, "search");
+    const ids = ((body?.items ?? []) as { id?: { channelId?: string } }[]).map((i) => i.id?.channelId).filter((x): x is string => !!x && CHANNEL_ID.test(x));
+    return [...new Set(ids)];
   }
 
   /** Channels a channel features on its page (its "multiple channels" sections). */

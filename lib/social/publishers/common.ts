@@ -17,12 +17,17 @@ export type StepResult = {
   event?: { kind: string; message: string };
 };
 
-/** A failure. `retry` = worth trying again later (network, rate limit, 5xx). */
+/**
+ * A failure. `retry` = worth trying again later (network, rate limit, 5xx). `restart` (1.47.0) = the platform failed
+ * this attempt for good (TikTok's FAILED): Try again starts the post over instead of asking about the dead one again.
+ */
 export class PublishError extends Error {
   retry: boolean;
-  constructor(message: string, retry = false) {
+  restart: boolean;
+  constructor(message: string, retry = false, restart = false) {
     super(message);
     this.retry = retry;
+    this.restart = restart;
   }
 }
 

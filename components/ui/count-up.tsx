@@ -1,15 +1,10 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { motionReduced } from "@/lib/motion";
 
-/** True when animations are off (the account setting, or the device asks for less motion). */
-export function motionReduced() {
-  if (typeof window === "undefined") return true;
-  const m = document.documentElement.dataset.motion;
-  if (m === "off") return true;
-  if (m === "on") return false;
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
+/** True when animations are off (lib/motion.ts; kept here for the components that import it from here). */
+export { motionReduced };
 
 /**
  * A number that counts up to its value (and glides to new values).

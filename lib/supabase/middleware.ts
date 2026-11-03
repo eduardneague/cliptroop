@@ -1,5 +1,10 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isPublicPath } from "@/lib/public-paths";
+import { TWO_STEP_COOKIE, emailDoneFor, twoStepApplies, twoStepNeed } from "@/lib/auth/two-step";
+import { sessionCookieOptions } from "./cookie-options";
+import { crossSiteWrite } from "@/lib/request-guard";
+import { buildCsp, cspHeaderName, newNonce, wantsCsp } from "@/lib/csp";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
@@ -13,6 +18,16 @@ type CookieToSet = { name: string; value: string; options?: CookieOptions };
  */
 export const VERIFIED_USER_ID_HEADER = "x-vp-verified-user-id";
 export const VERIFIED_USER_EMAIL_HEADER = "x-vp-verified-user-email";
+/** The page's nonce for the root layout (1.31.16). Set only here, like the two above. */
+export const NONCE_HEADER = "x-nonce";
+
+const hostOf = (url: string | undefined) => {
+  try {
+    return url ? new URL(url).host : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * On its own domain: pages opened on the old *.vercel.app address move to
@@ -55,12 +70,26 @@ export function canonicalRedirect(request: NextRequest): NextResponse | null {
 export async function updateSession(request: NextRequest) {
   const moved = canonicalRedirect(request);
   if (moved) return moved;
+  // Another site's page making a signed-in browser change something here (1.31.13, lib/request-guard.ts).
+  if (
+    crossSiteWrite({
+      method: request.method,
+      path: request.nextUrl.pathname,
+      host: request.headers.get("host") ?? request.nextUrl.host,
+      origin: request.headers.get("origin"),
+      fetchSite: request.headers.get("sec-fetch-site"),
+    })
+  ) {
+    return NextResponse.json({ error: "That request didn't come from this app." }, { status: 403, headers: { "Cache-Control": "private, no-store" } });
+  }
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Secure on https (1.31.11).
+      cookieOptions: sessionCookieOptions(request.nextUrl.protocol),
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -88,25 +117,7 @@ export async function updateSession(request: NextRequest) {
   const claims = claimsData?.claims;
   const user = claims?.sub ? { id: claims.sub as string, email: (claims.email as string | undefined) ?? null } : null;
 
-  const isPublicRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/api/auth") ||
-    // Where the sign-in emails lead (invites, password resets): signs you in.
-    request.nextUrl.pathname === "/welcome" ||
-    // Scheduled jobs (Supabase's timer). Each route checks CRON_SECRET itself.
-    request.nextUrl.pathname.startsWith("/api/cron/") ||
-    // Public pages the platform reviews require (the home page signs you in or sends you on).
-    request.nextUrl.pathname === "/" ||
-    request.nextUrl.pathname === "/privacy" ||
-    request.nextUrl.pathname === "/terms" ||
-    request.nextUrl.pathname === "/data-deletion" ||
-    // Lists the public pages for the platforms' robots (robots.txt itself is a static .txt).
-    request.nextUrl.pathname === "/sitemap.xml" ||
-    // Status page + health check: public (details only for the alert people).
-    request.nextUrl.pathname === "/status" ||
-    request.nextUrl.pathname === "/api/health" ||
-    // The installed app's "you're offline" page (cached by the service worker).
-    request.nextUrl.pathname === "/offline.html";
+  const isPublicRoute = isPublicPath(request.nextUrl.pathname);
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -117,12 +128,36 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
-  if (user && request.nextUrl.pathname === "/login") {
+  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     const redirect = NextResponse.redirect(url);
     redirect.headers.set("Cache-Control", "private, no-store");
     return redirect;
+  }
+
+  // 1.46.0: two-step sign-in. Everyone has a second step (set up after making an account), and every sign-in types its
+  // code before the app opens. The database refuses the rest anyway (migration 0125); this sends people to the right
+  // page. TWO_STEP=off (an emergency only) turns this part off; the database's part stays.
+  if (user && !isPublicRoute && process.env.TWO_STEP !== "off" && twoStepApplies(request.nextUrl.pathname)) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const need = twoStepNeed({
+      app: aal?.nextLevel === "aal2",
+      email: (claims?.app_metadata as { two_step?: unknown } | undefined)?.two_step === "email",
+      aal2: aal?.currentLevel === "aal2" || claims?.aal === "aal2",
+      emailDone: await emailDoneFor(request.cookies.get(TWO_STEP_COOKIE)?.value, typeof claims?.session_id === "string" ? claims.session_id : null),
+    });
+    if (need !== "ok") {
+      const url = request.nextUrl.clone();
+      url.pathname = need === "verify" ? "/two-step" : "/two-step/setup";
+      url.search = "";
+      url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+      const redirect = NextResponse.redirect(url);
+      redirect.headers.set("Cache-Control", "private, no-store");
+      // Keep any refreshed session cookies.
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
+    }
   }
 
   // Forward the request with sanitized identity headers: any
@@ -137,9 +172,23 @@ export async function updateSession(request: NextRequest) {
     requestHeaders.set(VERIFIED_USER_ID_HEADER, user.id);
     requestHeaders.set(VERIFIED_USER_EMAIL_HEADER, encodeURIComponent(user.email ?? ""));
   }
+  // The page's Content Security Policy with a fresh nonce (1.31.16, lib/csp.ts): Next.js reads it from
+  // the request to put the nonce on its scripts, the root layout reads x-nonce. Never a browser's own copy.
+  requestHeaders.delete(NONCE_HEADER);
+  requestHeaders.delete("content-security-policy");
+  requestHeaders.delete("content-security-policy-report-only");
+  const cspName = wantsCsp(request.nextUrl.pathname) ? cspHeaderName(process.env.CSP_MODE) : null;
+  let csp: string | null = null;
+  if (cspName) {
+    const nonce = newNonce();
+    csp = buildCsp({ nonce, dev: process.env.NODE_ENV === "development", preview: process.env.VERCEL_ENV === "preview", supabaseHost: hostOf(process.env.NEXT_PUBLIC_SUPABASE_URL) });
+    requestHeaders.set(NONCE_HEADER, nonce);
+    requestHeaders.set(cspName, csp);
+  }
   const forwarded = NextResponse.next({ request: { headers: requestHeaders } });
   response.cookies.getAll().forEach((c) => forwarded.cookies.set(c));
   response = forwarded;
+  if (cspName && csp) response.headers.set(cspName, csp);
 
   // Documented Supabase gotcha on platforms like Vercel: if a response
   // carrying a refreshed session cookie gets cached by the edge

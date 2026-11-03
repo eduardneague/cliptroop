@@ -9,19 +9,808 @@
  * Write for the team, not for developers: what they can now do, in plain
  * words. `kind`: "new" = a new thing, "better" = something improved,
  * "fixed" = a bug that's gone.
+ *
+ * 1.32.2: the list is over 100 KB of text, so only the server and the What's
+ * new window load it. The types and the version rules are in
+ * lib/changelog-meta.ts; a page's frame gets what it needs from
+ * whatsNewFacts() below, worked out on the server.
  */
-export type ChangeKind = "new" | "better" | "fixed";
-export type Change = { kind: ChangeKind; text: string };
-export type Release = {
-  version: string;
-  /** YYYY-MM-DD (left out when unknown). */
-  date?: string;
-  /** A few words: the headline of this update. */
-  title: string;
-  changes: Change[];
-};
+import { compareVersions, forAudience, isFeatureUpdateIn, seriesOf, type Audience, type Release, type ReleaseHeadline } from "./changelog-meta";
+
+export { compareVersions, forAudience, KIND_LABEL } from "./changelog-meta";
+export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } from "./changelog-meta";
 
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.47.1",
+    date: "2026-10-31",
+    title: "TikTok's numbers, said plainly",
+    changes: [
+      { kind: "fixed", text: "The website's TikTok page lists exactly what ClipTroop reads for Analytics: the account's follower, like and video counts and your public videos' views, likes, comments and shares. Never your private videos or messages." },
+    ],
+  },
+  {
+    version: "1.47.0",
+    date: "2026-10-31",
+    title: "TikTok posting, exactly as TikTok asks",
+    changes: [
+      { kind: "better", text: "Posting to TikTok uses TikTok's own words: the label your video will get (“Promotional content” or “Paid partnership”), why Only me is off for branded content, and the agreement to TikTok's Branded Content Policy and Music Usage Confirmation, on the card and again right before you post." },
+      { kind: "better", text: "With commercial content on, Post now and Schedule wait until you say whether it promotes you, someone else or both. Ticking Branded content while Only me is picked clears it, so you choose again." },
+      { kind: "better", text: "If TikTok won't take a post from the account right now, the card stops and says so, with Try again. It also says how long the account's videos may be, and that TikTok can take a few minutes to show a post." },
+      { kind: "better", text: "TikTok now fetches the video itself from a private copy that's removed once it has it, as TikTok asks of apps that keep your videos. Until that's set up, ClipTroop sends the file, as before." },
+      { kind: "better", text: "After posting, the card says plainly when a TikTok post is private, and why. A TikTok post that failed starts over when you press Try again." },
+    ],
+  },
+  {
+    version: "1.46.0",
+    date: "2026-10-30",
+    title: "Two-step sign-in, and a smoother website",
+    changes: [
+      { kind: "new", text: "Two-step sign-in for every account: after your password, a code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…) or one sent by email. You set it up the first time you sign in after this update, or right after making an account; then every sign-in asks for it." },
+      { kind: "new", text: "Settings → Account → Two-step sign-in: see which way you use, and change it (another app, a new phone, or email instead)." },
+      { kind: "better", text: "Without the code, nothing of yours can be read or changed, not even through the database directly: a password alone isn't enough any more." },
+      { kind: "better", text: "The website: the home page's steps are now six named tabs you can click (they move on by themselves while you watch), pages fill the width evenly, and things ease into view as you scroll." },
+      { kind: "better", text: "Pricing, rebuilt: choose monthly or yearly and how many people, and see what your team pays at once; storage, side by side and the questions follow." },
+      { kind: "better", text: "Platforms: each platform's page says what ClipTroop does there, step by step; the list of permissions isn't shown any more." },
+    ],
+  },
+  {
+    version: "1.45.0",
+    date: "2026-10-30",
+    title: "Open to everyone: sign up, plans with storage, a new website",
+    changes: [
+      { kind: "new", text: "Anyone can create an account now, on the website's Create an account page: your name, your email and a password, then a link to confirm the address. Next you name your team, and its masters choose its plan." },
+      { kind: "new", text: "Plans: Studio ($120 a person a month, or $100 billed yearly, with 50 GB of storage for the team) and Network for agencies with several teams (500 GB each, priced with you). There's no free plan or trial. A new team sees its plans until its plan is on: a master asks from the Plan page, and we write back by email." },
+      { kind: "new", text: "Team → Team → Plan and storage: your plan, and how much of its storage your files take, file type by file type (short and long videos, thumbnails, pictures in scripts, sketches, the media kit). Close to the limit, it says so." },
+      { kind: "new", text: "The website, rebuilt: a page for every feature (Shorts, Scripts, Review, Posting, Analytics, the Media kit, Outliers and the rest) and for each platform, a home page where one short's week of work plays along an editing timeline as you scroll, and a Pricing page that works out what a team pays." },
+      { kind: "new", text: "Settings → Preferences → Glass → Liquid: Light that follows the pointer, on or off. Off, cards and bars stay still under the pointer." },
+      { kind: "better", text: "Settings → Preferences: Mode and colours, Glass, Wallpaper and Motion and sound glide to their part of the page (straight there with animations off), and it glows for a moment." },
+      { kind: "better", text: "Sign in has Create an account next to it, and an account that hasn't confirmed its email is told to open the email we sent." },
+    ],
+  },
+  {
+    version: "1.44.0",
+    date: "2026-10-30",
+    title: "Media kit: brands with their logos, titles of your own",
+    changes: [
+      { kind: "new", text: "Media kit → Brands and kind words: one list of brands, each with its logo, its name, what they said and who said it. With Quotes, every brand with a quote is a group on the page: its logo, its name and the quote under them, centred. As many go on a page as fit nicely: six when the quotes are a line or two, three when they're long, one or two bigger; the rest go on the next page." },
+      { kind: "new", text: "Media kit → Brand logos only: every brand's logo on a wall, no names, on white tiles in rows centred on the page (a shorter row between two longer ones), from three big ones to 48 small. A brand without a logo shows its name." },
+      { kind: "new", text: "Add logos picks several at once (or drop them on the list): each becomes a brand, named from its file. PNG, JPG, WebP or SVG; the empty margin round a logo is cut away, so every logo fills its tile the same way." },
+      { kind: "new", text: "Media kit: a page can have a title of your own (Page title → Custom): About us, At a glance, each platform's page and audience, the videos, the brands and the rates. Turn it off and the page has its usual title again; yours is kept for next time." },
+      { kind: "new", text: "Media kit → Cover → Title → Custom: a box where each line stays where you break it (Viverro, then Tech Design under it), as big as fits, up to four lines." },
+      { kind: "better", text: "Media kit: the last page ends with ClipTroop's logo and “Built with ClipTroop on” the day the kit was made, which links to ClipTroop. Contact → Built with ClipTroop turns it off. It replaces the line about where the numbers come from." },
+      { kind: "fixed", text: "Media kit: a cover photo with a long file name stays on the cover after saving (it could drop off)." },
+    ],
+  },
+  {
+    version: "1.43.0",
+    date: "2026-10-30",
+    title: "Audience with Shorts, a full-screen player, controls of one height",
+    changes: [
+      { kind: "new", text: "Outliers → Audience: each channel's card shows up to 6 of its long videos and 6 of its Shorts (it showed one or two long videos), the ones that sent you viewers first, then its biggest outliers." },
+      { kind: "better", text: "Outliers: a video's player goes full screen. Press F, or Full screen under it; Esc, or the button in its corner, comes back." },
+      { kind: "better", text: "Outliers → a video: the × tile reads × its usual, with the usual in brackets, and its number is bigger. The sum behind it shows when you point at the tile (or its ⓘ) instead of sitting under the tiles." },
+      { kind: "better", text: "Outliers → The biggest outliers, Shorts: the headline Short is a full poster, its × at the top, its title, channel and views at the bottom." },
+      { kind: "better", text: "Outliers → Saved: Shorts stand in the middle of their folder instead of off to one side. A niche's channels: Find sits inside the search box, and Add channels / Done is one button at the top." },
+      { kind: "better", text: "Buttons, search boxes, dropdowns and filter rows that sit together are one height across the app (36 px in toolbars, 40 px in forms): none taller than what's beside it." },
+      { kind: "new", text: "Words cut short with … in a dropdown, a menu or a list slide into view while you point at them (or reach them with the arrow keys), and back when you move on." },
+      { kind: "fixed", text: "The team switcher on liquid glass opens its list over the page, solid enough to read over the side bar's links." },
+      { kind: "better", text: "Business uses the page's whole width.", only: "business" },
+      { kind: "new", text: "Cash book: a new line is typed above the table, apart from it. Pick money in or out and bank or cash, then the day, the document (attach its files with the paperclip beside it), what it was and the amount; what it is gets guessed from the words. Enter adds it, and it lights up where it landed in the table. Every field opens the whole entry window with what you typed.", only: "business" },
+      { kind: "new", text: "Cash book: Select (or the box that shows over a line's number when you point at it) picks lines, Shift a run of them. Then set what they are or their income source together, copy them for Excel, or remove them.", only: "business" },
+      { kind: "better", text: "Cash book: a change typed into the table shows it's on its way (a light across the line, a spinner in the cell), then flashes green with a tick. One that couldn't be saved shakes red and is back as it was. A removed line is struck through and slides off, as shorts do, and the lines under it glide up.", only: "business" },
+      { kind: "better", text: "A line's ⋯ menu: Edit first, every item with its icon, Remove apart at the end, in red. The paperclip on a line now only adds documents, straight away (dropping a file on the line works too); they're all in the line's window.", only: "business" },
+      { kind: "better", text: "The entry window: Attach sits right beside the document (it's optional), and a new entry's documents go up as soon as it's added. The amount and its currency are one box, the partner beside it. BNR's rate: the button carries a bank mark and BNR, a ring turns while BNR is asked, and the rate rolls into its box.", only: "business" },
+      { kind: "better", text: "Inventory, easier to follow: each group opens with its name, how many lines and its total, and a + that adds a line straight into it; Add a line sits at the top of the sheet; at the bottom, what it owns, what it owes and the difference side by side. Lines can be picked to move them to another group or remove them.", only: "business" },
+      { kind: "new", text: "Every register (the cash book, the fiscal register, the inventory, the fixed assets) has an ⓘ at its top right: what it is and what it's for, in a few words, then More details, a window of tabs: in short, how it's kept, worked examples for a creator's PFA, how this page does it, the rules, and the sources it was checked against. Rectificare has its own ⓘ: what it means and what to do, step by step.", only: "business" },
+      { kind: "fixed", text: "The PFA's activity (CAEN) takes up to 500 characters over several lines: a code with its name, or several codes.", only: "business" },
+      { kind: "fixed", text: "Fixed assets: a card's PDF and Excel buttons sit side by side on one line, each with its icon. Date boxes in Business's windows are as tall as the fields beside them.", only: "business" },
+    ],
+  },
+  {
+    version: "1.42.0",
+    date: "2026-10-29",
+    title: "Business: the PFA's registers",
+    // Only for the teams Business is turned on for (Developer → Features): nobody else sees these notes.
+    only: "business",
+    changes: [
+      { kind: "new", text: "Business: the PFA's three registers, kept here. The cash book (Registrul-jurnal de încasări și plăți), the fiscal register (Registrul de evidență fiscală) and the inventory (Registrul-inventar), with the fixed assets and their amortization. The team's owner always sees it, and chooses who else sees the registers or changes them too (Business → Settings → Access)." },
+      { kind: "new", text: "The cash book works like a spreadsheet: type a line straight in (Tab across, Enter adds it), click a cell and click again (or just type) to change it, use the arrows to move, and paste lines from Excel or Google Sheets. Every month is totalled with the balances after it, cash and bank apart." },
+      { kind: "new", text: "Money in another currency (AdSense in dollars, say) turns into lei at BNR's rate, which it asks BNR for: the last banking day's before the payment, as the rules say (or the day's own, if your accountant works that way). The amount in dollars and the rate go into the explanation." },
+      { kind: "new", text: "The fiscal register works itself out from the cash book and the fixed assets, a page for each income source: the income by its nature, the deductible expenses (protocol within 2%, a car's running costs at 50%, a car's amortization up to 1,500 lei a month) and the net income. Under it, what was left out and why. Lines for what isn't money (products a brand sent instead of paying) go there too." },
+      { kind: "new", text: "Fixed assets (5,000 lei or more from 2026): pick what it is from the catalogue for its code and useful life, choose straight-line, declining balance or accelerated, and see the plan year by year. Its card (Fișa mijlocului fix) downloads as a PDF or an Excel file." },
+      { kind: "new", text: "A new inventory starts from the books: the fixed assets in use, the cash on hand and the bank balance on that day. Add anything else line by line." },
+      { kind: "new", text: "Export the registers to Excel (with formulas, set up to print on A4 with the header on every page), to PDF to print and sign, or to CSV (the Romanian way or the standard way), in Romanian or English. Or everything at once, as a backup." },
+      { kind: "new", text: "A mistake is corrected the register's way, with a line that reverses it (storno). Close a year once its fiscal register is done: nothing in it changes until it's reopened. Attach the receipts and invoices to their lines. Every change stays in the history: who, when, what it was and what it became." },
+      { kind: "new", text: "The whole Business page in English or Romanian: the EN · RO switch at the top changes every tab, window and message to the registers' own Romanian terms (încasări și plăți, sold, stornare, mijloace fixe, amortizare), with amounts and days written the Romanian way (1.234,50 lei, 28.10.2026). This browser remembers it. Exports still start in Romanian, as ANAF's models are, and can be made in English." },
+      { kind: "new", text: "Developer → Features: Business turned on or off team by team. The team's owner gets a notification when it's on." },
+    ],
+  },
+  {
+    version: "1.41.0",
+    date: "2026-10-28",
+    title: "Who deletes videos, every video for the media kit",
+    changes: [
+      { kind: "new", text: "Team → Team → Danger zone, for the team's owner: let anyone on the team delete shorts, long videos or both. It asks first, they get a notification, and you can take it away any time. Masters can always delete." },
+      { kind: "new", text: "The owner also decides whether those people delete one at a time or several at once (long videos with their password, as masters do). One at a time is the default." },
+      { kind: "better", text: "Media kit → Pick the videos: every video your connected accounts have, on every platform and from every year, long videos and live streams too (before, only the latest 90 Shorts). Filter by platform, by kind and by year, put the most viewed, the newest or the oldest first, and search by title or #number. More come as you scroll." },
+      { kind: "fixed", text: "Media kit → Working together shows every package, whatever its platform. With one kit per platform, each kit has its own packages and the Any platform ones, and each package says which kit it's in." },
+      { kind: "better", text: "An Any platform package shows the four platforms' icons together, on the page and in the form. Up to eight packages fit on the page, in two columns." },
+      { kind: "new", text: "Media kit: a page of the preview that's being changed says so until its new version is there: it dims, a light in your theme's colour sweeps across it and a tag says Updating (another period's numbers, new pictures, a new photo, a bigger change). Only the pages that change, and a quick change never flashes it." },
+      { kind: "fixed", text: "Media kit: the preview shows a change at once, even while the last one is still being saved. It used to wait for the save, which on a slow connection took seconds." },
+      { kind: "fixed", text: "Media kit: the last page names every platform its numbers come from, the picked videos' platforms too." },
+    ],
+  },
+  {
+    version: "1.40.0",
+    date: "2026-10-27",
+    title: "Select on cards, long videos like shorts, media kit templates",
+    changes: [
+      { kind: "fixed", text: "Selecting shorts on the table: the tick box stays under your pointer when you click it (the row used to shift as it was pressed)." },
+      { kind: "new", text: "Select works on the cards too, for shorts and long videos: a click anywhere on a card picks it, Shift picks everything in between." },
+      { kind: "new", text: "Masters can delete the shorts they've picked, right from the bar at the bottom. It asks first, then each one is struck through and taken off the list." },
+      { kind: "new", text: "Long videos get the same tools: a video's ⋯ exports its script as a PDF or a Word file, and masters move it to a step (with Undo). Select several to export them in one zip, move them, or delete them." },
+      { kind: "new", text: "Deleting several long videos at once needs your password, so nothing goes by accident, or by someone else using your account. Only masters can." },
+      { kind: "new", text: "Media kit → Who can open it: masters choose who else makes the media kit, the way they choose who sees revenue. The people let in get a notification. This replaces the Partnerships role; everyone who had it is let in." },
+      { kind: "new", text: "Media kit templates: save your setup under a name, as many as you like. Open one next time and change what you need. Update template keeps your changes in it; the template stays as it was until you do." },
+    ],
+  },
+  {
+    version: "1.39.0",
+    date: "2026-10-27",
+    title: "Media kit: your own numbers, your own videos",
+    changes: [
+      { kind: "better", text: "The media kit's form follows its pages, in the same order. As you scroll, the part you're on lights up and its page comes into view beside it, marked Editing. Click a page to jump to its part." },
+      { kind: "new", text: "Manual numbers: every part with numbers (At a glance, each platform's page, who watches) can be typed in instead of read. Auto is the default; Manual starts from the numbers read, so you only change what you want. Type numbers as you say them: 2.5M, 120K." },
+      { kind: "new", text: "A platform's chart can show its views per day, your own points (say, subscribers per month) or nothing. A channel that isn't connected can be added by hand. The kit says which numbers are your own." },
+      { kind: "new", text: "Pick the videos: the best videos page (up to 6, called \"Videos we're proud of\") and the cover (up to 15) can show the ones you choose, in your order. Search finds any video you've posted." },
+      { kind: "new", text: "The cover's wall comes in three shapes: Shorts, long videos, or both together in one grid. Auto picks the one that suits your videos." },
+      { kind: "new", text: "Full screen: go through the kit page by page, the way a sponsor will, with the arrow keys, a swipe, or the pages along the bottom." },
+      { kind: "better", text: "On phones, Download PDF sits in a bar of its own at the bottom, with the page count and full screen beside it." },
+      { kind: "new", text: "A Partnerships role, for the people who deal with sponsors. Only masters and people with this role can open the media kit now (revenue access alone no longer does). A master gives the role in Team → Members." },
+      { kind: "fixed", text: "The media kit's preview no longer slides under the top bar as you scroll." },
+    ],
+  },
+  {
+    version: "1.38.0",
+    date: "2026-10-27",
+    title: "Shorts: export, move, select",
+    changes: [
+      { kind: "new", text: "A short's ⋯ on the list exports its script as a PDF or a Word file, straight away, without opening it. Everyone on the team can." },
+      { kind: "new", text: "Masters move a short to another step from its ⋯ too (Move to step). Undo puts it back." },
+      { kind: "new", text: "Select on the list: tick as many shorts as you like (Shift picks everything in between, a day's box the whole day), then export each one's script, as PDFs or Word files in one zip, or move them all to a step at once." },
+      { kind: "better", text: "Deleting a short: it's struck through, slides off the list and the gap closes. On its own page, the page falls away before the list opens." },
+      { kind: "better", text: "Exported files keep their letters: \"Transfăgărășan\" becomes \"transfagarasan\" in a file's name, not \"transfa-ga-ra-s-an\"." },
+    ],
+  },
+  {
+    version: "1.37.0",
+    date: "2026-10-27",
+    title: "Media kit",
+    changes: [
+      { kind: "new", text: "Analytics → Media kit makes the deck sponsors ask for: a PDF of your reach, your audience, your best videos, your rates and how to reach you, made from your own numbers. Every page shows as you set it up, exactly as the PDF will be." },
+      { kind: "new", text: "Pick the channels, one kit with everything or one kit per platform, and the period: 28 days, 90 days, 365 days or your own dates." },
+      { kind: "new", text: "Pick the pages: a cover, About us, At a glance, a page per platform, Audience (ages, genders and countries), your best videos, brands and kind words, rates and contact." },
+      { kind: "new", text: "Rates: show a price for each package, or say they're on request. Choose the currency and add a note, like what the price includes." },
+      { kind: "new", text: "Make it yours: light or dark pages, your team's colour or any other, and a cover with your best thumbnails, your own photo or one big number." },
+      { kind: "new", text: "The PDF has real text and links that work: your videos, profiles, email and website open from it. It says where its numbers come from and when they were read." },
+      { kind: "new", text: "A master's setup is saved, so the next kit starts from it. Like revenue, only masters and the people they give revenue access can make a kit." },
+    ],
+  },
+  {
+    version: "1.36.1",
+    date: "2026-10-27",
+    title: "Filming step, ready to go live",
+    changes: [
+      { kind: "fixed", text: "1.36.0 failed its build checks, so it couldn't go live. This fixes that; the Filming step works as described in 1.36.0." },
+    ],
+  },
+  {
+    version: "1.36.0",
+    date: "2026-10-26",
+    title: "A Filming step for shorts",
+    changes: [
+      { kind: "new", text: "Shorts have a Filming step, like long videos: Script → Filming → Editing. The master sends a finished script to filming, and the filmer gets a notification and a \"Film it\" task." },
+      { kind: "new", text: "When the footage is on the NAS, the filmer marks it filmed on the short's page and can add the NAS folder. The short moves to Editing and the editor is notified. With no editor yet, the masters are told it needs one." },
+      { kind: "new", text: "The NAS folder shows on the short at Editing, with a Copy button. Its filmer, its editor, a scheduler or the master can change it." },
+      { kind: "new", text: "Pick a short's filmer in its settings and when you add a short. Team → Defaults → Short videos has a default filmer for new shorts. With nobody picked, any filmer can film it." },
+      { kind: "better", text: "Filming a short gives 30 XP and counts toward the filming achievements. \"Assigned to me\" on the shorts list shows the shorts you film too." },
+      { kind: "better", text: "Step names in search results use their readable shade in dark mode." },
+    ],
+  },
+  {
+    version: "1.35.2",
+    date: "2026-10-26",
+    title: "Scripts sent once, tasks done early",
+    changes: [
+      { kind: "better", text: "Scripts: once you send a script to review or staging, its button turns grey until that step is done, so it can't be sent (and everyone notified) twice by accident. When the next step is done, you can send it again." },
+      { kind: "better", text: "Schedule the posts now counts as done as soon as every platform's post is scheduled, not on the day the posts go out. If a post is cancelled or fails, the task comes back." },
+      { kind: "new", text: "Your task history (My tasks → Done, and a day on Contributions) says when a task was done before its date: \"Done early on Oct 26, due Oct 29\"." },
+    ],
+  },
+  {
+    version: "1.35.1",
+    date: "2026-10-26",
+    title: "Dashboard filters, and a smoother wallpaper",
+    changes: [
+      { kind: "better", text: "Upcoming shorts' filters look like the ones on Followers and Views, and tick when you click them (with sounds on)." },
+      { kind: "new", text: "Upcoming shorts can show one editor's shorts: pick their face under the platforms, or \"No editor yet\" for the ones nobody is editing." },
+      { kind: "new", text: "Pick a platform on Upcoming shorts and tick Only to see just the shorts that go there and nowhere else, like the ones only for Instagram." },
+      { kind: "new", text: "Upcoming longs can show one editor's videos too, and shows who's editing each one." },
+      { kind: "fixed", text: "Upcoming longs shows each video's thumbnail: its winner from Thumbnail Studio, or else its first sketch. Before, only winners showed, so most videos had a plain icon." },
+      { kind: "better", text: "Top videos shows your 20 best in a list you can scroll inside the widget, and View all in its top right corner opens Analytics → Content on the same platform." },
+      { kind: "better", text: "Turning your wallpaper on or off, picking one, adding a new one or putting it on every page now shows Clip's loading screen, like a new colour theme, until the new look is ready." },
+    ],
+  },
+  {
+    version: "1.35.0",
+    date: "2026-10-26",
+    title: "Light mode, easy to read",
+    changes: [
+      { kind: "better", text: "Light mode got a full contrast pass. Every coloured word (links, statuses, chips, numbers in green or red) now uses a deeper shade of its colour, so it reads clearly on cards, the page and its own tinted chips, in every colour theme. Dark mode got lighter shades the same way." },
+      { kind: "better", text: "Main buttons use a slightly deeper shade of your theme's colour (in Default, a deeper orange), so their white words read clearly. Green and gold buttons too. In light mode a button darkens a little when you point at it, instead of washing out." },
+      { kind: "better", text: "Glass in light mode: the colours behind it stay soft and light, so dates, links and labels on the page stay readable with every theme (Ink and Slate included), your own colours and any glass level." },
+      { kind: "better", text: "Grey text, like dates and hints, is a touch darker in light mode, so it reads on every theme's page." },
+      { kind: "better", text: "A wallpaper on every page: behind pages other than the dashboard, a dark picture (in light mode) or a bright one (in dark mode) is softened a little more, so the words on the page stay readable." },
+      { kind: "better", text: "Your team's own short and long video colours (Team → Colors) are always readable as words, even a light yellow or blue." },
+      { kind: "fixed", text: "Initials on avatars are always readable: white on the deeper colours, dark on light ones." },
+      { kind: "fixed", text: "The TikTok logo no longer disappears on dark cards and selected filters: it has a faint edge and its colours." },
+    ],
+  },
+  {
+    version: "1.34.5",
+    date: "2026-10-26",
+    title: "Graphs you can point at, and smoother Outliers",
+    changes: [
+      { kind: "new", text: "The dashboard's Views widget has the platforms as filters, like Followers: pick YouTube, Instagram, TikTok or Facebook, or All. The number, the line and its colour follow your pick, and the widget remembers it." },
+      { kind: "new", text: "Point at any day of the Views or Followers graph for a popup with that day's views or new followers (every platform's own number too, when it shows them all). On a phone, tap a day; tap the numbers above to open Analytics." },
+      { kind: "better", text: "Ready to post: the row of platform tiles over the card is gone. Each platform's own part below already says where it's posted." },
+      { kind: "fixed", text: "Outliers: a video played straight after opening it no longer stops when its numbers arrive, so one press is enough." },
+      { kind: "fixed", text: "Outliers: a channel's Latest uploads no longer squeeze the titles to a word a line. In narrow spots the multiplier sits on the picture and the title gets the room." },
+    ],
+  },
+  {
+    version: "1.34.4",
+    date: "2026-10-26",
+    title: "Followers per day, and platforms on the dashboard",
+    changes: [
+      { kind: "better", text: "The dashboard's Followers widget now shows the new followers of each day of the last 28 as bars (a day that lost some goes below the line). Point at a bar for that day's number." },
+      { kind: "new", text: "Followers: the platforms under the bars are filters. Pick YouTube to see only its subscribers, or All for every platform together. The widget remembers your choice." },
+      { kind: "new", text: "Upcoming shorts shows the platforms each short goes to, with a tick where it's posted already, and filters on top: see only Instagram's, only TikTok's, or all. It remembers your choice too." },
+    ],
+  },
+  {
+    version: "1.34.3",
+    date: "2026-10-26",
+    title: "A better Ready to post",
+    changes: [
+      { kind: "better", text: "A short that's ready to post opens with a tile for each platform: scheduled for when, published, failed or not connected, with a tick where it's posted. Press one to jump to it." },
+      { kind: "new", text: "When to post: In 30 min, Team's times (each platform at your team's posting time, on the short's planned day) or Choose. A short planned for a later day starts on its planned day at your team's times." },
+      { kind: "new", text: "One caption for Instagram, TikTok and Facebook. Write one just for one of them if you want." },
+      { kind: "better", text: "What will be posted and when, with Post now and Schedule, stays at the bottom of the window while you fill it in. YouTube's description, audience and visibility fold into one line, and published or waiting posts take one line until you open their steps." },
+      { kind: "better", text: "Platform logos on short videos are now always in full colour, with a small teal tick where it's posted (they used to be greyed out until then). The calendar shows the same tick." },
+    ],
+  },
+  {
+    version: "1.34.2",
+    date: "2026-10-26",
+    title: "A tidier Account",
+    changes: [
+      { kind: "better", text: "Settings → Account is now just your sign-in and your devices: your email, your password, Log out and Sign out everywhere else, each on one line with its button right there." },
+      { kind: "new", text: "Reporting a bug or suggesting something has its own tab, Help & feedback, with what you sent before and Clip's tour, so it's no longer in the way on Account." },
+      { kind: "better", text: "Deleting your account is in the Danger zone, a page of its own behind one quiet row at the bottom of Account, so nobody ends up there by accident. It still asks twice before anything happens." },
+      { kind: "better", text: "On a phone, Settings' tabs slide to show the one you're on." },
+    ],
+  },
+  {
+    version: "1.34.1",
+    date: "2026-10-25",
+    title: "Glass bars that hold together",
+    changes: [
+      { kind: "better", text: "Outliers' bar (the niche, Long videos or Shorts, and its tabs) is now glass like the top bar: on a computer it floats under it as a pane of its own, and its words stay easy to read over bright thumbnails, in light mode too." },
+      { kind: "fixed", text: "With the glass slider at 0, the top bar stays a floating pane (solid now) instead of going back to the old full-width bar." },
+      { kind: "fixed", text: "The odd lighter patch in the middle of the page under the floating top bar is gone: what scrolls under it now blurs and fades evenly." },
+      { kind: "fixed", text: "Every row of tabs shows its orange underline under the tab you're on again, like a video's Analytics, where it had gone missing." },
+    ],
+  },
+  {
+    version: "1.34.0",
+    date: "2026-10-25",
+    title: "Pop-ups that leave the way they came",
+    changes: [
+      { kind: "new", text: "Everything that pops up now leaves the way it came in, played backwards: windows and prompts, the search window, menus, dropdowns and date pickers, the bell, pictures shown big, Outliers' side panel, the phone's sheets, Clip's tour and more. The dimmed page behind a window fades back with it." },
+      { kind: "better", text: "The moment you close a pop-up, nothing in it can be pressed any more, even while it's still on its way out, so a quick second click never lands on a button that's leaving." },
+      { kind: "new", text: "On a phone, the tab bar's marker slides to the tab you press straight away, stretching a little on the way, and the tab's icon gives a small hop. With Liquid glass it's the soft pill that glides across." },
+    ],
+  },
+  {
+    version: "1.33.1",
+    date: "2026-10-25",
+    title: "Rename a video anywhere",
+    changes: [
+      { kind: "new", text: "Click a video's name at the top of its page to rename it right there: Save or Enter keeps the new name, Cancel or Esc puts the old one back, and a message tells you it's saved. Long videos too, for the master and whoever is working on the step it's at." },
+      { kind: "fixed", text: "A short's and a long video's Settings now start with its name: change it and press Save name (or Enter). A name still being typed when you close Settings is saved too." },
+      { kind: "better", text: "A long video's main title idea changes with its name, so the two always match." },
+    ],
+  },
+  {
+    version: "1.33.0",
+    date: "2026-10-25",
+    title: "The ClipTroop website",
+    changes: [
+      { kind: "new", text: "ClipTroop has a website around the app, for teams who'd like to use it and for the platforms' reviewers: Features (everything it does, in the order a video is made), Platforms (what it asks YouTube, TikTok, Instagram and Facebook for, every permission and why), Pricing, Security, the Changelog, About and Contact. Anyone can read it without signing in." },
+      { kind: "new", text: "Pricing: three plans, Crew, Studio and Network, monthly or yearly, with every feature in each and the usual questions answered. An account still starts with a message: ClipTroop is invite only for now." },
+      { kind: "new", text: "Security says in plain words what keeps your team's work and connected accounts safe, and how to report a problem. Security researchers' tools find the same at /.well-known/security.txt." },
+      { kind: "better", text: "The home page, the privacy policy, the terms and data deletion share the website's header and footer, with a menu on phones." },
+    ],
+  },
+  {
+    version: "1.32.5",
+    date: "2026-10-25",
+    title: "Speed: long lists",
+    changes: [
+      { kind: "better", text: "The short videos list opens and updates much quicker once a team has a long history: posted shorts from before the last two weeks wait behind \"Show them\" (when there are 30 or more of them). Anything not posted yet, overdue included, is always there." },
+      { kind: "better", text: "The short and long videos lists draw what's on screen first and the rest as you scroll to it: a long list opens about twice as fast, and scrolling stays smooth." },
+      { kind: "fixed", text: "A team with more than 1,000 shorts no longer loses its newest ones from the list and the calendar." },
+    ],
+  },
+  {
+    version: "1.32.4",
+    date: "2026-10-25",
+    title: "Speed: measured where it counts",
+    changes: [
+      { kind: "better", text: "The app now measures how fast it really is for the people using it: each time a page is opened, the browser notes what Google looks at (how long until the page is on screen, how quickly it answers a tap, whether things jump around), and the developers see the last 7 days for phones and computers, and the pages opened most." },
+      { kind: "better", text: "Nothing about who: only the page (not which video or person), phone or computer, the connection's speed and the app's version, kept for 30 days." },
+    ],
+  },
+  {
+    version: "1.32.3",
+    date: "2026-10-25",
+    title: "Speed: pictures and fonts",
+    changes: [
+      { kind: "better", text: "Thumbnail Studio's pictures on the dashboard, the calendar, a video's page, the long videos list and search now come at the size they're shown (a small copy, not the full 1280 px picture), from an address that doesn't change: your browser keeps them instead of downloading them again on every visit. Ideate's sketches on the long videos list too." },
+      { kind: "better", text: "The dashboard and the calendar open a little quicker: they no longer ask the storage for a fresh link to every picture first." },
+      { kind: "better", text: "The headline font's italic, which only the home page uses, no longer loads ahead on every page." },
+    ],
+  },
+  {
+    version: "1.32.2",
+    date: "2026-10-25",
+    title: "Speed: less to download",
+    changes: [
+      { kind: "better", text: "Every page downloads less than a third of the code it used to for the app around it: the search window, the bell's cards and history, What's new's notes, Clip's tour and the celebrations now arrive once the page has settled, or the moment you point at them, instead of with every page. Pages open and respond sooner, most of all on a phone." },
+      { kind: "better", text: "Open one of those before its code has arrived and it shows at once, in its own shape, then fills in. If it can't arrive (no connection), only that part says so, with Reload: the rest of the page keeps working." },
+    ],
+  },
+  {
+    version: "1.32.1",
+    date: "2026-10-25",
+    title: "Speed: the server next to the database",
+    changes: [
+      { kind: "better", text: "Opening the app and the dashboard asks the database fewer questions: your profile is read once instead of four times, and your wallpaper's brightness comes with everything else instead of after it." },
+      { kind: "new", text: "App setup measures how far the app's server is from its database and how sign-ins are checked, with the two settings that make every page quicker when they're off." },
+    ],
+  },
+  {
+    version: "1.32.0",
+    date: "2026-10-25",
+    title: "Speed: the database asks once",
+    changes: [
+      { kind: "better", text: "Revenue, other income, money projections and the connected accounts' history load much faster: the database checks who may see them once per page instead of once for every row (on a few years of numbers, about 15 to 20 times faster)." },
+      { kind: "better", text: "Deleting a team or an account no longer has to read some Outliers tables from end to end." },
+    ],
+  },
+  {
+    version: "1.31.16",
+    date: "2026-10-25",
+    title: "Security: what a page may run",
+    changes: [
+      { kind: "better", text: "Every page now tells the browser exactly what it may run: only the app's own scripts, each page's with a new secret every time. A script someone managed to slip into a page wouldn't run, and nothing can load plugins, post a form to another site or show the app inside another site." },
+      { kind: "better", text: "Another site's window can't reach into the app's, and the browser features the app doesn't use (camera, microphone, USB, Bluetooth and the like) stay off." },
+    ],
+  },
+  {
+    version: "1.31.15",
+    date: "2026-10-25",
+    title: "Security: forms and what's shown",
+    changes: [
+      { kind: "fixed", text: "A picture in a script only ever comes from a web address: one that pointed anywhere else isn't shown, and its Download and Full size buttons can't open it." },
+      { kind: "better", text: "Analytics exports open safely in Excel, Numbers and Sheets: a title or search term that starts like a formula stays plain text." },
+      { kind: "better", text: "Every text box has a limit the app checks itself, with a message (a long video's hook, notes, budget and theme too), and the database keeps a limit on everything people can write, however it gets there. A new username follows the Settings rule everywhere." },
+    ],
+  },
+  {
+    version: "1.31.14",
+    date: "2026-10-25",
+    title: "Security: the database's own locks",
+    changes: [
+      { kind: "better", text: "Your email address and settings are only visible to you, your teams (and people who used to be on them) and the people with an invite between you. Anyone signed in can still open your profile page and find you by name or username to invite you, but an email only finds someone when it's typed in full, and it's never shown." },
+      { kind: "better", text: "Someone who isn't signed in can't reach anything in the database at all, and signed-in people only reach what the database's own rules allow, even through its own functions." },
+      { kind: "better", text: "Comment attachments are stored as pictures, videos, documents and the like, or as plain downloads: never as a page that could run in your browser. Videos for review take only the kinds the app uploads." },
+      { kind: "fixed", text: "A long video's default people (Team → Defaults) can only be active members of the same team, like the shorts' defaults." },
+    ],
+  },
+  {
+    version: "1.31.13",
+    date: "2026-10-24",
+    title: "Security: the app's own addresses",
+    changes: [
+      { kind: "better", text: "Another website can't make your signed-in browser change anything in the app: such requests are turned away before they reach it." },
+      { kind: "better", text: "Things that cost something each time (link previews, video thumbnails, the weather, adding channels in Outliers, invites, bug reports) have a sensible limit per person, so a stuck page or a script can't run up the bill or flood anyone." },
+    ],
+  },
+  {
+    version: "1.31.12",
+    date: "2026-10-24",
+    title: "Security: who can do what",
+    changes: [
+      { kind: "better", text: "Every action in the app and every address it answers was checked: each one makes sure who's asking is signed in, on the team and in a role that may do it (or leaves it to the database's own rules, which do). A new one without a check can't be added any more: the app's own tests stop it." },
+      { kind: "better", text: "Switching team only switches to a team you're an active member of, and the scheduled jobs all use one well-tested check for their secret." },
+    ],
+  },
+  {
+    version: "1.31.11",
+    date: "2026-10-24",
+    title: "Security: signed in where you mean to be",
+    changes: [
+      { kind: "better", text: "Log out signs out the device you're on. Your phone stays signed in when you log out on your computer (it used to sign out everything)." },
+      { kind: "new", text: "Sign out everywhere else, in Settings → Account: every other phone, computer and browser signed in to your account is signed out and stops getting your notifications. For a lost phone or a shared computer." },
+      { kind: "fixed", text: "Opening an invite or reset link meant for another account no longer quietly switches you into it: you're asked whether to continue as that account or stay as you." },
+      { kind: "better", text: "Devices signed out by a new password stop getting your notifications too, and the app's cookies only ever travel over a secure connection." },
+    ],
+  },
+  {
+    version: "1.31.10",
+    date: "2026-10-24",
+    title: "Security: passwords",
+    changes: [
+      { kind: "new", text: "Change your password in Settings → Account, with your current one. Forgot it? The same place emails you a reset link." },
+      { kind: "better", text: "One set of rules wherever you choose a password, ticked off as you type: at least 8 characters, not one people use a lot (or a run like 12345678), and not your email or your name. No rules about capitals or symbols: a few unrelated words make a strong password." },
+      { kind: "better", text: "A reset link says whose password you're choosing, and once it's saved, every other device signed in to your account is signed out (it tells you so)." },
+      { kind: "fixed", text: "Someone signed in on your computer can no longer choose a new password without knowing the current one: the reset and setup pages only do that for a sign-in that came from the email's link." },
+    ],
+  },
+  {
+    version: "1.31.9",
+    date: "2026-10-24",
+    title: "Phones and glass",
+    changes: [
+      { kind: "better", text: "With the glass look on a computer, the top bar floats: a pane of glass of its own beside the side bar, lined up with the page (where \"Good morning\" starts) instead of running into the side bar. What scrolls up under it blurs softly away." },
+      { kind: "better", text: "Messages at the top of a phone (like \"Flampok is out of Competition Tech\") sit in the middle, have an × to close them, and go with a swipe up or to the side. On a computer, swipe one down or to the side. They also go by themselves sooner." },
+      { kind: "fixed", text: "Profile pictures that stayed a plain coloured circle on some phones load now. A picture that really can't load is tried once more, then shows the person's initials." },
+      { kind: "fixed", text: "Video wallpapers and their previews show a picture on iPhones instead of an empty box." },
+      { kind: "fixed", text: "Objectives on a phone stays centred: the row of Today, This week, This month and the rest slides on its own instead of pushing the page off to the side." },
+      { kind: "fixed", text: "The side panes in Outliers (Formats, Keywords, Saved, Thumbnails) stay below its bar as you scroll; their tops used to hide behind it." },
+      { kind: "better", text: "A notification you remove is out of the way a little quicker." },
+    ],
+  },
+  {
+    version: "1.31.8",
+    date: "2026-10-24",
+    title: "Outliers, clearer",
+    changes: [
+      { kind: "fixed", text: "A video opens at once the first time you click it in Outliers: its panel slides in with the video, title and numbers you already saw on its card. The page used to go back to its loading screen first." },
+      { kind: "fixed", text: "Every tab in Outliers starts at the top of the page, and so does picking another niche or switching between long videos and Shorts." },
+      { kind: "better", text: "The × now shows what it's measured against: a video's views ÷ the usual views of the channel's videos just before it. The usual under its views and on each card is that same number (14M ÷ 4.2M = 3.3×), and when the channel's videos get many more or fewer views now, the panel says that too." },
+      { kind: "new", text: "Your own videos show their engaged views in Outliers (views where people kept watching). YouTube shares engaged views only with a channel's owner, so other channels' videos can't have them." },
+      { kind: "new", text: "\"Your viewers watch it\" on a channel now lists which of your videos its videos sent viewers to, how many views each got, and from which of its videos. Yours opens in Analytics, theirs in the panel. It fits on a phone too." },
+    ],
+  },
+  {
+    version: "1.31.7",
+    date: "2026-10-24",
+    title: "Security: nothing known gets through",
+    changes: [
+      { kind: "fixed", text: "The framework the app is built with carried its own old copy of a styling tool with four known security problems. It now uses the app's up-to-date copy, so GitHub's security check is green again." },
+      { kind: "better", text: "A version of the app with a known security problem in one of its packages can't be built or go live any more: the check runs before every build, on the servers too, and says exactly what to update." },
+    ],
+  },
+  {
+    version: "1.31.6",
+    date: "2026-10-23",
+    title: "Security: signing in",
+    changes: [
+      { kind: "better", text: "After too many wrong passwords, signing in waits a few minutes before it checks another one, so nobody can guess their way into an account. The right password clears the count, and Reset your password is right there while you wait." },
+      { kind: "better", text: "Deleting your account checks your password with the same limits." },
+      { kind: "fixed", text: "When signing in can't reach the server, it says so instead of saying your password is wrong. Spaces around your email don't matter anymore." },
+    ],
+  },
+  {
+    version: "1.31.5",
+    date: "2026-10-23",
+    title: "Glass pop-ups",
+    changes: [
+      { kind: "fixed", text: "With the glass look on, dialogs, menus, Search, the date and list pickers and the phone's menu now follow the glass slider like the rest of the app. They stayed nearly solid unless glass was set to go everywhere." },
+      { kind: "better", text: "In light mode a dialog over the dimmed page is light glass, not grey. Over a wallpaper they all keep their words readable." },
+    ],
+  },
+  {
+    version: "1.31.4",
+    date: "2026-10-23",
+    title: "Notifications at once",
+    changes: [
+      { kind: "better", text: "Notifications answer at once, like a like on a video: opening one, Mark all read, clearing one, Clear all, Accept and Decline show straight away while the app catches up. If something doesn't go through, it comes back exactly as it was and you're told." },
+      { kind: "new", text: "A notification you clear slides out and the ones under it move up into its place. Clear all sends them out one after the other, and a new one slides in at the top." },
+      { kind: "new", text: "Swipe a notification sideways to clear it (an invite still waiting for your answer stays put). With a keyboard: Tab to one, Enter opens it, Delete clears it." },
+      { kind: "better", text: "With the glass look on, the bell is glass like the rest of the app: you see the page through it, and each notification is a brighter pane of its own. Unread ones glow softly." },
+      { kind: "better", text: "The little messages that pop up (like Saved) are glass too. They wait while you point at them, slide out when they go while the others glide into place, and can be swiped away or closed with their X." },
+    ],
+  },
+  {
+    version: "1.31.3",
+    date: "2026-10-23",
+    title: "Smaller pictures",
+    changes: [
+      { kind: "better", text: "Any picture you add can be up to 5 MB (a thumbnail up to 15 MB), and each is made much smaller before it goes up: a 5 MB phone photo becomes a profile picture of about 15 KB, and a thumbnail is sized like YouTube shows it. Pages with pictures load faster." },
+      { kind: "better", text: "Thumbnail Studio, pictures in reports and pictures in drawings are made small too, and Thumbnail Studio still checks the file you made against YouTube's limits." },
+      { kind: "better", text: "A photo's hidden details (like where it was taken) never go up with it." },
+    ],
+  },
+  {
+    version: "1.31.2",
+    date: "2026-10-23",
+    title: "Security: packages",
+    changes: [
+      { kind: "fixed", text: "The framework the app runs on is updated to its latest safe version (Next.js 15.5.28), which closes a way to slow the app down with crafted requests." },
+      { kind: "better", text: "Behind the scenes: every package the app uses was checked. None is unused, and every one comes from npm's official registry with a checksum." },
+      { kind: "better", text: "Updates now come by themselves: one bundle of small updates a week into staging, security fixes as soon as they're out, and GitHub flags any package with a known serious problem." },
+    ],
+  },
+  {
+    version: "1.31.1",
+    date: "2026-10-23",
+    title: "Security: nothing left open",
+    changes: [
+      { kind: "better", text: "Profile pictures, team logos, thumbnails and pictures in scripts now only take pictures (PNG, JPG, WebP, GIF and the like), 25 MB at most. An SVG you pick is turned into a PNG first." },
+      { kind: "better", text: "A web page or an SVG attached to a comment is kept as a plain download, so it can never open as a page." },
+      { kind: "fixed", text: "Only the pages meant to be public open without signing in, and a new page can never become public by having a similar name." },
+      { kind: "better", text: "Behind the scenes: the public health check can't be used to flood the app, and the picture resizer only works on this app's own pictures." },
+    ],
+  },
+  {
+    version: "1.31.0",
+    date: "2026-10-23",
+    title: "Security: keys stay secret",
+    changes: [
+      { kind: "fixed", text: "GIF search in comments now only works for people signed in to ClipTroop, a few searches a second at most, so nobody else can use the app's GIF key." },
+      { kind: "better", text: "The sign-ins of your connected accounts, kept locked in the database, are now checked more strictly when they're opened: a changed one is always refused." },
+      { kind: "better", text: "Behind the scenes: no settings file or key file can end up in the code's history, every setting the app reads is described for whoever sets it up, and GitHub's automatic checks can only read the code." },
+    ],
+  },
+  {
+    version: "1.30.1",
+    date: "2026-10-23",
+    title: "Remove a channel from the top, and rows that fit",
+    changes: [
+      { kind: "new", text: "When a video or channel you open is in one of your niches, a button at the top of its panel takes the channel out of that niche. It asks first, its videos stop showing there, and Undo puts it back. In more than one niche? It asks which. For masters and researchers." },
+      { kind: "better", text: "Changing a niche shows its channels as placeholders while they load, as many as it has, instead of them popping in. The next time you open it they're there at once." },
+      { kind: "new", text: "A niche with a lot of channels gets a search box over them, so you can find one quickly (to take it out, say)." },
+      { kind: "fixed", text: "Rows that slid sideways on a computer now fit: the Saved folders wrap and a new folder's name box fits its column, and the thumbnail colours wrap." },
+      { kind: "better", text: "On a smaller computer screen, the tabs of Outliers and Analytics that don't fit go under More at the end (it shows the tab you're on when that's one of them). On phones you still swipe them, and the tab you're on is brought into view." },
+    ],
+  },
+  {
+    version: "1.30.0",
+    date: "2026-10-22",
+    title: "Search filters as a row of pills",
+    changes: [
+      { kind: "new", text: "Outliers → Search has its filters in one row of dropdowns over the results: Where, Outlier score, Posted, Views, Channel size and Length. Each opens its choices right under it; one that's set shows what it's set to, with an × to clear it, and Reset clears them all." },
+      { kind: "better", text: "The results get the whole width (more videos in a row), and the cut off Where switch is gone." },
+      { kind: "new", text: "More filters keeps the rest (views an hour, engagement, views per subscriber, channel age, language, format, what the title has, words and channels to leave out) in one window, and each one that's on shows as a small chip you can remove." },
+      { kind: "better", text: "The outlier score choices show the same colours as the multipliers." },
+      { kind: "better", text: "A menu that's open follows its button when the page moves, instead of closing (it closes once the button is off the screen)." },
+    ],
+  },
+  {
+    version: "1.29.11",
+    date: "2026-10-22",
+    title: "A cleaner Audience tab",
+    changes: [
+      { kind: "better", text: "Outliers → Audience has cleaner cards: the views each channel sent you, big, with a bar against the top one, how many of your videos it sits next to, its usual views, and its videos that sent you viewers as proper thumbnails. Its place in the list shows on its picture." },
+      { kind: "new", text: "An Add button on every card puts the channel straight into the niche you're looking at (the arrow next to it picks another niche), and the card then shows the niche it's in. No more ticks." },
+      { kind: "new", text: "A search box to find a channel in the list by its name, @handle, country or language, and a sort: most viewers sent, next to most of yours, or biggest." },
+      { kind: "better", text: "To make a niche of several channels, press Select, tap them, and use the bar at the bottom." },
+    ],
+  },
+  {
+    version: "1.29.10",
+    date: "2026-10-22",
+    title: "Scroll bars that fit",
+    changes: [
+      { kind: "fixed", text: "Scroll bars on Windows: no more arrow buttons or square, theme coloured bars poking out of rounded boxes. Every list, menu, window and page now has one thin grey bar that keeps clear of rounded corners and gets a little wider when you point at it." },
+      { kind: "fixed", text: "Lists that scroll up and down no longer also scroll sideways when something inside is a bit too wide." },
+      { kind: "better", text: "Swiping sideways on a table or a row of cards stops at its end instead of taking the browser back a page." },
+      { kind: "better", text: "On a Mac and on phones the system's own scroll bars stay, and in dark mode they're light so you can see them." },
+    ],
+  },
+  {
+    version: "1.29.9",
+    date: "2026-10-22",
+    title: "Outliers: a steadier panel and clearer numbers",
+    changes: [
+      { kind: "fixed", text: "In an idea, the arrow next to Start a video opens its menu on top of the idea again (it opened behind it). Esc closes just the menu." },
+      { kind: "better", text: "A niche that's still finding its first channels says Finding channels and videos, with a preview of the cards on their way, instead of No videos match. The page fills in by itself." },
+      { kind: "better", text: "The side panel stays open while you go from a video to its channel, to another video and back. Only what's inside changes, with a soft fade, instead of the panel closing and sliding in again. A channel's name and picture show at once while the rest loads." },
+      { kind: "better", text: "Multipliers have their own colours: red under the channel's usual, yellow from 2×, green from 5× (deeper from 10×, glowing from 25×). Never your theme's colour." },
+      { kind: "better", text: "Thin, rounded scroll bars without arrow buttons in the niche picker and every dropdown menu." },
+    ],
+  },
+  {
+    version: "1.29.8",
+    date: "2026-10-22",
+    title: "Clip covers a change of look",
+    changes: [
+      { kind: "better", text: "Switching the colour theme, light or dark, or the glass look (on, off or its style) now shows Clip for a moment while every page takes the new look, instead of a stutter or a flash." },
+      { kind: "better", text: "Loading placeholders take your colour theme's tint: soft pink with Cherry, soft blue with Ocean, plain grey with Ink, in light and dark mode." },
+    ],
+  },
+  {
+    version: "1.29.7",
+    date: "2026-10-22",
+    title: "Clip cheers your XP",
+    changes: [
+      { kind: "new", text: "The moment one of your steps is done, Clip pops up at the bottom with the XP you got and your bar filling up." },
+      { kind: "new", text: "A new level brings Clip's level up card: confetti in your level's colour, a fanfare, and any frame you unlocked or the new colour you reached." },
+      { kind: "new", text: "A secret: when My tasks says All done for today, tap Clip seven times quickly." },
+    ],
+  },
+  {
+    version: "1.29.6",
+    date: "2026-10-22",
+    title: "Achievements you can read, and four new showcases",
+    changes: [
+      { kind: "new", text: "Point at any achievement on a profile (or tap it on a phone) for a card with what it is, what it means and how far along you are. The medal spins in with a shine, or its ring fills up when it's still locked." },
+      { kind: "new", text: "30 more achievements, 55 in all: your first script, edit, take and video sent out, up to a thousand steps, 14 and 100 day streaks, levels 5, 20 and 100, steps finished early, Night owl and Early bird, every kind of step, three teams and a hundred videos." },
+      { kind: "new", text: "Four new showcases: Streak (your days in a row and the last two weeks), Next up (the achievements you're closest to), Milestones (what you reached and when) and Busiest days (the days of the week you finish the most on)." },
+    ],
+  },
+  {
+    version: "1.29.5",
+    date: "2026-10-22",
+    title: "Your profile in your colours",
+    changes: [
+      { kind: "better", text: "Level colours: grey up to level 9, yellow from 10, then on round the colour wheel (lime, green, cyan, blue, purple, pink, red, orange). A new one every 10 levels." },
+      { kind: "new", text: "Customize profile → Colours: your frame, your XP bar and the glow in your header can each be your level's colour, your theme's or any colour you like. The glow can be off. A small preview shows them together." },
+      { kind: "better", text: "The header's glow is one soft colour now (your level's to start), instead of your account colour and your level's (green and red for some)." },
+      { kind: "new", text: "Click your picture on your profile to change it." },
+      { kind: "fixed", text: "About me has its own Save, with or without Customize. Before, what you wrote could be lost." },
+      { kind: "new", text: "The Numbers showcase has an icon for each number, in your XP bar's colour." },
+      { kind: "fixed", text: "Visitors no longer see a settings gear on your About me and Featured achievement." },
+    ],
+  },
+  {
+    version: "1.29.4",
+    date: "2026-10-22",
+    title: "Light wallpapers, on every page if you like",
+    changes: [
+      { kind: "better", text: "Every wallpaper is made small before it's uploaded, 2 MB at most, so your dashboard and profile never wait for it: pictures become WebP, videos and GIFs a WebM video of up to 30 seconds. MOV videos work too." },
+      { kind: "new", text: "Wallpapers you added before that and are over 2 MB show their size and a Make it lighter button: the same picture or video, small." },
+      { kind: "new", text: "On every page: your wallpaper behind the whole app, not just the dashboard (Settings → Preferences → Wallpaper). Other pages show it darker so their words stay easy to read, and it stays put as you move around." },
+      { kind: "fixed", text: "Saving your profile no longer flashes the old background, and switching wallpapers fades from one to the other." },
+      { kind: "fixed", text: "A profile's background fills the whole screen from the first moment (it could sit in a box while the page appeared)." },
+    ],
+  },
+  {
+    version: "1.29.3",
+    date: "2026-10-22",
+    title: "Liquid glass reworked, a third style, a tidier Preferences",
+    changes: [
+      { kind: "better", text: "Liquid glass blends into what's behind it: no white band along the top and no bright sheen, just a hairline of light on each edge and soft shadows." },
+      { kind: "better", text: "The light that follows the pointer only shows on the widget or pop-up you point at, right where you point, in your colours instead of white." },
+      { kind: "new", text: "A third glass style, Halo: soft glass with your colours glowing round the edges. It uses the colours behind the glass, so it works with your theme, a blend or your own three." },
+      { kind: "better", text: "The search window (Ctrl K), the bell and other pop-ups follow the see-through slider too." },
+      { kind: "fixed", text: "With the slider at 0, the top and bottom bars are solid too." },
+      { kind: "better", text: "Settings → Preferences is in four groups (mode and colours, glass, wallpaper, motion and sound) with a row at the top to jump to each. The colour themes take less room." },
+    ],
+  },
+  {
+    version: "1.29.2",
+    date: "2026-10-21",
+    title: "Glass on means glass, off means solid",
+    changes: [
+      { kind: "better", text: "Glass off now means solid everywhere: the widgets over your wallpaper, your profile and the bars at the top and bottom no longer let anything through." },
+      { kind: "better", text: "The see-through slider goes from fully solid at 0 to nearly clear at 100." },
+      { kind: "new", text: "Pick the colours behind the glass: your theme's, any other theme's (Ink's greys under Cherry's buttons, say), a blend like Sunset or Aurora, or your own three. Or turn them off and keep the glass." },
+      { kind: "fixed", text: "Words stay readable on glass over any wallpaper, in light and dark mode. The picture behind each pane is dimmed or lifted just enough, so one that already suits the words stays as clear as you set it." },
+      { kind: "better", text: "Settings → Preferences → Glass fits phones: each choice sits under its name." },
+    ],
+  },
+  {
+    version: "1.29.1",
+    date: "2026-10-21",
+    title: "Clear your notifications, and small fixes",
+    changes: [
+      { kind: "new", text: "Clear notifications: the X on one takes it out of the bell, and Clear all (at the bottom of the bell) empties it after asking. Invites still waiting for your answer stay, and History still has the last 2 weeks." },
+      { kind: "fixed", text: "Team → Defaults → Short videos: the people for new shorts sit in as many columns as fit, so Reviewer and Scheduler stay inside the box." },
+      { kind: "fixed", text: "Clicking a day in Contributions doesn't make the squares grow behind it any more." },
+      { kind: "better", text: "Profiles: your @name, the date you joined, your bio and your XP are brighter and easier to read." },
+      { kind: "fixed", text: "The ClipTroop name no longer gets a coloured box behind it when you double click the logo." },
+      { kind: "fixed", text: "Light mode over a wallpaper: the side bar and the top bar stay light and easy to read instead of a murky grey." },
+      { kind: "better", text: "The side bar's scroll bar shows only when you point at the side bar, in a quiet grey." },
+    ],
+  },
+  {
+    version: "1.29.0",
+    date: "2026-10-21",
+    title: "Outliers that fit your niche: your channels, your viewers, the right creators",
+    changes: [
+      { kind: "new", text: "A niche is now the channels you pick plus the ones its keywords find that really fit. Add channels by name, @handle or link (Channels → Add channels), and turn on “Only videos from your channels” to see nothing else." },
+      { kind: "new", text: "Each niche says who its creators are: the language they speak (like your own channel to start with), where they're from (anywhere, the US, Canada, the UK and Europe, or English-speaking countries) and whether videos made for kids count. Channels that don't fit are left out, and Channels → Not a fit says why." },
+      { kind: "better", text: "Much better matching: a channel is judged on what it posts, not on one video or its tags, so toddler songs, other languages and off-topic channels stay out of a tech niche." },
+      { kind: "new", text: "Audience: the channels your viewers also watch, worked out from your channel's own YouTube numbers. Add them to a niche, or make a niche of just them to see only their outliers." },
+      { kind: "new", text: "Hide a channel in one click (⋯ on any video, or its page): it never shows in Outliers again. Outlier settings → Hidden channels brings it back." },
+      { kind: "new", text: "Outlier settings (the gear at the top) has the alerts and the hidden channels." },
+      { kind: "better", text: "The niche menu always shows the niche you're on, with your niches and the Explore ones together, and it stays at the top with the tabs while you scroll, on phones too." },
+      { kind: "fixed", text: "Explore niches fill in: each starts from well-known channels (MKBHD, Linus Tech Tips and more for tech) with its own share of YouTube's daily limit. “Use as my niche” makes a copy you can change." },
+      { kind: "fixed", text: "Every tracked channel shows, and a channel you track or open is read right away, with its scores and up to 150 videos." },
+      { kind: "fixed", text: "Any channel on YouTube can be found, like Linus Tech Tips: by name, @handle or link, with Search YouTube when it isn't collected yet." },
+      { kind: "better", text: "Nothing is searched while you type: every search box in Outliers has a button (or press Enter)." },
+      { kind: "fixed", text: "Opening a video doesn't make the page jump any more: the panel shows the video at once while the rest loads." },
+      { kind: "fixed", text: "Brightness and colourfulness show real percentages (they were 100 times too big), and pointing at them says what they mean." },
+      { kind: "better", text: "For you shows more of the biggest outliers and up to 8 videos taking off this week, and See all opens the same videos in Search." },
+      { kind: "better", text: "Ideas are simpler: the outlier each one comes from, its title, whose video it is and the hook. Tap one for every title, why it should work and all its outliers." },
+      { kind: "fixed", text: "When no ideas show, the button under them always does something: any format and topic, bring hidden ones back, or draw from every niche." },
+      { kind: "better", text: "The multiplier (how many times its channel's usual) is bigger and easier to see everywhere." },
+      { kind: "better", text: "Saved has no “No folder” any more: take something out of its folder from its menu." },
+      { kind: "fixed", text: "Charts stop at the last day every platform has reported instead of dropping to almost nothing while YouTube's last days come in. Pointing at those days says No data yet, and the dashboard's views compare two whole weeks." },
+    ],
+  },
+  {
+    version: "1.28.0",
+    date: "2026-10-21",
+    title: "Profiles with levels, Liquid glass and wallpapers",
+    changes: [
+      { kind: "new", text: "Profiles like Steam's: every step you finish on a video gives XP (bigger steps more, a quarter more when it's done by its date), and XP brings levels, with a new badge colour every 10. 25 achievements to reach, a year of contributions, and your numbers." },
+      { kind: "new", text: "Customize profile: arrange showcases (numbers, contributions, achievements, what you do, about me, teams, a featured achievement, your level) by dragging and resizing them like dashboard widgets, pick a picture frame (new ones unlock as you level up) and put one of your wallpapers behind it." },
+      { kind: "new", text: "Profiles are public to everyone signed in, or private (others see only your name and picture): Settings → Profile, or while customizing. Your bio is private with it." },
+      { kind: "new", text: "Glass has two styles: Simple (as before) and Liquid, like iOS: clearer panes with bright edges, light that catches the rims as you move the pointer, a floating side bar and a floating tab bar on phones." },
+      { kind: "new", text: "Glass can go everywhere: every pop-up, menu, message and the What's new box. The side bar can be see-through too, and a slider sets how see-through it all is." },
+      { kind: "better", text: "On phones the bottom bar is see-through with glass on." },
+      { kind: "new", text: "Wallpapers: keep up to 3 pictures, GIFs or videos (25 MB each) and switch with one click. Replacing or removing one deletes the old file straight away, after asking." },
+      { kind: "new", text: "Uploading a wallpaper shows the picture with how far the upload has got, and can be cancelled." },
+      { kind: "new", text: "The greeting over a wallpaper turns dark or white, whichever reads best over that picture (the darkening and light or dark mode counted in), and the widgets get more frosted when the picture would fight their words." },
+      { kind: "new", text: "Leave a team (Team → Team → Leave team). Its masters are told; what you made stays." },
+      { kind: "new", text: "Delete your account (Settings → Account): once you've left your teams, with two confirmations, your email and your password. What you made on teams stays with them, without your name." },
+      { kind: "better", text: "Search shows a loading outline while it's still looking, instead of seeming empty." },
+      { kind: "better", text: "The phone's More menu is a list, each place with what it's for." },
+      { kind: "better", text: "Team → Defaults packs its cards into two columns with no gaps." },
+      { kind: "fixed", text: "Making a widget bigger from its right edge follows the pointer, shows its size, and grows to the left once it reaches the edge of the board." },
+      { kind: "fixed", text: "The digital clock's digits are a sensible size, and an objective's count (like 12/10) always fits inside its rings." },
+      { kind: "better", text: "The privacy policy covers profiles (levels, achievements, public or private) and deleting your account yourself." },
+    ],
+  },
+  {
+    version: "1.27.5",
+    date: "2026-10-21",
+    title: "Scripts keep everything, glass, and a dashboard of your own",
+    changes: [
+      { kind: "new", text: "Tab in a script indents the line (Shift + Tab takes it back); in a list it moves the item in or out." },
+      { kind: "new", text: "Lists start themselves: type 1. or a. (A., i. and I. too) and a space, and Enter carries on with 2., b. or ii. A list inside a list goes 1. → a. → i." },
+      { kind: "new", text: "Copy from another script asks whether to bring its comments and editing ideas along too." },
+      { kind: "better", text: "Ready for review and Ready for staging copy the comments and editing ideas with the text; each one keeps who wrote it and when." },
+      { kind: "fixed", text: "Pictures pasted into a script stay: screenshots from the clipboard and pictures copied from a page or from Word upload while you keep writing." },
+      { kind: "fixed", text: "Scripts kept their words but lost some of their formatting when saved: link and picture addresses, heading sizes, highlight colours, list numbering, ticked boxes and alignment. It all saves now. Links whose words are their own address come back by themselves when the script opens; other links, pictures and highlights from before need adding again once." },
+      { kind: "fixed", text: "Export to PDF has no blank pages any more, however long or edited the script (Firefox printed them), and no comment marks." },
+      { kind: "better", text: "Clicking a word with a comment opens the comment; a writing suggestion on the same word gets its own Suggestion here button instead of taking the click." },
+      { kind: "better", text: "Links in a script show the hand pointer, and the Word export keeps tabs and lettered and roman lists." },
+      { kind: "new", text: "Delete a long video right from the grid or the table (⋯ → Delete…). It shows what goes with it (scripts, comments, files, thumbnails, notes), warns if someone was writing in its script a few minutes ago, and asks you to type the video's name." },
+      { kind: "better", text: "Long videos and Shorts: switching between grid and table, or to another step, shows the list's outline straight away instead of seeming stuck." },
+      { kind: "new", text: "Dashboard widgets resize from any edge or corner, not just the right." },
+      { kind: "new", text: "Followers has a graph of the last 28 days. The clock has a digital look (its settings → Look)." },
+      { kind: "new", text: "Top videos: a chip for each platform, and All for every platform together. The widget remembers your pick." },
+      { kind: "new", text: "Contributions can take any colour theme's colour, or follow your own theme." },
+      { kind: "new", text: "Next meeting: answer Going, Maybe or Not going right on the dashboard." },
+      { kind: "better", text: "The long videos widget is called Upcoming longs, and Add a widget is easier to find: an orange button at the top while customizing and a wide one under the widgets." },
+      { kind: "fixed", text: "Weather: picking a city works again. The forecast now comes through ClipTroop, tries again by itself after a hiccup and has a Try again button." },
+      { kind: "fixed", text: "Calendars (the widget and every date picker) show their days and their dots together instead of the dots popping in after." },
+      { kind: "new", text: "Analytics → Insights: the best time to post for every platform together (shorts with shorts, long videos with long videos), each video measured against its own platform's usual. Platforms still collecting say how many videos they have so far." },
+      { kind: "new", text: "Invite someone to a team from their profile page: masters always have the button, and each team says if they're already in it or have an invite." },
+      { kind: "new", text: "Team → Defaults → Video files: shorts' video files, long videos' edits and Thumbnail Studio's thumbnails that didn't win can stay from 1 day to 1 year after posting, or never be deleted." },
+      { kind: "new", text: "Glass (Settings → Preferences): frosted, see-through cards and bars over a soft wash of your colours, across the whole app, light or dark and with every colour theme. Off unless you turn it on." },
+      { kind: "new", text: "Dashboard background (Settings → Preferences): a picture, an animated GIF or a short looping video behind your dashboard, like a profile background, darkened as much as you like. The widgets turn frosted over it. Off unless you turn it on, and only you see it." },
+      { kind: "better", text: "The privacy policy lists the writing suggestions, weather and GIF services, and says that profile pictures and dashboard backgrounds are shown from an address anyone who has it can open." },
+    ],
+  },
   {
     version: "1.27.0",
     date: "2026-10-20",
@@ -736,10 +1525,8 @@ export const CHANGELOG: Release[] = [
   },
 ];
 
-export const KIND_LABEL: Record<ChangeKind, string> = { new: "New", better: "Better", fixed: "Fixed" };
-
-/** "1.2.3" → [1, 2, 3] (anything odd counts as 0). */
-const parts = (v: string) => v.split(".").map((n) => Number.parseInt(n, 10) || 0);
+/** The versions that brought something new. */
+const withNew = (list: Release[]) => list.filter((r) => r.changes.some((c) => c.kind === "new")).map((r) => r.version);
 
 /**
  * A feature release or milestone happened between `from` and `to` (not just
@@ -747,17 +1534,26 @@ const parts = (v: string) => v.split(".").map((n) => Number.parseInt(n, 10) || 0
  * something new (e.g. 1.7.5).
  */
 export function isFeatureUpdate(from: string | null, to: string) {
-  if (!from) return true;
-  const [a1, a2] = parts(from);
-  const [b1, b2] = parts(to);
-  if (b1 > a1 || (b1 === a1 && b2 > a2)) return true;
-  return CHANGELOG.some((r) => compareVersions(r.version, from) > 0 && compareVersions(r.version, to) <= 0 && r.changes.some((c) => c.kind === "new"));
+  return isFeatureUpdateIn(from, to, withNew(CHANGELOG));
 }
 
-/** -1 / 0 / 1, like a sort comparator. */
-export function compareVersions(a: string, b: string) {
-  const x = parts(a);
-  const y = parts(b);
-  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0) ? -1 : 1;
-  return 0;
+/**
+ * What the app's frame needs on every page, from the server (so the list
+ * itself never goes to the browser with it): the version you're on (the
+ * update card's words) and the versions of its series that brought something
+ * new (whether there's a card to show).
+ */
+export function whatsNewFacts(version: string, audience: Audience = {}): { current: ReleaseHeadline | null; newVersions: string[]; latest: string | null } {
+  // 1.42.0: as this person sees the notes (an update about a feature their team doesn't have isn't theirs: no card,
+  // and What's new's dot waits for the newest update they do have notes for, `latest`).
+  const list = forAudience(CHANGELOG, audience);
+  const r = list.find((x) => x.version === version);
+  return {
+    current: r ? { version: r.version, title: r.title, ...(r.date ? { date: r.date } : {}) } : null,
+    newVersions: withNew(list.filter((x) => seriesOf(x.version) === seriesOf(version) && compareVersions(x.version, version) <= 0)),
+    latest: list.find((x) => compareVersions(x.version, version) <= 0)?.version ?? null,
+  };
 }
+
+/** The notes everyone may read (the site's changelog): nothing about a feature only some teams have (1.42.0). */
+export const PUBLIC_CHANGELOG: Release[] = forAudience(CHANGELOG, {});

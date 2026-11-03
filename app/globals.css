@@ -14,12 +14,14 @@
   --paper-2: 229 230 221;
   --ink: 20 17 12;         /* warm near-black */
   --ink-soft: 74 69 60;     /* 8.1:1 on paper */
-  --ink-faint: 110 104 92;  /* 4.7:1 on paper — WCAG AA */
+  --ink-faint: 100 94 82;   /* 1.35.0: 4.7:1 on the darkest theme's paper-2 (110 104 92 was 4.1 there) */
   --surface: 255 255 255;
   --surface-2: 247 246 240;
   --line: 20 17 12;
 
-  --amber: 232 99 13;      /* the one accent — used sparingly, on purpose */
+  /* The one accent, used sparingly, on purpose. 1.35.0: a deeper orange than 232 99 13, in both modes, so white
+     words on it (every main button) read at 4.5:1; it was 3.4:1. Words in it use --amber-text (below). */
+  --amber: 197 81 0;
   --teal: 21 130 115;
   --blue: 47 86 194;
   --violet: 88 58 200;     /* meetings: 7.4:1 on white */
@@ -28,8 +30,8 @@
   --short: 234 88 12;
   --long: 14 165 233;
   --pink: 178 61 107;
-  --gold: 173 131 13;
-  --green: 43 151 87;
+  --gold: 149 111 0;     /* 1.35.0: deeper (was 173 131 13), so white words on it read at 4.5:1 */
+  --green: 15 134 72;     /* the same (was 43 151 87) */
   --red: 208 56 70;
   --coral: 224 90 64;
   /* Chart series (validated for colour-blind separation and contrast on
@@ -47,6 +49,18 @@
   --score-yellow: #e2b10f;
   --score-lime: #8cc23f;
   --score-green: #2fa652;
+  /* Outliers' multiplier (1.29.9): red under its usual, yellow 2–5×, green from 5× (deeper from 10×).
+     Its own colours, never the theme's (a multiplier in the accent read like a button). Each fill
+     comes with the number's colour on it (--m-on-*) and a colour for the number on the page (*-ink). */
+  --m-red: 220 38 38;
+  --m-red-ink: 176 13 19;      /* 1.35.0: a step deeper (was 185 28 28), 4.5:1 on its tint on every theme's paper */
+  --m-yellow: 234 179 8;
+  --m-yellow-ink: 133 79 0;    /* the same (was 161 98 7) */
+  --m-on-yellow: 66 50 0;
+  --m-green: 21 128 61;
+  --m-green-2: 22 101 52;
+  --m-green-ink: 0 93 40;      /* the same (was 21 128 61) */
+  --m-on-green: 255 255 255;
   /* A chart's "N videos posted" chip (1.23.1): a fill and its number that read on each other. */
   --mark-short: 234 88 12;
   --mark-long: 2 132 199;
@@ -82,6 +96,23 @@
   --obj-gold: 181 134 0;
   --obj-plum: 134 25 143;
   --obj-olive: 110 120 20;
+  /* Words in a colour (1.35.0: text-amber, text-red… go through these, tailwind.config.ts textColor): a deeper shade
+     in light mode, a lighter one in dark, so they read at 4.5:1 on cards, paper, hovers and the colour's own 5–15 %
+     chips in every theme (tests/light-contrast.test.ts). Fills, borders, rings and icons drawn with fill- / stroke-
+     keep the colour. A theme sets its own --amber-text; a team's own short / long colours set theirs
+     (lib/kind-colors.ts). */
+  --word-mix: 65%;          /* lib/word-color.ts: any other colour, as words, this much of it and the rest ink */
+  --amber-text: 156 62 0;
+  --teal-text: 0 104 92;
+  --blue-text: 43 81 189;
+  --violet-text: 88 58 200;
+  --short-text: 164 57 0;
+  --long-text: 0 101 146;
+  --pink-text: 161 45 93;
+  --gold-text: 118 87 0;
+  --green-text: 0 106 54;
+  --red-text: 179 20 47;
+  --coral-text: 175 43 16;
   /* --font-display / --font-body / --font-mono are provided by next/font
      via the className on <html> in app/layout.tsx — not redefined here,
      so there's a single source of truth instead of two competing ones. */
@@ -92,13 +123,12 @@
   --paper-2: 26 22 16;
   --ink: 240 236 227;
   --ink-soft: 204 196 181;  /* 11:1 on paper · 9.7:1 on surface-2 */
-  --ink-faint: 152 143 127; /* 6:1 on paper · 5.2:1 on surface-2 */
+  --ink-faint: 162 153 137; /* 1.35.0: 4.7:1 on Nord's lighter surface-2 (152 143 127 was 4.1 there) */
   --surface: 28 24 17;
   --surface-2: 34 29 20;
   --line: 240 236 227;
-  /* Accent/stage colors are NOT redefined here on purpose — they stay
-     identical to :root in both themes. Only structural tokens
-     (background/text/surface) actually need to invert for dark mode. */
+  /* Most accent and stage colours stay as in :root; the ones redefined here are brighter for dark backgrounds (and,
+     below, every word shade). */
   /* Brighter kind colours on dark backgrounds. */
   --violet: 152 130 245;   /* meetings: 5.8:1 on the dark surface */
   --short: 251 146 60;
@@ -116,6 +146,16 @@
   --score-yellow: #f1c84b;
   --score-lime: #a3d45c;
   --score-green: #43bd66;
+  /* The multiplier on the dark surface: brighter fills with a dark number on them. */
+  --m-red: 248 113 113;
+  --m-red-ink: 255 124 123;    /* 1.35.0: a step lighter (was 248 113 113) */
+  --m-yellow: 250 204 21;
+  --m-yellow-ink: 250 204 21;
+  --m-on-yellow: 66 50 0;
+  --m-green: 74 222 128;
+  --m-green-2: 34 197 94;
+  --m-green-ink: 74 222 128;
+  --m-on-green: 5 46 22;
   /* Light fills on the dark surface: a dark number on them (white couldn't be read). */
   --mark-short: 251 146 60;
   --mark-long: 56 189 248;
@@ -147,6 +187,19 @@
   --obj-gold: 214 168 40;
   --obj-plum: 196 90 205;
   --obj-olive: 160 170 60;
+  /* Words in a colour: lighter shades, 4.5:1 on the dark cards, paper and chips. */
+  --word-mix: 50%;
+  --amber-text: 239 119 58;
+  --teal-text: 73 170 153;
+  --blue-text: 104 149 255;
+  --violet-text: 165 145 255;
+  --short-text: 251 146 60;
+  --long-text: 56 189 248;
+  --pink-text: 235 112 156;
+  --gold-text: 188 149 59;
+  --green-text: 70 174 109;
+  --red-text: 255 101 108;
+  --coral-text: 251 114 87;
 }
 
 /*
@@ -154,87 +207,1042 @@
   <html data-palette="…"> switches the paper, the cards and the accent (the
   "amber" token every button and link uses). No attribute = Default, the
   original. Kind, chart, status and meeting colours stay the same in every
-  theme so their meaning never changes. Accents keep white text ≥ 3.4:1.
+  theme so their meaning never changes. Accents keep white words on them at
+  4.5:1 in both modes (1.35.0: they were 3.4:1 and up; the dark ones and
+  Default's are deeper now). Each also sets --amber-text, its accent for
+  words: 4.5:1 on its own chips and on every theme's cards and paper (so on
+  see-through panes and covered wallpapers too; tests/light-contrast.test.ts).
 */
-html[data-palette="ocean"]:not(.dark) { --paper: 233 237 242; --paper-2: 224 229 236; --surface: 255 255 255; --surface-2: 244 246 250; --amber: 37 99 235; }
-html.dark[data-palette="ocean"] { --paper: 12 15 21; --paper-2: 17 21 29; --surface: 21 26 35; --surface-2: 27 33 44; --amber: 59 130 246; }
-html[data-palette="forest"]:not(.dark) { --paper: 231 236 229; --paper-2: 222 229 219; --surface: 255 255 255; --surface-2: 244 247 241; --amber: 22 128 74; }
-html.dark[data-palette="forest"] { --paper: 12 16 13; --paper-2: 17 22 18; --surface: 21 28 23; --surface-2: 27 35 29; --amber: 31 150 88; }
-html[data-palette="lagoon"]:not(.dark) { --paper: 229 237 236; --paper-2: 220 230 229; --surface: 255 255 255; --surface-2: 243 248 247; --amber: 13 124 128; }
-html.dark[data-palette="lagoon"] { --paper: 10 16 17; --paper-2: 15 22 23; --surface: 19 28 29; --surface-2: 25 35 36; --amber: 20 150 150; }
-html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224 237; --surface: 255 255 255; --surface-2: 247 245 251; --amber: 109 64 214; }
-html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 139 102 240; }
-html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; }
-html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 225 62 120; }
-html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 161 98 7; }
-html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 178 120 8; }
-html[data-palette="cherry"]:not(.dark) { --paper: 242 233 233; --paper-2: 235 224 224; --surface: 255 255 255; --surface-2: 250 245 245; --amber: 200 30 48; }
-html.dark[data-palette="cherry"] { --paper: 20 11 12; --paper-2: 26 16 17; --surface: 33 21 23; --surface-2: 41 27 29; --amber: 229 62 74; }
-html[data-palette="orchid"]:not(.dark) { --paper: 241 232 242; --paper-2: 234 223 236; --surface: 255 255 255; --surface-2: 250 244 251; --amber: 162 28 175; }
-html.dark[data-palette="orchid"] { --paper: 18 11 19; --paper-2: 24 16 26; --surface: 31 21 33; --surface-2: 39 27 42; --amber: 192 72 206; }
-html[data-palette="lime"]:not(.dark) { --paper: 236 239 226; --paper-2: 228 232 216; --surface: 255 255 255; --surface-2: 247 249 241; --amber: 77 124 15; }
-html.dark[data-palette="lime"] { --paper: 14 17 10; --paper-2: 19 23 14; --surface: 25 30 19; --surface-2: 32 38 25; --amber: 88 142 14; }
-html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223 216; --surface: 255 254 252; --surface-2: 248 244 240; --amber: 120 82 52; }
-html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 166 118 78; }
-html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; }
-html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; }
+html[data-palette="ocean"]:not(.dark) { --paper: 233 237 242; --paper-2: 224 229 236; --surface: 255 255 255; --surface-2: 244 246 250; --amber: 37 99 235; --amber-text: 18 78 213; }
+html.dark[data-palette="ocean"] { --paper: 12 15 21; --paper-2: 17 21 29; --surface: 21 26 35; --surface-2: 27 33 44; --amber: 42 112 227; --amber-text: 93 154 255; }
+html[data-palette="forest"]:not(.dark) { --paper: 231 236 229; --paper-2: 222 229 219; --surface: 255 255 255; --surface-2: 244 247 241; --amber: 22 128 74; --amber-text: 0 105 58; }
+html.dark[data-palette="forest"] { --paper: 12 16 13; --paper-2: 17 22 18; --surface: 21 28 23; --surface-2: 27 35 29; --amber: 0 134 75; --amber-text: 66 173 111; }
+html[data-palette="lagoon"]:not(.dark) { --paper: 229 237 236; --paper-2: 220 230 229; --surface: 255 255 255; --surface-2: 243 248 247; --amber: 13 124 128; --amber-text: 0 102 106; }
+html.dark[data-palette="lagoon"] { --paper: 10 16 17; --paper-2: 15 22 23; --surface: 19 28 29; --surface-2: 25 35 36; --amber: 0 130 131; --amber-text: 66 169 169; }
+html[data-palette="grape"]:not(.dark) { --paper: 236 233 243; --paper-2: 228 224 237; --surface: 255 255 255; --surface-2: 247 245 251; --amber: 109 64 214; --amber-text: 103 56 206; }
+html.dark[data-palette="grape"] { --paper: 15 13 22; --paper-2: 20 18 29; --surface: 26 23 36; --surface-2: 33 29 45; --amber: 129 91 228; --amber-text: 163 136 255; }
+html[data-palette="berry"]:not(.dark) { --paper: 241 233 236; --paper-2: 234 224 228; --surface: 255 255 255; --surface-2: 250 245 247; --amber: 196 37 99; --amber-text: 176 2 84; }
+html.dark[data-palette="berry"] { --paper: 19 12 15; --paper-2: 25 17 21; --surface: 32 22 27; --surface-2: 40 28 34; --amber: 214 51 111; --amber-text: 255 95 146; }
+html[data-palette="sand"]:not(.dark) { --paper: 243 237 225; --paper-2: 236 228 213; --surface: 255 253 249; --surface-2: 250 246 238; --amber: 161 98 7; --amber-text: 133 79 0; }
+html.dark[data-palette="sand"] { --paper: 20 16 10; --paper-2: 27 22 15; --surface: 33 27 18; --surface-2: 40 33 22; --amber: 160 106 0; --amber-text: 200 144 59; }
+html[data-palette="cherry"]:not(.dark) { --paper: 242 233 233; --paper-2: 235 224 224; --surface: 255 255 255; --surface-2: 250 245 245; --amber: 200 30 48; --amber-text: 179 0 35; }
+html.dark[data-palette="cherry"] { --paper: 20 11 12; --paper-2: 26 16 17; --surface: 33 21 23; --surface-2: 41 27 29; --amber: 219 51 66; --amber-text: 255 101 105; }
+html[data-palette="orchid"]:not(.dark) { --paper: 241 232 242; --paper-2: 234 223 236; --surface: 255 255 255; --surface-2: 250 244 251; --amber: 162 28 175; --amber-text: 153 11 167; }
+html.dark[data-palette="orchid"] { --paper: 18 11 19; --paper-2: 24 16 26; --surface: 31 21 33; --surface-2: 39 27 42; --amber: 184 63 198; --amber-text: 224 104 238; }
+html[data-palette="lime"]:not(.dark) { --paper: 236 239 226; --paper-2: 228 232 216; --surface: 255 255 255; --surface-2: 247 249 241; --amber: 77 124 15; --amber-text: 61 102 0; }
+html.dark[data-palette="lime"] { --paper: 14 17 10; --paper-2: 19 23 14; --surface: 25 30 19; --surface-2: 32 38 25; --amber: 79 130 0; --amber-text: 116 170 60; }
+html[data-palette="mocha"]:not(.dark) { --paper: 238 233 228; --paper-2: 230 223 216; --surface: 255 254 252; --surface-2: 248 244 240; --amber: 120 82 52; --amber-text: 119 82 52; }
+html.dark[data-palette="mocha"] { --paper: 19 15 12; --paper-2: 25 20 16; --surface: 32 26 21; --surface-2: 40 33 27; --amber: 154 107 67; --amber-text: 194 145 104; }
+html[data-palette="slate"]:not(.dark) { --paper: 232 234 238; --paper-2: 223 226 232; --surface: 255 255 255; --surface-2: 245 246 248; --amber: 51 65 85; --amber-text: 51 65 85; }
+html.dark[data-palette="slate"] { --paper: 13 15 19; --paper-2: 18 21 26; --surface: 24 27 33; --surface-2: 31 35 42; --amber: 100 116 139; --amber-text: 140 157 181; }
 /* 1.13.0: eight more. Some pair a tinted paper with a different-coloured accent (Solar, Sakura). */
-html[data-palette="coral"]:not(.dark) { --paper: 244 233 228; --paper-2: 238 224 218; --surface: 255 255 255; --surface-2: 251 245 242; --amber: 208 70 50; }
-html.dark[data-palette="coral"] { --paper: 21 13 11; --paper-2: 28 18 15; --surface: 35 23 20; --surface-2: 43 29 25; --amber: 226 88 64; }
-html[data-palette="solar"]:not(.dark) { --paper: 248 241 222; --paper-2: 241 232 208; --surface: 255 252 242; --surface-2: 251 246 232; --amber: 33 113 181; }
-html.dark[data-palette="solar"] { --paper: 0 28 36; --paper-2: 2 32 41; --surface: 6 36 45; --surface-2: 12 46 56; --amber: 45 140 210; }
-html[data-palette="sakura"]:not(.dark) { --paper: 245 233 238; --paper-2: 239 224 231; --surface: 255 255 255; --surface-2: 252 245 248; --amber: 46 125 72; }
-html.dark[data-palette="sakura"] { --paper: 20 13 16; --paper-2: 27 18 22; --surface: 35 24 29; --surface-2: 43 30 36; --amber: 64 150 92; }
-html[data-palette="indigo"]:not(.dark) { --paper: 234 234 245; --paper-2: 225 225 240; --surface: 255 255 255; --surface-2: 246 246 252; --amber: 79 70 229; }
-html.dark[data-palette="indigo"] { --paper: 13 13 24; --paper-2: 18 18 32; --surface: 24 24 41; --surface-2: 31 31 52; --amber: 109 100 240; }
-html[data-palette="sky"]:not(.dark) { --paper: 230 238 244; --paper-2: 220 231 239; --surface: 255 255 255; --surface-2: 243 248 251; --amber: 3 116 176; }
-html.dark[data-palette="sky"] { --paper: 9 15 20; --paper-2: 13 21 28; --surface: 18 28 37; --surface-2: 24 35 46; --amber: 14 140 205; }
-html[data-palette="nord"]:not(.dark) { --paper: 229 233 240; --paper-2: 216 222 233; --surface: 255 255 255; --surface-2: 240 243 247; --amber: 76 106 150; }
-html.dark[data-palette="nord"] { --paper: 22 26 33; --paper-2: 27 31 39; --surface: 34 39 49; --surface-2: 42 48 60; --amber: 98 134 178; }
-html[data-palette="pine"]:not(.dark) { --paper: 230 236 233; --paper-2: 220 229 225; --surface: 255 255 255; --surface-2: 243 247 245; --amber: 22 101 72; }
-html.dark[data-palette="pine"] { --paper: 10 16 13; --paper-2: 14 22 18; --surface: 19 29 24; --surface-2: 25 37 31; --amber: 34 140 100; }
-html[data-palette="ink"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 28 28 30; }
-html.dark[data-palette="ink"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 120 120 128; }
+html[data-palette="coral"]:not(.dark) { --paper: 244 233 228; --paper-2: 238 224 218; --surface: 255 255 255; --surface-2: 251 245 242; --amber: 208 70 50; --amber-text: 175 36 18; }
+html.dark[data-palette="coral"] { --paper: 21 13 11; --paper-2: 28 18 15; --surface: 35 23 20; --surface-2: 43 29 25; --amber: 206 70 47; --amber-text: 249 109 84; }
+html[data-palette="solar"]:not(.dark) { --paper: 248 241 222; --paper-2: 241 232 208; --surface: 255 252 242; --surface-2: 251 246 232; --amber: 33 113 181; --amber-text: 0 94 160; }
+html.dark[data-palette="solar"] { --paper: 0 28 36; --paper-2: 2 32 41; --surface: 6 36 45; --surface-2: 12 46 56; --amber: 18 122 191; --amber-text: 69 161 232; }
+html[data-palette="sakura"]:not(.dark) { --paper: 245 233 238; --paper-2: 239 224 231; --surface: 255 255 255; --surface-2: 252 245 248; --amber: 46 125 72; --amber-text: 21 105 54; }
+html.dark[data-palette="sakura"] { --paper: 20 13 16; --paper-2: 27 18 22; --surface: 35 24 29; --surface-2: 43 30 36; --amber: 44 132 76; --amber-text: 87 172 113; }
+html[data-palette="indigo"]:not(.dark) { --paper: 234 234 245; --paper-2: 225 225 240; --surface: 255 255 255; --surface-2: 246 246 252; --amber: 79 70 229; --amber-text: 74 62 221; }
+html.dark[data-palette="indigo"] { --paper: 13 13 24; --paper-2: 18 18 32; --surface: 24 24 41; --surface-2: 31 31 52; --amber: 107 97 237; --amber-text: 143 143 255; }
+html[data-palette="sky"]:not(.dark) { --paper: 230 238 244; --paper-2: 220 231 239; --surface: 255 255 255; --surface-2: 243 248 251; --amber: 3 116 176; --amber-text: 0 96 147; }
+html.dark[data-palette="sky"] { --paper: 9 15 20; --paper-2: 13 21 28; --surface: 18 28 37; --surface-2: 24 35 46; --amber: 0 123 183; --amber-text: 64 162 224; }
+html[data-palette="nord"]:not(.dark) { --paper: 229 233 240; --paper-2: 216 222 233; --surface: 255 255 255; --surface-2: 240 243 247; --amber: 76 106 150; --amber-text: 63 92 136; }
+html.dark[data-palette="nord"] { --paper: 22 26 33; --paper-2: 27 31 39; --surface: 34 39 49; --surface-2: 42 48 60; --amber: 84 119 163; --amber-text: 122 158 204; }
+html[data-palette="pine"]:not(.dark) { --paper: 230 236 233; --paper-2: 220 229 225; --surface: 255 255 255; --surface-2: 243 247 245; --amber: 22 101 72; --amber-text: 22 101 72; }
+html.dark[data-palette="pine"] { --paper: 10 16 13; --paper-2: 14 22 18; --surface: 19 29 24; --surface-2: 25 37 31; --amber: 23 133 94; --amber-text: 73 172 130; }
+html[data-palette="ink"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 28 28 30; --amber-text: 28 28 30; }
+html.dark[data-palette="ink"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 117 116 124; --amber-text: 156 155 163; }
 /* Ink's greys with coloured buttons (1.15.0): orange (the app's own), grape, orchid and cherry. */
-html[data-palette="inkorange"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 232 99 13; }
-html.dark[data-palette="inkorange"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 232 99 13; }
-html[data-palette="inkgrape"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 109 64 214; }
-html.dark[data-palette="inkgrape"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 139 102 240; }
-html[data-palette="inkorchid"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 162 28 175; }
-html.dark[data-palette="inkorchid"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 192 72 206; }
-html[data-palette="inkcherry"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 200 30 48; }
-html.dark[data-palette="inkcherry"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 229 62 74; }
+html[data-palette="inkorange"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 197 81 0; --amber-text: 156 62 0; }
+html.dark[data-palette="inkorange"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 197 81 0; --amber-text: 239 119 58; }
+html[data-palette="inkgrape"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 109 64 214; --amber-text: 103 56 206; }
+html.dark[data-palette="inkgrape"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 129 91 228; --amber-text: 163 136 255; }
+html[data-palette="inkorchid"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 162 28 175; --amber-text: 153 11 167; }
+html.dark[data-palette="inkorchid"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 184 63 198; --amber-text: 224 104 238; }
+html[data-palette="inkcherry"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 200 30 48; --amber-text: 179 0 35; }
+html.dark[data-palette="inkcherry"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 219 51 66; --amber-text: 255 101 105; }
+
+/*
+  1.35.0: in light mode a filled button darkens a little when pointed at instead of brightening, so its white words
+  keep their 4.5:1 (brightened, the deeper accent dropped to 3.9:1); dark mode still brightens.
+*/
+html:not(.dark) :is(.bg-amber, .bg-green, .bg-red, .bg-teal, .bg-blue, .bg-violet, .bg-gold):is(.hover\:brightness-110, .hover\:brightness-105):hover {
+  --tw-brightness: brightness(0.92);
+}
 
 body {
   background: rgb(var(--paper));
   color: rgb(var(--ink));
 }
 
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/*
+  The glass look (Settings → Preferences → Glass; 1.27.5, grown in 1.28.0).
+  Off by default; works in light and dark mode and with every colour theme.
+  <html> carries:
+    data-glass="on"                the look is on
+    data-glass-style="liquid"      Liquid (absent = Simple, 1.27.5's)
+    data-glass-scope="everywhere"  every pop-up and floating box too (absent = cards and bars)
+    data-glass-sidebar="clear"     the side bar as see-through as the cards (absent = nearly solid)
+    data-glass-wash="none|one|three"  the colours behind it (absent = the theme's own; 1.29.2)
+    data-glass-opaque="on"         the slider at 0: solid, no blur worked out at all (1.29.2)
+    --glass-level                  0 (solid) … 1 (nearly clear), the Settings slider (inline; 0.5 by default)
+    --wash-light / --wash-dark     "one": a theme's accent, light and dark mode (inline)
+    --wash-1 / --wash-2 / --wash-3 "three": a blend's or your own colours (inline)
+
+  Off (1.29.2): nothing is see-through anywhere. The bars are solid (they
+  used to let a little through), and wallpapers show around solid cards.
+
+  - The wash: the paper with three soft fields of colour (the theme's own,
+    and two hues beside it where the browser can work them out; meetings'
+    violet and long videos' blue otherwise), fixed behind the page. Since
+    1.29.2 any theme's (--wash-base), three colours of their own, or none.
+    In light mode its colours stay light (1.35.0, below), so words read on it.
+  - Cards (bg-surface) let it through by --glass-tint; insets and hovers
+    (bg-surface-2) are a brighter pane on top; things that float over the
+    page stay readable (--glass-float, or --glass-pop when glass goes
+    everywhere).
+  - Real blur (backdrop-filter) only where it's safe: the bars, dashboard
+    widgets, pop-ups drawn at the top of the page (.glass-pane) and, with
+    "everywhere", boxes that are fixed or absolute themselves. (A blur makes
+    its box the frame for anything "fixed" inside it, which would trap a
+    pop-up drawn inside an ordinary card.)
+  - Liquid (modelled on iOS 26's Liquid Glass): stronger blur and colour,
+    bright rims and an inner glow, a sheen, a light that follows the
+    pointer (one light for the whole screen: the panes are lit where it
+    falls), rounder corners, a floating side bar and a floating tab bar on
+    phones.
+*/
+/*
+  The slider (1.29.2): 0 is solid, 1 nearly clear (0.04 of the pane left),
+  the middle as before (a gentle curve: 0.56 at 0.5). Floating boxes keep
+  more of themselves; the blur grows as the panes clear.
+*/
+html[data-glass] {
+  --glass-level: 0.5;
+  --glass-tint: calc(1 - var(--glass-level) * (0.8 + 0.16 * var(--glass-level)));
+  --glass-float: calc(1 - var(--glass-level) * 0.1);
+  --glass-pop: calc(1 - var(--glass-level) * 0.5);
+  --glass-raise: 255 255 255 / 0.7;
+  --glass-edge: 255 255 255 / 0.62;
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 14px 34px -22px rgb(var(--ink) / 0.4);
+  --glass-blur: blur(calc(8px + var(--glass-level) * 20px)) saturate(1.6);
+  --wash-base: var(--amber);
+  background: rgb(var(--paper));
 }
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* Solid: nothing to blur (an invalid filter list falls back to none, so the blur rules below drop out too). */
+html[data-glass][data-glass-opaque] { --glass-blur: none; }
+/* Another theme's colours behind the glass (light and dark mode have their own). */
+html[data-glass][data-glass-wash="one"]:not(.dark) { --wash-base: var(--wash-light); }
+html.dark[data-glass][data-glass-wash="one"] { --wash-base: var(--wash-dark); }
+html.dark[data-glass] {
+  --glass-raise: 255 255 255 / 0.075;
+  --glass-edge: 255 255 255 / 0.12;
+  --glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 18px 40px -22px rgb(0 0 0 / 0.75);
+}
+html[data-glass] body { background: transparent; }
+html[data-glass] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-base) / 0.3), transparent 62%),
+    radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--violet) / 0.2), transparent 60%),
+    radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--long) / 0.2), transparent 62%),
+    rgb(var(--paper));
+}
+@supports (color: hsl(from red h s l)) {
+  html[data-glass] body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-base) / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, hsl(from rgb(var(--wash-base)) calc(h - 36) s calc(l + 6) / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, hsl(from rgb(var(--wash-base)) calc(h + 26) s calc(l + 10) / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
+}
+/* Three colours of their own (a blend, or yours). */
+html[data-glass][data-glass-wash="three"] body::before {
+  background:
+    radial-gradient(70vmax 58vmax at 6% -4%, rgb(var(--wash-1) / 0.32), transparent 62%),
+    radial-gradient(56vmax 50vmax at 102% 14%, rgb(var(--wash-2) / 0.26), transparent 60%),
+    radial-gradient(64vmax 56vmax at 72% 104%, rgb(var(--wash-3) / 0.22), transparent 62%),
+    rgb(var(--paper));
+}
+/*
+  1.35.0: in light mode the colours behind the glass stay light (their hue and colour kept, lightness at least 0.84
+  in OKLCH), so words on the page and on see-through cards read on them as on the paper. A dark theme accent (Ink,
+  Slate, Mocha) or a deep colour of your own made a grey or muddy field that dimmed every date and link over it, and
+  at high glass levels the cards are mostly that field. Dark mode keeps its washes.
+*/
+@supports (color: oklch(from red l c h)) {
+  html[data-glass]:not(.dark) body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c h / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c calc(h - 36) / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, oklch(from rgb(var(--wash-base)) max(l, 0.84) c calc(h + 26) / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
+  html[data-glass][data-glass-wash="three"]:not(.dark) body::before {
+    background:
+      radial-gradient(70vmax 58vmax at 6% -4%, oklch(from rgb(var(--wash-1)) max(l, 0.84) c h / 0.32), transparent 62%),
+      radial-gradient(56vmax 50vmax at 102% 14%, oklch(from rgb(var(--wash-2)) max(l, 0.84) c h / 0.26), transparent 60%),
+      radial-gradient(64vmax 56vmax at 72% 104%, oklch(from rgb(var(--wash-3)) max(l, 0.84) c h / 0.22), transparent 62%),
+      rgb(var(--paper));
+  }
+}
+/* No colours: the glass over the plain paper (no layer at all). */
+html[data-glass][data-glass-wash="none"] body::before { display: none; }
+html[data-glass] .bg-surface { --tw-bg-opacity: var(--glass-tint); }
+/* Insets, hovers and picked options: a brighter pane on the card (glass on glass), so they still stand out. */
+html[data-glass] .bg-surface-2,
+html[data-glass] [class*="hover:bg-surface-2"]:hover { background-color: rgb(var(--glass-raise)); }
+html[data-glass] .bg-surface:is(.fixed, .absolute, .sticky, .shadow-lg, .shadow-xl, .shadow-2xl, [class^="shadow-[0_"], [class*=" shadow-[0_"]) { --tw-bg-opacity: var(--glass-float); }
+html[data-glass] .bg-surface[class*="border-line/"] { border-color: rgb(var(--glass-edge)); }
+html[data-glass] .bg-surface[class*="border-line/"]:not([class*="shadow"]) {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--glass-shadow);
+}
+html[data-glass] [data-shell],
+html[data-glass] .dash-item,
+html[data-glass] .glass-pane {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+html[data-glass] [data-shell="header"],
+html[data-glass] [data-shell="topbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.75)); }
+html[data-glass] [data-shell="sidebar"] { --tw-bg-opacity: max(0.9, var(--glass-tint)); border-color: rgb(var(--glass-edge)); }
+html[data-glass][data-glass-sidebar] [data-shell="sidebar"] { --tw-bg-opacity: calc(var(--glass-tint) * 0.85); }
+html[data-glass] [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9)); border-color: rgb(var(--glass-edge)); }
+/*
+  The main pop-ups (dialogs, the search palette, the bell, menus, pickers)
+  follow the slider (1.29.3; they were nearly solid). 1.31.5: as specific as
+  the floating boxes' rule above and after it, so it wins (it didn't, so
+  they stayed nearly solid unless glass went everywhere). Over a wallpaper
+  they keep the floor and the lift the bars have.
+*/
+html[data-glass] .bg-surface.glass-pane { --tw-bg-opacity: var(--glass-pop); }
+html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane {
+  --tw-bg-opacity: max(var(--glass-pop), var(--wall-floor));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+/* 1.43.0: a menu over busy words (the team switcher over the side bar's links) is never clearer than 82 %. */
+html[data-glass] .bg-surface.glass-pane.glass-floor { --tw-bg-opacity: max(var(--glass-pop), 0.82); }
+html[data-glass]:has([data-dash-bg]) .bg-surface.glass-pane.glass-floor { --tw-bg-opacity: max(var(--glass-pop), var(--wall-floor), 0.82); }
+/*
+  Over a dimmed page (dialogs, "Are you sure?", the search palette, the
+  phone's menu): in light mode the glass shows the page about as bright as
+  it was (the dimming is for around it), so the box is light glass, not
+  grey. Dark mode keeps the dimming.
+*/
+html[data-glass]:not(.dark) .bg-surface.glass-pane.glass-lift {
+  -webkit-backdrop-filter: var(--glass-blur) brightness(calc(var(--wall-lift, 1) * 1.8));
+  backdrop-filter: var(--glass-blur) brightness(calc(var(--wall-lift, 1) * 1.8));
+}
+html[data-glass] .dash-board .dash-item:not(.is-lifted):not(.is-resizing) { box-shadow: var(--glass-shadow); }
+
+/*
+  Everywhere: every pop-up, menu, sheet, message and floating box is glass
+  too. (Only boxes that float with a shadow: small badges and knobs that
+  happen to be positioned stay as they are.)
+*/
+html[data-glass-scope="everywhere"] .glass-pane,
+html[data-glass-scope="everywhere"] .bg-surface:is(.fixed, .absolute, .sticky):is(.shadow-lg, .shadow-xl, .shadow-2xl, [class^="shadow-[0_"], [class*=" shadow-[0_"]) { --tw-bg-opacity: var(--glass-pop); }
+html[data-glass-scope="everywhere"] .bg-surface:is(.fixed, .absolute):is(.shadow-lg, .shadow-xl, .shadow-2xl, [class^="shadow-[0_"], [class*=" shadow-[0_"]) {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+/* Toasts are glass whenever the glass look is on (1.31.4; only with "everywhere" before). */
+html[data-glass] .glass-toast.bg-ink {
+  background-color: rgb(var(--ink) / calc(0.9 - var(--glass-level) * 0.3));
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+}
+html[data-glass] .glass-toast.bg-red {
+  background-color: rgb(var(--red) / 0.9);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+html[data-glass-style="liquid"] .glass-toast { box-shadow: var(--liquid-rim), var(--liquid-drop); }
+/* A pointer on a pop-up (the tour's bubble) is exactly as see-through as the pop-up. */
+html[data-glass] .bg-surface.glass-tail { --tw-bg-opacity: inherit; }
+
+/*
+  Liquid (modelled on iOS 26's Liquid Glass): clearer panes with a stronger
+  blur that keeps the colours behind them, rounder corners, a floating side
+  bar and a floating tab bar on phones. 1.29.3: it blends into what's
+  behind instead of looking like frosted windows: no white sheen or glow
+  along the top, only a hairline of light on the top edge and a faint one
+  round the rest, soft shadows, and the light that follows the pointer is
+  on the pane you point at only, in your colours (--glint-rgb; LiquidLight
+  in components/ui/glass.tsx sets --mx / --my on that pane).
+*/
+html[data-glass-style="liquid"] {
+  /* 1.29.2: solid at 0, 0.46 in the middle (as before), 0.03 at the end. */
+  --glass-tint: calc(1 - var(--glass-level) * (1.19 - 0.22 * var(--glass-level)));
+  --glass-pop: calc(1 - var(--glass-level) * 0.64);
+  --glass-blur: blur(calc(10px + var(--glass-level) * 20px)) saturate(1.9);
+  --glass-edge: 255 255 255 / 0.2;
+  --liquid-rim:
+    inset 0 1px 0 rgb(255 255 255 / 0.65),
+    inset 0 0 0 1px rgb(255 255 255 / 0.16),
+    inset 0 -1px 0 rgb(0 0 0 / 0.035);
+  --liquid-drop: 0 10px 30px -16px rgb(0 0 0 / 0.2);
+  --liquid-drop-soft: 0 6px 20px -14px rgb(0 0 0 / 0.16);
+}
+html.dark[data-glass-style="liquid"] {
+  --glass-edge: 255 255 255 / 0.07;
+  --liquid-rim:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    inset 0 0 0 1px rgb(255 255 255 / 0.045),
+    inset 0 -1px 0 rgb(0 0 0 / 0.22);
+  --liquid-drop: 0 14px 36px -18px rgb(0 0 0 / 0.6);
+  --liquid-drop-soft: 0 8px 24px -16px rgb(0 0 0 / 0.5);
+}
+/* A brighter wash: glass needs colour behind it to show. */
+html[data-glass-style="liquid"] body::before { filter: saturate(1.3); }
+
+html[data-glass-style="liquid"] .bg-surface[class*="border-line/"]:not([class*="shadow"]) {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--liquid-rim), var(--liquid-drop-soft);
+}
+html[data-glass-style="liquid"] .dash-board .dash-item:not(.is-lifted):not(.is-resizing):not(.dash-ghost),
+html[data-glass-style="liquid"] .glass-pane,
+html[data-glass-style="liquid"] [data-shell="sidebar"],
+html[data-glass-style="liquid"] [data-shell="bottom-nav"] {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--liquid-rim), var(--liquid-drop);
+}
+html[data-glass-style="liquid"] .dash-item:not(.dash-ghost) { border-radius: 20px; }
+html[data-glass-style="liquid"] .bg-surface.rounded-xl { border-radius: 16px; }
+html[data-glass-style="liquid"] .bg-surface.rounded-2xl { border-radius: 22px; }
+
+/* The light on the rim of the pane under the pointer, where the pointer is, in your colours. Nothing elsewhere, nothing on touch. */
+html[data-glass] { --glint-rgb: var(--wash-base); }
+html[data-glass][data-glass-wash="three"] { --glint-rgb: var(--wash-1); }
+html[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"]), [data-shell="bottom-nav"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0px), rgb(var(--glint-rgb)), rgb(var(--glint-rgb) / 0) 72%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+html[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"]), [data-shell="bottom-nav"]):hover::after { opacity: 1; }
+/* …and a faint light on the glass under the pointer (under the words: z-index -1 inside the pane). */
+html[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"]))::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0px), rgb(var(--glint-rgb) / 0.09), rgb(var(--glint-rgb) / 0) 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+html.dark[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"]))::before {
+  background: radial-gradient(320px circle at var(--mx, 50%) var(--my, 0px), rgb(var(--glint-rgb) / 0.14), rgb(var(--glint-rgb) / 0) 70%);
+}
+html[data-glass-style="liquid"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"])):hover::before { opacity: 1; }
+@media (hover: none) {
+  html[data-glass-style="liquid"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"])::before,
+  html[data-glass-style="liquid"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"])::after { display: none; }
+}
+/* 1.45.0: the light that follows the pointer, switched off (Preferences → Glass): none of it, on any pane or bar. */
+html[data-glass-style="liquid"][data-glass-light="off"] :is(.dash-board .dash-item, .glass-pane, [data-shell="bottom-nav"], [data-shell="header"])::after,
+html[data-glass-style="liquid"][data-glass-light="off"] :is(.dash-board .dash-item, .glass-pane)::before { display: none; }
+
+/*
+  Halo (1.29.3): soft glass with your colours glowing round its edges: a
+  thin ring in the three colours behind the glass (your theme's and the two
+  beside it, a blend's, or your own), a gentle glow of the first one around
+  each card, brighter on the card under the pointer. No white anywhere.
+*/
+html[data-glass-style="halo"] {
+  --glass-tint: calc(1 - var(--glass-level) * (1.02 - 0.06 * var(--glass-level)));
+  --glass-edge: 255 255 255 / 0;
+  --halo-a: rgb(var(--wash-base));
+  --halo-b: rgb(var(--violet));
+  --halo-c: rgb(var(--long));
+  --halo-glow: 26%;
+}
+@supports (color: hsl(from red h s l)) {
+  html[data-glass-style="halo"] {
+    --halo-b: hsl(from rgb(var(--wash-base)) calc(h - 36) s calc(l + 6));
+    --halo-c: hsl(from rgb(var(--wash-base)) calc(h + 26) s calc(l + 10));
+  }
+}
+html[data-glass-style="halo"][data-glass-wash="three"] { --halo-a: rgb(var(--wash-1)); --halo-b: rgb(var(--wash-2)); --halo-c: rgb(var(--wash-3)); }
+html.dark[data-glass-style="halo"] { --halo-glow: 38%; }
+html[data-glass-style="halo"] .bg-surface[class*="border-line/"] { border-color: color-mix(in srgb, var(--halo-a) 28%, transparent); }
+html[data-glass-style="halo"] .bg-surface[class*="border-line/"]:not([class*="shadow"]) {
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 0 22px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent);
+}
+html[data-glass-style="halo"] .dash-board .dash-item:not(.is-lifted):not(.is-resizing):not(.dash-ghost),
+html[data-glass-style="halo"] .glass-pane,
+html[data-glass-style="halo"] .prof-frost {
+  border-color: transparent;
+  box-shadow: 0 0 30px -8px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+}
+html[data-glass-style="halo"] .prof-frost { border-color: color-mix(in srgb, var(--halo-a) 40%, transparent); }
+html[data-glass-style="halo"] [data-shell="sidebar"] { border-color: color-mix(in srgb, var(--halo-a) 32%, transparent); }
+html[data-glass-style="halo"] [data-shell="bottom-nav"] { border-color: color-mix(in srgb, var(--halo-a) 32%, transparent); }
+html[data-glass-style="halo"] .dash-item:not(.dash-ghost) { border-radius: 18px; }
+/* The ring: the three colours round the edge, brighter on the card you point at. */
+html[data-glass-style="halo"] :is(.dash-board .dash-item:not(.dash-ghost), .glass-pane:not([class*="overflow-y-auto"]))::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--halo-a), var(--halo-b) 50%, var(--halo-c));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+html[data-glass-style="halo"] .dash-board .dash-item:not(.dash-ghost):hover::before { opacity: 1; }
+
+/* The top bar: no line, a soft fade of blur as things go under it. */
+html[data-glass-style="liquid"] [data-shell="header"] {
+  background-color: transparent;
+  border-bottom-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-glass-style="liquid"] [data-shell="header"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -24px 0;
+  z-index: -1;
+  pointer-events: none;
+  /* 1.29.3: a little of the paper only (a lot of it read as a white band along the top), fading out as it goes down. */
+  background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.6)), rgb(var(--paper) / calc(var(--glass-tint) * 0.25)) calc(100% - 24px), rgb(var(--paper) / 0));
+  -webkit-backdrop-filter: blur(12px) saturate(1.6);
+  backdrop-filter: blur(12px) saturate(1.6);
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 34px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 34px), transparent);
+}
+html[data-glass-style="liquid"] [data-shell="topbar"] { border-bottom-color: transparent; }
+
+/*
+  A page's own bar under the top bar (Outliers' niche, kind and tabs).
+  1.34.1: the same glass as the top bar, in every style: its pane, its
+  tint, its blur, never just a fade (Liquid's was all but clear, so over
+  bright thumbnails its words had nothing behind them). On a computer it
+  floats under the top bar like it ("Pages' own bars float" below).
+*/
+html[data-glass] [data-shell="subbar"] { background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9)); }
+html[data-glass][data-glass-opaque] [data-shell="subbar"] { background-color: rgb(var(--paper)); }
+/* Phones, Liquid: the top bar's soft band stops at its own edge when a page's bar is under it (it would blur that bar's top). */
+html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]::before {
+  inset: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.6)), rgb(var(--paper) / calc(var(--glass-tint) * 0.25)));
 }
 
-.styled-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--amber) / 0.55) transparent;
+@media (min-width: 768px) {
+  /* The side bar floats, its corners round like the window's (iPadOS 26's). */
+  html[data-glass-style="liquid"] [data-shell="sidebar"] {
+    margin: 10px 0 10px 10px;
+    height: calc(100vh - 20px);
+    height: calc(100dvh - 20px);
+    top: 10px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 24px;
+  }
 }
-.styled-scroll::-webkit-scrollbar {
-  width: 7px;
+@media (max-width: 767px) {
+  /* Phones: the tab bar floats as a capsule over the page, the place you're on a soft pill (iOS 26's). */
+  html[data-glass-style="liquid"] [data-shell="bottom-nav"] {
+    left: 12px;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    padding: 4px !important;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 30px;
+  }
+  /* The lens (below) is a soft pill around the tab, inside the capsule's 4px. */
+  html[data-glass-style="liquid"] [data-shell="bottom-nav"] { --nav-pad: 4px; }
+  html[data-glass-style="liquid"] .nav-lens-blob { inset: 0; width: auto; height: auto; margin: 0; border-radius: 26px; background: rgb(var(--amber) / 0.14); }
+  /* Room under the page for the floating bar. */
+  html[data-glass-style="liquid"] main { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
 }
-.styled-scroll::-webkit-scrollbar-track {
-  background: transparent;
+
+/*
+  The phone's tab bar (1.34.0, components/ui/sidebar-nav.tsx): the place
+  you're on is one lens that slides to the tab you press, overshooting a
+  touch and stretching on the way (iOS 26's tab bar), then the tab's icon
+  hops. Plain bars: a short amber line at the top of the tab; Liquid: a soft
+  pill (above). One slot per tab: --i of --n.
+*/
+[data-shell="bottom-nav"] { --nav-pad: 0px; }
+.nav-lens {
+  position: absolute;
+  top: var(--nav-pad);
+  bottom: var(--nav-pad);
+  left: var(--nav-pad);
+  width: calc((100% - 2 * var(--nav-pad)) / var(--n));
+  transform: translateX(calc(var(--i) * 100%));
+  transition: transform 0.55s var(--ease-spring), opacity 0.2s ease;
+  pointer-events: none;
 }
-.styled-scroll::-webkit-scrollbar-thumb {
-  background: rgb(var(--amber) / 0.45);
+.nav-lens[data-hidden] { opacity: 0; }
+.nav-lens-blob { position: absolute; top: 0; left: 50%; width: 32px; height: 2.5px; margin-left: -16px; border-radius: 2px; background: rgb(var(--amber)); }
+.nav-lens-blob[data-moved] { animation: nav-stretch 0.55s var(--ease-out); }
+@keyframes nav-stretch { 35% { scale: 1.3 0.88; } }
+.nav-hop { animation: nav-hop 0.5s var(--ease-spring); }
+@keyframes nav-hop { 30% { scale: 0.82; } 65% { scale: 1.12; translate: 0 -2px; } }
+
+/* Settings' little pictures of the three styles. */
+.glass-sample {
+  background:
+    radial-gradient(80% 90% at 10% 0%, rgb(var(--amber) / 0.55), transparent 65%),
+    radial-gradient(70% 80% at 100% 100%, rgb(var(--long) / 0.45), transparent 65%),
+    rgb(var(--paper));
+}
+.glass-sample-card,
+.glass-sample-bar {
+  background: rgb(var(--surface) / 0.5);
+  border: 1px solid rgb(255 255 255 / 0.55);
   border-radius: 8px;
+  -webkit-backdrop-filter: blur(6px) saturate(1.5);
+  backdrop-filter: blur(6px) saturate(1.5);
 }
-.styled-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--amber) / 0.75);
+.glass-sample-bar { border-radius: 999px; }
+.glass-sample[data-sample="liquid"] .glass-sample-card,
+.glass-sample[data-sample="liquid"] .glass-sample-bar {
+  border-radius: 12px;
+  border-color: rgb(255 255 255 / 0.25);
+  background: rgb(var(--surface) / 0.32);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), 0 6px 16px -10px rgb(0 0 0 / 0.35);
 }
+.glass-sample[data-sample="liquid"] .glass-sample-bar { border-radius: 999px; }
+.glass-sample[data-sample="halo"] .glass-sample-card,
+.glass-sample[data-sample="halo"] .glass-sample-bar {
+  border-radius: 10px;
+  border-color: rgb(var(--amber) / 0.6);
+  box-shadow: 0 0 16px -3px rgb(var(--amber) / 0.55), inset 0 0 0 1px rgb(var(--violet) / 0.25);
+}
+.glass-sample[data-sample="halo"] .glass-sample-bar { border-radius: 999px; border-color: rgb(var(--long) / 0.6); box-shadow: 0 0 14px -3px rgb(var(--long) / 0.5); }
+.dark .glass-sample-card,
+.dark .glass-sample-bar { border-color: rgb(255 255 255 / 0.12); }
+.dark .glass-sample[data-sample="liquid"] .glass-sample-card,
+.dark .glass-sample[data-sample="liquid"] .glass-sample-bar { background: rgb(var(--surface) / 0.18); border-color: rgb(255 255 255 / 0.08); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.34), 0 8px 18px -10px rgb(0 0 0 / 0.6); }
+.dark .glass-sample[data-sample="halo"] .glass-sample-card { border-color: rgb(var(--amber) / 0.7); }
+.dark .glass-sample[data-sample="halo"] .glass-sample-bar { border-color: rgb(var(--long) / 0.7); }
+
+/*
+  A wallpaper (1.27.5 on the dashboard, 1.28.0 on profiles; Settings →
+  Preferences → Dashboard background): the picture, GIF or video sits behind
+  the page (DashboardBackdrop). 1.29.2: only the glass look makes things
+  see-through over it. With glass off the widgets, the bars and a profile
+  stay solid, and the picture shows around them.
+
+  Words over a wallpaper (1.28.0): dark or white, whichever reads best over
+  the picture. The page sets --bg-luma (how bright the picture's top is,
+  0–1, measured on upload; left out when unknown) and --bg-dim (the
+  darkening, 0–0.8) on <html> (DashboardBackdrop's style) and on its own
+  box; the paper's own brightness (light or dark mode) is mixed in like the
+  darkening layer mixes it. Above 0.52 (sRGB luma, about L* 56: a little
+  over WCAG's crossover, as white reads well on mid tones), dark words
+  (lib/wallpapers.ts WORDS_SPLIT). --words-dark is 1 for dark words, 0 for
+  white.
+
+  Glass over it (1.29.2): the panes keep the words readable whatever the
+  picture, however see-through the slider says. The picture behind them is
+  dimmed (dark mode: light words want a dark backdrop, --wall-lift < 1) or
+  lifted (light mode: dark words want a light one, --wall-lift > 1) by just
+  as much as it's too bright or too dark, and a very dark picture in light
+  mode keeps a little of the pane's own white (--wall-floor; dark mode a
+  little of its dark over a very bright one). Over a picture that already
+  suits the words nothing changes: the panes are exactly as clear as the
+  slider. The secondary words on them are a step stronger.
+*/
+html:has([data-dash-bg]),
+.wall-tone {
+  --paper-luma: 0.96;
+  --bg-eff: calc(var(--bg-luma, var(--paper-luma)) * (1 - var(--bg-dim, 0.3)) + var(--paper-luma) * var(--bg-dim, 0.3));
+  --words-dark: clamp(0, calc((var(--bg-eff) - 0.52) * 1000), 1);
+  --words: calc(255 - 237 * var(--words-dark));
+  --halo: calc(255 * var(--words-dark));
+  --wall-lift: clamp(1, calc(0.74 / var(--bg-eff)), 2.2);
+  --wall-floor: clamp(0, calc((0.62 - var(--bg-eff)) * 1.3), 0.45);
+}
+html.dark:has([data-dash-bg]),
+.dark .wall-tone,
+.dark.wall-tone {
+  --paper-luma: 0.08;
+  --wall-lift: clamp(0.35, calc(0.26 / var(--bg-eff)), 1);
+  --wall-floor: clamp(0, calc((var(--bg-eff) - 0.3) * 0.8), 0.3);
+}
+.wall-words,
+.wall-tone .dash-greeting h1 {
+  color: rgb(var(--words) var(--words) var(--words));
+  text-shadow: 0 1px 16px rgb(var(--halo) var(--halo) var(--halo) / 0.5), 0 0 2px rgb(var(--halo) var(--halo) var(--halo) / 0.3);
+}
+.wall-tone .dash-greeting p {
+  color: rgb(var(--words) var(--words) var(--words) / 0.86);
+  text-shadow: 0 1px 12px rgb(var(--halo) var(--halo) var(--halo) / 0.55), 0 0 2px rgb(var(--halo) var(--halo) var(--halo) / 0.3);
+}
+/*
+  The paper over a wallpaper (--cover: its dim; modules/dashboard/components/backdrop.tsx). 1.35.0: behind a page
+  other than the dashboard, whose words sit right on the picture (data-words), a picture too dark for light mode's
+  dark words, or too bright for dark mode's light ones, is covered more: enough that grey words read at 4.5:1, from
+  its measured brightness (--pic; 0.5 until it's measured), never past 93 %. A picture that suits the words keeps the
+  dim as it was.
+*/
+.wall-cover { background: rgb(var(--paper) / var(--cover)); }
+html:not(.dark) .wall-cover[data-words] { background: rgb(var(--paper) / clamp(var(--cover), calc(max(0, 0.86 - var(--pic, 0.5)) / max(0.1, 0.93 - var(--pic, 0.5))), 0.93)); }
+html.dark .wall-cover[data-words] { background: rgb(var(--paper) / clamp(var(--cover), calc(max(0, var(--pic, 0.5) - 0.17) / max(0.11, var(--pic, 0.5) - 0.06)), 0.93)); }
+/* (The glass look's wash isn't needed under it. The body stays see-through: with the glass look on, the page's
+   own background is on <html>, and a painted body would hide the picture.) */
+html:has([data-dash-bg]) body::before { display: none; }
+
+/* Glass on: the cards over the picture (dashboard widgets, a profile's showcases and header)… */
+html[data-glass] [data-dash-bg] :is(.dash-item, .prof-frost) {
+  --tw-bg-opacity: max(var(--glass-tint), var(--wall-floor));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+/* …and the bars around it (they aren't inside the page's box: <html> has the picture's numbers). */
+html[data-glass]:has([data-dash-bg]) :is([data-shell="header"], [data-shell="topbar"]) {
+  background-color: rgb(var(--paper) / max(calc(var(--glass-tint) * 0.75), var(--wall-floor)));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+html[data-glass]:has([data-dash-bg]) :is([data-shell="sidebar"], [data-shell="bottom-nav"]) {
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+html[data-glass][data-glass-sidebar]:has([data-dash-bg]) [data-shell="sidebar"] { --tw-bg-opacity: max(calc(var(--glass-tint) * 0.85), var(--wall-floor)); }
+html[data-glass]:has([data-dash-bg]) [data-shell="bottom-nav"] { background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor))); }
+/* The secondary words a step stronger on glass over a picture (they're made for solid cards). */
+html[data-glass]:not(.dark):has([data-dash-bg]) :is([data-shell], [data-dash-bg] .dash-item, [data-dash-bg] .prof-frost) { --ink-soft: 54 50 43; --ink-faint: 86 81 71; }
+html.dark[data-glass]:has([data-dash-bg]) :is([data-shell], [data-dash-bg] .dash-item, [data-dash-bg] .prof-frost) { --ink-soft: 224 218 206; --ink-faint: 192 184 170; }
+
+/*
+  On every page (1.29.4): the layout draws your wallpaper once
+  ([data-global-bg]); a page with its own (a profile's background) hides it.
+  Ordinary cards on other pages have no blur of their own (a blur would trap
+  any fixed pop-up inside them), so over the picture they keep most of
+  their pane.
+*/
+html:has([data-own-bg]) [data-global-bg] { display: none; }
+html[data-glass] [data-dash-bg] .bg-surface:not(.dash-item):not(.prof-frost):not(.glass-pane) { --tw-bg-opacity: max(var(--glass-tint), 0.8); }
+
+/* Glass off: the bars are solid everywhere (a wallpaper never shows through them); so is the mobile bar over a wallpaper. */
+html:not([data-glass]) :is([data-shell="header"], [data-shell="subbar"]) {
+  background-color: rgb(var(--paper));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html:not([data-glass]) [data-shell="bottom-nav"] {
+  background-color: rgb(var(--surface));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html:not([data-glass]):has([data-dash-bg]) [data-shell="topbar"] { background-color: rgb(var(--paper)); }
+/* Glass at 0 (solid): the bars are solid too, whatever the style or the picture (1.29.3). */
+html[data-glass][data-glass-opaque] :is([data-shell="header"], [data-shell="topbar"], [data-shell="subbar"]) { background-color: rgb(var(--paper)); }
+html[data-glass][data-glass-opaque] [data-shell="bottom-nav"] { background-color: rgb(var(--surface)); }
+html[data-glass][data-glass-opaque] [data-shell="header"]::before { display: none; }
+
+/*
+  The top bar floats (1.31.9). With the glass look on a computer (from md,
+  where the side bar is), the top bar is a pane of its own like the side
+  bar: off the side bar's edge, lined up with the page's own edges (the
+  dashboard's "Good morning" and its widgets: 20 px, 24 px from xl), 10 px
+  from the top like Liquid's floating side bar, rounded, and real glass
+  (blur, the cards' tint, a rim of light; Liquid's light follows the
+  pointer on it). It used to run edge to edge from the side bar. What
+  sticks under it starts below it: --shell-top (Outliers' bar). Phones keep
+  their bars. 1.34.1: at solid glass (the slider at 0) it still floats, as a
+  solid pane (it used to fall back to the plain bar beside a floating side
+  bar).
+
+  What scrolls up under it blurs softly away instead of showing sharp
+  around it (iOS 26's scroll edge): [data-shell="edge"], a band over the
+  top of the page (the layout puts it just before the top bar), under a
+  page's own bar (Outliers', z 15) and the top bar (z 20). Its blur fades
+  out before the page's first words (they start below --shell-top), and it
+  comes in as the page scrolls where the browser can tie it to scrolling
+  (elsewhere it's there from the start, over the empty top only). At every
+  glass level, solid too (1.34.1: with the bar floating there, what
+  scrolled under it showed sharp around it and between it and Outliers'
+  bar).
+*/
+[data-shell="edge"] { display: none; }
+@media (min-width: 900px) {
+  html[data-glass] { --shell-top: 72px; }
+  html[data-glass] [data-shell="edge"] {
+    display: block;
+    position: sticky;
+    top: 0;
+    height: 0;
+    z-index: 14;
+    pointer-events: none;
+    /* Not glass itself ([data-shell] are): a blur here would keep its band's blur from seeing the page. */
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /*
+    1.34.1: it fades in from the page's left edge (it began there sharply, so the strip between the side bar and the
+    top bar showed a block of its own, the owner's "weird thing in the middle"), and only blurs: a saturate() lit up
+    the colours behind it, which showed as that block even with nothing scrolling under it.
+  */
+  html[data-glass] [data-shell="edge"]::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: calc(var(--shell-top) + 10px);
+    background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.4)), rgb(var(--paper) / 0));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    --edge-down: linear-gradient(#000 calc(100% - 26px), transparent);
+    --edge-in: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 12px), transparent);
+    -webkit-mask-image: var(--edge-down), var(--edge-in);
+    -webkit-mask-composite: source-in;
+    mask-image: var(--edge-down), var(--edge-in);
+    mask-composite: intersect;
+  }
+  /* A page with its own bar under it (Outliers): blurred right down to that bar, which goes on from there. */
+  html[data-glass]:has([data-shell="subbar"]) [data-shell="edge"]::before {
+    --edge-down: linear-gradient(#000 calc(100% - 10px), transparent);
+  }
+  @supports (animation-timeline: scroll()) {
+    html[data-glass] [data-shell="edge"]::before {
+      animation: shell-edge-in auto linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 48px;
+    }
+  }
+  html[data-glass] [data-shell="header"] {
+    top: 10px;
+    height: 52px;
+    margin: 10px 20px 0;
+    padding-left: 14px;
+    padding-right: 10px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 18px;
+    background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9));
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+  }
+  /* Liquid's soft band of blur under a bar that touched the edges isn't needed under a floating one. */
+  html[data-glass] [data-shell="header"]::before { display: none; }
+  /* Solid glass: the same pane, solid. */
+  html[data-glass][data-glass-opaque] [data-shell="header"] {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-glass-style="liquid"] [data-shell="header"] {
+    border-radius: 20px;
+    box-shadow: var(--liquid-rim), var(--liquid-drop);
+  }
+  /* Liquid's light, where the pointer is, on its rim (LiquidLight sets --mx / --my). */
+  html[data-glass-style="liquid"] [data-shell="header"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0px), rgb(var(--glint-rgb)), rgb(var(--glint-rgb) / 0) 72%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  html[data-glass-style="liquid"] [data-shell="header"]:hover::after { opacity: 1; }
+  html[data-glass-style="halo"] [data-shell="header"] {
+    border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
+    box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+  }
+  /* Over a wallpaper: the same floor and lift as the other bars, so its words stay readable. */
+  html[data-glass]:not([data-glass-opaque]):has([data-dash-bg]) [data-shell="header"] {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor)));
+    -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+    backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  }
+}
+@media (min-width: 1400px) {
+  html[data-glass] [data-shell="header"] { margin-left: 24px; margin-right: 24px; }
+}
+@media (min-width: 900px) and (hover: none) {
+  html[data-glass-style="liquid"] [data-shell="header"]::after { display: none; }
+}
+/*
+  Pages' own bars float (1.34.1, Outliers'): with the glass look on a
+  computer, the bar under the top bar is a pane like it, 10 px under it,
+  lined up with it (its page pads 32 px, 40 px from xl: the pane comes out
+  12 px, then 16 px, to the top bar's 20 / 24 px), the same radius, rim and
+  shadow; its tab row loses its own line (the pane has an edge).
+*/
+@media (min-width: 900px) {
+  html[data-glass] [data-shell="subbar"] {
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 18px;
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+  }
+  html[data-glass][data-glass-opaque] [data-shell="subbar"] {
+    background-color: rgb(var(--surface));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-glass] [data-shell="subbar"] > nav { border-bottom-color: transparent; }
+  html[data-glass-style="liquid"] [data-shell="subbar"] { border-radius: 20px; box-shadow: var(--liquid-rim), var(--liquid-drop); }
+  html[data-glass-style="halo"] [data-shell="subbar"] {
+    border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
+    box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+  }
+  html[data-glass]:not([data-glass-opaque]):has([data-dash-bg]) [data-shell="subbar"] {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor)));
+    -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+    backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  }
+}
+@media (min-width: 1400px) {
+  html[data-glass] [data-shell="subbar"] { margin-left: -16px; margin-right: -16px; }
+}
+@keyframes shell-edge-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The Customize button (and the toolbar while customizing) on a pane of its own over the picture: solid, or glass. */
+[data-dash-bg] .dash-tool { background: rgb(var(--surface)); }
+html[data-glass] [data-dash-bg] .dash-tool {
+  background: rgb(var(--surface) / max(0.7, var(--glass-tint)));
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+[data-dash-bg] div.dash-tool { padding: 4px; }
+/* Settings' little preview of it: the cards solid, or frosted with glass on. */
+.dash-bg-sample { background: rgb(var(--surface)); border: 1px solid rgb(var(--line) / 0.12); }
+html[data-glass] .dash-bg-sample {
+  background: rgb(var(--surface) / 0.55);
+  border-color: rgb(255 255 255 / 0.45);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+}
+html.dark[data-glass] .dash-bg-sample { border-color: rgb(255 255 255 / 0.1); }
+
+/* The colours behind the glass, drawn small in Settings (1.29.2): a theme's (--wl / --wd), three of their own (--w1…3). */
+.wash-swatch {
+  --wb: var(--wl, var(--amber));
+  background:
+    radial-gradient(90% 130% at 0% 0%, rgb(var(--wb) / 0.62), transparent 70%),
+    radial-gradient(80% 120% at 100% 10%, rgb(var(--violet) / 0.42), transparent 66%),
+    radial-gradient(90% 130% at 70% 115%, rgb(var(--long) / 0.42), transparent 66%),
+    rgb(var(--paper));
+}
+.dark .wash-swatch { --wb: var(--wd, var(--amber)); }
+@supports (color: hsl(from red h s l)) {
+  .wash-swatch {
+    background:
+      radial-gradient(90% 130% at 0% 0%, rgb(var(--wb) / 0.62), transparent 70%),
+      radial-gradient(80% 120% at 100% 10%, hsl(from rgb(var(--wb)) calc(h - 36) s calc(l + 6) / 0.52), transparent 66%),
+      radial-gradient(90% 130% at 70% 115%, hsl(from rgb(var(--wb)) calc(h + 26) s calc(l + 10) / 0.46), transparent 66%),
+      rgb(var(--paper));
+  }
+}
+.wash-swatch[data-three] {
+  background:
+    radial-gradient(90% 130% at 0% 0%, rgb(var(--w1) / 0.62), transparent 70%),
+    radial-gradient(80% 120% at 100% 10%, rgb(var(--w2) / 0.52), transparent 66%),
+    radial-gradient(90% 130% at 70% 115%, rgb(var(--w3) / 0.46), transparent 66%),
+    rgb(var(--paper));
+}
+.wash-pick { -webkit-appearance: none; appearance: none; padding: 0; }
+.wash-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.wash-pick::-webkit-color-swatch { border: none; border-radius: 5px; }
+.wash-pick::-moz-color-swatch { border: none; border-radius: 5px; }
+
+/* ---------------------------------------------------------------------------
+   Scroll bars (1.29.10): one look everywhere. A thin grey line (never the
+   theme's colour), a little wider and darker under the pointer, no arrow
+   buttons; in a rounded box or menu it keeps clear of the corners.
+
+   Only where the system's scroll bars take room (Windows, Linux, a Mac set to
+   always show them): app/layout.tsx's first script measures and sets
+   <html data-bars="classic">. Phones and a Mac's own bars float over the
+   page and fade away; those stay as they are (in dark mode they're light,
+   from color-scheme).
+
+   Chrome draws them from the -webkit- rules below, but ignores those on any
+   box where scrollbar-width or scrollbar-color is set (scrollbar-color is
+   inherited too): Windows then draws its own bar, with arrow buttons and
+   square ends that don't fit a rounded box (what showed up all over the app
+   before). So those two are only ever set for Firefox.
+
+     (no class)       every scroll bar, the page's own too
+     .styled-scroll   a rounded box, a popup's body, a menu
+     .widget-scroll   a list inside a widget: its own lane, faint until pointed at
+     .side-scroll     the side bar: only while pointed at
+     .no-scrollbar    none (rows you swipe); a swipe past their end never
+                      turns into the browser's back / forward
+   ------------------------------------------------------------------------- */
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+html[data-bars="classic"]::-webkit-scrollbar, html[data-bars="classic"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+html[data-bars="classic"]::-webkit-scrollbar-track, html[data-bars="classic"] ::-webkit-scrollbar-track { background: transparent; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb, html[data-bars="classic"] ::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.2); border: 3px solid transparent; border-radius: 999px; background-clip: padding-box; min-height: 36px; min-width: 36px; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb:hover, html[data-bars="classic"] ::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.36); border-width: 2px; }
+html[data-bars="classic"]::-webkit-scrollbar-thumb:active, html[data-bars="classic"] ::-webkit-scrollbar-thumb:active { background-color: rgb(var(--ink) / 0.46); border-width: 2px; }
+html[data-bars="classic"]::-webkit-scrollbar-button, html[data-bars="classic"] ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+html[data-bars="classic"]::-webkit-scrollbar-corner, html[data-bars="classic"] ::-webkit-scrollbar-corner { background: transparent; }
+html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:vertical { margin-top: 10px; margin-bottom: 10px; }
+html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:horizontal { margin-left: 10px; margin-right: 10px; }
+.widget-scroll { overflow-y: auto; scrollbar-gutter: stable; padding-right: 4px; }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar { width: 8px; }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.1); border-width: 2px; }
+html[data-bars="classic"] .widget-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.26); }
+html[data-bars="classic"] .widget-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.4); }
+/* Chrome restyles a scroll bar only when its box's own style changes: this makes pointing at the box count. */
+html[data-bars="classic"] :is(.widget-scroll, .side-scroll):hover { --bar-hover: 1; }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar { width: 8px; }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb { background-color: transparent; border-width: 2px; }
+html[data-bars="classic"] .side-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.2); }
+html[data-bars="classic"] .side-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--ink) / 0.36); }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-x: contain; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+/*
+  1.41.0: a row you swipe on a phone (the media kit picker's platforms and kinds) fades at its far end, so it shows
+  there's more past the edge; where the browser can tie it to the scroll, the fade goes once you reach the end.
+*/
+@property --swipe-end { syntax: "<length>"; inherits: false; initial-value: 28px; }
+@media (max-width: 639px) {
+  .swipe-row {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--swipe-end)), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - var(--swipe-end)), transparent);
+  }
+  @supports (animation-timeline: scroll()) {
+    .swipe-row { animation: swipe-end auto linear both; animation-timeline: scroll(self inline); }
+  }
+}
+@keyframes swipe-end { 0%, 80% { --swipe-end: 28px; } 100% { --swipe-end: 0px; } }
+/* Underlined tabs that don't fit on a computer go under More (1.30.1, components/ui/tab-overflow.tsx): out of the row, still measured. */
+[data-overflow] { position: absolute !important; left: 0; top: 0; visibility: hidden; pointer-events: none; }
+@supports not selector(::-webkit-scrollbar) {
+  html { scrollbar-color: rgb(var(--ink) / 0.25) transparent; }
+  * { scrollbar-width: thin; }
+  .widget-scroll { scrollbar-color: rgb(var(--ink) / 0.14) transparent; }
+  .widget-scroll:hover { scrollbar-color: rgb(var(--ink) / 0.3) transparent; }
+  .side-scroll { scrollbar-color: transparent transparent; }
+  .side-scroll:hover { scrollbar-color: rgb(var(--ink) / 0.22) transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+}
+
+/*
+  The bell (1.31.4; a fold since 1.29.1): each notification is a card of its
+  own, a pane of glass with the glass look. Cleared (its X, a swipe, Delete,
+  Clear all), it slides out (a swipe: the way it went), then its gap closes
+  and the ones under it move up into its place; Clear all takes them one
+  after another (--leave-delay). A new one slides in at the top. Read, it
+  loses its amber light. The timings match LEAVE_MS and ENTER_MS in
+  components/ui/notification-bell.tsx.
+*/
+/* 1.31.9: quicker (out in 0.2 s, the gap closed by 0.32 s). */
+.notif-item { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.22s var(--ease-out) calc(var(--leave-delay, 0ms) + 0.08s); }
+.notif-clip { min-height: 0; overflow: hidden; }
+/* Up and down only: sideways it slides out to the bell's own edge. */
+@supports (overflow: clip) { .notif-clip { overflow-x: visible; overflow-y: clip; } }
+.notif-gap { padding-bottom: 6px; }
+.notif-card {
+  position: relative;
+  border-radius: 14px;
+  background-color: rgb(var(--surface-2) / 0.72);
+  border: 1px solid rgb(var(--line) / 0.07);
+  transition: transform 0.34s var(--ease-spring), opacity 0.22s ease, background-color 0.15s ease;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.notif-card:hover { background-color: rgb(var(--surface-2)); }
+.notif-card > * { position: relative; }
+.notif-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(var(--amber) / 0.14), rgb(var(--amber) / 0) 62%);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.notif-card[data-unread]::before { opacity: 1; }
+.notif-card[data-dragging] { transition: none; cursor: grabbing; }
+.notif-card img { -webkit-user-drag: none; }
+/* Its words have the focus (they're its button): the card shows it, and its X. */
+.notif-card:has(.notif-main:focus-visible) { outline: 2px solid rgb(var(--amber)); outline-offset: -1px; }
+.notif-card:has(.notif-main:focus-visible) .notif-x { opacity: 1; }
+.notif-item[data-leaving] { grid-template-rows: 0fr; pointer-events: none; }
+.notif-item[data-leaving] .notif-card {
+  transform: translateX(110%) scale(0.97);
+  opacity: 0;
+  transition: transform 0.2s cubic-bezier(0.55, 0, 0.75, 0.25) var(--leave-delay, 0ms), opacity 0.16s ease var(--leave-delay, 0ms);
+}
+.notif-item[data-entering] { animation: notif-open 0.42s var(--ease-out) both; }
+.notif-item[data-entering] .notif-card { animation: notif-in 0.46s var(--ease-out) both; }
+@keyframes notif-open { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+@keyframes notif-in { from { opacity: 0; transform: translateY(-12px) scale(0.97); } to { opacity: 1; transform: none; } }
+.notif-empty { animation: rise-in 0.4s var(--ease-out) both; }
+/*
+  Toasts (1.31.4): one that goes slides out (up, on a phone, where they sit
+  at the top; a swipe: the way it went), then the others glide into its
+  place. Timings match LEAVE_MS in components/ui/toast-provider.tsx.
+*/
+.toast-item { display: grid; grid-template-rows: 1fr; justify-items: stretch; transition: grid-template-rows 0.26s var(--ease-out) 0.12s; animation: notif-open 0.26s var(--ease-out) backwards; }
+@media (min-width: 640px) { .toast-item { justify-items: end; } }
+.toast-clip { min-height: 0; overflow: hidden; }
+@supports (overflow: clip) { .toast-clip { overflow-x: visible; overflow-y: clip; } }
+.toast-gap { padding: 4px 0 12px; }
+/* 1.31.9: a finger on a toast only moves the toast (sideways, or up and away on a phone), never the page under it. */
+.toast-card { touch-action: none; transition: transform 0.34s var(--ease-spring), opacity 0.2s ease; }
+.toast-card[data-dragging] { transition: none; cursor: grabbing; }
+.toast-item[data-leaving] { grid-template-rows: 0fr; }
+.toast-item[data-leaving] .toast-card { transform: translateX(115%); opacity: 0; transition: transform 0.26s cubic-bezier(0.55, 0, 0.75, 0.25), opacity 0.2s ease; }
+@media (max-width: 639px) { .toast-item[data-leaving] .toast-card { transform: translateY(-110%) scale(0.96); } }
+
+/* The count on the bell pops in when it changes. */
+.bell-badge { animation: badge-pop 0.34s var(--ease-spring); }
+@keyframes badge-pop { from { transform: scale(0.55); } to { transform: none; } }
+/*
+  Glass: the bell is as clear as the cards on the page (its notifications
+  are panes of their own on it and keep the words readable), each card a
+  brighter pane lit along its top. Set as the colour itself: the rule that
+  keeps floating boxes nearly solid is more specific than a class. Over a
+  wallpaper it keeps the floor and the lift the bars have.
+*/
+html[data-glass] .notif-panel { background-color: rgb(var(--surface) / var(--glass-tint)); }
+html[data-glass]:has([data-dash-bg]) .notif-panel {
+  background-color: rgb(var(--surface) / max(var(--glass-tint), var(--wall-floor)));
+  -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+}
+html[data-glass] .notif-card { background-color: rgb(255 255 255 / 0.5); border-color: rgb(var(--glass-edge)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
+html[data-glass] .notif-card:hover { background-color: rgb(255 255 255 / 0.68); }
+html.dark[data-glass] .notif-card { background-color: rgb(255 255 255 / 0.07); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+html.dark[data-glass] .notif-card:hover { background-color: rgb(255 255 255 / 0.1); }
+html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
 
 @keyframes toastin {
   0% { opacity: 0; transform: translateY(14px) scale(0.96); }
@@ -267,9 +1275,11 @@ body {
   0% { background-position: 150% 0; }
   70%, 100% { background-position: -50% 0; }
 }
+/* 1.29.8: in the colour theme's own tint (a touch of its accent), so Cherry's loading pages are a soft pink, Ocean's a
+   soft blue, Ink's plain grey; the wave a little more of it. Same in light and dark. */
 .skeleton {
-  background-color: rgb(var(--surface-2));
-  background-image: linear-gradient(100deg, transparent 38%, rgb(var(--ink) / 0.06) 50%, transparent 62%);
+  background-color: color-mix(in srgb, rgb(var(--amber)) 7%, rgb(var(--surface-2)));
+  background-image: linear-gradient(100deg, transparent 38%, color-mix(in srgb, rgb(var(--amber)) 9%, rgb(var(--ink) / 0.05)) 50%, transparent 62%);
   background-size: 200% 100%;
   background-repeat: no-repeat;
   background-attachment: fixed;
@@ -363,26 +1373,43 @@ body {
   color: rgb(var(--sp-soft)); background: rgb(var(--sp-bg));
 }
 .pm-page-break.ProseMirror-selectednode { outline: 2px solid rgb(var(--amber) / 0.6); outline-offset: 2px; border-radius: 4px; }
-.print-only { display: none; }
+/* Links: the hand, like on any page (a click shows where it goes; Ctrl / ⌘ + click opens it). */
+.script-doc a { cursor: pointer; }
+/* Tab (1.27.5): a tab stop about half an inch in, like Word. */
+.script-doc { tab-size: 6; tab-size: 2.6em; }
+/* Lists inside lists without a style of their own go 1. → a. → i. (lib/list-markers.ts). */
+.script-doc ol ol { list-style-type: lower-alpha; }
+.script-doc ol ol ol { list-style-type: lower-roman; }
+.script-doc ol ol ol ol { list-style-type: decimal; }
 
-/* PDF export = the browser's print, showing only the paper. */
+/* PDF export (1.27.5) = the browser's print of a plain copy of the script
+   (modules/scripts/lib/print-script.ts), straight under <body>: everything
+   else is taken off the page while it prints, so nothing hidden can make
+   room (Firefox printed long scripts with page after page left blank). */
+#script-print-root { display: none; }
 @media print {
   @page { margin: 18mm; }
-  body * { visibility: hidden !important; }
-  .script-print, .script-print * { visibility: visible !important; }
-  .script-print {
-    position: absolute; left: 0; top: 0; width: 100% !important; max-width: none !important;
-    border: 0 !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
-    --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
+  html.vp-printing, html.vp-printing body {
+    background: #fff !important; height: auto !important; min-height: 0 !important; overflow: visible !important;
   }
-  .script-print .print-only { display: block; }
-  .script-print { min-height: 0 !important; height: auto !important; background: rgb(var(--sp-bg)) !important; }
-  .pm-page-break { break-after: page; height: 0 !important; margin: 0 !important; background: none !important; }
-  .pm-page-break::after { display: none !important; }
+  html.vp-printing body { display: block !important; padding: 0 !important; margin: 0 !important; }
+  html.vp-printing body > *:not(#script-print-root) { display: none !important; }
+  html.vp-printing #script-print-root { display: block !important; }
+  #script-print-root .script-paper {
+    --sp-bg: 255 255 255; --sp-ink: 0 0 0; --sp-soft: 70 70 70; --sp-line: 0 0 0;
+    background: #fff; color: #000; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; max-width: none;
+  }
+  #script-print-root .print-title { font-size: 20pt; font-weight: 700; line-height: 1.25; margin: 0 0 14pt; }
+  /* (pre-wrap: tabs and runs of spaces print as they're typed.) */
+  #script-print-root .script-doc { font-size: 12pt; line-height: 1.6; min-height: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+  #script-print-root .script-doc h1, #script-print-root .script-doc h2, #script-print-root .script-doc h3 { break-after: avoid; }
+  #script-print-root .script-doc p, #script-print-root .script-doc li { orphans: 2; widows: 2; }
+  #script-print-root .print-image { margin: 0.8em 0; break-inside: avoid; }
+  #script-print-root .print-image img { display: inline-block; max-width: 100%; height: auto; border-radius: 4px; }
+  #script-print-root .pm-page-break { break-after: page; height: 0; margin: 0; border: 0; background: none; }
+  #script-print-root .pm-page-break::after { content: none; display: none; }
+  #script-print-root mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
-  .script-image [contenteditable="false"] { display: none !important; }
-  .script-doc { min-height: 0; font-size: 12pt; }
-  .script-doc mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 
@@ -395,6 +1422,64 @@ body {
   --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
 }
 
+/* ---------------------------------------------------------------------------
+   Pop-ups (1.34.0): each comes in one way and leaves the same way backwards,
+   for as long. Its moving parts name how they move:
+     pop-dim    the darkened page behind a window (fades)
+     pop-fade   a picture shown big (fades)
+     pop-modal  a window or a prompt (rises a little, grows a little)
+     pop-menu   a menu, a picker, a small box from a button (grows from its button)
+     pop-drop   a box that drops from the top
+     pop-sheet  a phone's sheet (slides up from the bottom)
+     pop-drawer a side panel (slides in from the right; a sheet below md, 900px)
+     pop-card   a card at the edge of the page (What's new)
+   When one closes, components/ui/leaves.tsx keeps a still copy on screen
+   with data-leaving while its way in plays backwards (lib/pop-ghost.ts):
+   nothing in it can be pressed meanwhile. "backwards" on the way in: once in,
+   the part keeps no transform of the animation's (a fixed pop-up inside it
+   would place itself against it). */
+:root {
+  --pop-fast: 180ms;
+  --pop: 220ms;
+  --pop-slow: 320ms;
+  /* The way in settles into place (--ease-out); the way out leaves it, speeding up as it goes. (--ease-out
+     time-reversed would sit still for half the way out: it would feel like the click didn't land.) */
+  --ease-leave: cubic-bezier(0.4, 0, 1, 1);
+}
+.pop-dim, .pop-fade { animation: pop-dim var(--pop) var(--ease-out) backwards; }
+.pop-modal { animation: pop-modal var(--pop) var(--ease-out) backwards; }
+.pop-menu { --pop-y: -6px; animation: pop-menu var(--pop-fast) var(--ease-out) backwards; }
+.pop-menu.origin-bottom, .pop-menu[data-up] { --pop-y: 6px; }
+.pop-drop { animation: pop-drop var(--pop) var(--ease-out) backwards; }
+.pop-sheet, .pop-drawer { animation: pop-sheet var(--pop-slow) var(--ease-out) backwards; }
+@media (min-width: 900px) { .pop-drawer { animation: pop-drawer var(--pop-slow) var(--ease-out) backwards; } }
+.pop-card { animation: pop-card var(--pop-slow) var(--ease-out) backwards; }
+
+[data-leaving], [data-leaving] * { pointer-events: none !important; }
+[data-leaving] * { animation: none !important; }
+[data-leaving] .pop-dim, [data-leaving] .pop-fade { animation: pop-dim-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-modal { animation: pop-modal-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-menu { animation: pop-menu-out var(--pop-fast) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-drop { animation: pop-drop-out var(--pop) var(--ease-leave) forwards !important; }
+[data-leaving] .pop-sheet, [data-leaving] .pop-drawer { animation: pop-sheet-out var(--pop-slow) var(--ease-leave) forwards !important; }
+@media (min-width: 900px) { [data-leaving] .pop-drawer { animation: pop-drawer-out var(--pop-slow) var(--ease-leave) forwards !important; } }
+[data-leaving] .pop-card { animation: pop-card-out var(--pop-slow) var(--ease-leave) forwards !important; }
+
+@keyframes pop-dim { from { opacity: 0; } }
+@keyframes pop-dim-out { to { opacity: 0; } }
+@keyframes pop-modal { from { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes pop-modal-out { to { opacity: 0; transform: translateY(10px) scale(0.96); } }
+@keyframes pop-menu { from { opacity: 0; transform: translateY(var(--pop-y)) scale(0.96); } }
+@keyframes pop-menu-out { to { opacity: 0; transform: translateY(var(--pop-y)) scale(0.96); } }
+@keyframes pop-drop { from { opacity: 0; transform: translateY(-16px) scale(0.98); } }
+@keyframes pop-drop-out { to { opacity: 0; transform: translateY(-16px) scale(0.98); } }
+@keyframes pop-sheet { from { transform: translateY(100%); } }
+@keyframes pop-sheet-out { to { transform: translateY(100%); } }
+@keyframes pop-drawer { from { opacity: 0; transform: translateX(28px); } }
+@keyframes pop-drawer-out { to { opacity: 0; transform: translateX(28px); } }
+@keyframes pop-card { from { opacity: 0; transform: translateY(18px) scale(0.96); } }
+@keyframes pop-card-out { to { opacity: 0; transform: translateY(18px) scale(0.96); } }
+
 /* Pages rise in when you navigate. */
 /* Timeline marker: a ring pulses out when clicked. */
 @keyframes marker-ping {
@@ -402,15 +1487,6 @@ body {
   100% { box-shadow: 0 0 0 12px rgb(var(--amber) / 0); }
 }
 
-/* Bottom sheet rises; top popup drops in. */
-@keyframes sheetup {
-  from { transform: translateY(100%); }
-  to { transform: none; }
-}
-@keyframes sheetdown {
-  from { opacity: 0; transform: translateY(-16px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
 
 /* Ends on "transform: none" (not translateY(0)): a leftover transform
    would make fixed popups inside the page position against the page. */
@@ -425,6 +1501,9 @@ body {
    first, and the real content replaces it a moment later. Children
    animate whenever they're inserted, so the real content rises in too. */
 .motion-page > * { animation: page-in 0.42s var(--ease-out) backwards; }
+/* A page with its own wallpaper just fades in (1.29.4): while the rise ran, its transform made the
+   wallpaper (position: fixed) fill only the page's box instead of the screen. */
+.motion-page > [data-dash-bg] { animation-name: fadein; }
 
 /* Lists and tables cascade in. */
 @keyframes rise-in {
@@ -442,6 +1521,16 @@ body {
 .motion-stagger > *:nth-child(9) { animation-delay: 240ms; }
 .motion-stagger > *:nth-child(10) { animation-delay: 270ms; }
 .motion-stagger > *:nth-child(n + 11) { animation-delay: 300ms; }
+
+/* Long lists (1.32.5): rows and cards go in groups (LIST_CHUNK in lib/chunks.ts); a group off screen isn't laid
+   out or painted until it comes near, its height the one it had when last drawn (auto), or this guess before.
+   Groups, not each row: a thousand rows each watched on their own made scrolling stutter (frames of half a second
+   in the harness), 50 groups don't. What opens from a row (menus, pickers, dialogs) opens in a portal, so nothing
+   is cut off by a group (content-visibility contains its painting). */
+.list-chunk { content-visibility: auto; contain-intrinsic-block-size: auto 1450px; }
+/* Cards lift and cast a shadow when pointed at: 12 px of room around them inside the group (taken back outside it,
+   so the cards sit where they did; the list stacks groups with flex and a gap, not margins). */
+.list-chunk-cards { content-visibility: auto; contain-intrinsic-block-size: auto 1800px; padding: 12px; margin: -12px; }
 
 /* Popups and menus settle with a soft, decelerating scale. */
 [class*="animate-[modalin"] { animation-timing-function: var(--ease-out) !important; animation-duration: 0.22s !important; }
@@ -471,6 +1560,58 @@ button { transition-timing-function: var(--ease-out); }
   box-shadow: 0 0 0 6px rgb(var(--amber) / 0.08);
   background-image: linear-gradient(rgb(var(--amber) / 0.08), rgb(var(--amber) / 0.08));
 }
+
+/* Picking shorts on the table (1.38.0, modules/short-videos/components/pick-shorts.tsx): the row's number gives way to
+   its tick box, and the whole row is the tick box (on top of its link, toggles and ⋯ until you're done). */
+[data-selecting] [data-row-num] { visibility: hidden; }
+.row-pick {
+  position: absolute; inset: 0; z-index: 20; width: 100%; cursor: pointer;
+  background: transparent; transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* 1.40.0: no press-in on a tick area as wide as a row or a card: 0.97 of a whole row moved its box ~18 px from under the
+   pointer (the owner: "the box on the left is unclickable because the short goes to the right when clicking"). */
+button.row-pick:not(:disabled):active,
+button.card-pick:not(:disabled):active { scale: none; }
+.row-pick:hover { background: rgb(var(--ink) / 0.03); }
+.row-pick.is-on { background: rgb(var(--amber) / 0.08); box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.row-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.row-pick.is-on:focus-visible { box-shadow: inset 3px 0 0 rgb(var(--amber)), inset 0 0 0 2px rgb(var(--amber)); }
+.pick-box {
+  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid rgb(var(--ink) / 0.3); background: rgb(var(--surface)); color: #fff;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.pick-box.is-on { background: rgb(var(--amber)); border-color: rgb(var(--amber)); }
+.pick-box.is-on svg { animation: pick-pop 0.24s var(--ease-spring) both; }
+.row-pick-box { position: absolute; left: 14px; top: 50%; margin-top: -9px; animation: pick-pop 0.22s var(--ease-spring) both; }
+/* 1.40.0: cards too (shorts and long videos, components/ui/list-pick.tsx): the whole card is the tick box, its box in
+   the corner where the card's number was; picked, the card is outlined. */
+[data-selecting] [data-card-num] { visibility: hidden; }
+.card-pick {
+  position: absolute; inset: 0; z-index: 20; width: 100%; border-radius: inherit; cursor: pointer;
+  background: transparent; transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-pick:hover { background: rgb(var(--ink) / 0.03); }
+.card-pick.is-on { background: rgb(var(--amber) / 0.07); box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.card-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.card-pick.is-on:focus-visible { box-shadow: inset 0 0 0 3px rgb(var(--amber)); }
+.card-pick-box { position: absolute; left: var(--pick-x, 14px); top: var(--pick-y, 14px); animation: pick-pop 0.22s var(--ease-spring) both; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
+.card-pick-box.is-right { left: auto; right: var(--pick-x, 14px); }
+.pick-count {
+  min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+  animation: pick-pop 0.24s var(--ease-spring) both;
+}
+@keyframes pick-pop { from { opacity: 0; transform: scale(0.55); } }
+
+/* A menu's second list (1.38.0: a short's ⋯ → Move to step) comes in from the right, and the first one back from the
+   left. */
+.menu-slide-in { animation: menu-slide 0.2s var(--ease-out) both; }
+.menu-back-in { animation: menu-back 0.2s var(--ease-out) both; }
+@keyframes menu-slide { from { opacity: 0; transform: translateX(12px); } }
+@keyframes menu-back { from { opacity: 0; transform: translateX(-12px); } }
 
 /* Off: the user's setting, or the device asks for less motion. */
 html[data-motion="off"] *,
@@ -580,7 +1721,11 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
    in studio.tsx) stack the widgets in reading order (--o), 2 columns on
    small laptops and tablets, 1 under 600px.
    ------------------------------------------------------------------------- */
-.dash-cq { container-type: inline-size; }
+/* The digital clock's colon fades with the seconds (1.27.5); still when motion is off. */
+.digital-colon { transition: opacity 0.35s ease; }
+html[data-motion="off"] .digital-colon { opacity: 1 !important; }
+@media (prefers-reduced-motion: reduce) { html:not([data-motion="on"]) .digital-colon { opacity: 1 !important; } }
+.dash-cq { container: dash / inline-size; }
 .dash-board {
   --gap: 12px;
   /* Exact px from the script once measured; container units until then
@@ -630,6 +1775,8 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
   z-index: 40;
   width: var(--rw);
   height: var(--rh);
+  /* Pulled by a left or top edge, its corner moves with it (1.27.5). */
+  transform: translate(var(--rx, calc(var(--x) * var(--col))), var(--ry, calc(var(--y) * var(--row)))) rotate(0deg) scale(1);
   transition: box-shadow 0.2s ease;
   box-shadow: 0 18px 40px -16px rgb(0 0 0 / 0.35), 0 0 0 1.5px rgb(var(--amber) / 0.7);
 }
@@ -665,7 +1812,7 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
 }
 .dash-cells.is-on { opacity: 1; }
 .dash-cells > span { border-radius: 10px; background: rgb(var(--line) / 0.05); box-shadow: inset 0 0 0 1px rgb(var(--line) / 0.05); }
-@container (max-width: 1099px) {
+@container dash (max-width: 1099px) {
   .dash-board {
     display: grid;
     height: auto !important;
@@ -687,15 +1834,426 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
   .dash-board .dash-item.is-removing { transform: scale(0.92); }
   .dash-ghost, .dash-cells, .dash-resize { display: none !important; }
 }
-@container (max-width: 599px) {
+@container dash (max-width: 599px) {
   .dash-board { grid-template-columns: minmax(0, 1fr); }
   .dash-item { grid-column: span 1; grid-row: span var(--mhp, var(--mh, 3)); }
 }
+
+/* A profile's showcases (1.28.0): the same board, stacking at narrower widths (a profile is narrower than a dashboard). */
+.prof-cq { container: prof / inline-size; }
+@container prof (max-width: 759px) {
+  .dash-board {
+    display: grid;
+    height: auto !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 60px;
+    gap: var(--gap);
+    grid-auto-flow: row dense;
+  }
+  .dash-item {
+    position: relative;
+    width: auto;
+    height: auto;
+    transform: none;
+    order: var(--o);
+    grid-column: span var(--mw, 1);
+    grid-row: span var(--mh, 3);
+    transition: opacity 0.2s ease;
+  }
+  .dash-board .dash-item.is-removing { transform: scale(0.92); }
+  .dash-ghost, .dash-cells, .dash-resize { display: none !important; }
+}
+@container prof (max-width: 479px) {
+  .dash-board { grid-template-columns: minmax(0, 1fr); }
+  .dash-item { grid-column: span 1; grid-row: span var(--mhp, var(--mh, 3)); }
+}
+
+/*
+  Profiles (1.28.0). The header: a soft glow in its corner (1.29.5: one
+  colour, --pg, your level's by default, or the one you picked; off with
+  data-glow="off". It was your account's colour and your level's, green
+  and red for some). Over a background picture it's frosted like the
+  showcases.
+*/
+.prof-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--pg, transparent) 18%, transparent), transparent 62%),
+    radial-gradient(60% 120% at 100% 100%, color-mix(in srgb, var(--pg, transparent) 9%, transparent), transparent 60%);
+}
+.prof-head[data-glow="off"]::before { content: none; }
+
+/* Your own picture changes with a click (1.29.5): a camera over it when you point at it; on touch screens a small one in its corner, always. */
+.pf-change { position: relative; display: inline-flex; flex-shrink: 0; border-radius: 50%; cursor: pointer; }
+.pf-change:focus-visible { outline: 2px solid rgb(var(--amber)); outline-offset: 8px; }
+.pf-change-face {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease-out);
+}
+.pf-change:hover .pf-change-face,
+.pf-change:focus-visible .pf-change-face,
+.pf-change[data-busy] .pf-change-face { opacity: 1; }
+/* Initials step aside for the camera. */
+@media (hover: hover) {
+  .pf-change .pf-img { transition: color 0.16s var(--ease-out); }
+  .pf-change:is(:hover, :focus-visible, [data-busy]) .pf-img { color: transparent; }
+}
+.pf-spin { width: 24px; height: 24px; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; }
+@media (hover: none) {
+  .pf-change-face {
+    inset: auto;
+    right: -2px;
+    bottom: -2px;
+    width: 32px;
+    height: 32px;
+    opacity: 1;
+    background: rgb(var(--surface));
+    color: rgb(var(--ink));
+    box-shadow: 0 0 0 2px rgb(var(--surface)), 0 2px 8px rgb(0 0 0 / 0.22);
+  }
+  .pf-change-face svg, .pf-change-face .pf-spin { width: 16px; height: 16px; }
+}
+
+/* Colours to pick (1.29.5, Customize → Colours): round swatches, "your own" a rainbow until it's picked. */
+.pf-swatch {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  transition: transform 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+.pf-swatch:hover { transform: scale(1.1); }
+.pf-swatch[aria-checked="true"], .pf-swatch-own[data-on] { box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--ink) / 0.8); }
+.pf-swatch:focus-visible, .pf-swatch-own:focus-within { outline: 2px solid rgb(var(--amber)); outline-offset: 4px; }
+.pf-swatch-own { background: conic-gradient(#e5484d, #f76b15, #e2a300, #30a46c, #00a2c7, #3e63dd, #ab4aba, #e5484d); }
+.pf-swatch-own[data-on] { background: var(--c); }
+.pf-swatch-own input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.pf-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.pf-dot-off { background: linear-gradient(135deg, transparent calc(50% - 1px), rgb(var(--ink-faint)) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)); box-shadow: inset 0 0 0 1.5px rgb(var(--ink-faint)); }
+
+/* The Numbers showcase's icons (1.29.5), in the XP bar's colour (--pb). */
+.pf-stat-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pb, rgb(var(--amber)));
+  background: color-mix(in srgb, var(--pb, rgb(var(--amber))) 15%, transparent);
+}
+/* Over a background picture: solid, or glass like the showcases with the glass look on (1.29.2, the wallpaper rules). */
+
+/* The picture in its frame: --s its size, --pf the frame's colour. Moving frames stand still when animations are off (the rules further down). */
+.pf-avatar { position: relative; display: inline-flex; width: var(--s); height: var(--s); flex-shrink: 0; }
+.pf-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pf-on, white); /* 1.35.0: dark initials on a light colour (lib/contrast.ts onFill) */
+  font-weight: 700;
+}
+.pf-ring { position: absolute; inset: calc(var(--s) / -16); border-radius: 50%; pointer-events: none; }
+.pf-avatar[data-frame="ring"] .pf-ring { border: max(2px, calc(var(--s) / 30)) solid var(--pf); }
+.pf-avatar[data-frame="dashed"] .pf-ring { border: max(2px, calc(var(--s) / 28)) dashed var(--pf); animation: pf-spin 16s linear infinite; }
+.pf-avatar[data-frame="glow"] .pf-ring {
+  border: max(1.5px, calc(var(--s) / 44)) solid color-mix(in srgb, var(--pf) 70%, white);
+  box-shadow: 0 0 calc(var(--s) / 5) calc(var(--s) / 24) color-mix(in srgb, var(--pf) 55%, transparent);
+  animation: pf-pulse 3.2s ease-in-out infinite;
+}
+.pf-avatar[data-frame="duo"] .pf-ring { inset: calc(var(--s) / -11); border: max(2px, calc(var(--s) / 34)) solid var(--pf); }
+.pf-avatar[data-frame="duo"] .pf-ring::after {
+  content: "";
+  position: absolute;
+  inset: max(2px, calc(var(--s) / 30));
+  border-radius: 50%;
+  border: max(1.5px, calc(var(--s) / 48)) solid color-mix(in srgb, var(--pf) 55%, white);
+}
+.pf-avatar[data-frame="orbit"] .pf-ring { inset: calc(var(--s) / -12); border: 1.5px solid color-mix(in srgb, var(--pf) 45%, transparent); animation: pf-spin 7s linear infinite; }
+.pf-avatar[data-frame="orbit"] .pf-ring::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--s) / -22);
+  left: 50%;
+  width: max(6px, calc(var(--s) / 11));
+  height: max(6px, calc(var(--s) / 11));
+  margin-left: calc(max(6px, calc(var(--s) / 11)) / -2);
+  border-radius: 50%;
+  background: var(--pf);
+  box-shadow: 0 0 calc(var(--s) / 10) var(--pf);
+}
+.pf-avatar[data-frame="sunburst"] .pf-ring {
+  inset: calc(var(--s) / -8);
+  background: repeating-conic-gradient(var(--pf) 0deg 5deg, transparent 5deg 15deg);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - var(--s) / 16), #000 calc(50% - var(--s) / 16 + 1px));
+  mask: radial-gradient(circle, transparent calc(50% - var(--s) / 16), #000 calc(50% - var(--s) / 16 + 1px));
+  animation: pf-spin 48s linear infinite;
+}
+.pf-avatar[data-frame="laurel"] .pf-ring { border: max(1.5px, calc(var(--s) / 48)) solid color-mix(in srgb, var(--pf) 60%, transparent); }
+.pf-avatar[data-frame="prism"] .pf-ring {
+  inset: calc(var(--s) / -14);
+  background: conic-gradient(#ff5f6d, #ffc371, #47e891, #3fa9f5, #a46bff, #ff5f6d);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - var(--s) / 22), #000 calc(50% - var(--s) / 22 + 1px));
+  mask: radial-gradient(circle, transparent calc(50% - var(--s) / 22), #000 calc(50% - var(--s) / 22 + 1px));
+  filter: drop-shadow(0 0 calc(var(--s) / 16) rgb(255 255 255 / 0.35));
+  animation: pf-spin 6s linear infinite;
+}
+.pf-avatar[data-frame="crown"] .pf-ring { border: max(2px, calc(var(--s) / 26)) solid var(--pf); box-shadow: 0 0 calc(var(--s) / 8) color-mix(in srgb, var(--pf) 45%, transparent); }
+.pf-deco { position: absolute; inset: calc(var(--s) / -6.5); width: calc(100% + var(--s) / 3.25); height: calc(100% + var(--s) / 3.25); z-index: 2; pointer-events: none; }
+.pf-crown { position: absolute; z-index: 2; left: 50%; top: calc(var(--s) / -3.4); width: calc(var(--s) / 2.4); transform: translateX(-50%) rotate(-8deg); pointer-events: none; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.25)); }
+@keyframes pf-spin { to { transform: rotate(360deg); } }
+@keyframes pf-pulse { 50% { box-shadow: 0 0 calc(var(--s) / 3.5) calc(var(--s) / 14) color-mix(in srgb, var(--pf) 70%, transparent); } }
+
+/* A level badge: a circle in the level's colour (--lv), a hexagon from level 100. */
+.pf-level {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ls);
+  height: var(--ls);
+  border-radius: 50%;
+  border: max(2px, calc(var(--ls) / 15)) solid var(--lv);
+  background: color-mix(in srgb, var(--lv) 12%, rgb(var(--surface)));
+  color: rgb(var(--ink));
+  font-weight: 800;
+  font-size: calc(var(--ls) * 0.4);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.pf-level[data-shape="hexagon"] { border: 0; border-radius: 0; background: var(--lv); clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); }
+.pf-level[data-shape="hexagon"]::before {
+  content: "";
+  position: absolute;
+  inset: max(2px, calc(var(--ls) / 15));
+  background: color-mix(in srgb, var(--lv) 14%, rgb(var(--surface)));
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+}
+.pf-level > span { position: relative; }
+.pf-xp { transition: width 0.6s var(--ease-out); }
+
+/* Achievement medallions: the tier's colours when reached; grey, with how far along, when not. */
+.pf-medal { --m1: #94a3b8; --m2: #64748b; position: relative; display: inline-flex; width: var(--ms); height: var(--ms); flex-shrink: 0; }
+.pf-medal[data-tier="rare"] { --m1: #60a5fa; --m2: #2563eb; }
+.pf-medal[data-tier="epic"] { --m1: #c084fc; --m2: #7e22ce; }
+.pf-medal[data-tier="legendary"] { --m1: #fcd34d; --m2: #d97706; }
+.pf-medal-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--m1) 80%, white), var(--m1) 45%, var(--m2));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), inset 0 -2px 4px rgb(0 0 0 / 0.18), 0 2px 6px -2px color-mix(in srgb, var(--m2) 60%, transparent);
+}
+.pf-medal[data-locked] .pf-medal-face {
+  color: rgb(var(--ink-faint));
+  background: rgb(var(--line) / 0.1);
+  box-shadow: none;
+  outline: 2px solid transparent;
+}
+.pf-medal[data-locked]::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(rgb(var(--amber) / 0.75) var(--mp), rgb(var(--line) / 0.15) 0);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 1.5px));
+  mask: radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 1.5px));
+}
+.pf-medal-lock {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(var(--surface));
+  color: rgb(var(--ink-faint));
+  box-shadow: 0 0 0 1px rgb(var(--line) / 0.2);
+}
+.pf-featured .pf-medal-face { box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.45), inset 0 -4px 8px rgb(0 0 0 / 0.2), 0 10px 26px -10px color-mix(in srgb, var(--m2) 80%, transparent); }
+.pf-tier { color: #64748b; }
+.pf-tier[data-tier="rare"] { color: #2563eb; }
+.pf-tier[data-tier="epic"] { color: #9333ea; }
+.pf-tier[data-tier="legendary"] { color: #d97706; }
+.dark .pf-tier { color: #94a3b8; }
+.dark .pf-tier[data-tier="rare"] { color: #60a5fa; }
+.dark .pf-tier[data-tier="epic"] { color: #c084fc; }
+.dark .pf-tier[data-tier="legendary"] { color: #fbbf24; }
+
+/*
+  A medal's card (1.29.6, achievements.tsx): point at a medal, tap it or Tab
+  to it. One card for the page, fixed beside the medal with an arrow at it
+  (--ax). It rises in; the medal in it spins in with a shine sweeping across,
+  or, still locked, its ring fills to how far along you are (--mp is
+  registered so it can move). Everything stands still with animations off.
+*/
+@property --mp { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+.pf-medal-face { position: relative; overflow: hidden; }
+.pf-medal-hit { display: inline-flex; border-radius: 50%; cursor: pointer; outline: none; transition: transform 0.18s var(--ease-spring); }
+@media (hover: hover) { .pf-medal-hit:hover { transform: translateY(-2px) scale(1.07); } }
+.pf-medal-hit:focus-visible { box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--amber)); }
+.pf-card {
+  position: fixed;
+  z-index: 130;
+  width: min(284px, calc(100vw - 16px));
+  padding: 12px 14px 13px;
+  border-radius: 14px;
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--line) / 0.14);
+  box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08);
+  pointer-events: none;
+  transform-origin: var(--ax, 50%) 100%;
+  animation: pf-card-in 0.2s var(--ease-out) both;
+}
+.pf-card[data-below] { transform-origin: var(--ax, 50%) 0; animation-name: pf-card-in-below; }
+.pf-card::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--ax, 50%) - 6px);
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: rgb(var(--surface));
+  border-right: 1px solid rgb(var(--line) / 0.14);
+  border-bottom: 1px solid rgb(var(--line) / 0.14);
+  transform: rotate(45deg);
+}
+.pf-card[data-below]::after { bottom: auto; top: -6px; border: 0; border-left: 1px solid rgb(var(--line) / 0.14); border-top: 1px solid rgb(var(--line) / 0.14); }
+@keyframes pf-card-in { from { opacity: 0; transform: translateY(6px) scale(0.94); } }
+@keyframes pf-card-in-below { from { opacity: 0; transform: translateY(-6px) scale(0.94); } }
+.pf-card-medal { display: inline-flex; flex-shrink: 0; }
+.pf-card .pf-medal { animation: pf-medal-pop 0.62s var(--ease-spring) 0.04s both; }
+.pf-card .pf-medal[data-locked] { animation: pf-medal-pop 0.62s var(--ease-spring) 0.04s both, pf-ring-fill 0.9s var(--ease-out) 0.18s both; }
+.pf-card .pf-medal:not([data-locked]) .pf-medal-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.65) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: pf-shine 0.9s var(--ease-out) 0.38s both;
+}
+.pf-card[data-tier="legendary"] .pf-medal:not([data-locked]) .pf-medal-face { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 0 18px color-mix(in srgb, var(--m1) 70%, transparent); }
+.pf-card-bar { background: rgb(var(--amber)); transform-origin: left; animation: pf-bar-grow 0.8s var(--ease-out) 0.18s both; }
+@keyframes pf-medal-pop {
+  from { opacity: 0; transform: scale(0.4) rotate(-30deg); }
+  60% { opacity: 1; transform: scale(1.1) rotate(6deg); }
+  to { transform: none; }
+}
+@keyframes pf-shine { to { transform: translateX(120%); } }
+@keyframes pf-ring-fill { from { --mp: 0deg; } }
+@keyframes pf-bar-grow { from { transform: scaleX(0); } }
+
+/* Streak (1.29.6): the flame, and the last two weeks (--pb: the XP bar's colour). */
+.pf-streak-flame { width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: rgb(var(--ink-faint)); background: rgb(var(--line) / 0.1); }
+.pf-streak-flame[data-on] { color: var(--pb); background: color-mix(in srgb, var(--pb) 16%, transparent); }
+.pf-streak-day { display: block; width: 100%; max-width: 24px; aspect-ratio: 1; border-radius: 5px; background: rgb(var(--line) / 0.12); }
+.pf-streak-day[data-on] { background: var(--pb); }
+.pf-streak-day[data-today] { box-shadow: 0 0 0 1.5px rgb(var(--surface)), 0 0 0 3px color-mix(in srgb, var(--pb) 55%, transparent); }
+
+/* Milestones (1.29.6): dates, then medals on a line. */
+.pf-timeline { position: relative; }
+.pf-timeline::before { content: ""; position: absolute; top: 13px; bottom: 13px; left: calc(4.4rem + 10px + 12px); width: 2px; border-radius: 1px; background: rgb(var(--line) / 0.15); }
+.pf-tl-row { position: relative; display: grid; grid-template-columns: 4.4rem 26px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 26px; }
+.pf-tl-row > :nth-child(2) { position: relative; z-index: 1; justify-self: center; }
+.pf-tl-date { font-size: 11.5px; color: rgb(var(--ink-faint)); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-tl-dot { width: 10px; height: 10px; border-radius: 50%; background: rgb(var(--surface)); box-shadow: inset 0 0 0 2px rgb(var(--ink-faint)); }
+
+/* Clip's XP (1.29.7, xp-cheers.tsx): "+40 XP" at the bottom (above the phone's tab bar), a spring in, the bar filling;
+   the level up card's badge spins in. */
+.xp-pop-wrap { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 5.25rem); z-index: 205; display: flex; justify-content: center; padding: 0 12px; pointer-events: none; }
+@media (min-width: 768px) { .xp-pop-wrap { bottom: 1.5rem; } }
+.xp-pop {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 12px;
+  border-radius: 18px;
+  background: rgb(var(--surface));
+  box-shadow: 0 18px 44px -14px rgb(0 0 0 / 0.42), 0 0 0 1px rgb(var(--line) / 0.12);
+  animation: xp-pop-in 0.5s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.xp-pop.is-out { animation: xp-pop-out 0.3s ease-in forwards; }
+@keyframes xp-pop-in { from { opacity: 0; transform: translateY(28px) scale(0.9); } }
+@keyframes xp-pop-out { to { opacity: 0; transform: translateY(18px) scale(0.96); } }
+.xp-pop-bar { transition: width 0.9s var(--ease-out) 0.15s; }
+.lv-up-badge { display: inline-flex; animation: lv-up-badge 0.8s cubic-bezier(0.3, 1.5, 0.5, 1) 0.2s both; }
+@keyframes lv-up-badge { from { opacity: 0; transform: scale(0.2) rotate(-40deg); } }
+
+/* Clip's "new look" screen (1.29.8, look-screen.tsx): solid paper over everything while a theme, light or dark, or glass
+   is put on (it fades in before the change and out after it). */
+.look-screen { position: fixed; inset: 0; z-index: 600; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(var(--paper)); animation: look-in 0.12s ease-out both; }
+.look-screen.is-out { animation: look-out 0.24s ease-in forwards; }
+@keyframes look-in { from { opacity: 0; } }
+@keyframes look-out { to { opacity: 0; } }
+.look-screen-card { display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 22rem; }
+.look-screen-dots { display: flex; gap: 6px; margin-top: 14px; }
+.look-screen-dots span { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--amber)); animation: look-dot 1s ease-in-out infinite; }
+.look-screen-dots span:nth-child(2) { animation-delay: 0.15s; }
+.look-screen-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes look-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
+
+/* Clip's secret (1.29.7, the tasks widget's All done): a squish on every tap, a spin on the seventh. */
+.clip-tap { display: inline-flex; border-radius: 9999px; cursor: default; -webkit-tap-highlight-color: transparent; }
+.clip-tap:focus-visible { outline: 2px solid rgb(var(--amber)); outline-offset: 4px; }
+.clip-tap .clip-bump { display: inline-flex; animation: clip-bump 0.32s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.clip-tap[data-secret] .clip-bump { animation: clip-secret 0.9s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+@keyframes clip-bump { 40% { transform: scale(1.12, 0.88); } }
+@keyframes clip-secret { 30% { transform: translateY(-14%) scale(1.15) rotate(-12deg); } 70% { transform: translateY(-6%) scale(1.05) rotate(360deg); } to { transform: rotate(360deg); } }
+
+/* Busiest days (1.29.6): a bar a weekday, the busiest in full colour. */
+.pf-rhythm-bar { display: block; width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px; background: color-mix(in srgb, var(--pb) 35%, transparent); }
+.pf-rhythm-bar[data-top] { background: var(--pb); }
 
 /* A video's numbers in its header (1.21.0): all in one row when they fit,
    else rows of the same length (3 + 3, 3 + 2, 2 + 2), else pairs, so no
    number is left alone on a row. `data-n`: how many numbers there are;
    the widths keep about 100px per number. */
+/*
+  An outlier's row (Outliers' lists, a panel's Latest uploads; 1.34.5): laid out by the room the row has, not the
+  window's width. With less than 540px (a phone, or a column beside another) the multiplier goes on the picture and
+  the column on the right goes, so the title gets the width: in a channel panel's half-width column it was squeezed
+  to a word a line, under its chips. (VideoRow in modules/outliers/components/video-card.tsx.)
+*/
+.vrow { container: vrow / inline-size; }
+.vrow .vrow-narrow { display: none; }
+@container vrow (max-width: 539px) {
+  .vrow .vrow-narrow { display: inline-flex; }
+  .vrow .vrow-wide { display: none; }
+  .vrow .vrow-thumb { width: 124px; }
+}
+
 .stat-cq { container-type: inline-size; }
 .stat-grid { display: grid; gap: 10px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @container (min-width: 288px) {
@@ -709,20 +2267,7 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
 @container (min-width: 800px) { .stat-grid[data-n="7"] { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 @container (min-width: 910px) { .stat-grid[data-n="8"] { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 
-/* Lists that scroll inside a widget: a thin scrollbar in its own lane (it
-   never covers a date, a badge or an avatar), faint until you point at it. */
-.widget-scroll {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--line) / 0.2) transparent;
-  scrollbar-gutter: stable;
-  padding-right: 4px;
-}
-.widget-scroll:hover { scrollbar-color: rgb(var(--amber) / 0.55) transparent; }
-.widget-scroll::-webkit-scrollbar { width: 6px; }
-.widget-scroll::-webkit-scrollbar-track { background: transparent; }
-.widget-scroll::-webkit-scrollbar-thumb { background: rgb(var(--line) / 0.2); border-radius: 6px; }
-.widget-scroll:hover::-webkit-scrollbar-thumb { background: rgb(var(--amber) / 0.55); }
+/* Lists that scroll inside a widget: .widget-scroll, with the other scroll bars (1.29.10). */
 
 /* ---------------------------------------------------------------------------
    To-do list: checking things off should feel good.
@@ -892,11 +2437,9 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
 }
 
 /* ---------------------------------------------------------------------------
-   What's new (components/ui/whats-new.tsx): the update card springs in from
-   below; the sidebar dot breathes until you've looked. */
-@keyframes whats-new-in {
-  from { opacity: 0; transform: translateY(18px) scale(0.96); }
-}
+   What's new (components/ui/whats-new.tsx): the update card rises in from
+   below and sinks back the same way (pop-card, 1.34.0); the sidebar dot
+   breathes until you've looked. */
 @keyframes whats-new-dot {
   50% { box-shadow: 0 0 0 4px rgb(var(--amber) / 0.2); }
 }
@@ -911,6 +2454,63 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
   35% { transform: rotate(0deg); }
   55% { transform: rotate(-20deg); }
   100% { transform: rotate(-12deg); }
+}
+
+/* ---------------------------------------------------------------------------
+   A kit page being updated (1.41.0, modules/media-kit/components/kit-page-busy.tsx):
+   over a page of the media kit's preview while a change is drawn into it (only
+   there). A beat after the change (a quick one never shows it), the page dims a
+   little, a light sweeps across it in the theme's own colour and a tag says
+   Updating. With animations off: the same, still, once the beat has passed. */
+.kit-page-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: rgb(var(--page-paper, var(--surface)) / 0.45);
+  box-shadow: inset 0 0 0 2px rgb(var(--amber) / 0.6);
+  animation: kit-busy-in 0.25s var(--ease-out) 0.2s both;
+}
+.kit-page-busy::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, rgb(var(--amber) / 0.12) 30%, rgb(var(--amber) / 0.26) 50%, rgb(var(--amber) / 0.12) 70%, transparent);
+  transform: translateX(-110%) skewX(-14deg);
+  animation: kit-busy-sweep 1.35s cubic-bezier(0.45, 0, 0.35, 1) 0.2s infinite;
+}
+.kit-page-busy-tag {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 11px 3px 6px;
+  border-radius: 999px;
+  background: rgb(var(--surface));
+  color: rgb(var(--amber));
+  border: 1px solid rgb(var(--amber) / 0.35);
+  box-shadow: 0 8px 20px -10px rgb(var(--amber) / 0.7), 0 1px 3px rgb(0 0 0 / 0.08);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.kit-page-busy-tag > span { color: rgb(var(--ink)); }
+.clap-loader { width: 20px; height: 20px; flex-shrink: 0; overflow: visible; }
+.clap-loader-arm { transform-box: view-box; transform-origin: 4px 11px; animation: clap-loader 0.9s ease-in-out infinite; }
+@keyframes kit-busy-in { from { opacity: 0; } }
+@keyframes kit-busy-sweep { to { transform: translateX(340%) skewX(-14deg); } }
+@keyframes clap-loader { 0%, 100% { transform: rotate(-24deg); } 45% { transform: rotate(-24deg); } 62% { transform: rotate(2deg); } 72% { transform: rotate(-5deg); } 82% { transform: rotate(0deg); } }
+/* Animations off (the setting, or the device's "reduce motion"): no wait in CSS, so the tag waits for data-late. */
+html[data-motion="off"] .kit-page-busy:not([data-late]) { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .kit-page-busy:not([data-late]) { visibility: hidden; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1053,15 +2653,243 @@ html.dark .word-absent { background: #3f3a31; border-color: #3f3a31; }
   to { opacity: 1; transform: none; }
 }
 .deal > * { animation: deal-in 0.5s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 26ms); }
-@keyframes drawer-in {
-  from { opacity: 0; transform: translateX(28px); }
-  to { opacity: 1; transform: none; }
-}
 /* The multiplier: tabular figures, a hair tighter. */
 .mult { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* A niche filling in (1.29.9): when the list itself says "Finding channels and videos…", the line at the top doesn't say it again. */
+.ol-page:has([data-finding-note]) .ol-finding-banner { display: none; }
+/* Audience (1.29.11): each card's bar grows once; Add's plus turns when pointed at; a niche it was just added to pops in. */
+@keyframes aud-grow { from { transform: scaleX(0); } to { transform: none; } }
+.aud-bar { transform-origin: 0 50%; animation: aud-grow 0.7s var(--ease-out) both; }
+.aud-plus { transition: transform 0.22s var(--ease-out); }
+.aud-add:hover .aud-plus { transform: rotate(90deg); }
+@keyframes aud-pop { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }
+.aud-pop { animation: aud-pop 0.34s var(--ease-out) both; }
 /* A thumbnail wall: pictures fill their tiles, the title rises on hover/focus. */
 .thumb-tile .thumb-caption { opacity: 0; transform: translateY(6px); transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out); }
 .thumb-tile:hover .thumb-caption, .thumb-tile:focus-visible .thumb-caption { opacity: 1; transform: none; }
 @media (hover: none) { .thumb-tile .thumb-caption { opacity: 1; transform: none; } }
 /* The panels' bar charts grow from the baseline once (each bar a little after the last). */
 .spike-bar > span { transform-origin: 50% 100%; animation: spike-grow 0.6s var(--ease-out) backwards; animation-delay: inherit; }
+
+/* ---------------------------------------------------------------------------
+   Business (1.42.0, modules/business): the cash book as a spreadsheet. Thin
+   lines between the cells, the header and the first column held while it
+   scrolls, the cell you're on outlined in amber (typing goes into it), each
+   month's total and balance rows set apart. A tab comes in with a short
+   fade; the month bars grow once. (1.43.0: the new line is typed above the
+   table, entry-composer.tsx, no longer in a first row of it.) */
+.biz-tab-in { animation: fadein 0.22s var(--ease-out) both; }
+.biz-grid tbody tr { background: rgb(var(--surface)); }
+.biz-grid .biz-td {
+  padding: 0.45rem 0.625rem;
+  border-bottom: 1px solid rgb(var(--line) / 0.08);
+  vertical-align: top;
+}
+.biz-grid .biz-row:hover { background: color-mix(in srgb, rgb(var(--surface-2)) 55%, rgb(var(--surface))); }
+.biz-grid .biz-cell { cursor: cell; outline: none; position: relative; }
+.biz-grid .biz-cell:focus-visible,
+.biz-grid .biz-on {
+  box-shadow: inset 0 0 0 2px rgb(var(--amber) / 0.85);
+  border-radius: 3px;
+  background: rgb(var(--amber) / 0.06);
+}
+.biz-grid .biz-cell:has(.biz-input) { background: rgb(var(--surface)); box-shadow: inset 0 0 0 2px rgb(var(--amber)); }
+.biz-grid .biz-input { font: inherit; color: inherit; padding: 0; min-width: 0; }
+.biz-grid .biz-row-total { background: rgb(var(--surface-2)); }
+.biz-grid .biz-row-total .biz-td { border-bottom-color: rgb(var(--line) / 0.12); }
+.biz-grid .biz-row-quiet { background: color-mix(in srgb, rgb(var(--surface-2)) 40%, rgb(var(--surface))); }
+.biz-grid .biz-row-year { background: rgb(var(--amber) / 0.1); }
+.biz-grid .biz-month { background: rgb(var(--surface)); }
+.biz-grid .biz-reversed td:not(:first-child) { color: rgb(var(--ink-soft)); }
+.biz-grid thead th { background: rgb(var(--surface-2)); }
+.biz-grid-wrap { scrollbar-gutter: stable; }
+@keyframes biz-grow { from { transform: scaleY(0.04); } to { transform: none; } }
+.biz-bar { transform-origin: 50% 100%; animation: biz-grow 0.6s var(--ease-out) backwards; transition: height 0.35s var(--ease-out); }
+
+/* ---------------------------------------------------------------------------
+   1.43.0. An outlier's player full screen (F, or Full screen under it): the
+   whole screen, no corners; a still picture keeps its whole frame. */
+.player-box:fullscreen { border-radius: 0; box-shadow: none; aspect-ratio: auto; max-width: none; width: 100%; height: 100%; background: #000; }
+.player-box:fullscreen > button img { object-fit: contain; }
+.player-box:not(:hover) .player-leave { opacity: 0.55; }
+
+/* ---------------------------------------------------------------------------
+   1.43.0. Business: the cash book's lines as they change (the owner: "vreau
+   animație de loading când modifici ceva direct în tabele"). On its way to the
+   server, a light sweeps across the line (one light for the whole line: the
+   cells share the screen's coordinates) and the cell that changed spins;
+   saved, the line flashes green and the cell shows a tick; refused, it shakes
+   red (it's back as it was). A line just added glows amber where it landed. */
+.biz-spin {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+  border: 2px solid rgb(var(--ink-faint) / 0.35); border-top-color: rgb(var(--amber));
+  animation: biz-spin 0.7s linear infinite;
+}
+.biz-spin-on-amber { border-color: rgb(255 255 255 / 0.4); border-top-color: #fff; }
+@keyframes biz-spin { to { transform: rotate(360deg); } }
+.biz-grid .biz-saving > td {
+  background-image: linear-gradient(100deg, transparent 0%, rgb(var(--amber) / 0.11) 42%, rgb(var(--amber) / 0.2) 50%, rgb(var(--amber) / 0.11) 58%, transparent 100%);
+  background-size: 46vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: biz-sweep 1.1s linear infinite;
+}
+@keyframes biz-sweep { from { background-position: -46vw 0; } to { background-position: 100vw 0; } }
+/* In the cell's top corner (its right one; an amount's left), on a round patch of the row's ground, so it never
+   sits on the words. */
+.biz-grid .biz-cell-busy::after,
+.biz-grid .biz-cell-saved::after {
+  content: ""; position: absolute; top: 9px; right: 5px; pointer-events: none;
+}
+.biz-grid .biz-cell-busy.text-right::after,
+.biz-grid .biz-cell-saved.text-right::after { right: auto; left: 5px; }
+.biz-grid .biz-cell-busy::after {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgb(var(--ink-faint) / 0.35); border-top-color: rgb(var(--amber));
+  background: rgb(var(--surface)); box-shadow: 0 0 0 3px rgb(var(--surface));
+  animation: biz-spin 0.7s linear infinite;
+}
+.biz-grid .biz-cell-saved::after {
+  width: 6px; height: 11px; margin-top: -1px;
+  border: solid rgb(var(--green)); border-width: 0 2.25px 2.25px 0;
+  transform: rotate(45deg);
+  animation: biz-tick 1.1s var(--ease-out) both;
+}
+@keyframes biz-tick {
+  0% { opacity: 0; transform: rotate(45deg) scale(0.4); }
+  18% { opacity: 1; transform: rotate(45deg) scale(1.15); }
+  30% { transform: rotate(45deg) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(45deg) scale(1); }
+}
+.biz-saved > td { animation: biz-saved 1.1s var(--ease-out); }
+@keyframes biz-saved { 0%, 25% { background-color: rgb(var(--green) / 0.16); } 100% { background-color: transparent; } }
+.biz-failed > td { animation: biz-failed 0.9s var(--ease-out); }
+@keyframes biz-failed {
+  0% { background-color: rgb(var(--red) / 0.16); transform: translateX(0); }
+  12% { transform: translateX(-6px); }
+  28% { transform: translateX(5px); }
+  44% { transform: translateX(-3px); }
+  60% { transform: translateX(2px); }
+  76% { transform: translateX(0); }
+  100% { background-color: transparent; }
+}
+.biz-fresh > td { animation: biz-fresh 1.8s var(--ease-out); }
+@keyframes biz-fresh {
+  0% { background-color: rgb(var(--amber) / 0.22); opacity: 0; transform: translateY(-6px); }
+  14% { opacity: 1; transform: none; }
+  100% { background-color: transparent; }
+}
+/* The sticky first cell keeps its own ground while the line flashes (the table scrolls under it). */
+.biz-grid .biz-saved > td:first-child,
+.biz-grid .biz-failed > td:first-child,
+.biz-grid .biz-fresh > td:first-child { background-clip: padding-box; }
+
+/* Picking lines (1.43.0): on hover a line's number gives way to an empty box (a
+   click starts picking with it); while picking, the whole line is the box,
+   picked ones tinted amber with a bar on their left, and the line's own
+   buttons step back. A file dragged over a line lights it (dropped: attached). */
+/* (The number's cell is sticky: that already holds the box over it.) */
+.biz-no-pick, .biz-tick {
+  position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 0.5rem; background: transparent; cursor: pointer;
+}
+.biz-inv .biz-tick { align-items: center; padding-top: 0; }
+.biz-no-pick { opacity: 0; transition: opacity 0.15s ease; }
+.biz-grid .biz-row:hover .biz-no-pick, .biz-no-pick:focus-visible { opacity: 1; }
+.biz-grid .biz-row:hover .biz-no-num { visibility: hidden; }
+.biz-tick:focus-visible, .biz-no-pick:focus-visible { outline: none; }
+.biz-tick:focus-visible .pick-box, .biz-no-pick:focus-visible .pick-box { box-shadow: 0 0 0 2px rgb(var(--amber) / 0.5); }
+.biz-tick .pick-box { animation: pick-pop 0.22s var(--ease-spring) both; }
+button.biz-tick:not(:disabled):active, button.biz-no-pick:not(:disabled):active { scale: none; }
+.biz-picking, .biz-picking .biz-cell { cursor: pointer; }
+.biz-picking:hover > td { background-color: rgb(var(--ink) / 0.025); }
+.biz-picking.is-picked > td { background-color: color-mix(in srgb, rgb(var(--amber)) 9%, rgb(var(--surface))); }
+.biz-picking.is-picked > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.biz-picking .biz-act { pointer-events: none; opacity: 0.3; }
+.biz-act { transition: opacity 0.15s ease; }
+.biz-drop > td { background-color: rgb(var(--amber) / 0.1); }
+.biz-drop > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber)); }
+.biz-drop > td:not(:first-child) { box-shadow: inset 0 1px 0 rgb(var(--amber) / 0.5), inset 0 -1px 0 rgb(var(--amber) / 0.5); }
+
+/* A line's paperclip: it only adds documents (1.43.0); its count beside it. */
+.biz-clip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+  height: 28px; min-width: 28px; padding: 0 4px; border-radius: 6px;
+  color: rgb(var(--ink-faint) / 0.6); transition: color 0.15s ease, background-color 0.15s ease;
+}
+.biz-clip:hover { color: rgb(var(--ink)); background: rgb(var(--surface-2)); }
+.biz-clip.has-files { color: rgb(var(--ink-soft)); }
+.biz-clip:disabled { cursor: progress; }
+.biz-clip-n {
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgb(var(--amber)); color: #fff; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1;
+  animation: pick-pop 0.26s var(--ease-spring) both;
+}
+
+/* The box a new line is typed in, above the table: a file dragged over it lights it. */
+.biz-composer { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.biz-composer.is-drop { border-color: rgb(var(--amber)); box-shadow: 0 0 0 3px rgb(var(--amber) / 0.18); }
+
+/* The inventory (1.43.0): each group a block, its first row its name, count
+   and total (debts in red: taken off); the line being typed tinted. */
+.biz-inv-group > td { background: color-mix(in srgb, rgb(var(--surface-2)) 70%, rgb(var(--surface))); border-top: 1px solid rgb(var(--line) / 0.12); }
+.biz-inv-group > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--amber) / 0.75); }
+.biz-inv-group.is-owed > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--red) / 0.7); }
+.biz-inv-row > td { border-top: 1px solid rgb(var(--line) / 0.07); }
+.biz-inv-row:hover > td { background-color: rgb(var(--surface-2) / 0.45); }
+.biz-inv-row > td:nth-child(2) { padding-left: 1.25rem; }
+.biz-inv-edit > td { background: rgb(var(--amber) / 0.06); border-top: 1px solid rgb(var(--amber) / 0.3); border-bottom: 1px solid rgb(var(--amber) / 0.3); }
+.biz-inv-edit { animation: fadein 0.18s var(--ease-out) both; }
+
+/* A register's guide: each tab comes in softly. */
+.biz-guide { animation: biz-guide-in 0.22s var(--ease-out) both; }
+@keyframes biz-guide-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* BNR's rate in the entry window (1.43.0, the owner: "la cursul BNR când apăs
+   pe buton vreau un logo cu BNR acolo și o animație frumoasă de loading"): a
+   bank mark and "BNR" on the button; asking, a ring turns around the mark and
+   the rate's box shimmers; the rate then rolls in, digit after digit. */
+.biz-bnr {
+  display: inline-flex; align-items: center; gap: 0.5rem; height: 2.5rem; padding: 0 0.875rem 0 0.375rem;
+  border-radius: 0.75rem; border: 1px solid rgb(var(--line) / 0.2); background: rgb(var(--surface));
+  font-size: 13px; font-weight: 600; color: rgb(var(--ink)); white-space: nowrap;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.biz-bnr:hover:not(:disabled) { border-color: rgb(var(--blue) / 0.45); background: rgb(var(--blue) / 0.05); }
+.biz-bnr:disabled { opacity: 0.6; }
+.biz-bnr.is-busy:disabled { opacity: 1; cursor: progress; border-color: rgb(var(--blue) / 0.35); background: rgb(var(--blue) / 0.04); }
+.biz-bnr-mark {
+  position: relative; width: 28px; height: 28px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgb(var(--blue) / 0.12); color: rgb(var(--blue));
+}
+.biz-bnr-word {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; line-height: 1;
+  padding: 4px 6px; border-radius: 6px; background: rgb(var(--blue)); color: #fff;
+}
+.biz-bnr.is-busy .biz-bnr-mark::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 999px;
+  border: 2px solid transparent; border-top-color: rgb(var(--blue)); border-right-color: rgb(var(--blue) / 0.35);
+  animation: biz-spin 0.8s linear infinite;
+}
+.biz-bnr.is-busy .biz-bnr-mark svg { animation: biz-bnr-pulse 1.1s ease-in-out infinite; }
+@keyframes biz-bnr-pulse { 50% { transform: scale(0.8); opacity: 0.55; } }
+.biz-rate-wait {
+  position: absolute; inset: 1px; border-radius: 11px; pointer-events: none; overflow: hidden;
+  background: linear-gradient(100deg, transparent 25%, rgb(var(--blue) / 0.1) 45%, rgb(var(--blue) / 0.18) 50%, rgb(var(--blue) / 0.1) 55%, transparent 75%) rgb(var(--surface));
+  background-size: 220% 100%; animation: biz-wait 1.1s linear infinite;
+}
+.biz-rate-wait::after {
+  content: ""; position: absolute; right: 14px; top: 50%; width: 58px; height: 10px; margin-top: -5px;
+  border-radius: 4px; background: rgb(var(--ink) / 0.09);
+}
+@keyframes biz-wait { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+.biz-rate-roll {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; overflow: hidden;
+  padding: 0 0.875rem; pointer-events: none; font-size: 14px; font-variant-numeric: tabular-nums; color: rgb(var(--ink));
+}
+.biz-rate-roll > span { display: inline-block; white-space: pre; animation: biz-roll 0.5s var(--ease-spring) both; }
+@keyframes biz-roll { from { opacity: 0; transform: translateY(80%); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+.biz-rate-ok { animation: pick-pop 0.3s var(--ease-spring) both; }

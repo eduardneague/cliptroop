@@ -161,7 +161,7 @@ function FolderMenu({ open, onClose, anchor, s, kind }: { open: boolean; onClose
     <AnchoredMenu open={open} onClose={onClose} anchor={anchor} width={280} label="Save to">
       <div className="p-1.5" data-floating-menu>
         <p className="px-3 pt-1.5 pb-1 text-[11.5px] font-semibold text-ink-faint">Save {kind === "video" ? "this video" : "this channel"} to</p>
-        {[{ id: null as string | null, name: "Saved (no folder)", color: "slate", count: -1 }, ...s.folders].map((f) => {
+        {[{ id: null as string | null, name: "Saved", color: "slate", count: -1 }, ...s.folders].map((f) => {
           const on = !!inFolder(f.id);
           return (
             <button key={f.id ?? "none"} type="button" role="menuitemcheckbox" aria-checked={on} onClick={() => toggle(f.id)} className={row}>

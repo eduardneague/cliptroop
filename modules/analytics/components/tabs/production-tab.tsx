@@ -73,7 +73,7 @@ export function ProductionTab({ p, compare, w }: { p: Production; compare: boole
             </ChartCard>
 
             <ChartCard title="People" sub="Steps finished in this range · on time = by their due date">
-              <div className="overflow-x-auto -mx-1">
+              <div className="overflow-x-auto overscroll-x-contain -mx-1">
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr className="text-[11px] font-bold uppercase tracking-wide text-ink-faint text-left">

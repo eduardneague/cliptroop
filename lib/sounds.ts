@@ -88,6 +88,12 @@ export const sounds = {
     }),
   /** Something added. */
   pop: () => play((ac) => note(ac, 660, 0, 0.09, 0.04, "sine", 990)),
+  /** Something deleted (1.38.0: a short sliding off the list): a soft falling swish and a tiny tick. */
+  remove: () =>
+    play((ac) => {
+      note(ac, 720, 0, 0.22, 0.035, "sine", 190);
+      note(ac, 1600, 0.01, 0.03, 0.012, "triangle");
+    }),
   /** Saved / done (success toasts). */
   success: () =>
     play((ac) => {
@@ -124,6 +130,30 @@ export const sounds = {
     play((ac) => {
       [523.3, 659.3, 784, 1046.5].forEach((f, k) => note(ac, f, k * 0.075, 0.22, 0.04));
       note(ac, 1568, 0.33, 0.45, 0.03);
+    }),
+  /** XP earned (1.29.7): a bright little coin. */
+  xp: () =>
+    play((ac) => {
+      note(ac, 1318.5, 0, 0.07, 0.035, "triangle");
+      note(ac, 1975.5, 0.06, 0.22, 0.035, "triangle");
+    }),
+  /** Clip's secret (1.29.7, seven taps): a quick rising run and a twinkle. */
+  secret: () =>
+    play((ac) => {
+      [784, 988, 1175, 1568].forEach((f, k) => note(ac, f, k * 0.06, 0.16, 0.035, "triangle"));
+      note(ac, 2349, 0.3, 0.4, 0.02);
+    }),
+  /** The runner game (1.29.7): a jump, a hundred points, and getting caught. */
+  jump: () => play((ac) => note(ac, 392, 0, 0.13, 0.03, "triangle", 784)),
+  point: () =>
+    play((ac) => {
+      note(ac, 1046.5, 0, 0.06, 0.025, "triangle");
+      note(ac, 1568, 0.05, 0.12, 0.025, "triangle");
+    }),
+  hit: () =>
+    play((ac) => {
+      note(ac, 220, 0, 0.16, 0.05, "triangle", 110);
+      note(ac, 146.8, 0.12, 0.3, 0.045, "triangle", 98);
     }),
   /** An objective reached: a proper fanfare (da da da DAAA), a ringing chord and a sparkle on top. */
   fanfare: () =>

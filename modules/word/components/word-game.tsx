@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { motionReduced } from "@/components/ui/count-up";
 import { sounds } from "@/lib/sounds";
 import { APP_NAME } from "@/lib/brand";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 const KEYS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 const FLIP_STEP = 250; // ms between tiles turning over
@@ -425,14 +426,9 @@ function TeamToday({ team }: { team: WordMate[] }) {
       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
         {team.map((m) => (
           <li key={m.userId} className="flex items-center gap-2 min-w-0 text-[13px]">
-            {m.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
-            ) : (
-              <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0" style={{ background: m.color }} aria-hidden>
-                {m.name.slice(0, 1).toUpperCase()}
-              </span>
-            )}
+            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 overflow-hidden" style={{ background: m.color }} aria-hidden>
+              <AvatarImg src={m.avatarUrl} fallback={m.name.slice(0, 1).toUpperCase()} />
+            </span>
             <span className="flex-1 min-w-0 truncate">{m.me ? "You" : m.name}</span>
             <span className={`tabular-nums text-[12.5px] font-semibold ${m.finished ? (m.solved ? "text-green" : "text-red") : "text-ink-faint"}`}>
               {m.finished ? (m.solved ? `${m.tries}/${MAX_TRIES}` : `X/${MAX_TRIES}`) : m.tries ? "playing" : "not yet"}

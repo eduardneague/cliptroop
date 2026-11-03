@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { MonthCalendar, warmPlannedDays, type DayInfo } from "./month-calendar";
 import { CalendarIcon, CloseIcon } from "./icons";
 import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "./confirm-provider";
+import { Leaves } from "./leaves";
+import { intlOf, useUiLang, useUiWords, type UiLang } from "./ui-locale";
 
 export type { DayInfo };
 
@@ -20,10 +22,10 @@ export function DatePicker({
   dayInfo,
   triggerClassName,
   children,
-  ariaLabel = "Pick a date",
+  ariaLabel: ariaLabelProp,
   disabled,
   onClear,
-  clearLabel = "Clear date",
+  clearLabel,
 }: {
   value: string | null;
   onChange: (date: string) => void;
@@ -36,6 +38,8 @@ export function DatePicker({
   onClear?: () => void;
   clearLabel?: string;
 }) {
+  const w = useUiWords();
+  const ariaLabel = ariaLabelProp ?? w.pickDate;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ left: 0, top: 0, up: false });
   const btn = useRef<HTMLButtonElement>(null);
@@ -107,45 +111,47 @@ export function DatePicker({
 
       {open &&
         createPortal(
-          <div
-            ref={pop}
-            role="dialog"
-            aria-label={ariaLabel}
-            // (Inside a dropdown, e.g. Analytics' custom range: picking a day doesn't close the dropdown.)
-            data-floating-menu=""
-            style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
-            className="fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 animate-[modalin_.12s_ease]"
-          >
-            <MonthCalendar
-              value={value}
-              autoFocus
-              dayInfo={dayInfo}
-              onPick={(d) => {
-                onChange(d);
-                close();
-              }}
-              onEscape={() => close()}
-              onClear={
-                onClear
-                  ? () => {
-                      onClear();
-                      close();
-                    }
-                  : undefined
-              }
-              clearLabel={clearLabel}
-            />
-          </div>,
+          <Leaves>
+            <div
+              ref={pop}
+              role="dialog"
+              aria-label={ariaLabel}
+              // (Inside a dropdown, e.g. Analytics' custom range: picking a day doesn't close the dropdown.)
+              data-floating-menu=""
+              style={{ left: pos.left, ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }) }}
+              className={`pop-menu glass-pane fixed z-[130] w-[304px] rounded-2xl border border-line/15 bg-surface shadow-2xl p-3 ${pos.up ? "origin-bottom" : "origin-top"}`}
+            >
+              <MonthCalendar
+                value={value}
+                autoFocus
+                dayInfo={dayInfo}
+                onPick={(d) => {
+                  onChange(d);
+                  close();
+                }}
+                onEscape={() => close()}
+                onClear={
+                  onClear
+                    ? () => {
+                        onClear();
+                        close();
+                      }
+                    : undefined
+                }
+                clearLabel={clearLabel ?? w.clearDate}
+              />
+            </div>
+          </Leaves>,
           document.body
         )}
     </>
   );
 }
 
-const niceDate = (d: string) => {
+const niceDate = (d: string, lang: UiLang = "en") => {
   const date = new Date(`${d}T00:00:00`);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  return date.toLocaleDateString(intlOf(lang), { weekday: "short", month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
 };
 
 /**
@@ -157,11 +163,12 @@ export function DateChip({
   value,
   onChange,
   onClear,
-  placeholder = "Pick a date",
-  ariaLabel = "Pick a date",
+  placeholder,
+  ariaLabel,
   dayInfo,
   disabled,
   className = "",
+  size = "bar",
 }: {
   value: string | null;
   onChange: (date: string) => void;
@@ -171,9 +178,13 @@ export function DateChip({
   dayInfo?: (date: string) => DayInfo;
   disabled?: boolean;
   className?: string;
+  /** 1.43.0: as tall as what's beside it: 36 px in a toolbar ("bar"), 40 px among a form's fields ("field"). */
+  size?: "bar" | "field";
 }) {
   const set = !!value;
   const confirmClear = useConfirmSafe();
+  const lang = useUiLang();
+  const w = useUiWords();
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <DatePicker
@@ -181,22 +192,22 @@ export function DateChip({
         onChange={onChange}
         onClear={onClear}
         dayInfo={dayInfo}
-        ariaLabel={ariaLabel}
+        ariaLabel={ariaLabel ?? w.pickDate}
         disabled={disabled}
-        triggerClassName={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[12.5px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+        triggerClassName={`inline-flex items-center gap-1.5 rounded-lg border px-3 ${size === "field" ? "h-10 text-[13px]" : "h-9 text-[12.5px]"} font-semibold transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
           set ? "border-amber/50 bg-amber/10 text-ink" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"
         }`}
       >
         <CalendarIcon className={`w-3.5 h-3.5 ${set ? "text-amber" : ""}`} />
-        {value ? niceDate(value) : placeholder}
+        {value ? niceDate(value, lang) : (placeholder ?? w.pickDate)}
       </DatePicker>
       {set && onClear && !disabled && (
         <button
           type="button"
           onClick={async () => {
-            if (await confirmClear(CLEAR_DATE_CONFIRM)) onClear();
+            if (await confirmClear(lang === "en" ? CLEAR_DATE_CONFIRM : { title: w.clearDateTitle, description: w.clearDateBody, confirmLabel: w.clearDate, cancelLabel: w.keepIt, danger: true })) onClear();
           }}
-          aria-label="Clear date"
+          aria-label={w.clearDate}
           className="w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
           <CloseIcon className="w-3.5 h-3.5" />
         </button>

@@ -182,8 +182,15 @@ export function plural(s: string): string {
 
 const LANG_WORDS: Record<string, string[]> = {
   en: ["the", "and", "you", "this", "with", "how", "what", "why", "for", "is", "my", "i", "to", "of", "in", "it", "it's", "your", "can", "best", "vs", "i'm", "we", "are"],
-  es: ["el", "la", "los", "las", "de", "que", "y", "en", "un", "una", "por", "con", "para", "es", "mi", "como", "lo", "mas", "más", "esto", "porque", "nuevo", "mejor"],
-  pt: ["o", "os", "as", "de", "que", "e", "em", "um", "uma", "por", "com", "para", "é", "meu", "minha", "como", "não", "nao", "mais", "isso", "esse", "você", "voce", "melhor"],
+  es: [
+    "el", "la", "los", "las", "de", "que", "y", "en", "un", "una", "por", "con", "para", "es", "mi", "como", "lo", "mas", "más", "esto", "porque", "nuevo", "mejor",
+    "probando", "probé", "compré", "comprando", "haciendo", "nueva", "peor", "estas", "estos", "cosas", "muy", "pero", "del", "su", "sus", "hice", "todo", "todos",
+    "cuando", "así", "aquí", "ahora", "siempre", "barato", "barata", "también", "hasta", "sin", "le", "les", "eso", "esta",
+  ],
+  pt: [
+    "o", "os", "as", "de", "que", "e", "em", "um", "uma", "por", "com", "para", "é", "meu", "minha", "como", "não", "nao", "mais", "isso", "esse", "você", "voce", "melhor",
+    "testei", "comprei", "fiz", "muito", "então", "também", "agora", "vale", "pena", "barato", "caro", "testando", "nunca", "do", "da", "dos", "das", "no", "na",
+  ],
   fr: ["le", "la", "les", "de", "des", "et", "un", "une", "est", "en", "pour", "avec", "mon", "ma", "pas", "que", "qui", "ce", "cette", "je", "j'ai", "vous", "meilleur"],
   de: ["der", "die", "das", "und", "ist", "ich", "nicht", "ein", "eine", "mit", "für", "fur", "auf", "den", "dem", "zu", "wie", "was", "mein", "meine", "wir", "beste", "so"],
   it: ["il", "lo", "la", "gli", "le", "di", "che", "e", "un", "una", "per", "con", "non", "sono", "mio", "mia", "come", "questo", "questa", "migliore", "ho", "del", "della"],
@@ -191,7 +198,22 @@ const LANG_WORDS: Record<string, string[]> = {
   nl: ["de", "het", "een", "en", "van", "ik", "niet", "is", "met", "voor", "op", "dat", "die", "mijn", "hoe", "wat", "beste", "zijn", "naar"],
   pl: ["i", "w", "z", "na", "nie", "się", "sie", "to", "jak", "co", "jest", "do", "mój", "moj", "moja", "za", "czy", "najlepszy", "tego"],
   tr: ["ve", "bir", "bu", "ile", "için", "icin", "ne", "nasıl", "nasil", "en", "çok", "cok", "mi", "benim", "değil", "degil", "gibi", "da", "de"],
-  id: ["dan", "yang", "di", "ini", "itu", "dengan", "untuk", "saya", "aku", "tidak", "ada", "apa", "cara", "bisa", "dari", "ke", "terbaik", "kok"],
+  // Indonesian, with the short forms titles use ("yg", "ga", "aja") (1.29.0).
+  id: [
+    "dan", "yang", "di", "ini", "itu", "dengan", "untuk", "saya", "aku", "tidak", "ada", "apa", "cara", "bisa", "dari", "terbaik", "kok",
+    "yg", "ga", "gak", "nggak", "aja", "banget", "bikin", "buat", "harga", "juta", "jutaan", "murah", "beli", "udah", "sudah", "kalau", "kalo",
+    "tapi", "gimana", "kenapa", "sama", "lagi", "punya", "rasa", "jual", "rugi", "isinya", "jelas", "berasa", "pemecah", "rekor", "sang", "hp", "seharga",
+  ],
+  // Hindi written in Latin letters ("Hinglish"), common in Indian titles (1.29.0). Only words English titles don't use.
+  hi: [
+    "ke", "ki", "ka", "ko", "hai", "hain", "se", "ye", "yeh", "kya", "kyu", "kyun", "kyon", "nahi", "nahin", "bhi", "aur", "mein", "pe", "ne", "li",
+    "wala", "wali", "wale", "kaise", "kaisa", "karo", "kar", "karna", "karne", "apne", "apna", "apni", "apko", "aapko", "aap", "sabse", "hota", "hoti",
+    "hoga", "liye", "tha", "thi", "bhai", "abhi", "kuch", "koi", "hum", "tum", "mera", "meri", "tera", "teri", "iska", "uska", "jab", "phir", "agar",
+    "lekin", "toh", "hua", "hui", "gaya", "gayi", "diya", "kiya", "dekho", "dekha", "dekhiye", "sasta", "saste", "paisa", "paise", "lakh", "crore",
+    "chahiye", "kaun", "kahan", "yahan", "accha", "acha", "bahut", "bohot", "zyada", "jyada", "naya", "nayi", "sach", "pata", "pta", "maine",
+    "mujhe", "humne", "sabko", "bilkul", "sirf", "bina", "saath", "khud", "jaane", "janiye", "bacho", "bach", "raho", "behen", "maar", "khani",
+    "esa", "aisa", "phle", "pehle", "kabhi", "chori", "wahi", "yahi", "kyunki", "matlab", "jaldi", "sabhi", "unka", "inka", "hamara", "tumhara",
+  ],
 };
 const SCRIPTS: [RegExp, string][] = [
   [/[぀-ヿ]/, "ja"],
@@ -233,8 +255,9 @@ export function guessLang(text: string): string | null {
   }
   // Two little words, and clearly ahead of the next language.
   if (bestN >= 2 && bestN > second) return best;
-  // Plain English titles often have no glue at all ("iPhone 17 Pro Max Review"): ASCII with no hits elsewhere.
-  if (bestN === 0 || (best === "en" && bestN >= 1 && second === 0)) return /^[\x00-\x7f]*$/.test(text) && ws.length >= 2 ? "en" : best;
+  // Plain English titles often have no glue at all ("iPhone 17 Pro Max Review"): only English letters
+  // (emoji, prices and marks aside) and no hits elsewhere.
+  if (bestN === 0 || (best === "en" && bestN >= 1 && second === 0)) return /^[a-z]*$/i.test(text.replace(/[^\p{L}]/gu, "")) && ws.length >= 2 ? "en" : best;
   return null;
 }
 

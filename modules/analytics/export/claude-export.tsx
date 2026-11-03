@@ -177,7 +177,7 @@ export function ClaudeExport({
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <pre className="px-3 pb-3 pt-1.5 text-[12px] text-ink-soft whitespace-pre-wrap font-body max-h-56 overflow-y-auto styled-scroll">{prompt}</pre>
+            <pre className="px-3 pb-3 pt-1.5 text-[12px] text-ink-soft whitespace-pre-wrap font-body max-h-56 overflow-y-auto overflow-x-hidden styled-scroll">{prompt}</pre>
           </div>
         </div>
       ) : busy ? (

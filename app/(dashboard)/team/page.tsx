@@ -1,10 +1,14 @@
 import { APP_NAME } from "@/lib/brand";
 import Link from "next/link";
-import { StarIcon } from "@/components/ui/icons";
+import { AlertIcon, StarIcon } from "@/components/ui/icons";
+import { DeleteAccess, type DeletePerson } from "./delete-access";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, ROLES } from "@/lib/permissions/roles";
+import { getTeamPlan, getTeamStorage } from "@/modules/plans/lib/server";
+import { StorageMeter } from "@/modules/plans/components/storage-meter";
+import { PLAN_FACTS, gbLabel } from "@/lib/plans";
 import type { RoleId } from "@/lib/permissions/roles";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { colorForId, displayName, initialsFor } from "@/lib/avatar";
@@ -21,6 +25,7 @@ export const metadata: Metadata = { title: "Team" };
 import { RoleColorPicker } from "./role-color-picker";
 import { TransferOwnership } from "./transfer-ownership";
 import { DeleteTeamButton } from "./delete-team-button";
+import { LeaveTeamButton } from "./leave-team-button";
 import { ShortSettingsForm } from "./short-settings";
 import { APP_VERSION_LABEL } from "@/lib/version";
 import { KindColorsForm } from "./kind-colors-form";
@@ -78,6 +83,10 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     tasksVis,
     objectivesBoard,
     longFiles,
+    deleteAccessRows,
+    deleteRulesRow,
+    teamPlan,
+    teamStorage,
   ] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
@@ -127,6 +136,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     tab === "objectives" ? getObjectivesBoard(supabase, currentTeam.id, { history: "none" }) : Promise.resolve(null),
     // Long videos' files and Thumbnail Studio's (0089).
     tab === "defaults" ? getLongFilesKeep(currentTeam.id) : Promise.resolve(null),
+    // 1.41.0, the Danger zone (the owner's): who else deletes videos, and several at once or not (0119). Only the owner
+    // reads every row (the others see their own); before 0119 both answer with an error and the panel says so.
+    tab === "team" ? supabase.from("video_delete_access").select("user_id, shorts, longs").eq("team_id", currentTeam.id) : Promise.resolve(null),
+    tab === "team" ? supabase.from("teams").select("delete_many_shorts, delete_many_longs").eq("id", currentTeam.id).maybeSingle() : Promise.resolve(null),
+    // 1.45.0: the team's plan and what its files take (0124).
+    tab === "team" ? getTeamPlan(supabase, currentTeam.id) : Promise.resolve(null),
+    tab === "team" ? getTeamStorage(supabase, currentTeam.id) : Promise.resolve(null),
   ]);
   const userIsMaster = isMaster(membership?.roles ?? []);
   const canManageSocial = userIsMaster || (membership?.roles ?? []).includes("publisher");
@@ -146,6 +162,28 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const scriptDefaults = userIsMaster && tab === "defaults" ? scriptDefaultsAny : { data: [], error: null };
   const viewerIsOwner = !!currentUser && currentUser.id === team?.owner_id;
   const pendingTransferRow = viewerIsOwner ? transferRow : null;
+  // The Danger zone's people: everyone active but the owner, masters first (they always can), with what they were given.
+  const deleteReady = !!deleteAccessRows && !deleteAccessRows.error && !!deleteRulesRow && !deleteRulesRow.error;
+  const given = new Map(((deleteAccessRows?.data ?? []) as { user_id: string; shorts: boolean; longs: boolean }[]).map((r) => [r.user_id, r]));
+  const deletePeople: DeletePerson[] = viewerIsOwner
+    ? people
+        .filter((p) => p.userId !== team?.owner_id)
+        .map((p) => ({
+          userId: p.userId,
+          name: p.name,
+          avatarUrl: p.avatarUrl,
+          color: p.color,
+          roles: ROLES.filter((r) => p.roles.includes(r.id)).map((r) => r.name).join(" · "),
+          master: p.roles.includes("master"),
+          shorts: given.get(p.userId)?.shorts === true,
+          longs: given.get(p.userId)?.longs === true,
+        }))
+        .sort((a, b) => Number(b.master) - Number(a.master) || a.name.localeCompare(b.name))
+    : [];
+  const deleteRules = {
+    manyShorts: (deleteRulesRow?.data as { delete_many_shorts?: boolean } | null)?.delete_many_shorts === true,
+    manyLongs: (deleteRulesRow?.data as { delete_many_longs?: boolean } | null)?.delete_many_longs === true,
+  };
 
   const memberRows: MemberRow[] = (members ?? []).map((m) => {
     const profile = m.profiles as unknown as { username: string | null; full_name: string | null; email: string | null; avatar_url: string | null } | null;
@@ -221,7 +259,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       )}
 
       {tab === "defaults" && userIsMaster && (
-        <div className="grid gap-6 xl:grid-cols-2 items-start">
+        // 1.28.0: the cards flow down two columns and sit right under each other (a grid left gaps under the short ones).
+        <div className="xl:columns-2 gap-6 [&>section]:break-inside-avoid [&>section]:mb-6 [&>section:last-child]:mb-0">
         {userIsMaster && (
           <section id="short-defaults" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
             <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft mb-1">
@@ -431,11 +470,34 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
             <p className="text-[12.5px] text-ink-faint">Only the master can change workspace branding.</p>
           )}
         </section>
-        {currentUser?.id === team?.owner_id && (
-          <section className="rounded-xl border border-red/20 bg-red/5 p-6">
-            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-red mb-1">
-              Transfer ownership
+        {teamPlan?.plan ? (
+          // 1.45.0: the plan and the storage it gives (lib/plans.ts), against what the team's files take.
+          <section id="plan" className="rounded-xl border border-line/10 bg-surface p-6 scroll-mt-20">
+            <div className="flex items-baseline justify-between gap-3 mb-4">
+              <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Plan and storage</h2>
+              <Link href="/plan" className="text-[12.5px] font-semibold text-amber hover:underline">
+                {userIsMaster ? "Change plan" : "See plans"}
+              </Link>
+            </div>
+            <p className="text-[14px] mb-4">
+              <b>{PLAN_FACTS[teamPlan.plan].name}</b>
+              <span className="text-ink-soft"> · {gbLabel(teamPlan.storageGb ?? PLAN_FACTS[teamPlan.plan].storageGb)} of storage for the team&rsquo;s files</span>
+            </p>
+            <StorageMeter usage={teamStorage ?? null} gb={teamPlan.storageGb} />
+          </section>
+        ) : null}
+        {viewerIsOwner && (
+          // 1.41.0: the owner's Danger zone: who else deletes videos (and how many at once), the ownership, the team itself.
+          <section id="danger-zone" className="rounded-xl border border-red/20 bg-red/5 p-6 scroll-mt-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-red mb-1 flex items-center gap-2">
+              <AlertIcon className="w-4 h-4" />
+              Danger zone
             </h2>
+            <p className="text-[12px] text-ink-soft mb-5">What you change here can delete things for good. Only you, the team&rsquo;s owner, see it.</p>
+            <DeleteAccess teamId={currentTeam.id} ready={deleteReady} people={deletePeople} rules={deleteRules} />
+
+            <div className="mt-6 pt-5 border-t border-red/20">
+            <h3 className="text-[12px] font-bold text-red mb-1">Transfer ownership</h3>
             <p className="text-[12px] text-ink-soft mb-4">
               Send someone a request to become this team&rsquo;s owner. Nothing
               changes until they accept. You stay the owner until then.
@@ -456,6 +518,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 .filter((m) => m.userId && m.userId !== currentUser?.id && m.status === "active")
                 .map((m) => ({ userId: m.userId as string, name: m.name, avatarUrl: m.avatarUrl }))}
             />
+            </div>
 
             <div className="mt-5 pt-5 border-t border-red/20">
               <h3 className="text-[12px] font-bold text-red mb-1">Delete team</h3>
@@ -467,6 +530,15 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 teamName={currentTeam.name}
               />
             </div>
+          </section>
+        )}
+        {currentUser && team && currentUser.id !== team.owner_id && (
+          <section id="leave" className="rounded-xl border border-red/20 bg-red/5 p-6 scroll-mt-20">
+            <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-red mb-1">Leave team</h2>
+            <p className="text-[12px] text-ink-soft mb-4">
+              You lose access to this team&rsquo;s videos, scripts and notes. What you made stays with the team, and a master can invite you back.
+            </p>
+            <LeaveTeamButton teamId={currentTeam.id} teamName={currentTeam.name} then="/dashboard" />
           </section>
         )}
         </div>

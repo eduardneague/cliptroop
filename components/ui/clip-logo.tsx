@@ -64,7 +64,7 @@ export function ClipLogo({ size = 28, className = "", id = "clip-logo" }: { size
 /** Clip + the wordmark. */
 export function Brand({ className = "" }: { className?: string }) {
   return (
-    <span className={`brand-row inline-flex items-center gap-2 ${className}`} title={`Hi, I'm ${MASCOT_NAME}!`}>
+    <span className={`brand-row inline-flex items-center gap-2 select-none ${className}`} title={`Hi, I'm ${MASCOT_NAME}!`}>
       <ClipLogo size={28} />
       <span className="font-display font-semibold text-[16px] tracking-tight">{APP_NAME}</span>
     </span>

@@ -3,6 +3,8 @@
  * action and the database (0068) share. Safe to use in the browser.
  */
 
+import { pictureTooBig } from "./image/limits";
+
 export type FeedbackKind = "bug" | "idea";
 
 export const FEEDBACK_MAX_CHARS = 500;
@@ -14,10 +16,15 @@ export const FEEDBACK_BUCKET = "feedback";
 
 export const FEEDBACK_KIND_LABEL: Record<FeedbackKind, string> = { bug: "Bug report", idea: "Suggestion" };
 
-/** Why a file can't be added, or null when it can. */
+/** Why a file can't be added, or null when it can. 1.31.3: a picture up to 5 MB (it's made small before it goes up), a video up to 25 MB. */
 export function feedbackFileProblem(file: { name: string; type: string; size: number }): string | null {
-  const media = /^(image|video)\//.test(file.type) || /\.(png|jpe?g|gif|webp|heic|heif|avif|mp4|mov|m4v|webm)$/i.test(file.name);
+  const picture = /^image\//.test(file.type) || (!file.type && /\.(png|jpe?g|gif|webp|heic|heif|avif)$/i.test(file.name));
+  const media = picture || /^video\//.test(file.type) || /\.(mp4|mov|m4v|webm)$/i.test(file.name);
   if (!media) return `${file.name} isn't a photo or a video.`;
+  if (picture) {
+    const tooBig = pictureTooBig(file);
+    if (tooBig) return tooBig;
+  }
   if (file.size > FEEDBACK_MAX_BYTES) return `${file.name} is ${mb(file.size)}. Each file can be up to 25 MB.`;
   if (file.size === 0) return `${file.name} is empty.`;
   return null;

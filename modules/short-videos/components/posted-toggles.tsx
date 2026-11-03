@@ -5,12 +5,14 @@ import { setShortPlatformPosted } from "@/app/(dashboard)/shorts/actions";
 import { useAction } from "@/lib/hooks/use-action";
 import { useConfirmSafe } from "@/components/ui/confirm-provider";
 import { PLATFORM_META, type Platform } from "../lib/constants";
-import { PlatformIcon } from "./platform-icon";
+import { PlatformMark } from "./platform-mark";
 
 /**
- * The spreadsheet's "Posted" column, per platform. Colored = posted,
- * grey = not yet. Masters/schedulers can click to flip one (instant,
- * with rollback if the server says no); everyone else just sees status.
+ * The spreadsheet's "Posted" column, per platform: every logo in full
+ * colour, a teal tick on the ones it's posted on (1.34.3; not yet posted
+ * used to be greyed out). Masters/schedulers can click to flip one
+ * (instant, with rollback if the server says no); everyone else just sees
+ * status.
  */
 export function PostedToggles({
   shortId,
@@ -47,10 +49,7 @@ export function PostedToggles({
           const on = shown.includes(p);
           const label = `${PLATFORM_META[p].name}: ${on ? "posted" : "not posted"}`;
           const icon = (
-            <PlatformIcon
-              platform={p}
-              className={`${iconSize} rounded-[5px] transition-all ${on ? "" : "grayscale opacity-30"}`}
-            />
+            <PlatformMark platform={p} posted={on} className={`${iconSize} rounded-[5px]`} tick={size === "md" ? "md" : "sm"} />
           );
           return canToggle ? (
             <button

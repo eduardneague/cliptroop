@@ -1,9 +1,11 @@
 "use server";
 
+import { overLimit } from "@/lib/rate-limit";
 import { APP_NAME } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { hasShortFilming } from "@/modules/short-videos/lib/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, ROLES } from "@/lib/permissions/roles";
@@ -12,7 +14,7 @@ import { displayName } from "@/lib/avatar";
 import { actorMeta, teamMeta, sendNotifications } from "@/lib/notify";
 import { getRoleColors } from "@/lib/permissions/team-role-colors";
 import { isOwnStorageUrl } from "@/lib/storage-url";
-import { isLongMediaKeepDays, isMediaKeepDays, isStudioKeepDays } from "@/lib/media-keep";
+import { isKeepDays } from "@/lib/media-keep";
 
 async function requireMaster(teamId: string) {
   const supabase = await createClient();
@@ -50,6 +52,8 @@ export async function inviteExistingUser(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Session expired." };
+  // Each one is a notification (and a phone notification) to someone (1.31.13): a team's worth, not a flood.
+  if (overLimit("invite", user.id, 30, 60 * 60_000)) return { error: "That's a lot of invites in an hour. Wait a bit, then try again." };
 
   // Clear out any of THEIR pending invites to THIS team that have gone
   // stale (past the 1-hour window) — this is what makes re-inviting
@@ -184,6 +188,11 @@ export async function deleteTeam(teamId: string) {
   const { data: logoFiles } = await admin.storage.from("team-logos").list(teamId);
   if (logoFiles && logoFiles.length > 0) {
     await admin.storage.from("team-logos").remove(logoFiles.map((f) => `${teamId}/${f.name}`));
+  }
+  // The media kit's cover photos (1.37.0; the setup itself goes with the team).
+  const { data: kitFiles } = await admin.storage.from("media-kit").list(teamId);
+  if (kitFiles && kitFiles.length > 0) {
+    await admin.storage.from("media-kit").remove(kitFiles.map((f) => `${teamId}/${f.name}`));
   }
 
   const { error } = await admin.from("teams").delete().eq("id", teamId);
@@ -522,6 +531,8 @@ export async function updateShortSettings(
     defaultReviewer: string | null;
     defaultScheduler: string | null;
     defaultScripter: string | null;
+    /** 1.36.0 (migration 0113). */
+    defaultFilmer?: string | null;
     youtubeDescription: string;
   }
 ) {
@@ -553,6 +564,8 @@ export async function updateShortSettings(
       default_short_scheduler_member_id: input.defaultScheduler || null,
       default_short_scripter_member_id: input.defaultScripter || null,
       default_youtube_description: String(input.youtubeDescription ?? "").slice(0, 5000),
+      // Before migration 0113 there's no such column: left out then.
+      ...((await hasShortFilming()) && input.defaultFilmer !== undefined ? { default_short_filmer_member_id: input.defaultFilmer || null } : {}),
     })
     .eq("id", teamId);
 
@@ -566,49 +579,40 @@ export async function updateShortSettings(
   return { success: true };
 }
 
-/** Team → Defaults → Video files: how long posted shorts' files stay (masters). */
-export async function updateMediaKeepDays(teamId: string, days: number) {
+/**
+ * Saving a team's "how long files stay" (1.27.5: 1 day to 1 year, or never = null; the database takes those from
+ * 0092 on). Masters only.
+ */
+async function saveKeep(teamId: string, column: "media_keep_days" | "long_media_keep_days" | "studio_keep_days", days: number | null, since: string) {
   const check = await requireMaster(teamId);
   if (!check.ok) return { error: check.error };
-  if (!isMediaKeepDays(days)) return { error: "Pick 1, 2 or 3 weeks, or 1 month." };
+  if (days !== null && !isKeepDays(days)) return { error: "Pick from 1 day to 1 year, or never." };
   const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ media_keep_days: days }).eq("id", teamId).select("id");
+  const { data, error } = await supabase.from("teams").update({ [column]: days }).eq("id", teamId).select("id");
   if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0070)." : "Couldn't save. Try again." };
+    if (error.code === "42703" || error.code === "PGRST204") return { error: `This needs the latest database update (migration ${since}).` };
+    // The old choices only (0092 not in yet): the new lengths and "never" don't fit them.
+    if (error.code === "23514" || error.code === "23502") return { error: "This choice needs the latest database update (migration 0092)." };
+    return { error: "Couldn't save. Try again." };
   }
   if (!data?.length) return { error: "Only the master can do this." };
   revalidatePath("/team");
   return { success: true };
 }
 
-/** Team → Defaults → Video files (1.25.0): how long a posted long video's edit stays. */
-export async function updateLongMediaKeepDays(teamId: string, days: number) {
-  const check = await requireMaster(teamId);
-  if (!check.ok) return { error: check.error };
-  if (!isLongMediaKeepDays(days)) return { error: "Pick 3 days, 1, 2 or 3 weeks, or 1 month." };
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ long_media_keep_days: days }).eq("id", teamId).select("id");
-  if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
-  }
-  if (!data?.length) return { error: "Only the master can do this." };
-  revalidatePath("/team");
-  return { success: true };
+/** Team → Defaults → Video files: how long posted shorts' files stay (null: never deleted). */
+export async function updateMediaKeepDays(teamId: string, days: number | null) {
+  return saveKeep(teamId, "media_keep_days", days, "0070");
+}
+
+/** Team → Defaults → Video files (1.25.0): how long a posted long video's edit stays (null: never deleted). */
+export async function updateLongMediaKeepDays(teamId: string, days: number | null) {
+  return saveKeep(teamId, "long_media_keep_days", days, "0089");
 }
 
 /** Team → Defaults → Video files (1.25.0): how long Thumbnail Studio keeps the thumbnails that didn't win (null = keep them). */
 export async function updateStudioKeepDays(teamId: string, days: number | null) {
-  const check = await requireMaster(teamId);
-  if (!check.ok) return { error: check.error };
-  if (days !== null && !isStudioKeepDays(days)) return { error: "Pick 1 or 2 weeks, 1 or 3 months, or keep them." };
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("teams").update({ studio_keep_days: days }).eq("id", teamId).select("id");
-  if (error) {
-    return { error: error.code === "42703" || error.code === "PGRST204" ? "This needs the latest database update (migration 0089)." : "Couldn't save. Try again." };
-  }
-  if (!data?.length) return { error: "Only the master can do this." };
-  revalidatePath("/team");
-  return { success: true };
+  return saveKeep(teamId, "studio_keep_days", days, "0089");
 }
 
 /** Team → Defaults → Long videos: review the edit in ClipTroop (a video can still choose its own way). */
@@ -789,5 +793,47 @@ export async function updateTasksVisibility(teamId: string, value: string) {
   if (!data?.length) return { error: "Only the master can do this." };
   revalidatePath("/team");
   revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/**
+ * Leave a team (1.28.0): anyone but its owner (who transfers it or deletes it
+ * first, 0093's leave_team). Its masters are told. What you made stays with
+ * the team; a master can invite you back.
+ */
+export async function leaveTeam(teamId: string): Promise<{ success?: true; error?: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(teamId)) return { error: "That team isn't there any more." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  // Who to tell, while you can still see the team.
+  const [{ data: masters }, actor, team] = await Promise.all([
+    supabase.from("team_members").select("user_id, member_roles!inner(role)").eq("team_id", teamId).eq("status", "active").eq("member_roles.role", "master"),
+    actorMeta(supabase, user.id),
+    teamMeta(supabase, teamId),
+  ]);
+
+  const { error } = await supabase.rpc("leave_team", { p_team: teamId });
+  if (error) {
+    if (error.code === "P0001" || error.code === "P0002") return { error: error.message };
+    if (error.code === "PGRST202" || /leave_team/.test(error.message)) return { error: "This needs the latest database update (migration 0093)." };
+    return { error: "Couldn't leave. Try again." };
+  }
+
+  const tell = [...new Set((masters ?? []).map((m) => m.user_id as string | null).filter((id): id is string => !!id && id !== user.id))];
+  if (tell.length) {
+    await sendNotifications(
+      tell.map((recipient_id) => ({
+        recipient_id,
+        kind: "member_left",
+        metadata: { actor, team, href: "/team?tab=members" },
+        body: `${actor.name} left ${team.name}.`,
+      })),
+    );
+  }
+  revalidatePath("/", "layout");
   return { success: true };
 }

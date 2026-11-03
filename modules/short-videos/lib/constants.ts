@@ -2,11 +2,13 @@
  * Mirrors supabase/migrations/0026_short_videos.sql (short_stage and
  * social_platform enums). UI only — the database enforces the rules.
  */
-export const SHORT_STAGES = ["script", "editing", "review", "ready", "posted"] as const;
+/** 1.36.0: Filming between Script and Editing (migrations 0112, 0113), like a long video's Film step. */
+export const SHORT_STAGES = ["script", "filming", "editing", "review", "ready", "posted"] as const;
 export type ShortStage = (typeof SHORT_STAGES)[number];
 
 export const SHORT_STAGE_LABELS: Record<ShortStage, string> = {
   script: "Script",
+  filming: "Filming",
   editing: "Editing",
   review: "In review",
   ready: "Ready to post",
@@ -16,6 +18,7 @@ export const SHORT_STAGE_LABELS: Record<ShortStage, string> = {
 /**
  * Color = what the stage asks of you, kept to a calm set:
  *   neutral  → not started (Script)
+ *   blue     → being filmed (Filming, 1.36.0)
  *   orange   → being worked on (Editing)
  *   violet   → waiting on the master (In review)
  *   teal     → approved, waiting to be posted (Ready)
@@ -23,6 +26,7 @@ export const SHORT_STAGE_LABELS: Record<ShortStage, string> = {
  */
 export const SHORT_STAGE_COLOR: Record<ShortStage, string> = {
   script: "rgb(var(--ink-faint))",
+  filming: "rgb(var(--blue))",
   editing: "rgb(var(--amber))",
   review: "rgb(var(--violet))",
   ready: "rgb(var(--teal))",

@@ -2,11 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { KindIcon } from "@/components/ui/kind-icon";
 import { CheckIcon } from "@/components/ui/icons";
 import { Mascot } from "@/components/ui/mascot";
+import { MASCOT_NAME } from "@/lib/brand";
+import { sounds } from "@/lib/sounds";
 import { useBox } from "./widget-box";
 import type { Done, Task, TeamPersonLite, TeamTask, TeamTasks } from "../lib/queries";
+import { doneEarly, earlyText } from "../lib/done-early";
+import { AvatarImg } from "@/components/ui/avatar-img";
+
+// Clip's runner (1.29.7): loaded only once the secret is found.
+const ClipRunner = dynamic(() => import("./clip-runner"), { ssr: false, loading: () => <div className="h-full min-h-[150px]" aria-hidden /> });
+/** Seven taps on Clip, each within this long of the last, open the runner. */
+const SECRET_TAPS = 7;
+const SECRET_GAP = 800;
 
 export const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDays = (day: string, n: number) => {
@@ -16,31 +27,38 @@ const addDays = (day: string, n: number) => {
 };
 const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+/** A due day in a word: "Today" · "Tomorrow" · "Yesterday" · "Fri" (this week) · "Oct 9". */
+export function dueWord(due: string, today: string) {
+  const late = due < today;
+  const inWeek = due > today && due <= addDays(today, 6);
+  return due === today
+    ? "Today"
+    : due === addDays(today, 1)
+      ? "Tomorrow"
+      : late
+        ? due === addDays(today, -1)
+          ? "Yesterday"
+          : shortDate(due)
+        : inWeek
+          ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
+          : shortDate(due);
+}
+
+/** The whole day, for a tooltip. */
+export const dueTitle = (due: string) => new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
 /** "Overdue" · "Today" · "Tomorrow" · "Fri" (this week) · "Oct 9". */
 export function DueChip({ due, today }: { due: string | null; today: string }) {
   if (!due) return null;
   const late = due < today;
-  const inWeek = due > today && due <= addDays(today, 6);
-  const label =
-    due === today
-      ? "Today"
-      : due === addDays(today, 1)
-        ? "Tomorrow"
-        : late
-          ? due === addDays(today, -1)
-            ? "Yesterday"
-            : shortDate(due)
-          : inWeek
-            ? new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })
-            : shortDate(due);
   return (
     <span
       className={`flex-shrink-0 rounded-[5px] px-1.5 h-5 inline-flex items-center text-[11px] font-bold tabular-nums ${
         late ? "bg-red/12 text-red" : due === today ? "bg-amber/12 text-amber" : "bg-surface-2 text-ink-soft"
       }`}
-      title={new Date(`${due}T00:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+      title={dueTitle(due)}
     >
-      {label}
+      {dueWord(due, today)}
     </span>
   );
 }
@@ -169,10 +187,53 @@ function AllDone({ overdue, onOverdue }: { overdue: number; onOverdue: () => voi
       </div>
     );
   }
+  return <AllDoneToday room={room} box={box} roomRef={ref} />;
+}
+
+/**
+ * Today is clear: Clip celebrates. His secret (1.29.7): tap him seven times
+ * quickly and he spins, chimes, and the card becomes his runner game.
+ */
+function AllDoneToday({ room, box, roomRef }: { room: { w: number; h: number } | null; box: { w: number; h: number }; roomRef: React.RefObject<HTMLDivElement | null> }) {
+  const [taps, setTaps] = useState(0);
+  const [secret, setSecret] = useState(false);
+  const [game, setGame] = useState(false);
+  const last = useRef(0);
+  useEffect(() => {
+    if (!secret) return;
+    const t = setTimeout(() => setGame(true), 900);
+    return () => clearTimeout(t);
+  }, [secret]);
   const size = clipSize(room, box, 60);
+  if (game)
+    return (
+      <ClipRunner
+        onClose={() => {
+          setGame(false);
+          setSecret(false);
+          setTaps(0);
+        }}
+      />
+    );
+  const tap = () => {
+    if (secret) return;
+    const now = performance.now();
+    const n = now - last.current < SECRET_GAP ? taps + 1 : 1;
+    last.current = now;
+    setTaps(n);
+    if (n >= SECRET_TAPS) {
+      setSecret(true);
+      sounds.secret();
+    }
+  };
   return (
-    <div ref={ref} className="h-full min-h-[160px] flex flex-col items-center justify-center text-center px-3 animate-[fadein_.3s_ease]">
-      <Mascot mood="celebrate" size={size} />
+    <div ref={roomRef} className="h-full min-h-[160px] flex flex-col items-center justify-center text-center px-3 animate-[fadein_.3s_ease]">
+      <button type="button" onClick={tap} aria-label={MASCOT_NAME} className="clip-tap" data-secret={secret ? "" : undefined}>
+        {/* A new key every tap: the squish (and his celebration) plays again. */}
+        <span key={taps} className={taps ? "clip-bump" : "inline-flex"}>
+          <Mascot mood="celebrate" size={size} />
+        </span>
+      </button>
       <p className={`font-display font-semibold leading-tight mt-1.5 ${size >= 150 ? "text-[20px]" : "text-[17px]"}`}>All done for today!</p>
       <p className="text-[12.5px] text-ink-soft mt-0.5">You&rsquo;ve completed all your tasks for today.</p>
     </div>
@@ -193,12 +254,9 @@ function NothingOverdue() {
 
 /** A person's picture (or initial) in their colour. */
 function Face({ p, size = 20 }: { p: TeamPersonLite; size?: number }) {
-  return p.avatarUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={p.avatarUrl} alt="" className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size }} />
-  ) : (
-    <span className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ width: size, height: size, background: p.color, fontSize: size * 0.45 }} aria-hidden>
-      {p.name.slice(0, 1).toUpperCase()}
+  return (
+    <span className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden" style={{ width: size, height: size, background: p.color, fontSize: size * 0.45 }} aria-hidden>
+      <AvatarImg src={p.avatarUrl} fallback={p.name.slice(0, 1).toUpperCase()} />
     </span>
   );
 }
@@ -402,21 +460,26 @@ export function TasksWidget({ tasks, done, teamTasks = null, settings }: { tasks
                 <div className="sticky top-0 z-[1] bg-surface px-2 pt-1.5 pb-0.5 text-[10.5px] font-bold uppercase tracking-wider text-ink-faint">
                   {dayName(day)} <span className="font-semibold">{list.length}</span>
                 </div>
-                {list.map((d) => (
-                  <Link key={d.id} href={d.href} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2/70">
-                    {/* (1.23.1) The calendar's posted tick: filled, in the green of a finished step. */}
-                    <span className="w-[26px] h-[26px] rounded-[6px] text-white flex items-center justify-center flex-shrink-0" style={{ background: "rgb(var(--teal))" }} aria-label="Done">
-                      <CheckIcon className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1 leading-tight">
-                      <span className="block text-[13px] font-semibold truncate">{d.action}</span>
-                      <span className="block text-[11.5px] text-ink-soft truncate">
-                        {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
+                {list.map((d) => {
+                  // 1.35.2: finished before the day it was due.
+                  const early = doneEarly(d.at, d.due, localDay);
+                  return (
+                    <Link key={d.id} href={d.href} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2/70">
+                      {/* (1.23.1) The calendar's posted tick: filled, in the green of a finished step. */}
+                      <span className="w-[26px] h-[26px] rounded-[6px] text-white flex items-center justify-center flex-shrink-0" style={{ background: "rgb(var(--teal))" }} aria-label="Done">
+                        <CheckIcon className="w-3.5 h-3.5" />
                       </span>
-                    </span>
-                    <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
-                  </Link>
-                ))}
+                      <span className="min-w-0 flex-1 leading-tight">
+                        <span className="block text-[13px] font-semibold truncate">{d.action}</span>
+                        <span className="block text-[11.5px] text-ink-soft truncate">
+                          {d.kind === "meeting" ? <span className="text-ink-faint">From</span> : <span className="font-mono text-ink-faint">#{d.number}</span>} {d.title}
+                        </span>
+                        {early && d.due && <span className="block mt-0.5 text-[11px] font-semibold text-green truncate">{earlyText(early, d.due)}</span>}
+                      </span>
+                      <span className="text-[11px] text-ink-faint tabular-nums">{new Date(d.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </Link>
+                  );
+                })}
               </div>
             ))
           ) : (

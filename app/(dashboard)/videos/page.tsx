@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
 import {
   STAGE_LABELS,
   STAGE_ORDER,
@@ -14,12 +15,21 @@ import {
 } from "@/modules/long-videos/lib/stages";
 import type { PipelineStage } from "@/lib/permissions/roles";
 import { colorForId } from "@/lib/avatar";
-import { GridIcon, ListIcon, CalendarIcon, PlusIcon, VideoIcon } from "@/components/ui/icons";
+import { CalendarIcon, PlusIcon, VideoIcon } from "@/components/ui/icons";
 import { relativeDay, todayISO } from "@/modules/short-videos/lib/dates";
 import { setViewMode } from "./view-mode-actions";
-import { LinkPendingIndicator } from "@/components/ui/link-pending";
 import { VIEW_MODE_COOKIE } from "@/lib/view-mode";
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { FilterChip } from "@/components/ui/filter-chip";
+import { VideoMenu } from "@/modules/long-videos/components/video-menu";
+import { PickVideosButton, VideosPicker } from "@/modules/long-videos/components/pick-videos";
+import { CardPick, RowPick } from "@/components/ui/list-pick";
+import { VIDEO_TABLE_COLS, VideoCardsSkeleton, VideoTableSkeleton } from "@/modules/long-videos/components/list-skeletons";
 import type { Metadata } from "next";
+import { sketchThumb, studioThumb, type PictureWidth } from "@/lib/picture-size";
+import { chunks, LIST_CHUNK, WIDE_CHUNK } from "@/lib/chunks";
+import { wordColor } from "@/lib/word-color";
 
 export const metadata: Metadata = { title: "Long videos" };
 
@@ -47,7 +57,7 @@ export default async function VideosPage({
   let query = supabase
     .from("long_video_projects")
     .select(
-      "id, entry_number, title, stage, expected_date, theme, subtheme, video_type, project_thumbnails(storage_path, position)"
+      "id, entry_number, title, stage, expected_date, theme, subtheme, video_type, project_thumbnails(id, storage_path, position)"
     )
     .eq("team_id", currentTeam.id)
     // Posting order: earliest expected date first, undated at the end —
@@ -64,7 +74,7 @@ export default async function VideosPage({
 
   // Stage counts for the filter chips — one tiny query (just the stage
   // column), run in parallel with the main list.
-  const [{ data: projects }, { data: stageRows }, membership, { data: winnerRows }] = await Promise.all([
+  const [{ data: projects }, { data: stageRows }, membership, { data: winnerRows }, rights] = await Promise.all([
     query,
     supabase.from("long_video_projects").select("stage").eq("team_id", currentTeam.id),
     getMembership(supabase, currentTeam.id),
@@ -76,18 +86,29 @@ export default async function VideosPage({
       .eq("is_winner", true)
       .not("thumbnail_storage_path", "is", null)
       .order("position"),
+    // 1.41.0: masters, and whoever the team's owner lets delete long videos (one at a time, or several with the password).
+    getDeleteRights(supabase, currentTeam.id),
   ]);
-  const thumbnailBase = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/thumbnails/`;
   const winnerOf = new Map<string, string>();
   for (const w of winnerRows ?? []) if (!winnerOf.has(w.project_id as string)) winnerOf.set(w.project_id as string, w.id as string);
-  const coverOf = (p: { id: string; project_thumbnails?: { storage_path: string; position: number }[] | null }) => {
+  // A copy as wide as it's shown (1.32.3): 160 px for the table's 56 px, 640 for a card (up to 300 px). The pictures
+  // are kept up to 1280 px wide.
+  const coverOf = (p: { id: string; project_thumbnails?: { id: string; storage_path: string; position: number }[] | null }, w: PictureWidth) => {
     const winner = winnerOf.get(p.id);
-    if (winner) return `/api/package-thumb/${winner}`;
+    if (winner) return studioThumb(winner, w);
     const first = [...(p.project_thumbnails ?? [])].sort((a, b) => a.position - b.position)[0];
-    return first ? thumbnailBase + first.storage_path : null;
+    return first ? sketchThumb(first.id, w) : null;
   };
   const createRoles = membership?.roles ?? [];
   const canCreate = isMaster(createRoles) || createRoles.includes("publisher");
+  // Deleting straight from the list (1.27.5): masters. 1.40.0: moving to a step too, one or many; everyone exports.
+  const master = isMaster(createRoles);
+  const viewHref = (mode: "grid" | "table") => {
+    const q = new URLSearchParams();
+    if (stageFilter) q.set("stage", stageFilter);
+    q.set("view", mode);
+    return `/videos?${q}`;
+  };
   const stageCounts = new Map<string, number>();
   (stageRows ?? []).forEach((r) => stageCounts.set(r.stage, (stageCounts.get(r.stage) ?? 0) + 1));
   const totalCount = stageRows?.length ?? 0;
@@ -105,6 +126,7 @@ export default async function VideosPage({
   };
 
   return (
+    <PendingNav>
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1720px] mx-auto">
       <div className="flex items-start justify-between gap-6 mb-7 flex-wrap">
         <div>
@@ -133,6 +155,8 @@ export default async function VideosPage({
         )}
       </div>
 
+      {/* 1.40.0: long videos picked together (pick-videos.tsx): export; masters move; masters (1.41.0: and whoever the owner lets) delete, with their password. */}
+      <VideosPicker items={(projects ?? []).map((p) => ({ id: p.id, number: p.entry_number, title: p.title, stage: p.stage as PipelineStage }))} canMove={master} canDelete={rights.longs} deleteMany={rights.manyLongs}>
       {/* Filters — small, low-key, border-led rather than solid fills — with the view toggle on the same row, opposite side */}
       <div className="flex items-center justify-between gap-3 mb-7 flex-wrap">
         {/* Neutral, quiet filter chips: color is reserved for the ONE that's
@@ -144,77 +168,44 @@ export default async function VideosPage({
               label: STAGE_LABELS[st],
               count: stageCounts.get(st) ?? 0,
             }))].map((f) => {
-              const active = (stageFilter ?? "") === f.key;
               const params = new URLSearchParams();
               if (f.key) params.set("stage", f.key);
               if (isTable) params.set("view", "table");
-              const href = `/videos${params.toString() ? `?${params}` : ""}`;
               return (
-                <Link
+                <FilterChip
                   key={f.key || "all"}
-                  href={href}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-ink text-paper"
-                      : f.count === 0
-                        ? "text-ink-faint/70 hover:bg-surface-2 hover:text-ink-soft"
-                        : "text-ink-soft hover:bg-surface-2 hover:text-ink"
-                  }`}
-                >
-                  {f.label}
-                  <span
-                    className={`text-[11px] tabular-nums font-medium ${
-                      active ? "text-paper/60" : "text-ink-faint"
-                    }`}
-                  >
-                    {f.count}
-                  </span>
-                  <LinkPendingIndicator />
-                </Link>
+                  href={`/videos${params.toString() ? `?${params}` : ""}`}
+                  navKey={`stage:${f.key}`}
+                  active={(stageFilter ?? "") === f.key}
+                  label={f.label}
+                  count={f.count}
+                />
               );
             })}
           </div>
         </div>
 
-        <div className="flex items-center rounded-lg border border-line/15 p-0.5 flex-shrink-0">
-          <form action={setViewMode}>
-            <input type="hidden" name="mode" value="grid" />
-            <input type="hidden" name="stage" value={stageFilter ?? ""} />
-            <button
-              type="submit"
-              aria-label="Card view"
-              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                !isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-              }`}
-            >
-              <GridIcon className="w-[15px] h-[15px]" />
-            </button>
-          </form>
-          <form action={setViewMode}>
-            <input type="hidden" name="mode" value="table" />
-            <input type="hidden" name="stage" value={stageFilter ?? ""} />
-            <button
-              type="submit"
-              aria-label="Table view"
-              className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-              }`}
-            >
-              <ListIcon className="w-[15px] h-[15px]" />
-            </button>
-          </form>
+        <div className="flex items-center gap-2">
+          {(projects ?? []).length > 0 && <PickVideosButton />}
+          <ViewToggle
+            value={isTable ? "table" : "grid"}
+            cookie={VIEW_MODE_COOKIE}
+            hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
+            action={setViewMode}
+            fields={{ stage: stageFilter ?? "" }}
+          />
         </div>
       </div>
 
+      {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
+      <PendingSwap fallback={isTable ? <VideoTableSkeleton /> : <VideoCardsSkeleton />} fallbacks={{ grid: <VideoCardsSkeleton />, table: <VideoTableSkeleton /> }}>
       {!projects || projects.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-line/15 py-24 text-center text-[15px] text-ink-faint">
           No projects{stageFilter ? " in this stage" : " yet"}.
         </div>
       ) : isTable ? (
-        <div className="motion-stagger rounded-xl border border-line/10 overflow-hidden">
-          <div className="grid grid-cols-[40px_56px_1fr] sm:grid-cols-[48px_64px_1fr_110px_160px_110px_110px] gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
+        <div className="rounded-xl border border-line/10 overflow-hidden">
+          <div className={`${VIDEO_TABLE_COLS} gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint`}>
             <span className="text-right">#</span>
             <span></span>
             <span>Title</span>
@@ -222,18 +213,22 @@ export default async function VideosPage({
             <span className="hidden sm:block">Theme</span>
             <span className="hidden sm:block">Stage</span>
             <span className="hidden sm:block">Expected</span>
+            <span />
           </div>
-          {projects.map((p) => {
-            const cover = coverOf(p);
+          {chunks(projects, LIST_CHUNK).map((group, g) => (
+          // A group of rows off screen isn't laid out or painted until it comes near (1.32.5, globals.css .list-chunk).
+          <div key={g} className="list-chunk motion-stagger">
+          {group.map((p) => {
+            const cover = coverOf(p, 160);
             const c = stageColor(p.stage as PipelineStage);
             const themeColor = colorForId(p.theme || "theme");
             return (
-              <Link
+              <div
                 key={p.id}
-                href={`/videos/${p.id}`}
-                className="grid grid-cols-[40px_56px_1fr] sm:grid-cols-[48px_64px_1fr_110px_160px_110px_110px] gap-3 px-3 py-2 items-center border-t border-line/10 hover:bg-surface-2 transition-colors"
+                data-item-id={p.id}
+                className={`relative ${VIDEO_TABLE_COLS} gap-3 px-3 py-2 items-center border-t border-line/10 hover:bg-surface-2 transition-colors`}
               >
-                <span className="text-right font-mono text-[12px] text-ink-faint tabular-nums">{p.entry_number}</span>
+                <span data-row-num="" className="text-right font-mono text-[12px] text-ink-faint tabular-nums">{p.entry_number}</span>
                 <span
                   className="w-14 h-8 rounded-md overflow-hidden flex-shrink-0"
                   style={{
@@ -247,37 +242,50 @@ export default async function VideosPage({
                     <img loading="lazy" decoding="async" src={cover} alt="" className="w-full h-full object-cover" />
                   )}
                 </span>
-                <span className="text-[13px] font-semibold truncate">{p.title}</span>
+                {/* The title's link stretches over the whole row; the ⋯ sits above it. */}
+                <Link href={`/videos/${p.id}`} data-row-title="" className="text-[13px] font-semibold truncate after:absolute after:inset-0 after:content-['']">
+                  {p.title}
+                </Link>
                 <span className="hidden sm:block text-[11.5px] text-ink-soft truncate">
                   {(p.video_type ?? []).join(" + ") || "None"}
                 </span>
-                <span className="hidden sm:block text-[12px] font-semibold truncate" style={{ color: themeColor }}>
+                <span className="hidden sm:block text-[12px] font-semibold truncate" style={{ color: wordColor(themeColor) }}>
                   {p.theme}
                   {p.subtheme ? ` · ${p.subtheme}` : ""}
                 </span>
                 <span className="hidden sm:block">
                   <span
                     className="text-[10.5px] font-bold px-2 py-0.5 rounded-md"
-                    style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
+                    style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 14%, transparent)` }}
                   >
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
                 </span>
                 <span className={`hidden sm:block text-[11.5px] tabular-nums ${due(p).tone}`}>{p.stage === "done" ? "Posted" : formatDate(p.expected_date)}</span>
-              </Link>
+                <span className="justify-self-end">
+                  <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} canDelete={rights.longs} className="text-ink-soft hover:text-ink hover:bg-surface" />
+                </span>
+                <RowPick id={p.id} label={`#${p.entry_number} ${p.title}`} />
+              </div>
             );
           })}
+          </div>
+        ))}
         </div>
       ) : (
-        <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
-          {projects.map((p) => {
-            const cover = coverOf(p);
+        <div className="flex flex-col gap-5">
+        {chunks(projects, WIDE_CHUNK).map((group, g) => (
+          // A group of cards off screen isn't drawn until it comes near (1.32.5, globals.css .list-chunk-cards).
+          <div key={g} className="list-chunk-cards motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+          {group.map((p) => {
+            const cover = coverOf(p, 640);
             const c = stageColor(p.stage as PipelineStage);
             return (
-              <Link
+              <div
                 key={p.id}
-                href={`/videos/${p.id}`}
-                className="group rounded-2xl border border-line/10 bg-surface overflow-hidden hover:border-line/25 hover:shadow-[0_10px_28px_-14px_rgb(0_0_0/0.35)] hover:-translate-y-0.5 transition-all flex flex-col"
+                data-card=""
+                data-item-id={p.id}
+                className="group relative rounded-2xl border border-line/10 bg-surface overflow-hidden hover:border-line/25 hover:shadow-[0_10px_28px_-14px_rgb(0_0_0/0.35)] hover:-translate-y-0.5 transition-all flex flex-col"
               >
                 <div className="aspect-video relative overflow-hidden bg-surface-2">
                   {cover ? (
@@ -297,8 +305,11 @@ export default async function VideosPage({
                     <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: c }} aria-hidden />
                     {STAGE_LABELS[p.stage as PipelineStage]}
                   </span>
-                  <span className="absolute top-2.5 right-2.5 font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
-                    #{p.entry_number}
+                  <span data-card-num="" className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                    <span className="font-mono text-[11px] font-bold px-2 h-6 inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm tabular-nums">
+                      #{p.entry_number}
+                    </span>
+                    <VideoMenu id={p.id} teamId={currentTeam.id} number={p.entry_number} title={p.title} stage={p.stage as PipelineStage} isMaster={master} canDelete={rights.longs} className="!w-7 !h-6 bg-black/60 text-white backdrop-blur-sm hover:bg-black/75" />
                   </span>
                   {/* Where it is in the pipeline: one segment per step. */}
                   <span className="absolute inset-x-2.5 bottom-2.5 flex gap-[3px]" aria-hidden>
@@ -315,11 +326,14 @@ export default async function VideosPage({
                   </span>
                 </div>
                 <div className="p-4 flex flex-col gap-1.5 flex-1">
-                  <span className="font-semibold text-[15px] leading-snug line-clamp-2">{p.title}</span>
+                  {/* The title's link covers the whole card; the ⋯ sits above it. */}
+                  <Link href={`/videos/${p.id}`} data-row-title="" className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']">
+                    {p.title}
+                  </Link>
                   {(p.theme || (p.video_type ?? []).length > 0) && (
                     <span className="flex items-center gap-2 text-[12px] min-w-0">
                       {p.theme && (
-                        <span className="font-semibold truncate" style={{ color: colorForId(p.theme || "theme") }}>
+                        <span className="font-semibold truncate" style={{ color: wordColor(colorForId(p.theme || "theme")) }}>
                           {p.theme}
                           {p.subtheme ? ` · ${p.subtheme}` : ""}
                         </span>
@@ -339,11 +353,17 @@ export default async function VideosPage({
                     );
                   })()}
                 </div>
-              </Link>
+                <CardPick id={p.id} label={`#${p.entry_number} ${p.title}`} corner="right" x={10} y={13} />
+              </div>
             );
           })}
+          </div>
+        ))}
         </div>
       )}
+      </PendingSwap>
+      </VideosPicker>
     </div>
+    </PendingNav>
   );
 }

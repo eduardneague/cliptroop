@@ -83,7 +83,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
   const current = selected ? rows.find((r) => r.id === selected) ?? { id: selected, local: null, cross: null } : list[0] ?? null;
 
   if (!rows.length)
-    return <EmptyNote title="Formats show up once there are enough videos">Each format needs a few videos in the niche before it can be measured.</EmptyNote>;
+    return <EmptyNote title="Formats show up once there are enough videos" finding>Each format needs a few videos in the niche before it can be measured.</EmptyNote>;
 
   return (
     <div className="space-y-12">
@@ -166,7 +166,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
         </div>
 
         <aside className="hidden lg:block min-w-0">
-          <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
+          <div className="sticky top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-var(--shell-top,3.5rem)-var(--ol-bar,104px)-1.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <FormatDetail row={current} />}</div>
         </aside>
       </div>
 
@@ -179,7 +179,7 @@ export function FormatsTab({ data }: { data: FormatsData }) {
                 <p className="font-display text-[16px] leading-snug font-semibold">{templateLabel(t.text)}</p>
                 <p className="mt-1.5 text-[12px] text-ink-faint">
                   {t.n} videos from {t.ch} channels · {t.out} hit 3× · median{" "}
-                  <span className="font-display font-semibold" style={{ color: (t.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+                  <span className="font-display font-semibold" style={{ color: (t.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
                     {multText(t.med)}
                   </span>
                 </p>
@@ -267,7 +267,7 @@ function FormatDetail({ row, inSheet = false }: { row: Row; inSheet?: boolean })
             {s ? (
               <>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="font-display text-[24px] font-semibold leading-none" style={{ color: (s.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+                  <span className="font-display text-[24px] font-semibold leading-none" style={{ color: (s.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
                     {multText(s.med)}
                   </span>
                   <span className="text-[11.5px] text-ink-faint">median</span>
@@ -283,7 +283,7 @@ function FormatDetail({ row, inSheet = false }: { row: Row; inSheet?: boolean })
         ))}
       </div>
 
-      <Link href={nav.href({ tab: "ideas", params: { lock: f.id } })} className={`${BTN_MAIN} mt-4 w-full h-10`}>
+      <Link href={nav.href({ tab: "ideas", params: { lock: f.id } })} className={`${BTN_MAIN} mt-4 w-full !h-10`}>
         Write it for {ctx.niche?.name ?? "my niche"}
       </Link>
 

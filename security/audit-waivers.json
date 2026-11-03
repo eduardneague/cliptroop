@@ -1,0 +1,9 @@
+{
+  "//": [
+    "Known vulnerabilities let through for now (1.31.7). scripts/audit.mjs stops the build on every other one.",
+    "Add one only when the problem can't reach ClipTroop and there's no fixed version yet, then take it out as soon as there is:",
+    "{ \"id\": \"GHSA-xxxx-xxxx-xxxx\", \"package\": \"its name\", \"reason\": \"why it's safe to wait\", \"until\": \"YYYY-MM-DD\" }",
+    "The date is at most 90 days ahead; after it, the waiver lets nothing through. See docs/DEVELOPMENT.md → Vulnerability gate."
+  ],
+  "waivers": []
+}

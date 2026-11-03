@@ -36,6 +36,24 @@ ok(noOverlap(p4), "move tasks right: no overlap");
 // Resize clock to 4x3
 const p5 = preview(base, { kind: "resize", id: "w-clock", w: 4, h: 3 }, lim);
 ok(noOverlap(p5) && p5.find((b) => b.i === "w-clock")!.w === 4, "resize grows and pushes");
+// From the left / top edge (1.27.5): that edge moves, the opposite one stays.
+{
+  const cl0 = base.find((b) => b.i === "w-clock")!;
+  const pl = preview(base, { kind: "resize", id: "w-clock", w: 4, h: cl0.h, left: true }, lim);
+  const me = pl.find((b) => b.i === "w-clock")!;
+  ok(noOverlap(pl) && me.w === 4 && me.x + me.w === cl0.x + cl0.w, `pulled from the left: wider to the left, its right edge where it was (x${me.x} w${me.w})`);
+  const pr = preview(base, { kind: "resize", id: "w-clock", w: 4, h: cl0.h }, lim).find((b) => b.i === "w-clock")!;
+  ok(pr.x === cl0.x && pr.w === 4, "pulled from the right: its left edge stays");
+  const pe = preview(base, { kind: "resize", id: "w-teams", w: 12, h: 2, left: true }, lim).find((b) => b.i === "w-teams")!;
+  const te = base.find((b) => b.i === "w-teams")!;
+  ok(pe.x === 0 && pe.x + pe.w === te.x + te.w, "can't go past the board's left edge");
+  const cal = base.find((b) => b.i === "w-cal")!;
+  const pt = preview(base, { kind: "resize", id: "w-cal", w: cal.w, h: cal.h + 2, top: true }, lim);
+  const ct = pt.find((b) => b.i === "w-cal")!;
+  ok(noOverlap(pt) && ct.h === cal.h + 2, `pulled from the top: taller (h${ct.h}), the widget above makes room`);
+  const pc = preview(base, { kind: "resize", id: "w-cal", w: cal.w + 1, h: cal.h + 1, left: true, top: true }, lim);
+  ok(noOverlap(pc) && pc.length === base.length, "a top-left corner: never overlapping, nothing lost");
+}
 const p6 = preview(base, { kind: "resize", id: "w-clock", w: 20, h: 20 }, lim);
 ok(p6.find((b) => b.i === "w-clock")!.w === 4 && p6.find((b) => b.i === "w-clock")!.h === 4, "resize respects limits");
 // Random moves never overlap
@@ -43,7 +61,7 @@ let rnd = 1; const r = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
 let allOk = true;
 for (let k = 0; k < 3000; k++) {
   const w = base[Math.floor(r() * base.length)];
-  const res = r() < 0.7 ? preview(base, { kind: "move", id: w.i, x: Math.floor(r() * 12), y: Math.floor(r() * 16) }, lim) : preview(base, { kind: "resize", id: w.i, w: 1 + Math.floor(r() * 12), h: 1 + Math.floor(r() * 10) }, lim);
+  const res = r() < 0.7 ? preview(base, { kind: "move", id: w.i, x: Math.floor(r() * 12), y: Math.floor(r() * 16) }, lim) : preview(base, { kind: "resize", id: w.i, w: 1 + Math.floor(r() * 12), h: 1 + Math.floor(r() * 10), left: r() < 0.4, top: r() < 0.4 }, lim);
   if (!noOverlap(res) || !noOverlap(fill(res, lim)) || res.length !== base.length) { allOk = false; console.log("bad", w.i); break; }
 }
 ok(allOk, "3000 random moves/resizes: never overlapping, nothing lost");

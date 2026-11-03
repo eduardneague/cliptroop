@@ -76,7 +76,7 @@ export function SkeletonTabs({ tabs, active }: { tabs: string[]; active?: string
           className={`relative px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap ${t === active ? "text-ink" : "text-ink-faint"}`}
         >
           {t}
-          {t === active && <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber" />}
+          {t === active && <span className="absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber" />}
         </span>
       ))}
     </div>

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
+import { Dialog } from "@/components/ui/dialog";
 import { ChevronDownIcon, CloseIcon, CopyIcon, ShortsIcon, VideoIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { startNavProgress } from "@/components/ui/nav-progress";
@@ -10,15 +11,16 @@ import { dismissIdea, removeSave, saveIdea, startFromIdea } from "@/app/(dashboa
 import { FORMAT_BY_ID, type FormatGroup } from "../lib/formats";
 import type { Idea } from "../lib/ideas";
 import type { MiniVideo, SavedIdea } from "../lib/types";
-import { multText } from "../lib/scores";
-import { BookmarkIcon, heat, Thumb } from "./bits";
+import { compact } from "../lib/filters";
+import { BookmarkIcon, ChannelAvatar, Mult, Thumb } from "./bits";
 import { useOutliersNav } from "./context";
 
 /*
- * An idea (1.27.0), in the Ideate step's shape: 2 to 4 titles (tap one to
- * make it the main title), a hook, the type, why it should work and the
- * outliers it comes from. Save it, start a long video or a Short from it
- * (New long video opens filled in), copy the titles, or hide it for good.
+ * An idea (1.27.0; simpler since 1.29.0). In a list it's the outlier it
+ * comes from (its thumbnail and multiplier), the title, whose video it's
+ * from and the hook in a line or two, with Start and Save. Tapping it opens
+ * the whole idea: every title (tap one to make it the main title), the
+ * hook, why it should work and all the outliers behind it.
  */
 
 /** Each kind of format its own colour, so a list of ideas reads at a glance. */
@@ -83,18 +85,24 @@ function Strength({ value }: { value: number }) {
   );
 }
 
-export function IdeaCard({
-  idea,
-  teamId,
-  examples,
-  nicheName,
-  kind,
-  savedId,
-  onSaved,
-  onHide,
-  index = 0,
-  dense = false,
-}: {
+/**
+ * The outlier each idea in a list leads with: its first source not already
+ * shown by an idea above it, so a list of ideas doesn't repeat one picture.
+ */
+export function leadSources(ideas: Idea[], examples: Record<string, MiniVideo> | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  const used = new Set<string>();
+  for (const idea of ideas) {
+    const have = idea.sources.filter((id) => examples?.[id]);
+    const pick = have.find((id) => !used.has(id)) ?? have[0];
+    if (!pick) continue;
+    out.set(idea.key, pick);
+    used.add(pick);
+  }
+  return out;
+}
+
+type IdeaProps = {
   idea: Idea;
   teamId: string;
   examples?: Record<string, MiniVideo>;
@@ -104,22 +112,19 @@ export function IdeaCard({
   onSaved: (key: string, id: string | null) => void;
   onHide?: (key: string) => void;
   index?: number;
-  /** Fewer details (For you, the video panel). */
-  dense?: boolean;
-}) {
+  /** The outlier's thumbnail on top (off where the idea comes from the video already shown). */
+  thumb?: boolean;
+  /** Which of its outliers leads (leadSources: no picture twice in a list). */
+  lead?: string | null;
+};
+
+/** Saving, starting, hiding and copying an idea (the tile and the full view share them). */
+function useIdea({ idea, teamId, examples, nicheName, kind, savedId, onSaved, onHide }: IdeaProps, main: number) {
   const router = useRouter();
   const toast = useToast();
-  const { openVideo } = useOutliersNav();
-  const [main, setMain] = useState(0);
-  const [allTitles, setAllTitles] = useState(false);
   const [busy, setBusy] = useState<"save" | "start" | null>(null);
-  const [startOpen, setStartOpen] = useState(false);
-  const startRef = useRef<HTMLButtonElement>(null);
-  const f = idea.formatId ? FORMAT_BY_ID.get(idea.formatId) : undefined;
-  const titles = [idea.titles[main], ...idea.titles.filter((_, i) => i !== main)];
-  const ordered: Idea = { ...idea, titles };
-  const saved = toSaved(ordered, { niche: nicheName, kind, examples });
-
+  const titles = [idea.titles[main] ?? idea.titles[0], ...idea.titles.filter((_, i) => i !== main)];
+  const saved = toSaved({ ...idea, titles }, { niche: nicheName, kind, examples });
   const toggleSave = async () => {
     if (busy) return;
     setBusy("save");
@@ -146,7 +151,6 @@ export function IdeaCard({
     }
   };
   const start = async (as: "long" | "short") => {
-    setStartOpen(false);
     if (busy) return;
     setBusy("start");
     try {
@@ -179,126 +183,212 @@ export function IdeaCard({
     }
   };
   const sources = idea.sources.map((id) => examples?.[id]).filter((x): x is MiniVideo => !!x);
+  return { titles, busy, toggleSave, start, hide, copy, sources };
+}
+
+/** The idea in a list: where it's from, the title and the hook. Tap for the whole idea. */
+export function IdeaCard(props: IdeaProps) {
+  const { idea, kind, savedId, onHide, index = 0, thumb = true, lead = null } = props;
+  const [main, setMain] = useState(0);
+  const [full, setFull] = useState(false);
+  const a = useIdea(props, main);
+  const f = idea.formatId ? FORMAT_BY_ID.get(idea.formatId) : undefined;
+  const src = (lead ? a.sources.find((x) => x.id === lead) : null) ?? a.sources[0] ?? null;
+  const more = Math.max(0, idea.sources.length - 1);
 
   return (
-    <article className="group relative flex flex-col rounded-2xl border border-line/10 bg-surface p-4 min-w-0 transition-shadow hover:shadow-[0_10px_30px_-18px_rgb(0_0_0/0.45)]" style={{ "--i": index } as React.CSSProperties}>
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: formatColor(idea.formatId) }} aria-hidden />
-        <span className="text-[12px] font-semibold text-ink-soft truncate">{f?.name ?? "From real outlier titles"}</span>
-        <span className="rounded-md bg-surface-2 px-1.5 h-5 inline-flex items-center text-[11px] font-semibold text-ink-faint flex-shrink-0">{idea.type}</span>
-        {idea.origin === "every" && (
-          <span className="rounded-md bg-violet/12 text-violet px-1.5 h-5 inline-flex items-center text-[11px] font-semibold flex-shrink-0" title="A format that wins in other niches, written for yours">
-            From other niches
-          </span>
+    <article className="group relative flex flex-col rounded-2xl border border-line/10 bg-surface overflow-hidden min-w-0 transition-shadow hover:shadow-[0_10px_30px_-18px_rgb(0_0_0/0.45)]" style={{ "--i": index } as React.CSSProperties}>
+      {thumb && src ? (
+        <button type="button" onClick={() => setFull(true)} className="relative block aspect-video bg-surface-2 overflow-hidden" aria-label={`Open the idea: ${a.titles[0]}`}>
+          <Thumb id={src.id} kind={src.kind === "short" ? "long" : src.kind} sizes="(min-width: 1536px) 22vw, (min-width: 1280px) 30vw, (min-width: 768px) 45vw, 92vw" tint={src.tint} />
+          <span className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" aria-hidden />
+          {src.score !== null && <Mult score={src.score} size="md" className="absolute bottom-2 left-2" />}
+          {more > 0 && <span className="absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 h-6 inline-flex items-center text-[11.5px] font-bold text-white backdrop-blur-sm">+{more} more</span>}
+        </button>
+      ) : (
+        <span className="block h-1.5" style={{ background: formatColor(idea.formatId) }} aria-hidden />
+      )}
+      {onHide && (
+        <button type="button" onClick={a.hide} aria-label="Hide this idea" title="Hide (it won't come back)" className={`absolute top-2 right-2 z-[1] w-8 h-8 rounded-lg flex items-center justify-center transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 ${thumb && src ? "bg-black/55 text-white hover:bg-black/75 backdrop-blur-sm" : "text-ink-faint hover:text-ink hover:bg-surface-2"}`}>
+          <CloseIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      <div className="flex flex-col flex-1 p-3.5 min-w-0">
+        <button type="button" onClick={() => setFull(true)} className={`text-left ${onHide && !(thumb && src) ? "pr-8" : ""}`}>
+          <h3 className="font-display text-[16.5px] leading-[1.25] font-semibold text-balance line-clamp-3 hover:underline decoration-line/40 underline-offset-2">{a.titles[0]}</h3>
+        </button>
+        {src ? (
+          <p className="mt-1.5 flex items-center gap-1.5 min-w-0 text-[12px] text-ink-soft">
+            <ChannelAvatar src={src.avatar} title={src.channel} size={18} />
+            <span className="truncate">
+              From <span className="font-semibold text-ink">{src.channel}</span>
+              {src.views !== null && <span className="text-ink-faint"> · {compact(src.views)} views</span>}
+            </span>
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[12px] text-ink-faint truncate">{f?.name ?? "From real outlier titles"}</p>
         )}
-        <span className="flex-1" />
-        <Strength value={idea.strength} />
-        {onHide && (
-          <button type="button" onClick={hide} aria-label="Hide this idea" title="Hide (it won't come back)" className="-mr-1.5 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
-            <CloseIcon className="w-3.5 h-3.5" />
+        <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft line-clamp-2">{idea.hook}</p>
+        <div className="mt-auto pt-3 flex items-center gap-1.5 min-w-0">
+          <button type="button" disabled={a.busy !== null} onClick={() => a.start(kind)} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white h-8 px-3 text-[12.5px] font-semibold whitespace-nowrap hover:brightness-110 disabled:opacity-60" title={kind === "short" ? "Start a Short from this idea" : "Start a long video from this idea"}>
+            {kind === "short" ? <ShortsIcon className="w-3.5 h-3.5" /> : <VideoIcon className="w-3.5 h-3.5" />}
+            {a.busy === "start" ? "Opening…" : "Start"}
           </button>
-        )}
-      </div>
-
-      <h3 className={`mt-2.5 font-display leading-[1.22] font-semibold text-balance ${dense ? "text-[17px]" : "text-[17.5px] sm:text-[18px]"}`}>{titles[0]}</h3>
-      {titles.length > 1 && (
-        <ul className="mt-2 space-y-1" aria-label="Other titles (tap one to make it the main title)">
-          {idea.titles
-            .map((t, i) => ({ t, i }))
-            .filter((x) => x.i !== main)
-            .slice(0, dense && !allTitles ? 1 : 4)
-            .map(({ t, i }) => (
-              <li key={t}>
-                <button type="button" onClick={() => setMain(i)} className="text-left text-[13px] leading-snug text-ink-soft hover:text-ink flex gap-2" title="Make this the main title">
-                  <span className="mt-[7px] w-1 h-1 rounded-[1px] bg-ink-faint flex-shrink-0" aria-hidden />
-                  {t}
-                </button>
-              </li>
-            ))}
-          {dense && !allTitles && titles.length > 2 && (
-            <li>
-              <button type="button" onClick={() => setAllTitles(true)} className="text-[12px] font-semibold text-ink-faint hover:text-ink pl-3">
-                {titles.length - 2} more title{titles.length - 2 === 1 ? "" : "s"}
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
-
-      <p className={`mt-3 text-[12.5px] leading-relaxed text-ink-soft border-l-2 border-amber/50 pl-2.5 ${dense ? "line-clamp-2" : ""}`} title={dense ? idea.hook : undefined}>
-        <span className="font-semibold text-ink">Hook </span>
-        {idea.hook}
-      </p>
-
-      {!dense && idea.why.length > 0 && (
-        <ul className="mt-3 space-y-1">
-          {idea.why.map((w) => (
-            <li key={w.text} className="flex gap-2 text-[12px] leading-snug text-ink-soft">
-              <span className={`mt-[5px] w-1.5 h-1.5 rounded-[2px] flex-shrink-0 ${w.tone === "good" ? "bg-green" : w.tone === "new" ? "bg-violet" : "bg-blue"}`} aria-hidden />
-              {w.text}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {sources.length > 0 && !dense && (
-        <div className="mt-3 flex items-center gap-1.5 min-w-0">
-          <span className="text-[11.5px] text-ink-faint flex-shrink-0">From</span>
-          <Sources list={sources.slice(0, 3)} open={openVideo} />
-        </div>
-      )}
-
-      <div className="mt-auto pt-3.5 flex items-center gap-1.5 min-w-0">
-        <div className="inline-flex rounded-lg overflow-hidden">
-          <button type="button" disabled={busy !== null} onClick={() => start(kind)} className="inline-flex items-center gap-1.5 bg-amber text-white h-9 pl-3 pr-2.5 text-[13px] font-semibold whitespace-nowrap hover:brightness-110 disabled:opacity-60" title={kind === "short" ? "Start a Short from this idea" : "Start a long video from this idea"}>
-            {kind === "short" ? <ShortsIcon className="w-4 h-4" /> : <VideoIcon className="w-4 h-4" />}
-            {busy === "start" ? "Opening…" : dense ? "Start" : kind === "short" ? "Start a Short" : "Start a video"}
+          <button type="button" disabled={a.busy === "save"} onClick={a.toggleSave} aria-pressed={!!savedId} aria-label={savedId ? "Saved (click to remove)" : "Save this idea"} title={savedId ? "Saved" : "Save"} className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${savedId ? "border-amber/40 bg-amber/10 text-amber" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`}>
+            <BookmarkIcon filled={!!savedId} />
           </button>
-          <button ref={startRef} type="button" disabled={busy !== null} onClick={() => setStartOpen((o) => !o)} aria-label="More ways to start" aria-haspopup="menu" aria-expanded={startOpen} className="bg-amber text-white h-9 w-8 flex items-center justify-center border-l border-white/25 hover:brightness-110 disabled:opacity-60">
-            <ChevronDownIcon className="w-3.5 h-3.5" />
+          <span className="flex-1" />
+          <button type="button" onClick={() => setFull(true)} className="text-[12px] font-semibold text-ink-faint hover:text-ink whitespace-nowrap">
+            See all
           </button>
         </div>
-        <AnchoredMenu open={startOpen} onClose={() => setStartOpen(false)} anchor={startRef} width={230} align="left" label="Start from this idea">
-          <div className="p-1.5">
-            {(["long", "short"] as const).map((k) => (
-              <button key={k} type="button" role="menuitem" onClick={() => start(k)} className="w-full flex items-center gap-2.5 px-3 h-10 rounded-lg text-left text-[13.5px] hover:bg-surface-2">
-                {k === "short" ? <ShortsIcon className="w-4 h-4 text-short" /> : <VideoIcon className="w-4 h-4 text-long" />}
-                {k === "short" ? "Start a Short" : "Start a long video"}
-              </button>
-            ))}
-          </div>
-        </AnchoredMenu>
-        <button type="button" disabled={busy === "save"} onClick={toggleSave} aria-pressed={!!savedId} aria-label={savedId ? "Saved (click to remove)" : "Save this idea"} title={savedId ? "Saved" : "Save"} className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors ${savedId ? "border-amber/40 bg-amber/10 text-amber" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`}>
-          <BookmarkIcon filled={!!savedId} />
-        </button>
-        <button type="button" onClick={copy} aria-label="Copy the titles and hook" title="Copy" className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line/15 text-ink-soft hover:text-ink hover:border-line/30 flex-shrink-0">
-          <CopyIcon className="w-4 h-4" />
-        </button>
-        {dense && sources.length > 0 && (
-          <div className="ml-auto flex items-center gap-1.5 min-w-0 pl-1">
-            <span className="text-[11.5px] text-ink-faint flex-shrink-0 hidden min-[420px]:inline">From</span>
-            <Sources list={sources.slice(0, 2)} open={openVideo} />
-          </div>
-        )}
       </div>
+      <IdeaDialog open={full} onClose={() => setFull(false)} props={props} main={main} setMain={setMain} a={a} />
     </article>
   );
 }
 
-/** The outliers an idea comes from, as small thumbnails with their multiplier. */
-function Sources({ list, open }: { list: MiniVideo[]; open: (id: string) => void }) {
+/** The whole idea: every title, the hook, why it should work and the outliers behind it. */
+function IdeaDialog({ open, onClose, props, main, setMain, a }: { open: boolean; onClose: () => void; props: IdeaProps; main: number; setMain: (i: number) => void; a: ReturnType<typeof useIdea> }) {
+  const { openVideo } = useOutliersNav();
+  const { idea, kind, savedId, onHide } = props;
+  const [startOpen, setStartOpen] = useState(false);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const f = idea.formatId ? FORMAT_BY_ID.get(idea.formatId) : undefined;
+  const others = idea.titles.map((t, i) => ({ t, i })).filter((x) => x.i !== main);
   return (
-    <div className="flex gap-1.5 min-w-0 overflow-hidden">
-      {list.map((s) => (
-        <button key={s.id} type="button" onClick={() => open(s.id)} title={`${s.title} · ${s.channel}`} className="relative flex-shrink-0 rounded-md overflow-hidden ring-1 ring-line/10 hover:ring-line/40 w-[64px] aspect-video bg-surface-2">
-          <Thumb id={s.id} kind={s.kind === "short" ? "long" : s.kind} sizes="64px" tint={s.tint} />
-          {s.score !== null && (
-            <span className="absolute bottom-0.5 left-0.5 rounded-[3px] px-1 text-[10px] font-display font-semibold leading-[14px] text-white" style={{ background: s.score >= 2 ? heat(s.score).solid : "rgb(0 0 0 / 0.7)" }}>
-              {multText(s.score)}
-            </span>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Idea"
+      width="sm:max-w-2xl"
+      footer={
+        <>
+          {onHide && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                a.hide();
+              }}
+              className="mr-auto inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[13px] font-semibold text-ink-faint hover:text-ink hover:bg-surface-2"
+            >
+              Hide it
+            </button>
           )}
-        </button>
-      ))}
-    </div>
+          <button type="button" onClick={a.copy} className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-line/30">
+            <CopyIcon className="w-4 h-4" />
+            Copy
+          </button>
+          <button type="button" disabled={a.busy === "save"} onClick={a.toggleSave} aria-pressed={!!savedId} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-9 text-[13px] font-semibold transition-colors ${savedId ? "border-amber/40 bg-amber/10 text-amber" : "border-line/15 text-ink-soft hover:text-ink hover:border-line/30"}`}>
+            <BookmarkIcon filled={!!savedId} />
+            {savedId ? "Saved" : "Save"}
+          </button>
+          <div className="inline-flex rounded-lg overflow-hidden">
+            <button type="button" disabled={a.busy !== null} onClick={() => a.start(kind)} className="inline-flex items-center gap-1.5 bg-amber text-white h-9 pl-3 pr-2.5 text-[13px] font-semibold whitespace-nowrap hover:brightness-110 disabled:opacity-60">
+              {kind === "short" ? <ShortsIcon className="w-4 h-4" /> : <VideoIcon className="w-4 h-4" />}
+              {a.busy === "start" ? "Opening…" : kind === "short" ? "Start a Short" : "Start a video"}
+            </button>
+            <button ref={startRef} type="button" disabled={a.busy !== null} onClick={() => setStartOpen((o) => !o)} aria-label="More ways to start" aria-haspopup="menu" aria-expanded={startOpen} className="bg-amber text-white h-9 w-8 flex items-center justify-center border-l border-white/25 hover:brightness-110 disabled:opacity-60">
+              <ChevronDownIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <AnchoredMenu open={startOpen} onClose={() => setStartOpen(false)} anchor={startRef} width={230} label="Start from this idea">
+            <div className="p-1.5">
+              {(["long", "short"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setStartOpen(false);
+                    a.start(k);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 h-10 rounded-lg text-left text-[13.5px] hover:bg-surface-2"
+                >
+                  {k === "short" ? <ShortsIcon className="w-4 h-4 text-short" /> : <VideoIcon className="w-4 h-4 text-long" />}
+                  {k === "short" ? "Start a Short" : "Start a long video"}
+                </button>
+              ))}
+            </div>
+          </AnchoredMenu>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 px-2 h-6 text-[12px] font-semibold text-ink-soft">
+            <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: formatColor(idea.formatId) }} aria-hidden />
+            {f?.name ?? "From real outlier titles"}
+          </span>
+          <span className="rounded-md bg-surface-2 px-2 h-6 inline-flex items-center text-[12px] font-semibold text-ink-faint">{idea.type}</span>
+          {idea.origin === "every" && <span className="rounded-md bg-violet/12 text-violet px-2 h-6 inline-flex items-center text-[12px] font-semibold">From other niches</span>}
+          <span className="flex-1" />
+          <Strength value={idea.strength} />
+        </div>
+
+        <div>
+          <h3 className="font-display text-[22px] sm:text-[24px] leading-[1.2] font-semibold text-balance">{a.titles[0]}</h3>
+          {others.length > 0 && (
+            <ul className="mt-3 space-y-1.5" aria-label="Other titles (tap one to make it the main title)">
+              {others.map(({ t, i }) => (
+                <li key={t}>
+                  <button type="button" onClick={() => setMain(i)} className="text-left text-[14px] leading-snug text-ink-soft hover:text-ink flex gap-2" title="Make this the main title">
+                    <span className="mt-[8px] w-1 h-1 rounded-[1px] bg-ink-faint flex-shrink-0" aria-hidden />
+                    {t}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <p className="text-[14px] leading-relaxed text-ink-soft border-l-2 border-amber/60 pl-3">
+          <span className="font-semibold text-ink">Hook </span>
+          {idea.hook}
+        </p>
+
+        {a.sources.length > 0 && (
+          <div>
+            <p className="mb-2 text-[12px] font-semibold text-ink-faint">The outliers it comes from</p>
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+              {a.sources.slice(0, 3).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openVideo(s.id);
+                  }}
+                  className="text-left group/src min-w-0"
+                >
+                  <span className="relative block aspect-video rounded-xl overflow-hidden bg-surface-2 ring-1 ring-line/10 group-hover/src:ring-line/40">
+                    <Thumb id={s.id} kind={s.kind === "short" ? "long" : s.kind} sizes="(min-width: 640px) 200px, 90vw" tint={s.tint} />
+                    {s.score !== null && <Mult score={s.score} size="sm" className="absolute bottom-1.5 left-1.5" />}
+                  </span>
+                  <span className="mt-1.5 block text-[12.5px] font-semibold leading-snug line-clamp-2">{s.title}</span>
+                  <span className="block text-[11.5px] text-ink-faint truncate">{s.channel}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {idea.why.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-ink-faint">Why it should work</p>
+            <ul className="space-y-1.5">
+              {idea.why.map((w) => (
+                <li key={w.text} className="flex gap-2 text-[13px] leading-snug text-ink-soft">
+                  <span className={`mt-[6px] w-1.5 h-1.5 rounded-[2px] flex-shrink-0 ${w.tone === "good" ? "bg-green" : w.tone === "new" ? "bg-violet" : "bg-blue"}`} aria-hidden />
+                  {w.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Dialog>
   );
 }

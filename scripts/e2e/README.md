@@ -25,6 +25,29 @@ against it with fake YouTube, TikTok, Instagram and Facebook APIs:
   the videos behind a day's revenue, `analytics_sync_now` through PostgREST
   (masters and schedulers only), and another account starting the history
   over.
+- `outliers.e2e.ts` (1.27.0, 1.29.0): Outliers' collector with a fake
+  YouTube: a niche fills in (searches, channels, scores, insights), which
+  found channels count (a cooking channel with one phone video doesn't),
+  what teammates and outsiders can read, the explore niches, alerts, live
+  searches and their limits, adding a channel by its link, finding channels
+  by name or handle, a niche's own channels ("only these"), a channel the
+  team hid, YouTube's 30 days and the budget. `E2E_ONLY=outliers` runs just
+  this one.
+- `notifications.e2e.ts` (1.29.1, 0095): clearing notifications out of the
+  bell, signed in as the person, through the code the bell's server actions
+  run: the bell's newest 25 (only yours), the X on one (read too; someone
+  else's can't be cleared), Clear all (older ones too; an invite or an
+  ownership request still waiting for an answer stays; History keeps
+  everything), and how a database behind on migrations is recognised.
+- `profiles.e2e.ts` (1.29.5, 0099; 1.29.6, 0100): a profile page's colours,
+  signed in as the person, through the code the profile route and its Save
+  run (`modules/profile/page-data.ts`): saved with the rest and kept when
+  something else is saved, what isn't allowed becoming the level's colour,
+  what a visitor reads (nothing of a private page), someone else's page left
+  alone, and a database without 0099 (the page still reads, colours say the
+  update is needed, the rest still saves). Then `profile_stats` through
+  PostgREST: a step at night and one at dawn in a Tokyo team, one finished
+  early, read with `readStats` and turned into Night owl and Early bird.
 
 ```bash
 TEST_DB_URL=postgres://postgres:postgres@localhost:5432/postgres scripts/e2e/run.sh
@@ -34,5 +57,5 @@ It needs PostgREST: `POSTGREST_BIN=/path/to/postgrest`, or it downloads
 v12.2.3 for Linux x64 from GitHub. Ports 3001 and 54399. It creates and drops
 a database called `vplanner_e2e`: never point `TEST_DB_URL` at staging or
 production (it refuses Supabase addresses). Not part of CI (CI has no
-PostgREST); run it after changing the live job, the morning copy, 0083, 0084
-or 0085.
+PostgREST); run it after changing the live job, the morning copy, Outliers'
+collector, 0083, 0084, 0085, 0091, 0094, 0095, 0099 or 0100.

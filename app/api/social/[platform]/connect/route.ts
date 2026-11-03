@@ -5,6 +5,7 @@ import { PROVIDERS, isSocialPlatform, redirectUriFor } from "@/lib/social/provid
 import { requireSocialManager } from "@/lib/social/access";
 import { socialKeyConfigured } from "@/lib/social/crypto";
 import { POPUP_COOKIE } from "@/lib/social/popup";
+import { teamHasPlan } from "@/modules/plans/lib/server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const access = await requireSocialManager(teamId);
   if (!access.user) return NextResponse.redirect(new URL("/login", request.url));
   if (!access.ok) return back(`social_error=forbidden&platform=${platform}`);
+  // 1.45.0: a team without a plan connects nothing (its pages show the plans; migration 0124).
+  if (!(await teamHasPlan(teamId))) return back(`social_error=no_plan&platform=${platform}`);
 
   const state = b64url(randomBytes(32));
   // 48 random bytes → 64 URL-safe characters (TikTok and the standard

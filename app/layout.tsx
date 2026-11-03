@@ -1,6 +1,7 @@
 import { APP_NAME, APP_DESCRIPTION, APP_SHORT_NAME, APP_TAGLINE } from "@/lib/brand";
 import { PwaRegister } from "@/components/pwa";
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { AuthHashHandler } from "@/components/ui/auth-hash-handler";
 import { BRAND_PAGES_RE, facebookMeta, OG_IMAGE, siteUrl } from "@/lib/public-pages";
@@ -23,7 +24,16 @@ const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-display",
   weight: ["500", "600", "700"],
-  style: ["normal", "italic"],
+});
+
+// Its italic only says a few words on the website (landing.css .ld-italic): a family of its own that isn't
+// preloaded (1.32.3). In one call with the upright one, every page of the app preloaded it too.
+const frauncesItalic = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display-italic",
+  weight: ["500", "600"],
+  style: "italic",
+  preload: false,
 });
 
 const inter = Inter({
@@ -84,22 +94,31 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // This page's nonce (1.31.16, the middleware's Content Security Policy): Next.js puts it on its own
+  // scripts; the first-paint script below takes it too. Reading it makes every page render per visit,
+  // which a nonce needs (a page built ahead would carry an old one).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${fraunces.variable} ${frauncesItalic.variable} ${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script
+          nonce={nonce}
+          // The browser hides a nonce once the page has it, so the copy React sees differs: expected.
+          suppressHydrationWarning
           // Runs before paint so dark mode doesn't flash light first.
           dangerouslySetInnerHTML={{
-            // Also applies the user's "Animations off" choice and colour theme before first paint
+            // Also applies the user's "Animations off" choice, colour theme and glass look (1.27.5; its style, where,
+            // the side bar and how see-through in 1.28.0; the colours behind it and solid at 0 in 1.29.2; Halo in 1.29.3) before first paint
             // (not on the brand pages: home, sign-in, status, legal; see lib/public-pages.ts).
-            __html: `try{var d=document.documentElement;if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname))d.dataset.palette=p}catch(e){}`,
+            // 1.29.10: data-bars="classic" when the system's scroll bars take room (Windows, Linux): globals.css draws its own thin ones then.
+            __html: `try{var d=document.documentElement;try{var S=document.createElement('div');S.style.cssText='position:absolute;top:-999px;width:80px;height:80px;overflow:scroll;visibility:hidden';d.appendChild(S);if(S.offsetWidth-S.clientWidth>0)d.dataset.bars='classic';d.removeChild(S)}catch(e){}if(localStorage.getItem('vp-theme')==='dark')d.classList.add('dark');var m=localStorage.getItem('vp-motion');if(m==='off'||m==='on')d.dataset.motion=m;var b=new RegExp(${JSON.stringify(BRAND_PAGES_RE)}).test(location.pathname);var p=localStorage.getItem('vp-palette');if(p&&/^[a-z]{2,20}$/.test(p)&&!b)d.dataset.palette=p;var L=null;try{L=JSON.parse(localStorage.getItem('vp-look')||'null')}catch(e){}if(!b&&(L?L.on===true:localStorage.getItem('vp-glass')==='on')){d.dataset.glass='on';if(L){if(L.style==='liquid'||L.style==='halo')d.dataset.glassStyle=L.style;if(L.scope==='everywhere')d.dataset.glassScope='everywhere';if(L.sidebar===true)d.dataset.glassSidebar='clear';if(typeof L.level==='number')d.style.setProperty('--glass-level',String(Math.max(0,Math.min(100,L.level))/100));if(L.level===0)d.dataset.glassOpaque='on';if(L.style==='liquid'&&L.light===false)d.dataset.glassLight='off';var P=L.paint;if(P&&/^(none|one|three)$/.test(P.wash)){d.dataset.glassWash=P.wash;var V=P.vars||{};for(var k in V){if(/^--wash-(light|dark|[123])$/.test(k)&&/^[0-9]{1,3} [0-9]{1,3} [0-9]{1,3}$/.test(V[k]))d.style.setProperty(k,V[k])}}}}}catch(e){}`,
           }}
         />
       </head>

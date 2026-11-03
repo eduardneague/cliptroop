@@ -57,6 +57,7 @@ export function NewShortForm({
   const [ideaId, setIdeaId] = useState<string | null>(idea?.id ?? null);
   const [schedule, setSchedule] = useState<ScheduleValue>({ mode: "auto" });
   // Start from the team defaults — change them only when you need someone else.
+  const [filmer, setFilmer] = useState<string | null>(settings.defaultFilmer);
   const [editor, setEditor] = useState<string | null>(settings.defaultEditor);
   const [reviewer, setReviewer] = useState<string | null>(settings.defaultReviewer);
   const [scheduler, setScheduler] = useState<string | null>(settings.defaultScheduler);
@@ -80,6 +81,7 @@ export function NewShortForm({
         title,
         plannedDate: schedule.mode === "pinned" ? schedule.date : null,
         pinKind: schedule.mode === "pinned" ? schedule.kind : undefined,
+        filmerMemberId: filmer,
         editorMemberId: editor,
         reviewerMemberId: reviewer,
         schedulerMemberId: scheduler,
@@ -197,8 +199,8 @@ export function NewShortForm({
       </div>
 
       {canAssignPeople ? (
-        <div className="grid gap-5 sm:grid-cols-3">
-          <div className="sm:col-span-3">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
             <Label>Scripters</Label>
             <ScripterPicker
               people={people}
@@ -207,6 +209,11 @@ export function NewShortForm({
               onRemove={(m) => setScripterIds((ids) => ids.filter((x) => x !== m))}
             />
             <p className="mt-1.5 text-[11.5px] text-ink-faint">Only these people (and masters) can edit the script.</p>
+          </div>
+          {/* 1.36.0: who films it (Script → Filming → Editing). */}
+          <div>
+            <Label>Filmer</Label>
+            <PersonSelect kind="filmer" people={people} value={filmer} onChange={setFilmer} />
           </div>
           <div>
             <Label>Editor</Label>
@@ -220,12 +227,12 @@ export function NewShortForm({
             <Label>Scheduler</Label>
             <PersonSelect kind="scheduler" people={people} value={scheduler} onChange={setScheduler} />
           </div>
-          <p className="sm:col-span-3 -mt-2 text-[11.5px] text-ink-faint">
+          <p className="sm:col-span-2 -mt-2 text-[11.5px] text-ink-faint">
             Pre-filled from your team defaults (Team → Short videos). Each person is notified when it&rsquo;s their turn.
           </p>
         </div>
       ) : (
-        <p className="text-[12.5px] text-ink-faint">The scripter, editor, reviewer and scheduler come from your team&rsquo;s defaults.</p>
+        <p className="text-[12.5px] text-ink-faint">The scripter, filmer, editor, reviewer and scheduler come from your team&rsquo;s defaults.</p>
       )}
 
       <div>

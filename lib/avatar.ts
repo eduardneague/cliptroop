@@ -1,11 +1,13 @@
-const PALETTE = [
-  "#E8630D",
-  "#178C7C",
+// Avatars' colours (and video themes'). 1.35.0: the orange, teal, gold and green a little deeper, so white initials
+// read on each at 4.5:1 (they were 3.2–4.1); as words they go through wordColor (lib/word-color.ts).
+export const PALETTE = [
+  "#C55100",
+  "#028475",
   "#3159C9",
   "#6B4FD6",
   "#B84070",
-  "#B4890E",
-  "#2B9757",
+  "#946F00",
+  "#0F8648",
 ];
 
 export function colorForId(id: string) {

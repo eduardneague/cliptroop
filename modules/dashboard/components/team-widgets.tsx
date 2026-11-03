@@ -6,11 +6,16 @@ import { KindIcon } from "@/components/ui/kind-icon";
 import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/icons";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { PlatformFilter, type PlatformChoice } from "@/modules/short-videos/components/platform-filter";
-import { PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
+import { PLATFORMS, PLATFORM_META, type Platform } from "@/modules/short-videos/lib/constants";
+import { PlatformMark } from "@/modules/short-videos/components/platform-mark";
 import type { Pipeline, PostToday, UpcomingLong, UpcomingShort } from "../lib/queries";
-import { DueChip, localDay } from "./tasks-widget";
+import { editedBy, editorChoice, editorPick, editorsOf, goesTo, isPlatform, nothingFor, type EditorPick, type Person, type PlatformPick } from "../lib/upcoming-filters";
+import { DueChip, dueTitle, dueWord, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
+import { FilterChips, chipClass, type ChipOption } from "./filter-chips";
 import { CountUp } from "@/components/ui/count-up";
+import { AvatarImg } from "@/components/ui/avatar-img";
+import { onFill } from "@/lib/contrast";
 
 const dayLabel = (d: string, today: string) => {
   const t = new Date(`${today}T00:00:00`);
@@ -23,77 +28,300 @@ function EmptyLine({ text }: { text: string }) {
   return <p className="h-full min-h-[48px] flex items-center justify-center text-center text-[12.5px] text-ink-soft">{text}</p>;
 }
 
-export function UpcomingShortsWidget({ items }: { items: UpcomingShort[] }) {
-  const today = localDay();
-  if (!items.length) return <EmptyLine text="No shorts planned ahead." />;
+type Save = (s: Record<string, unknown>) => void;
+
+/** A filter saved with the dashboard: what's saved, and picking another (saved again). */
+function useSaved<T extends string | boolean>(saved: T, key: string, onSettings: Save | undefined) {
+  const [v, setV] = useState<T>(saved);
+  useEffect(() => setV(saved), [saved]);
+  const pick = (x: T) => {
+    setV(x);
+    onSettings?.({ [key]: x });
+  };
+  return [v, pick, setV] as const;
+}
+
+/** Someone's face on a chip: their picture, or their initial on their colour. */
+function Face({ p }: { p: Person }) {
   return (
-    <ul className="h-full widget-scroll -mx-1 motion-stagger">
-      {items.map((s, i) => {
-        const newDay = i === 0 || items[i - 1].date !== s.date;
-        return (
-          <li key={s.id}>
-            <Link href={`/shorts/${s.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
-              <span className={`w-8 text-center flex-shrink-0 leading-none ${newDay ? "" : "invisible"}`}>
-                <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })}</span>
-                <span className={`block text-[14px] font-bold tabular-nums ${s.date === today ? "text-amber" : ""}`}>{Number(s.date.slice(8))}</span>
-              </span>
-              <span className="min-w-0 flex-1 leading-tight">
-                <span className="block text-[12.5px] font-semibold truncate">
-                  <span className="font-mono text-ink-faint font-normal">#{s.number}</span> {s.title}
-                </span>
-                <span className="block text-[11px] text-ink-soft truncate">
-                  {dayLabel(s.date, today)} · {s.stage}
-                </span>
-              </span>
-              {s.editor &&
-                (s.editor.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.editor.avatarUrl} alt={s.editor.name} title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0" style={{ background: s.editor.color }}>
-                    {s.editor.name.slice(0, 1).toUpperCase()}
-                  </span>
-                ))}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden" style={{ background: p.color, color: onFill(p.color) }}>
+      <AvatarImg src={p.avatarUrl} fallback={p.name.slice(0, 1).toUpperCase()} />
+    </span>
   );
 }
 
-export function UpcomingLongsWidget({ items }: { items: UpcomingLong[] }) {
-  const today = localDay();
-  if (!items.length) return <EmptyLine text="No long videos in progress." />;
+/** Nobody yet: an empty dashed circle. */
+const NoFace = () => <span aria-hidden className="w-5 h-5 rounded-full border-[1.5px] border-dashed border-current opacity-70 flex-shrink-0" />;
+
+/**
+ * The editor filter (Upcoming shorts and longs, 1.35.1): All, each editor (their face, and their first name in a wide
+ * widget), and "No editor yet" when some have nobody; each with how many you see when you pick it.
+ */
+function editorOptions(people: readonly Person[], none: number, num: (e: EditorPick) => number, unit: (n: number) => string, names: boolean): ChipOption<EditorPick>[] {
+  return [
+    { id: "all", name: `Every editor: ${unit(num("all"))}`, face: <span className="pl-0.5">All</span>, count: num("all") },
+    ...people.map((p) => ({
+      id: p.id,
+      name: `${p.name}: ${unit(num(p.id))}`,
+      face: (
+        <>
+          <Face p={p} />
+          {names && <span className="max-w-[80px] truncate">{p.name.split(" ")[0]}</span>}
+        </>
+      ),
+      count: num(p.id),
+    })),
+    ...(none ? [{ id: "none", name: `No editor yet: ${unit(num("none"))}`, face: <NoFace />, count: num("none") }] : []),
+  ];
+}
+
+const nShorts = (n: number) => `${n} ${n === 1 ? "short" : "shorts"}`;
+const nLongs = (n: number) => `${n} ${n === 1 ? "long video" : "long videos"}`;
+
+/** An empty list after filtering: what's missing, and a way back to everything. */
+function Nothing({ text, all, onAll }: { text: string; all: string; onAll: () => void }) {
   return (
-    <ul className="h-full widget-scroll -mx-1 motion-stagger">
-      {items.map((l) => (
-        <li key={l.id}>
-          <Link href={`/videos/${l.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
-            {l.thumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={l.thumb} alt="" className="w-[52px] aspect-video rounded-[5px] object-cover flex-shrink-0 bg-surface-2" />
-            ) : (
-              <span className="w-[52px] aspect-video rounded-[5px] bg-long/10 flex items-center justify-center flex-shrink-0">
-                <KindIcon kind="long" className="w-3.5 h-3.5" />
+    <div className="flex-1 min-h-[48px] flex flex-col items-center justify-center gap-1 text-center px-2">
+      <p className="text-[12.5px] text-ink-soft">{text}</p>
+      <button type="button" onClick={onAll} className="text-[12px] font-semibold text-amber hover:underline">
+        {all}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Upcoming shorts (1.34.4, the owner: "i want to see which shorts will come
+ * with filters for instagram and so on and also see the platforms those
+ * shorts will be posted on. i want to see only instagram or only other
+ * platforms too"): each short's platforms (a tick where it's out already),
+ * and the platforms as filters on top. 1.35.1 (the owner: "i want the filters
+ * to look the same as the followers and views, i also want to be able to
+ * filter by editor and filter by only instagram or only 1 platform in
+ * particular. add sounds to the filters just like the other widgets"):
+ * Followers' chips (`FilterChips`, a tick on each click), an editor filter
+ * under them, and "Only" next to a picked platform for the shorts that go
+ * there and nowhere else. Each chip says how many you see when you pick it
+ * (a wide widget shows it). All of it is saved with the dashboard.
+ */
+export function UpcomingShortsWidget({ items, settings, onSettings }: { items: UpcomingShort[]; settings?: Record<string, unknown>; onSettings?: Save }) {
+  const today = localDay();
+  const box = useBox();
+  const [platform, pickPlatform, setPlatform] = useSaved<PlatformPick>(isPlatform(settings?.platform) ? settings!.platform : "all", "platform", onSettings);
+  const [only, pickOnly] = useSaved<boolean>(settings?.only === true, "only", onSettings);
+  const [wantEditor, pickEditor, setEditor] = useSaved<EditorPick>(typeof settings?.editor === "string" ? settings.editor : "all", "editor", onSettings);
+  if (!items.length) return <EmptyLine text="No shorts planned ahead." />;
+  const editorsOfShort = (s: UpcomingShort) => (s.editor ? [s.editor] : []);
+  const { people, none } = editorsOf(items.map(editorsOfShort));
+  const editor = editorPick(wantEditor, people, none);
+  const pass = (s: UpcomingShort, p: PlatformPick, e: EditorPick) => goesTo(s.platforms, p, only) && editedBy(editorsOfShort(s), e);
+  const count = (p: PlatformPick, e: EditorPick) => items.filter((s) => pass(s, p, e)).length;
+  const list = items.filter((s) => pass(s, platform, editor));
+  // The platforms these shorts go to (and the one picked, even if none do any more: its empty list says so).
+  const used = PLATFORMS.filter((p) => p === platform || items.some((s) => goesTo(s.platforms, p)));
+  const room = box.h >= 90;
+  const showPlatforms = room && (used.length > 1 || platform !== "all");
+  const showEditors = room && editorChoice(people, none, editor);
+  // "Only" when it changes something: some of the picked platform's shorts go elsewhere too (or it's on).
+  const showOnly = showPlatforms && platform !== "all" && (only || items.some((s) => goesTo(s.platforms, platform) && !goesTo(s.platforms, platform, true)));
+  const counted = box.w >= 330;
+  const tight = box.w < 165;
+  const showAll = () => {
+    setPlatform("all");
+    setEditor("all");
+    // One save for both (two in a row would each start from the same old layout).
+    onSettings?.({ platform: "all", editor: "all" });
+  };
+  const platformOptions: ChipOption<PlatformPick>[] = [
+    { id: "all", name: `All platforms: ${nShorts(count("all", editor))}`, face: <span className="pl-0.5">All</span>, count: count("all", editor) },
+    ...used.map((p) => {
+      const n = count(p, editor);
+      return { id: p, name: `${PLATFORM_META[p].name}${only ? " only" : ""}: ${nShorts(n)}`, face: <PlatformIcon platform={p} className="w-4 h-4 rounded-[4px]" />, count: n };
+    }),
+  ];
+  // Wide: the platforms at the end of the row; narrow: after the day and step.
+  const wide = box.w >= 300;
+  return (
+    <div className="h-full flex flex-col min-h-0">
+      {(showPlatforms || showEditors) && (
+        <div className="mb-1.5 flex-shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {showPlatforms && (
+            <div className="flex flex-wrap items-center gap-1">
+              <FilterChips label="Platform" options={platformOptions} value={platform} onPick={pickPlatform} counts={counted} tight={tight} />
+              {showOnly && (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={only}
+                  aria-label={`Only ${PLATFORM_META[platform as Platform].name}`}
+                  title={`Only the shorts that go to ${PLATFORM_META[platform as Platform].name} and nowhere else`}
+                  onClick={() => pickOnly(!only)}
+                  className={chipClass(only, tight)}
+                >
+                  <span aria-hidden className={`w-3 h-3 rounded-[3px] flex items-center justify-center ${only ? "bg-paper text-ink" : "border-[1.5px] border-current"}`}>
+                    {only && <CheckIcon className="w-2.5 h-2.5" />}
+                  </span>
+                  Only
+                </button>
+              )}
+            </div>
+          )}
+          {showEditors && (
+            <FilterChips
+              label="Editor"
+              options={editorOptions(people, none, (e) => count(platform, e), nShorts, box.w >= 420)}
+              value={editor}
+              onPick={pickEditor}
+              counts={counted}
+              tight={tight}
+              className="flex-wrap"
+            />
+          )}
+        </div>
+      )}
+      {list.length ? (
+        <ul key={`${platform}${only}${editor}`} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {list.map((s, i) => {
+            const newDay = i === 0 || list[i - 1].date !== s.date;
+            const ps = s.platforms.filter(isPlatform);
+            const marks = ps.length ? (
+              <span className="inline-flex items-center gap-1 flex-shrink-0" aria-label={`Posts to ${ps.map((p) => PLATFORM_META[p].name).join(", ")}`}>
+                {ps.map((p) => (
+                  <PlatformMark key={p} platform={p} posted={s.posted.includes(p)} className="w-3.5 h-3.5 rounded-[4px]" tick="xs" />
+                ))}
               </span>
-            )}
-            <span className="min-w-0 flex-1 leading-tight">
-              <span className="block text-[12.5px] font-semibold truncate">
-                <span className="font-mono text-ink-faint font-normal">#{l.number}</span> {l.title}
-              </span>
-              <span className="block text-[11px] font-semibold text-long truncate">{l.stage}</span>
-            </span>
-            {l.date ? <DueChip due={l.date} today={today} /> : <span className="text-[10.5px] text-ink-faint flex-shrink-0">No date</span>}
-          </Link>
-        </li>
-      ))}
-    </ul>
+            ) : null;
+            return (
+              <li key={s.id}>
+                <Link href={`/shorts/${s.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
+                  <span className={`w-8 text-center flex-shrink-0 leading-none ${newDay ? "" : "invisible"}`}>
+                    <span className="block text-[9.5px] font-bold uppercase text-ink-faint">{new Date(`${s.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" })}</span>
+                    <span className={`block text-[14px] font-bold tabular-nums ${s.date === today ? "text-amber" : ""}`}>{Number(s.date.slice(8))}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block text-[12.5px] font-semibold truncate">
+                      <span className="font-mono text-ink-faint font-normal">#{s.number}</span> {s.title}
+                    </span>
+                    <span className="flex items-center gap-1.5 min-w-0 text-[11px] text-ink-soft">
+                      {/* Narrow: the step only (the day is in the date column), so the platforms fit after it. */}
+                      <span className="truncate">{wide ? `${dayLabel(s.date, today)} · ${s.stage}` : s.stage}</span>
+                      {!wide && marks}
+                    </span>
+                  </span>
+                  {wide && marks}
+                  {s.editor && (
+                    <span title={`Editor: ${s.editor.name}`} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden" style={{ background: s.editor.color, color: onFill(s.editor.color) }}>
+                      <AvatarImg src={s.editor.avatarUrl} alt={s.editor.name} fallback={s.editor.name.slice(0, 1).toUpperCase()} />
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <Nothing
+          text={nothingFor(
+            "shorts",
+            platform === "all" ? null : { name: PLATFORM_META[platform].name, only },
+            editor === "all" ? null : editor === "none" ? "none" : (people.find((p) => p.id === editor) ?? null)
+          )}
+          all="Show all shorts"
+          onAll={showAll}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Upcoming longs: each long video in progress with its thumbnail, step, editor and date. 1.35.1 (the owner: "same
+ * for longs too, but its only youtube basically, and i want the thumbnails to show up in upcoming long"): the editor
+ * filter on top (Upcoming shorts' chips; long videos only go to YouTube, so no platforms), saved with the dashboard;
+ * the thumbnail is the winner or else the first sketch (only winners showed before), a little bigger in a wide widget.
+ */
+export function UpcomingLongsWidget({ items, settings, onSettings }: { items: UpcomingLong[]; settings?: Record<string, unknown>; onSettings?: Save }) {
+  const today = localDay();
+  const box = useBox();
+  const [wantEditor, pickEditor] = useSaved<EditorPick>(typeof settings?.editor === "string" ? settings.editor : "all", "editor", onSettings);
+  if (!items.length) return <EmptyLine text="No long videos in progress." />;
+  const { people, none } = editorsOf(items.map((l) => l.editors));
+  const editor = editorPick(wantEditor, people, none);
+  const count = (e: EditorPick) => items.filter((l) => editedBy(l.editors, e)).length;
+  const list = items.filter((l) => editedBy(l.editors, editor));
+  const showEditors = box.h >= 90 && editorChoice(people, none, editor);
+  const thumbW = box.w >= 340 ? "w-[68px]" : box.w >= 260 ? "w-[52px]" : "w-[44px]";
+  // Faces when there's room for them beside the title and the date; a narrow widget puts the date under the title.
+  const faces = box.w >= 300;
+  const narrow = box.w < 260;
+  return (
+    <div className="h-full flex flex-col min-h-0">
+      {showEditors && (
+        <FilterChips
+          label="Editor"
+          options={editorOptions(people, none, count, nLongs, box.w >= 420)}
+          value={editor}
+          onPick={pickEditor}
+          counts={box.w >= 330}
+          tight={box.w < 165}
+          className="mb-1.5 flex-shrink-0 flex-wrap"
+        />
+      )}
+      {list.length ? (
+        <ul key={editor} className="flex-1 min-h-0 widget-scroll -mx-1 motion-stagger">
+          {list.map((l) => (
+            <li key={l.id}>
+              <Link href={`/videos/${l.id}`} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-2/70">
+                {l.thumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.thumb} alt="" className={`${thumbW} aspect-video rounded-[5px] object-cover flex-shrink-0 bg-surface-2`} />
+                ) : (
+                  <span className={`${thumbW} aspect-video rounded-[5px] bg-long/10 flex items-center justify-center flex-shrink-0`}>
+                    <KindIcon kind="long" className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 leading-tight">
+                  <span className="block text-[12.5px] font-semibold truncate">
+                    <span className="font-mono text-ink-faint font-normal">#{l.number}</span> {l.title}
+                  </span>
+                  <span className="block text-[11px] font-semibold text-long truncate">
+                    {l.stage}
+                    {narrow && (
+                      <span className={!l.date ? "text-ink-faint font-medium" : l.date < today ? "text-red" : l.date === today ? "text-amber" : "text-ink-soft font-medium"} title={l.date ? dueTitle(l.date) : undefined}>
+                        {" · "}
+                        {l.date ? dueWord(l.date, today) : "No date"}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                {faces && l.editors.length > 0 && (
+                  <span title={`Editing: ${l.editors.map((e) => e.name).join(", ")}`} className="flex -space-x-1 flex-shrink-0">
+                    {l.editors.slice(0, 2).map((e) => (
+                      <span key={e.id} className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold overflow-hidden ring-2 ring-surface" style={{ background: e.color, color: onFill(e.color) }}>
+                        <AvatarImg src={e.avatarUrl} alt={e.name} fallback={e.name.slice(0, 1).toUpperCase()} />
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {!narrow && (l.date ? <DueChip due={l.date} today={today} /> : <span className="text-[10.5px] text-ink-faint flex-shrink-0">No date</span>)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Nothing
+          text={nothingFor("long videos", null, editor === "none" ? "none" : (people.find((p) => p.id === editor) ?? null))}
+          all="Show all long videos"
+          onAll={() => pickEditor("all")}
+        />
+      )}
+    </div>
   );
 }
 
 const SHORT_STEPS: [string, string][] = [
   ["script", "Script"],
+  ["filming", "Filming"],
   ["editing", "Editing"],
   ["review", "Review"],
   ["ready", "Ready"],
@@ -460,40 +688,71 @@ export function WeatherWidget({ settings }: { settings?: Record<string, unknown>
     typeof settings?.lat === "number" ? { name: String(settings.city ?? ""), lat: settings.lat as number, lon: settings.lon as number } : null
   );
   const [wx, setWx] = useState<Wx | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   // No city chosen: this device's location if allowed, otherwise Bucharest.
   useEffect(() => {
-    if (typeof settings?.lat === "number") return setPlace({ name: String(settings.city ?? ""), lat: settings.lat as number, lon: settings.lon as number });
-    const fallback = () => setPlace({ name: "Bucharest", lat: 44.43, lon: 26.1 });
+    // (The same place again isn't a new one: no second request.)
+    const put = (next: { name: string; lat: number; lon: number }) => setPlace((p) => (p && p.name === next.name && p.lat === next.lat && p.lon === next.lon ? p : next));
+    if (typeof settings?.lat === "number" && typeof settings?.lon === "number") return put({ name: String(settings.city ?? ""), lat: settings.lat, lon: settings.lon });
+    const fallback = () => put({ name: "Bucharest", lat: 44.43, lon: 26.1 });
     if (!navigator.geolocation) return fallback();
-    navigator.geolocation.getCurrentPosition((p) => setPlace({ name: "Your location", lat: p.coords.latitude, lon: p.coords.longitude }), fallback, { timeout: 4000, maximumAge: 3_600_000 });
+    navigator.geolocation.getCurrentPosition((p) => put({ name: "Your location", lat: p.coords.latitude, lon: p.coords.longitude }), fallback, { timeout: 4000, maximumAge: 3_600_000 });
   }, [settings?.lat, settings?.lon, settings?.city]);
 
+  // 1.27.5: through the app (/api/weather), shown at once from this device's last copy,
+  // asked again once when it fails, and a "Try again" instead of a dead end.
   useEffect(() => {
-    if (!place) return;
+    if (!place || typeof place.lat !== "number" || typeof place.lon !== "number") return;
     let alive = true;
-    setFailed(false);
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,weather_code,wind_speed_10m,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=8${f ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : ""}`;
-    fetch(url)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return;
-        setWx({
-          temp: Math.round(j.current.temperature_2m),
-          code: j.current.weather_code,
-          wind: Math.round(j.current.wind_speed_10m),
-          isDay: j.current.is_day !== 0,
-          days: (j.daily.time as string[]).map((d, i) => ({ date: d, max: Math.round(j.daily.temperature_2m_max[i]), min: Math.round(j.daily.temperature_2m_min[i]), code: j.daily.weather_code[i] })),
+    const units = f ? "f" : "c";
+    const key = `vp:weather:${place.lat.toFixed(2)},${place.lon.toFixed(2)},${units}`;
+    setFailed(null);
+    setWx(null);
+    try {
+      const kept = JSON.parse(localStorage.getItem(key) ?? "null") as { at: number; wx: Wx } | null;
+      if (kept?.wx && Date.now() - kept.at < 6 * 3_600_000) setWx(kept.wx);
+    } catch {
+      /* nothing kept */
+    }
+    const load = (tries: number) => {
+      fetch(`/api/weather?lat=${place.lat}&lon=${place.lon}&units=${units}`)
+        .then(async (r) => {
+          const j = (await r.json().catch(() => null)) as (Wx & { error?: string }) | null;
+          if (!r.ok || !j || typeof j.temp !== "number" || !Array.isArray(j.days)) throw new Error(j?.error ?? "Couldn't load the weather.");
+          return j;
+        })
+        .then((w) => {
+          if (!alive) return;
+          setWx(w);
+          try {
+            localStorage.setItem(key, JSON.stringify({ at: Date.now(), wx: w }));
+          } catch {
+            /* full or private */
+          }
+        })
+        .catch((e: Error) => {
+          if (!alive) return;
+          if (tries > 0) setTimeout(() => alive && load(tries - 1), 2500);
+          else setFailed(e.message || "Couldn't load the weather.");
         });
-      })
-      .catch(() => alive && setFailed(true));
+    };
+    load(1);
     return () => {
       alive = false;
     };
-  }, [place, f]);
+  }, [place, f, attempt]);
 
-  if (failed) return <EmptyLine text="Couldn't load the weather." />;
+  if (!wx && failed)
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center">
+        <p className="text-[12.5px] text-ink-soft leading-snug">{failed}</p>
+        <button type="button" onClick={() => setAttempt((n) => n + 1)} className="rounded-lg border border-line/20 px-3 h-8 text-[12.5px] font-semibold hover:border-line/40 hover:bg-surface-2">
+          Try again
+        </button>
+      </div>
+    );
   if (!wx) return <div className="skeleton h-full rounded-lg opacity-60" />;
   const [sky, label] = WMO(wx.code);
   const todayWx = wx.days[0];
@@ -534,40 +793,71 @@ export function WeatherWidget({ settings }: { settings?: Record<string, unknown>
   );
 }
 
-/** Weather settings: search a city (Open-Meteo geocoding). */
+/** Weather settings: search a city (Open-Meteo's places, through /api/weather). */
 export function WeatherCitySearch({ onPick }: { onPick: (p: { city: string; lat: number; lon: number }) => void }) {
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<{ name: string; country: string; admin1?: string; latitude: number; longitude: number }[]>([]);
+  const [hits, setHits] = useState<{ name: string; region: string; lat: number; lon: number }[]>([]);
+  const [state, setState] = useState<"idle" | "searching" | "done" | "error">("idle");
+  const [picked, setPicked] = useState<string | null>(null);
   useEffect(() => {
-    if (q.trim().length < 2) return setHits([]);
+    const term = q.trim();
+    if (term.length < 2) {
+      setHits([]);
+      setState("idle");
+      return;
+    }
+    let alive = true;
+    setState("searching");
     const t = setTimeout(() => {
-      fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q.trim())}&count=6`)
-        .then((r) => r.json())
-        .then((j) => setHits(j.results ?? []))
-        .catch(() => setHits([]));
+      fetch(`/api/weather?q=${encodeURIComponent(term)}`)
+        .then(async (r) => {
+          const j = (await r.json().catch(() => null)) as { results?: { name: string; region: string; lat: number; lon: number }[] } | null;
+          if (!r.ok || !j) throw new Error();
+          if (!alive) return;
+          setHits(j.results ?? []);
+          setState("done");
+        })
+        .catch(() => {
+          if (!alive) return;
+          setHits([]);
+          setState("error");
+        });
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, [q]);
   return (
     <div className="space-y-1.5">
       <input
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setPicked(null);
+        }}
         placeholder="Search a city…"
+        aria-label="Search a city"
         className="w-full rounded-lg border border-line/15 bg-surface px-3 h-10 text-[14px] outline-none focus:ring-2 focus:ring-amber"
       />
+      {picked && <p className="text-[12.5px] font-semibold text-green" role="status">Showing {picked} now.</p>}
+      {state === "searching" && <p className="px-1 text-[12.5px] text-ink-soft">Searching…</p>}
+      {state === "error" && <p className="px-1 text-[12.5px] text-red">Couldn&rsquo;t search right now. Try again in a moment.</p>}
+      {state === "done" && !hits.length && <p className="px-1 text-[12.5px] text-ink-soft">No city by that name.</p>}
       {hits.map((h) => (
         <button
-          key={`${h.latitude},${h.longitude}`}
+          key={`${h.lat},${h.lon}`}
           type="button"
           onClick={() => {
-            onPick({ city: h.name, lat: h.latitude, lon: h.longitude });
+            onPick({ city: h.name, lat: h.lat, lon: h.lon });
+            setPicked(h.name);
             setQ("");
             setHits([]);
+            setState("idle");
           }}
-          className="w-full text-left rounded-lg px-3 h-10 text-[13.5px] hover:bg-surface-2"
+          className="w-full text-left rounded-lg px-3 h-10 text-[13.5px] hover:bg-surface-2 truncate"
         >
-          {h.name} <span className="text-ink-faint">{[h.admin1, h.country].filter(Boolean).join(", ")}</span>
+          {h.name} <span className="text-ink-faint">{h.region}</span>
         </button>
       ))}
     </div>

@@ -32,10 +32,18 @@ export function GET() {
 body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#EDEEE7;color:#14110C;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px;box-sizing:border-box;text-align:center}
 @media (prefers-color-scheme:dark){body{background:#120F0B;color:#F0ECE3}p{color:#B8B0A2}}
 main{max-width:22rem}h1{font-size:26px;margin:14px 0 6px;letter-spacing:-.01em}p{margin:0 0 22px;color:#5C5548}
-button{font:inherit;font-weight:600;border:0;border-radius:12px;background:#E8630D;color:#fff;padding:0 20px;height:44px;cursor:pointer}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;background:#C55100;color:#fff;padding:0 20px;height:44px;cursor:pointer}
 </style></head><body><main>${MASCOT}<h1>You&rsquo;re offline</h1>
 <p>${name} needs the internet to show your team&rsquo;s latest work. It&rsquo;ll be right here as soon as you&rsquo;re back online.</p>
 <button type="button" onclick="location.reload()">Try again</button></main>
 <script>addEventListener("online",function(){location.reload()})</script></body></html>`;
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+      // Its own policy (1.31.16; pages get the middleware's): nothing from anywhere, only its inline style,
+      // its reload button and its one script. It never shows anyone's text.
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    },
+  });
 }

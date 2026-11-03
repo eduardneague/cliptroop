@@ -11,6 +11,11 @@ import type { PipelineStage, RoleId } from "@/lib/permissions/roles";
 import { getMembership, canActOnStage } from "@/lib/permissions/membership";
 import { isMaster, ROLES, PIPELINE_STAGES, roleAllowsStage } from "@/lib/permissions/roles";
 import { displayName } from "@/lib/avatar";
+import { FORM_LIMITS, tooLong } from "@/lib/form-limits";
+import { cleanName } from "@/lib/names";
+import { removeLongVideo } from "@/modules/long-videos/lib/remove-video";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { mayDelete, noDeleteText } from "@/lib/permissions/delete-rules";
 import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 
 /**
@@ -36,50 +41,110 @@ async function requireProjectMaster(projectId: string) {
 }
 
 /**
- * Deletes a project permanently — master-only, checked here before doing
- * anything. Uses the admin client for the actual deletion so we can also
+ * 1.41.0: as requireProjectMaster, for deleting: a Master of the project's own team, or someone its owner lets delete
+ * long videos (lib/permissions/delete-rules.ts, migration 0119), read here with the person's verified id.
+ */
+async function requireProjectDeleter(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Your session expired. Sign in again." };
+  const { data: project } = await supabase.from("long_video_projects").select("id, team_id, stage, title").eq("id", projectId).maybeSingle();
+  if (!project) return { ok: false as const, error: "Project not found." };
+  const rights = await getDeleteRights(supabase, project.team_id as string, user.id);
+  if (!mayDelete(rights, "long", 1)) return { ok: false as const, error: noDeleteText(rights, "long") };
+  return { ok: true as const, supabase, project };
+}
+
+/**
+ * Deletes a project permanently: masters, and (1.41.0) the people the team's owner lets delete long videos, checked
+ * here before doing anything. Uses the admin client for the actual deletion so we can also
  * clean up the project's uploaded files (thumbnails, chat attachments),
  * which live in storage and aren't covered by the database's own cascade
  * deletes on the comment/title/assignee rows.
  */
-export async function deleteProject(projectId: string, _teamId?: string) {
+export async function deleteProject(projectId: string, _teamId?: string, opts?: { stay?: boolean; confirmTitle?: string }) {
   // The team is taken from the project itself — previously a master of
   // team A could pass their own teamId and delete team B's project.
-  const check = await requireProjectMaster(projectId);
-  if (!check.ok) {
-    return { error: check.error === "Only the master can do this." ? "Only the master can delete a project." : check.error };
+  if (typeof projectId !== "string" || !/^[0-9a-f-]{36}$/i.test(projectId)) return { error: "Project not found." };
+  const check = await requireProjectDeleter(projectId);
+  if (!check.ok) return { error: check.error };
+  // From the list (1.27.5): the name typed in the window must be this video's.
+  if (opts?.confirmTitle !== undefined && opts.confirmTitle.trim().toLowerCase() !== String(check.project.title ?? "").trim().toLowerCase()) {
+    return { error: "The name doesn't match. Nothing was deleted." };
   }
 
-  const admin = createAdminClient();
-
-  // Its edits (1.25.0, up to 3 GB each) and Thumbnail Studio's images live
-  // under <team>/<video>/: they go too, so nothing is left behind.
-  const folder = `${check.project.team_id as string}/${projectId}`;
-  const [{ data: thumbFiles }, { data: attachFiles }, { data: editFiles }, { data: studioFiles }] = await Promise.all([
-    admin.storage.from("thumbnails").list(projectId),
-    admin.storage.from("comment-attachments").list(projectId),
-    admin.storage.from("long-review-videos").list(folder, { limit: 1000 }),
-    admin.storage.from("package-thumbs").list(folder, { limit: 1000 }),
-  ]);
-  if (thumbFiles && thumbFiles.length > 0) {
-    await admin.storage.from("thumbnails").remove(thumbFiles.map((f) => `${projectId}/${f.name}`));
-  }
-  if (attachFiles && attachFiles.length > 0) {
-    await admin.storage.from("comment-attachments").remove(attachFiles.map((f) => `${projectId}/${f.name}`));
-  }
-  if (editFiles && editFiles.length > 0) {
-    await admin.storage.from("long-review-videos").remove(editFiles.map((f) => `${folder}/${f.name}`));
-  }
-  if (studioFiles && studioFiles.length > 0) {
-    await admin.storage.from("package-thumbs").remove(studioFiles.map((f) => `${folder}/${f.name}`));
-  }
-
-  const { error } = await admin.from("long_video_projects").delete().eq("id", projectId);
-  if (error) return { error: "Couldn't delete the project. Try again." };
+  const removed = await removeLongVideo(createAdminClient(), { id: projectId, teamId: check.project.team_id as string });
+  if (removed.error) return { error: removed.error };
 
   queueObjectivesSync(check.project.team_id as string);
   revalidatePath("/videos");
+  if (opts?.stay) return {};
   redirect("/videos");
+}
+
+export type VideoWork = {
+  number: number;
+  title: string;
+  /** Its documents with words in them (scripts, then research). */
+  docs: { name: string; research: boolean; words: number; updatedAt: string | null; by: string | null }[];
+  comments: number;
+  ideas: number;
+  /** Uploaded edits, thumbnails (ideas and Thumbnail Studio), notes. */
+  files: number;
+  thumbnails: number;
+  notes: number;
+};
+
+/**
+ * What deleting a long video would take with it (1.27.5, from the list): the
+ * words in its scripts and research and who wrote last, open comments and
+ * editing ideas, edits, thumbnails, notes. For the people who can delete it
+ * (masters, and 1.41.0 whoever the team's owner lets delete long videos).
+ */
+export async function getVideoWork(projectId: string): Promise<({ error?: undefined } & VideoWork) | { error: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(projectId)) return { error: "Video not found." };
+  const check = await requireProjectDeleter(projectId);
+  if (!check.ok) return { error: check.error };
+  const { supabase } = check;
+  const head = { count: "exact" as const, head: true };
+  const [{ data: p }, { data: docs }, files, thumbs, entries, notes] = await Promise.all([
+    supabase.from("long_video_projects").select("entry_number, title").eq("id", projectId).maybeSingle(),
+    supabase
+      .from("scripts")
+      .select("id, kind, name, word_count, updated_at, editor:profiles!scripts_updated_by_fkey(username, full_name, email)")
+      .eq("long_video_id", projectId)
+      .order("kind", { ascending: false })
+      .order("position"),
+    supabase.from("long_video_versions").select("id", head).eq("project_id", projectId).is("deleted_at", null),
+    supabase.from("project_thumbnails").select("id", head).eq("project_id", projectId),
+    supabase.from("package_entries").select("id", head).eq("project_id", projectId),
+    supabase.from("project_comments").select("id", head).eq("project_id", projectId),
+  ]);
+  const ids = (docs ?? []).map((d) => d.id as string);
+  const { data: cm } = ids.length ? await supabase.from("script_comments").select("kind").in("script_id", ids).is("resolved_at", null) : { data: [] };
+  return {
+    number: (p?.entry_number as number | undefined) ?? 0,
+    title: (p?.title as string | undefined) ?? String(check.project.title ?? ""),
+    docs: (docs ?? [])
+      .filter((d) => Number(d.word_count) > 0)
+      .map((d) => {
+        const e = d.editor as unknown as { username: string | null; full_name: string | null; email: string | null } | null;
+        return {
+          name: String(d.name),
+          research: d.kind === "research",
+          words: Number(d.word_count) || 0,
+          updatedAt: (d.updated_at as string | null) ?? null,
+          by: e ? displayName(e.username, e.full_name, e.email) : null,
+        };
+      }),
+    comments: (cm ?? []).filter((c) => c.kind !== "edit_idea").length,
+    ideas: (cm ?? []).filter((c) => c.kind === "edit_idea").length,
+    files: files.count ?? 0,
+    thumbnails: (thumbs.count ?? 0) + (entries.count ?? 0),
+    notes: notes.count ?? 0,
+  };
 }
 
 const VIDEO_TYPES = ["Hub", "Help", "Hero"];
@@ -91,8 +156,11 @@ export async function updateTypeTheme(
   theme: string,
   subtheme: string
 ) {
-  if (videoType.length === 0) return { error: "Pick at least one type." };
-  if (!theme.trim()) return { error: "Theme can't be empty." };
+  if (!Array.isArray(videoType) || videoType.length === 0) return { error: "Pick at least one type." };
+  if (typeof theme !== "string" || !theme.trim()) return { error: "Theme can't be empty." };
+  if (typeof subtheme !== "string") return { error: "Couldn't save. Try again." };
+  const long = tooLong(theme.trim(), FORM_LIMITS.theme, "the theme") ?? tooLong(subtheme.trim(), FORM_LIMITS.theme, "the sub-theme");
+  if (long) return { error: long };
 
   const supabase = await createClient();
   const {
@@ -171,6 +239,9 @@ export async function updateExpectedDate(
 
 const EDITABLE_FIELDS = ["hook", "notes", "budget_notes"] as const;
 type EditableField = (typeof EDITABLE_FIELDS)[number];
+// The same as the database's limits (1.31.15, lib/form-limits.ts).
+const FIELD_MAX: Record<EditableField, number> = { hook: FORM_LIMITS.hook, notes: FORM_LIMITS.notes, budget_notes: FORM_LIMITS.budgetNotes };
+const FIELD_NAME: Record<EditableField, string> = { hook: "the hook", notes: "the notes", budget_notes: "the budget notes" };
 
 /**
  * Inline-edit for the free-text Ideate fields. Same access rule as the
@@ -186,6 +257,9 @@ export async function updateIdeateField(
   value: string
 ) {
   if (!EDITABLE_FIELDS.includes(field)) return { error: "Not editable." };
+  if (typeof value !== "string") return { error: "Couldn't save. Try again." };
+  const long = tooLong(value, FIELD_MAX[field], FIELD_NAME[field]);
+  if (long) return { error: long };
 
   const supabase = await createClient();
   const {
@@ -668,6 +742,38 @@ export async function setLongPlatforms(projectId: string, platforms: string[]): 
   if (error || !data?.length) return { error: "Only the master can change the platforms." };
   refreshLong(projectId, "any");
   return {};
+}
+
+/**
+ * A long video's name (1.33.1), from its heading or its Settings: masters, and whoever can work on the step it's at
+ * (the database's own rule for changing a video). The main title picked among its title ideas is the same name, so
+ * it changes with it (the header and the lists always show that one).
+ */
+export async function renameLongVideo(projectId: string, title: string): Promise<StepResult & { title?: string }> {
+  if (!UUID_RE.test(projectId)) return { error: "Video not found." };
+  const next = cleanName(title);
+  if (!next) return { error: "Give the video a name." };
+  const long = tooLong(next, FORM_LIMITS.videoTitle, "the name");
+  if (long) return { error: long };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expired." };
+  const { data: project } = await supabase.from("long_video_projects").select("id, team_id, stage, title").eq("id", projectId).maybeSingle();
+  if (!project) return { error: "Video not found." };
+  const membership = await getMembership(supabase, project.team_id);
+  if (!isMaster(membership?.roles ?? []) && !canActOnStage(membership, project.stage as PipelineStage)) return { error: "Only the master, or whoever is working on this step, can rename it." };
+  if (project.title === next) return { title: next };
+  const { data, error } = await supabase
+    .from("long_video_projects")
+    .update({ title: next, updated_at: new Date().toISOString(), updated_by: user.id })
+    .eq("id", projectId)
+    .select("id");
+  if (error || !data?.length) return { error: "Couldn't rename it. Try again." };
+  await supabase.from("project_titles").update({ title: next }).eq("project_id", projectId).eq("is_picked", true);
+  refreshLong(projectId, "any");
+  return { title: next };
 }
 
 /** Package: the final YouTube description. */

@@ -7,6 +7,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { SettingsIcon } from "./icons";
 import { WhatsNewButton } from "./whats-new";
 import { Brand } from "./clip-logo";
+import { AvatarImg } from "@/components/ui/avatar-img";
 
 export function Sidebar({
   teams,
@@ -17,6 +18,7 @@ export function Sidebar({
   userColor,
   username,
   developer = false,
+  business = false,
 }: {
   teams: TeamSummary[];
   currentTeam: TeamSummary | null;
@@ -27,9 +29,11 @@ export function Sidebar({
   username: string | null;
   /** A developer account: the Developer page in the menu. */
   developer?: boolean;
+  /** Business is on for the team and theirs to open (1.42.0). */
+  business?: boolean;
 }) {
   return (
-    <aside className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden styled-scroll">
+    <aside data-shell="sidebar" className="hidden md:flex w-[236px] flex-shrink-0 border-r border-line/10 bg-surface flex-col p-3.5 gap-1 h-screen sticky top-0 overflow-y-auto overflow-x-hidden side-scroll">
       <Link href="/dashboard" aria-label={`${APP_NAME} home`} className="flex items-center px-1.5 pt-0.5 pb-3 rounded-lg">
         <Brand />
       </Link>
@@ -37,7 +41,7 @@ export function Sidebar({
         <WorkspaceSwitcher teams={teams} currentTeam={currentTeam} />
       </div>
 
-      <SidebarNav developer={developer} />
+      <SidebarNav developer={developer} business={business} />
 
       <div className="mt-auto">
         <WhatsNewButton variant="sidebar" className="mb-2" />
@@ -52,12 +56,7 @@ export function Sidebar({
               className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 overflow-hidden"
               style={{ background: userColor }}
             >
-              {userAvatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img loading="lazy" decoding="async" src={userAvatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                initialsFor(userDisplayName)
-              )}
+              <AvatarImg src={userAvatarUrl} fallback={initialsFor(userDisplayName)} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-semibold truncate">

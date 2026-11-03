@@ -1,5 +1,6 @@
 "use server";
 
+import { overLimit } from "@/lib/rate-limit";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { APP_NAME } from "@/lib/brand";
@@ -32,6 +33,8 @@ export async function submitFeedback(input: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again, then send it (your text is still here)." };
+  // Each one emails the developer (1.31.13).
+  if (overLimit("feedback", user.id, 5, 10 * 60_000)) return { error: "That's a lot of reports at once. Wait a few minutes, then send it (your text is still here)." };
 
   const kind = input.kind === "bug" || input.kind === "idea" ? input.kind : null;
   const message = String(input.message ?? "").trim();

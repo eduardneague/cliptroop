@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { getAccessToken } from "@/lib/social/tokens";
-import { tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
+import { TikTokApiError, tiktokCall, type TikTokOptions } from "@/lib/social/publishers/tiktok";
 import { PublishError } from "@/lib/social/publishers/common";
 import { runPostsNow } from "@/lib/social/worker";
 import { FACEBOOK_POST_SCOPE, FB_GRAPH, YOUTUBE_EDIT_SCOPE } from "@/lib/social/providers";
@@ -25,6 +25,13 @@ const PLATFORM_LIST: Platform[] = ["youtube", "instagram", "tiktok", "facebook"]
 const FACEBOOK_DAILY_MAX = 30;
 const FACEBOOK_NEEDS_PERMISSION = `${APP_NAME} needs permission to post on your Page. Reconnect Facebook in Team → Connected accounts and allow managing posts.`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** TikTok's answers that mean "this account can't post right now" (1.47.0): stop, and ask to try later. */
+const CANT_POST_NOW: Record<string, string> = {
+  spam_risk_too_many_posts: "This TikTok account has reached TikTok's posting limit for now. Try again later, or post it from the TikTok app.",
+  spam_risk_user_banned_from_posting: "TikTok isn't letting this account post right now. Try again later.",
+  reached_active_user_cap: `TikTok's daily limit of accounts posting through ${APP_NAME} was reached. Try again later.`,
+  rate_limit_exceeded: "TikTok is busy right now. Try again in a minute.",
+};
 
 async function manager(teamId: string) {
   const supabase = await createClient();
@@ -74,6 +81,8 @@ export async function getTikTokCreatorInfo(teamId: string): Promise<Result<{ inf
       },
     };
   } catch (e) {
+    // TikTok says this account can't post right now: the post screen stops and says so (TikTok's guidelines).
+    if (e instanceof TikTokApiError && CANT_POST_NOW[e.code]) return { error: CANT_POST_NOW[e.code] };
     return { error: e instanceof PublishError || e instanceof Error ? e.message : "Couldn't reach TikTok." };
   }
 }
@@ -487,6 +496,7 @@ export async function checkBeforeScheduling(shortId: string, platforms: Platform
         if (max && duration && duration > max) return { platform, ok: false, message: `This account can post up to ${max}s; the video is ${Math.round(duration)}s.` };
         return { platform, ok: true, message: `Signed in as ${String(d.creator_nickname ?? "account")}. ${APP_NAME} sends it at your time.` };
       } catch (e) {
+        if (e instanceof TikTokApiError && CANT_POST_NOW[e.code]) return { platform, ok: false, message: CANT_POST_NOW[e.code] };
         return { platform, ok: false, message: e instanceof Error ? e.message : "Couldn't check this account." };
       }
     })

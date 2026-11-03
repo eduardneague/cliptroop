@@ -143,7 +143,7 @@ export function VideoAnalytics({
                 className={`relative px-2.5 sm:px-3.5 h-11 inline-flex items-center text-[14px] font-semibold whitespace-nowrap transition-colors ${on ? "text-ink" : "text-ink-soft hover:text-ink"}`}
               >
                 {TAB_NAME[id]}
-                <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+                <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-amber transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
               </button>
             );
           })}
@@ -434,7 +434,7 @@ function Advanced({ data }: { data: VideoPageData }) {
   const splits = (data.breakdowns?.list ?? []).filter((b) => ["traffic_source", "search_term"].includes(b.id));
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-line/10 bg-surface overflow-x-auto" aria-label="Every number">
+      <section className="rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll" aria-label="Every number">
         <table className="w-full min-w-[640px] text-[13px]">
           <thead>
             <tr className="bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">
@@ -511,7 +511,7 @@ function Advanced({ data }: { data: VideoPageData }) {
 
       {dayRows.length > 0 && (
         <ChartCard title="Day by day" sub={d?.source === "daily" ? "YouTube's own numbers for each day" : "The change between one morning's copy and the next"}>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overscroll-x-contain">
             <table className={`w-full text-[12.5px] ${dayCols.length > 3 ? "min-w-[720px]" : "min-w-[420px]"}`}>
               <thead>
                 <tr className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">

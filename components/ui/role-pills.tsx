@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Leaves } from "./leaves";
 
 export type RolePill = { name: string; color: string };
 
@@ -77,14 +78,16 @@ export function RolePills({ roles, max = 2 }: { roles: RolePill[]; max?: number 
             +{hidden.length}
           </button>
           {open && (
-            <span
-              role="tooltip"
-              className="absolute left-0 top-[calc(100%+6px)] z-30 flex flex-wrap gap-1 w-max max-w-[220px] rounded-lg border border-line/10 bg-surface p-1.5 shadow-lg animate-[modalin_.12s_ease]"
-            >
-              {hidden.map((r) => (
-                <Pill key={r.name} role={r} />
-              ))}
-            </span>
+            <Leaves as="span">
+              <span
+                role="tooltip"
+                className="pop-menu origin-top-left absolute left-0 top-[calc(100%+6px)] z-30 flex flex-wrap gap-1 w-max max-w-[220px] rounded-lg border border-line/10 bg-surface p-1.5 shadow-lg"
+              >
+                {hidden.map((r) => (
+                  <Pill key={r.name} role={r} />
+                ))}
+              </span>
+            </Leaves>
           )}
         </span>
       )}

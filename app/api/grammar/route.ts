@@ -1,4 +1,5 @@
 import { getCachedUser } from "@/lib/supabase/get-user";
+import { overLimit } from "@/lib/rate-limit";
 import { DISABLED_RULES } from "@/modules/scripts/grammar/languagetool";
 
 /*
@@ -26,16 +27,8 @@ function setup() {
   return null;
 }
 
-// A few checks a second per person is plenty (per server instance).
-const recent = new Map<string, number[]>();
-function tooMany(user: string) {
-  const now = Date.now();
-  const list = (recent.get(user) ?? []).filter((t) => now - t < 60_000);
-  list.push(now);
-  recent.set(user, list);
-  if (recent.size > 5000) recent.clear();
-  return list.length > 90;
-}
+// A few checks a second per person is plenty (per server instance; 1.31.13: the shared limiter).
+const tooMany = (user: string) => overLimit("grammar", user, 90, 60_000);
 
 const LANGUAGE = /^(auto|[a-z]{2,3}(-[A-Z]{2})?)$/;
 

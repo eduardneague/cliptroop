@@ -2,6 +2,8 @@ import { Mascot } from "@/components/ui/mascot";
 import { APP_NAME } from "@/lib/brand";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InstallAppSkeleton, PushSettingsSkeleton } from "@/components/pwa";
+import { ChevronLeftIcon } from "@/components/ui/icons";
+import { BTN, CARD, Group, H2, Row, TEXT } from "./account-parts";
 
 /** Account settings tabs, in order (the page, its loading screen and its skeletons share them). */
 export const SETTINGS_TABS = [
@@ -10,6 +12,8 @@ export const SETTINGS_TABS = [
   { id: "notifications", label: "Notifications & app" },
   { id: "preferences", label: "Preferences" },
   { id: "account", label: "Account" },
+  // 1.34.2: reporting a bug and the tour, out of Account.
+  { id: "help", label: "Help & feedback" },
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number]["id"];
 
@@ -17,13 +21,16 @@ export function settingsTab(raw: string | null | undefined): SettingsTab {
   return SETTINGS_TABS.some((t) => t.id === raw) ? (raw as SettingsTab) : "profile";
 }
 
-const H2 = "text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft";
+/** A tab's own sub-page (?view=…): Account's Danger zone, else none. */
+export function settingsView(tab: SettingsTab, raw: string | null | undefined): "danger" | null {
+  return tab === "account" && raw === "danger" ? "danger" : null;
+}
 
 /**
  * One Settings tab while it loads (switching tabs, or the page opening): the
  * same sections with their real titles, only what's yours shimmers.
  */
-export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
+export function SettingsTabSkeleton({ tab }: { tab: SettingsTab | "danger" }) {
   if (tab === "teams") {
     return (
       <section className="rounded-xl border border-line/10 bg-surface p-6" aria-hidden>
@@ -91,54 +98,119 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
     );
   }
   if (tab === "preferences") {
-    const rows = [
-      ["Appearance", "Switch between light and dark mode", "h-9 w-9"],
-      ["Animations", "Soft motion when pages, lists and popups open. “Match device” turns them off if your device asks for less motion.", "h-9 w-56"],
-      ["Sounds", "Quiet little sounds when you check things off, save, get a notification or drag something.", "h-9 w-24"],
-    ];
-    return (
-      <section className="rounded-xl border border-line/10 bg-surface p-6" aria-hidden>
-        <h2 className={`${H2} mb-4`}>Preferences</h2>
-        {rows.map(([title, text, size], i) => (
-          <div key={title} className={`flex items-center justify-between gap-4 ${i ? "mt-5 pt-5 border-t border-line/10" : ""}`}>
-            <div>
-              <div className="text-[13.5px] font-semibold">{title}</div>
-              <div className="text-[11.5px] text-ink-faint">{text}</div>
-            </div>
-            <Skeleton className={`${size} rounded-lg flex-shrink-0`} />
-          </div>
-        ))}
-        <div className="mt-5 pt-5 border-t border-line/10">
-          <div className="text-[13.5px] font-semibold">Colours</div>
-          <div className="text-[11.5px] text-ink-faint mb-3">
-            The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-16 rounded-xl" />
-            ))}
-          </div>
+    // 1.29.3: the four groups, as the tab draws them.
+    const card = "rounded-xl border border-line/10 bg-surface p-6";
+    const row = (title: string, text: string, size: string, first = false) => (
+      <div className={`flex items-center justify-between gap-4 ${first ? "" : "mt-5 pt-5 border-t border-line/10"}`}>
+        <div>
+          <div className="text-[13.5px] font-semibold">{title}</div>
+          <div className="text-[11.5px] text-ink-faint">{text}</div>
         </div>
-      </section>
+        <Skeleton className={`${size} rounded-lg flex-shrink-0`} />
+      </div>
+    );
+    return (
+      <div className="space-y-6" aria-hidden>
+        <div className="flex items-center gap-2">
+          {["Mode and colours", "Glass", "Wallpaper", "Motion and sound"].map((l) => (
+            <span key={l} className="whitespace-nowrap rounded-lg border border-line/15 px-3 h-8 inline-flex items-center text-[12.5px] font-semibold text-ink-soft">
+              {l}
+            </span>
+          ))}
+        </div>
+        <section className={card}>
+          <h2 className={`${H2} mb-4`}>Mode and colours</h2>
+          {row("Light or dark", "Switch between light and dark mode.", "h-9 w-9", true)}
+          <div className="mt-5 pt-5 border-t border-line/10">
+            <div className="text-[13.5px] font-semibold">Colour theme</div>
+            <div className="text-[11.5px] text-ink-faint mb-3">
+              The paper, cards and accent across the whole app, in light and dark mode. Only you see your choice; shorts, long videos, meetings and charts keep their colours.
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-24 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </section>
+        <section className={card}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className={H2}>Glass</h2>
+              <div className="mt-1 text-[11.5px] text-ink-faint">See-through cards and bars across the whole app, over your wallpaper or a soft wash of colour. Off, everything is solid.</div>
+            </div>
+            <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
+          </div>
+        </section>
+        <section className={card}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className={H2}>Wallpaper</h2>
+              <div className="mt-1 text-[11.5px] text-ink-faint">Pictures, GIFs or short videos behind your dashboard, like a profile background.</div>
+            </div>
+            <Skeleton className="h-9 w-24 rounded-lg flex-shrink-0" />
+          </div>
+          <Skeleton className="mt-3 aspect-video w-full max-w-[17rem] rounded-xl" />
+        </section>
+        <section className={card}>
+          <h2 className={`${H2} mb-4`}>Motion and sound</h2>
+          {row("Animations", "Soft motion when pages, lists and popups open. “Match device” turns them off if your device asks for less motion.", "h-9 w-56", true)}
+          {row("Sounds", "Quiet little sounds when you check things off, save, get a notification or drag something.", "h-9 w-24")}
+        </section>
+      </div>
     );
   }
   if (tab === "account") {
+    // 1.34.2: the cards as the tab draws them; only your email shimmers (the developer's card comes with the page).
     return (
-      <div aria-hidden>
-        <section className="rounded-xl border border-line/10 bg-surface p-6 mb-6">
-          <h2 className={H2}>Tutorial</h2>
-          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Mascot size={56} className="flex-shrink-0 -my-1" />
-              <p className="text-[13.5px] text-ink-soft leading-relaxed">
-                Clip&rsquo;s one-minute tour of {APP_NAME}: where everything is and how a video gets from idea to posted.
-              </p>
-            </div>
-            <Skeleton className="h-10 w-44 rounded-lg flex-shrink-0" />
-          </div>
+      <div className="space-y-6" aria-hidden>
+        <Group title={TEXT.signingIn}>
+          <Row title={TEXT.email} text={TEXT.emailText} action={<Skeleton className="h-3.5 w-52" />} />
+          <Row title={TEXT.password} text={TEXT.passwordText} action={<span className={BTN}>Change password</span>}>
+            <p className="mt-3 text-[12.5px] text-ink-soft">
+              Forgot your current password? <span className="font-semibold text-amber">Email me a reset link</span>
+            </p>
+          </Row>
+        </Group>
+        <Group title={TEXT.devices}>
+          <Row title={TEXT.thisDevice} text={TEXT.thisDeviceText} action={<span className={BTN}>Log out</span>} />
+          <Row title={TEXT.otherDevices} text={TEXT.otherDevicesText} action={<span className={BTN}>Sign out everywhere else</span>} />
+        </Group>
+        <div className="flex items-center gap-3.5 rounded-xl border border-line/10 px-5 py-4">
+          <span className="w-9 h-9 rounded-lg bg-surface-2 flex-shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-[14px] font-semibold">{TEXT.danger}</span>
+            <span className="block text-[12.5px] text-ink-soft">{TEXT.dangerText}</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+  if (tab === "danger") {
+    return (
+      <div className="space-y-5" aria-hidden>
+        <span className="inline-flex items-center gap-1 -ml-1.5 pl-1 pr-2.5 h-8 text-[13px] font-semibold text-ink-soft">
+          <ChevronLeftIcon className="w-4 h-4" />
+          Account
+        </span>
+        <div>
+          <h2 className="font-display text-[22px] font-semibold leading-tight">{TEXT.danger}</h2>
+          <p className="mt-1 text-[13px] text-ink-soft">{TEXT.dangerIntro}</p>
+        </div>
+        <section className="rounded-xl border border-red/25 bg-red/5 p-6">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-red">Delete account</h2>
+          <Skeleton className="mt-2 h-3 w-full max-w-xl" />
+          <Skeleton className="mt-1.5 h-3 w-2/3 max-w-md" />
+          <Skeleton className="mt-4 h-10 w-44 rounded-lg" />
         </section>
-        <section className="rounded-xl border border-line/10 bg-surface p-6 mb-6">
-          <h2 className={H2}>Report a bug or suggest something</h2>
+      </div>
+    );
+  }
+  if (tab === "help") {
+    return (
+      <div className="space-y-6" aria-hidden>
+        <section className={CARD}>
+          <h2 className={H2}>{TEXT.report}</h2>
           <p className="text-[12.5px] text-ink-soft mt-1 mb-4">Something broken, or an idea that would make {APP_NAME} better? Only the developer sees what you send.</p>
           <div className="space-y-4">
             <div>
@@ -170,12 +242,17 @@ export function SettingsTabSkeleton({ tab }: { tab: SettingsTab }) {
             </div>
           </div>
         </section>
-        <section className="rounded-xl border border-line/10 bg-surface p-6 space-y-4">
-          <div>
-            <h2 className={H2}>Account</h2>
-            <Skeleton className="h-3.5 w-56 mt-2" />
+        <section className={CARD}>
+          <h2 className={H2}>{TEXT.tutorial}</h2>
+          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Mascot size={56} className="flex-shrink-0 -my-1" />
+              <p className="text-[13.5px] text-ink-soft leading-relaxed">
+                Clip&rsquo;s one-minute tour of {APP_NAME}: where everything is and how a video gets from idea to posted.
+              </p>
+            </div>
+            <Skeleton className="h-10 w-44 rounded-lg flex-shrink-0" />
           </div>
-          <Skeleton className="h-11 w-full rounded-lg" />
         </section>
       </div>
     );

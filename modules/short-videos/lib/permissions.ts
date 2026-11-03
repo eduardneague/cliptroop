@@ -10,17 +10,25 @@ export function shortPermissions({
   roles,
   isAssignedEditor,
   isAssignedReviewer = false,
+  isAssignedFilmer = false,
+  hasFilmer = false,
   stage,
   scheduleMode = "auto",
 }: {
   roles: RoleId[];
   isAssignedEditor: boolean;
   isAssignedReviewer?: boolean;
+  /** 1.36.0: you film this short. */
+  isAssignedFilmer?: boolean;
+  /** Someone is set to film it (else any filmer may mark it filmed, as for long videos). */
+  hasFilmer?: boolean;
   stage: ShortStage;
   scheduleMode?: "auto" | "pinned";
 }) {
   const master = isMaster(roles);
   const scheduler = roles.includes("publisher");
+  // 1.36.0 (short_mark_filmed, 0113): its filmer, any filmer while nobody is set, or a master.
+  const filmer = isAssignedFilmer || (!hasFilmer && roles.includes("filmer"));
 
   return {
     isMaster: master,
@@ -33,9 +41,13 @@ export function shortPermissions({
     canEditCaption: master || scheduler,
     canEditFileLink: master || isAssignedEditor || scheduler,
     canAssignEditor: master,
-    canAssignPeople: master || scheduler, // editor, reviewer, scheduler
+    canAssignPeople: master || scheduler, // filmer, editor, reviewer, scheduler
     canReorder: master,
-    canSendToEditing: master && stage === "script",
+    // 1.36.0: Script → Filming → Editing (was Script → Editing).
+    canSendToFilming: master && stage === "script",
+    canMarkFilmed: (master || filmer) && stage === "filming",
+    // Where the footage is: its filmer, its editor, a scheduler or the master.
+    canEditFootage: master || filmer || isAssignedEditor || scheduler,
     canSubmitForReview: (master || isAssignedEditor) && stage === "editing",
     canReview: (master || isAssignedReviewer) && stage === "review",
     canMarkPosted: (master || scheduler) && (stage === "ready" || stage === "posted"),

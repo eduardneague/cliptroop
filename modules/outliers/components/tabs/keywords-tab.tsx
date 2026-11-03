@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Dialog } from "@/components/ui/dialog";
-import { SearchIcon } from "@/components/ui/icons";
+import { CloseIcon, SearchIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { loadVideos } from "@/app/(dashboard)/outliers/actions";
 import { titleHasKeyword, type KeywordStat } from "../../lib/keywords";
@@ -36,6 +36,7 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
   const [sort, setSort] = useState<SortId>("rank");
   const [size, setSize] = useState<"all" | "one" | "phrase">("all");
   const [filter, setFilter] = useState("");
+  const [typed, setTyped] = useState("");
   const [selected, setSelected] = useState<string | null>(data.selected);
   const [sheet, setSheet] = useState(false);
   const [all, setAll] = useState(false);
@@ -69,17 +70,41 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
   };
   const maxN = Math.max(1, ...data.keywords.map((k) => k.n));
 
-  if (!data.keywords.length) return <EmptyNote title="Keywords show up once there are enough videos">A keyword needs a few videos from at least two channels.</EmptyNote>;
+  if (!data.keywords.length) return <EmptyNote title="Keywords show up once there are enough videos" finding>A keyword needs a few videos from at least two channels.</EmptyNote>;
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-6">
       <div className="min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          <label className="relative flex-1 min-w-[12rem] max-w-sm">
-            <span className="sr-only">Find a keyword</span>
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
-            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Find a keyword" className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
-          </label>
+          <form
+            className="flex items-center gap-1.5 flex-1 min-w-[12rem] max-w-sm"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFilter(typed);
+            }}
+          >
+            <label className="relative flex-1 min-w-0">
+              <span className="sr-only">Find a keyword</span>
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint pointer-events-none" />
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Find a keyword" className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-8 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
+              {(typed || filter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTyped("");
+                    setFilter("");
+                  }}
+                  aria-label="Clear"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center text-ink-faint hover:text-ink"
+                >
+                  <CloseIcon className="w-3 h-3" />
+                </button>
+              )}
+            </label>
+            <button type="submit" className={`${BTN} text-ink`}>
+              Find
+            </button>
+          </form>
           <Segmented
             ariaLabel="Order"
             size="sm"
@@ -160,7 +185,7 @@ export function KeywordsTab({ data }: { data: KeywordsData }) {
       </div>
 
       <aside className="hidden lg:block min-w-0">
-        <div className="sticky top-[4.5rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <KeywordDetail k={current} data={data} onPick={pickKey} />}</div>
+        <div className="sticky top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)] max-h-[calc(100dvh-var(--shell-top,3.5rem)-var(--ol-bar,104px)-1.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-2xl border border-line/10 bg-surface">{current && <KeywordDetail k={current} data={data} onPick={pickKey} />}</div>
       </aside>
 
       <Dialog open={sheet} onClose={() => setSheet(false)} title={current ? current.k : "Keyword"} width="sm:max-w-2xl">
@@ -220,7 +245,7 @@ function KeywordDetail({ k, data, onPick, inSheet = false }: { k: KeywordStat; d
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         <div className="rounded-xl border border-line/10 px-3 py-2.5">
           <div className="text-[11.5px] font-semibold text-ink-faint">Median</div>
-          <div className="mt-1 font-display text-[22px] font-semibold leading-none" style={{ color: (k.med ?? 0) >= 2 ? "rgb(var(--green))" : undefined }}>
+          <div className="mt-1 font-display text-[22px] font-semibold leading-none" style={{ color: (k.med ?? 0) >= 2 ? "rgb(var(--green-text))" : undefined }}>
             {multText(k.med)}
           </div>
         </div>
@@ -236,10 +261,10 @@ function KeywordDetail({ k, data, onPick, inSheet = false }: { k: KeywordStat; d
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Link href={nav.href({ tab: "ideas", params: { topic: k.k } })} className={`${BTN_MAIN} h-10`}>
+        <Link href={nav.href({ tab: "ideas", params: { topic: k.k } })} className={`${BTN_MAIN} !h-10`}>
           Ideas about it
         </Link>
-        <Link href={nav.href({ tab: "search", params: { q: k.k } })} className={`${BTN} h-10`}>
+        <Link href={nav.href({ tab: "search", params: { q: k.k } })} className={`${BTN} !h-10`}>
           Search it
         </Link>
       </div>

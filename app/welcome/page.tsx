@@ -16,5 +16,6 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : "");
   const tokenHash = /^[A-Za-z0-9_-]{8,200}$/.test(one("token_hash")) ? one("token_hash") : null;
   const type = (TYPES as string[]).includes(one("type")) ? (one("type") as LinkType) : null;
-  return <WelcomeCard tokenHash={tokenHash} type={type} expired={one("error") === "expired"} />;
+  // swap=1: an old-style link for another account than the one signed in here, waiting for the question (1.31.11).
+  return <WelcomeCard tokenHash={tokenHash} type={type} expired={one("error") === "expired"} swap={one("swap") === "1"} />;
 }

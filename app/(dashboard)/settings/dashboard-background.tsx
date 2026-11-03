@@ -1,0 +1,606 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-provider";
+import { CheckIcon, CloseIcon, PlusIcon, RetryIcon, TrashIcon } from "@/components/ui/icons";
+import { bgFileProblem, bgKind, bgPathFor, clampDim, DASH_BG_ACCEPT, DASH_BG_BUCKET, DASH_BG_MAX_DIM } from "@/lib/dashboard-bg";
+import { planFor, sizeLabel, WALL_MAX_BYTES, WALL_MAX_SECONDS } from "@/lib/wallpaper-plan";
+import { pictureTooBig } from "@/lib/image/limits";
+import { ConvertError, prepareWallpaper } from "@/lib/wallpaper-convert";
+import { WALLPAPER_MAX } from "@/lib/wallpapers";
+import { measureFile } from "@/lib/wallpapers-measure";
+import { startUpload, UploadError } from "@/lib/upload/resumable";
+import { updateDashboardBackground } from "./actions";
+import { addWallpaper, pickWallpaper, removeWallpaper, replaceWallpaper } from "./wallpaper-actions";
+import { stillSrc } from "@/lib/video-still";
+import { changeLook, wallpaperDrawn } from "@/lib/look-screen";
+
+/**
+ * Settings → Preferences → Dashboard background (1.27.5; saved wallpapers in
+ * 1.28.0): up to three pictures, GIFs or short looping videos, one click to
+ * switch, like a profile background. Off by default; only you see it.
+ * Uploading shows its progress; replacing or removing one deletes the old
+ * file for good, after a confirmation. The words over each are shown in the
+ * colour the dashboard will use (dark or white, whichever reads best).
+ *
+ * 1.29.4: every file is made small in the browser first (2 MB at most:
+ * pictures as WebP, videos and moving GIFs as a WebM of up to 30 seconds;
+ * lib/wallpaper-convert.ts), with its own progress. A wallpaper saved before
+ * that and bigger than 2 MB can be made lighter in one click. And it can go
+ * behind every page, not only the dashboard.
+ */
+
+/** `size`: the stored file's bytes, when known (Settings lists them). */
+export type WallpaperItem = { id: string; path: string; url: string; luma: number | null; size?: number | null };
+
+type Job = {
+  /** The wallpaper being replaced, or "new". */
+  slot: string;
+  phase: "converting" | "uploading" | "saving";
+  share: number;
+  preview: string;
+  video: boolean;
+  /** Made into a video (it plays for a while: the label says so). */
+  recording?: boolean;
+  cancel?: () => void;
+};
+
+const toneStyle = (luma: number | null, dim: number): CSSProperties =>
+  ({ ...(luma === null ? {} : { "--bg-luma": luma / 100 }), "--bg-dim": dim / 100 }) as CSSProperties;
+
+export function DashboardBackground({
+  userId,
+  ready,
+  listReady,
+  on: initialOn,
+  current: initialCurrent,
+  dim: initialDim,
+  wallpapers: initialWallpapers,
+  everywhere: initialEverywhere = false,
+  everywhereReady = true,
+}: {
+  userId: string;
+  /** Migration 0092 is in (the background itself). */
+  ready: boolean;
+  /** Migration 0093 is in (saved wallpapers). */
+  listReady: boolean;
+  on: boolean;
+  /** The file in use. */
+  current: string | null;
+  dim: number;
+  wallpapers: WallpaperItem[];
+  /** Behind every page (1.29.4). */
+  everywhere?: boolean;
+  /** Migration 0098 is in. */
+  everywhereReady?: boolean;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const input = useRef<HTMLInputElement>(null);
+  const replacing = useRef<WallpaperItem | null>(null);
+  const [items, setItems] = useState<WallpaperItem[]>(initialWallpapers);
+  const [current, setCurrent] = useState<string | null>(initialCurrent);
+  const [on, setOn] = useState(initialOn);
+  const [dim, setDim] = useState(initialDim);
+  const [everywhere, setEverywhere] = useState(initialEverywhere);
+  const [job, setJob] = useState<Job | null>(null);
+  const [busy, setBusy] = useState<{ id: string; kind: "use" | "remove" } | null>(null);
+  const [refreshing, start] = useTransition();
+  const dimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (dimTimer.current && clearTimeout(dimTimer.current)), []);
+
+  const refresh = () => start(() => router.refresh());
+  // 1.35.1: a refresh you can wait for (the look screen stays up until the page has the new wallpaper).
+  const waiters = useRef<(() => void)[]>([]);
+  useEffect(() => {
+    if (refreshing || !waiters.current.length) return;
+    const done = waiters.current;
+    waiters.current = [];
+    done.forEach((f) => f());
+  }, [refreshing]);
+  const refreshed = () =>
+    new Promise<void>((resolve) => {
+      waiters.current.push(resolve);
+      window.setTimeout(resolve, 6000);
+      refresh();
+    });
+  /**
+   * A change to the wallpaper you see (1.35.1, the owner: "turning wallpaper off should also give you the loading
+   * screen thing", "selecting a wallpaper should too"): under Clip's screen, like a new colour theme, which stays up
+   * until it's saved, the page has it and its picture has loaded.
+   */
+  const underScreen = (what: "wallpaper" | "wallpaper-off", change: () => Promise<boolean>) =>
+    changeLook(what, async () => {
+      if (!(await change())) return;
+      await refreshed();
+      if (what === "wallpaper") await wallpaperDrawn();
+    });
+  const full = items.length >= WALLPAPER_MAX;
+  const locked = !ready || !listReady || !!job || !!busy;
+
+  function choose(replace: WallpaperItem | null) {
+    replacing.current = replace;
+    input.current?.click();
+  }
+
+  async function picked(original: File | undefined, lighten: WallpaperItem | null = null) {
+    const target = lighten ?? replacing.current;
+    replacing.current = null;
+    if (!original) return;
+    const plan = planFor(original.type, original.size, new Uint8Array());
+    if (plan.action === "refuse") {
+      toast.error(plan.problem);
+      return;
+    }
+    // A picture you pick: up to 5 MB, like every picture (1.31.3). Not one already here being made lighter.
+    const tooBig = !lighten && plan.action === "image" ? pictureTooBig(original) : null;
+    if (tooBig) {
+      toast.error(tooBig);
+      return;
+    }
+    if (target && !lighten) {
+      const ok = await confirm({
+        title: "Replace this wallpaper?",
+        description: `“${original.name}” takes its place. The old file is deleted for good as soon as the new one is up.`,
+        confirmLabel: "Replace",
+        danger: true,
+      });
+      if (!ok) return;
+    } else if (!target && full) {
+      toast.error(`You can keep ${WALLPAPER_MAX} wallpapers. Remove or replace one first.`);
+      return;
+    }
+    const moving = original.type.startsWith("video/") || original.type === "image/gif";
+    const preview = URL.createObjectURL(original);
+    const stop = new AbortController();
+    setJob({ slot: target?.id ?? "new", phase: "converting", share: 0, preview, video: original.type.startsWith("video/"), recording: moving, cancel: () => stop.abort() });
+    const supabase = createClient();
+    let path: string | null = null;
+    let uploaded = false;
+    try {
+      // Always made small first (1.29.4): a WebP picture or a WebM video, 2 MB at most.
+      const ready = await prepareWallpaper(original, ({ share }) => setJob((j) => (j ? { ...j, share } : j)), stop.signal);
+      const f = ready.file;
+      const problem = bgFileProblem(f);
+      if (problem) throw new Error(problem);
+      const luma = await measureFile(f, ready.video ? "video" : "image");
+      path = bgPathFor(userId, f.name, f.type);
+      if (!path) throw new UploadError("type", "type");
+      setJob((j) => (j ? { ...j, phase: "uploading", share: 0, cancel: undefined } : j));
+      const upload = await startUpload({
+        bucket: DASH_BG_BUCKET,
+        path,
+        file: f,
+        contentType: f.type,
+        onProgress: (share) => setJob((j) => (j ? { ...j, phase: "uploading", share } : j)),
+      });
+      setJob((j) => (j ? { ...j, phase: "uploading", cancel: upload.cancel } : j));
+      await upload.done;
+      uploaded = true;
+      setJob((j) => (j ? { ...j, phase: "saving", share: 1, cancel: undefined } : j));
+      const url = supabase.storage.from(DASH_BG_BUCKET).getPublicUrl(path).data.publicUrl;
+      const note = ready.trimmed ? ` It keeps the first ${WALL_MAX_SECONDS} seconds.` : "";
+      if (target) {
+        const r = await replaceWallpaper(target.id, path, luma);
+        if (r.error) throw new Error(r.error);
+        setItems((list) => list.map((w) => (w.id === target.id ? { ...w, path: path!, url, luma, size: f.size } : w)));
+        toast.success(lighten ? `Made lighter: ${sizeLabel(lighten.size ?? original.size)} to ${sizeLabel(f.size)}.` : `Wallpaper replaced (${sizeLabel(f.size)}).${note}`);
+      } else {
+        const r = await addWallpaper(path, luma);
+        if (r.error || !r.id) throw new Error(r.error ?? "Couldn't save. Try again.");
+        setItems((list) => [...list, { id: r.id!, path: path!, url, luma, size: f.size }]);
+        toast.success(`Wallpaper added (${sizeLabel(f.size)}).${note}`);
+      }
+      // Making one lighter keeps whatever was showing; anything else puts the new one up (1.35.1: under the screen).
+      if (!lighten || target?.path === current) {
+        setCurrent(path);
+        if (!lighten) setOn(true);
+      }
+      if (lighten) refresh();
+      else underScreen("wallpaper", async () => true);
+    } catch (e) {
+      // Not saved: don't leave the file behind.
+      if (uploaded && path) await supabase.storage.from(DASH_BG_BUCKET).remove([path]).then(() => null, () => null);
+      if (e instanceof ConvertError) {
+        if (e.kind !== "cancelled") toast.error(e.message);
+      } else if (e instanceof UploadError) {
+        if (e.kind !== "cancelled") {
+          toast.error(
+            e.kind === "too-large"
+              ? "Keep it under 2 MB."
+              : e.kind === "type"
+                ? "Pick a picture, a GIF or a video."
+                : e.kind === "bucket"
+                  ? "This needs the latest database update (migration 0092)."
+                  : e.kind === "session"
+                    ? "Your session expired. Sign in again."
+                    : e.kind === "forbidden"
+                      ? "You can only upload to your own folder. Sign in again."
+                      : "The upload stopped. Check your connection and try again.",
+          );
+        }
+      } else {
+        toast.error(e instanceof Error && e.message ? e.message : "Couldn't save. Try again.");
+      }
+    } finally {
+      URL.revokeObjectURL(preview);
+      setJob(null);
+    }
+  }
+
+  /** A wallpaper from before 1.29.4, bigger than 2 MB: the same picture or video, made small, in its place. */
+  async function makeLighter(w: WallpaperItem) {
+    if (locked) return;
+    try {
+      const res = await fetch(w.url);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const name = w.path.split("/").pop() ?? "wallpaper";
+      await picked(new File([blob], name, { type: blob.type || (bgKind(w.path) === "video" ? "video/mp4" : "image/jpeg") }), w);
+    } catch {
+      toast.error("Couldn't fetch it to make it lighter. Check your connection and try again.");
+    }
+  }
+
+  function changeEverywhere(next: boolean) {
+    if (next === everywhere || locked) return;
+    // This page gets it, or loses it: under the screen when there's one up.
+    const change = async () => {
+      setEverywhere(next);
+      const r = await updateDashboardBackground({ everywhere: next });
+      if (r.error) {
+        setEverywhere(!next);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success(next ? "Your wallpaper is on every page" : "Your wallpaper is on the dashboard only");
+      return true;
+    };
+    if (on && current) underScreen(next ? "wallpaper" : "wallpaper-off", change);
+    else void change().then((ok) => ok && refresh());
+  }
+
+  function switchTo(w: WallpaperItem) {
+    if (locked || (w.path === current && on)) return;
+    underScreen("wallpaper", async () => {
+      setBusy({ id: w.id, kind: "use" });
+      const before = { current, on };
+      setCurrent(w.path);
+      setOn(true);
+      const r = await pickWallpaper(w.id);
+      setBusy(null);
+      if (r.error) {
+        setCurrent(before.current);
+        setOn(before.on);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success("Wallpaper changed");
+      return true;
+    });
+  }
+
+  async function remove(w: WallpaperItem) {
+    if (locked) return;
+    const inUse = w.path === current;
+    const others = items.filter((x) => x.id !== w.id).length;
+    const ok = await confirm({
+      title: "Remove this wallpaper?",
+      description: `Its file is deleted for good right away.${inUse && on ? (others ? " Your dashboard switches to your newest other wallpaper." : " The background turns off.") : ""}`,
+      confirmLabel: "Remove",
+      danger: true,
+    });
+    if (!ok) return;
+    const change = async () => {
+      setBusy({ id: w.id, kind: "remove" });
+      const r = await removeWallpaper(w.id);
+      setBusy(null);
+      if (r.error) {
+        toast.error(r.error);
+        return false;
+      }
+      setItems((list) => list.filter((x) => x.id !== w.id));
+      if (r.current !== undefined) setCurrent(r.current);
+      if (r.current === null) setOn(false);
+      toast.success("Wallpaper removed");
+      return true;
+    };
+    // The one showing: the next one goes up (or none), under the screen.
+    if (inUse && on) underScreen(others ? "wallpaper" : "wallpaper-off", change);
+    else if (await change()) refresh();
+  }
+
+  function toggle(next: boolean) {
+    if (next === on || locked) return;
+    if (next && !items.length) {
+      choose(null);
+      return;
+    }
+    if (next && !items.some((w) => w.path === current)) {
+      switchTo(items[items.length - 1]);
+      return;
+    }
+    underScreen(next ? "wallpaper" : "wallpaper-off", async () => {
+      setOn(next);
+      const r = await updateDashboardBackground({ on: next });
+      if (r.error) {
+        setOn(!next);
+        toast.error(r.error);
+        return false;
+      }
+      toast.success(next ? "Dashboard background on" : "Dashboard background off");
+      return true;
+    });
+  }
+
+  function changeDim(v: number) {
+    const d = clampDim(v);
+    setDim(d);
+    if (dimTimer.current) clearTimeout(dimTimer.current);
+    dimTimer.current = setTimeout(() => {
+      void updateDashboardBackground({ dim: d }).then((r) => {
+        if (r.error) toast.error(r.error);
+        else refresh();
+      });
+    }, 450);
+  }
+
+  const slots: (WallpaperItem | "new")[] = [...items, ...(items.length < WALLPAPER_MAX ? (["new"] as const) : [])];
+
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-[13px] font-display font-semibold uppercase tracking-wide text-ink-soft">Wallpaper</h2>
+          <div className="mt-1 text-[11.5px] text-ink-faint">
+            Pictures, GIFs or short videos behind your dashboard, like a profile background. Keep up to {WALLPAPER_MAX} and switch with a click. Only you see them. With glass on
+            (above), the widgets let them show through; with glass off they stay solid.
+          </div>
+        </div>
+        <div role="radiogroup" aria-label="Dashboard background" className="inline-flex rounded-lg border border-line/15 p-0.5 flex-shrink-0">
+          {[false, true].map((v) => (
+            <button
+              key={String(v)}
+              type="button"
+              role="radio"
+              aria-checked={on === v}
+              data-sound="none"
+              disabled={locked}
+              onClick={() => void toggle(v)}
+              className={`px-3 h-8 rounded-md text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${on === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+            >
+              {v ? "On" : "Off"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!ready || !listReady ? (
+        <p className="mt-3 text-[12.5px] text-ink-soft">This needs the latest database update (migration {ready ? "0093" : "0092"}).</p>
+      ) : (
+        <>
+          <ul className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3" aria-label="Your wallpapers">
+            {slots.map((w) => {
+              if (w === "new") {
+                const uploading = job?.slot === "new" ? job : null;
+                return (
+                  <li key="new">
+                    {uploading ? (
+                      <UploadTile job={uploading} />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => choose(null)}
+                        disabled={locked}
+                        className="group w-full aspect-video rounded-xl border-2 border-dashed border-line/20 hover:border-amber/60 focus-visible:outline-none focus-visible:border-amber flex flex-col items-center justify-center gap-1 text-center px-3 transition-colors disabled:opacity-50"
+                      >
+                        <span className="w-8 h-8 rounded-full bg-surface-2 flex items-center justify-center text-ink-soft group-hover:text-amber transition-colors">
+                          <PlusIcon className="w-4 h-4" strokeWidth={2.25} />
+                        </span>
+                        <span className="text-[12.5px] font-semibold text-ink">{items.length ? "Add another" : "Add a wallpaper"}</span>
+                        <span className="text-[11px] text-ink-faint">
+                          {items.length}/{WALLPAPER_MAX} saved
+                        </span>
+                      </button>
+                    )}
+                  </li>
+                );
+              }
+              const uploading = job?.slot === w.id ? job : null;
+              const inUse = w.path === current;
+              const video = bgKind(w.path) === "video";
+              return (
+                <li key={w.id} className="min-w-0">
+                  {uploading ? (
+                    <UploadTile job={uploading} />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void switchTo(w)}
+                      disabled={locked && busy?.id !== w.id}
+                      aria-pressed={inUse && on}
+                      aria-label={inUse && on ? "In use" : "Use this wallpaper"}
+                      className={`wall-tone group relative block w-full aspect-video rounded-xl overflow-hidden text-left transition-shadow focus-visible:outline-none ${
+                        inUse ? (on ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : "ring-2 ring-line/30 ring-offset-2 ring-offset-surface") : "ring-1 ring-line/15 hover:ring-line/35 focus-visible:ring-2 focus-visible:ring-amber"
+                      }`}
+                      style={toneStyle(w.luma, dim)}
+                    >
+                      {video ? (
+                        <video src={stillSrc(w.url)} muted loop playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" onMouseEnter={(e) => void e.currentTarget.play().catch(() => null)} onMouseLeave={(e) => e.currentTarget.pause()} />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={w.url} alt="" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+                      )}
+                      <span className="absolute inset-0" style={{ background: `rgb(var(--paper) / ${dim / 100})` }} aria-hidden />
+                      {/* The words in the colour the dashboard will use over it. */}
+                      <span className="wall-words absolute left-2.5 top-2 right-2.5 font-display text-[13px] font-semibold leading-tight truncate" aria-hidden>
+                        Good morning
+                      </span>
+                      <span className="absolute left-2.5 right-2.5 bottom-2 grid grid-cols-3 gap-1" aria-hidden>
+                        <span className="col-span-2 h-3 rounded-[4px] dash-bg-sample" />
+                        <span className="h-3 rounded-[4px] dash-bg-sample" />
+                      </span>
+                      {inUse && on && (
+                        <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber text-white text-[10.5px] font-bold pl-1.5 pr-2 h-5 shadow">
+                          <CheckIcon className="w-3 h-3" />
+                          In use
+                        </span>
+                      )}
+                      {busy?.id === w.id && busy.kind === "remove" && <span className="absolute inset-0 bg-black/45 flex items-center justify-center text-white text-[12px] font-semibold">Removing…</span>}
+                    </button>
+                  )}
+                  <div className="mt-1.5 flex items-center gap-1">
+                    <span className="text-[11px] text-ink-faint truncate flex-1 min-w-0">
+                      {video ? "Video" : /\.gif$/i.test(w.path) ? "GIF" : "Picture"}
+                      {w.size ? ` · ${sizeLabel(w.size)}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => choose(w)}
+                      disabled={locked}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 h-7 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      <RetryIcon className="w-3.5 h-3.5" />
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void remove(w)}
+                      disabled={locked}
+                      aria-label="Remove this wallpaper"
+                      className="inline-flex items-center rounded-md px-1.5 h-7 text-ink-soft hover:text-red hover:bg-red/10 disabled:opacity-50"
+                    >
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {/* Saved before 1.29.4 and big: one click makes it small (the same picture or video). */}
+                  {!uploading && (w.size ?? 0) > WALL_MAX_BYTES && (
+                    <button
+                      type="button"
+                      onClick={() => void makeLighter(w)}
+                      disabled={locked}
+                      className="mt-1 w-full rounded-lg border border-amber/40 bg-amber/10 px-2 h-8 text-[12px] font-semibold text-amber hover:bg-amber/15 disabled:opacity-50"
+                      title="It's big, so pages wait for it. This makes the same one small."
+                    >
+                      Make it lighter
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <p className="text-[12px] text-ink-soft flex-1 min-w-[14rem]">
+              JPG, PNG, WebP, AVIF, GIF, MP4, MOV or WebM (pictures up to 5 MB). Each is made small before it&rsquo;s uploaded, 2 MB at most, so pages never wait for it: pictures become WebP, videos and GIFs a WebM of up to {WALL_MAX_SECONDS} seconds (keep this tab open while it&rsquo;s made). Videos play muted, on a loop. The greeting over it turns dark or white, whichever reads best.
+            </p>
+            {on && current && (
+              <Link href="/dashboard" className="text-[12.5px] font-semibold text-amber hover:brightness-110">
+                See it on your dashboard
+              </Link>
+            )}
+          </div>
+          {items.length > 0 && (
+            <label className="block mt-3 max-w-md">
+              <span className="flex items-center justify-between text-[12.5px] font-semibold mb-1">
+                <span>Darken it</span>
+                <span className="text-ink-faint font-medium tabular-nums">{dim}%</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={DASH_BG_MAX_DIM}
+                step={5}
+                value={dim}
+                onChange={(e) => changeDim(Number(e.target.value))}
+                className="w-full accent-[rgb(var(--amber))]"
+                aria-describedby="dash-bg-dim-hint"
+              />
+              <span id="dash-bg-dim-hint" className="block text-[11.5px] text-ink-faint">
+                More keeps the widgets easy to read over a busy picture.
+              </span>
+            </label>
+          )}
+          {items.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-line/10 flex flex-col items-start sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+              <div>
+                <div className="text-[12.5px] font-semibold">On every page</div>
+                <div className="text-[11.5px] text-ink-faint">
+                  {everywhereReady
+                    ? "Behind the whole app, not just the dashboard. Other pages show it darker, so their words stay easy to read."
+                    : "This needs the latest database update (migration 0098)."}
+                </div>
+              </div>
+              <div role="radiogroup" aria-label="On every page" className="inline-flex rounded-lg border border-line/15 p-0.5 flex-shrink-0">
+                {[false, true].map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    role="radio"
+                    aria-checked={everywhere === v}
+                    data-sound="none"
+                    disabled={locked || !everywhereReady || (v && !on)}
+                    onClick={() => void changeEverywhere(v)}
+                    className={`px-3 h-8 rounded-md text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${everywhere === v ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+                  >
+                    {v ? "On" : "Off"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <input ref={input} type="file" accept={DASH_BG_ACCEPT} className="hidden" onChange={(e) => void picked(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
+    </div>
+  );
+}
+
+/** A wallpaper on its way up: the file itself, dimmed, with how far it's got. */
+function UploadTile({ job }: { job: Job }) {
+  const pct = Math.round(job.share * 100);
+  const label =
+    job.phase === "converting"
+      ? job.recording
+        ? `Making a small video ${pct}%`
+        : "Making it smaller…"
+      : job.phase === "saving"
+        ? "Saving…"
+        : `Uploading ${pct}%`;
+  return (
+    <div className="relative w-full aspect-video rounded-xl overflow-hidden ring-2 ring-amber/60 ring-offset-2 ring-offset-surface" role="status" aria-live="polite" aria-label={label}>
+      {job.video ? (
+        <video src={stillSrc(job.preview)} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={job.preview} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      <span className="absolute inset-0 bg-black/50" aria-hidden />
+      <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-white">
+        <span className="text-[12.5px] font-semibold tabular-nums drop-shadow">{label}</span>
+        <span className="w-full max-w-[11rem] h-1.5 rounded-full bg-white/25 overflow-hidden">
+          {job.phase === "uploading" || (job.phase === "converting" && job.recording) ? (
+            <span className="block h-full rounded-full bg-white transition-[width] duration-200 ease-out" style={{ width: `${Math.max(3, pct)}%` }} />
+          ) : (
+            <span className="block h-full w-1/3 rounded-full bg-white animate-[splash-slide_1.1s_ease-in-out_infinite]" />
+          )}
+        </span>
+      </span>
+      {job.cancel && (
+        <button
+          type="button"
+          onClick={job.cancel}
+          aria-label={job.phase === "converting" ? "Stop making it small" : "Cancel the upload"}
+          className="absolute right-1.5 top-1.5 w-7 h-7 rounded-full bg-black/45 hover:bg-black/65 text-white flex items-center justify-center"
+        >
+          <CloseIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}

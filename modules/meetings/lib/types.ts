@@ -31,7 +31,7 @@ export type Meeting = {
   myRsvp: Rsvp | null;
 };
 
-export const RSVP_LABEL: Record<Rsvp, string> = { pending: "No answer", yes: "Going", maybe: "Maybe", no: "Can't make it" };
+export const RSVP_LABEL: Record<Rsvp, string> = { pending: "No answer", yes: "Going", maybe: "Maybe", no: "Not going" };
 
 export const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
 

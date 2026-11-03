@@ -24,6 +24,9 @@ function describe(e: ShortEvent, auto: boolean): React.ReactNode {
       if (e.fromStage === "review" && e.toStage === "ready") return "approved it";
       if (e.fromStage === "review" && e.toStage === "editing") return "asked for changes";
       if (e.fromStage === "script" && e.toStage === "editing") return "sent it to editing";
+      // 1.36.0: the Filming step.
+      if (e.fromStage === "script" && e.toStage === "filming") return "sent it to filming";
+      if (e.fromStage === "filming" && e.toStage === "editing") return "filmed it";
       if (e.toStage === "posted") return "finished posting it everywhere";
       return (
         <>

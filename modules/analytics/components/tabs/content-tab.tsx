@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { ContentList, type ContentKind } from "../content-list";
 import { fmtCompact } from "../charts";
@@ -84,7 +85,9 @@ export function ContentTab({
   rangeLabel: string | null;
   advancedHref: string;
 }) {
-  const [platform, setPlatform] = useState<"all" | P>("all");
+  // 1.35.1: a link can open it on one platform (the dashboard's Top videos' "View all", ?platform=).
+  const asked = useSearchParams().get("platform");
+  const [platform, setPlatform] = useState<"all" | P>(() => (asked && (ALL_P as readonly string[]).includes(asked) ? (asked as P) : "all"));
   const [kind, setKind] = useState<ContentKind>("all");
   const inPlatform = useMemo(() => items.filter((i) => platform === "all" || i.platform === platform), [items, platform]);
   const counts = useMemo(() => Object.fromEntries(KINDS.map((k) => [k.id, k.id === "all" ? inPlatform.length : inPlatform.filter((i) => i.kind === k.id).length])) as Record<ContentKind, number>, [inPlatform]);
@@ -124,7 +127,7 @@ export function ContentTab({
           >
             {k.label}
             <span className="text-[11.5px] font-medium text-ink-faint tabular-nums">{counts[k.id]}</span>
-            <span aria-hidden className={`absolute left-2 right-2 -bottom-px h-[2px] rounded-[2px] bg-ink transition-opacity ${kind === k.id ? "opacity-100" : "opacity-0"}`} />
+            <span aria-hidden className={`absolute left-2 right-2 bottom-0 h-[2.5px] rounded-t-[2px] bg-ink transition-opacity ${kind === k.id ? "opacity-100" : "opacity-0"}`} />
           </button>
         ))}
       </nav>

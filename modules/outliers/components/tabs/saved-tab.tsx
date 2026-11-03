@@ -140,19 +140,19 @@ export function SavedTab({ data }: { data: SavedData }) {
   return (
     <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
       <nav aria-label="Folders" className="mb-5 lg:mb-0">
-        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 lg:sticky lg:top-[4.5rem]">
+        {/* Phones: a row to swipe through. Wider: the folders wrap (a column from lg), nothing slides sideways (1.30.1). */}
+        <div className="relative flex lg:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 lg:sticky lg:top-[calc(var(--shell-top,3.5rem)+var(--ol-bar,104px)+0.75rem)]">
           {folderBtn(null, "Everything", null)}
-          {folderBtn("unsorted", "No folder", null)}
           {saves.folders.map((f) => folderBtn(f.id, f.name, f.count, f.color))}
           {naming === "new" ? (
             <form
-              className="flex-shrink-0 flex items-center gap-1 lg:mt-1"
+              className="flex-shrink-0 flex items-center gap-1 lg:mt-1 lg:w-full"
               onSubmit={(e) => {
                 e.preventDefault();
                 make();
               }}
             >
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus maxLength={40} placeholder="Folder name" onBlur={() => !newName.trim() && setNaming(null)} className="w-40 lg:w-full rounded-lg border border-line/15 bg-surface px-2.5 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus maxLength={40} placeholder="Folder name" onBlur={() => !newName.trim() && setNaming(null)} className="w-40 lg:w-auto lg:flex-1 min-w-0 rounded-lg border border-line/15 bg-surface px-2.5 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber" />
               <button type="submit" aria-label="Make the folder" className="w-9 h-9 rounded-lg bg-amber text-white flex items-center justify-center flex-shrink-0">
                 <CheckIcon className="w-4 h-4" />
               </button>
@@ -174,7 +174,7 @@ export function SavedTab({ data }: { data: SavedData }) {
             ) : (
               <h2 className="font-display text-[22px] font-semibold leading-tight truncate flex items-center gap-2">
                 {current && <span className="w-3 h-3 rounded-[3px]" style={{ background: folderColor(current.color) }} aria-hidden />}
-                {current ? current.name : folder === "unsorted" ? "No folder" : "Everything saved"}
+                {current ? current.name : folder === "unsorted" ? "Not in a folder" : "Everything saved"}
               </h2>
             )}
             <p className="text-[12.5px] text-ink-faint mt-0.5">{folder ? `${items.length} saved here` : `${items.length} saved by the team${total ? ` · ${total} in folders` : ""}`}</p>
@@ -279,14 +279,12 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
     <li className="rounded-2xl border border-line/10 bg-surface p-3 flex flex-col min-w-0">
       {item.kind === "video" && item.video ? (
         item.video.kind === "short" ? (
-          <div className="max-w-[200px]">
-            <ShortCard v={item.video} />
-          </div>
+          <ShortCard v={item.video} staged />
         ) : (
           <VideoCard v={item.video} />
         )
       ) : item.kind === "channel" && item.channel ? (
-        <button type="button" onClick={() => ctx.openChannel(item.channel!.id)} className="flex items-center gap-3 text-left rounded-xl p-1 hover:bg-surface-2/60">
+        <button type="button" onClick={() => ctx.openChannel(item.channel!.id, item.channel!)} className="flex items-center gap-3 text-left rounded-xl p-1 hover:bg-surface-2/60">
           <ChannelAvatar src={item.channel.avatar} title={item.channel.title} size={52} />
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-semibold truncate">{item.channel.title}</span>
@@ -337,8 +335,8 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
           </button>
           <AnchoredMenu open={menu} onClose={() => setMenu(false)} anchor={anchor} width={240} label="Saved item">
             <div className="p-1.5">
-              <p className="px-3 pt-1 pb-1 text-[11.5px] font-semibold text-ink-faint">Move to</p>
-              {[{ id: null as string | null, name: "No folder", color: "" }, ...folders].map((f) => (
+              {folders.length > 0 && <p className="px-3 pt-1 pb-1 text-[11.5px] font-semibold text-ink-faint">Move to</p>}
+              {folders.map((f) => (
                 <button
                   key={f.id ?? "none"}
                   type="button"
@@ -354,6 +352,20 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
                   {item.folderId === f.id && <CheckIcon className="w-3.5 h-3.5 text-amber" />}
                 </button>
               ))}
+              {item.folderId && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenu(false);
+                    onMove(null);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-left text-[13px] hover:bg-surface-2"
+                >
+                  <span className="w-2.5" />
+                  <span className="flex-1 truncate">Take out of {folderName ?? "its folder"}</span>
+                </button>
+              )}
               <button
                 type="button"
                 role="menuitem"
@@ -419,22 +431,22 @@ function SavedIdeaBody({ item }: { item: SavedItem }) {
       {idea.hook && <p className="mt-2 text-[12.5px] text-ink-soft border-l-2 border-amber/50 pl-2.5 leading-relaxed">{idea.hook}</p>}
       <div className="mt-3 flex items-center gap-1.5 flex-wrap">
         {item.projectId ? (
-          <Link href={`/videos/${item.projectId}`} className={`${BTN} h-8 text-[12.5px]`}>
+          <Link href={`/videos/${item.projectId}`} className={`${BTN} !h-8 text-[12.5px]`}>
             <VideoIcon className="w-3.5 h-3.5 text-long" />
             Started: open the video
           </Link>
         ) : item.shortId ? (
-          <Link href={`/shorts/${item.shortId}`} className={`${BTN} h-8 text-[12.5px]`}>
+          <Link href={`/shorts/${item.shortId}`} className={`${BTN} !h-8 text-[12.5px]`}>
             <ShortsIcon className="w-3.5 h-3.5 text-short" />
             Started: open the Short
           </Link>
         ) : (
           <>
-            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "short" : "long")} className={`${BTN_MAIN} h-8 text-[12.5px]`}>
+            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "short" : "long")} className={`${BTN_MAIN} !h-8 text-[12.5px]`}>
               {idea.kind === "short" ? <ShortsIcon className="w-3.5 h-3.5" /> : <VideoIcon className="w-3.5 h-3.5" />}
               {busy ? "Opening…" : idea.kind === "short" ? "Start a Short" : "Start a video"}
             </button>
-            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "long" : "short")} className={`${BTN} h-8 text-[12.5px]`}>
+            <button type="button" disabled={busy} onClick={() => start(idea.kind === "short" ? "long" : "short")} className={`${BTN} !h-8 text-[12.5px]`}>
               {idea.kind === "short" ? "As a long video" : "As a Short"}
             </button>
           </>

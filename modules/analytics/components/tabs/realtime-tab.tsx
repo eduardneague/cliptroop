@@ -219,7 +219,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
 
       <ChartCard title="Getting views now" sub={hourly ? "The videos with the most views in the last 48 hours, and their last 60 minutes" : "The videos with the most views in the last 60 minutes"}>
         {top.length ? (
-          <div className="relative overflow-x-auto styled-scroll -mx-1">
+          <div className="relative overflow-x-auto overscroll-x-contain styled-scroll -mx-1">
             <table className="w-full sm:min-w-[560px] text-[13px]">
               <thead>
                 <tr className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">

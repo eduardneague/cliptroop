@@ -14,6 +14,7 @@ import { ScheduleField, type ScheduleValue } from "./schedule-field";
 import { ShortTypePicker, Switch } from "./short-type";
 import { PlatformPicker } from "./platform-picker";
 import { CopyButton } from "./copy-button";
+import { cleanName, NameField } from "@/components/ui/editable-title";
 
 export type ShortSettingsData = {
   id: string;
@@ -30,6 +31,8 @@ export type ShortSettingsData = {
   editorId: string | null;
   reviewerId: string | null;
   schedulerId: string | null;
+  /** 1.36.0. */
+  filmerId: string | null;
   scripterIds: string[];
 };
 
@@ -54,8 +57,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 /**
- * Everything about a short that isn't part of the current step: post
- * date, type, platforms and caption. Each change saves right away.
+ * Everything about a short that isn't part of the current step: its name
+ * (1.33.1: Save, or saved when the window closes), post date, type,
+ * platforms and caption. Each other change saves right away.
  */
 export function ShortSettingsDialog({
   open,
@@ -78,8 +82,16 @@ export function ShortSettingsDialog({
   const [plats, setPlats] = useState(short.platforms);
   const [capOn, setCapOn] = useState(short.captionEnabled);
   const [cap, setCap] = useState(short.caption ?? "");
-  const [who, setWho] = useState({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
+  const [who, setWho] = useState({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
   const [scripters, setScripters] = useState<string[]>(short.scripterIds);
+  const [name, setName] = useState(short.title);
+  // The name as saved: the server's, or the one just saved here (before the page catches up).
+  const [savedName, setSavedName] = useState(short.title);
+  useEffect(() => setSavedName(short.title), [short.title]);
+  // The name box starts from the saved name each time it opens (and only then: never under your fingers).
+  useEffect(() => {
+    if (open) setName(short.title);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fresh values each time it opens (or when the server changes them).
   useEffect(() => {
@@ -89,14 +101,24 @@ export function ShortSettingsDialog({
     setPlats(short.platforms);
     setCapOn(short.captionEnabled);
     setCap(short.caption ?? "");
-    setWho({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
+    setWho({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId });
     setScripters(short.scripterIds);
-  }, [open, short.scripterIds.join(","), short.editorId, short.reviewerId, short.schedulerId, short.plannedDate, short.scheduleMode, short.pinKind, short.shortType, short.platforms, short.captionEnabled, short.caption]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, short.scripterIds.join(","), short.filmerId, short.editorId, short.reviewerId, short.schedulerId, short.plannedDate, short.scheduleMode, short.pinKind, short.shortType, short.platforms, short.captionEnabled, short.caption]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useAction(updateShortDetails, { success: "Saved" });
+  const rename = useAction(updateShortDetails, {
+    success: (_id, patch) => `Renamed to “${patch.title}”`,
+    onSuccess: (_r, _id, patch) => patch.title && setSavedName(patch.title),
+  });
+  /** What's still being typed when the window closes: the caption and the name. */
+  function keepTyped() {
+    if (capOn && cap.trim() !== (short.caption ?? "")) save.run(short.id, { caption: cap });
+    const next = cleanName(name);
+    if (next && next !== savedName && !rename.pending) rename.run(short.id, { title: next });
+  }
   const assign = useAction(assignShortPerson, {
     success: (_id, role, m) => (m ? `${role[0].toUpperCase()}${role.slice(1)} set. They've been notified.` : `${role[0].toUpperCase()}${role.slice(1)} cleared.`),
-    onError: () => setWho({ editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId }),
+    onError: () => setWho({ filmer: short.filmerId, editor: short.editorId, reviewer: short.reviewerId, scheduler: short.schedulerId }),
   });
   const scripter = useAction(setShortScripter, {
     success: (_id, _m, add) => (add ? "Scripter added. They've been notified." : "Scripter removed."),
@@ -107,7 +129,7 @@ export function ShortSettingsDialog({
     scripter.run(short.id, memberId, add);
   }
 
-  function setPerson(kind: "editor" | "reviewer" | "scheduler", memberId: string | null) {
+  function setPerson(kind: "filmer" | "editor" | "reviewer" | "scheduler", memberId: string | null) {
     setWho((w) => ({ ...w, [kind]: memberId }));
     assign.run(short.id, kind, memberId);
   }
@@ -117,18 +139,18 @@ export function ShortSettingsDialog({
     <Dialog
       open={open}
       onClose={() => {
-        // Don't lose a caption that's still being typed.
-        if (capOn && cap.trim() !== (short.caption ?? "")) save.run(short.id, { caption: cap });
+        // Don't lose a caption or a name that's still being typed.
+        keepTyped();
         onClose();
       }}
       title={`Settings for #${short.number}`}
       width="sm:max-w-2xl"
-      description={short.title}
+      description={savedName}
       footer={
         <button
           type="button"
           onClick={() => {
-            if (capOn && cap.trim() !== (short.caption ?? "")) save.run(short.id, { caption: cap });
+            keepTyped();
             onClose();
           }}
           className="rounded-lg bg-ink text-paper font-bold px-5 h-10 text-[13.5px] hover:opacity-90"
@@ -137,9 +159,15 @@ export function ShortSettingsDialog({
         </button>
       }
     >
+      <Section label="Name">
+        <NameField value={name} saved={savedName} onChange={setName} onSave={() => rename.run(short.id, { title: cleanName(name) })} max={200} pending={rename.pending} />
+      </Section>
+
       <Section label="People">
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* 1.36.0: the filmer too, in the order they work on it. */}
+        <div className="grid gap-3 sm:grid-cols-2">
           {([
+            ["filmer", "Filmer"],
             ["editor", "Editor"],
             ["reviewer", "Reviewer"],
             ["scheduler", "Scheduler"],

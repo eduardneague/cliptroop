@@ -7,6 +7,11 @@ import { authEmails } from "@/lib/auth-emails";
 import { APP_DOMAIN, APP_NAME, CONTACT_EMAIL } from "@/lib/brand";
 import type { SocialPlatform } from "@/lib/social/providers";
 import { CopyField, EmailPreview } from "./setup-client";
+import { readSignUpState } from "@/lib/auth/sign-up-settings";
+import { turnstileOn } from "@/lib/auth/turnstile-verify";
+import { measureServerSpeed } from "@/lib/server-speed";
+import { distanceOf, SUPABASE_REGIONS, VERCEL_REGIONS } from "@/lib/regions";
+import { PULL_BUCKET, pullPrefix } from "@/lib/social/tiktok-pull";
 
 export const metadata: Metadata = { title: "App setup" };
 export const dynamic = "force-dynamic";
@@ -90,7 +95,8 @@ function Where({ children }: { children: React.ReactNode }) {
 export default async function SetupPage() {
   const user = await getCachedUser();
   if (!(await isDeveloper(user))) notFound();
-  const setup = await getSocialSetup();
+  const [setup, signUp, speed] = await Promise.all([getSocialSetup(), readSignUpState(), measureServerSpeed()]);
+  const distance = distanceOf(speed.databaseMs);
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
   const staging = setup.env === "preview";
@@ -122,7 +128,8 @@ export default async function SetupPage() {
     { name: "STAGING_URL", what: staging ? "Staging's address (Preview only, no slash at the end). Set it only once the address opens staging (card 1)." : "Staging only (Preview), e.g. https://staging." + mailDomain + ".", value: staging ? target : undefined, set: env("STAGING_URL"), need: "staging" },
     { name: "RESEND_API_KEY", what: "Resend → API Keys → the key made for " + mailDomain + " (card 2).", set: env("RESEND_API_KEY"), need: "yes" },
     { name: "EMAIL_FROM", what: "Who the app's own emails (alerts, hand-offs, meetings) come from. The domain must be verified in Resend.", value: `${APP_NAME} <alerts@${mailDomain}>`, set: env("EMAIL_FROM"), need: "yes" },
-    { name: "NEXT_PUBLIC_CONTACT_EMAIL", what: "Shown on the privacy, terms and data deletion pages (the platforms check it). Make the inbox in cPanel → Email Accounts.", value: contact, set: env("NEXT_PUBLIC_CONTACT_EMAIL"), need: "yes" },
+    { name: "NEXT_PUBLIC_CONTACT_EMAIL", what: "Shown on the website (Contact, Security, Pricing's buttons, every footer, security.txt) and the privacy, terms and data deletion pages (the platforms check it). Make the inbox in cPanel → Email Accounts.", value: contact, set: env("NEXT_PUBLIC_CONTACT_EMAIL"), need: "yes" },
+    { name: "NEXT_PUBLIC_COMPANY_NAME", what: `Who runs ${APP_NAME}, as the terms, the privacy policy, About and Contact say it: your company's registered name, or your own name. Empty = "the ${APP_NAME} team".`, set: env("NEXT_PUBLIC_COMPANY_NAME"), need: "optional" },
     { name: "VAPID_SUBJECT", what: "Push notifications: your contact, as mailto:.", value: `mailto:${contact}`, set: env("VAPID_SUBJECT"), need: "optional" },
     { name: "NEXT_PUBLIC_SUPABASE_URL", what: "Supabase → Project Settings → Data API (this project's).", set: env("NEXT_PUBLIC_SUPABASE_URL"), need: "yes" },
     { name: "NEXT_PUBLIC_SUPABASE_ANON_KEY", what: "Supabase → Project Settings → API Keys (publishable / anon).", set: env("NEXT_PUBLIC_SUPABASE_ANON_KEY"), need: "yes" },
@@ -150,6 +157,8 @@ export default async function SetupPage() {
     { name: "OUTLIERS_DAILY_UNITS", what: "Outliers: how much of YouTube's 10,000 daily units it may use (default 4000, leaving the rest for posting and analytics).", set: env("OUTLIERS_DAILY_UNITS"), need: "optional" },
     { name: "OUTLIERS_STATS_DAYS", what: "Outliers: days of views over time to keep (default 30). Up to 1095 only after accepting YouTube's derived metrics amendment (YouTube API Services form → Analytics & Reporting); titles and names are always refreshed or deleted within 30 days.", set: env("OUTLIERS_STATS_DAYS"), need: "optional" },
     { name: "OUTLIERS_EXPLORE", what: "Outliers: 0 turns off the built-in Explore niches (and the YouTube units they use).", set: env("OUTLIERS_EXPLORE"), need: "optional" },
+    { name: "OUTLIERS_EXPLORE_UNITS", what: "Outliers (1.29.0): of its daily units, the ones kept for the Explore niches (default 1200, at most half). They fill from well-known channels, so a team's collecting can't use them up.", set: env("OUTLIERS_EXPLORE_UNITS"), need: "optional" },
+    { name: "OUTLIERS_EXPLORE_SEARCHES", what: "Outliers (1.29.0): of the collector's daily YouTube searches, the ones kept for the Explore niches (default 6, at most half).", set: env("OUTLIERS_EXPLORE_SEARCHES"), need: "optional" },
     { name: "SUPABASE_PLAN", what: "pro once this Supabase project is on the Pro plan: the developer's Usage page then measures against Pro's 8 GB database and 100 GB of files (else Free's 500 MB and 1 GB).", set: env("SUPABASE_PLAN"), need: "optional" },
   ];
 
@@ -312,6 +321,18 @@ export default async function SetupPage() {
           <b>Basic information</b> (Terms of Service URL, Privacy Policy URL, Web/Desktop URL) and <b>URL properties</b> → Verify → Domain {domain} (TikTok shows a TXT
           record: add it the same way).
         </Where>
+        {/* 1.47.0: TikTok fetches each post's video itself (PULL_FROM_URL), from an address verified for the app. */}
+        {pullPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL) ? (
+          <>
+            <CopyField label="TikTok: the address it fetches videos from (URL prefix)" value={pullPrefix(process.env.NEXT_PUBLIC_SUPABASE_URL)!} hint="TikTok → URL properties" />
+            <Where>
+              TikTok fetches each post&rsquo;s video from here (TikTok&rsquo;s guidelines ask for that when the file is already on our servers). Verify it once in each version of
+              the TikTok app you post with (Sandbox now; Production too once approved): TikTok for Developers → your app → <b>URL properties</b> → Verify properties →{" "}
+              <b>URL prefix</b> → paste it → download TikTok&rsquo;s file → Supabase → Storage → <b>{PULL_BUCKET}</b> → Upload it there as it is (top level, same name) →
+              back in TikTok, Verify. Until then {APP_NAME} sends the file to TikTok itself, as before, and the post&rsquo;s history says so. Needs migration 0126.
+            </Where>
+          </>
+        ) : null}
       </Section>
 
       <Section
@@ -361,6 +382,136 @@ export default async function SetupPage() {
         <Where>
           The answer is one row, <b>timer_address</b>, showing {target}/api/cron/posting. Then in the app: <b>Posting</b> → <b>Test the timer</b>: it should say the
           timer reached the app. &ldquo;No rows returned&rdquo; means the timer was never set up on this project: tell Claude.
+        </Where>
+      </Section>
+
+      <Section
+        n={9}
+        title="Supabase: password rules"
+        intro={
+          <p>
+            The app checks every new password (at least 8 characters, not a common one, not the person&rsquo;s email or name). Supabase should check too, so going around the
+            app gets nowhere. Same project → Authentication → <b>Sign In / Providers</b> → <b>Email</b>.
+          </p>
+        }
+      >
+        <Open href={sb("auth/providers")} label={`Open Sign In / Providers (${projectWord})`} />
+        <Where>
+          <b>Minimum password length</b>: 8. <b>Password requirements</b>: leave &ldquo;No required characters&rdquo; (they make passwords harder to remember, not harder to
+          guess). <b>Secure password change</b>: on (only a sign-in from the last 24 hours can change a password; the app signs you in again when you change yours in
+          Settings, and a reset link is a fresh sign-in). If it&rsquo;s there, <b>Require current password when updating</b>: on. On the Pro plan, <b>Prevent use of leaked
+          passwords</b>: on. Save.
+        </Where>
+        <Where>
+          Authentication → <b>Emails</b>: if there&rsquo;s a <b>Password changed</b> notification, turn it on, so someone whose password was changed hears about it (and
+          can reset it if it wasn&rsquo;t them).
+        </Where>
+        <Where>
+          A new password signs out every other device signed in to that account: the app&rsquo;s own actions stop there at once, the rest when that device&rsquo;s
+          sign-in token runs out (an hour at most, Supabase&rsquo;s default).
+        </Where>
+      </Section>
+
+      <Section
+        n={10}
+        title="Supabase: who can make an account"
+        intro={
+          <p>
+            1.45.0: anyone can make an account on the website&rsquo;s <b>Create an account</b> page (/signup), then a team; a team without a plan sees only the plans
+            until you set one (Developer → Plans). Same project → Authentication → <b>Sign In / Providers</b>.
+          </p>
+        }
+      >
+        <Open href={sb("auth/providers")} label={`Open Sign In / Providers (${projectWord})`} />
+        <ul className="text-[13px] space-y-1.5" aria-label="What Supabase says now">
+          {signUp ? (
+            <>
+              <li className={signUp.open ? "text-green" : "text-red font-semibold"}>
+                {signUp.open ? "✓ New accounts can be made (the Create an account page works)." : "✗ Sign-ups are off: the Create an account page can't make accounts. Turn on Allow new users to sign up."}
+              </li>
+              <li className={signUp.noEmailCheck ? "text-red font-semibold" : "text-green"}>
+                {signUp.noEmailCheck ? "✗ A new account works without its email being checked: turn on Confirm email." : "✓ A new account has to open its email first."}
+              </li>
+              <li className={signUp.anonymous ? "text-red font-semibold" : "text-green"}>
+                {signUp.anonymous ? "✗ Anonymous sign-ins are on: turn them off." : "✓ No anonymous sign-ins."}
+              </li>
+            </>
+          ) : (
+            <li className="text-ink-soft">Couldn&rsquo;t ask Supabase just now (it&rsquo;s read again each time this page opens).</li>
+          )}
+          {/* 1.46.0: two-step sign-in's own key (the cookie and the email codes); without it the service key is used. */}
+          <li className={process.env.TWO_STEP_SECRET?.trim() ? "text-green" : "text-gold font-semibold"}>
+            {process.env.TWO_STEP_SECRET?.trim()
+              ? "✓ Two-step sign-in has its own key (TWO_STEP_SECRET)."
+              : "! Two-step sign-in uses the service key for now: set TWO_STEP_SECRET (a long random text) in Vercel. Supabase → Authentication → Multi-Factor: keep App Authenticator (TOTP) on."}
+          </li>
+          <li className={turnstileOn() ? "text-green" : "text-gold font-semibold"}>
+            {turnstileOn()
+              ? "✓ The security check (Cloudflare Turnstile) is on for new accounts."
+              : "! No security check on new accounts yet: set NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY (Cloudflare → Turnstile → Add site)."}
+          </li>
+        </ul>
+        <Where>
+          <b>User Signups</b>: <b>Allow new users to sign up</b> on, <b>Allow anonymous sign-ins</b> off, <b>Confirm email</b> on. Save. Leave{" "}
+          <b>Attack Protection → Captcha protection</b> off: the app checks new accounts with Turnstile itself, and Supabase&rsquo;s own captcha would also stop sign-ins
+          and Settings&rsquo; password checks, which don&rsquo;t send it. Paste the <b>Confirm signup</b> email from card 4 if you haven&rsquo;t. Inviting from
+          Authentication → Users keeps working.
+        </Where>
+      </Section>
+
+      <Section
+        n={11}
+        title="Speed: the server next to the database"
+        intro={
+          <p>
+            Every page asks the database a few things in turn. With the app&rsquo;s server in the same city as the database each question takes a few milliseconds; with an
+            ocean between them, about 90 ms each, a third of a second on every page.
+          </p>
+        }
+      >
+        <ul className="text-[13px] space-y-1.5" aria-label="Measured just now">
+          <li>
+            This page ran in{" "}
+            <b>{speed.region ? `${VERCEL_REGIONS[speed.region] ?? speed.region} (${speed.region})` : "your computer (not on Vercel)"}</b>.
+          </li>
+          <li className={distance === "far" ? "text-red font-semibold" : distance === "near" ? "text-gold font-semibold" : distance ? "text-green" : "text-ink-soft"}>
+            {speed.databaseMs === null
+              ? "Couldn't time the database just now."
+              : distance === "same-city"
+                ? `✓ The database answers in ${speed.databaseMs} ms: the same city.`
+                : distance === "near"
+                  ? `The database answers in ${speed.databaseMs} ms: close, not the same city.`
+                  : `✗ The database answers in ${speed.databaseMs} ms: far away. Move the server next to it (below).`}
+          </li>
+          <li className={speed.keys === "shared" ? "text-red font-semibold" : speed.keys === "own" ? "text-green" : "text-ink-soft"}>
+            {speed.keys === "own"
+              ? "✓ Sign-ins are checked by the app itself (JWT signing keys)."
+              : speed.keys === "shared"
+                ? "✗ Every page first asks Supabase who you are (the old shared JWT secret): switch to signing keys (below)."
+                : "Couldn't ask how sign-ins are checked just now."}
+          </li>
+        </ul>
+        <Open href={sb("settings/general")} label={`Open Project Settings (${projectWord})`} />
+        <Where>
+          <b>The server&rsquo;s city</b>: Supabase → the project → Project Settings → General: its <b>Region</b>. Then Vercel → the project → Settings → <b>Functions</b> →{" "}
+          <b>Function Region</b>: the same city (below), Save, then Deployments → the newest → ⋯ → Redeploy. Both copies (production and staging) use the project&rsquo;s
+          setting, so check both Supabase projects are in the same region.
+        </Where>
+        <details className="text-[12.5px] text-ink-soft">
+          <summary className="cursor-pointer font-semibold text-ink">Supabase region → Vercel region</summary>
+          <ul className="mt-2 grid sm:grid-cols-2 gap-x-4 gap-y-1">
+            {SUPABASE_REGIONS.map((r) => (
+              <li key={r.id}>
+                {r.name} <span className="text-ink-faint">({r.id})</span> → <b>{VERCEL_REGIONS[r.vercel]}</b> ({r.vercel})
+              </li>
+            ))}
+          </ul>
+        </details>
+        <Open href={sb("settings/jwt")} label={`Open JWT Keys (${projectWord})`} />
+        <Where>
+          <b>Sign-ins checked by the app</b>: Supabase → Project Settings → <b>JWT Keys</b> → <b>Migrate JWT secret</b> (it keeps the old secret, so nobody is signed out,
+          and makes a new signing key ready), then <b>Rotate keys</b> to start using the new one. The app&rsquo;s keys (anon and service role) keep working. Afterwards every
+          page checks your sign-in itself instead of asking Supabase first; this card shows ✓ once it&rsquo;s done.
         </Where>
       </Section>
     </div>

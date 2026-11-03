@@ -106,6 +106,7 @@ const BUCKETS: Record<string, string> = {
   "script-images": "Pictures in scripts",
   "script-sketches": "Editing idea sketches",
   "team-logos": "Team logos",
+  "media-kit": "Media kit cover photos",
   avatars: "Profile pictures",
   feedback: "Bug report files",
 };

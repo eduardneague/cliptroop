@@ -1,16 +1,17 @@
 "use client";
 
 import { APP_NAME } from "@/lib/brand";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BOTTOM_ITEMS, DEVELOPER, MORE_ITEMS, NAV_GROUPS } from "@/lib/nav-items";
-import { AppsIcon, LogoutIcon, SettingsIcon } from "./icons";
+import { BOTTOM_ITEMS, MORE_ITEMS, moreItems as moreFor, navGroups } from "@/lib/nav-items";
+import { AppsIcon, ChevronRightIcon, LogoutIcon, SettingsIcon } from "./icons";
 import { ClipLogo } from "./clip-logo";
 import { openWhatsNew, SparkIcon } from "./whats-new";
 import { LogoutButton } from "@/components/ui/logout-button";
+import { Leaves } from "./leaves";
 
 /**
  * Icons are quiet grey at rest (one consistent menu), and light up in their
@@ -24,16 +25,28 @@ const ACCENT: Record<string, { on: string; hover: string }> = {
 };
 const accent = (href: string) => ACCENT[href] ?? { on: "text-amber", hover: "group-hover:text-amber" };
 
+/** A line under each place in the phone's More list (1.28.0). */
+const HINT: Record<string, string> = {
+  "/outliers": "What's taking off in your niche",
+  "/meetings": "Plan them, answer, follow up",
+  "/posting": "What's going out, and what went out",
+  "/analytics": "Every platform's numbers",
+  "/objectives": "The team's goals and projections",
+  "/team": "People, roles and defaults",
+  "/business": "The PFA's registers and exports",
+  "/developer": "Status, usage and tools",
+};
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /** Desktop sidebar navigation, in groups, with the current section highlighted. */
-export function SidebarNav({ developer = false }: { developer?: boolean }) {
+export function SidebarNav({ developer = false, business = false }: { developer?: boolean; business?: boolean }) {
   const pathname = usePathname();
-  const groups = developer ? [...NAV_GROUPS, { label: "Developer", items: [DEVELOPER] }] : NAV_GROUPS;
+  const groups = navGroups({ business, developer });
   return (
-    <nav className="flex flex-col" aria-label="Main">
+    <nav className="flex flex-col select-none" aria-label="Main">
       {groups.map((g, gi) => (
         <div key={g.label ?? gi} className={gi ? "mt-4" : ""}>
           {g.label && <div className="px-2.5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">{g.label}</div>}
@@ -63,32 +76,90 @@ export function SidebarNav({ developer = false }: { developer?: boolean }) {
   );
 }
 
-/** Phone bottom bar: the four most used places + More (everything else). */
-export function BottomNavItems({ developer = false }: { developer?: boolean }) {
+/**
+ * Phone bottom bar: the four most used places + More (everything else). The place you're on is marked by one lens
+ * (1.34.0, globals.css "nav-lens") that slides to the tab you press, at once, while its page is still coming, stretching
+ * a little on the way like iOS 26's tab bar; the tab's icon gives a small hop. With More's sheet open it rests on More,
+ * and goes back if you close the sheet without going anywhere.
+ */
+export function BottomNavItems({ developer = false, business = false }: { developer?: boolean; business?: boolean }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
-  const moreItems = developer ? [...MORE_ITEMS, DEVELOPER] : MORE_ITEMS;
+  // The tab just pressed (before the address changes), and the one whose icon hops.
+  const [pressed, setPressed] = useState<string | null>(null);
+  const [hop, setHop] = useState<{ href: string; n: number } | null>(null);
+  const moreItems = moreFor({ business, developer });
   const moreActive = moreItems.some((i) => isActive(pathname, i.href)) || isActive(pathname, "/settings");
-  // Close the sheet when you go somewhere.
-  useEffect(() => setMore(false), [pathname]);
+  // Close the sheet when you go somewhere; the address has caught up with the press.
+  useEffect(() => {
+    setMore(false);
+    setPressed(null);
+  }, [pathname]);
+  // A press that never became a page (a link already open, an offline phone) stops counting.
+  useEffect(() => {
+    if (!pressed) return;
+    const t = window.setTimeout(() => setPressed(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [pressed]);
+  useEffect(() => {
+    if (!hop) return;
+    const t = window.setTimeout(() => setHop(null), 520);
+    return () => window.clearTimeout(t);
+  }, [hop]);
 
-  const item = (active: boolean) =>
-    `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors active:scale-95 ${active ? "text-amber" : "text-ink-faint"}`;
+  const MORE = BOTTOM_ITEMS.length;
+  const routeAt = BOTTOM_ITEMS.findIndex((i) => isActive(pathname, i.href));
+  const pressedAt = pressed ? BOTTOM_ITEMS.findIndex((i) => i.href === pressed) : -1;
+  const at = more ? MORE : pressedAt >= 0 ? pressedAt : routeAt >= 0 ? routeAt : moreActive ? MORE : -1;
+  // The lens stretches only when it moves (not when the page first draws).
+  const was = useRef(at);
+  const [moves, setMoves] = useState(0);
+  useEffect(() => {
+    if (was.current !== at && was.current >= 0 && at >= 0) setMoves((m) => m + 1);
+    was.current = at;
+  }, [at]);
+  const press = (href: string) => {
+    setPressed(href);
+    setHop((h) => ({ href, n: (h?.n ?? 0) + 1 }));
+  };
+
+  const item = (on: boolean) => `relative z-[1] flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors duration-300 active:scale-95 ${on ? "text-amber" : "text-ink-faint"}`;
   return (
     <>
-      {BOTTOM_ITEMS.map(({ href, shortLabel, Icon }) => {
+      <span aria-hidden className="nav-lens" data-hidden={at < 0 ? "" : undefined} style={{ ["--i" as string]: Math.max(0, at), ["--n" as string]: MORE + 1 }}>
+        <span key={moves} className="nav-lens-blob" data-moved={moves ? "" : undefined} />
+      </span>
+      {BOTTOM_ITEMS.map(({ href, shortLabel, Icon }, i) => {
         const active = isActive(pathname, href);
+        const on = at === i;
         return (
-          <Link key={href} href={href} data-tour={`nav-${href.slice(1)}`} aria-current={active ? "page" : undefined} className={item(active)}>
-            <span className={`absolute top-0 h-[2.5px] w-8 rounded-[2px] bg-amber transition-opacity ${active ? "opacity-100" : "opacity-0"}`} />
-            <Icon className={`w-[22px] h-[22px] ${active ? accent(href).on : ""}`} strokeWidth={active ? 2 : 1.75} />
+          <Link
+            key={href}
+            href={href}
+            data-tour={`nav-${href.slice(1)}`}
+            data-on={on ? "" : undefined}
+            aria-current={active ? "page" : undefined}
+            onClick={() => press(href)}
+            className={item(on)}
+          >
+            <Icon key={hop?.href === href ? hop.n : 0} className={`w-[22px] h-[22px] ${on ? accent(href).on : ""} ${hop?.href === href ? "nav-hop" : ""}`} strokeWidth={on ? 2 : 1.75} />
             <span className="text-[10px] font-semibold">{shortLabel}</span>
           </Link>
         );
       })}
-      <button type="button" data-tour="nav-more" onClick={() => setMore(true)} aria-haspopup="dialog" aria-expanded={more} className={item(moreActive)}>
-        <span className={`absolute top-0 h-[2.5px] w-8 rounded-[2px] bg-amber transition-opacity ${moreActive ? "opacity-100" : "opacity-0"}`} />
-        <AppsIcon className="w-[22px] h-[22px]" strokeWidth={moreActive ? 2 : 1.75} />
+      <button
+        type="button"
+        data-tour="nav-more"
+        data-on={at === MORE ? "" : undefined}
+        onClick={() => {
+          setMore(true);
+          setHop((h) => ({ href: "more", n: (h?.n ?? 0) + 1 }));
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={more}
+        className={item(at === MORE)}
+      >
+        <AppsIcon key={hop?.href === "more" ? hop.n : 0} className={`w-[22px] h-[22px] ${hop?.href === "more" ? "nav-hop" : ""}`} strokeWidth={at === MORE ? 2 : 1.75} />
         <span className="text-[10px] font-semibold">More</span>
       </button>
       {more && <MoreSheet onClose={() => setMore(false)} pathname={pathname} items={moreItems} />}
@@ -105,56 +176,64 @@ function MoreSheet({ onClose, pathname, items }: { onClose: () => void; pathname
     return () => document.removeEventListener("keydown", onKey);
   }, [close]);
   return createPortal(
-    <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="More">
-      <div className="absolute inset-0 bg-black/45 animate-[fadein_.15s_ease]" onClick={onClose} aria-hidden />
-      <div className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line/15 bg-surface shadow-2xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] animate-[sheetup_.28s_var(--ease-out)]">
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-[3px] bg-line/25" aria-hidden />
-        <div className="flex items-center gap-2 px-1 mb-3">
-          <ClipLogo size={26} />
-          <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>
-        </div>
-        {/* Two columns for four places; three once there are more (Objectives, Developer). */}
-        <div className={`grid gap-2 ${items.length > 4 ? "grid-cols-3" : "grid-cols-2"}`}>
-          {items.map(({ href, label, Icon }) => {
-            const on = isActive(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onClose}
-                className={`flex flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-4 text-[12.5px] font-semibold transition-colors active:scale-[0.97] ${
-                  on ? "border-amber/50 bg-amber/10 text-ink" : "border-line/10 bg-surface-2/40 text-ink-soft"
-                }`}
-              >
-                <Icon className={`w-6 h-6 ${on ? accent(href).on : ""}`} />
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-        <div className="mt-3 rounded-2xl border border-line/10 divide-y divide-line/10 overflow-hidden">
-          <Link href="/settings" onClick={onClose} className="flex items-center gap-3 px-4 h-12 text-[14px] font-semibold">
-            <SettingsIcon className="w-5 h-5 text-ink-soft" />
-            Settings
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              setTimeout(openWhatsNew, 150);
-            }}
-            className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-left"
-          >
-            <SparkIcon className="w-5 h-5 text-amber" />
-            What&rsquo;s new
-          </button>
-          <LogoutButton className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-red text-left">
-            <LogoutIcon className="w-5 h-5" />
-            Log out
-          </LogoutButton>
+    <Leaves lock>
+      <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="More">
+        <div className="pop-dim absolute inset-0 bg-black/45" onClick={onClose} aria-hidden />
+        <div className="glass-pane glass-lift absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll rounded-t-3xl border-t border-line/15 bg-surface shadow-2xl px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] pop-sheet">
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-[3px] bg-line/25" aria-hidden />
+          <div className="flex items-center gap-2 px-1 mb-3">
+            <ClipLogo size={26} />
+            <span className="font-display font-semibold text-[15px]">{APP_NAME}</span>
+          </div>
+          {/* A list, one place a row with what it's for (1.28.0: the grid's last row was uneven). */}
+          <ul className="rounded-2xl border border-line/10 divide-y divide-line/10 overflow-hidden">
+            {items.map(({ href, label, Icon }) => {
+              const on = isActive(pathname, href);
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={onClose}
+                    aria-current={on ? "page" : undefined}
+                    className={`flex items-center gap-3 px-3 min-h-[60px] py-2 transition-colors active:bg-surface-2 ${on ? "bg-amber/10" : ""}`}
+                  >
+                    <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${on ? "bg-amber/15" : "bg-surface-2"}`}>
+                      <Icon className={`w-5 h-5 ${on ? accent(href).on : "text-ink-soft"}`} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14.5px] font-semibold leading-tight">{label}</span>
+                      {HINT[href] && <span className="block text-[12px] text-ink-faint leading-snug truncate">{HINT[href]}</span>}
+                    </span>
+                    <ChevronRightIcon className="w-4 h-4 text-ink-faint flex-shrink-0" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 rounded-2xl border border-line/10 divide-y divide-line/10 overflow-hidden">
+            <Link href="/settings" onClick={onClose} className="flex items-center gap-3 px-4 h-12 text-[14px] font-semibold">
+              <SettingsIcon className="w-5 h-5 text-ink-soft" />
+              Settings
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                setTimeout(openWhatsNew, 150);
+              }}
+              className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-left"
+            >
+              <SparkIcon className="w-5 h-5 text-amber" />
+              What&rsquo;s new
+            </button>
+            <LogoutButton className="w-full flex items-center gap-3 px-4 h-12 text-[14px] font-semibold text-red text-left">
+              <LogoutIcon className="w-5 h-5" />
+              Log out
+            </LogoutButton>
+          </div>
         </div>
       </div>
-    </div>,
+    </Leaves>,
     document.body
   );
 }

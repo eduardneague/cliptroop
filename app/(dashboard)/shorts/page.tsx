@@ -6,8 +6,12 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster } from "@/lib/permissions/roles";
 import { getCachedUser } from "@/lib/supabase/get-user";
-import { GridIcon, ListIcon, PlusIcon, CalendarIcon, PinIcon } from "@/components/ui/icons";
-import { LinkPendingIndicator } from "@/components/ui/link-pending";
+import { getDeleteRights } from "@/lib/permissions/delete-rights";
+import { PlusIcon, CalendarIcon } from "@/components/ui/icons";
+import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { FilterChip } from "@/components/ui/filter-chip";
+import { ShortCardsSkeleton, ShortTableSkeleton } from "@/modules/short-videos/components/list-skeletons";
 import {
   getShortSettings,
   listDayLimits,
@@ -17,7 +21,6 @@ import {
   getQueueStart,
   type ShortListItem,
 } from "@/modules/short-videos/lib/queries";
-import { DayLimitControl } from "@/modules/short-videos/components/day-limit-control";
 import {
   PLATFORMS,
   PLATFORM_META,
@@ -30,10 +33,8 @@ import {
   isPlatform,
   isShortStage,
 } from "@/modules/short-videos/lib/constants";
-import { formatShortDate, isOverdue, relativeDay, todayISO } from "@/modules/short-videos/lib/dates";
+import { formatShortDate, isOverdue, todayISO } from "@/modules/short-videos/lib/dates";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
-import { EditorCell } from "@/modules/short-videos/components/editor-cell";
-import { ShortRowMenu } from "@/modules/short-videos/components/row-menu";
 import { ScrollToToday } from "@/modules/short-videos/components/scroll-to-today";
 import { FiltersMenu } from "@/modules/short-videos/components/filters-menu";
 import { ShortTypeBadge } from "@/modules/short-videos/components/short-type";
@@ -43,6 +44,11 @@ import { PostedToggles } from "@/modules/short-videos/components/posted-toggles"
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { MarkDoneButton } from "@/modules/short-videos/components/mark-done-button";
 import { ShortsRealtime } from "@/modules/short-videos/components/shorts-realtime";
+import { ShortsTable } from "@/modules/short-videos/components/shorts-table";
+import { PickShortsButton, ShortsPicker } from "@/modules/short-videos/components/pick-shorts";
+import { CardPick } from "@/components/ui/list-pick";
+import { splitHistory } from "@/modules/short-videos/lib/history";
+import { chunks, LIST_CHUNK } from "@/lib/chunks";
 import { setShortsViewMode } from "./view-mode-actions";
 
 export const metadata: Metadata = { title: "Short videos" };
@@ -56,6 +62,8 @@ type Params = {
   type?: string;
   sort?: string;
   view?: string;
+  /** "all": posted shorts from before the last two weeks too (1.32.5). */
+  past?: string;
 };
 
 export default async function ShortsPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -72,13 +80,15 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
   // First visit of a new day rolls unposted Auto shorts forward, so the list
   // and the queue are read after that; everything else loads alongside it.
-  const [membership, user, settings, everyone, dayLimits, [all, queueStart]] = await Promise.all([
+  const [membership, user, settings, everyone, dayLimits, [all, queueStart], rights] = await Promise.all([
     getMembership(supabase, currentTeam.id),
     getCachedUser(),
     getShortSettings(currentTeam.id),
     listTeamPeople(currentTeam.id),
     listDayLimits(currentTeam.id),
     refreshShortQueue(currentTeam.id).then(() => Promise.all([listShorts(currentTeam.id), getQueueStart(currentTeam.id)])),
+    // 1.41.0: masters, and whoever the owner lets delete shorts (one at a time, or several when the team lets them).
+    getDeleteRights(supabase, currentTeam.id),
   ]);
   const roles = membership?.roles ?? [];
   const master = isMaster(roles);
@@ -96,33 +106,6 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
     isMaster: master,
     people,
   };
-  const settingsFor = (x: ShortListItem) => ({
-    short: {
-      id: x.id,
-      number: x.number,
-      title: x.title,
-      plannedDate: x.plannedDate,
-      scheduleMode: x.scheduleMode,
-      pinKind: x.pinKind,
-      shortType: x.shortType,
-      platforms: x.platforms,
-      captionEnabled: x.captionEnabled,
-      caption: x.caption,
-      fileLink: x.fileLink,
-      editorId: x.editor?.memberId ?? null,
-      reviewerId: x.reviewer?.memberId ?? null,
-      schedulerId: x.scheduler?.memberId ?? null,
-      scripterIds: x.scripterIds,
-    },
-    ctx: settingsCtx,
-  });
-
-  const capacityFor = (day: string) =>
-    day in dayLimits
-      ? dayLimits[day]
-      : !settings.weekends && [0, 6].includes(new Date(day + "T00:00:00").getDay())
-        ? 0
-        : settings.perDay;
   // Editors, plus masters (a master can take on any job).
   const editors = people.filter((p) => p.roles.includes("editor") || p.roles.includes("master"));
   const canCreate = master || roles.includes("publisher");
@@ -141,7 +124,9 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   // Counts come from the whole list; filtering happens after.
   const counts = new Map<string, number>();
   all.forEach((s) => counts.set(s.stage, (counts.get(s.stage) ?? 0) + 1));
-  const mineCount = all.filter((s) => s.editor?.memberId === myMemberId).length;
+  // "Assigned to me": you edit it, or (1.36.0) you film it.
+  const isMine = (s: (typeof all)[number]) => !!myMemberId && (s.editor?.memberId === myMemberId || s.filmer?.memberId === myMemberId);
+  const mineCount = all.filter(isMine).length;
   const lateCount = all.filter((s) => isOverdue(s.plannedDate, s.stage)).length;
   const reviewCount = counts.get("review") ?? 0;
   const readyCount = counts.get("ready") ?? 0;
@@ -149,7 +134,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   const filtered = all.filter(
     (s) =>
       (!stageFilter || s.stage === stageFilter) &&
-      (!mine || s.editor?.memberId === myMemberId) &&
+      (!mine || isMine(s)) &&
       (!late || isOverdue(s.plannedDate, s.stage)) &&
       (!platform || (only ? s.platforms.length === 1 && s.platforms[0] === platform : s.platforms.includes(platform))) &&
       (!typeFilter || s.shortType === typeFilter)
@@ -161,6 +146,10 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
   const dayCounts = new Map<string, number>();
   all.forEach((s) => s.plannedDate && dayCounts.set(s.plannedDate, (dayCounts.get(s.plannedDate) ?? 0) + 1));
   const firstUpcoming = newest ? null : shorts.find((s) => s.plannedDate && s.plannedDate >= today)?.id ?? null;
+  // A long history stays out of the way until asked for (1.32.5, modules/short-videos/lib/history.ts).
+  const showPast = params.past === "all";
+  const history = splitHistory(shorts, today, showPast);
+  const list = history.shown;
 
   const buildHref = (next: Partial<Params>) => {
     const merged = {
@@ -171,6 +160,7 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       only: only ? "1" : undefined,
       type: typeFilter ?? undefined,
       sort: newest ? "newest" : undefined,
+      past: showPast ? "all" : undefined,
       ...next,
     };
     const qs = new URLSearchParams();
@@ -186,27 +176,24 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
       only: only ? "1" : null,
       type: typeFilter,
       sort: newest ? "newest" : null,
+      past: showPast ? "all" : null,
     }).filter((e): e is [string, string] => !!e[1])
   ).toString();
 
+  // The cards' controls (the table works out its own: shorts-table.tsx).
   const rowProps = (s: ShortListItem) => ({
     canToggle: canPost && (s.stage === "ready" || s.stage === "posted"),
     canMarkDone: s.stage === "editing" && (master || (!!myMemberId && s.editor?.memberId === myMemberId)),
-    locked: s.stage === "posted" || s.postedPlatforms.length > 0,
   });
 
-  // Days you've set to "no shorts" have nothing in them, but should still
-  // show (so the exception can be seen and undone) — slotted in by date.
-  const emptyExceptionDays = Object.entries(dayLimits)
-    .filter(([day, n]) => n === 0 && day >= today && !dayCounts.has(day))
-    .map(([day]) => day)
-    .sort();
-  const emptyDaysBefore = (day: string | null, prev: string | null) =>
-    newest || !day
-      ? []
-      : emptyExceptionDays.filter((d) => d < day && (prev === null || d > prev));
+  const viewHref = (mode: "grid" | "table") => {
+    const q = new URLSearchParams(currentQs);
+    q.set("view", mode);
+    return `/shorts?${q}`;
+  };
 
   return (
+    <PendingNav>
     <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1500px] mx-auto">
       <ShortsRealtime teamId={currentTeam.id} />
 
@@ -237,7 +224,9 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
         )}
       </div>
 
-      {/* One row at every screen size: stage chips, Filters, view toggle. */}
+      {/* Shorts picked together (pick-shorts.tsx): export; masters move; masters (1.41.0: and whoever the owner lets) delete. 1.38.0 on the table; 1.40.0 on the cards too. */}
+      <ShortsPicker items={list.map((x) => ({ id: x.id, number: x.number, title: x.title, stage: x.stage }))} canMove={master} canDelete={rights.shorts} deleteMany={rights.manyShorts}>
+      {/* One row at every screen size: stage chips, Filters, Select (the table), view toggle. */}
       <div className="flex items-center gap-2 mb-6">
         <div className="-ml-4 pl-4 sm:ml-0 sm:pl-0 flex-1 min-w-0 overflow-x-auto no-scrollbar">
           <div className="flex gap-1 w-max items-center">
@@ -246,51 +235,29 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
               label: SHORT_STAGE_LABELS[st],
               count: counts.get(st) ?? 0,
               color: SHORT_STAGE_COLOR[st] as string | null,
-            }))].map((f) => {
-              const active = (stageFilter ?? "") === f.key;
-              return (
-                <Link
-                  key={f.key || "all"}
-                  href={buildHref({ stage: f.key || undefined })}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-                    active
-                      ? "bg-ink text-paper"
-                      : f.count === 0
-                        ? "text-ink-faint hover:bg-surface-2 hover:text-ink-soft"
-                        : "text-ink-soft hover:bg-surface-2 hover:text-ink"
-                  }`}
-                >
-                  {f.color && <span className="w-1.5 h-1.5 rounded-[2px] flex-shrink-0" style={{ background: f.color, opacity: f.count ? 1 : 0.45 }} aria-hidden />}
-                  {f.label}
-                  <span className={`text-[11px] tabular-nums font-medium ${active ? "text-paper/60" : "text-ink-faint"}`}>
-                    {f.count}
-                  </span>
-                  <LinkPendingIndicator />
-                </Link>
-              );
-            })}
+            }))].map((f) => (
+              <FilterChip
+                key={f.key || "all"}
+                href={buildHref({ stage: f.key || undefined })}
+                navKey={`stage:${f.key}`}
+                active={(stageFilter ?? "") === f.key}
+                label={f.label}
+                count={f.count}
+                color={f.color}
+                tall
+              />
+            ))}
           </div>
         </div>
 
-        <div className="flex-shrink-0 flex items-center rounded-lg border border-line/15 p-0.5">
-          {(["grid", "table"] as const).map((mode) => (
-            <form key={mode} action={setShortsViewMode}>
-              <input type="hidden" name="mode" value={mode} />
-              <input type="hidden" name="qs" value={currentQs} />
-              <button
-                type="submit"
-                aria-label={mode === "grid" ? "Card view" : "Table view"}
-                className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                  (mode === "table") === isTable ? "bg-surface-2 text-ink" : "text-ink-faint hover:text-ink"
-                }`}
-              >
-                {mode === "grid" ? <GridIcon className="w-[15px] h-[15px]" /> : <ListIcon className="w-[15px] h-[15px]" />}
-              </button>
-            </form>
-          ))}
-        </div>
+        {shorts.length > 0 && <PickShortsButton />}
+        <ViewToggle
+          value={isTable ? "table" : "grid"}
+          cookie={SHORTS_VIEW_COOKIE}
+          hrefs={{ grid: viewHref("grid"), table: viewHref("table") }}
+          action={setShortsViewMode}
+          fields={{ qs: currentQs }}
+        />
       </div>
 
       <div className="-mt-3 mb-6">
@@ -367,6 +334,10 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
 
       {!newest && firstUpcoming && <ScrollToToday />}
 
+      {!newest && history.offer && <HistoryBar history={history} showHref={buildHref({ past: "all" })} hideHref={buildHref({ past: undefined })} />}
+
+      {/* Switching view or step: the list's skeleton answers at once (1.27.5). */}
+      <PendingSwap fallback={isTable ? <ShortTableSkeleton /> : <ShortCardsSkeleton />} fallbacks={{ grid: <ShortCardsSkeleton />, table: <ShortTableSkeleton /> }}>
       {shorts.length === 0 ? (
         <div className="rounded-2xl border-2 border-dashed border-line/15 py-20 px-6 text-center">
           <p className="text-[15px] font-semibold mb-1">
@@ -390,234 +361,50 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
           ) : null}
         </div>
       ) : isTable ? (
-        <div className="motion-stagger rounded-xl border border-line/10 bg-surface overflow-hidden">
-          <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1fr)_120px_60px_64px] lg:grid-cols-[40px_minmax(0,1fr)_160px_120px_60px_64px] xl:grid-cols-[44px_minmax(0,1fr)_160px_120px_150px_64px] 2xl:grid-cols-[48px_minmax(0,1fr)_140px_160px_120px_150px_64px] gap-3 px-3 py-2 bg-surface-2 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
-            <span className="text-right">#</span>
-            <span>Title</span>
-            <span className="hidden 2xl:block">Planned</span>
-            <span className="hidden lg:block">Editor</span>
-            <span>Status</span>
-            <span>Posted</span>
-            <span></span>
-          </div>
-          {shorts.map((s, i) => {
-            const { canToggle, canMarkDone, locked } = rowProps(s);
-            const overdue = isOverdue(s.plannedDate, s.stage);
-            const rel = relativeDay(s.plannedDate);
-            // Day header when the date changes (schedule order only).
-            const newDay = !newest && s.plannedDate !== (shorts[i - 1]?.plannedDate ?? "__start");
-            const count = s.plannedDate ? dayCounts.get(s.plannedDate) ?? 0 : 0;
-            return (
-              <div key={s.id}>
-                {newDay &&
-                  emptyDaysBefore(s.plannedDate, shorts[i - 1]?.plannedDate ?? null).map((d) => (
-                    <div
-                      key={`empty-${d}`}
-                      className="flex items-center justify-between gap-3 px-3 py-2 border-t border-line/10 text-[11px] font-bold uppercase tracking-wide text-ink-soft bg-surface-2/40"
-                    >
-                      <span>
-                        {formatShortDate(d)} · no shorts this day
-                      </span>
-                      <DayLimitControl
-                        teamId={currentTeam.id}
-                        day={d}
-                        count={0}
-                        limit={0}
-                        isException
-                        teamDefault={settings.perDay}
-                        canEdit={master || canPost}
-                      />
-                    </div>
-                  ))}
-                {newDay && (
-                  <div
-                    {...(s.id === firstUpcoming ? { "data-today-anchor": "" } : {})}
-                    className={`flex items-center justify-between gap-3 px-3 pt-3 pb-1.5 border-t border-line/10 first:border-t-0 text-[11px] font-bold uppercase tracking-wide ${
-                      s.plannedDate === today ? "text-amber" : s.plannedDate && s.plannedDate < today ? "text-ink-faint/70" : "text-ink-faint"
-                    }`}
-                  >
-                    <span>
-                      {s.plannedDate ? formatShortDate(s.plannedDate) : "No date"}
-                      {rel ? ` · ${rel}` : ""}
-                    </span>
-                    {s.plannedDate && (
-                      <span className="relative z-10">
-                        <DayLimitControl
-                          teamId={currentTeam.id}
-                          day={s.plannedDate}
-                          count={count}
-                          limit={capacityFor(s.plannedDate)}
-                          isException={s.plannedDate in dayLimits}
-                          teamDefault={settings.perDay}
-                          canEdit={(master || canPost) && s.plannedDate >= today}
-                          dayShorts={shorts
-                            .filter((x) => x.plannedDate === s.plannedDate)
-                            .map((x) => ({
-                              id: x.id,
-                              number: x.number,
-                              title: x.title,
-                              locked: x.stage === "posted" || x.postedPlatforms.length > 0,
-                              fixed: x.scheduleMode === "pinned",
-                            }))}
-                        />
-                      </span>
-                    )}
-                  </div>
-                )}
-              <div
-                className="relative grid grid-cols-[36px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(0,1fr)_120px_60px_64px] lg:grid-cols-[40px_minmax(0,1fr)_160px_120px_60px_64px] xl:grid-cols-[44px_minmax(0,1fr)_160px_120px_150px_64px] 2xl:grid-cols-[48px_minmax(0,1fr)_140px_160px_120px_150px_64px] gap-x-3 gap-y-1 px-3 py-2.5 items-center border-t border-line/5 hover:bg-surface-2/70 transition-colors"
-              
-                style={
-                  SHORT_TYPE_META[s.shortType].color
-                    ? {
-                        // Sponsor / Big: a colored left edge and a soft tint, plus the S / B badge on the right.
-                        boxShadow: `inset 4px 0 0 ${SHORT_TYPE_META[s.shortType].color}`,
-                        background: `color-mix(in srgb, ${SHORT_TYPE_META[s.shortType].color} 8%, transparent)`,
-                      }
-                    : undefined
-                }
->
-                <span className="text-right font-mono text-[12px] text-ink-faint tabular-nums self-start md:self-center pt-0.5 md:pt-0">
-                  {s.number}
-                </span>
-
-                <div className="min-w-0">
-                  {/* The title link stretches over the whole row; inline controls sit above it. */}
-                  <Link
-                    href={`/shorts/${s.id}`}
-                    className="block min-w-0 text-[13.5px] font-semibold truncate after:absolute after:inset-0 after:content-['']"
-                  >
-                    {s.title}
-                  </Link>
-                  {/* Second line, only when there's something worth saying: the date on
-                      phones, a fixed date, overdue, the reviewer's requested changes. */}
-                  {(() => {
-                    const pinned = s.scheduleMode === "pinned";
-                    const changes = s.stage === "editing" && s.reviewNote;
-                    const extra = pinned || overdue || changes;
-                    return (
-                      <div className={`flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap text-[11.5px] text-ink-soft ${extra ? "" : s.editor ? "lg:hidden" : "md:hidden"}`}>
-                        <span className="md:hidden">
-                          <ShortStagePill stage={s.stage} />
-                        </span>
-                        {s.plannedDate && <span className={`md:hidden ${overdue ? "text-red font-semibold" : ""}`}>{formatShortDate(s.plannedDate)}</span>}
-                        {pinned && (
-                          <span className="2xl:hidden inline-flex items-center gap-1 text-ink-soft" title={s.pinKind === "oneoff" ? "Fixed, just this one: the queue carries on around it" : "Fixed: the queue continues from this date"}>
-                            <PinIcon className="w-3 h-3" />
-                            {s.pinKind === "oneoff" ? "One-off date" : "Fixed date"}
-                          </span>
-                        )}
-                        {overdue && <span className="2xl:hidden text-red font-semibold">Overdue</span>}
-                        {changes && (
-                          <span className="inline-flex items-center gap-1 min-w-0 max-w-full text-amber font-medium" title={s.reviewNote ?? undefined}>
-                            <span className="font-bold flex-shrink-0">Changes:</span>
-                            <span className="truncate">{s.reviewNote}</span>
-                          </span>
-                        )}
-                        {s.editor && <span className="lg:hidden truncate">{s.editor.name}</span>}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="hidden 2xl:block text-[12px]">
-                  {s.plannedDate ? (
-                    <>
-                      <div className={`font-semibold ${overdue ? "text-red" : "text-ink"}`}>
-                        {formatShortDate(s.plannedDate)}
-                        {s.scheduleMode === "pinned" && (
-                          <span
-                            className="ml-1.5 inline-flex items-center gap-0.5 text-[9.5px] font-bold uppercase tracking-wide text-ink-faint"
-                            title={s.pinKind === "oneoff" ? "Fixed, just this one: the queue carries on around it" : "Fixed: the queue continues from this date"}
-                          >
-                            <PinIcon className="w-2.5 h-2.5" />
-                            {s.pinKind === "oneoff" ? "One-off" : "Fixed"}
-                          </span>
-                        )}
-                      </div>
-                      {(overdue || rel) && (
-                        <div className={`text-[11px] ${overdue ? "text-red/80" : "text-ink-faint"}`}>
-                          {overdue ? `Overdue · ${rel ?? ""}`.replace(/ · $/, "") : rel}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-ink-faint">Not set</span>
-                  )}
-                </div>
-
-                <div className="hidden lg:flex items-center min-w-0">
-                  <EditorCell id={s.id} number={s.number} current={s.editor} editors={editors} canChange={master} />
-                </div>
-
-                <div className="hidden md:block">
-                  {canMarkDone ? (
-                    <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
-                  ) : (
-                    <ShortStagePill stage={s.stage} />
-                  )}
-                </div>
-
-                <div className="relative z-10 justify-self-end md:justify-self-start flex flex-col items-end md:items-start gap-1">
-                  <div className="flex items-center gap-1">
-                    <span className="hidden xl:inline-flex">
-                      <PostedToggles shortId={s.id} platforms={s.platforms} posted={s.postedPlatforms} canToggle={canToggle} />
-                    </span>
-                    {/* Smaller screens: just the count; tick platforms on the short's page. */}
-                    <span
-                      className={`xl:hidden text-[11.5px] font-bold tabular-nums rounded-md px-2 py-0.5 ${
-                        s.postedPlatforms.length >= s.platforms.length
-                          ? "bg-green/15 text-green"
-                          : s.postedPlatforms.length
-                            ? "bg-amber/15 text-amber"
-                            : "bg-surface-2 text-ink-soft"
-                      }`}
-                    >
-                      {s.platforms.filter((p) => s.postedPlatforms.includes(p)).length}/{s.platforms.length}
-                    </span>
-                    <span className="md:hidden flex items-center gap-1">
-                      <ShortTypeBadge type={s.shortType} />
-                      {(master || canPost) && (
-                        <ShortRowMenu id={s.id} number={s.number} title={s.title} pinned={s.scheduleMode === "pinned"} pinKind={s.pinKind} locked={locked} queueStart={queueStart} isMaster={master} canReorder={master || canPost} settings={settingsFor(s)} />
-                      )}
-                    </span>
-                  </div>
-                  {canMarkDone && (
-                    <span className="md:hidden">
-                      <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
-                    </span>
-                  )}
-                </div>
-                <div className="hidden md:flex items-center justify-end gap-1.5">
-                  <ShortTypeBadge type={s.shortType} />
-                  {(master || canPost) && (
-                    <ShortRowMenu id={s.id} number={s.number} title={s.title} pinned={s.scheduleMode === "pinned"} pinKind={s.pinKind} locked={locked} queueStart={queueStart} isMaster={master} canReorder={master || canPost} settings={settingsFor(s)} />
-                  )}
-                </div>
-              </div>
-              </div>
-            );
-          })}
-        </div>
+        <ShortsTable
+          teamId={currentTeam.id}
+          list={list}
+          shorts={shorts}
+          newest={newest}
+          today={today}
+          firstUpcoming={firstUpcoming}
+          dayCounts={dayCounts}
+          dayLimits={dayLimits}
+          perDay={settings.perDay}
+          weekends={settings.weekends}
+          master={master}
+          canDelete={rights.shorts}
+          canPost={canPost}
+          myMemberId={myMemberId}
+          editors={editors}
+          queueStart={queueStart}
+          settingsCtx={settingsCtx}
+        />
       ) : (
-        <div className="motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {shorts.map((s) => {
+        <div className="flex flex-col gap-4">
+        {chunks(list, LIST_CHUNK).map((group, g) => (
+          // A group of cards off screen isn't drawn until it comes near (1.32.5, globals.css .list-chunk-cards).
+          <div key={g} className="list-chunk-cards motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {group.map((s) => {
             const { canToggle, canMarkDone } = rowProps(s);
             const overdue = isOverdue(s.plannedDate, s.stage);
             return (
               <div
                 key={s.id}
+                data-card=""
+                data-item-id={s.id}
                 className="relative rounded-2xl border-2 border-line/10 bg-surface p-4 flex flex-col gap-3 hover:border-amber hover:shadow-[0_8px_24px_-8px_rgb(var(--amber)/0.35)] hover:-translate-y-0.5 transition-all"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="font-mono text-[12px] font-bold text-ink-faint tabular-nums">#{s.number}</span>
+                    <span data-card-num="" className="font-mono text-[12px] font-bold text-ink-faint tabular-nums">#{s.number}</span>
                     <ShortTypeBadge type={s.shortType} />
                   </span>
                   <ShortStagePill stage={s.stage} />
                 </div>
                 <Link
                   href={`/shorts/${s.id}`}
+                  data-row-title=""
                   className="font-semibold text-[15px] leading-snug line-clamp-2 after:absolute after:inset-0 after:content-['']"
                 >
                   {s.title}
@@ -649,9 +436,21 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
                     <MarkDoneButton shortId={s.id} number={s.number} compact disabled={!s.hasVideo} />
                   </div>
                 )}
+                <CardPick id={s.id} label={`#${s.number} ${s.title}`} x={14} y={17} />
               </div>
             );
           })}
+          </div>
+        ))}
+        </div>
+      )}
+
+      </PendingSwap>
+      </ShortsPicker>
+
+      {newest && history.offer && (
+        <div className="mt-4">
+          <HistoryBar history={history} showHref={buildHref({ past: "all" })} hideHref={buildHref({ past: undefined })} />
         </div>
       )}
 
@@ -661,6 +460,33 @@ export default async function ShortsPage({ searchParams }: { searchParams: Promi
             ? "Tip: click a platform icon to mark it posted. Colored means live."
             : "Colored platform icons are where a short is already live."}
         </p>
+      )}
+    </div>
+    </PendingNav>
+  );
+}
+
+/** "312 posted shorts from before Mon, Oct 12 · Show them" (and back), 1.32.5. */
+function HistoryBar({ history, showHref, hideHref }: { history: ReturnType<typeof splitHistory>; showHref: string; hideHref: string }) {
+  const when = formatShortDate(history.cutoff);
+  return (
+    <div className="mb-3 flex items-center gap-2 flex-wrap rounded-xl border border-dashed border-line/20 px-3.5 py-2.5 text-[12.5px] text-ink-soft">
+      {history.hiding ? (
+        <>
+          <span>
+            {history.older} posted short{history.older === 1 ? "" : "s"} from before {when} {history.older === 1 ? "is" : "are"} left out, so the list stays quick.
+          </span>
+          <Link href={showHref} className="font-semibold text-amber hover:underline">
+            Show them
+          </Link>
+        </>
+      ) : (
+        <>
+          <span>Showing every posted short, {history.older} from before {when}.</span>
+          <Link href={hideHref} className="font-semibold text-amber hover:underline">
+            Show only the last two weeks
+          </Link>
+        </>
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { isCurrencyCode } from "@/lib/fx";
 import { after } from "next/server";
 import { catchUpAnalytics, syncTeamAnalytics } from "@/modules/analytics/lib/sync";
+import { mayMakeMediaKit, mediaKitData } from "@/modules/media-kit/lib/gather";
 
 export const metadata: Metadata = { title: "Analytics" };
 // "Sync now" and the catch-up copy from several platforms: give them time.
@@ -31,10 +32,12 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   // (Before 1.20.0, Content had its own "Every video": that's Lifetime now.)
   let range: RangeId = tab === "content" && sp.every === "1" && !sp.range ? "lifetime" : readRange(sp.range, tab);
   const compare = sp.compare !== "0";
-  const [membership, { data: team }, revenueAllowed, wantedCurrency, catchingUp, first] = await Promise.all([
+  const [membership, { data: team }, revenueAllowed, kitAccess, wantedCurrency, catchingUp, first] = await Promise.all([
     getMembership(supabase, teamId),
     supabase.from("teams").select("timezone, created_at").eq("id", teamId).maybeSingle(),
     canViewRevenue(supabase, teamId),
+    // 1.40.0: the media kit is for Masters and the people they let in (modules/media-kit/lib/access.ts, migration 0117).
+    mayMakeMediaKit(supabase, teamId),
     tab === "revenue" || tab === "advanced" || tab === "overview" ? revenueCurrency(supabase) : Promise.resolve(null),
     // Copied every morning on its own; if that was missed, start it now (from the database since 1.22.0).
     catchUpAnalytics(teamId),
@@ -99,6 +102,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         view: readAdvView(sp.view),
       };
       break;
+    case "mediakit":
+      data = {
+        tab,
+        kit: kitAccess.ok
+          ? await mediaKitData(supabase, teamId, { name: currentTeam.name, color: currentTeam.color, logoUrl: currentTeam.logoUrl ?? null, tz }, latest, { id: kitAccess.userId, master: kitAccess.master })
+          : { allowed: false },
+      };
+      break;
     default:
       data = { tab: "revenue", revenue: await getRevenue(teamId, w, isMaster, wantedCurrency, revenueAllowed) };
   }
@@ -113,6 +124,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       canSync={canSync}
       catchingUp={catchingUp !== "none" && !!membership}
       revenueAllowed={revenueAllowed}
+      kitAllowed={kitAccess.ok}
       latest={latest}
       earliest={earliest}
       data={data}

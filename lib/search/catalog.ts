@@ -20,7 +20,7 @@ export type IconKey =
   | "users" | "settings" | "word" | "user" | "code" | "flag" | "lock" | "document" | "trash" | "plus"
   | "moon" | "sun" | "sound" | "bell" | "star" | "bug" | "lightbulb" | "logout" | "link" | "download"
   | "grid" | "list" | "clock" | "money" | "compass" | "alert" | "check" | "fill" | "retry" | "history"
-  | "eye" | "trophy" | "image" | "flame" | "outliers";
+  | "eye" | "trophy" | "image" | "flame" | "outliers" | "business";
 
 export type Entry = {
   id: string;
@@ -45,6 +45,8 @@ export type SearchContext = {
   /** Your roles in the team you're in. */
   roles: readonly string[];
   developer: boolean;
+  /** Business is on for the team and theirs to open (1.42.0). */
+  business?: boolean;
   hasTeam: boolean;
   profileHref: string | null;
   dark: boolean;
@@ -55,6 +57,7 @@ export type SearchContext = {
 
 const SHORT_STAGE: Record<ShortStage, { title: string; words: string }> = {
   script: { title: "Shorts at Script", words: "scripting writing step stage" },
+  filming: { title: "Shorts in Filming", words: "film filmed filmer recording shooting shoot record nas footage step stage" },
   editing: { title: "Shorts in Editing", words: "edit edited being editor step stage" },
   review: { title: "Shorts in review", words: "reviewing approve approval waiting step stage" },
   ready: { title: "Shorts ready to post", words: "approved posting queue step stage" },
@@ -84,7 +87,8 @@ const OUTLIER_TABS: [string, string, string, IconKey][] = [
   ["ideas", "Video ideas", "ideas generator content topics shuffle what to make next", "lightbulb"],
   ["formats", "Formats that win", "formats templates title shapes video types", "grid"],
   ["keywords", "Outlier keywords", "keywords words phrases topics rising", "trend"],
-  ["channels", "Outlier channels", "channels competitors creators track tracked", "users"],
+  ["channels", "Outlier channels", "channels competitors creators track tracked group only these channels", "users"],
+  ["audience", "Channels your viewers watch", "audience viewers also watch suggested related similar channels fans", "users"],
   ["titles", "Title lab", "title score test titles rewrite compare", "document"],
   ["thumbnails", "Outlier thumbnails", "thumbnails thumbnail colours colors preview mockup", "image"],
   ["saved", "Saved outliers", "saved bookmarks folders boards collections", "star"],
@@ -99,6 +103,8 @@ const ANALYTICS_TABS: [string, string, string][] = [
   ["insights", "Insights", "tips patterns what works hooks advice"],
   ["advanced", "Advanced", "detailed details metrics retention ctr impressions watch time"],
   ["production", "Production", "output on time late cycle speed how fast"],
+  // 1.37.0.
+  ["mediakit", "Media kit", "media kit sponsors sponsorship brand deck pdf rates press kit one sheet pitch partners"],
 ];
 const RANGES: [string, string, string][] = [
   ["48h", "Last 48 hours", "48h two days 2 days hours"],
@@ -149,10 +155,23 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "settings", kind: "page", title: "Settings", trail: [], words: "account preferences options config configuration", icon: "settings", href: "/settings", boost: 0.05 });
   add({ id: "word", kind: "page", title: "Daily word", trail: [], hint: "A five-letter word a day", words: "wordle game puzzle guess letters", icon: "word", href: "/word", boost: 0.02 });
   add({ id: "profile", kind: "page", title: "My profile", trail: [], hint: "Your public page", words: "me public page bio about", icon: "user", href: ctx.profileHref ?? undefined }, !!ctx.profileHref);
+  add({ id: "profile.customize", kind: "setting", title: "Customize my profile", trail: ["My profile"], hint: "Showcases, frame, colours and background", words: "customise colours colors colour color frame ring xp bar glow level showcases widgets background about me picture", icon: "settings", href: ctx.profileHref ? `${ctx.profileHref}?edit=1` : undefined }, !!ctx.profileHref);
+  // 1.42.0: a PFA's registers, where a developer turned them on and they're the person's.
+  const business = team && !!ctx.business;
+  add({ id: "business", kind: "page", title: "Business", trail: [], hint: "The PFA's registers: cash book, fiscal register, inventory", words: "pfa registre registru contabilitate accounting books ledger firma company taxes anaf", icon: "business", href: "/business", boost: 0.04 }, business);
+  for (const [id, label, words] of [
+    ["cashbook", "Cash book", "registrul jurnal incasari plati receipts payments journal entries"],
+    ["fiscal", "Fiscal register", "registrul de evidenta fiscala venit net income expenses deductible declaratia unica d212"],
+    ["inventory", "Inventory", "registrul inventar inventar assets debts balances"],
+    ["assets", "Fixed assets", "mijloace fixe amortizare depreciation fisa mijlocului fix"],
+    ["settings", "Business settings", "cui pfa details opening balances sources close year access"],
+  ] as const) {
+    add({ id: `business.${id}`, kind: "tab", title: label, trail: ["Business"], words, icon: "business", href: `/business?tab=${id}` }, business);
+  }
   add({ id: "developer", kind: "page", title: "Developer", trail: [], hint: "Status, problems and usage of the whole app", words: "admin errors problems usage logs", icon: "code", href: "/developer" }, ctx.developer);
   add({ id: "setup", kind: "page", title: "App setup", trail: [], hint: "What to paste in Supabase, Google, Meta, TikTok and Vercel", words: "env environment keys secrets install", icon: "code", href: "/setup" }, ctx.developer);
-  for (const [id, label] of [["overview", "Overview"], ["usage", "Usage"], ["problems", "Problems"], ["status", "Status"]] as const) {
-    add({ id: `developer.${id}`, kind: "tab", title: label, trail: ["Developer"], words: id === "problems" ? "errors reports bugs" : id === "usage" ? "database storage space teams people" : "", icon: "code", href: `/developer${id === "overview" ? "" : `?tab=${id}`}` }, ctx.developer);
+  for (const [id, label] of [["overview", "Overview"], ["usage", "Usage"], ["problems", "Problems"], ["status", "Status"], ["features", "Features"]] as const) {
+    add({ id: `developer.${id}`, kind: "tab", title: label, trail: ["Developer"], words: id === "problems" ? "errors reports bugs" : id === "usage" ? "database storage space teams people" : id === "features" ? "business turn on teams feature flags" : "", icon: "code", href: `/developer${id === "overview" ? "" : `?tab=${id}`}` }, ctx.developer);
   }
   add({ id: "status", kind: "page", title: "Status", trail: [], hint: "Is everything working right now", words: "down outage working uptime incidents health", icon: "flag", href: "/status" });
   add({ id: "privacy", kind: "page", title: "Privacy policy", trail: [], words: "privacy data gdpr personal information", icon: "lock", href: "/privacy" });
@@ -175,8 +194,8 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "sync", kind: "action", title: "Sync analytics now", trail: ["Analytics"], hint: "Get the latest numbers from every platform", words: "refresh update latest numbers reload fetch", icon: "retry", run: "sync" }, team && manager);
   add({ id: "claude", kind: "action", title: "Download for Claude", trail: ["Analytics"], hint: "Your numbers in one file to ask Claude about", words: "export ai claude chatgpt download data report csv", icon: "download", href: "/analytics?claude=1" }, team);
   add({ id: "logout", kind: "action", title: "Log out", trail: [], words: "logout sign out signout exit", icon: "logout", run: "logout" });
-  add({ id: "report", kind: "action", title: "Report a bug", trail: ["Settings", "Account"], hint: "Only the developer sees it", words: "bug report feedback problem broken issue support contact", icon: "bug", href: "/settings?tab=account#report" });
-  add({ id: "suggest", kind: "action", title: "Suggest an idea", trail: ["Settings", "Account"], hint: `Something that would make ${APP_NAME} better`, words: "suggest suggestion idea feature request feedback wish", icon: "lightbulb", href: "/settings?tab=account#report" });
+  add({ id: "report", kind: "action", title: "Report a bug", trail: ["Settings", "Help & feedback"], hint: "Only the developer sees it", words: "bug report feedback problem broken issue support contact", icon: "bug", href: "/settings?tab=help#report" });
+  add({ id: "suggest", kind: "action", title: "Suggest an idea", trail: ["Settings", "Help & feedback"], hint: `Something that would make ${APP_NAME} better`, words: "suggest suggestion idea feature request feedback wish", icon: "lightbulb", href: "/settings?tab=help#report" });
 
   // ---- Short videos ------------------------------------------------------
   if (team) {
@@ -199,8 +218,9 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
     const researcher = master || ctx.roles.includes("researcher");
     for (const [id, title, words, icon] of OUTLIER_TABS) add({ id: `outliers.${id}`, kind: "tab", title, trail: ["Outliers"], words, icon, href: `/outliers?tab=${id}` });
     add({ id: "outliers.shorts", kind: "filter", title: "Shorts outliers", trail: ["Outliers"], words: "shorts short reels vertical viral", icon: "shorts", href: "/outliers?kind=short" });
-    add({ id: "outliers.add-niche", kind: "action", title: "Add a niche", trail: ["Outliers"], hint: "Keywords for a kind of video to follow", words: "new niche keywords topic follow research competitors", icon: "plus", href: "/outliers?open=niche" }, researcher);
-    add({ id: "outliers.alerts", kind: "setting", title: "Outlier alerts", trail: ["Outliers"], hint: "When a tracked channel's video takes off", words: "alerts notify notifications tracked channel takes off digest watch words weekly", icon: "bell", href: "/outliers?open=alerts" });
+    add({ id: "outliers.add-niche", kind: "action", title: "Add a niche", trail: ["Outliers"], hint: "The channels and keywords to follow", words: "new niche keywords topic follow research competitors channels group", icon: "plus", href: "/outliers?open=niche" }, researcher);
+    add({ id: "outliers.settings", kind: "setting", title: "Outlier settings", trail: ["Outliers"], hint: "Alerts and hidden channels", words: "settings outlier alerts notify notifications tracked channel takes off digest watch words weekly", icon: "settings", href: "/outliers?open=alerts" });
+    add({ id: "outliers.hidden", kind: "setting", title: "Hidden channels", trail: ["Outliers", "Outlier settings"], hint: "Channels you never want to see in Outliers", words: "hidden blocked block hide mute channels filter out never show", icon: "eye", href: "/outliers?open=hidden" });
   }
 
   // ---- Calendar, meetings, posting ---------------------------------------
@@ -260,12 +280,13 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
     add({ id: "team.long-defaults", kind: "setting", title: "Long video defaults", trail: ["Team", "Defaults"], hint: "What every new long video starts with", words: "description scripter researcher filmer editor packager scheduler", icon: "video", href: "/team?tab=defaults#long-defaults" }, master);
     add({ id: "team.long-review", kind: "setting", title: "Long video review", trail: ["Team", "Defaults"], hint: `Review long videos in ${APP_NAME}`, words: "review upload in app approve versions", icon: "eye", href: "/team?tab=defaults#long-review" }, master);
     add({ id: "team.tasks", kind: "setting", title: "Who sees everyone's tasks", trail: ["Team", "Defaults"], words: "tasks visibility late my tasks", icon: "check", href: "/team?tab=defaults#tasks" }, master);
-    add({ id: "team.video-files", kind: "setting", title: "Video files", trail: ["Team", "Defaults"], hint: "How long files stay after posting", words: "keep delete storage space cleanup clean up files days thumbnails studio", icon: "trash", href: "/team?tab=defaults#video-files" }, master);
+    add({ id: "team.video-files", kind: "setting", title: "Video files", trail: ["Team", "Defaults"], hint: "How long files stay after posting", words: "keep delete storage space cleanup clean up auto deletion automatic files days weeks months year never thumbnails studio", icon: "trash", href: "/team?tab=defaults#video-files" }, master);
     add({ id: "team.script-defaults", kind: "setting", title: "Script handoffs", trail: ["Team", "Defaults"], hint: "Who's next when a script is handed on", words: "scripts review staging next default handoff", icon: "document", href: "/team?tab=defaults#script-defaults" }, master);
     add({ id: "team.accounts", kind: "tab", title: "Connected accounts", trail: ["Team"], words: "connect accounts social youtube instagram tiktok facebook sign in link channels", icon: "link", href: "/team?tab=accounts" });
     add({ id: "team.appearance", kind: "tab", title: "Team colours", trail: ["Team", "Appearance"], words: "appearance color look shorts long videos roles", icon: "fill", href: "/team?tab=appearance" });
     add({ id: "team.role-colors", kind: "setting", title: "Role colours", trail: ["Team", "Appearance"], words: "role color badge mentions", icon: "fill", href: "/team?tab=appearance#role-colors" });
     add({ id: "team.workspace", kind: "setting", title: "Team name and logo", trail: ["Team"], words: "rename name logo picture branding workspace image", icon: "image", href: "/team?tab=team#workspace" });
+    add({ id: "team.leave", kind: "setting", title: "Leave team", trail: ["Team", "Team"], words: "leave quit exit team membership", icon: "logout", href: "/team?tab=team#leave" });
   }
 
   // ---- Settings --------------------------------------------------------------
@@ -278,11 +299,18 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "settings.push", kind: "setting", title: "Notifications", trail: ["Settings", "Notifications & app"], words: "notifications push alerts this device turn on off", icon: "bell", href: "/settings?tab=notifications#push" });
   add({ id: "settings.devices", kind: "setting", title: "Your devices", trail: ["Settings", "Notifications & app"], words: "devices phones computers", icon: "bell", href: "/settings?tab=notifications#devices" });
   add({ id: "settings.preferences", kind: "tab", title: "Preferences", trail: ["Settings"], words: "preferences options", icon: "settings", href: "/settings?tab=preferences" });
-  add({ id: "settings.appearance", kind: "setting", title: "Appearance", trail: ["Settings", "Preferences"], words: "dark light mode theme", icon: "moon", href: "/settings?tab=preferences#appearance" });
+  add({ id: "settings.appearance", kind: "setting", title: "Light or dark mode", trail: ["Settings", "Preferences"], words: "appearance dark light mode theme night", icon: "moon", href: "/settings?tab=preferences#appearance" });
   add({ id: "settings.animations", kind: "setting", title: "Animations", trail: ["Settings", "Preferences"], words: "motion animation reduce reduced movement", icon: "star", href: "/settings?tab=preferences#animations" });
   add({ id: "settings.sounds", kind: "setting", title: "Sounds", trail: ["Settings", "Preferences"], words: "sound audio noise mute quiet", icon: "sound", href: "/settings?tab=preferences#sounds" });
-  add({ id: "settings.colors", kind: "setting", title: "Colours", trail: ["Settings", "Preferences"], words: "palette theme accent paper color look", icon: "fill", href: "/settings?tab=preferences#colours" });
+  add({ id: "settings.colors", kind: "setting", title: "Colours", trail: ["Settings", "Preferences"], hint: "Your colour theme", words: "palette theme accent paper color look", icon: "fill", href: "/settings?tab=preferences#colours" });
+  add({ id: "settings.glass", kind: "setting", title: "Glass", trail: ["Settings", "Preferences"], hint: "Simple, Liquid or Halo, how see-through, the colours behind it", words: "glass glassmorphism frosted blur transparent see through translucent look theme liquid ios apple halo glow sidebar intensity clear solid wash colours behind gradient", icon: "fill", href: "/settings?tab=preferences#glass" });
+  add({ id: "settings.background", kind: "setting", title: "Wallpapers", trail: ["Settings", "Preferences"], hint: "Up to 3 pictures, GIFs or videos behind your dashboard or every page", words: "background wallpaper wallpapers picture image gif video animated steam profile dashboard custom switch every page everywhere whole app lighter smaller compress", icon: "image", href: "/settings?tab=preferences#background" });
+  add({ id: "settings.profile-page", kind: "setting", title: "Profile privacy", trail: ["Settings", "Profile"], hint: "Public or private, and customize your profile", words: "public private privacy profile level achievements showcases frame customize steam xp", icon: "eye", href: "/settings#profile-page" });
   add({ id: "settings.account", kind: "tab", title: "Account", trail: ["Settings"], words: "account email sign in", icon: "settings", href: "/settings?tab=account" });
+  add({ id: "settings.password", kind: "setting", title: "Change password", trail: ["Settings", "Account"], hint: "With your current one; signs out your other devices", words: "password change new reset forgot forgotten security sign in login credentials", icon: "lock", href: "/settings?tab=account#password" });
+  add({ id: "settings.sign-out-elsewhere", kind: "setting", title: "Sign out everywhere else", trail: ["Settings", "Account"], hint: "Every other device signed in to your account", words: "sign out log out logout everywhere other devices sessions lost phone stolen shared computer security revoke", icon: "logout", href: "/settings?tab=account#sessions" });
+  add({ id: "settings.delete-account", kind: "setting", title: "Delete account", trail: ["Settings", "Account", "Danger zone"], words: "delete remove close account deactivate erase data goodbye danger zone", icon: "trash", href: "/settings?tab=account&view=danger#delete-account" });
+  add({ id: "settings.help", kind: "tab", title: "Help & feedback", trail: ["Settings"], hint: "Report a bug, suggest an idea, take the tour again", words: "help feedback support bug report idea suggestion tutorial tour contact", icon: "bug", href: "/settings?tab=help" });
 
   return out;
 }

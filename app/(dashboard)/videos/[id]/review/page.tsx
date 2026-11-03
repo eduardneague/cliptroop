@@ -12,6 +12,7 @@ import { getProject } from "@/modules/long-videos/lib/queries";
 import { STAGE_LABELS, stageColor } from "@/modules/long-videos/lib/stages";
 import { listNotes, listVersions } from "@/modules/review/lib/queries";
 import { ReviewWorkspace } from "@/modules/review/components/workspace";
+import { wordColor } from "@/lib/word-color";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -60,7 +61,7 @@ export default async function LongReviewPage({ params }: { params: Promise<{ id:
         </h1>
         <span
           className="inline-flex items-center gap-1.5 rounded-md font-bold whitespace-nowrap text-[12px] px-2.5 py-1"
-          style={{ color: c, background: `color-mix(in srgb, ${c} 14%, transparent)` }}
+          style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 14%, rgb(var(--surface)))` }}
         >
           <span className="w-1.5 h-1.5 rounded-[2px]" style={{ background: c }} aria-hidden />
           {STAGE_LABELS[stage]}

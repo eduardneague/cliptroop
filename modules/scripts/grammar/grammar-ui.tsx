@@ -8,6 +8,7 @@ import { ArrowLeftIcon, BookIcon, CheckIcon, CloseIcon, SpellCheckIcon, TargetIc
 import type { Grammar } from "./use-grammar";
 import { scoreColor, scoreInk } from "./score";
 import { CATEGORIES, CATEGORY_COLOR, CATEGORY_HINT, CATEGORY_LABEL, FORMALITY, LANGUAGES, type GrammarCategory, type Suggestion } from "./types";
+import { Leaves } from "@/components/ui/leaves";
 
 /*
  * Writing suggestions on screen, the way Grammarly shows them:
@@ -186,35 +187,37 @@ function HoverCard({
 
   if (!s) return null;
   return createPortal(
-    <div
-      ref={box}
-      role="dialog"
-      aria-label={`${CATEGORY_LABEL[s.category]}: ${s.title}`}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: "min(330px, calc(100vw - 16px))", boxShadow: `inset 0 3px 0 ${CATEGORY_COLOR[s.category]}, 0 20px 50px -18px rgb(0 0 0 / .45)` }}
-      className="no-print fixed z-[120] rounded-xl border border-line/15 bg-surface p-3 animate-[modalin_.14s_var(--ease-out)]"
-    >
-      <SuggestionCard
-        s={s}
-        onAccept={(r) => {
-          g.accept(s.id, r);
-          onClose();
-        }}
-        onDismiss={() => {
-          g.dismiss(s.id);
-          onClose();
-        }}
-        onAddWord={
-          s.word
-            ? () => {
-                void g.dictionary.add(s.word!);
-                onClose();
-              }
-            : undefined
-        }
-      />
-    </div>,
+    <Leaves>
+      <div
+        ref={box}
+        role="dialog"
+        aria-label={`${CATEGORY_LABEL[s.category]}: ${s.title}`}
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+        style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: "min(330px, calc(100vw - 16px))", boxShadow: `inset 0 3px 0 ${CATEGORY_COLOR[s.category]}, 0 20px 50px -18px rgb(0 0 0 / .45)` }}
+        className="pop-menu no-print fixed z-[120] rounded-xl border border-line/15 bg-surface p-3"
+      >
+        <SuggestionCard
+          s={s}
+          onAccept={(r) => {
+            g.accept(s.id, r);
+            onClose();
+          }}
+          onDismiss={() => {
+            g.dismiss(s.id);
+            onClose();
+          }}
+          onAddWord={
+            s.word
+              ? () => {
+                  void g.dictionary.add(s.word!);
+                  onClose();
+                }
+              : undefined
+          }
+        />
+      </div>
+    </Leaves>,
     document.body
   );
 }
@@ -278,7 +281,7 @@ function Goals({ g, onBack }: { g: Grammar; onBack: () => void }) {
     setWord("");
   };
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-5">
+    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3.5 space-y-5">
       <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-soft hover:text-ink">
         <ArrowLeftIcon className="w-3.5 h-3.5" />
         Back to the suggestions
@@ -429,9 +432,9 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
   );
 
   return createPortal(
-    <>
+    <Leaves>
       <section
-        className="no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col animate-[modalin_.18s_var(--ease-out)] inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[384px] lg:h-[min(680px,calc(100dvh-9rem))]"
+        className="pop-modal no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[384px] lg:h-[min(680px,calc(100dvh-9rem))]"
         aria-label="Writing suggestions"
       >
         <header className="px-4 pt-3.5 pb-3 border-b border-line/10">
@@ -509,7 +512,7 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
                 </button>
               )}
             </div>
-            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1.5">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-1.5">
               {(all.length > 0 || names.length > 0) && (
                 <div className="rounded-xl bg-surface-2 px-3 py-2 mb-2 space-y-2">
                   {all.length > 0 && (
@@ -623,7 +626,7 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
           ). Style suggestions are worked out on your device.
         </footer>
       </section>
-    </>,
+    </Leaves>,
     document.body
   );
 }
@@ -699,11 +702,35 @@ export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: 
  * Everything on screen for one editor's suggestions: the card over a word,
  * the corner button and the panel.
  */
-export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: { editor: Editor | null; g: Grammar; open: boolean; onOpen: () => void; onClose: () => void; fab?: boolean }) {
+export function GrammarLayer({
+  editor,
+  g,
+  open,
+  onOpen,
+  onClose,
+  fab = true,
+  skipInside,
+  request = null,
+}: {
+  editor: Editor | null;
+  g: Grammar;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  fab?: boolean;
+  /**
+   * 1.27.5: words inside this (the comments' highlights) don't open their
+   * suggestion on a point or a click: the comment opens, with the
+   * suggestion as a button on it (`request`).
+   */
+  skipInside?: string;
+  /** Open this suggestion's card (pinned), e.g. from "Suggestion here" on a comment. `n` changes each time. */
+  request?: { id: string; n: number } | null;
+}) {
   const [card, setCard] = useState<{ id: string; pinned: boolean } | null>(null);
   const timers = useRef<{ show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
-  const live = useRef({ open, card });
-  live.current = { open, card };
+  const live = useRef({ open, card, skipInside });
+  live.current = { open, card, skipInside };
 
   const { pick, enabled } = g;
   const close = useCallback(() => {
@@ -717,6 +744,8 @@ export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: {
     const t = timers.current;
     const markOf = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null;
+      // (A comment's words: the comment opens instead.)
+      if (live.current.skipInside && target.closest(live.current.skipInside)) return null;
       const word = target.closest<HTMLElement>("[data-gr]");
       if (word) return word.dataset.gr ?? null;
       return target.closest<HTMLElement>("[data-gr-wide]")?.dataset.grWide ?? null;
@@ -760,6 +789,18 @@ export function GrammarLayer({ editor, g, open, onOpen, onClose, fab = true }: {
   useEffect(() => {
     if (open) setCard(null);
   }, [open]);
+
+  // Asked for (a comment's "Suggestion here"): its card, pinned (or picked in the open panel).
+  const asked = request?.n ?? 0;
+  useEffect(() => {
+    if (!request) return;
+    if (live.current.open) pick(request.id, false);
+    else {
+      setCard({ id: request.id, pinned: true });
+      pick(request.id, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asked]);
 
   if (!editor || !g.enabled) return null;
   return (

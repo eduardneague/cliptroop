@@ -73,7 +73,7 @@ export function UpcomingList({ items, view, manager, now, dayOf }: { items: Queu
     );
   // One table (its columns line up), a row for each day.
   return (
-    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
       <table className="w-full min-w-[760px] text-[13px]">
         <thead>
           <tr className="bg-surface-2 text-[10.5px] text-ink-faint text-left uppercase tracking-wide">
@@ -284,7 +284,7 @@ export function PostedList({ items, view }: { items: PostedItem[]; view: ListVie
       </ul>
     );
   return (
-    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto styled-scroll">
+    <div className="relative rounded-2xl border border-line/10 bg-surface overflow-x-auto overscroll-x-contain styled-scroll">
       <table className="w-full min-w-[760px] text-[13px]">
         <thead>
           <tr className="bg-surface-2 text-[10.5px] text-ink-faint text-left uppercase tracking-wide">
