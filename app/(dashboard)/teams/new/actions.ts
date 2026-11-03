@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDeveloper } from "@/lib/errors";
+import { TEAM_NEXT } from "@/lib/auth/onboarding";
 
 export type CreateTeamState = { error?: string } | undefined;
 
@@ -31,6 +32,8 @@ export async function createTeam(
   formData: FormData
 ): Promise<CreateTeamState> {
   const name = String(formData.get("name") ?? "").trim();
+  // 1.49.0: the onboarding's Your team step goes on to its last step; nothing else may choose where this leads.
+  const next = formData.get("next") === TEAM_NEXT ? TEAM_NEXT : "/dashboard";
 
   if (!name) {
     return { error: "Give your team a name." };
@@ -75,7 +78,7 @@ export async function createTeam(
             () => null,
           );
       }
-      redirect(`/dashboard`);
+      redirect(next);
     }
     if (error && error.code !== "23505") {
       // Not a "slug already taken" conflict — a real problem.

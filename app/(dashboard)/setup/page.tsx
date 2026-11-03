@@ -12,6 +12,7 @@ import { turnstileOn } from "@/lib/auth/turnstile-verify";
 import { measureServerSpeed } from "@/lib/server-speed";
 import { distanceOf, SUPABASE_REGIONS, VERCEL_REGIONS } from "@/lib/regions";
 import { PULL_BUCKET, pullPrefix } from "@/lib/social/tiktok-pull";
+import { readDbUpdates } from "@/lib/db-updates";
 
 export const metadata: Metadata = { title: "App setup" };
 export const dynamic = "force-dynamic";
@@ -95,7 +96,7 @@ function Where({ children }: { children: React.ReactNode }) {
 export default async function SetupPage() {
   const user = await getCachedUser();
   if (!(await isDeveloper(user))) notFound();
-  const [setup, signUp, speed] = await Promise.all([getSocialSetup(), readSignUpState(), measureServerSpeed()]);
+  const [setup, signUp, speed, db] = await Promise.all([getSocialSetup(), readSignUpState(), measureServerSpeed(), readDbUpdates()]);
   const distance = distanceOf(speed.databaseMs);
   const origin = setup.origin.replace(/\/+$/, "");
   const prod = setup.env === "production";
@@ -182,6 +183,31 @@ export default async function SetupPage() {
         {staging && (
           <p className="mt-3 rounded-xl border border-line/15 bg-surface px-4 py-3 text-[13px] text-ink-soft">
             This is <b className="text-ink">staging</b>: use the <b className="text-ink">staging</b> Supabase project, and the Sandbox / test versions of the platform apps.
+          </p>
+        )}
+        {/* 1.49.0: the database's own updates first: production once ran this code on a database still at 1.27. */}
+        {db.missing.length ? (
+          <div role="alert" className="mt-3 rounded-xl border border-red/30 bg-red/[0.07] px-4 py-3 text-[13px]">
+            <p className="font-semibold text-red">✗ This database is missing updates: {db.missing.length === 1 ? `migration ${db.missing[0].n}` : `migrations ${db.missing[0].n} to ${db.newest}`}.</p>
+            <p className="mt-1 text-ink-soft">
+              Until they run, these don&rsquo;t work here: {db.missing.map((m) => m.what).join("; ")}.{" "}
+              {prod ? (
+                <>
+                  Run them: merge <b className="text-ink">staging</b> into <b className="text-ink">main</b> with a pull request (the Database action runs them on production by itself), or
+                  GitHub → Actions → <b className="text-ink">Database</b> → Run workflow → branch <b className="text-ink">staging</b>, which database <b className="text-ink">production</b>,{" "}
+                  <b className="text-ink">push</b>.
+                </>
+              ) : (
+                <>
+                  Run them: GitHub → Actions → <b className="text-ink">Database</b> → Run workflow → branch <b className="text-ink">staging</b>, which database{" "}
+                  <b className="text-ink">staging</b>, <b className="text-ink">push</b> (a push to staging runs it too).
+                </>
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className={`mt-3 rounded-xl border px-4 py-3 text-[13px] ${db.unsure ? "border-gold/30 bg-gold/10" : "border-green/30 bg-green/[0.07] text-green font-semibold"}`}>
+            {db.unsure ? "! Couldn't check the database's updates just now (it's read again each time this page opens)." : `✓ The database has every update this version needs (migrations up to ${db.newest}).`}
           </p>
         )}
       </header>
@@ -439,10 +465,10 @@ export default async function SetupPage() {
           ) : (
             <li className="text-ink-soft">Couldn&rsquo;t ask Supabase just now (it&rsquo;s read again each time this page opens).</li>
           )}
-          {/* 1.46.0: two-step sign-in's own key (the cookie and the email codes); without it the service key is used. */}
+          {/* 1.46.0: two-step sign-in's own key (the cookie and the email codes); without it the service key is used. Optional for people since 1.49.0. */}
           <li className={process.env.TWO_STEP_SECRET?.trim() ? "text-green" : "text-gold font-semibold"}>
             {process.env.TWO_STEP_SECRET?.trim()
-              ? "✓ Two-step sign-in has its own key (TWO_STEP_SECRET)."
+              ? "✓ Two-step sign-in has its own key (TWO_STEP_SECRET). It's optional: people turn it on while setting up their account or in Settings → Account."
               : "! Two-step sign-in uses the service key for now: set TWO_STEP_SECRET (a long random text) in Vercel. Supabase → Authentication → Multi-Factor: keep App Authenticator (TOTP) on."}
           </li>
           <li className={turnstileOn() ? "text-green" : "text-gold font-semibold"}>

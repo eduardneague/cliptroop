@@ -87,6 +87,10 @@ ok(/Too many tries/.test(passwordSaveError({ status: 429, message: "rate limit" 
 ok(/link has expired/.test(passwordSaveError({ name: "AuthSessionMissingError", message: "Auth session missing!" }) ?? ""), "from a link: the link expired");
 ok(/session expired/.test(passwordSaveError({ name: "AuthSessionMissingError", message: "Auth session missing!" }, "settings") ?? ""), "from Settings: the session did");
 ok(passwordSaveError({ message: "something else" }) === "Couldn't save your password. Try again in a minute.", "anything else");
+// 1.49.0: the owner's screenshot (Nov 3 2026): a reset link, an account with an authenticator app, "Your link has expired".
+const aal = passwordSaveError({ status: 401, message: "AAL2 session is required to update email or password when MFA is enabled." });
+ok(/type the code from your app first/.test(aal ?? "") && !/expired/.test(aal ?? ""), "an account with an app: its code first, not 'the link expired'");
+ok(/type the code from your app first/.test(passwordSaveError({ status: 403, code: "insufficient_aal", message: "insufficient aal" }) ?? ""), "insufficient_aal: the same");
 
 // --- How the sign-in started -----------------------------------------------------------------------------------------------------------
 for (const m of ["otp", "recovery", "invite", "magiclink", "email/signup"]) ok(fromEmailLink([{ method: m, timestamp: 1 }]), `${m}: from an email link`);
@@ -99,7 +103,9 @@ ok(/fromEmailLink\(aal\?\.currentAuthenticationMethods\)/.test(reset) && /Change
 ok(/For <b[^>]*>\{who\.email\}<\/b>/.test(reset), "it says whose password it is");
 ok(/newPasswordState\(password, confirm, \{ email: who\.email, names: who\.names \}\)/.test(reset) && /passwordSaveError\(saveError\)/.test(reset), "the rules, and Supabase's answer in plain words");
 ok(/Every other device that was signed in to your account was signed out/.test(reset), "and that the other devices are signed out");
-const setup = read("app/set-password/page.tsx");
+ok(/aal\?\.nextLevel === "aal2" && aal\?\.currentLevel !== "aal2"/.test(reset) && /factors\?\.totp\?\.find\(\(f\) => f\.status === "verified"\)/.test(reset), "an account with an authenticator app: the reset page asks for its code (1.49.0)");
+ok(/challengeAndVerify\(\{ factorId: who\.appFactor, code \}\)/.test(reset) && reset.indexOf("challengeAndVerify(") < reset.indexOf("updateUser({ password })"), "the code is checked before the password is saved");
+const setup = read("components/onboarding/account-setup.tsx");
 ok(/<NewPasswordFields/.test(setup) && /newPasswordState\(password, confirm, about\)/.test(setup), "an invited account's first step: the same rules");
 ok(/const link = fromEmailLink\(aal\?\.currentAuthenticationMethods\);/.test(setup) && /if \(!link\) setStep\(\(s\) => \(s === "password" \? "profile" : s\)\);/.test(setup), "a password sign-in skips choosing one there");
 const fields = read("components/ui/new-password.tsx");
@@ -131,7 +137,7 @@ const walk = (d: string) => {
 };
 for (const d of ["app", "components", "modules", "lib"]) walk(join(root, d));
 const setters = files.filter((f) => /updateUser\(\{[^}]*\bpassword\b/.test(readFileSync(f, "utf8"))).map((f) => relative(root, f)).sort();
-ok(JSON.stringify(setters) === JSON.stringify(["app/(dashboard)/settings/account-actions.ts", "app/reset-password/page.tsx", "app/set-password/page.tsx"]), `passwords are set in three places only (${setters.join(", ")})`);
+ok(JSON.stringify(setters) === JSON.stringify(["app/(dashboard)/settings/account-actions.ts", "app/reset-password/page.tsx", "components/onboarding/account-setup.tsx"]), `passwords are set in three places only (${setters.join(", ")})`);
 
 if (fails) {
   console.log(`${fails} FAILED`);

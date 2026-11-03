@@ -15,9 +15,9 @@ export type SignUpState = { error?: string; field?: SignUpField | null; sent?: s
 /**
  * Creating an account (1.45.0, the owner: "we will now work on a registration form as well because i will open the
  * app publicly"). Checked again here (the page checks as you type), the security check with Cloudflare when it's set
- * up, then Supabase makes the account and sends "Confirm your email" (lib/auth-emails.ts → /welcome → the dashboard,
- * where they name their team; a team then chooses its plan). Signed in at once only when Supabase doesn't ask for the
- * email to be confirmed.
+ * up, then Supabase makes the account and sends "Confirm your email" (lib/auth-emails.ts → /welcome → /get-started,
+ * the account's first steps, 1.49.0, where they name their team; a team then chooses its plan). Signed in at once only
+ * when Supabase doesn't ask for the email to be confirmed.
  *
  * Whether an email already has an account is never said: Supabase answers the same for both, and so does this.
  */
@@ -55,7 +55,8 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
     if (pw) return { error: pw, field: "password" };
     return signUpErrorText(error) ?? { error: "Couldn't create your account. Try again in a minute.", field: null };
   }
-  // No email check asked for (Supabase → Authentication → Email → Confirm email off): signed in already.
-  if (data.session) redirect("/dashboard");
+  // No email check asked for (Supabase → Authentication → Email → Confirm email off): signed in already, on to the
+  // account's first steps (1.49.0).
+  if (data.session) redirect("/get-started");
   return { sent: email };
 }

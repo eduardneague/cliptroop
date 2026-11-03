@@ -36,7 +36,7 @@ ok(readHandoff(hand({ at: now - SWAP_MAX_AGE_MS - 1 }), now) === null, "an old o
 ok(readHandoff(hand({ at: now + 60_000 }), now) === null, "nor one from the future");
 ok(readHandoff(hand({ refresh_token: "" }), now) === null && readHandoff("{", now) === null && readHandoff(null, now) === null, "nor a broken one");
 ok(readHandoff(hand({ type: "<script>" }), now)?.type === null, "an odd type is dropped");
-ok(nextForLinkType("recovery") === "/reset-password" && nextForLinkType("invite") === "/set-password" && nextForLinkType(null) === "/set-password", "where an old-style link's sign-in goes");
+ok(nextForLinkType("recovery") === "/reset-password" && nextForLinkType("invite") === "/set-password" && nextForLinkType("signup") === "/get-started" && nextForLinkType(null) === "/set-password", "where an old-style link's sign-in goes");
 
 // --- Secure cookies ----------------------------------------------------------------------------------------------------------------
 ok(sessionCookieOptions("https:").secure && sessionCookieOptions("https").secure && sessionCookieOptions("https,http").secure && sessionCookieOptions("HTTPS").secure, "https (the page's, or Vercel's x-forwarded-proto): Secure");

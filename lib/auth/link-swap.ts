@@ -62,5 +62,8 @@ export function readHandoff(raw: string | null | undefined, now: number): Handof
   }
 }
 
-/** Where an old-style link's sign-in goes once it's this browser's: a reset to choosing a password, the rest to setting up. */
-export const nextForLinkType = (type: string | null | undefined) => (type === "recovery" ? "/reset-password" : "/set-password");
+/**
+ * Where an old-style link's sign-in goes once it's this browser's: a reset to choosing a password, a sign-up to its
+ * first steps (1.49.0; its password was chosen on the form), the rest to setting up.
+ */
+export const nextForLinkType = (type: string | null | undefined) => (type === "recovery" ? "/reset-password" : type === "signup" ? "/get-started" : "/set-password");

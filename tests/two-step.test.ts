@@ -1,5 +1,6 @@
 // 1.46.0: two-step sign-in. The owner: "2 factor authentication … through a google authenticator or email and you
-// have to set this up in your account after first creating it".
+// have to set this up in your account after first creating it". 1.49.0 (Nov 3 2026): "i also want an option where
+// you're not obligated to have 2fa, you should just enable it if you want to on the onboarding".
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CODE_TRIES, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, safeNext, sessionIdOf, twoStepApplies, twoStepNeed } from "../lib/auth/two-step";
@@ -18,7 +19,7 @@ async function main() {
 
   // Who goes where.
   const base = { app: false, email: false, aal2: false, emailDone: false };
-  ok(twoStepNeed(base) === "setup", "nothing set up: set it up (everyone has one)");
+  ok(twoStepNeed(base) === "ok", "nothing set up: in (optional since 1.49.0; nobody is sent to set it up)");
   ok(twoStepNeed({ ...base, app: true }) === "verify" && twoStepNeed({ ...base, app: true, aal2: true }) === "ok", "an app: its code, then in");
   ok(twoStepNeed({ ...base, email: true }) === "verify" && twoStepNeed({ ...base, email: true, emailDone: true }) === "ok", "email: its code, then in");
   ok(twoStepNeed({ ...base, emailDone: true }) === "ok", "just set up by email (the token still says nothing): in");
@@ -46,7 +47,8 @@ async function main() {
 
   // The middleware.
   const mw = read("lib/supabase/middleware.ts");
-  ok(/if \(user && !isPublicRoute && process\.env\.TWO_STEP !== "off" && twoStepApplies\(request\.nextUrl\.pathname\)\)/.test(mw) && /url\.pathname = need === "verify" \? "\/two-step" : "\/two-step\/setup";/.test(mw), "every app page: set up or type the code first");
+  ok(/if \(user && !isPublicRoute && process\.env\.TWO_STEP !== "off" && twoStepApplies\(request\.nextUrl\.pathname\)\)/.test(mw) && /if \(need === "verify"\) \{\s*const url = request\.nextUrl\.clone\(\);\s*url\.pathname = "\/two-step";/.test(mw), "every app page: whoever has a second step types its code first");
+  ok(!/two-step\/setup/.test(mw), "and nobody is sent to set one up");
 
   // The server's side of email codes.
   const act = read("app/two-step/actions.ts");
@@ -56,6 +58,17 @@ async function main() {
   ok(/admin\.auth\.admin\.mfa\.deleteFactor/.test(act) && /two_step: null/.test(act), "one way at a time");
   const forms = read("components/auth/two-step-forms.tsx");
   ok(/mfa\.enroll\(\{ factorType: "totp"/.test(forms) && /challengeAndVerify/.test(forms) && /autoComplete="one-time-code"/.test(forms), "the app: Supabase's own, the code box the phone fills");
+
+  // 1.49.0: optional. Setting it up has "Not now"; Settings turns it on, changes it, or turns it off.
+  ok(/<Foot skip=\{skip\} \/>/.test(forms) && /Not now/.test(forms) && !/Every \$\{APP_NAME\} account signs in in two steps/.test(forms), "setting it up says it's optional, with Not now");
+  const setupPage = read("app/two-step/setup/page.tsx");
+  ok(/skip=\{app \|\| email \? null : back\}/.test(setupPage), "Not now only while nothing is set up, back where it came from");
+  const off = act.slice(act.indexOf("export async function turnOffTwoStep"), act.indexOf("export async function appFromNowOn"));
+  ok(off.length > 0 && /aal\?\.currentLevel === "aal2" \|\| \(await emailDoneFor\(/.test(off) && off.indexOf("emailDoneFor(") < off.indexOf("deleteFactor"), "turning it off: only from a sign-in that typed its code");
+  ok(/admin\.auth\.admin\.mfa\.deleteFactor/.test(off) && /from\("two_step_email"\)\.delete\(\)/.test(off) && /two_step: null/.test(off), "and everything goes: the app, email codes, the choice");
+  const tab = read("app/(dashboard)/settings/account-tab.tsx");
+  ok(/Turn it on/.test(tab) && /<TwoStepOff \/>/.test(tab) && /Change/.test(tab), "Settings → Account: Turn it on, or Change and Turn off");
+  ok(/turnOffTwoStep\(\)/.test(read("app/(dashboard)/settings/two-step-off.tsx")) && /Turn off two-step sign-in\?/.test(read("app/(dashboard)/settings/two-step-off.tsx")), "Turn off asks first");
 
   // The database.
   const m = read("supabase/migrations/0125_two_step.sql");

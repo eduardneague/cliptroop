@@ -1,10 +1,11 @@
 /*
- * Two-step sign-in (1.46.0): the owner, "2 factor authentication … through a google authenticator or email and you
- * have to set this up in your account after first creating it". Everyone has one: an authenticator app (Supabase's
- * own MFA, a session that typed its code is "aal2") or codes by email (ClipTroop's: app/two-step/actions.ts). The
- * database refuses a signed-in request that still owes its code (migration 0125); this is the app's side of it:
- * who goes where, and the cookie that says this sign-in typed its email code. Runs in the middleware (no Node APIs:
- * Web Crypto) and on the server.
+ * Two-step sign-in (1.46.0): an authenticator app (Supabase's own MFA, a session that typed its code is "aal2") or
+ * codes by email (ClipTroop's: app/two-step/actions.ts). 1.49.0, the owner (Nov 3 2026): "i also want an option where
+ * you're not obligated to have 2fa, you should just enable it if you want to on the onboarding": it's optional. Whoever
+ * turned it on types their code at every sign-in; nobody is sent to set one up (the onboarding and Settings → Account
+ * offer it). The database refuses a signed-in request that still owes its code (migration 0125, which already lets
+ * through someone with no second step); this is the app's side of it: who goes where, and the cookie that says this
+ * sign-in typed its email code. Runs in the middleware (no Node APIs: Web Crypto) and on the server.
  */
 
 export const TWO_STEP_COOKIE = "vp_2s";
@@ -27,13 +28,13 @@ export type TwoStepState = {
   emailDone: boolean;
 };
 
-/** ok: carry on. verify: this sign-in owes its code. setup: no second step yet (everyone needs one). */
-export function twoStepNeed(s: TwoStepState): "ok" | "verify" | "setup" {
+/** ok: carry on. verify: this sign-in owes its code. (No second step at all: carry on, it's optional since 1.49.0.) */
+export function twoStepNeed(s: TwoStepState): "ok" | "verify" {
   // The email cookie is only ever made for a session that typed its code (and the token's own copy of the person's
   // choice can be older than the choice: right after setting email up it still says none).
   if (s.aal2 || s.emailDone) return "ok";
   if (s.app || s.email) return "verify";
-  return "setup";
+  return "ok";
 }
 
 /** The pages the check never stands in front of: its own, and the ones that sign you in or set your password. */

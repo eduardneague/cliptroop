@@ -54,7 +54,7 @@ ok(/const problem = signUpProblem\(raw\);\s+if \(problem\) return problem;/.test
 ok(/if \(String\(formData\.get\("website"\) \?\? ""\)\.trim\(\)\) return \{ sent: email \};/.test(action), "the box only scripts fill in: told what everyone's told");
 ok(/await verifyTurnstile\(String\(formData\.get\("captcha"\) \?\? ""\), address, "signup"\)/.test(action) && action.indexOf("verifyTurnstile(") < action.indexOf("auth.signUp("), "the security check before the account");
 ok(/options: \{ data: \{ full_name: name \}, emailRedirectTo: `\$\{appUrl\(\)\}\/welcome` \}/.test(action), "the name goes to the profile (handle_new_user), the email to /welcome");
-ok(/if \(data\.session\) redirect\("\/dashboard"\);\s+return \{ sent: email \};/.test(action), "signed in at once only without Confirm email");
+ok(/if \(data\.session\) redirect\("\/get-started"\);\s+return \{ sent: email \};/.test(action), "signed in at once only without Confirm email (then its first steps, 1.49.0)");
 const verify = read("lib/auth/turnstile-verify.ts");
 ok(/import "server-only";/.test(verify) && /turnstile\/v0\/siteverify/.test(verify) && /if \(!secret\) return "ok";/.test(verify), "Cloudflare checks the answer, on the server; without a secret there's nothing to check");
 
@@ -66,7 +66,7 @@ ok(/\{pending \? "Creating your account…" : "Create account"\}/.test(page), "t
 ok(/name="website" type="text" tabIndex=\{-1\}/.test(page), "the box only scripts fill in");
 ok(/I&rsquo;m 18 or older and I agree to the/.test(page) && /You must be 18 or older to make an account\./.test(read("app/(legal)/terms/page.tsx")), "18 or older, on the form and in the terms");
 ok(!/invitation only|Access is by invitation/i.test(read("app/(legal)/privacy/page.tsx") + read("app/(legal)/terms/page.tsx")), "the legal pages no longer say invitation only");
-ok(/next: "\/dashboard",/.test(read("app/welcome/welcome-card.tsx").split("signup: {")[1]?.split("},")[0] ?? ""), "a confirmed sign-up goes on to name its team");
+ok(/next: "\/get-started",/.test(read("app/welcome/welcome-card.tsx").split("signup: {")[1]?.split("},")[0] ?? ""), "a confirmed sign-up goes on to its first steps (1.49.0), naming its team among them");
 
 if (fails) {
   console.log(`${fails} failed`);

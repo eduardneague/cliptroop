@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailConfigured, sendCodeEmail } from "@/lib/email";
 import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
-import { CODE_MINUTES, CODE_TRIES, RESEND_SECONDS, TWO_STEP_COOKIE, cleanCode, codeHash, emailDoneCookie, maskEmail, sessionIdOf } from "@/lib/auth/two-step";
+import { CODE_MINUTES, CODE_TRIES, RESEND_SECONDS, TWO_STEP_COOKIE, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, sessionIdOf } from "@/lib/auth/two-step";
 
 /*
  * Two-step sign-in by email (1.46.0): a six-digit code to the account's own address, kept as a keyed hash for 10
@@ -107,6 +107,33 @@ export async function verifyTwoStepCode(raw: string, purpose: Purpose): Promise<
     maxAge: 60 * 60 * 24 * 30,
     ...sessionCookieOptions(proto),
   });
+  return { ok: true };
+}
+
+/**
+ * Turning two-step sign-in off (1.49.0: it's optional). Only from a sign-in that typed its code (an app's: aal2; or
+ * this session's email cookie), so a stolen password alone can't switch it off. Everything goes: the app's factors,
+ * email codes, the choice on the account.
+ */
+export async function turnOffTwoStep(): Promise<{ error?: string; ok?: true }> {
+  const who = await me();
+  if (!who) return { error: "Your session expired. Sign in again." };
+  const { data: aal } = await who.supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const typed = aal?.currentLevel === "aal2" || (await emailDoneFor((await cookies()).get(TWO_STEP_COOKIE)?.value, who.sessionId));
+  if (!typed) return { error: "Type this sign-in's code first: sign out and in again." };
+  const admin = createAdminClient();
+  const { data: factors, error: listError } = await admin.auth.admin.mfa.listFactors({ userId: who.user.id });
+  if (listError) return { error: "Couldn't turn it off. Try again in a minute." };
+  for (const f of factors?.factors ?? []) {
+    const { error } = await admin.auth.admin.mfa.deleteFactor({ userId: who.user.id, id: f.id });
+    if (error) return { error: "Couldn't turn it off. Try again in a minute." };
+  }
+  // Before 0125 there's no such table: nothing to remove.
+  await admin.from("two_step_email").delete().eq("user_id", who.user.id);
+  if (usesEmail(who.user.app_metadata)) {
+    const { error } = await admin.auth.admin.updateUserById(who.user.id, { app_metadata: { ...(who.user.app_metadata ?? {}), two_step: null } });
+    if (error) return { error: "Couldn't turn it off. Try again in a minute." };
+  }
   return { ok: true };
 }
 

@@ -23,6 +23,11 @@ import { forgetOtherDevicesNow } from "@/app/(dashboard)/settings/account-action
  * without the current one. Someone already signed in with their password
  * (who opened this page some other way) changes it in Settings, where the
  * current one is asked for.
+ *
+ * 1.49.0: an account with an authenticator app (two-step sign-in) types the
+ * app's code here too. Supabase only changes such an account's password from
+ * a sign-in that typed it (aal2), and a reset link alone isn't one: saving
+ * said "Your link has expired" (the owner's screenshot of Nov 3 2026).
  */
 
 const input =
@@ -31,7 +36,11 @@ const label = "block text-[12.5px] font-semibold text-ink-soft mb-1.5";
 const primary =
   "inline-flex items-center justify-center gap-2 rounded-xl bg-amber text-white font-semibold text-[15px] h-12 px-6 hover:brightness-110 disabled:opacity-60";
 
-type Who = { id: string; email: string; names: string[]; link: boolean };
+/** appFactor: the authenticator app whose code this sign-in still owes (null: none, or already typed). */
+type Who = { id: string; email: string; names: string[]; link: boolean; appFactor: string | null };
+
+const codeInput =
+  "w-full rounded-xl border border-line/15 bg-transparent px-3.5 h-12 text-center font-mono text-[22px] tracking-[0.35em] outline-none focus:ring-2 focus:ring-amber focus:border-transparent";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -40,6 +49,8 @@ export default function ResetPasswordPage() {
   const [who, setWho] = useState<Who | null | undefined>(undefined);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [code, setCode] = useState("");
+  const [codeOk, setCodeOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
@@ -55,12 +66,19 @@ export default function ResetPasswordPage() {
         supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
         supabase.from("profiles").select("full_name, username").eq("id", user.id).maybeSingle(),
       ]);
+      // Two-step sign-in with an app, not typed yet on this sign-in: its code comes first.
+      let appFactor: string | null = null;
+      if (aal?.nextLevel === "aal2" && aal?.currentLevel !== "aal2") {
+        const { data: factors } = await supabase.auth.mfa.listFactors();
+        appFactor = factors?.totp?.find((f) => f.status === "verified")?.id ?? null;
+      }
       if (!alive) return;
       setWho({
         id: user.id,
         email: user.email ?? "",
         names: [profile?.full_name as string | null, profile?.username as string | null].filter((n): n is string => !!n),
         link: fromEmailLink(aal?.currentAuthenticationMethods),
+        appFactor,
       });
     })();
     return () => {
@@ -72,9 +90,21 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     if (!who) return;
     setError(null);
+    const needCode = !!who.appFactor && !codeOk;
+    if (needCode && !/^\d{6}$/.test(code)) return setError("Type the six-digit code from your authenticator app.");
     const state = newPasswordState(password, confirm, { email: who.email, names: who.names });
     if (!state.ready) return setError(state.error);
     setPending(true);
+    if (needCode && who.appFactor) {
+      const { error: codeError } = await supabase.auth.mfa.challengeAndVerify({ factorId: who.appFactor, code });
+      if (codeError) {
+        setPending(false);
+        setCode("");
+        sounds.error();
+        return setError(/invalid|expired|code/i.test(codeError.message) ? "That's not the code. Type the one your app shows now." : "Couldn't check the code. Try again.");
+      }
+      setCodeOk(true);
+    }
     const { error: saveError } = await supabase.auth.updateUser({ password });
     setPending(false);
     const problem = passwordSaveError(saveError);
@@ -160,6 +190,27 @@ export default function ResetPasswordPage() {
         <p className="text-[14px] text-ink-soft mb-6">
           For <b className="text-ink font-semibold break-all">{who.email}</b>. Every other device signed in to this account will be signed out.
         </p>
+        {who.appFactor && !codeOk && (
+          <div className="mb-5">
+            <label htmlFor="app-code" className={label}>
+              Code from your authenticator app
+            </label>
+            <input
+              id="app-code"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                setError(null);
+              }}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={12}
+              autoFocus
+              className={codeInput}
+            />
+            <p className="mt-1.5 text-[12px] text-ink-faint">Your account has two-step sign-in: type the six digits your app shows now.</p>
+          </div>
+        )}
         <NewPasswordFields
           value={password}
           confirm={confirm}
@@ -175,7 +226,7 @@ export default function ResetPasswordPage() {
           about={{ email: who.email, names: who.names }}
           inputClass={input}
           labelClass={label}
-          autoFocus
+          autoFocus={!who.appFactor || codeOk}
         />
         {error && (
           <p role="alert" className="mt-4 text-[13.5px] text-red font-medium">

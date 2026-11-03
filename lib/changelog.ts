@@ -22,6 +22,17 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.49.0",
+    date: "2026-11-03",
+    title: "Your first steps, at your pace",
+    changes: [
+      { kind: "new", text: "New accounts start with a few quick steps: your name and photo, two-step sign-in if you want it, ClipTroop on your phone, and your team's name. Every step has Skip for now, straight into the app." },
+      { kind: "better", text: "Two-step sign-in is now optional. Turn it on while setting up your account or in Settings → Account, where you can also change it or turn it off." },
+      { kind: "better", text: "Invited teammates get the same choice: their first steps offer two-step sign-in too." },
+      { kind: "fixed", text: "Resetting your password when you sign in with an authenticator app: the page now asks for your app's code first, instead of saying the link had expired." },
+    ],
+  },
+  {
     version: "1.47.1",
     date: "2026-10-31",
     title: "TikTok's numbers, said plainly",

@@ -136,9 +136,9 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   }
 
-  // 1.46.0: two-step sign-in. Everyone has a second step (set up after making an account), and every sign-in types its
-  // code before the app opens. The database refuses the rest anyway (migration 0125); this sends people to the right
-  // page. TWO_STEP=off (an emergency only) turns this part off; the database's part stays.
+  // 1.46.0: two-step sign-in. Whoever has a second step (optional since 1.49.0: the onboarding and Settings offer it)
+  // types its code at every sign-in before the app opens. The database refuses the rest anyway (migration 0125); this
+  // sends people to the right page. TWO_STEP=off (an emergency only) turns this part off; the database's part stays.
   if (user && !isPublicRoute && process.env.TWO_STEP !== "off" && twoStepApplies(request.nextUrl.pathname)) {
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     const need = twoStepNeed({
@@ -147,9 +147,9 @@ export async function updateSession(request: NextRequest) {
       aal2: aal?.currentLevel === "aal2" || claims?.aal === "aal2",
       emailDone: await emailDoneFor(request.cookies.get(TWO_STEP_COOKIE)?.value, typeof claims?.session_id === "string" ? claims.session_id : null),
     });
-    if (need !== "ok") {
+    if (need === "verify") {
       const url = request.nextUrl.clone();
-      url.pathname = need === "verify" ? "/two-step" : "/two-step/setup";
+      url.pathname = "/two-step";
       url.search = "";
       url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
       const redirect = NextResponse.redirect(url);

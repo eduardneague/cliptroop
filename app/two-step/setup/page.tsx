@@ -5,8 +5,9 @@ import { TWO_STEP_COOKIE, emailDoneFor, maskEmail, safeNext, sessionIdOf } from 
 import { TwoStepSetup } from "@/components/auth/two-step-forms";
 
 /**
- * Setting up two-step sign-in (1.46.0): everyone does it once, after making an account (the middleware sends them
- * here), and again from Settings → Account to change the way (?change=1, only from a sign-in that typed its code).
+ * Setting up two-step sign-in (1.46.0). 1.49.0: it's optional, so this page is opened, never sent to: from the
+ * onboarding's Two-step step (with ?next back to it) and from Settings → Account (?change=1: turn it on, or change the
+ * way, which takes this sign-in's code first). With nothing set up yet, "Not now" goes back where it came from.
  */
 export default async function TwoStepSetupPage({ searchParams }: { searchParams: Promise<{ next?: string; change?: string }> }) {
   const sp = await searchParams;
@@ -26,5 +27,6 @@ export default async function TwoStepSetupPage({ searchParams }: { searchParams:
     if (!done) redirect(`/two-step?next=${encodeURIComponent(change ? "/two-step/setup?change=1" : next)}`);
     if (!change) redirect(next);
   }
-  return <TwoStepSetup email={maskEmail(user.email ?? "")} current={app ? "app" : email ? "email" : null} change={change && (app || email)} next={change ? "/settings?tab=account" : next} />;
+  const back = change ? "/settings?tab=account" : next;
+  return <TwoStepSetup email={maskEmail(user.email ?? "")} current={app ? "app" : email ? "email" : null} change={change && (app || email)} next={back} skip={app || email ? null : back} />;
 }
