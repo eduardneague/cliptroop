@@ -27,9 +27,11 @@ ok(/e\.code === "42P01" \|\| e\.code === "42703" \|\| e\.code === "PGRST204" \|\
 ok(/admin\.storage\.getBucket\("tiktok-pull"\)/.test(src), "0126: its bucket");
 ok(/column\(a, "short_videos", "filmer_member_id, filmed_at, footage_path"\)/.test(src), "0113: what Send to filming needs");
 ok(/column\(a, "two_step_codes", "user_id"\)/.test(src), "0125: email codes");
+ok(/column\(a, "script_comments", "edited_at"\)/.test(src), "0127: changing comments (edited_at)");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0127": /alter table script_comments add column if not exists edited_at timestamptz/,
   "0125": /create table if not exists public\.two_step_codes/,
   "0124": /add column if not exists plan\b/,
   "0119": /create table if not exists video_delete_access/,

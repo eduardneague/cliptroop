@@ -46,9 +46,11 @@ import {
   MoreIcon,
   PageBreakIcon,
   WidthIcon,
+  CommentIcon,
+  ScissorsIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CommentHighlights, commentKey, findQuote, findText, occurrenceAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
+import { CommentHighlights, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
 import { SearchHit, searchHitKey } from "../lib/search-hit";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
@@ -595,7 +597,7 @@ export function ScriptEditor({
   }, [editor, comments, switching]);
   const openFace = (id: string, top: number) => {
     const w = paperRef.current?.clientWidth ?? 600;
-    if (renderCommentPopover) setPop({ id, top: top + 32, left: Math.max(8, w - 312) });
+    if (renderCommentPopover) setPop({ id, top: top + 32, left: Math.max(8, w - 352) });
     else onCommentClick?.(id);
   };
 
@@ -615,18 +617,17 @@ export function ScriptEditor({
       // Writing a comment: it stays on the text it was started on.
       if (draftRef.current.text !== null) return;
       const { from, to, empty } = editor.state.selection;
-      const $from = editor.state.doc.resolve(from);
-      const $to = editor.state.doc.resolve(to);
-      if (empty || !$from.sameParent($to)) {
+      if (empty) {
         if (draft === null) setSel(null);
         return;
       }
-      const quote = editor.state.doc.textBetween(from, to, "\u0000").slice(0, 500);
-      if (!quote.trim()) return setSel(null);
+      // 1.50.0: any number of lines and paragraphs (it was one paragraph only).
+      const q = quoteAt(editor.state.doc, from, to);
+      if (!q) return setSel(null);
       const box = paperRef.current?.getBoundingClientRect();
       const end = editor.view.coordsAtPos(to);
       if (!box) return;
-      setSel({ quote, occurrence: occurrenceAt(editor.state.doc, quote, from), top: end.bottom - box.top + 6, left: Math.min(end.left - box.left, (paperRef.current?.clientWidth ?? 600) - 140) });
+      setSel({ quote: q.quote, occurrence: q.occurrence, top: end.bottom - box.top + 6, left: Math.min(end.left - box.left, (paperRef.current?.clientWidth ?? 600) - 140) });
     };
     editor.on("selectionUpdate", update);
     return () => {
@@ -1014,7 +1015,7 @@ export function ScriptEditor({
             const box = paperRef.current?.getBoundingClientRect();
             const r = el!.getBoundingClientRect();
             if (box && renderCommentPopover) {
-              setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 300)), suggestion });
+              setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 348)), suggestion });
             } else onCommentClick?.(id);
           }}
           className={`script-paper relative isolate transition-colors mx-auto w-full ${STRIP_W[width]} rounded-2xl px-5 sm:px-14 py-8 sm:py-14 border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)]`}
@@ -1094,7 +1095,7 @@ export function ScriptEditor({
             </div>
           )}
           {pop && renderCommentPopover && (
-            <div className="no-print absolute z-30 w-[300px]" style={{ top: pop.top, left: pop.left }}>
+            <div className="no-print absolute z-30 w-[340px] max-w-[calc(100%-16px)]" style={{ top: pop.top, left: pop.left }}>
               {renderCommentPopover(pop.id, () => setPop(null))}
               <SuggestionHere
                 s={pop.suggestion ? grammar.items.find((x) => x.id === pop.suggestion) ?? null : null}
@@ -1108,7 +1109,8 @@ export function ScriptEditor({
           {sel && onAddComment && draft === null && (
             <Leaves>
               <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
-                <div className="pop-menu flex gap-1 rounded-xl bg-surface border border-line/15 shadow-xl p-1">
+                {/* 1.50.0: the app's own colours (text-ink: on the white page the words went dark on a dark box), the kind's colour on its icon. */}
+                <div className="pop-menu origin-top-left flex items-center gap-0.5 rounded-xl bg-surface text-ink border border-line/15 shadow-[0_14px_36px_-12px_rgb(0_0_0/0.45)] p-1">
                   {([
                     ["comment", "Comment"],
                     ["edit_idea", "Editing idea"],
@@ -1123,19 +1125,23 @@ export function ScriptEditor({
                         // (A new one takes the old one's place in the copy kept on this device.)
                         setBackup(null);
                       }}
-                      className="rounded-lg px-3 h-9 sm:h-8 text-[12.5px] font-bold whitespace-nowrap text-white hover:brightness-110"
-                      style={{ background: KIND_COLOR[k] }}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 sm:h-8 text-[12.5px] font-semibold whitespace-nowrap text-ink hover:bg-surface-2 transition-colors"
                     >
+                      <span className="inline-flex" style={{ color: KIND_COLOR[k] }} aria-hidden>
+                        {k === "edit_idea" ? <ScissorsIcon className="w-3.5 h-3.5" /> : <CommentIcon className="w-3.5 h-3.5" />}
+                      </span>
                       {label}
                     </button>
                   ))}
+                  {/* Several lines: say how many, so it's clear what the comment covers. */}
+                  {/[\n\u0000]/.test(sel.quote) && <span className="pl-1.5 pr-2 text-[11.5px] text-ink-faint whitespace-nowrap">{sel.quote.split(/[\n\u0000]/).length} lines</span>}
                 </div>
               </div>
             </Leaves>
           )}
           {sel && onAddComment && draft !== null && !isPhone && (
             <Leaves>
-              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 308)) }}>
+              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 348)) }}>
                 <CommentComposer
                   kind={draftKind}
                   quote={sel.quote}
@@ -1149,7 +1155,7 @@ export function ScriptEditor({
                   busy={sending}
                   onSubmit={() => void submitDraft()}
                   onCancel={() => void requestDiscard()}
-                  sheet={false}
+                  variant="popover"
                 />
               </div>
             </Leaves>
@@ -1182,7 +1188,7 @@ export function ScriptEditor({
                 busy={sending}
                 onSubmit={() => void submitDraft()}
                 onCancel={() => void requestDiscard()}
-                sheet
+                variant="sheet"
               />
             </div>
           </Leaves>,

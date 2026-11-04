@@ -8,6 +8,7 @@ import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 import { displayName } from "@/lib/avatar";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
 import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
+import { MAX_COMMENT, MAX_QUOTE } from "@/modules/scripts/lib/comment-limits";
 
 type SaveResult =
   | { ok: true; version: number; updatedAt: string }
@@ -255,6 +256,8 @@ async function mayComment(supabase: Awaited<ReturnType<typeof createClient>>, sc
  * Add a comment or an editing idea (optionally with a sketch already
  * uploaded to script-sketches). @mentions in the text notify those people
  * (a person, a role like @Scheduler, or @all), never the author.
+ * 1.50.0: `general` is on the whole document, on no words (quote ""); a
+ * quote may run over several lines and paragraphs, up to 4,000 characters.
  */
 export async function addComment(input: {
   scriptId: string;
@@ -263,14 +266,16 @@ export async function addComment(input: {
   body: string;
   kind?: "comment" | "edit_idea";
   sketch?: { path: string; w: number; h: number } | null;
+  general?: boolean;
 }): Promise<DocResult<{ id: string }>> {
-  const quote = String(input.quote ?? "").slice(0, 500);
+  const general = input.general === true;
+  const quote = general ? "" : String(input.quote ?? "").slice(0, MAX_QUOTE);
   const sketch = input.sketch && SKETCH_RX.test(input.sketch.path) ? input.sketch : null;
   // A drawing alone is fine: it gets a short caption.
   const body = String(input.body ?? "").trim() || (sketch ? "Sketch" : "");
-  if (!quote.trim()) return { error: "Select some text first." };
+  if (!general && !quote.trim()) return { error: "Select some text first." };
   if (!body) return { error: "Write a comment." };
-  if (body.length > 2000) return { error: "Keep comments under 2,000 characters." };
+  if (body.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
   if (!UUID_RX.test(input.scriptId)) return { error: "Document not found." };
   const kind = input.kind === "edit_idea" ? "edit_idea" : "comment";
   const supabase = await createClient();
@@ -284,7 +289,7 @@ export async function addComment(input: {
     .insert({
       script_id: input.scriptId,
       quote,
-      occurrence: Math.max(0, Math.floor(input.occurrence) || 0),
+      occurrence: general ? 0 : Math.max(0, Math.floor(input.occurrence) || 0),
       body,
       kind,
       sketch_path: sketch?.path ?? null,
@@ -293,6 +298,8 @@ export async function addComment(input: {
     })
     .select("id, team_id, scripts(name, short_video_id, long_video_id)")
     .single();
+  // 23514: a database from before 0127 (a quote of one paragraph, 1 to 500 characters), so no general ones yet.
+  if (error?.code === "23514") return { error: "This database is missing an update (0127) for this. App setup shows how to run it." };
   if (error || !data) return { error: sketch ? "Couldn't add the idea with its sketch." : "Couldn't add the comment." };
   const s = (Array.isArray(data.scripts) ? data.scripts[0] : data.scripts) as { name: string; short_video_id: string | null; long_video_id: string | null } | null;
   refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
@@ -313,6 +320,8 @@ async function notifyScriptMentions(a: {
   body: string;
   quote: string;
   kind: "comment" | "edit_idea";
+  /** 1.50.0: the words before an edit: whoever they mentioned was told already. */
+  before?: string;
 }) {
   const [{ data: rows }, video, actor] = await Promise.all([
     a.supabase.from("team_members").select("user_id, profiles(username, full_name, email), member_roles(role)").eq("team_id", a.teamId).eq("status", "active"),
@@ -331,10 +340,11 @@ async function notifyScriptMentions(a: {
   );
   const to = resolveMentionRecipients(a.body, catalog, members);
   to.delete(a.userId);
+  if (a.before) for (const id of resolveMentionRecipients(a.before, catalog, members)) to.delete(id);
   if (!to.size) return;
   const number = (video.data?.entry_number as number | undefined) ?? 0;
   const title = (video.data?.title as string | undefined) ?? "a video";
-  const what = a.kind === "edit_idea" ? "an editing idea" : "a comment";
+  const what = a.kind === "edit_idea" ? (a.quote ? "an editing idea" : "an editing idea for the whole document") : a.quote ? "a comment" : "a comment on the whole document";
   const snippet = a.body.length > 100 ? `${a.body.slice(0, 100)}…` : a.body;
   const base = a.short ? `/shorts/${a.short}/script` : `/videos/${a.long}/script`;
   await sendNotifications(
@@ -356,6 +366,48 @@ async function notifyScriptMentions(a: {
       },
     }))
   );
+}
+
+/**
+ * Changing a comment's words (1.50.0, the owner: "i want to be able to edit comments as well from here"). Only its
+ * author (the database checks it too, 0127, and marks it edited). People the new words mention who weren't mentioned
+ * before get a notification; nobody is told twice.
+ */
+export async function editComment(id: string, body: string): Promise<DocResult> {
+  if (!UUID_RX.test(id)) return { error: "Comment not found." };
+  const text = String(body ?? "").trim();
+  if (!text) return { error: "Write something, or delete it instead." };
+  if (text.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Sign in again." };
+  const { data: old } = await supabase.from("script_comments").select("id, body, author_id, kind, quote, script_id, team_id, scripts(name, short_video_id, long_video_id)").eq("id", id).maybeSingle();
+  if (!old) return { error: "Comment not found." };
+  if (old.author_id !== user.id) return { error: "Only the person who wrote it can change it." };
+  if ((old.body as string) === text) return {};
+  const { data, error } = await supabase.from("script_comments").update({ body: text }).eq("id", id).select("id");
+  if (error || !data?.length) return { error: "Couldn't save the change. Try again." };
+  const s = (Array.isArray(old.scripts) ? old.scripts[0] : old.scripts) as { name: string; short_video_id: string | null; long_video_id: string | null } | null;
+  refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
+  if (text.includes("@") && s) {
+    await notifyScriptMentions({
+      supabase,
+      userId: user.id,
+      teamId: old.team_id as string,
+      commentId: id,
+      scriptId: old.script_id as string,
+      docName: s.name,
+      short: s.short_video_id,
+      long: s.long_video_id,
+      body: text,
+      quote: (old.quote as string) ?? "",
+      kind: old.kind === "edit_idea" ? "edit_idea" : "comment",
+      before: old.body as string,
+    });
+  }
+  return {};
 }
 
 export async function resolveComment(id: string, resolved: boolean): Promise<DocResult> {

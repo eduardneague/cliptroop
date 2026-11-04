@@ -22,6 +22,20 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.50.0",
+    date: "2026-11-04",
+    title: "Comments, rebuilt",
+    changes: [
+      { kind: "new", text: "Scripts: change a comment or an editing idea you wrote. Edit is on it in the comments and in the small box on its words; it then says “edited”, and only people you newly @mention are notified." },
+      { kind: "new", text: "Scripts: comments and editing ideas on the whole document, on no words in particular. Write them at the bottom of the comments panel." },
+      { kind: "new", text: "Scripts: a comment or an editing idea can cover several lines or paragraphs. Select as much as you like; it shows all the lines it's on, and Export ideas keeps them." },
+      { kind: "better", text: "Scripts: the comment box, the small box on a comment's words and the comments panel are redone: clearer cards with who, when and what it's on, Edit, Resolve and Delete on every one, and counts on All, Comments and Editing ideas." },
+      { kind: "fixed", text: "Scripts: the @ list when you tag someone was dark on dark over the white page. It's in clear colours now and opens below the box (above only when there's no room below)." },
+      { kind: "fixed", text: "Scripts: words that already had quote marks showed them twice in the comments." },
+      { kind: "better", text: "Creating a team: the name's example no longer uses a real team's name." },
+    ],
+  },
+  {
     version: "1.49.1",
     date: "2026-11-03",
     title: "Three steps in, and a clear goodbye",

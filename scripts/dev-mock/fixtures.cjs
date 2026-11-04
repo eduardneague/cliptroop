@@ -165,7 +165,25 @@ const scriptDocs = [
 // MOCK_SCRIPT=/path/to/doc.json (the editor's JSON): the first short's Script is that document, e.g. a long
 // one to check the PDF export (1.27.5). With MOCK_COMMENTS=many it gets a comment or editing idea on every
 // third paragraph.
-const SCRIPT_DOC = process.env.MOCK_SCRIPT ? JSON.parse(require("fs").readFileSync(process.env.MOCK_SCRIPT, "utf8")) : null;
+// 1.50.0: MOCK_COMMENTS=rehaul gives the first Script a few paragraphs (one with its own quote marks) and comments on
+// them: over two paragraphs, on the whole document (general), changed by its author, resolved, written by edu.
+const REHAUL_DOC = {
+  type: "doc",
+  content: [
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Hook" }] },
+    { type: "paragraph", content: [{ type: "text", text: '"You\'ll be hated a lot in the beginning." That\'s what everyone told me before my first street food video.' }] },
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Body" }] },
+    { type: "paragraph", content: [{ type: "text", text: "Three stalls, three prices. The cheapest one tasted the best." }] },
+    { type: "paragraph", content: [{ type: "text", text: "Slow zoom on the grill while I say the price out loud." }] },
+    { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Call to action" }] },
+    { type: "paragraph", content: [{ type: "text", text: "Follow for part two." }] },
+  ],
+};
+const SCRIPT_DOC = process.env.MOCK_SCRIPT
+  ? JSON.parse(require("fs").readFileSync(process.env.MOCK_SCRIPT, "utf8"))
+  : process.env.MOCK_COMMENTS === "rehaul"
+    ? REHAUL_DOC
+    : null;
 const blockText = (n) => (n.text ?? "") + (n.content ?? []).map(blockText).join("");
 if (SCRIPT_DOC) {
   const text = (SCRIPT_DOC.content ?? []).map(blockText).join("\n");
@@ -652,6 +670,17 @@ module.exports = {
             sketch_path: null, sketch_w: null, sketch_h: null, script_id: "dd000000-0000-4000-8000-000000000001", team_id: TEAM,
             author: { username: people[k % 3]?.username ?? null, full_name: people[k % 3]?.full_name ?? null, email: null, avatar_url: null },
           }))
+      : process.env.MOCK_COMMENTS === "rehaul"
+      ? [
+          ["cm000000-0000-4000-8000-000000000011", "comment", '"You\'ll be hated a lot in the beginning."', 0, "Strong open. Can we cut \"before my first street food video\" so it lands faster? @Ioana", U[1], at(-2, 11), at(-2, 12), null],
+          ["cm000000-0000-4000-8000-000000000012", "edit_idea", "The cheapest one tasted the best.\nSlow zoom on the grill", 0, "Cut to the grill on \"cheapest\", then hold the zoom until the price.", U[2], at(-1, 15), null, null],
+          ["cm000000-0000-4000-8000-000000000013", "comment", "", 0, "Overall this works. Keep the whole thing under 45 seconds.", U[0], at(-1, 17), null, null],
+          ["cm000000-0000-4000-8000-000000000014", "edit_idea", "", 0, "Same upbeat track as the last short, all the way through.", U[1], at(0, -3), null, null],
+          ["cm000000-0000-4000-8000-000000000015", "comment", "Follow for part two.", 0, "Say when part two comes out?", U[3], at(-3, 10), null, at(-2, 9)],
+        ].map(([id, kind, quote, occurrence, body, author, created, edited, resolved]) => ({
+          id, kind, quote, occurrence, body, created_at: created, edited_at: edited, resolved_at: resolved, author_id: author, sketch_path: null, sketch_w: null, sketch_h: null, script_id: "dd000000-0000-4000-8000-000000000001", team_id: TEAM,
+          author: { username: people[U.indexOf(author)]?.username ?? null, full_name: people[U.indexOf(author)]?.full_name ?? null, email: null, avatar_url: null },
+        }))
       : process.env.MOCK_COMMENTS
       ? [
           ["cm000000-0000-4000-8000-000000000001", "comment", "three stalls, three prices", 0, "Can we show the prices on screen as they say them?", U[1], at(-2, 11)],

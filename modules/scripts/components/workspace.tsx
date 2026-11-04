@@ -1,6 +1,5 @@
 "use client";
 
-import { Ago } from "@/components/ui/ago";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,7 +11,6 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
-import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
 import { PageBreak } from "../lib/page-break";
@@ -25,12 +23,13 @@ import { repairDoc } from "../lib/repair";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
 import { findQuote, type PostingComment } from "../lib/anchors";
 import { dock, useDock } from "../lib/dock";
-import { Skeleton, SkeletonCircle } from "@/components/ui/skeleton";
-import { addComment, copyCommentsFrom, createDoc, deleteComment, deleteDoc, getDocContent, renameDoc, resolveComment, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
+import { addComment, copyCommentsFrom, createDoc, deleteDoc, getDocContent, renameDoc, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
-import { MentionText } from "./comment-composer";
+import { CommentComposer, KindMark } from "./comment-composer";
+import { CommentCard, PostingCard } from "./comment-card";
+import { sounds } from "@/lib/sounds";
 import type { MentionPerson } from "../lib/mention-people";
 import type { ScriptFlow } from "../lib/flow";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
@@ -129,7 +128,6 @@ function Workspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
-  const colorOf = (c: ScriptComment) => commentColor(c, roleColors);
   const open = comments.filter((c) => !c.resolved).length;
   // One panel on the right at a time: the comments close when another opens.
   const panel = useDock();
@@ -147,6 +145,21 @@ function Workspace({
     if (posting?.id && comments.some((c) => c.id === posting.id)) setPosting(null);
   }, [comments, posting]);
   const mayDelete = (c: ScriptComment) => !!me && (me.master || c.author?.id === me.userId);
+  // 1.50.0: a comment on the whole document (on no words of it), written in the comments panel.
+  const onAddGeneral = canComment
+    ? async (body: string, kind: "comment" | "edit_idea") => {
+        setPosting({ quote: "", occurrence: 0, kind, body, sketchUrl: null });
+        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true });
+        if (r.error !== undefined) {
+          setPosting(null);
+          return r.error;
+        }
+        setPosting((p) => (p ? { ...p, id: r.id } : p));
+        setActive(r.id);
+        router.refresh();
+        return null;
+      }
+    : undefined;
 
   const href = (next: { doc?: string; side?: string | null }) => {
     const q = new URLSearchParams(params.toString());
@@ -279,71 +292,27 @@ function Workspace({
       renderCommentPopover={(id, close) => {
         const c = comments.find((x) => x.id === id);
         if (!c) return null;
-        const color = colorOf(c);
         return (
           <Leaves>
-            <div className="pop-menu rounded-xl border border-line/15 bg-surface shadow-2xl p-3" style={{ boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent), 0 20px 50px -20px rgb(0 0 0 / .5)` }}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-5 h-5 text-[9px]" />
-                <span className="text-[12.5px] font-semibold text-ink">{c.author?.name ?? "Someone"}</span>
-                <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
-                  {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
-                </span>
-                <span className="ml-auto text-[11px] text-ink-faint"><Ago iso={c.createdAt} /></span>
-              </div>
-              <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => setZoomed(c)} />
-              <div className="flex items-center gap-1 mt-2 -mb-1">
-                {canComment && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!c.resolved && !(await confirmResolve(confirm, c))) return;
-                    const r = await resolveComment(c.id, !c.resolved);
-                    if (r.error) toast.error(r.error);
-                    else {
-                      close();
-                      router.refresh();
-                    }
-                  }}
-                  className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-                >
-                  {c.resolved ? "Reopen" : "Resolve"}
-                </button>
-                )}
-                {mayDelete(c) && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!(await confirmDelete(confirm, c))) return;
-                      const r = await deleteComment(c.id);
-                      if (r.error) toast.error(r.error);
-                      else {
-                        close();
-                        router.refresh();
-                      }
-                    }}
-                    className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
-                  >
-                    Delete
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    close();
-                    setActive(c.id);
-                    setChatOpen(true);
-                  }}
-                  className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-                >
-                  All comments
-                </button>
-                <span className="flex-1" />
-                <button type="button" onClick={close} aria-label="Close" className="w-7 h-7 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
-                  <CloseIcon className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
+            <CommentCard
+              // One per comment: another one's words open a fresh box (not this one half-changed).
+              key={c.id}
+              variant="popover"
+              c={c}
+              people={people}
+              roleColors={roleColors}
+              me={me}
+              canComment={canComment}
+              mayDelete={mayDelete(c)}
+              onSketch={() => setZoomed(c)}
+              onDone={close}
+              onClose={close}
+              onAll={() => {
+                close();
+                setActive(c.id);
+                setChatOpen(true);
+              }}
+            />
           </Leaves>
         );
       }}
@@ -360,7 +329,6 @@ function Workspace({
           docName={doc.name}
           number={number}
           docContent={doc.content}
-          colorOf={colorOf}
           roleColors={roleColors}
           exportTitle={title}
           people={people}
@@ -369,60 +337,11 @@ function Workspace({
           mayDelete={mayDelete}
           posting={posting}
           me={me}
+          onAddGeneral={onAddGeneral}
         />
       }
     />
     {zoomed?.sketch && <Lightbox src={zoomed.sketch.url} alt={`Sketch: ${zoomed.body}`} download={`sketch-${zoomed.id.slice(0, 8)}.png`} onClose={() => setZoomed(null)} />}
-    </>
-  );
-}
-
-/** Resolving hides a comment / editing idea from the list: ask first. */
-function confirmResolve(confirm: ReturnType<typeof useConfirm>, c: ScriptComment) {
-  const idea = c.kind === "edit_idea";
-  return confirm({
-    title: idea ? "Resolve this editing idea?" : "Resolve this comment?",
-    description: `It's marked as done and hidden from the list (Show resolved brings it back). You can reopen it any time.`,
-    confirmLabel: "Resolve",
-  });
-}
-
-/** Deleting can't be undone: ask first. */
-function confirmDelete(confirm: ReturnType<typeof useConfirm>, c: ScriptComment) {
-  const idea = c.kind === "edit_idea";
-  return confirm({
-    title: idea ? "Delete this editing idea?" : "Delete this comment?",
-    description: c.sketch ? "Its drawing is deleted too. This can't be undone." : "This can't be undone.",
-    confirmLabel: "Delete",
-    danger: true,
-  });
-}
-
-/** A comment's text (mentions highlighted) and its sketch, if it has one. */
-function CommentBody({ c, people, roleColors, onSketch }: { c: ScriptComment; people: MentionPerson[]; roleColors: Record<string, string>; onSketch: () => void }) {
-  const onlySketch = !!c.sketch && c.body.trim() === "Sketch";
-  return (
-    <>
-      {!onlySketch && (
-        <p className="text-[13.5px] text-ink whitespace-pre-wrap break-words">
-          <MentionText text={c.body} people={people} roleColors={roleColors} />
-        </p>
-      )}
-      {c.sketch && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSketch();
-          }}
-          className="group/sk relative mt-1.5 block w-full rounded-lg border border-line/15 bg-white overflow-hidden hover:border-line/35 transition-colors"
-          aria-label="Open the sketch"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={c.sketch.url} alt="Sketch" loading="lazy" className="w-full max-h-40 object-contain" />
-          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 text-white px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold opacity-0 group-hover/sk:opacity-100 transition-opacity">View</span>
-        </button>
-      )}
     </>
   );
 }
@@ -926,6 +845,11 @@ function commentColor(c: ScriptComment, _roleColors?: Record<string, string>) {
  * Research…): the panel names the one it belongs to. Comments left on words
  * that were rewritten since are kept apart at the end, so they never look
  * like they came from somewhere else.
+ *
+ * 1.50.0, rebuilt (the owner: "the comments UI is pretty bad, we need improvements acros sthe board"): the same card
+ * as the small box on the words (comment-card.tsx), with Edit for its author; counts on the filters; and a box at the
+ * bottom for a comment or an editing idea on the whole document, on no words of it ("general comments as well, not
+ * linked to anything in particular").
  */
 export function CommentsChat({
   open,
@@ -937,7 +861,6 @@ export function CommentsChat({
   docName,
   number,
   docContent,
-  colorOf,
   roleColors,
   exportTitle,
   people,
@@ -946,6 +869,7 @@ export function CommentsChat({
   mayDelete,
   posting,
   me,
+  onAddGeneral,
 }: {
   canComment: boolean;
   mayDelete: (c: ScriptComment) => boolean;
@@ -960,11 +884,12 @@ export function CommentsChat({
   docName: string;
   number: number;
   docContent: Record<string, unknown>;
-  colorOf: (c: ScriptComment) => string;
   roleColors: Record<string, string>;
   exportTitle: string;
   people: MentionPerson[];
   onSketch: (c: ScriptComment) => void;
+  /** A comment on the whole document: null when it's posted, else what went wrong. */
+  onAddGeneral?: (body: string, kind: "comment" | "edit_idea") => Promise<string | null>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -974,11 +899,14 @@ export function CommentsChat({
   const [big, setBig] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
   const openCount = comments.filter((c) => !c.resolved).length;
-  const list = comments.filter((c) => (showResolved || !c.resolved) && (filter === "all" || c.kind === filter));
+  const shown = comments.filter((c) => showResolved || !c.resolved);
+  const counts = { all: shown.length, comment: shown.filter((c) => c.kind === "comment").length, edit_idea: shown.filter((c) => c.kind === "edit_idea").length };
+  const list = shown.filter((c) => filter === "all" || c.kind === filter);
   const listRef = useRef<HTMLDivElement>(null);
+  const hasPosting = !!posting;
   useEffect(() => {
     if (open) listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [open, comments.length, !!posting]);
+  }, [open, comments.length, hasPosting]);
   const sending = posting && !comments.some((c) => c.id === posting.id) ? posting : null;
   const meAs = me ? people.find((p) => p.userId === me.userId) ?? null : null;
   // Which quotes can no longer be found (the text was rewritten). Null until the text is read.
@@ -996,7 +924,8 @@ export function CommentsChat({
   );
   useEffect(() => {
     if (!ed) return;
-    setMissing(new Set(comments.filter((c) => !findQuote(ed.state.doc, c.quote, c.occurrence)).map((c) => c.id)));
+    // A general one is on no words: it's never "on text that changed".
+    setMissing(new Set(comments.filter((c) => c.quote && !findQuote(ed.state.doc, c.quote, c.occurrence)).map((c) => c.id)));
   }, [ed, comments]);
   const here = missing ? list.filter((c) => !missing.has(c.id)) : list;
   const gone = missing ? list.filter((c) => missing.has(c.id)) : [];
@@ -1006,10 +935,60 @@ export function CommentsChat({
   const showGone = goneShown ?? here.length === 0;
   const [resolvingGone, setResolvingGone] = useState(false);
 
-  async function act(fn: () => Promise<{ error?: string }>) {
-    const r = await fn();
-    if (r.error) toast.error(r.error);
-    else router.refresh();
+  // The box for the whole document, and a copy of what's in it on this device (a reload can't lose it).
+  const generalKey = `vp:general-comment:${docId}`;
+  const [gKind, setGKind] = useState<"comment" | "edit_idea">("comment");
+  const [gText, setGText] = useState("");
+  const [gBusy, setGBusy] = useState(false);
+  useEffect(() => {
+    try {
+      const b = JSON.parse(localStorage.getItem(generalKey) ?? "null");
+      if (b && typeof b.text === "string" && Date.now() - (b.at ?? 0) < 14 * 86_400_000) {
+        setGText(b.text);
+        setGKind(b.kind === "edit_idea" ? "edit_idea" : "comment");
+      }
+    } catch {}
+  }, [generalKey]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (!gText.trim()) localStorage.removeItem(generalKey);
+        else localStorage.setItem(generalKey, JSON.stringify({ kind: gKind, text: gText, at: Date.now() }));
+      } catch {
+        /* full or private: it's still in the box */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [gText, gKind, generalKey]);
+  async function sendGeneral() {
+    const body = gText.trim();
+    if (!onAddGeneral || gBusy || !body) return;
+    const was = { text: gText, kind: gKind };
+    setGBusy(true);
+    // It shows at once, as "Posting…"; if it fails, the words come back to the box.
+    setGText("");
+    const err = await onAddGeneral(body, gKind);
+    setGBusy(false);
+    if (err) {
+      setGText(was.text);
+      setGKind(was.kind);
+      toast.error(err);
+      return;
+    }
+    sounds.send();
+    try {
+      localStorage.removeItem(generalKey);
+    } catch {}
+  }
+  async function discardGeneral() {
+    if (!gText.trim()) return;
+    const ok = await confirm({
+      title: gKind === "edit_idea" ? "Discard this editing idea?" : "Discard this comment?",
+      description: "What you wrote will be lost.",
+      confirmLabel: "Discard",
+      danger: true,
+    });
+    if (ok) setGText("");
   }
 
   async function resolveGone() {
@@ -1029,64 +1008,22 @@ export function CommentsChat({
     router.refresh();
   }
 
-  const card = (c: ScriptComment) => {
-    const color = colorOf(c);
-    return (
-      <article
-        key={c.id}
-        onClick={() => onPick(c.id)}
-        className={`rounded-xl border p-3 cursor-pointer transition-colors ${c.resolved ? "opacity-55" : ""} ${c.id === active ? "border-line/40" : "border-line/10 hover:border-line/25"}`}
-        style={{ background: `color-mix(in srgb, ${color} 5%, transparent)`, boxShadow: `inset 2px 0 0 color-mix(in srgb, ${color} 65%, transparent)` }}
-      >
-        <div className="flex items-center gap-2 mb-1.5">
-          <PersonAvatar name={c.author?.name ?? "?"} avatarUrl={c.author?.avatarUrl ?? null} color={c.author?.color ?? "#888"} className="w-6 h-6 text-[10px]" />
-          <span className="text-[12.5px] font-semibold text-ink truncate">{c.author?.name ?? "Someone"}</span>
-          <span className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold flex-shrink-0" style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
-            {c.kind === "edit_idea" ? "Editing idea" : "Comment"}
-          </span>
-          <span className="ml-auto text-[11px] text-ink-faint whitespace-nowrap">
-            <Ago iso={c.createdAt} />
-          </span>
-        </div>
-        <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}>
-          “{c.quote}”
-          {missing?.has(c.id) && (
-            <span className="ml-1.5 rounded bg-surface-2 px-1.5 text-[10.5px] font-bold" title="These words were changed or deleted since">
-              text changed
-            </span>
-          )}
-        </div>
-        <CommentBody c={c} people={people} roleColors={roleColors} onSketch={() => onSketch(c)} />
-        {canComment && (
-          <div className="flex items-center gap-1 mt-1.5 -mb-1">
-            <button
-              type="button"
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (!c.resolved && !(await confirmResolve(confirm, c))) return;
-                void act(() => resolveComment(c.id, !c.resolved));
-              }}
-              className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
-            >
-              {c.resolved ? "Reopen" : "Resolve"}
-            </button>
-            {mayDelete(c) && (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (await confirmDelete(confirm, c)) void act(() => deleteComment(c.id));
-                }}
-                className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-red hover:bg-red/10"
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        )}
-      </article>
-    );
-  };
+  const card = (c: ScriptComment) => (
+    <CommentCard
+      key={c.id}
+      variant="list"
+      c={c}
+      people={people}
+      roleColors={roleColors}
+      me={me}
+      canComment={canComment}
+      mayDelete={mayDelete(c)}
+      changed={!!missing?.has(c.id)}
+      active={c.id === active}
+      onPick={() => onPick(c.id)}
+      onSketch={() => onSketch(c)}
+    />
+  );
 
   return (
     <>
@@ -1109,14 +1046,14 @@ export function CommentsChat({
         <Leaves>
           <section
             key={big ? "big" : "small"}
-            className={`no-print fixed z-40 bg-surface border border-line/15 shadow-2xl flex flex-col pop-modal ${
+            className={`no-print fixed z-40 bg-surface text-ink border border-line/15 shadow-2xl flex flex-col pop-modal ${
               big
                 ? "inset-2 sm:inset-6 lg:inset-x-[max(1.5rem,calc(50vw-28rem))] lg:inset-y-8 rounded-2xl"
-                : "inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[400px] lg:h-[min(620px,calc(100dvh-9rem))]"
+                : "inset-x-2 bottom-2 h-[78dvh] rounded-2xl lg:inset-auto lg:right-6 lg:bottom-6 lg:w-[420px] lg:h-[min(660px,calc(100dvh-9rem))]"
             }`}
             aria-label="Comments"
           >
-            <header className="px-4 pt-3.5 pb-2.5 border-b border-line/10 space-y-2.5">
+            <header className="px-4 pt-3.5 pb-3 border-b border-line/10 space-y-3">
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="text-[15px] font-bold">Comments</h2>
                 <span className="text-[12.5px] text-ink-soft whitespace-nowrap">{openCount} open</span>
@@ -1132,65 +1069,42 @@ export function CommentsChat({
                   <CloseIcon className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Show">
+              <div className="flex rounded-xl bg-surface-2 p-0.5" role="radiogroup" aria-label="Show">
                 {([
-                  ["all", "All", null],
-                  ["comment", "Comments", TYPE_COLOR.comment],
-                  ["edit_idea", "Editing ideas", TYPE_COLOR.edit_idea],
-                ] as const).map(([k, label, dot]) => (
+                  ["all", "All"],
+                  ["comment", "Comments"],
+                  ["edit_idea", "Editing ideas"],
+                ] as const).map(([k, label]) => (
                   <button
                     key={k}
                     type="button"
                     role="radio"
                     aria-checked={filter === k}
                     onClick={() => setFilter(k)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 h-8 text-[12.5px] font-semibold transition-colors ${filter === k ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] px-2 h-8 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
+                      filter === k ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.18)] ring-1 ring-inset ring-line/10" : "text-ink-soft hover:text-ink"
+                    }`}
                   >
-                    {dot && <span className="w-2 h-2 rounded-[3px]" style={{ background: dot }} />}
+                    {k !== "all" && <KindMark kind={k} />}
                     {label}
+                    <span className={`tabular-nums text-[11.5px] ${filter === k ? "text-ink-soft" : "text-ink-faint"}`}>{counts[k]}</span>
                   </button>
                 ))}
               </div>
             </header>
-            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-2.5">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden styled-scroll px-3 py-3 space-y-2.5">
               {!list.length && !sending && (
-                <p className="text-[13px] text-ink-soft text-center px-6 py-10">
-                  {comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet. Select text, then choose Comment or Editing idea.`}
-                </p>
+                <div className="text-center px-6 py-10">
+                  <p className="text-[13.5px] font-semibold text-ink">{comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet.`}</p>
+                  {!comments.length && (
+                    <p className="mt-1.5 text-[12.5px] text-ink-soft leading-relaxed">
+                      Select any words in it, a line or several, then choose Comment or Editing idea{canComment && onAddGeneral ? ". Or write one below for the whole document." : "."}
+                    </p>
+                  )}
+                </div>
               )}
               {here.map(card)}
-              {sending && (
-                <article
-                  aria-busy="true"
-                  aria-label={sending.kind === "edit_idea" ? "Posting your editing idea" : "Posting your comment"}
-                  className="rounded-xl border border-line/10 p-3 animate-[rise-in_.3s_var(--ease-out)]"
-                  style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 5%, transparent)`, boxShadow: `inset 2px 0 0 color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 65%, transparent)` }}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {meAs ? <PersonAvatar name={meAs.name} avatarUrl={meAs.avatarUrl} color={meAs.color} className="w-6 h-6 text-[10px]" /> : <SkeletonCircle className="w-6 h-6" />}
-                    {meAs ? <span className="text-[12.5px] font-semibold text-ink truncate">{meAs.name}</span> : <Skeleton className="h-3 w-20" />}
-                    <span
-                      className="rounded-md px-1.5 h-5 inline-flex items-center text-[10.5px] font-semibold flex-shrink-0"
-                      style={{ background: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 14%, transparent)`, color: TYPE_COLOR[sending.kind] }}
-                    >
-                      {sending.kind === "edit_idea" ? "Editing idea" : "Comment"}
-                    </span>
-                    <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-ink-faint whitespace-nowrap">
-                      <span className="w-3 h-3 rounded-full border-2 border-ink-faint/30 border-t-amber animate-spin" aria-hidden />
-                      Posting…
-                    </span>
-                  </div>
-                  <div className="text-[12px] text-ink-soft pl-2 mb-1.5 line-clamp-2 border-l-2" style={{ borderColor: `color-mix(in srgb, ${TYPE_COLOR[sending.kind]} 55%, transparent)` }}>
-                    “{sending.quote}”
-                  </div>
-                  {sending.body && sending.body !== "Sketch" && <p className="text-[13.5px] text-ink/70 whitespace-pre-wrap break-words">{sending.body}</p>}
-                  {sending.sketchUrl && <Skeleton className="mt-1.5 h-20 w-full rounded-lg" />}
-                  <div className="flex items-center gap-1.5 mt-2" aria-hidden>
-                    <Skeleton className="h-5 w-14 rounded-md" />
-                    <Skeleton className="h-5 w-12 rounded-md" />
-                  </div>
-                </article>
-              )}
+              {sending && <PostingCard p={sending} meAs={meAs} />}
               {gone.length > 0 && (
                 <div className={here.length ? "pt-2" : ""}>
                   <div className="rounded-xl border border-dashed border-line/20 px-3 py-2.5">
@@ -1221,8 +1135,25 @@ export function CommentsChat({
                 </div>
               )}
             </div>
+            {canComment && onAddGeneral && (
+              <div className="px-3 pt-2.5 pb-2 border-t border-line/10">
+                <CommentComposer
+                  variant="panel"
+                  kind={gKind}
+                  setKind={setGKind}
+                  quote=""
+                  people={people}
+                  roleColors={roleColors}
+                  text={gText}
+                  setText={setGText}
+                  busy={gBusy}
+                  onSubmit={() => void sendGeneral()}
+                  onCancel={() => void discardGeneral()}
+                />
+              </div>
+            )}
             <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
-              <span className="flex-1 min-w-[8rem]">{canComment ? "Select text, then Enter to add." : "Only this video's scripters and its Review and Staging people can comment."}</span>
+              <span className="flex-1 min-w-[8rem]">{canComment ? "Or select words to comment on them." : "Only this video's scripters and its Review and Staging people can comment."}</span>
               {comments.some((c) => c.kind === "edit_idea") && (
                 <span className="inline-flex items-center gap-1">
                   <span className="font-semibold">Export ideas</span>
@@ -1231,10 +1162,10 @@ export function CommentsChat({
                       key={f}
                       type="button"
                       onClick={async () => {
-                        // Editing ideas in the order they appear in the script.
+                        // Editing ideas in the order they appear in the script (the ones on the whole document first).
                         const ideas = comments
                           .filter((c) => c.kind === "edit_idea" && !c.resolved)
-                          .map((c) => ({ c, at: ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
+                          .map((c) => ({ c, at: !c.quote ? -1 : ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
                           .sort((a, b) => a.at - b.at)
                           .map(({ c }) => ({ quote: c.quote, idea: c.sketch && c.body.trim() === "Sketch" ? "" : c.body, sketch: c.sketch?.url ?? null }));
                         if (!ideas.length) return toast.error("No open editing ideas to export.");
