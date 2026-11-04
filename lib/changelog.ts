@@ -22,6 +22,14 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.50.1",
+    date: "2026-11-04",
+    title: "Database updates run again",
+    changes: [
+      { kind: "fixed", text: "Behind the scenes: the automatic database updates had stopped since Nov 2, when Supabase's tools started asking for a yes that GitHub can't type. They give it themselves now, so 1.50.0's update reaches staging and production." },
+    ],
+  },
+  {
     version: "1.50.0",
     date: "2026-11-04",
     title: "Comments, rebuilt",

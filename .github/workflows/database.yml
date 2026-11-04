@@ -49,6 +49,18 @@ jobs:
         run: |
           curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin supabase
           supabase --version
+          # 1.50.1: written for the CLI's version 3 (Nov 2 2026). --remote=<address> names the database (the = matters:
+          # --remote alone means the linked project; it replaces the old db-url flag), and a change is only made with
+          # --yes (in a job nobody can answer its question, so without it v3 stops: "Confirmation required … Nothing
+          # was changed").
+          major=$(supabase --version | grep -oE '[0-9]+' | head -1)
+          if [ "${major:-0}" -lt 3 ]; then
+            echo "::error::This workflow needs the Supabase CLI 3 or newer (got $(supabase --version))."
+            exit 1
+          fi
+          if [ "$major" -gt 3 ]; then
+            echo "::warning::The Supabase CLI is now $(supabase --version) and this workflow was written for 3. If a step fails, check that version's notes."
+          fi
 
       - name: Check the connection string is set
         run: |
@@ -70,7 +82,7 @@ jobs:
       - name: Migrations on ${{ env.TARGET }}
         run: |
           set -o pipefail
-          if ! supabase migration list --db-url "$DB_URL" 2>&1 | tee /tmp/list.txt; then
+          if ! supabase migration list --remote="$DB_URL" 2>&1 | tee /tmp/list.txt; then
             name=$([ "$TARGET" = production ] && echo PRODUCTION_DB_URL || echo STAGING_DB_URL)
             if grep -q "password authentication failed" /tmp/list.txt; then
               echo "::error::The password inside $name is wrong. Reset the $TARGET database password in Supabase (letters and numbers only), put it in the address, update the secret, then Re-run all jobs. Steps: scripts/db/README.md"
@@ -93,12 +105,13 @@ jobs:
 
       - name: Dry run (what would run)
         if: env.ACTION == 'push'
-        run: supabase db push --db-url "$DB_URL" --dry-run
+        run: supabase db push --dry-run --remote="$DB_URL"
 
       - name: Run new migrations
         if: env.ACTION == 'push'
-        run: supabase db push --db-url "$DB_URL"
+        # --yes: the go-ahead (the checks above and the dry run come first).
+        run: supabase db push --yes --remote="$DB_URL"
 
       - name: Result
         if: env.ACTION == 'push'
-        run: supabase migration list --db-url "$DB_URL"
+        run: supabase migration list --remote="$DB_URL"

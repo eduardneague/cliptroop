@@ -13,7 +13,8 @@ set -euo pipefail
 DB_URL="${1:?Usage: scripts/db/baseline.sh <db-url> [last-version-already-run, default 0062]}"
 LAST="${2:-0062}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SUPABASE="${SUPABASE_BIN:-npx --yes supabase@2}"
+# The Supabase CLI 3 (Nov 2 2026): --remote=<address> names the database, --yes confirms the change.
+SUPABASE="${SUPABASE_BIN:-npx --yes supabase@3}"
 
 versions=()
 for f in "$ROOT"/supabase/migrations/*.sql; do
@@ -24,5 +25,5 @@ done
 
 echo "Marking ${versions[0]} … ${versions[${#versions[@]}-1]} (${#versions[@]} migrations) as already run."
 cd "$ROOT"
-$SUPABASE migration repair --db-url "$DB_URL" --status applied "${versions[@]}"
-$SUPABASE migration list --db-url "$DB_URL"
+$SUPABASE migration repair --status applied "${versions[@]}" --yes --remote="$DB_URL"
+$SUPABASE migration list --remote="$DB_URL"
