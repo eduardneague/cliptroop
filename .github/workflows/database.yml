@@ -42,7 +42,7 @@ jobs:
       ACTION: ${{ inputs.action || 'push' }}
       DB_URL: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.PRODUCTION_DB_URL || (github.event_name == 'push' && secrets.STAGING_DB_URL) || (inputs.target == 'production' && secrets.PRODUCTION_DB_URL || secrets.STAGING_DB_URL) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install the Supabase CLI
