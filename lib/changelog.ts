@@ -22,6 +22,16 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.49.1",
+    date: "2026-11-03",
+    title: "Three steps in, and a clear goodbye",
+    changes: [
+      { kind: "better", text: "The link in “Confirm your email” now signs you straight in: no second button to press." },
+      { kind: "better", text: "A new account's first steps are two: About you, then two-step sign-in set up right there. Each one has Skip, and then you're in the app." },
+      { kind: "better", text: "Deleting your account asks one last time after your email and password, then shows a page saying it's done, with a way back to the home page." },
+    ],
+  },
+  {
     version: "1.49.0",
     date: "2026-11-03",
     title: "Your first steps, at your pace",

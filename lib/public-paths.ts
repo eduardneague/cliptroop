@@ -19,6 +19,8 @@ const EXACT = new Set([
   "/signup",
   // Where the sign-in emails lead (invites, password resets): signs you in.
   "/welcome",
+  // 1.49.1: where deleting your account ends (signed out by then).
+  "/account-deleted",
   // The pages the platforms' reviews check.
   "/privacy",
   "/terms",

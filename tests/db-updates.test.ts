@@ -46,7 +46,8 @@ ok(/'tiktok-pull'/.test(read(`supabase/migrations/${files.find((x) => x.startsWi
 
 // App setup shows it at the top, with the way to run them.
 const setup = read("app/(dashboard)/setup/page.tsx");
-ok(/readDbUpdates\(\)/.test(setup) && /This database is missing updates/.test(setup) && /Run workflow/.test(setup) && /merge <b className="text-ink">staging<\/b> into <b className="text-ink">main<\/b>/.test(setup), "App setup: what's missing and how to run it");
+ok(/readDbUpdates\(\)/.test(setup) && /This database is missing updates/.test(setup) && /Use workflow from <b className="text-ink">staging<\/b>, Which\s+database <b className="text-ink">production<\/b>/.test(setup), "App setup: what's missing and how to run it (Run workflow: staging and main share no history, so no pull request)");
+ok(!/merge <b className="text-ink">staging<\/b> into <b className="text-ink">main<\/b>/.test(setup), "not a merge that can't be made");
 
 if (fails) {
   console.log(`${fails} failed`);

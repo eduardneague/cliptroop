@@ -16,13 +16,16 @@ export type AccountTeam = { id: string; name: string; color: string; logo_url: s
 /**
  * Settings → Account → Delete account (1.28.0). Locked until you're on no
  * team (leave each one here; teams you own: transfer or delete them on their
- * Team page first). Then two steps: what goes, ticked as understood; and your
- * email and password, checked again on the server.
+ * Team page first). Then three steps: what goes, ticked as understood; your
+ * email and password; and (1.49.1, the owner: "i want one last cofnirmation
+ * after you click delete when you input your credentials") one last "Yes,
+ * delete it". The server checks the password again, deletes, and opens
+ * /account-deleted.
  */
 export function DeleteAccount({ email, teams }: { email: string; teams: AccountTeam[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [understood, setUnderstood] = useState(false);
   const [typed, setTyped] = useState("");
   const [password, setPassword] = useState("");
@@ -38,18 +41,27 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
     setPassword("");
   }
 
+  // Email and password typed: the last question first.
+  function askLast() {
+    if (!emailOk || !password || pending) return;
+    setStep(3);
+  }
+
   function confirmDelete() {
     if (!emailOk || !password || pending) return;
     start(async () => {
       const r = await deleteAccount({ email: typed, password });
-      // Deleted: the server sends you to the sign-in page.
+      // Deleted: the server opens /account-deleted.
       if (r?.error) {
         toast.error(r.error);
         if (r.blocked) {
           close();
           router.refresh();
+          return;
         }
+        // A wrong password (or a hiccup): back to typing it.
         setPassword("");
+        setStep(2);
       }
     });
   }
@@ -149,8 +161,8 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
             <button type="button" onClick={close} disabled={pending} className="rounded-lg border border-line/15 px-3.5 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink">
               Cancel
             </button>
-            <button type="button" onClick={confirmDelete} disabled={!emailOk || !password || pending} className="rounded-lg bg-red text-white px-3.5 h-9 text-[13px] font-semibold hover:brightness-110 disabled:opacity-40">
-              {pending ? "Deleting…" : "Delete my account for good"}
+            <button type="button" onClick={askLast} disabled={!emailOk || !password || pending} className="rounded-lg bg-red text-white px-3.5 h-9 text-[13px] font-semibold hover:brightness-110 disabled:opacity-40">
+              Delete my account
             </button>
           </div>
         }
@@ -158,7 +170,7 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            confirmDelete();
+            askLast();
           }}
           className="space-y-3"
         >
@@ -188,6 +200,30 @@ export function DeleteAccount({ email, teams }: { email: string; teams: AccountT
           </label>
           <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
         </form>
+      </Dialog>
+
+      <Dialog
+        open={step === 3}
+        onClose={() => !pending && close()}
+        title="Delete your account for good?"
+        description="This is the last step."
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={close} disabled={pending} className="rounded-lg border border-line/15 px-3.5 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink">
+              Keep my account
+            </button>
+            <button type="button" onClick={confirmDelete} disabled={pending} className="rounded-lg bg-red text-white px-3.5 h-9 text-[13px] font-semibold hover:brightness-110 disabled:opacity-40">
+              {pending ? "Deleting…" : "Yes, delete it"}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex gap-3 rounded-xl bg-red/10 border border-red/20 p-3.5">
+          <AlertIcon className="w-5 h-5 text-red flex-shrink-0 mt-0.5" />
+          <p className="text-[13px] text-ink leading-relaxed">
+            <b className="break-all">{email}</b> is deleted right away, with everything that&rsquo;s yours. Nobody can bring it back, not even the developer.
+          </p>
+        </div>
       </Dialog>
     </section>
   );

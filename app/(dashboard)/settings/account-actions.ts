@@ -185,5 +185,7 @@ export async function deleteAccount(input: { email: string; password: string }):
   const cookieStore = await cookies();
   cookieStore.delete(PUSH_COOKIE);
   cookieStore.delete(CURRENT_TEAM_COOKIE);
-  redirect("/login?deleted=1");
+  // 1.49.1: a page that says so (the owner: "you should get a page saying your account has been successfully delted …
+  // after that page, refreshing or a quick link to go back to the ladning page"). Public, so it works signed out.
+  redirect("/account-deleted");
 }

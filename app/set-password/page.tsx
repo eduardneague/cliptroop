@@ -11,5 +11,5 @@ export default async function SetUpAccountPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const facts = await onboardingFacts();
   const asked = typeof sp.step === "string" ? sp.step : null;
-  return <AccountSetup key={asked ?? ""} mode="invite" asked={asked} twoStep={facts.twoStep} hasTeam={facts.hasTeam} />;
+  return <AccountSetup key={asked ?? ""} mode="invite" asked={asked} twoStep={facts.twoStep} maskedEmail={facts.maskedEmail} />;
 }

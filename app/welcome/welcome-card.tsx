@@ -22,12 +22,12 @@ const COPY: Record<LinkType, { eyebrow: string; title: string; text: string; cta
     cta: "Let's set you up",
     next: "/set-password",
   },
-  // 1.45.0: the password was chosen on the sign-up form. 1.49.0: next come the account's first steps (each skippable),
-  // naming the team among them.
+  // 1.45.0: the password was chosen on the sign-up form. 1.49.0: next come the account's first steps, each skippable.
+  // 1.49.1: it confirms by itself as the page opens (the button is for someone else signed in on this device).
   signup: {
     eyebrow: "Almost there",
     title: "Confirm your email",
-    text: `Press the button to confirm your email. Next, a few quick steps to set up your account and your team (you can skip them).`,
+    text: `Next come two quick steps to set up your account (you can skip them), then the app.`,
     cta: "Confirm my email",
     next: "/get-started",
   },
@@ -75,10 +75,46 @@ type Swap = { from: string; to: string; session: LinkSession; next: string };
 
 export function WelcomeCard({ tokenHash, type, expired, swap: handoff = false }: { tokenHash: string | null; type: LinkType | null; expired: boolean; swap?: boolean }) {
   const router = useRouter();
-  const [state, setState] = useState<"idle" | "working" | "failed" | "stayed">(expired ? "failed" : "idle");
+  // 1.49.1: a sign-up's link confirms by itself as the page opens (the owner: "the fact that i click confirm sign in on
+  // the email, shouldnt get me to a page where i have to press sign in again"), so it shows that from the start.
+  const autoConfirm = type === "signup" && !!tokenHash && !expired && !handoff;
+  const [state, setState] = useState<"idle" | "working" | "failed" | "stayed">(expired ? "failed" : autoConfirm ? "working" : "idle");
   const [swap, setSwap] = useState<Swap | null>(null);
   const copy = type ? COPY[type] : null;
   const supabase = useRef(createClient()).current;
+  const started = useRef(false);
+
+  // Only once the page is in front of someone (and only in a browser running it: a mail scanner that just fetches
+  // the address never uses the code). Someone else signed in on this device: the button asks first, as before.
+  useEffect(() => {
+    if (!autoConfirm || !tokenHash) return;
+    // Once per page: the code works once. A run always finishes (it's the same card when React mounts it twice).
+    const run = async () => {
+      if (started.current) return;
+      started.current = true;
+      const { data: here } = await supabase.auth.getUser();
+      if (here.user) {
+        setState("idle");
+        return;
+      }
+      const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "signup" });
+      if (error) {
+        sounds.error();
+        setState("failed");
+        return;
+      }
+      sounds.advance();
+      router.replace(COPY.signup.next);
+    };
+    const onShow = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onShow);
+      void run();
+    };
+    if (document.visibilityState === "visible") void run();
+    else document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
+  }, [autoConfirm, tokenHash, supabase, router]);
 
   // An old-style link (#access_token=…) for another account: AuthHashHandler left it here to ask about.
   useEffect(() => {
