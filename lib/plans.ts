@@ -10,6 +10,18 @@
  */
 export const CURRENCY = "$";
 
+/**
+ * Whether a team needs a plan to open (1.51.0: no, for now). The owner (Nov 4 2026), shown "Choose a plan to open your
+ * team" on a new account: "remove this for now please, just until i get the tiktok approval thing, lets give access to
+ * free accounts for now, and thne we can add this back and connect it to stripe or something".
+ *
+ * Off: every team opens without one (no plan page in place of the app, accounts connect, files upload), and the website
+ * says ClipTroop is free while in early access. The plans themselves stay: their prices on Pricing, Developer → Plans
+ * (a plan still sets a team's storage), and a master can still ask for one on /plan once the team has a plan.
+ * To turn plans back on: set this to true AND make the database's public.plans_required() say true (migration 0128).
+ */
+export const PLANS_REQUIRED: boolean = false;
+
 export const PLAN_IDS = ["studio", "network"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 export const isPlanId = (v: unknown): v is PlanId => typeof v === "string" && (PLAN_IDS as readonly string[]).includes(v);

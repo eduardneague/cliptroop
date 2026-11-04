@@ -5,7 +5,7 @@ import { btn, btnQuiet, SitePage, textLink } from "@/components/site/site-chrome
 import { Steps } from "@/components/site/steps";
 import { DEPTS, FEATURES, featuresIn } from "@/lib/site/features";
 import { SITE_PLATFORMS } from "@/lib/site/platforms";
-import { PLAN_FACTS, gbLabel, planPrice } from "@/lib/plans";
+import { PLAN_FACTS, PLANS_REQUIRED, gbLabel, planPrice } from "@/lib/plans";
 import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import { ClipOnView, Play, Timecode } from "./landing-client";
 import { PhoneVignette } from "./vignettes";
@@ -186,7 +186,8 @@ function Price() {
           </h2>
           <p className="mt-3 text-[16px] leading-relaxed text-ink-soft max-w-[34rem]">
             {studio.name} is {planPrice("studio", false)} a person a month, or {planPrice("studio", true)} billed yearly, with {gbLabel(studio.storageGb)} of storage for the
-            team. Network, for agencies with several teams, is priced with you. There&rsquo;s no free plan and no trial.
+            team. Network, for agencies with several teams, is priced with you.{" "}
+            {PLANS_REQUIRED ? <>There&rsquo;s no free plan and no trial.</> : <>Free while {APP_NAME} is in early access.</>}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 md:justify-end">

@@ -104,7 +104,7 @@ for (const p of PLANS) {
 ok(PLANS[0].monthly === 120 && PLANS[0].yearly === 100 && priceLabel(PLANS[1], true) === null, "Studio $120 or $100 yearly; Network priced with you");
 const pricingPage = read("app/(site)/pricing/page.tsx");
 const pricingPlans = read("components/site/pricing-plans.tsx");
-ok(pricingPlans.includes("Yearly, two months free") && pricingPage.includes("No free plan and no trial."), "the switch's words, and no free plan, said plainly");
+ok(pricingPlans.includes("Yearly, two months free") && pricingPage.includes("No free plan and no trial.") && pricingPage.includes("is in early access: create an account and your team opens right away."), "the switch's words, and what a team pays for, said plainly (free in early access while plans are off, 1.51.0)");
 ok(/<Tween value=\{each \* people\} format=\{f\} \/>/.test(pricingPlans) && /const each = \(yearly \? studio\.yearly : studio\.monthly\) \?\? 0;/.test(pricingPlans) && /max=\{MAX_PEOPLE\}/.test(pricingPlans), "what a team pays, worked out from the plan's numbers as you choose");
 ok(/<Link href="\/signup"/.test(pricingPlans) && /<PricingPlans plans=\{PLANS\}/.test(pricingPage), "Studio starts with Create an account");
 ok(EVERY_PLAN.length >= 3 && PRICING_FAQ.length >= 4 && PRICING_FAQ.every((f) => f.q.endsWith("?")), "every plan's list and the questions");

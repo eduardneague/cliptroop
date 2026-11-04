@@ -3,6 +3,7 @@ import { publicMetadata } from "@/lib/public-pages";
 import Link from "next/link";
 import { APP_NAME, COMPANY_NAME } from "@/lib/brand";
 import { LEGAL_CONTACT, LEGAL_CONTACT_HREF, LEGAL_UPDATED } from "@/lib/legal";
+import { PLANS_REQUIRED } from "@/lib/plans";
 
 export const metadata: Metadata = { ...publicMetadata("/terms", "Terms of service"), robots: { index: true, follow: true } };
 
@@ -32,10 +33,19 @@ export default function TermsPage() {
 
       <H>Plans and payment</H>
       <ul className="list-disc pl-6 space-y-1.5">
-        <li>
-          Every team needs a plan (<Link href="/pricing" className="underline">Pricing</Link>). There&rsquo;s no free plan or trial. A team&rsquo;s Master asks for one in the
-          app; we agree the details by email and invoice for it, monthly or yearly, and the team opens once its plan is on.
-        </li>
+        {PLANS_REQUIRED ? (
+          <li>
+            Every team needs a plan (<Link href="/pricing" className="underline">Pricing</Link>). There&rsquo;s no free plan or trial. A team&rsquo;s Master asks for one in the
+            app; we agree the details by email and invoice for it, monthly or yearly, and the team opens once its plan is on.
+          </li>
+        ) : (
+          // 1.51.0: while plans are off (PLANS_REQUIRED, lib/plans.ts).
+          <li>
+            While {APP_NAME} is in early access, every team can use it free of charge, without a plan. The plans on{" "}
+            <Link href="/pricing" className="underline">Pricing</Link> come after it: nothing is charged unless a team&rsquo;s Master agrees to one with us by email, and we
+            invoice for it, monthly or yearly.
+          </li>
+        )}
         <li>Prices are in US dollars, per person on the team, per month.</li>
         <li>Each plan includes storage for the team&rsquo;s files. If a team goes past it, we&rsquo;ll ask it to remove files or add storage to its plan.</li>
       </ul>

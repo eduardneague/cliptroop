@@ -110,7 +110,7 @@ ok(real.expired.length === 0, "no expired waivers left in the file");
 // --- Wiring --------------------------------------------------------------------------------------------------------------------
 type Pkg = { version: string; scripts: Record<string, string>; devDependencies: Record<string, string>; overrides?: Record<string, unknown> };
 const pkg = JSON.parse(read("package.json")) as Pkg;
-ok(/^node scripts\/audit\.mjs && next build$/.test(pkg.scripts.build), "npm run build checks first, then builds (Vercel and CI run npm run build)");
+ok(/^node scripts\/audit\.mjs && node scripts\/patch-next-font\.mjs && next build$/.test(pkg.scripts.build), "npm run build checks first, then builds (Vercel and CI run npm run build); 1.51.0: next/font's Google fallback before it");
 ok(pkg.overrides?.postcss === "$postcss" && /^\^8\.5\.(3[1-9]|[4-9]\d)/.test(pkg.devDependencies.postcss), "every package, Next.js included, uses the app's own PostCSS (8.5.31 or newer)");
 const lock = JSON.parse(read("package-lock.json")) as { packages: Record<string, { version?: string; dev?: boolean }> };
 const copies = Object.entries(lock.packages).filter(([k]) => /(^|\/)node_modules\/postcss$/.test(k));

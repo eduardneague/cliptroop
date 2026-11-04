@@ -73,12 +73,25 @@ function sideClient() {
 /** The question when the link is for another account than the one signed in here (1.31.11). */
 type Swap = { from: string; to: string; session: LinkSession; next: string };
 
-export function WelcomeCard({ tokenHash, type, expired, swap: handoff = false }: { tokenHash: string | null; type: LinkType | null; expired: boolean; swap?: boolean }) {
+export function WelcomeCard({
+  tokenHash,
+  type,
+  code = null,
+  expired,
+  swap: handoff = false,
+}: {
+  tokenHash: string | null;
+  type: LinkType | null;
+  /** 1.51.0: a link from Supabase's own email (?code=): this browser's sign-in, if it's the one that signed up. */
+  code?: string | null;
+  expired: boolean;
+  swap?: boolean;
+}) {
   const router = useRouter();
   // 1.49.1: a sign-up's link confirms by itself as the page opens (the owner: "the fact that i click confirm sign in on
   // the email, shouldnt get me to a page where i have to press sign in again"), so it shows that from the start.
   const autoConfirm = type === "signup" && !!tokenHash && !expired && !handoff;
-  const [state, setState] = useState<"idle" | "working" | "failed" | "stayed">(expired ? "failed" : autoConfirm ? "working" : "idle");
+  const [state, setState] = useState<"idle" | "working" | "failed" | "stayed" | "elsewhere">(expired ? "failed" : autoConfirm || (code && !handoff) ? "working" : "idle");
   const [swap, setSwap] = useState<Swap | null>(null);
   const copy = type ? COPY[type] : null;
   const supabase = useRef(createClient()).current;
@@ -115,6 +128,31 @@ export function WelcomeCard({ tokenHash, type, expired, swap: handoff = false }:
     else document.addEventListener("visibilitychange", onShow);
     return () => document.removeEventListener("visibilitychange", onShow);
   }, [autoConfirm, tokenHash, supabase, router]);
+
+  // 1.51.0: Supabase's own email (?code=): Supabase already checked the link (a sign-up's email is confirmed by then).
+  // This browser finishes signing in only if it's the one that asked (its half of the code is kept here); otherwise, or
+  // with someone else signed in here, it says to sign in. The app then opens a new account's first steps by itself.
+  useEffect(() => {
+    if (!code || tokenHash || handoff) return;
+    const run = async () => {
+      if (started.current) return;
+      started.current = true;
+      window.history.replaceState(null, "", "/welcome");
+      const { data: here } = await supabase.auth.getUser();
+      if (here.user) {
+        setState("elsewhere");
+        return;
+      }
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        setState("elsewhere");
+        return;
+      }
+      sounds.advance();
+      router.replace("/dashboard");
+    };
+    void run();
+  }, [code, tokenHash, handoff, supabase, router]);
 
   // An old-style link (#access_token=…) for another account: AuthHashHandler left it here to ask about.
   useEffect(() => {
@@ -262,6 +300,36 @@ export function WelcomeCard({ tokenHash, type, expired, swap: handoff = false }:
       <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-paper">
         <Mascot size={88} />
         <span className="sr-only">Loading…</span>
+      </main>
+    );
+  }
+
+  // A ?code= link this browser couldn't finish, or with someone signed in here already (1.51.0).
+  if (state === "elsewhere") {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-paper">
+        <div className={card}>
+          <Brand className="mb-6" />
+          <Mascot size={84} className="mb-3 -ml-2" />
+          <h1 className="font-display text-[26px] leading-tight font-semibold mb-2">Sign in to carry on</h1>
+          <p className="text-[14.5px] text-ink-soft mb-6">
+            The link worked, but only the browser you signed up in can use it to sign you in. If it was to confirm your email, that&rsquo;s done: sign in and you&rsquo;ll
+            pick up where you left off.
+          </p>
+          <Link href="/login" className="inline-flex items-center rounded-xl bg-amber text-white font-semibold text-[14px] px-5 h-11 hover:brightness-110">
+            Sign in
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // A ?code= link being finished: a moment of nothing.
+  if (code && state === "working") {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-paper">
+        <Mascot size={88} />
+        <span className="sr-only">Signing you in…</span>
       </main>
     );
   }

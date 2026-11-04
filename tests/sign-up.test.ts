@@ -53,7 +53,7 @@ const action = read("app/signup/actions.ts");
 ok(/const problem = signUpProblem\(raw\);\s+if \(problem\) return problem;/.test(action), "checked again on the server");
 ok(/if \(String\(formData\.get\("website"\) \?\? ""\)\.trim\(\)\) return \{ sent: email \};/.test(action), "the box only scripts fill in: told what everyone's told");
 ok(/await verifyTurnstile\(String\(formData\.get\("captcha"\) \?\? ""\), address, "signup"\)/.test(action) && action.indexOf("verifyTurnstile(") < action.indexOf("auth.signUp("), "the security check before the account");
-ok(/options: \{ data: \{ full_name: name \}, emailRedirectTo: `\$\{appUrl\(\)\}\/welcome` \}/.test(action), "the name goes to the profile (handle_new_user), the email to /welcome");
+ok(/options: \{ data: \{ full_name: name, \[ONBOARDING_KEY\]: ONBOARDING_PENDING \}, emailRedirectTo: `\$\{appUrl\(\)\}\/welcome` \}/.test(action), "the name goes to the profile (handle_new_user), the account is marked for its first steps (1.51.0), the email to /welcome");
 ok(/if \(data\.session\) redirect\("\/get-started"\);\s+return \{ sent: email \};/.test(action), "signed in at once only without Confirm email (then its first steps, 1.49.0)");
 const verify = read("lib/auth/turnstile-verify.ts");
 ok(/import "server-only";/.test(verify) && /turnstile\/v0\/siteverify/.test(verify) && /if \(!secret\) return "ok";/.test(verify), "Cloudflare checks the answer, on the server; without a secret there's nothing to check");
