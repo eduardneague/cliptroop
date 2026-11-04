@@ -172,6 +172,9 @@ begin
 end;
 $$;
 
+-- 6 checks 0124's rule with plans on. 0128 ships them off (7 below), so the switch goes on here first.
+create or replace function public.plans_required() returns boolean language sql stable as $$ select true; $$;
+
 -- 6. Files: a team without a plan adds none, not even its master in its own folder (its pages are closed too); with
 --    one, it does. A profile picture isn't a team's: always. A team made by ClipTroop itself starts on Network.
 insert into storage.buckets (id, name) values ('avatars', 'avatars') on conflict do nothing;
@@ -215,6 +218,26 @@ begin
      or storage_team_of('avatars', '00000000-0000-4000-8000-0000000124a1/a.webp') is not null
      or storage_team_of('media-kit', 'not-a-uuid/x.webp') is not null then
     raise exception '6: whose a file is, by its folder';
+  end if;
+end;
+$$;
+
+-- 7. Plans off (0128, as it ships): a team without a plan adds its files too. The switch goes back to 0128's false.
+create or replace function public.plans_required() returns boolean language sql stable as $$ select false; $$;
+update teams set plan = null, plan_storage_gb = null where id = '10000000-0000-4000-8000-0000000124a0';
+begin;
+  select pg_temp.as_user('00000000-0000-4000-8000-0000000124a1');
+  set local role authenticated;
+  insert into storage.objects (bucket_id, name, owner) values ('media-kit', '10000000-0000-4000-8000-0000000124a0/logo-7.webp', auth.uid());
+  insert into storage.objects (bucket_id, name, owner) values ('thumbnails', '30000000-0000-4000-8000-0000000124c1/t7.jpg', auth.uid());
+commit;
+do $$
+begin
+  if public.plans_required() then
+    raise exception '7: plans are off as 0128 ships';
+  end if;
+  if (select count(*) from storage.objects where name in ('10000000-0000-4000-8000-0000000124a0/logo-7.webp', '30000000-0000-4000-8000-0000000124c1/t7.jpg')) <> 2 then
+    raise exception '7: with plans off, a team without a plan adds its files';
   end if;
 end;
 $$;

@@ -43,6 +43,7 @@ import { HashFlash } from "@/components/ui/hash-flash";
 import { WebVitals } from "@/components/web-vitals";
 import { OverflowMarquee } from "@/components/ui/overflow-marquee";
 import { getTeamPlan } from "@/modules/plans/lib/server";
+import { PLANS_REQUIRED } from "@/lib/plans";
 import { PlanGateBoundary } from "@/modules/plans/components/plan-gate";
 import type { PlanInfo } from "@/modules/plans/components/plan-chooser";
 import { isMaster } from "@/lib/permissions/roles";
@@ -89,7 +90,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
       const [membership, biz, plan] = await Promise.all([
         getMembership(supabase, t.currentTeam.id).catch(() => null),
         getBusinessAccess(supabase, t.currentTeam.id).catch(() => null),
-        getTeamPlan(supabase, t.currentTeam.id),
+        // 1.51.0: only read while plans are needed (PLANS_REQUIRED, lib/plans.ts: off for now, every team opens).
+        PLANS_REQUIRED ? getTeamPlan(supabase, t.currentTeam.id) : Promise.resolve(null),
       ]);
       return { ...t, roles: membership?.roles ?? [], business: !!biz?.access, plan };
     }),
@@ -112,9 +114,10 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
   const resolvedEmail = profile?.email ?? user?.email ?? "";
   const resolvedAvatar = profile?.avatar_url ?? null;
   const resolvedColor = colorForId(user!.id);
-  // A team without a plan: its plans in place of its pages (PlanGateBoundary). Never for developer accounts.
+  // A team without a plan: its plans in place of its pages (PlanGateBoundary). Never for developer accounts, and not
+  // while plans are off (1.51.0: free for now).
   const gate: PlanInfo | null =
-    currentTeam && plan && plan.known && !plan.plan && !developer
+    PLANS_REQUIRED && currentTeam && plan && plan.known && !plan.plan && !developer
       ? {
           teamId: currentTeam.id,
           teamName: currentTeam.name,

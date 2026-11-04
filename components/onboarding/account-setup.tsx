@@ -19,6 +19,7 @@ import { fromEmailLink, passwordSaveError } from "@/lib/auth/password-rules";
 import { TwoStepSetup } from "@/components/auth/two-step-forms";
 import {
   SKIP_TO,
+  NEW_DONE,
   canSkip,
   nextStep,
   prevStep,
@@ -368,7 +369,7 @@ export function AccountSetup({ mode, asked, twoStep, maskedEmail }: { mode: Onbo
                 Two-step sign-in is on ({twoStep === "app" ? "authenticator app" : "codes by email"}).
               </p>
               <div className="mt-7 flex justify-end">
-                <a href={SKIP_TO} className={primary}>
+                <a href={NEW_DONE} className={primary}>
                   Go to my dashboard
                   <ArrowRightIcon className="w-4 h-4" />
                 </a>
@@ -381,7 +382,8 @@ export function AccountSetup({ mode, asked, twoStep, maskedEmail }: { mode: Onbo
                 Back
               </button>
               {/* The set-up itself, here: an app or email codes. Done or "Not now", the app opens. */}
-              <TwoStepSetup email={maskedEmail} current={null} change={false} next={SKIP_TO} skip={SKIP_TO} />
+              {/* 1.51.0: either way through NEW_DONE, which marks the first steps as done (then the dashboard). */}
+              <TwoStepSetup email={maskedEmail} current={null} change={false} next={NEW_DONE} skip={NEW_DONE} />
             </>
           )}
         </div>

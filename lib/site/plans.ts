@@ -1,4 +1,4 @@
-import { CURRENCY, PLAN_FACTS, gbLabel, type PlanId } from "@/lib/plans";
+import { CURRENCY, PLAN_FACTS, PLANS_REQUIRED, gbLabel, type PlanId } from "@/lib/plans";
 
 /**
  * The plans on the website's Pricing page (1.33.0; 1.45.0: ClipTroop opens to the public with no free plan or trial,
@@ -65,13 +65,18 @@ export const EVERY_PLAN = [
 ] as const;
 
 export const PRICING_FAQ = [
+  // 1.51.0: while plans are off (PLANS_REQUIRED, lib/plans.ts), the first two say ClipTroop is free in early access.
   {
     q: "How do we start?",
-    a: "Create an account, make your team and choose its plan in the app. We write back by email to agree the details and send the invoice; your team opens as soon as its plan is on.",
+    a: PLANS_REQUIRED
+      ? "Create an account, make your team and choose its plan in the app. We write back by email to agree the details and send the invoice; your team opens as soon as its plan is on."
+      : "Create an account and make your team: while ClipTroop is in early access, it opens right away, free of charge. When the plans start, your team’s Master chooses one in the app and we agree the details by email.",
   },
   {
     q: "Is there a free plan or a free trial?",
-    a: "No. Every team is on Studio or Network, so the people who use ClipTroop are the people it’s built for.",
+    a: PLANS_REQUIRED
+      ? "No. Every team is on Studio or Network, so the people who use ClipTroop are the people it’s built for."
+      : "Not a plan of its own: ClipTroop is free for every team while it’s in early access. After it, every team is on Studio or Network.",
   },
   {
     q: "Who counts as a person?",

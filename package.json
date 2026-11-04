@@ -1,11 +1,11 @@
 {
   "name": "vplanner",
-  "version": "1.50.1",
+  "version": "1.51.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:https": "next dev --turbopack --experimental-https",
-    "build": "node scripts/audit.mjs && next build",
+    "build": "node scripts/audit.mjs && node scripts/patch-next-font.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,7 @@
     "db:test": "bash scripts/db/test-from-scratch.sh",
     "db:baseline": "bash scripts/db/baseline.sh",
     "dev:webpack": "next dev",
-    "postinstall": "node scripts/copy-vendor.mjs",
+    "postinstall": "node scripts/copy-vendor.mjs && node scripts/patch-next-font.mjs",
     "audit:check": "node scripts/audit.mjs"
   },
   "dependencies": {

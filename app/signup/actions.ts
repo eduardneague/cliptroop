@@ -1,5 +1,6 @@
 "use server";
 
+import { ONBOARDING_KEY, ONBOARDING_PENDING } from "@/lib/auth/onboarding";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -48,7 +49,9 @@ export async function signUp(_prev: SignUpState, formData: FormData): Promise<Si
   const { data, error } = await supabase.auth.signUp({
     email,
     password: raw.password,
-    options: { data: { full_name: name }, emailRedirectTo: `${appUrl()}/welcome` },
+    // 1.51.0: marked as having its first steps ahead (lib/auth/onboarding.ts): they open at its first sign-in, whatever
+    // the email's link did.
+    options: { data: { full_name: name, [ONBOARDING_KEY]: ONBOARDING_PENDING }, emailRedirectTo: `${appUrl()}/welcome` },
   });
   if (error) {
     const pw = /weak_password|pwned|leaked|longer than 72/i.test(`${error.code ?? ""} ${error.message ?? ""}`) ? passwordSaveError(error) : null;

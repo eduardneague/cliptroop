@@ -3,7 +3,7 @@ import Link from "next/link";
 import { APP_NAME } from "@/lib/brand";
 import { publicMetadata } from "@/lib/public-pages";
 import { CheckIcon } from "@/components/ui/icons";
-import { CURRENCY, PLAN_FACTS, gbLabel } from "@/lib/plans";
+import { CURRENCY, PLAN_FACTS, PLANS_REQUIRED, gbLabel } from "@/lib/plans";
 import { EVERY_PLAN, PLANS, PRICING_FAQ } from "@/lib/site/plans";
 import { askHref, PageHead, SitePage, textLink } from "@/components/site/site-chrome";
 import { PricingPlans } from "@/components/site/pricing-plans";
@@ -53,7 +53,12 @@ export default function PricingPage() {
     <SitePage current="/pricing">
       <PageHead
         title="One price a person, every feature"
-        lead="No free plan and no trial. Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up."
+        lead={
+          // 1.51.0: free while plans are off (PLANS_REQUIRED, lib/plans.ts); the plans themselves stay as they are.
+          PLANS_REQUIRED
+            ? "No free plan and no trial. Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up."
+            : `Free while ${APP_NAME} is in early access: create an account and your team opens right away. After it, Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up.`
+        }
       />
 
       <PricingPlans plans={PLANS} currency={CURRENCY} talkHref={askHref(`${APP_NAME}: the Network plan`)} />

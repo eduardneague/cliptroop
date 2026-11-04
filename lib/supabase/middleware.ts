@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isPublicPath } from "@/lib/public-paths";
 import { TWO_STEP_COOKIE, emailDoneFor, twoStepApplies, twoStepNeed } from "@/lib/auth/two-step";
+import { onboardingApplies, onboardingPending } from "@/lib/auth/onboarding";
 import { sessionCookieOptions } from "./cookie-options";
 import { crossSiteWrite } from "@/lib/request-guard";
 import { buildCsp, cspHeaderName, newNonce, wantsCsp } from "@/lib/csp";
@@ -158,6 +159,18 @@ export async function updateSession(request: NextRequest) {
       response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
       return redirect;
     }
+  }
+
+  // 1.51.0: a new account's first steps (lib/auth/onboarding.ts). Until it finishes or skips them, every page of the app
+  // sends it there, however it got signed in (the email's link, or the sign-in page after a link that ended there).
+  if (user && !isPublicRoute && onboardingPending(claims?.user_metadata) && onboardingApplies(request.nextUrl.pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/get-started";
+    url.search = "";
+    const redirect = NextResponse.redirect(url);
+    redirect.headers.set("Cache-Control", "private, no-store");
+    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
   }
 
   // Forward the request with sanitized identity headers: any

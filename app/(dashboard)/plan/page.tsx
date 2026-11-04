@@ -6,6 +6,7 @@ import { getTeamsAndCurrent } from "@/lib/teams";
 import { getMembership } from "@/lib/permissions/membership";
 import { isMaster, type RoleId } from "@/lib/permissions/roles";
 import { getTeamPlan, getTeamStorage } from "@/modules/plans/lib/server";
+import { PLANS_REQUIRED } from "@/lib/plans";
 import { PlanChooser } from "@/modules/plans/components/plan-chooser";
 import { StorageMeter } from "@/modules/plans/components/storage-meter";
 
@@ -23,6 +24,8 @@ export default async function PlanPage() {
   const { currentTeam } = await getTeamsAndCurrent(supabase);
   if (!currentTeam) redirect("/teams/new");
   const [plan, membership] = await Promise.all([getTeamPlan(supabase, currentTeam.id), getMembership(supabase, currentTeam.id).catch(() => null)]);
+  // 1.51.0: while plans are off (PLANS_REQUIRED, lib/plans.ts), a team without one has nothing to choose here.
+  if (!PLANS_REQUIRED && !plan.plan) redirect("/team");
   const storage = plan.plan ? await getTeamStorage(supabase, currentTeam.id) : null;
   return (
     <div className="pb-10">

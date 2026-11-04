@@ -2,7 +2,7 @@
 // have some storage related to it", "for pricing, i want the prices to be 10 times as high for each".
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { GB, PLAN_FACTS, PLAN_IDS, gbLabel, isPlanId, planPrice, storageGbFor, storageState } from "../lib/plans";
+import { GB, PLAN_FACTS, PLAN_IDS, PLANS_REQUIRED, gbLabel, isPlanId, planPrice, storageGbFor, storageState } from "../lib/plans";
 import { PLANS, PRICING_FAQ, priceLabel } from "../lib/site/plans";
 import { openWithoutPlan } from "../modules/plans/lib/gate";
 
@@ -35,13 +35,22 @@ ok(PLANS.every((p) => p.monthly === PLAN_FACTS[p.id].monthly && p.yearly === PLA
 ok(priceLabel(PLANS[0], false) === "$120" && priceLabel(PLANS[0], true) === "$100" && priceLabel(PLANS[1], true) === null, "priceLabel");
 ok(PLANS[0].includes.some((x) => x.startsWith("50 GB")) && PLANS[1].includes.some((x) => x.startsWith("500 GB")), "each plan says its storage");
 const faq = PRICING_FAQ.map((f) => `${f.q} ${f.a}`).join(" ");
-ok(!/invitation|Crew|\bFree\b/.test(faq) && /no free plan or a free trial\?/i.test(faq.replace("Is there a free plan or a free trial?", "no free plan or a free trial?")), "the FAQ: open to everyone, no free plan");
+ok(!/invitation|Crew|\bFree\b/.test(faq) && /no free plan or a free trial\?/i.test(faq.replace("Is there a free plan or a free trial?", "no free plan or a free trial?")), "the FAQ: open to everyone, no Free plan");
+
+// 1.51.0: plans off for now (the owner, Nov 4 2026: "lets give access to free accounts for now, and thne we can add this
+// back and connect it to stripe"). One switch in the app, one in the database; everything else of the plans stays.
+ok(PLANS_REQUIRED === false, "plans are off for now");
+const answer = (q: string) => PRICING_FAQ.find((f) => f.q === q)?.a ?? "";
+ok(/free for every team while it’s in early access/.test(answer("Is there a free plan or a free trial?")) && /it opens right away, free of charge/.test(answer("How do we start?")), "the FAQ says it's free while in early access");
+ok(/PLANS_REQUIRED\s+\? "No free plan and no trial\./.test(read("app/(site)/pricing/page.tsx")) && /Free while \$\{APP_NAME\} is in early access: create an account and your team opens right away\./.test(read("app/(site)/pricing/page.tsx")), "Pricing: both ways, by the switch");
+ok(/\{PLANS_REQUIRED \? <>There&rsquo;s no free plan and no trial\.<\/> : <>Free while \{APP_NAME\} is in early access\.<\/>\}/.test(read("components/landing/landing.tsx")), "the home page too");
+ok(/\{PLANS_REQUIRED \? \(/.test(read("app/(legal)/terms/page.tsx")) && /every team can use it free of charge, without a plan/.test(read("app/(legal)/terms/page.tsx")), "and the terms");
 
 // The gate: which pages a team without a plan still opens.
 ok(openWithoutPlan("/plan") && openWithoutPlan("/settings") && openWithoutPlan("/settings/x") && openWithoutPlan("/teams/new"), "the Plan page, Settings, making a team");
 ok(!openWithoutPlan("/dashboard") && !openWithoutPlan("/shorts") && !openWithoutPlan("/team") && !openWithoutPlan("/planner") && !openWithoutPlan("/settingsx"), "nothing else");
 const layout = read("app/(dashboard)/layout.tsx");
-ok(/currentTeam && plan && plan\.known && !plan\.plan && !developer/.test(layout) && (layout.match(/<PlanGateBoundary gate=\{gate\}>\{children\}<\/PlanGateBoundary>/g) ?? []).length === 2, "the layout gates a planless team (not developers), with a wallpaper or without");
+ok(/PLANS_REQUIRED && currentTeam && plan && plan\.known && !plan\.plan && !developer/.test(layout) && /PLANS_REQUIRED \? getTeamPlan\(supabase, t\.currentTeam\.id\) : Promise\.resolve\(null\)/.test(layout) && (layout.match(/<PlanGateBoundary gate=\{gate\}>\{children\}<\/PlanGateBoundary>/g) ?? []).length === 2, "the layout gates a planless team (not developers), with a wallpaper or without");
 const server = read("modules/plans/lib/server.ts");
 ok(/if \(error \|\| !data\) return DEFAULT;/.test(server) && /known: false/.test(server), "before 0124 (or a failed read) nobody is locked out");
 
@@ -56,7 +65,8 @@ ok(/\{ id: "plans", label: "Plans" \}/.test(read("app/(dashboard)/developer/skel
 
 // What costs: refused for a planless team on the server.
 const connect = read("app/api/social/[platform]/connect/route.ts");
-ok(/if \(!\(await teamHasPlan\(teamId\)\)\) return back\(`social_error=no_plan&platform=\$\{platform\}`\);/.test(connect), "connecting an account needs a plan");
+ok(/if \(PLANS_REQUIRED && !\(await teamHasPlan\(teamId\)\)\) return back\(`social_error=no_plan&platform=\$\{platform\}`\);/.test(connect), "connecting an account needs a plan (while plans are on)");
+ok(/if \(!PLANS_REQUIRED && !plan\.plan\) redirect\("\/team"\);/.test(read("app/(dashboard)/plan/page.tsx")), "with plans off, a team without one has no plan page to choose on");
 ok(/no_plan: "can be connected once your team has a plan/.test(read("app/(dashboard)/team/connected-accounts.tsx")), "and says so");
 ok(/\.update\(\{ plan: "network", plan_set_at: new Date\(\)\.toISOString\(\) \}\)/.test(read("app/(dashboard)/teams/new/actions.ts")), "a team a developer makes is on Network at once");
 
@@ -67,6 +77,11 @@ ok(/if current_user in \('authenticated', 'anon'\) then\s+if tg_op = 'INSERT' th
 ok(/as restrictive for insert to authenticated\s+with check \(public\.storage_upload_allowed\(bucket_id, name\)\);/.test(m) && /as restrictive for update to authenticated/.test(m), "a planless team's files are refused by the database");
 ok(/revoke all on function public\.(teams_plan_guard|request_team_plan|team_storage_usage|storage_team_of|storage_upload_allowed)\(/.test(m) && (m.match(/revoke all on function public\./g) ?? []).length === 5, "every function closed to the public");
 ok(read("supabase/tests/team-plans.test.sql").includes("-- 6. Files: a team without a plan adds none"), "0124's test covers files");
+const m128 = read("supabase/migrations/0128_plans_off.sql");
+ok(/create or replace function public\.plans_required\(\)[\s\S]*?select false;/.test(m128), "0128: the database's switch, off");
+ok(/select not public\.plans_required\(\)\s+or coalesce\(\(select t\.plan is not null from teams t where t\.id = public\.storage_team_of\(p_bucket, p_name\)\), true\);/.test(m128), "0128: 0124's rule only while it's on");
+ok((m128.match(/revoke all on function public\./g) ?? []).length === 2, "0128: both functions closed to the public");
+ok(/-- 7\. Plans off \(0128, as it ships\): a team without a plan adds its files too\./.test(read("supabase/tests/team-plans.test.sql")), "0128's test: files with plans off");
 
 if (fails) {
   console.log(`${fails} failed`);

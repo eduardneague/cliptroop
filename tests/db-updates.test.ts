@@ -28,9 +28,11 @@ ok(/admin\.storage\.getBucket\("tiktok-pull"\)/.test(src), "0126: its bucket");
 ok(/column\(a, "short_videos", "filmer_member_id, filmed_at, footage_path"\)/.test(src), "0113: what Send to filming needs");
 ok(/column\(a, "two_step_codes", "user_id"\)/.test(src), "0125: email codes");
 ok(/column\(a, "script_comments", "edited_at"\)/.test(src), "0127: changing comments (edited_at)");
+ok(/await admin\.rpc\("plans_required"\)/.test(src) && /error\.code === "PGRST202"/.test(src), "0128: its switch (a missing function is PGRST202)");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0128": /create or replace function public\.plans_required\(\)/,
   "0127": /alter table script_comments add column if not exists edited_at timestamptz/,
   "0125": /create table if not exists public\.two_step_codes/,
   "0124": /add column if not exists plan\b/,

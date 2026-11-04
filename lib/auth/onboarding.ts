@@ -30,6 +30,34 @@ export const ONBOARDING_HOME: Record<OnboardingMode, string> = { invite: "/set-p
 /** The app: where skipping, or finishing a new account's steps, goes. */
 export const SKIP_TO = "/dashboard";
 
+/*
+ * 1.51.0: a new account's first steps don't hang on its email's link any more. The owner (Nov 4 2026): "the onboarding
+ * doesnt exist again, after you confirmt he email you just get prompted to sign in, no onboarding no 2fa, nothing". The
+ * link can end on the sign-in page (Supabase's own email, a link opened in another browser, a used one), and signing
+ * in went straight to the dashboard. Now the account itself says it hasn't had them: signing up marks it
+ * (user_metadata.onboarding = "pending"), every page of the app sends it to /get-started until it finishes or skips
+ * them (lib/supabase/middleware.ts), and /get-started/done clears the mark. Accounts from before have no mark.
+ */
+export const ONBOARDING_KEY = "onboarding";
+export const ONBOARDING_PENDING = "pending";
+export const ONBOARDING_DONE = "done";
+
+/** Where a new account's steps end, finished or skipped: clears the mark, then the app (app/get-started/done/route.ts). */
+export const NEW_DONE = "/get-started/done";
+
+/** Whether this account still has its first steps ahead (its user_metadata, as the sign-in carries it). */
+export function onboardingPending(meta: unknown): boolean {
+  return !!meta && typeof meta === "object" && (meta as Record<string, unknown>)[ONBOARDING_KEY] === ONBOARDING_PENDING;
+}
+
+/** Pages a new account opens before its first steps are done: the steps themselves, signing in and out, the links. */
+const BEFORE_STEPS = ["/get-started", "/welcome", "/two-step", "/login", "/signup", "/set-password", "/reset-password", "/account-deleted", "/auth/", "/api/"];
+
+/** Whether this page sends an account with its first steps ahead to them. */
+export function onboardingApplies(path: string): boolean {
+  return !BEFORE_STEPS.some((p) => (p.endsWith("/") ? path.startsWith(p) : path === p || path.startsWith(`${p}/`)));
+}
+
 export function stepsFor(mode: OnboardingMode): OnboardingStep[] {
   return mode === "invite" ? ["password", "profile", "two-step", "phone", "done"] : ["profile", "two-step"];
 }

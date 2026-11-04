@@ -23,6 +23,15 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 }
 
 export const PROBES: Probe[] = [
+  {
+    n: "0128",
+    what: "free access while plans are off (files for teams without a plan)",
+    has: async (admin) => {
+      const { error } = await admin.rpc("plans_required");
+      if (!error) return true;
+      return missing(error) || error.code === "PGRST202" ? false : null;
+    },
+  },
   { n: "0127", what: "changing comments, comments on a whole document, comments over several lines", has: (a) => column(a, "script_comments", "edited_at") },
   {
     n: "0126",
