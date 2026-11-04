@@ -50,7 +50,7 @@ export default function NewTeamPage() {
               type="text"
               required
               autoFocus
-              placeholder="e.g. Viverro"
+              placeholder="e.g. Northside Studio"
               className="w-full rounded-lg border border-line/15 bg-surface px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-amber"
             />
           </div>

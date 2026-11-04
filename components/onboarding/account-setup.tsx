@@ -2,12 +2,11 @@
 
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { pictureTooBig } from "@/lib/image/limits";
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateProfile, updateAvatar } from "@/app/(dashboard)/settings/actions";
-import { createTeam } from "@/app/(dashboard)/teams/new/actions";
 import { initialsFor } from "@/lib/avatar";
 import { APP_NAME, MASCOT_NAME } from "@/lib/brand";
 import { sounds } from "@/lib/sounds";
@@ -17,13 +16,13 @@ import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "@/components/ui/icons"
 import { InstallApp, PushSettings } from "@/components/pwa";
 import { NewPasswordFields, newPasswordState } from "@/components/ui/new-password";
 import { fromEmailLink, passwordSaveError } from "@/lib/auth/password-rules";
+import { TwoStepSetup } from "@/components/auth/two-step-forms";
 import {
   SKIP_TO,
-  STEP_LABEL,
-  TEAM_NEXT,
   canSkip,
   nextStep,
   prevStep,
+  progressFor,
   startStep,
   stepsFor,
   twoStepSetupHref,
@@ -34,11 +33,12 @@ import {
 /*
  * A new account's first steps (lib/auth/onboarding.ts has the order and the rules).
  *   An invite (/set-password, 1.9.1): Password · About you · Two-step · Your phone · All set
- *   Creating an account (/get-started, 1.49.0): About you · Two-step · Your phone · Your team · All set
+ *   Creating an account (/get-started, 1.49.1): About you · Two-step · then the app
  * The password is saved before moving on, so closing the page halfway
  * never locks anyone out (they sign in and fix the rest in Settings).
- * "Skip for now" (1.49.0) goes straight to the dashboard from every step
- * after the password.
+ * A new account's two steps each have Skip, on to the next (the second's
+ * goes into the app); an invited account has "Skip for now" (to the
+ * dashboard) on every step after its password.
  *
  * 1.31.10: the password follows the same rules as everywhere else
  * (lib/auth/password-rules.ts, a checklist as you type). Only a sign-in
@@ -58,10 +58,11 @@ function Spinner() {
   return <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />;
 }
 
-export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: OnboardingMode; asked: string | null; twoStep: "app" | "email" | null; hasTeam: boolean }) {
+export function AccountSetup({ mode, asked, twoStep, maskedEmail }: { mode: OnboardingMode; asked: string | null; twoStep: "app" | "email" | null; maskedEmail: string }) {
   const router = useRouter();
   const supabase = useRef(createClient()).current;
-  const steps = stepsFor(mode, hasTeam);
+  const steps = stepsFor(mode);
+  const marks = progressFor(mode);
   const [step, setStep] = useState<OnboardingStep>(() => startStep(steps, asked));
   const [me, setMe] = useState<{ id: string; email: string; link: boolean } | null | undefined>(undefined);
   const [invites, setInvites] = useState(0);
@@ -77,8 +78,6 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Team (an account someone made themselves)
-  const [teamState, teamAction, teamPending] = useActionState(createTeam, undefined);
 
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -208,11 +207,11 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
     <Shell skip={canSkip(mode, step)}>
       {/* Progress */}
       <ol className="flex items-center gap-1.5 mb-7" aria-label="Setup steps">
-        {steps.map((s, i) => (
-          <li key={s} className="flex-1 min-w-0">
+        {marks.map((m, i) => (
+          <li key={m} className="flex-1 min-w-0">
             <span className={`block h-1.5 rounded-[3px] transition-colors duration-500 ${i <= idx ? "bg-amber" : "bg-line/15"}`} />
             <span className={`mt-1.5 block truncate text-[11px] font-semibold ${i === idx ? "text-ink" : "text-ink-faint"}`} aria-current={i === idx ? "step" : undefined}>
-              {STEP_LABEL[s]}
+              {m}
             </span>
           </li>
         ))}
@@ -265,7 +264,7 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
             <div className="flex items-end gap-3 mb-4">
               <Mascot size={76} className="-ml-1.5 -mb-1 flex-shrink-0" />
               <p className="mb-2 rounded-2xl rounded-bl-md bg-amber/12 px-3.5 py-2 text-[13px] font-medium">
-                Hi! I&rsquo;m {MASCOT_NAME}. A few quick steps, all optional.
+                Hi! I&rsquo;m {MASCOT_NAME}. Two quick steps, both optional.
               </p>
             </div>
           )}
@@ -359,7 +358,36 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
         </form>
       )}
 
-      {step === "two-step" && (
+      {step === "two-step" && mode === "new" && (
+        <div className="motion-step">
+          {twoStep ? (
+            <>
+              <h1 className="font-display text-[26px] leading-tight font-semibold mb-1.5">Protect your account</h1>
+              <p className="flex items-center gap-2.5 rounded-xl bg-green/10 px-3.5 py-3 text-[14px] font-semibold text-green">
+                <CheckIcon className="w-4 h-4 flex-shrink-0" />
+                Two-step sign-in is on ({twoStep === "app" ? "authenticator app" : "codes by email"}).
+              </p>
+              <div className="mt-7 flex justify-end">
+                <a href={SKIP_TO} className={primary}>
+                  Go to my dashboard
+                  <ArrowRightIcon className="w-4 h-4" />
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={back} className="mb-4 -ml-1 inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-soft hover:text-ink">
+                <ArrowLeftIcon className="w-3.5 h-3.5" />
+                Back
+              </button>
+              {/* The set-up itself, here: an app or email codes. Done or "Not now", the app opens. */}
+              <TwoStepSetup email={maskedEmail} current={null} change={false} next={SKIP_TO} skip={SKIP_TO} />
+            </>
+          )}
+        </div>
+      )}
+
+      {step === "two-step" && mode === "invite" && (
         <div className="motion-step">
           <h1 className="font-display text-[26px] leading-tight font-semibold mb-1.5">Protect your account</h1>
           <p className="text-[14px] text-ink-soft mb-6">
@@ -373,14 +401,10 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
             </p>
           )}
           <div className="mt-7 flex items-center justify-between gap-2">
-            {prevStep(steps, step) !== step ? (
-              <button type="button" onClick={back} className={quiet}>
-                <ArrowLeftIcon className="w-4 h-4" />
-                Back
-              </button>
-            ) : (
-              <span />
-            )}
+            <button type="button" onClick={back} className={quiet}>
+              <ArrowLeftIcon className="w-4 h-4" />
+              Back
+            </button>
             {twoStep ? (
               <button type="button" onClick={forward} className={primary}>
                 Continue
@@ -391,7 +415,7 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
                 <button type="button" onClick={forward} className={quiet}>
                   Not now
                 </button>
-                <Link href={twoStepSetupHref(mode, steps)} className={primary}>
+                <Link href={twoStepSetupHref(steps)} className={primary}>
                   Set it up
                   <ArrowRightIcon className="w-4 h-4" />
                 </Link>
@@ -433,51 +457,12 @@ export function AccountSetup({ mode, asked, twoStep, hasTeam }: { mode: Onboardi
         </div>
       )}
 
-      {step === "team" && (
-        <form
-          className="motion-step"
-          // Not a form action: React would empty the name after an error.
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            startTransition(() => teamAction(fd));
-          }}
-        >
-          <h1 className="font-display text-[26px] leading-tight font-semibold mb-1.5">Name your team</h1>
-          <p className="text-[14px] text-ink-soft mb-6">
-            A team is a channel or workspace: your projects, people and roles. You&rsquo;ll be its owner, and you can invite teammates and make more teams later.
-            {invites > 0 ? ` You also have ${invites === 1 ? "a team invite" : `${invites} team invites`} waiting: the bell on your dashboard has ${invites === 1 ? "it" : "them"}.` : ""}
-          </p>
-          <label className={label} htmlFor="team-name">
-            Team name
-          </label>
-          <input id="team-name" name="name" type="text" required maxLength={60} autoFocus placeholder="e.g. your channel's name" className={input} />
-          <input type="hidden" name="next" value={TEAM_NEXT} />
-          {teamState?.error && <p className="mt-4 text-[13.5px] text-red font-medium">{teamState.error}</p>}
-          <div className="mt-7 flex items-center justify-between gap-2">
-            <button type="button" onClick={back} className={quiet}>
-              <ArrowLeftIcon className="w-4 h-4" />
-              Back
-            </button>
-            <button type="submit" disabled={teamPending} className={primary}>
-              {teamPending ? <Spinner /> : null}
-              {teamPending ? "Creating…" : "Create my team"}
-              {!teamPending && <ArrowRightIcon className="w-4 h-4" />}
-            </button>
-          </div>
-        </form>
-      )}
-
       {step === "done" && (
         <div className="motion-step text-center">
           <Mascot mood="celebrate" size={128} className="mx-auto mb-2" />
           <h1 className="font-display text-[28px] leading-tight font-semibold mb-2">You&rsquo;re all set{firstName ? `, ${firstName}` : ""}!</h1>
           <p className="text-[14.5px] text-ink-soft mb-5 max-w-sm mx-auto">
-            {mode === "new"
-              ? hasTeam
-                ? "Your team is ready. On your dashboard, choose its plan and invite your teammates."
-                : "Your dashboard is next: start your team there whenever you're ready."
-              : invites > 0
+            {invites > 0
                 ? `You have ${invites === 1 ? "a team invite" : `${invites} team invites`} waiting. Open the bell at the top of your dashboard to say yes.`
                 : "Your team will add you to their space. You'll get a notification when they do."}
           </p>

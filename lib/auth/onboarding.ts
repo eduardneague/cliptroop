@@ -1,37 +1,43 @@
 /*
  * The first steps of a new account (1.49.0). The owner (Nov 3 2026): "where did the onboarding step for new accounts
  * go? i want that too and an option to skip onbaording for now and g odirectly to the app", and two-step sign-in
- * "you should just enable it if you want to on the onboarding".
+ * "you should just enable it if you want to on the onboarding". 1.49.1, the owner: "after creating an account and
+ * clicking confirm sign in on the enamil, you should get to the onboadring page with the ability to skip, then you go
+ * to the add two step with the ability to skip and then thats it, you go to the app … make it like a 3 stepp thing".
  *
  *   An invite (/set-password): Password · About you · Two-step · Your phone · All set
- *   Creating an account (/get-started): About you · Two-step · Your phone · Your team · All set
+ *   Creating an account (/get-started): About you · Two-step · then the app (the third mark on the bar)
  *
- * The password of an account someone made themselves was chosen on the sign-up form; "Your team" is only for someone
- * with no team yet. Every step after the password has "Skip for now", straight to the dashboard (which asks a person
- * without a team to start one). Pure: the pages and their tests use it.
+ * The password of an account someone made themselves was chosen on the sign-up form, and its team is named on the
+ * dashboard (Start your first team). Each of a new account's two steps has its own Skip, on to the next; an invited
+ * account has "Skip for now" (to the dashboard) once it has a password. Pure: the pages and their tests use it.
  */
 
 export type OnboardingMode = "invite" | "new";
-export type OnboardingStep = "password" | "profile" | "two-step" | "phone" | "team" | "done";
+export type OnboardingStep = "password" | "profile" | "two-step" | "phone" | "done";
 
 export const STEP_LABEL: Record<OnboardingStep, string> = {
   password: "Password",
   profile: "About you",
   "two-step": "Two-step",
   phone: "Your phone",
-  team: "Your team",
   done: "All set",
 };
 
-/** Each mode's own address (where Two-step's set-up page sends you back to). */
+/** Each mode's own address (where Two-step's set-up page sends an invited account back to). */
 export const ONBOARDING_HOME: Record<OnboardingMode, string> = { invite: "/set-password", new: "/get-started" };
 
-/** Where "Skip for now" goes. */
+/** The app: where skipping, or finishing a new account's steps, goes. */
 export const SKIP_TO = "/dashboard";
 
-export function stepsFor(mode: OnboardingMode, hasTeam: boolean): OnboardingStep[] {
-  if (mode === "invite") return ["password", "profile", "two-step", "phone", "done"];
-  return hasTeam ? ["profile", "two-step", "phone", "done"] : ["profile", "two-step", "phone", "team", "done"];
+export function stepsFor(mode: OnboardingMode): OnboardingStep[] {
+  return mode === "invite" ? ["password", "profile", "two-step", "phone", "done"] : ["profile", "two-step"];
+}
+
+/** The bar's marks: an invite's steps; a new account's two, then the app itself. */
+export function progressFor(mode: OnboardingMode): string[] {
+  const steps = stepsFor(mode).map((s) => STEP_LABEL[s]);
+  return mode === "new" ? [...steps, "Your dashboard"] : steps;
 }
 
 /** The step to open on: the one asked for (?step=, coming back from setting up two-step) when it's one of these, never the password. */
@@ -40,10 +46,9 @@ export function startStep(steps: OnboardingStep[], asked: string | null | undefi
   return s && s !== "password" ? s : steps[0];
 }
 
-/** Whether "Skip for now" shows: not before an invited account has a password, and not on the last step. */
+/** Whether the top's "Skip for now" shows: only for an invited account with its password, not on the last step. (A new account's steps each have their own Skip.) */
 export function canSkip(mode: OnboardingMode, step: OnboardingStep): boolean {
-  if (step === "done") return false;
-  return mode === "new" || step !== "password";
+  return mode === "invite" && step !== "password" && step !== "done";
 }
 
 /** The step after this one (the last step stays). */
@@ -59,10 +64,7 @@ export function prevStep(steps: OnboardingStep[], step: OnboardingStep): Onboard
   return p === "password" ? step : p;
 }
 
-/** Two-step's set-up page, coming back to this mode's next step afterwards (or on "Not now"). */
-export function twoStepSetupHref(mode: OnboardingMode, steps: OnboardingStep[]): string {
-  return `/two-step/setup?next=${encodeURIComponent(`${ONBOARDING_HOME[mode]}?step=${nextStep(steps, "two-step")}`)}`;
+/** An invited account's Two-step step: the set-up page, coming back to the next step afterwards (or on "Not now"). */
+export function twoStepSetupHref(steps: OnboardingStep[]): string {
+  return `/two-step/setup?next=${encodeURIComponent(`${ONBOARDING_HOME.invite}?step=${nextStep(steps, "two-step")}`)}`;
 }
-
-/** Where naming your team in the onboarding goes next (createTeam accepts only this, else the dashboard). */
-export const TEAM_NEXT = "/get-started?step=done";

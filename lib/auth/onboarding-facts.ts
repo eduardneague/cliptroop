@@ -1,17 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
+import { maskEmail } from "@/lib/auth/two-step";
 
 /**
  * What the onboarding pages (1.49.0) need to know about the person on the server: whether two-step sign-in is on (and
- * how), and whether they're on a team yet (an account someone made themselves names its own).
+ * how), and their email half hidden (for setting up email codes in the steps, 1.49.1).
  */
-export async function onboardingFacts(): Promise<{ twoStep: "app" | "email" | null; hasTeam: boolean }> {
+export async function onboardingFacts(): Promise<{ twoStep: "app" | "email" | null; maskedEmail: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { twoStep: null, hasTeam: false };
+  if (!user) return { twoStep: null, maskedEmail: "" };
   const app = (user.factors ?? []).some((f) => f.factor_type === "totp" && f.status === "verified");
   const email = (user.app_metadata as { two_step?: unknown } | null)?.two_step === "email";
-  const { count } = await supabase.from("team_members").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "active");
-  return { twoStep: app ? "app" : email ? "email" : null, hasTeam: (count ?? 0) > 0 };
+  return { twoStep: app ? "app" : email ? "email" : null, maskedEmail: maskEmail(user.email ?? "") };
 }

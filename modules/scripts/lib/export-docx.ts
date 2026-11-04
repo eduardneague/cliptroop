@@ -252,9 +252,18 @@ export async function exportScriptDocx(doc: Node, title: string, fileName: strin
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/** One editing idea: the script text it's about, and the idea. */
-/** One editing idea: the quoted script text, the idea, and its drawing (if any). */
+/** One editing idea: the quoted script text ("" for one on the whole document, 1.50.0), the idea, and its drawing (if any). */
 export type IdeaExport = { quote: string; idea: string; sketch?: string | null };
+
+/**
+ * An idea's heading, line by line (1.50.0): its words in quote marks, one line per line they run over (line breaks
+ * inside a paragraph too), or "On the whole document" for a general one.
+ */
+export function ideaHeading(n: number, quote: string): string[] {
+  if (!quote.trim()) return [`#${n} On the whole document`];
+  const lines = quote.replace(/\u0000/g, "\n").split("\n");
+  return lines.map((l, i) => `${i === 0 ? `#${n} "` : ""}${l}${i === lines.length - 1 ? `"` : ""}`);
+}
 
 /**
  * Editing ideas as Word:
@@ -269,7 +278,7 @@ export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileNa
     new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(title)] }),
     new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Editing Ideas")] }),
     ...ideas.flatMap((x, i) => {
-      const out = [new Paragraph({ spacing: { before: 280 }, children: [new TextRun({ text: `#${i + 1} "${x.quote}"`, bold: true })] })];
+      const out = [new Paragraph({ spacing: { before: 280 }, children: ideaHeading(i + 1, x.quote).map((text, j) => new TextRun({ text, bold: true, ...(j ? { break: 1 } : {}) })) })];
       if (x.idea.trim()) out.push(new Paragraph({ children: [new TextRun({ text: `(${x.idea})`, italics: true })] }));
       const img = pictures[i];
       if (img) {
@@ -299,7 +308,7 @@ export function exportIdeasPdf(ideas: IdeaExport[], title: string) {
 h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;font-weight:600;color:#555;margin:0 0 28px}
 .q{font-weight:700;margin:22px 0 2px}.i{font-style:italic;margin:0}.s{display:block;max-width:80%;max-height:420px;margin:10px 0 4px;border:1px solid #ddd;border-radius:6px;break-inside:avoid}@page{margin:18mm}</style></head><body>
 <h1>${esc(title)}</h1><h2>Editing Ideas</h2>
-${ideas.map((x, i) => `<p class="q">#${i + 1} "${esc(x.quote)}"</p>${x.idea.trim() ? `<p class="i">(${esc(x.idea)})</p>` : ""}${x.sketch ? `<img class="s" src="${esc(x.sketch)}" alt="Sketch">` : ""}`).join("\n")}
+${ideas.map((x, i) => `<p class="q">${ideaHeading(i + 1, x.quote).map(esc).join("<br>")}</p>${x.idea.trim() ? `<p class="i">(${esc(x.idea)})</p>` : ""}${x.sketch ? `<img class="s" src="${esc(x.sketch)}" alt="Sketch">` : ""}`).join("\n")}
 <script>window.onload=()=>{const imgs=[...document.images];Promise.all(imgs.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r}))).then(()=>window.print())}</script></body></html>`;
   const w = window.open("", "_blank");
   if (!w) return false;

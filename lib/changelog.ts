@@ -22,6 +22,38 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.50.1",
+    date: "2026-11-04",
+    title: "Database updates run again",
+    changes: [
+      { kind: "fixed", text: "Behind the scenes: the automatic database updates had stopped since Nov 2, when Supabase's tools started asking for a yes that GitHub can't type. They give it themselves now, so 1.50.0's update reaches staging and production." },
+    ],
+  },
+  {
+    version: "1.50.0",
+    date: "2026-11-04",
+    title: "Comments, rebuilt",
+    changes: [
+      { kind: "new", text: "Scripts: change a comment or an editing idea you wrote. Edit is on it in the comments and in the small box on its words; it then says “edited”, and only people you newly @mention are notified." },
+      { kind: "new", text: "Scripts: comments and editing ideas on the whole document, on no words in particular. Write them at the bottom of the comments panel." },
+      { kind: "new", text: "Scripts: a comment or an editing idea can cover several lines or paragraphs. Select as much as you like; it shows all the lines it's on, and Export ideas keeps them." },
+      { kind: "better", text: "Scripts: the comment box, the small box on a comment's words and the comments panel are redone: clearer cards with who, when and what it's on, Edit, Resolve and Delete on every one, and counts on All, Comments and Editing ideas." },
+      { kind: "fixed", text: "Scripts: the @ list when you tag someone was dark on dark over the white page. It's in clear colours now and opens below the box (above only when there's no room below)." },
+      { kind: "fixed", text: "Scripts: words that already had quote marks showed them twice in the comments." },
+      { kind: "better", text: "Creating a team: the name's example no longer uses a real team's name." },
+    ],
+  },
+  {
+    version: "1.49.1",
+    date: "2026-11-03",
+    title: "Three steps in, and a clear goodbye",
+    changes: [
+      { kind: "better", text: "The link in “Confirm your email” now signs you straight in: no second button to press." },
+      { kind: "better", text: "A new account's first steps are two: About you, then two-step sign-in set up right there. Each one has Skip, and then you're in the app." },
+      { kind: "better", text: "Deleting your account asks one last time after your email and password, then shows a page saying it's done, with a way back to the home page." },
+    ],
+  },
+  {
     version: "1.49.0",
     date: "2026-11-03",
     title: "Your first steps, at your pace",

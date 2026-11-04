@@ -36,9 +36,14 @@ Same thing from your own computer, if you prefer:
 
 ```bash
 scripts/db/baseline.sh "$STAGING_DB_URL" 0062   # once
-npx supabase@2 db push --db-url "$STAGING_DB_URL" --dry-run
-npx supabase@2 db push --db-url "$STAGING_DB_URL"
+npx supabase@3 db push --dry-run --remote="$STAGING_DB_URL"
+npx supabase@3 db push --yes --remote="$STAGING_DB_URL"
 ```
+
+The Supabase CLI 3 (Nov 2 2026) changed two things these rely on. `--remote=<address>` names the database (it
+replaces the old db-url flag; keep the `=`, since `--remote` alone means the linked project). And a change to a
+hosted database is only made with `--yes`: without it, in GitHub's job or anywhere nobody can answer, it stops with
+"Confirmation required … Nothing was changed" (1.50.1).
 
 ## Writing a new migration
 

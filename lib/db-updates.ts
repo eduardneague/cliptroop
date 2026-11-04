@@ -23,6 +23,7 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 }
 
 export const PROBES: Probe[] = [
+  { n: "0127", what: "changing comments, comments on a whole document, comments over several lines", has: (a) => column(a, "script_comments", "edited_at") },
   {
     n: "0126",
     what: "TikTok's copies of videos (the tiktok-pull bucket)",

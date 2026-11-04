@@ -25,10 +25,13 @@ export type ScriptComment = {
   kind: "comment" | "edit_idea";
   /** The author's roles in the team (for the colour). */
   authorRoles: string[];
+  /** The words it's on; "" for a general comment, on the whole document (1.50.0). May run over several lines. */
   quote: string;
   occurrence: number;
   body: string;
   createdAt: string;
+  /** When its author last changed the words (1.50.0, 0127); null if never. */
+  editedAt: string | null;
   resolved: boolean;
   author: { id: string; name: string; avatarUrl: string | null; color: string } | null;
   /** A drawing attached to the idea (Sketch Studio), public URL + size. */
@@ -126,11 +129,12 @@ export async function listComments(scriptId: string, teamId: string): Promise<Sc
   const supabase = await createClient();
   const base = "id, kind, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)";
   const read = (cols: string) => supabase.from("script_comments").select(cols).eq("script_id", scriptId).order("created_at");
-  const [first, { data: members }] = await Promise.all([
-    read(`${base}, sketch_path, sketch_w, sketch_h`),
+  const [newest, { data: members }] = await Promise.all([
+    read(`${base}, sketch_path, sketch_w, sketch_h, edited_at`),
     supabase.from("team_members").select("user_id, member_roles(role)").eq("team_id", teamId).eq("status", "active"),
   ]);
-  // Before migration 0056 the sketch columns don't exist yet: read without them.
+  // Before migration 0127 there's no edited_at, before 0056 no sketch columns: read without them.
+  const first = newest.error ? await read(`${base}, sketch_path, sketch_w, sketch_h`) : newest;
   const data = (first.error ? (await read(base)).data : first.data) as unknown as Record<string, unknown>[] | null;
   const rolesOf = new Map((members ?? []).map((m) => [m.user_id as string, ((m.member_roles as { role: string }[]) ?? []).map((r) => r.role)]));
   return (data ?? []).map((c) => {
@@ -144,6 +148,7 @@ export async function listComments(scriptId: string, teamId: string): Promise<Sc
       occurrence: (c.occurrence as number) ?? 0,
       body: c.body as string,
       createdAt: c.created_at as string,
+      editedAt: (c.edited_at as string | null | undefined) ?? null,
       resolved: !!c.resolved_at,
       author: id ? { id, name: displayName(p?.username, p?.full_name, p?.email), avatarUrl: p?.avatar_url ?? null, color: colorForId(id) } : null,
       sketch: c.sketch_path

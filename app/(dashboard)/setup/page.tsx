@@ -192,10 +192,10 @@ export default async function SetupPage() {
             <p className="mt-1 text-ink-soft">
               Until they run, these don&rsquo;t work here: {db.missing.map((m) => m.what).join("; ")}.{" "}
               {prod ? (
+                // 1.49.1: not "merge staging into main": the two branches share no history (staging restarted on Oct 29 2026), so there's no pull request to make.
                 <>
-                  Run them: merge <b className="text-ink">staging</b> into <b className="text-ink">main</b> with a pull request (the Database action runs them on production by itself), or
-                  GitHub → Actions → <b className="text-ink">Database</b> → Run workflow → branch <b className="text-ink">staging</b>, which database <b className="text-ink">production</b>,{" "}
-                  <b className="text-ink">push</b>.
+                  Run them: GitHub → Actions → <b className="text-ink">Database</b> → <b className="text-ink">Run workflow</b> → Use workflow from <b className="text-ink">staging</b>, Which
+                  database <b className="text-ink">production</b>, <b className="text-ink">push</b> → Run workflow. When it&rsquo;s green, open this page again.
                 </>
               ) : (
                 <>
