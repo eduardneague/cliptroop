@@ -23,6 +23,7 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 }
 
 export const PROBES: Probe[] = [
+  { n: "0131", what: "To Do (your lists, steps, My Day, reminders, repeating to-dos)", has: (a) => column(a, "todo_lists", "id, sort_by, hide_done") },
   {
     n: "0130",
     what: "video numbers every 12 hours, Outliers once a day",

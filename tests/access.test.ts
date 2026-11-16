@@ -103,10 +103,6 @@ const LEFT_TO_THE_DATABASE: Record<string, string> = {
   "app/(dashboard)/videos/[id]/studio/actions.ts#toggleWinner": "the person's own client: RLS (the video's team)",
   "app/(dashboard)/videos/[id]/studio/actions.ts#addPackageTitle": "the person's own client: RLS (the video's team)",
   "app/(dashboard)/videos/[id]/studio/actions.ts#deletePackageTitle": "the person's own client: RLS (the video's team)",
-  "modules/dashboard/actions.ts#addTodo": "the person's own client: RLS (their own to-dos)",
-  "modules/dashboard/actions.ts#updateTodo": "the person's own client: RLS (their own to-dos)",
-  "modules/dashboard/actions.ts#deleteTodo": "the person's own client: RLS (their own to-dos)",
-  "modules/dashboard/actions.ts#reorderTodos": "the person's own client: RLS (their own to-dos)",
   "modules/word/actions.ts#loadWord": "lib/state.ts context(): the signed-in person (getCachedUser), their own board",
   "modules/word/actions.ts#guessWord": "lib/state.ts context(): the signed-in person (getCachedUser), their own guesses",
 };

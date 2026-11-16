@@ -34,7 +34,9 @@ const TOP_PLATFORMS = [
   { id: "tiktok", label: "TikTok" },
   { id: "facebook", label: "Facebook" },
 ] as const;
-import type { Done, Pipeline, PostToday, Task, TeamCard, TeamTasks, Todo, UpcomingLong, UpcomingShort } from "../lib/queries";
+import type { Done, Pipeline, PostToday, Task, TeamCard, TeamTasks, UpcomingLong, UpcomingShort } from "../lib/queries";
+import type { TodoBoard } from "@/modules/todo/lib/model";
+import { todoWidgetHref } from "./todo-widget-href";
 import { BoxContext } from "./widget-box";
 import { editorPick, editorsOf } from "../lib/upcoming-filters";
 import { GAP, GridBoard, type GridCardMeta } from "./grid-board";
@@ -115,7 +117,8 @@ export type StudioData = {
   done: Done[];
   /** Everyone's tasks, when the team shares them (null: it doesn't, or before 0076). */
   teamTasks?: TeamTasks | null;
-  todos: Todo[];
+  /** Your To Do (1.53.0): to-dos, lists, settings. */
+  todo: TodoBoard;
   teams: TeamCard[];
   teamId: string;
   upcomingShorts: UpcomingShort[];
@@ -368,7 +371,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "contributions":
       return <ContributionsWidget done={data.done} teamId={data.teamId} settings={w.settings} />;
     case "todo":
-      return <TodoWidget todos={data.todos} />;
+      return <TodoWidget board={data.todo} settings={w.settings} onSettings={update} />;
     case "teams":
       return <TeamsWidget teams={data.teams} currentTeamId={data.teamId} />;
     case "clock":
@@ -417,6 +420,8 @@ const widgetMeta = (w: WidgetInstance): GridCardMeta => {
     hasSettings: HAS_SETTINGS.includes(w.type),
     size: { w: m.w, h: m.h },
     link: w.type === "topVideos" ? { href: topVideosHref(w.settings), label: "View all" } : undefined,
+    // 1.53.0: the To-do list's "Open" goes to To Do, on the list the widget shows.
+    ...(w.type === "todo" ? { link: { href: todoWidgetHref(w.settings), label: "Open" } } : {}),
   };
 };
 const BOARD_HINTS = {

@@ -45,7 +45,7 @@ export default async function DashboardPage() {
   const since = new Date(Date.now() - 372 * 86_400_000).toISOString();
   const t = new Date();
   const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-  const [tasks, done, todos, teamCards, { profile, look, every }, upcoming, posts, meetings, teamTasks, { data: walls }] = await Promise.all([
+  const [tasks, done, todo, teamCards, { profile, look, every }, upcoming, posts, meetings, teamTasks, { data: walls }] = await Promise.all([
     listMyTasks(currentTeam.id),
     listDone(since, currentTeam.id),
     listTodos(),
@@ -65,7 +65,7 @@ export default async function DashboardPage() {
     <DashboardStudio
       name={name}
       initial={readLayout(profile?.dashboard_layout)}
-      data={{ tasks, done, todos, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts, meetings, teamTasks }}
+      data={{ tasks, done, todo, teams: teamCards, teamId: currentTeam.id, ...upcoming, posts, meetings, teamTasks }}
     />
   );
   if (!bgPath || (every as { dashboard_bg_everywhere?: boolean } | null)?.dashboard_bg_everywhere) return studio;

@@ -1144,3 +1144,13 @@ export function TagIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** To Do (1.53.0): a ticked box with its lines, the menu's way to your own lists. */
+export function TodoIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="4.5" />
+      <path d="m7.5 12.25 2.6 2.6 6.4-6.6" />
+    </Svg>
+  );
+}

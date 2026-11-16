@@ -187,7 +187,7 @@ function Price() {
           <p className="mt-3 text-[16px] leading-relaxed text-ink-soft max-w-[34rem]">
             {studio.name} is {planPrice("studio", false)} a person a month, or {planPrice("studio", true)} billed yearly, with {gbLabel(studio.storageGb)} of storage for the
             team. Network, for agencies with several teams, is priced with you.{" "}
-            {PLANS_REQUIRED ? <>There&rsquo;s no free plan and no trial.</> : <>Free while {APP_NAME} is in early access.</>}
+            {PLANS_REQUIRED ? <>There&rsquo;s no free plan and no trial.</> : <>For now it&rsquo;s free for every team.</>}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 md:justify-end">

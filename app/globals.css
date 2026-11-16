@@ -2275,6 +2275,8 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 .todo-check { position: relative; }
 .todo-check svg path { stroke-dasharray: 22; stroke-dashoffset: 22; transition: stroke-dashoffset 0.28s var(--ease-out) 0.06s; }
 .todo-check[aria-checked="true"] svg path { stroke-dashoffset: 0; }
+/* To Do (1.53.0): the round tick draws a faint check while it's pointed at, before it's pressed. */
+.todo-check[data-round][aria-checked="false"]:hover svg path { stroke-dashoffset: 0; opacity: 0.6; }
 .todo-check.just-checked { animation: todo-pop 0.42s var(--ease-spring); }
 .todo-check .burst {
   position: absolute; inset: -3px; border-radius: 6px; pointer-events: none;

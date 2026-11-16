@@ -142,6 +142,17 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
 
   // ---- Pages -------------------------------------------------------------
   add({ id: "dashboard", kind: "page", title: "Dashboard", trail: [], hint: "Your widgets: tasks, today's posts, numbers", words: "home start main widgets", icon: "home", href: "/dashboard", boost: 0.06 });
+  // 1.53.0: To Do, Microsoft To Do's way (your own lists; not tied to a team).
+  add({ id: "todo", kind: "page", title: "To Do", trail: [], hint: "My Day, your lists, reminders", words: "todo to-do todos list lists checklist personal reminders microsoft my day errands", icon: "check", href: "/todo", boost: 0.06 });
+  for (const [id, title, words, icon] of [
+    ["myday", "My Day", "today day focus sun plan", "sun"],
+    ["important", "Important", "starred star priority", "star"],
+    ["planned", "Planned", "due dates scheduled reminders upcoming", "calendar"],
+    ["assigned", "Assigned to me", "my tasks team work steps given", "user"],
+    ["tasks", "Tasks", "inbox default list", "list"],
+  ] as const) {
+    add({ id: `todo.${id}`, kind: "tab", title, trail: ["To Do"], words: `todo to-do ${words}`, icon, href: `/todo?list=${id}`, boost: 0.02 });
+  }
   add({ id: "shorts", kind: "page", title: "Short videos", trail: [], words: "shorts reels tiktoks list schedule queue table", icon: "shorts", href: "/shorts", boost: 0.06 }, team);
   add({ id: "videos", kind: "page", title: "Long videos", trail: [], words: "longform projects pipeline list youtube", icon: "video", href: "/videos", boost: 0.06 }, team);
   add({ id: "calendar", kind: "page", title: "Calendar", trail: [], words: "schedule month week agenda dates planned when", icon: "calendar", href: "/calendar", boost: 0.05 }, team);
@@ -186,6 +197,7 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "new-projection", kind: "action", title: "New projection", trail: ["Objectives", "Projections"], words: "create add forecast milestone target", icon: "plus", href: "/objectives?view=projections&new=1", boost: 0.02 }, team && master);
   add({ id: "invite", kind: "action", title: "Invite people", trail: ["Team", "Members"], words: "invite add member join new person people", icon: "plus", href: "/team?invite=1", boost: 0.03 }, team && master);
   add({ id: "new-team", kind: "action", title: "Create a team", trail: [], words: "new team workspace channel start", icon: "plus", href: "/teams/new" });
+  add({ id: "new-todo", kind: "action", title: "Add a to-do", trail: ["To Do"], hint: "Into My Day", words: "new todo to-do task reminder add note remember", icon: "plus", href: "/todo?list=myday&new=1", boost: 0.04 });
   add({ id: "theme", kind: "action", title: ctx.dark ? "Turn off dark mode" : "Turn on dark mode", trail: [], hint: ctx.dark ? "Back to light" : "Easier on the eyes at night", words: "dark mode light mode night theme black white", icon: ctx.dark ? "sun" : "moon", run: "theme", boost: 0.03 });
   add({ id: "sounds-toggle", kind: "action", title: ctx.sounds ? "Turn sounds off" : "Turn sounds on", trail: [], hint: "The little sounds when you check things off", words: "sounds sound mute unmute quiet audio noise", icon: "sound", run: "sounds" });
   add({ id: "whats-new", kind: "action", title: "What's new", trail: [], hint: "What changed in the latest versions", words: "changelog updates update release notes version changes new features", icon: "star", run: "whatsNew" });

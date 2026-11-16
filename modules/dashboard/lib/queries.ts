@@ -5,6 +5,8 @@ import { getCachedUser } from "@/lib/supabase/get-user";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import { sketchThumb, studioThumb } from "@/lib/picture-size";
 import type { Person } from "./upcoming-filters";
+import { loadTodoBoard } from "@/modules/todo/lib/queries";
+import type { TodoBoard, TodoItem } from "@/modules/todo/lib/model";
 
 export type TaskKind = "short" | "long";
 /** What a task row looks like: a short, a long video, or a meeting action item. */
@@ -40,7 +42,8 @@ export type Done = { id: string; at: string; kind: DoneLook; action: string; num
 export type TeamPersonLite = { userId: string; name: string; avatarUrl: string | null; color: string };
 export type TeamTask = Task & { userId: string };
 export type TeamTasks = { visibility: "masters" | "team"; people: TeamPersonLite[]; tasks: TeamTask[]; me: string };
-export type Todo = { id: string; title: string; notes: string | null; dueDate: string | null; priority: number; position: number; doneAt: string | null };
+/** A to-do (1.53.0: To Do's, modules/todo/lib/model.ts). */
+export type Todo = TodoItem;
 export type TeamCard = {
   id: string;
   name: string;
@@ -335,18 +338,12 @@ export async function listDone(sinceIso: string, teamId = ""): Promise<Done[]> {
   return [...tasks, ...played].sort((a, b) => b.at.localeCompare(a.at));
 }
 
-export async function listTodos(): Promise<Todo[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.from("todos").select("id, title, notes, due_date, priority, position, done_at").order("position");
-  return (data ?? []).map((t) => ({
-    id: t.id as string,
-    title: t.title as string,
-    notes: (t.notes as string | null) ?? null,
-    dueDate: (t.due_date as string | null) ?? null,
-    priority: (t.priority as number) ?? 0,
-    position: Number(t.position),
-    doneAt: (t.done_at as string | null) ?? null,
-  }));
+/**
+ * The To-do list widget's copy of To Do (1.53.0): every open to-do, the 50 finished last, your lists and settings. It
+ * used to read every to-do ever made.
+ */
+export async function listTodos(): Promise<TodoBoard> {
+  return loadTodoBoard({ done: 50 });
 }
 
 /** Your teams with their members (for the team switcher widget). */

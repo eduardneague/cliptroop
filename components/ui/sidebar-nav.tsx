@@ -22,11 +22,13 @@ const ACCENT: Record<string, { on: string; hover: string }> = {
   "/shorts": { on: "text-short", hover: "group-hover:text-short" },
   "/videos": { on: "text-long", hover: "group-hover:text-long" },
   "/meetings": { on: "text-violet", hover: "group-hover:text-violet" },
+  "/todo": { on: "text-teal", hover: "group-hover:text-teal" },
 };
 const accent = (href: string) => ACCENT[href] ?? { on: "text-amber", hover: "group-hover:text-amber" };
 
 /** A line under each place in the phone's More list (1.28.0). */
 const HINT: Record<string, string> = {
+  "/todo": "My Day, your lists, reminders",
   "/outliers": "What's taking off in your niche",
   "/meetings": "Plan them, answer, follow up",
   "/posting": "What's going out, and what went out",

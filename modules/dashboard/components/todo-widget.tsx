@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DatePicker } from "@/components/ui/date-picker";
+import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { CLEAR_DATE_CONFIRM, markDoneConfirm, useConfirmSafe } from "@/components/ui/confirm-provider";
-import { CalendarIcon, ChevronDownIcon, FlagIcon, GripIcon, PlusIcon } from "@/components/ui/icons";
+import { BellIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ExternalIcon, FlagIcon, GripIcon, HomeIcon, ListBulletIcon, PlusIcon, StarIcon, SunIcon } from "@/components/ui/icons";
+import { RepeatIcon } from "@/modules/todo/components/todo-icons";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
 import { Mascot } from "@/components/ui/mascot";
-import { addTodo, deleteTodo, reorderTodos, updateTodo } from "../actions";
-import type { Todo } from "../lib/queries";
+import { createTodo, deleteTodo, reorderTodos, saveTodo, setTodoDone, type TodoPatch } from "@/modules/todo/actions";
+import { belongs, dayWord, isSmart, listColor, nextOccurrence, reminderWord, todoHref, type TodoBoard, type TodoItem, type ViewId } from "@/modules/todo/lib/model";
 import { DueChip, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
 
@@ -28,16 +31,28 @@ const FILTER_KEY = "vp-todo-filter";
 const HOLD_MS = 750;
 const FOLD_MS = 280;
 
+/** What the widget shows (1.53.0): every list ("all", as before), a smart list of To Do's, or one of your lists. */
+type Shows = "all" | ViewId;
+const SMART_NAMES: Record<string, string> = { all: "Everything", myday: "My Day", important: "Important", planned: "Planned", tasks: "Tasks" };
+const showsName = (s: Shows, board: TodoBoard) => SMART_NAMES[s] ?? board.lists.find((l) => l.id === s)?.name ?? "Everything";
+
 /**
  * Your own to-do list. Checking one off: a pop, a chime, it turns green and
  * stays (All), then slides down to the finished ones. In Active it folds
  * away after a moment instead of vanishing.
+ *
+ * 1.53.0 (To Do): it shows Everything, My Day, Important, Planned, Tasks or one of your lists (the menu at the top
+ * left, kept with the widget); a star marks the important ones; a new one goes where you're looking (My Day, the
+ * list…); a repeating one brings its next one; the details open the whole to-do in To Do.
  */
-export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
+export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const toast = useToast();
   const confirmDone = useConfirmSafe();
-  const [todos, setTodos] = useState(initial);
+  const [todos, setTodos] = useState(board.todos);
   const [filter, setFilterState] = useState<Filter>("all");
+  const savedShows = typeof settings?.list === "string" ? (settings.list as Shows) : "all";
+  const [shows, setShows] = useState<Shows>(savedShows);
+  useEffect(() => setShows(savedShows), [savedShows]);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
   const [due, setDue] = useState<string | null>(null);
@@ -53,7 +68,11 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
   const today = localDay();
   // Same id on the server and in the browser (dnd-kit's own counter differs).
   const dndId = useId();
-  const narrow = useBox().w < 220;
+  const box = useBox();
+  const narrow = box.w < 220;
+  const lists = useMemo(() => new Map(board.lists.map((l) => [l.id, l])), [board.lists]);
+  // A list that's gone: Everything.
+  const view: Shows = shows === "all" || isSmart(shows) || lists.has(shows) ? shows : "all";
 
   useEffect(() => {
     try {
@@ -68,6 +87,10 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
     try {
       localStorage.setItem(FILTER_KEY, f);
     } catch {}
+  };
+  const pickShows = (s: Shows) => {
+    setShows(s);
+    onSettings?.({ list: s });
   };
 
   const later = (id: string, ms: number, fn: () => void) => {
@@ -93,19 +116,31 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
       return n;
     });
 
-  const patch = (id: string, p: Partial<Todo>) => setTodos((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
+  const patch = (id: string, p: Partial<TodoItem>) => setTodos((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
   const fail = (r: { error?: string }) => r.error && toast.error(r.error);
+  const save = (t: TodoItem, p: TodoPatch) => {
+    patch(t.id, p as Partial<TodoItem>);
+    if (!t.id.startsWith("tmp-")) void saveTodo(t.id, p).then(fail);
+  };
 
-  async function toggle(t: Todo) {
-    if (!t.doneAt && !(await confirmDone(markDoneConfirm(t.title)))) return;
+  async function toggle(t: TodoItem) {
+    if (t.id.startsWith("tmp-")) return;
+    if (!t.doneAt && board.prefs.confirmDone && !(await confirmDone(markDoneConfirm(t.title)))) return;
     const doneAt = t.doneAt ? null : new Date().toISOString();
     clearLater(t.id);
     patch(t.id, { doneAt });
-    void updateTodo(t.id, { done: !!doneAt }).then(fail);
+    void setTodoDone(t.id, !!doneAt, doneAt ? nextOccurrence(t, today) : null).then((r) => {
+      if (r.error !== undefined) {
+        fail(r);
+        return patch(t.id, { doneAt: t.doneAt });
+      }
+      // A repeating one: its next one, in its place.
+      if (r.next) setTodos((all) => [r.next!, ...all]);
+    });
     if (doneAt) {
       sounds.check();
       // The last open one: a little fanfare.
-      if (todos.filter((x) => !x.doneAt).length === 1) setTimeout(() => sounds.celebrate(), 420);
+      if (shown.filter((x) => !x.doneAt).length === 1) setTimeout(() => sounds.celebrate(), 420);
       setIn(setPopped, t.id, true);
       later(t.id, 700, () => setIn(setPopped, t.id, false));
     } else sounds.uncheck();
@@ -121,7 +156,28 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
   async function add() {
     const text = title.trim();
     if (!text) return;
-    const temp: Todo = { id: `tmp-${Date.now()}`, title: text, notes: null, dueDate: due, priority, position: Math.min(0, ...todos.map((x) => x.position)) - 1, doneAt: null };
+    if (!board.ready) return toast.error("To Do needs a database update first (App setup lists it).");
+    // Where you're looking: My Day, Important, Planned (due today), or the list.
+    const where = {
+      listId: view !== "all" && !isSmart(view) ? view : null,
+      myDay: view === "myday" ? today : null,
+      important: view === "important",
+      dueDate: due ?? (view === "planned" ? today : null),
+    };
+    const temp: TodoItem = {
+      id: `tmp-${Date.now()}`,
+      title: text,
+      notes: null,
+      ...where,
+      priority,
+      remindAt: null,
+      repeat: null,
+      categories: [],
+      position: Math.min(0, ...todos.map((x) => x.position)) - 1,
+      doneAt: null,
+      createdAt: new Date().toISOString(),
+      steps: [],
+    };
     setTodos((all) => [temp, ...all]);
     setIn(setFresh, temp.id, true);
     setTitle("");
@@ -129,36 +185,37 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
     setPriority(0);
     sounds.pop();
     if (filter === "done") setFilter("all");
-    const r = await addTodo({ title: text, dueDate: temp.dueDate, priority: temp.priority });
+    const r = await createTodo({ title: text, ...where, priority: temp.priority, onTop: true });
     if (r.error !== undefined) {
       toast.error(r.error);
       setTodos((all) => all.filter((x) => x.id !== temp.id));
     } else {
       // The real id replaces the temporary one (no second slide-in).
-      setTodos((all) => all.map((x) => (x.id === temp.id ? { ...x, id: r.id } : x)));
+      setTodos((all) => all.map((x) => (x.id === temp.id ? { ...r.todo, priority: x.priority } : x)));
       setIn(setFresh, temp.id, false);
     }
   }
 
-  function remove(t: Todo) {
+  function remove(t: TodoItem) {
     setIn(setLeaving, t.id, true);
     later(t.id, FOLD_MS, () => {
       setTodos((all) => all.filter((x) => x.id !== t.id));
       setIn(setLeaving, t.id, false);
     });
-    void deleteTodo(t.id).then(fail);
+    if (!t.id.startsWith("tmp-")) void deleteTodo(t.id).then(fail);
   }
 
-  // What's shown: open ones by your order, then finished ones (latest first).
+  // The list it shows (1.53.0), then the filter: open ones by your order, then finished ones (latest first).
+  const inView = useMemo(() => (view === "all" ? todos : todos.filter((t) => belongs(t, view, today, board.prefs) || (view === "myday" && !!t.doneAt && t.myDay === today))), [todos, view, today, board.prefs]);
   const shown = useMemo(() => {
-    const isDone = (t: Todo) => !!t.doneAt && !settling.has(t.id);
-    const byPos = (a: Todo, b: Todo) => a.position - b.position;
-    const open = todos.filter((t) => !isDone(t)).sort(byPos);
-    const finished = todos.filter(isDone).sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
-    if (filter === "active") return todos.filter((t) => !t.doneAt || settling.has(t.id)).sort(byPos);
-    if (filter === "done") return todos.filter((t) => !!t.doneAt || settling.has(t.id)).sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
+    const isDone = (t: TodoItem) => !!t.doneAt && !settling.has(t.id);
+    const byPos = (a: TodoItem, b: TodoItem) => a.position - b.position;
+    const open = inView.filter((t) => !isDone(t)).sort(byPos);
+    const finished = inView.filter(isDone).sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
+    if (filter === "active") return inView.filter((t) => !t.doneAt || settling.has(t.id)).sort(byPos);
+    if (filter === "done") return inView.filter((t) => !!t.doneAt || settling.has(t.id)).sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
     return [...open, ...finished];
-  }, [todos, filter, settling]);
+  }, [inView, filter, settling]);
 
   // Smooth moves when the order changes (a finished item sliding down).
   const list = useRef<HTMLUListElement>(null);
@@ -188,10 +245,12 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
     void reorderTodos(moved.filter((id) => !id.startsWith("tmp-"))).then(fail);
   }
 
-  const total = todos.length;
-  const doneCount = todos.filter((t) => t.doneAt).length;
+  const total = inView.length;
+  const doneCount = inView.filter((t) => t.doneAt).length;
   const openCount = total - doneCount;
   const pr = PRIORITY[priority];
+  // Outside a list of yours, each row says which list it's in.
+  const showList = !narrow && board.lists.length > 0 && (view === "all" || view === "myday" || view === "important" || view === "planned");
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -200,7 +259,7 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void add()}
-          placeholder="Add a to-do…"
+          placeholder={view === "myday" ? "Add to My Day…" : view === "all" || isSmart(view) ? "Add a to-do…" : `Add to ${showsName(view, board)}…`}
           maxLength={300}
           aria-label="New to-do"
           className="min-w-0 flex-1 bg-transparent pl-2.5 h-8 text-[13px] outline-none"
@@ -223,7 +282,8 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
         </button>
       </div>
 
-      <div className="flex items-center gap-0.5 mt-1.5 flex-shrink-0">
+      <div className="flex items-center gap-0.5 mt-1.5 flex-shrink-0 min-w-0">
+        <ShowsPicker board={board} value={view} onPick={pickShows} narrow={narrow} />
         {(
           [
             ["all", "All", total],
@@ -236,13 +296,13 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
             type="button"
             onClick={() => setFilter(f)}
             aria-pressed={filter === f}
-            className={`rounded-md px-2 h-6 text-[12px] font-semibold transition-colors ${filter === f ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
+            className={`rounded-md px-2 h-6 text-[12px] font-semibold transition-colors flex-shrink-0 ${filter === f ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink"}`}
           >
             {label}
-            {n > 0 && !narrow && <span className="ml-1 text-[11px] text-ink-faint tabular-nums">{n}</span>}
+            {n > 0 && !narrow && box.w >= 300 && <span className="ml-1 text-[11px] text-ink-faint tabular-nums">{n}</span>}
           </button>
         ))}
-        {total > 0 && !narrow && (
+        {total > 0 && !narrow && box.w >= 340 && (
           <span className="ml-auto text-[11px] tabular-nums text-ink-faint" title={`${doneCount} of ${total} done`}>
             {doneCount}/{total}
           </span>
@@ -259,19 +319,19 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
           <SortableContext items={shown.map((t) => t.id)} strategy={verticalListSortingStrategy}>
             <ul ref={list} className="relative">
               {shown.map((t) => (
-                <TodoItem
+                <TodoItemRow
                   key={t.id}
                   narrow={narrow}
                   t={t}
                   today={today}
+                  view={view}
+                  listName={showList ? (t.listId ? (lists.get(t.listId)?.name ?? null) : "Tasks") : null}
+                  listColor={t.listId ? listColor(lists.get(t.listId)?.color ?? "blue").fill : null}
                   popped={popped.has(t.id)}
                   entering={fresh.has(t.id)}
                   out={settling.get(t.id) === "out" || leaving.has(t.id)}
                   onToggle={() => toggle(t)}
-                  onSave={(p) => {
-                    patch(t.id, p);
-                    void updateTodo(t.id, { title: p.title, notes: p.notes, dueDate: p.dueDate, priority: p.priority }).then(fail);
-                  }}
+                  onSave={(p) => save(t, p)}
                   onDelete={() => remove(t)}
                 />
               ))}
@@ -285,10 +345,72 @@ export function TodoWidget({ todos: initial }: { todos: Todo[] }) {
               <p className="text-[12.5px] font-semibold mt-1">All done. Nice!</p>
             </div>
           ) : (
-            <p className="py-5 text-center text-[12.5px] text-ink-soft animate-[fadein_.3s_ease]">{filter === "done" ? "Nothing checked off yet." : "Nothing here yet. Add your first one above."}</p>
+            <p className="py-5 text-center text-[12.5px] text-ink-soft animate-[fadein_.3s_ease]">
+              {filter === "done" ? "Nothing checked off yet." : view === "myday" ? "Nothing in My Day yet. Add what today needs above." : view === "important" ? "Star a to-do to see it here." : "Nothing here yet. Add your first one above."}
+            </p>
           ))}
       </div>
     </div>
+  );
+}
+
+/** The widget's list menu: Everything, the smart lists, your lists. */
+function ShowsPicker({ board, value, onPick, narrow }: { board: TodoBoard; value: Shows; onPick: (s: Shows) => void; narrow: boolean }) {
+  const btn = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const icon = (s: Shows, cls = "w-3.5 h-3.5") => {
+    if (s === "myday") return <SunIcon className={`${cls} text-amber`} />;
+    if (s === "important") return <StarIcon className={`${cls} text-pink`} />;
+    if (s === "planned") return <CalendarIcon className={`${cls} text-teal`} />;
+    if (s === "tasks") return <HomeIcon className={`${cls} text-blue`} />;
+    if (s === "all") return <ListBulletIcon className={`${cls} text-ink-soft`} />;
+    const l = board.lists.find((x) => x.id === s);
+    return l?.emoji ? <span className="text-[12px] leading-none">{l.emoji}</span> : <span style={{ color: listColor(l?.color ?? "blue").fill }}><ListBulletIcon className={cls} /></span>;
+  };
+  const pick = (s: Shows) => {
+    onPick(s);
+    setOpen(false);
+  };
+  const item = (s: Shows, label: string) => (
+    <button key={s} type="button" role="menuitemradio" aria-checked={value === s} onClick={() => pick(s)} className="w-full flex items-center gap-2.5 text-left rounded-lg px-3 py-2 text-[13px] hover:bg-surface-2 focus:bg-surface-2 focus:outline-none">
+      <span className="w-4 flex items-center justify-center flex-shrink-0">{icon(s, "w-4 h-4")}</span>
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+      {value === s && <CheckIcon className="w-4 h-4 text-amber flex-shrink-0" />}
+    </button>
+  );
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={`Shows: ${showsName(value, board)}`}
+        aria-label={`Shows: ${showsName(value, board)}`}
+        className="inline-flex items-center gap-1 rounded-md pl-1.5 pr-1 h-6 text-[12px] font-semibold text-ink hover:bg-surface-2 min-w-0 max-w-[45%] flex-shrink"
+      >
+        <span className="flex-shrink-0 flex">{icon(value)}</span>
+        {!narrow && <span className="truncate">{showsName(value, board)}</span>}
+        <ChevronDownIcon className="w-3 h-3 text-ink-faint flex-shrink-0" />
+      </button>
+      <span className="w-px h-3.5 bg-line/15 mx-1 flex-shrink-0" aria-hidden />
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={230} align="left" label="Shows">
+        <div className="p-1" role="none">
+          {item("all", "Everything")}
+          {item("myday", "My Day")}
+          {item("important", "Important")}
+          {item("planned", "Planned")}
+          {item("tasks", "Tasks")}
+          {board.lists.length > 0 && <div className="my-1 mx-2 h-px bg-line/10" role="separator" />}
+          {board.lists.map((l) => item(l.id, l.name))}
+          <div className="my-1 mx-2 h-px bg-line/10" role="separator" />
+          <Link href={todoHref(value === "all" ? null : value)} onClick={() => setOpen(false)} className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-amber hover:bg-amber/10">
+            <ExternalIcon className="w-4 h-4 flex-shrink-0" /> Open To Do
+          </Link>
+        </div>
+      </AnchoredMenu>
+    </>
   );
 }
 
@@ -318,10 +440,13 @@ function Check({ done, popped, color, onToggle }: { done: boolean; popped: boole
   );
 }
 
-function TodoItem({
+function TodoItemRow({
   narrow,
   t,
   today,
+  view,
+  listName,
+  listColor: dot,
   popped,
   entering,
   out,
@@ -330,13 +455,16 @@ function TodoItem({
   onDelete,
 }: {
   narrow: boolean;
-  t: Todo;
+  t: TodoItem;
   today: string;
+  view: Shows;
+  listName: string | null;
+  listColor: string | null;
   popped: boolean;
   entering: boolean;
   out: boolean;
   onToggle: () => void;
-  onSave: (p: Partial<Todo>) => void;
+  onSave: (p: TodoPatch) => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id, disabled: !!t.doneAt });
@@ -345,6 +473,9 @@ function TodoItem({
   const [editing, setEditing] = useState(false);
   const pr = PRIORITY[t.priority] ?? PRIORITY[0];
   const done = !!t.doneAt;
+  const inDay = t.myDay === today;
+  const steps = t.steps.length ? `${t.steps.filter((s) => s.doneAt).length}/${t.steps.length}` : null;
+  const extras = !open && ((t.dueDate && !done) || t.notes || listName || (inDay && view !== "myday" && !done) || steps || (t.remindAt && !done) || t.repeat);
   return (
     <li
       ref={setNodeRef}
@@ -391,13 +522,42 @@ function TodoItem({
                   <span className="todo-title">{t.title}</span>
                 </button>
               )}
-              {!open && ((t.dueDate && !done) || t.notes) && (
-                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+              {extras && (
+                <div className="flex items-center gap-1.5 mt-0.5 min-w-0 text-[11px] text-ink-faint">
                   {!done && <DueChip due={t.dueDate} today={today} />}
-                  {t.notes && <span className="text-[11px] text-ink-faint truncate">{t.notes}</span>}
+                  {inDay && view !== "myday" && !done && (
+                    <span className="inline-flex items-center gap-0.5 text-amber flex-shrink-0" title="In My Day">
+                      <SunIcon className="w-3 h-3" />
+                    </span>
+                  )}
+                  {t.repeat && <RepeatIcon className="w-3 h-3 flex-shrink-0" />}
+                  {t.remindAt && !done && (
+                    <span className="inline-flex items-center gap-0.5 flex-shrink-0" title={`Reminder: ${reminderWord(t.remindAt, today)}`}>
+                      <BellIcon className="w-3 h-3" />
+                      {!narrow && <span className="tabular-nums">{reminderWord(t.remindAt, today)}</span>}
+                    </span>
+                  )}
+                  {steps && <span className="tabular-nums flex-shrink-0">{steps}</span>}
+                  {listName && (
+                    <span className="inline-flex items-center gap-1 min-w-0 flex-shrink-0 max-w-[55%]">
+                      <span className="w-1.5 h-1.5 rounded-[2px] flex-shrink-0" style={{ background: dot ?? "rgb(var(--blue))" }} aria-hidden />
+                      <span className="truncate">{listName}</span>
+                    </span>
+                  )}
+                  {t.notes && <span className="min-w-0 truncate">{t.notes}</span>}
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => onSave({ important: !t.important })}
+              aria-pressed={t.important}
+              aria-label={t.important ? "Remove importance" : "Mark as important"}
+              title={t.important ? "Remove importance" : "Mark as important"}
+              className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${t.important ? "text-pink" : "text-ink-faint opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-pink"} ${narrow && !t.important ? "hidden" : ""}`}
+            >
+              <StarIcon filled={t.important} className="w-3.5 h-3.5" />
+            </button>
             <button
               type="button"
               onClick={() => setOpen((o) => !o)}
@@ -429,7 +589,7 @@ function TodoItem({
                   </button>
                 ))}
                 <DatePicker value={t.dueDate} onChange={(d) => onSave({ dueDate: d })} ariaLabel="Due date" triggerClassName="rounded-md px-1.5 h-6 text-[11px] font-semibold border border-line/15 text-ink-soft">
-                  {t.dueDate ? new Date(`${t.dueDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Due date"}
+                  {t.dueDate ? dayWord(t.dueDate, today) : "Due date"}
                 </DatePicker>
                 {t.dueDate && (
                   <button
@@ -441,6 +601,21 @@ function TodoItem({
                   >
                     Clear date
                   </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => onSave({ myDay: inDay ? null : today })}
+                  aria-pressed={inDay}
+                  className={`inline-flex items-center gap-1 rounded-md px-1.5 h-6 text-[11px] font-semibold border ${inDay ? "border-amber bg-amber/10 text-amber" : "border-line/15 text-ink-soft"}`}
+                >
+                  <SunIcon className="w-3 h-3" /> {inDay ? "In My Day" : "Add to My Day"}
+                </button>
+                {!t.id.startsWith("tmp-") && (
+                  <Link href={todoHref(t.listId ?? "tasks", t.id)} className="inline-flex items-center gap-1 rounded-md px-1.5 h-6 text-[11px] font-semibold border border-line/15 text-ink-soft hover:text-ink">
+                    <ExternalIcon className="w-3 h-3" /> Steps, reminder, repeat
+                  </Link>
                 )}
                 <span className="flex-1" />
                 <button type="button" onClick={onDelete} className="rounded-md px-1.5 h-6 text-[11px] font-semibold text-ink-soft hover:text-red hover:bg-red/10">

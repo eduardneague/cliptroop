@@ -6,7 +6,7 @@ import { getNotificationHistory } from "@/app/(dashboard)/notification-actions";
 import { CloseIcon, TrophyIcon } from "./icons";
 import { Dialog } from "./dialog";
 import { initialsFor } from "@/lib/avatar";
-import { OutliersIcon, ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
+import { BellIcon, OutliersIcon, ShortsIcon, UsersIcon, VideoIcon } from "@/components/ui/icons";
 import { periodPhrase } from "@/modules/objectives/lib/periods";
 import { actionableStatus, waitsForAnswer } from "@/lib/notification-status";
 import { useSwipeAway } from "./use-swipe-away";
@@ -71,6 +71,14 @@ function LeadingVisual({ n }: { n: NotificationItem }) {
     return (
       <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-amber/15 text-amber" aria-label="Outliers">
         <OutliersIcon className="w-4 h-4" />
+      </span>
+    );
+  }
+  // 1.53.0: a To Do reminder.
+  if (n.kind === "todo_reminder") {
+    return (
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-teal/15 text-teal" aria-label="Reminder">
+        <BellIcon className="w-4 h-4" />
       </span>
     );
   }
@@ -463,6 +471,13 @@ function RichBody({ n }: { n: NotificationItem }) {
       return (
         <>
           This week in <b>{m.niche ?? "your niches"}</b>: {m.count} new outlier{m.count === 1 ? "" : "s"}, the best at <b>{m.best.mult}</b>: &ldquo;{m.best.title}&rdquo;
+        </>
+      );
+    case "todo_reminder":
+      return (
+        <>
+          Reminder: <b>{m.title}</b>
+          {m.list ? <span className="text-ink-soft"> · {m.list}</span> : null}
         </>
       );
     case "meeting_reminder":

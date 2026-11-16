@@ -22,6 +22,27 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.0",
+    date: "2026-11-16",
+    title: "To Do",
+    changes: [
+      { kind: "new", text: "To Do: a page of its own for your own to-dos, like Microsoft To Do. My Day starts fresh every morning, Important collects what you starred, Planned shows everything with a date day by day, and Tasks plus lists of your own (with an emoji and a colour) hold the rest." },
+      { kind: "new", text: "Assigned to me is the work the team gives you: the same tasks as My tasks, from scripts to edits and action items. Put one in My Day with the sun; it ticks off by itself when the video moves on." },
+      { kind: "new", text: "Every to-do has steps, a reminder (in the bell and as a notification), a due date, a repeat (daily, weekdays, every 2 weeks on Monday…), categories, a priority and a note. A repeating one brings the next one when you tick it off." },
+      { kind: "new", text: "My Day's Suggestions offer what's overdue, due today, coming up, left from yesterday or due from the team. Search finds to-dos in every list, steps and notes included. Drag to reorder, or drop a to-do on a list, My Day or Important." },
+      { kind: "new", text: "Faster to reach: To Do in the menu, the To Do button in the top bar (or press T on any page) for a quick My Day, \"Add a to-do\" in search, and To Do on the installed app's icon." },
+      { kind: "better", text: "The To-do list widget shows Everything, My Day, Important, Planned, Tasks or one of your lists, stars the important ones, and opens the whole to-do in To Do." },
+    ],
+  },
+  {
+    version: "1.52.2",
+    date: "2026-11-16",
+    title: "Free for now",
+    changes: [
+      { kind: "better", text: "Pricing, the home page and the Terms say it simply: ClipTroop is free for every team for now, and the plans on Pricing come later." },
+    ],
+  },
+  {
     version: "1.52.1",
     date: "2026-11-16",
     title: "Numbers twice a day, Outliers daily",
@@ -42,9 +63,9 @@ export const CHANGELOG: Release[] = [
   {
     version: "1.51.0",
     date: "2026-11-04",
-    title: "Free while in early access",
+    title: "Free for now",
     changes: [
-      { kind: "new", text: "ClipTroop is free while it's in early access. A new team opens right away, with no plan to choose first: every page, uploading files and connecting your accounts work from the start. The plans on Pricing come later." },
+      { kind: "new", text: "ClipTroop is free for now. A new team opens right away, with no plan to choose first: every page, uploading files and connecting your accounts work from the start. The plans on Pricing come later." },
       { kind: "fixed", text: "A new account always gets its first steps (About you, then two-step sign-in). If the confirm-your-email link ends on the sign-in page, signing in opens them." },
       { kind: "fixed", text: "Behind the scenes: building the app no longer fails when Google Fonts answers in an unusual way." },
     ],
