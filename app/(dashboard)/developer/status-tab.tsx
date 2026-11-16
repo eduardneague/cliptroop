@@ -71,10 +71,10 @@ export async function StatusTab() {
           <CheckRow
             c={{
               key: "status-call",
-              name: "Status check (every 10 minutes)",
+              name: "Status check (every 30 minutes)",
               level: !statusCall?.at ? "unknown" : statusCall.code !== null && statusCall.code >= 200 && statusCall.code < 300 ? "ok" : statusCall.code !== null && statusCall.code < 500 ? "warn" : "down",
               detail: !statusCall?.at
-                ? "No answer recorded yet (needs migration 0069 and the Vault secrets; it runs every 10 minutes)."
+                ? "No answer recorded yet (needs migration 0069 and the Vault secrets; it runs every 30 minutes since 0129)."
                 : `${statusCall.why ?? "No details."} Last check ${new Date(statusCall.at).toISOString().slice(11, 16)} UTC.`,
             }}
           />
@@ -116,7 +116,7 @@ export async function StatusTab() {
           )}
         </div>
         {incidents.length === 0 ? (
-          <p className="pt-2 text-[13.5px] text-ink-soft">{history.since ? "None." : "Nothing recorded yet: the status check runs every 10 minutes once migration 0067 is in and the Vault secrets are set."}</p>
+          <p className="pt-2 text-[13.5px] text-ink-soft">{history.since ? "None." : "Nothing recorded yet: the status check runs every 30 minutes once migration 0067 is in and the Vault secrets are set."}</p>
         ) : (
           <>
             {/* The latest three (ongoing ones first); the rest fold away. */}

@@ -24,6 +24,24 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 
 export const PROBES: Probe[] = [
   {
+    n: "0130",
+    what: "video numbers every 12 hours, Outliers once a day",
+    has: async (admin) => {
+      const { data, error } = await admin.rpc("timer_plan");
+      if (error) return missing(error) || error.code === "PGRST202" ? false : null;
+      return /12 hours/.test(JSON.stringify(data));
+    },
+  },
+  {
+    n: "0129",
+    what: "lighter timers (status every 30 minutes, live counts hourly unless a video is fresh, Outliers every 3 hours)",
+    has: async (admin) => {
+      const { error } = await admin.rpc("timer_plan");
+      if (!error) return true;
+      return missing(error) || error.code === "PGRST202" ? false : null;
+    },
+  },
+  {
     n: "0128",
     what: "free access while plans are off (files for teams without a plan)",
     has: async (admin) => {

@@ -194,7 +194,7 @@ export type Incident = { part: string; level: "warn" | "down"; startedAt: string
 export type History = { hours: number; bars: Record<string, Bar[]>; uptime: Record<string, number | null>; since: string | null };
 
 /**
- * The status check every 10 minutes (pg_cron → /api/cron/posting with
+ * The status check every 30 minutes (0129; 10 before) (pg_cron → /api/cron/posting with
  * {"status": true}): checks everything and records the app-wide parts and
  * the services. Returns the checks so the caller can raise alerts.
  */

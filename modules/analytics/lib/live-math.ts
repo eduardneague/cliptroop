@@ -8,6 +8,15 @@
 
 export type LivePoint = { at: number; views: number | null };
 
+/**
+ * How often every video's counts are read (1.52.1, migration 0130: the owner, Nov 16 2026, "video numbers every 12
+ * hours"). The screens say it in these words; the last-60-minutes view (10-minute slots) only makes sense when the
+ * counts come at least every 10 minutes, so it shows only then.
+ */
+export const LIVE_EVERY_HOURS = 12;
+export const LIVE_EVERY_WORDS = "every 12 hours";
+export const LIVE_MINUTE_VIEW = LIVE_EVERY_HOURS * 60 <= 10;
+
 export const COUNT_KEYS = ["views", "likes", "comments", "shares"] as const;
 export type CountKey = (typeof COUNT_KEYS)[number];
 export type Counts = Record<CountKey, number | null>;
@@ -131,9 +140,9 @@ export function hourRange(at: number, now: number): string {
 }
 
 /**
- * How often the counts are read (1.19.0): every 10 minutes, or LIVE_MINUTES
- * (20, 30 or 60) for a lighter load on a small hosting plan. The timer still
- * calls every 10 minutes (at :05, :15 …); the calls in between do nothing.
+ * Whether a timer call should read (1.19.0: LIVE_MINUTES 20, 30 or 60 skipped
+ * the 10-minute calls in between). Since 0130 (1.52.1) the database calls every
+ * 12 hours at :05, which this always lets through; LIVE_MINUTES isn't needed.
  */
 export function liveDue(now = new Date(), every = Number(process.env.LIVE_MINUTES)): boolean {
   const step = [20, 30, 60].includes(every) ? every / 10 : 1;

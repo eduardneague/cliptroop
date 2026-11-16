@@ -22,6 +22,24 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.52.1",
+    date: "2026-11-16",
+    title: "Numbers twice a day, Outliers daily",
+    changes: [
+      { kind: "better", text: "Your videos' numbers are read every 12 hours, and Sync now still reads them at once. Analytics → Realtime shows the last 48 hours hour by hour (the last-60-minutes view needs reads every few minutes, so it's hidden)." },
+      { kind: "better", text: "Outliers looks for new videos once a day." },
+    ],
+  },
+  {
+    version: "1.52.0",
+    date: "2026-11-16",
+    title: "Lighter on the server",
+    changes: [
+      { kind: "better", text: "Behind the scenes: ClipTroop's background work runs only as often as it's useful. Your videos' numbers update once an hour, and every 10 minutes for videos from the last 48 hours, when they move fast. The status check and goal counting run every 30 minutes." },
+      { kind: "better", text: "Outliers looks for new videos every 3 hours and reads a little less of YouTube each day. Its built-in Explore niches are off unless turned on." },
+    ],
+  },
+  {
     version: "1.51.0",
     date: "2026-11-04",
     title: "Free while in early access",

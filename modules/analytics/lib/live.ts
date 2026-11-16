@@ -11,8 +11,10 @@ import { syncReach } from "./reach";
 import { liveDue, snapshotsOf, type CountKey, type Counts, type SeenCounts, type Snapshot } from "./live-math";
 
 /*
- * Numbers within minutes (1.19.0). Every 10 minutes the timer (0083) calls
- * once per team and platform; each call:
+ * Numbers within minutes (1.19.0). The timer (0083) calls once per team and
+ * platform: every 10 minutes until 1.52.0, every 12 hours since 1.52.1 (0130,
+ * the owner: "video numbers every 12 hours"), so each call is a full pass now;
+ * each call:
  *   - reads the public counts (views, likes, comments, shares) of the videos
  *     that matter now ("hot": the newest, posted in the last week, gaining
  *     views in the last day), and every few hours of EVERY video on the

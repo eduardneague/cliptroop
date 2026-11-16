@@ -7,7 +7,7 @@ import { TrackIcon } from "./bits";
 import { useOutliers } from "./context";
 
 /*
- * Track a channel (1.27.0): its new videos are read every few hours and an
+ * Track a channel (1.27.0): its new videos are read once a day (1.52.1) and an
  * alert goes out when one takes off. Masters and researchers only; everyone
  * else sees whether it's tracked.
  */

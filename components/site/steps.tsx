@@ -59,7 +59,7 @@ const SCENES = [
     id: "measure",
     label: "Measure",
     title: "Then, what worked",
-    text: "Views, watch time, followers and revenue from every platform, side by side, next to what the team made. The newest videos are read every few minutes, the rest every few hours.",
+    text: "Views, watch time, followers and revenue from every platform, side by side, next to what the team made. Every video's numbers are read twice a day.",
     facts: ["Every platform in one place", "Every video counted", "Goals that fill up live"],
     more: { href: "/features/analytics", label: "Analytics" },
     Vignette: MeasureVignette,

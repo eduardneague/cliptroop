@@ -12,7 +12,7 @@ import { OBJECTIVE_COLS, kindOf, loadOverrides, loadPeople, needsOf, targetIn, t
 /*
  * The server's own count (admin client): after anything that can move an
  * objective (a short or long video posted, a step done, the morning's
- * platform numbers), every 10 minutes as a safety net (the status timer),
+ * platform numbers), every 30 minutes as a safety net (the status timer; 10 until 0129),
  * and when someone opens the page or the widget (at most every 30 s).
  *
  * It saves each objective's current period (and the one before, while late
@@ -178,7 +178,7 @@ export function queueObjectivesSyncFor(kind: "short" | "long", id: string | null
 }
 
 /**
- * The safety net (the status timer, every 10 minutes): every team with an
+ * The safety net (the status timer, every 30 minutes since 0129): every team with an
  * active objective that hasn't been counted in the last 5 minutes, within a
  * time budget.
  */

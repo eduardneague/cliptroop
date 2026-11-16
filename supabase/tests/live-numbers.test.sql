@@ -47,7 +47,8 @@ declare
   expected int := (select count(*) from (select distinct team_id, platform from social_accounts where status = 'active') x);
   n int;
 begin
-  n := analytics_live_fanout();
+  -- 0129: the hour's first run (:05) calls everyone.
+  n := analytics_live_fanout(date_trunc('hour', now()) + interval '5 minutes');
   if n <> expected or (select count(*) from net.http_request_queue) - before <> expected then
     raise exception 'analytics_live_fanout: expected % calls, got %', expected, n;
   end if;
@@ -61,13 +62,35 @@ begin
     raise exception 'analytics_live_fanout: counts older than 8 days are dropped';
   end if;
   if not exists (select 1 from cron.job where jobname = 'vplanner-live' and command like '%analytics_live_fanout()%') then
-    raise exception 'the 10-minute live timer is scheduled';
+    raise exception 'the live timer is scheduled';
   end if;
   if (select array_agg(views order by at) from analytics_live where external_id = 'thin') <> array[3, 4, 5, 6]::bigint[] then
     raise exception 'analytics_live_fanout: after 48 hours only the last count of each hour stays (got %)', (select array_agg(views order by at) from analytics_live where external_id = 'thin');
   end if;
 end $$;
 delete from analytics_live where external_id = 'thin';
+
+-- 1b (0130): every run calls every team and platform (0129's "only fresh ones between the hours" is gone): the timer
+-- itself runs every 12 hours. Outliers once a day, the status check every 30 minutes.
+do $$
+declare
+  expected int := (select count(*) from (select distinct team_id, platform from social_accounts where status = 'active') x);
+  n int;
+begin
+  n := analytics_live_fanout(date_trunc('hour', now()) + interval '25 minutes');
+  if n <> expected then
+    raise exception 'analytics_live_fanout at :25: every team and platform (expected % calls, got %)', expected, n;
+  end if;
+  if not exists (select 1 from cron.job where jobname = 'vplanner-live' and schedule = '5 6,18 * * *' and command like '%analytics_live_fanout()%') then
+    raise exception 'the live timer runs every 12 hours';
+  end if;
+  if not exists (select 1 from cron.job where jobname = 'vplanner-outliers' and schedule = '17 5 * * *' and command like '%outliers_fanout()%') then
+    raise exception 'the outliers timer runs once a day';
+  end if;
+  if not exists (select 1 from cron.job where jobname = 'vplanner-status' and schedule = '*/30 * * * *') then
+    raise exception 'the status timer runs every 30 minutes';
+  end if;
+end $$;
 
 -- 2. A video seen three times: 100 three hours ago, 160 two hours ago, 190 half an hour ago.
 insert into analytics_live (team_id, platform, external_id, at, views, likes, comments) values

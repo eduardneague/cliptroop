@@ -179,7 +179,7 @@ export function ContentTab({
         }
       />
       <p className="text-[12px] text-ink-faint">
-        Every video on each connected account, with its totals now: the newest and the ones getting views are read every 10 minutes, all the others every few hours. Impressions and CTR are
+        Every video on each connected account, with its totals now (every video is read every 12 hours, and Sync now reads them at once). Impressions and CTR are
         YouTube&rsquo;s (thumbnail impressions and click-through rate over the days YouTube keeps). Shorts the team posted show here too, with &ldquo;–&rdquo; until the platform shares their
         numbers. &ldquo;× typical&rdquo;: views next to the median of the same kind posted before it, on the same platform. Only the accounts connected now are listed.
       </p>
