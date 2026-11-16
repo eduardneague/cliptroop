@@ -13,7 +13,7 @@ import { runOutliersJob } from "@/modules/outliers/lib/collector";
  * Called by the Supabase timers (pg_cron → pg_net), protected by
  * CRON_SECRET ("Authorization: Bearer …"):
  *   - every minute when a post or a meeting reminder is due;
- *   - every 10 minutes with {"status": true} (0067): check everything,
+ *   - every 30 minutes with {"status": true} (0067; 10 until 0129): check everything,
  *     record it for the status page's hourly bars, alert the developers
  *     about anything app-wide that's down, and count every team's
  *     objectives (the safety net, 1.14.0). No posts run on that call.
@@ -21,11 +21,11 @@ import { runOutliersJob } from "@/modules/outliers/lib/collector";
  *     morning analytics copy: {"job": "analytics", "team", "platform"} once
  *     per team and platform at 05:10 UTC and {"job": "analytics", "retry":
  *     true} at 05:40 and 06:40 (0082): lib/daily-jobs.ts.
- *   - every 10 minutes (:05, :15…) with {"job": "live", "team", "platform"}
- *     once per team and platform (0083): every video's counts within
+ *   - with {"job": "live", "team", "platform"} (0083): every 12 hours (06:05
+ *     and 18:05 UTC, 0130) for each team and platform: every video's counts within
  *     minutes, Analytics' realtime, impressions and CTR
  *     (modules/analytics/lib/live.ts).
- *   - every 30 minutes (:17, :47) with {"job": "outliers", "team"} once per
+ *   - once a day (05:17 UTC, 0130) with {"job": "outliers", "team"} once per
  *     team that follows a niche or tracks a channel, and {"job":
  *     "outliers", "explore": true} once (0091): Outliers' collector
  *     (modules/outliers/lib/collector.ts).
@@ -50,7 +50,7 @@ async function handle(request: Request) {
   if (body?.status === true) {
     const s = await recordStatus();
     const problems = await watchHealth("status", s);
-    // Objectives' safety net (1.14.0): every team counted at least every 10 minutes,
+    // Objectives' safety net (1.14.0): every team counted at least every 30 minutes (0129),
     // so a goal reached by something no action told the server about is still celebrated.
     const objectives = await syncAllObjectives(15_000).catch((e) => ({ teams: 0, wins: 0, error: e instanceof Error ? e.message : String(e) }));
     return NextResponse.json({ ok: true, recorded: s.recorded, problems, objectives, ...(s.error ? { error: s.error } : {}) });

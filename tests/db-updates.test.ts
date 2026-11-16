@@ -29,9 +29,13 @@ ok(/column\(a, "short_videos", "filmer_member_id, filmed_at, footage_path"\)/.te
 ok(/column\(a, "two_step_codes", "user_id"\)/.test(src), "0125: email codes");
 ok(/column\(a, "script_comments", "edited_at"\)/.test(src), "0127: changing comments (edited_at)");
 ok(/await admin\.rpc\("plans_required"\)/.test(src) && /error\.code === "PGRST202"/.test(src), "0128: its switch (a missing function is PGRST202)");
+ok(/await admin\.rpc\("timer_plan"\)/.test(src), "0129: the timers' plan");
+ok(/return \/12 hours\/\.test\(JSON\.stringify\(data\)\);/.test(src), "0130: the plan says 12 hours");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0130": /'live', 'every 12 hours \(06:05 and 18:05 UTC\)'/,
+  "0129": /create or replace function public\.timer_plan\(\)/,
   "0128": /create or replace function public\.plans_required\(\)/,
   "0127": /alter table script_comments add column if not exists edited_at timestamptz/,
   "0125": /create table if not exists public\.two_step_codes/,

@@ -19,10 +19,12 @@ const ok = (c: boolean, m: string) => {
 // Budgets
 {
   const b = readBudgets({});
-  ok(b.searches === 90 && b.crawlSearches === 45 && b.personSearches === 15 && b.teamSearches === 40 && b.units === 4000 && b.stats === 5000 && b.statsDays === 30 && b.explore, "defaults");
+  ok(b.searches === 90 && b.crawlSearches === 24 && b.personSearches === 15 && b.teamSearches === 40 && b.units === 1500 && b.stats === 2000 && b.statsDays === 30 && !b.explore && b.exploreUnits === 0, "defaults (1.52.0: lighter, Explore off)");
+  const on = readBudgets({ OUTLIERS_EXPLORE: "1" });
+  ok(on.explore && on.exploreUnits === 750 && on.exploreSearches === 6, "OUTLIERS_EXPLORE=1 turns Explore on (never more than half the units)");
   const c = readBudgets({ OUTLIERS_SEARCHES_PER_DAY: "20", OUTLIERS_CRAWL_SEARCHES: "50", OUTLIERS_STATS_DAYS: "9999", OUTLIERS_EXPLORE: "0", OUTLIERS_DAILY_UNITS: "abc" });
   ok(c.searches === 20 && c.crawlSearches === 20, "the collector never gets more searches than there are");
-  ok(c.statsDays === 1095 && !c.explore && c.units === 4000, "limits and odd values");
+  ok(c.statsDays === 1095 && !c.explore && c.units === 1500, "limits and odd values");
   ok(pacedCap(2400, 0) === 300 && pacedCap(2400, 21) === 2400 && pacedCap(2400, 12) === 1500, "paced by the hour, with a head start");
   ok(pacedCap(2400, 0, true) === 960, "a new niche may use 40% at once");
   ok(leftToday(2400, 250, 0) === 50 && leftToday(2400, 400, 0) === 0 && leftToday(2400, 2390, 23) === 10, "what's left now");

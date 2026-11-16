@@ -8,18 +8,23 @@
  * the same 10,000 units, so Outliers only ever takes its own share:
  *
  *   OUTLIERS_SEARCHES_PER_DAY  searches Outliers may use in all (default 90)
- *   OUTLIERS_CRAWL_SEARCHES    of those, the collector's (default 45; the rest are people's)
+ *   OUTLIERS_CRAWL_SEARCHES    of those, the collector's (default 24, was 45 until 1.52.0; the rest are people's)
  *   OUTLIERS_PERSON_SEARCHES   fresh YouTube searches one person may run a day (default 15)
  *   OUTLIERS_TEAM_SEARCHES     and one team (default 40)
- *   OUTLIERS_DAILY_UNITS       units of the 10,000 (default 4000)
- *   OUTLIERS_STATS_PER_DAY     batchGetStats calls (default 5000)
+ *   OUTLIERS_DAILY_UNITS       units of the 10,000 (default 1500, was 4000 until 1.52.0)
+ *   OUTLIERS_STATS_PER_DAY     batchGetStats calls (default 2000, was 5000 until 1.52.0)
  *   OUTLIERS_STATS_DAYS        how long views over time are kept (default 30;
  *                              up to 1095 once YouTube's derived-metrics terms are accepted)
- *   OUTLIERS_EXPLORE           "0" turns the built-in explore niches off
+ *   OUTLIERS_EXPLORE           "1" turns the built-in explore niches on (1.52.0: off unless asked for)
  *   OUTLIERS_EXPLORE_UNITS     of the units, the explore niches' own (default 1200, 1.29.0:
  *                              they fill from well-known channels, so they need units,
  *                              not searches; a team's collecting can't use them up)
  *   OUTLIERS_EXPLORE_SEARCHES  of the collector's searches, the explore niches' (default 6)
+ *
+ * 1.52.0 (the owner, Nov 16 2026, before Vercel Pro's $20 a month: "save a lot of rescoures"): every video the
+ * collector reads is work on the server, so the defaults ask for about a third of what they did, and the explore
+ * niches (a showcase for teams with none of their own) collect only when OUTLIERS_EXPLORE=1. Each of these can be
+ * raised again in Vercel's environment variables.
  *
  * The collector also paces itself: by any hour it may have used its day's
  * share up to that hour plus a head start, so a busy morning doesn't leave
@@ -47,16 +52,16 @@ const int = (v: string | undefined, def: number, min: number, max: number) => {
 
 export function readBudgets(env: Record<string, string | undefined> = process.env): Budgets {
   const searches = int(env.OUTLIERS_SEARCHES_PER_DAY, 90, 0, 100_000);
-  const crawlSearches = Math.min(searches, int(env.OUTLIERS_CRAWL_SEARCHES, 45, 0, 100_000));
-  const units = int(env.OUTLIERS_DAILY_UNITS, 4000, 0, 10_000_000);
-  const explore = env.OUTLIERS_EXPLORE !== "0";
+  const crawlSearches = Math.min(searches, int(env.OUTLIERS_CRAWL_SEARCHES, 24, 0, 100_000));
+  const units = int(env.OUTLIERS_DAILY_UNITS, 1500, 0, 10_000_000);
+  const explore = env.OUTLIERS_EXPLORE === "1";
   return {
     searches,
     crawlSearches,
     personSearches: int(env.OUTLIERS_PERSON_SEARCHES, 15, 0, 10_000),
     teamSearches: int(env.OUTLIERS_TEAM_SEARCHES, 40, 0, 100_000),
     units,
-    stats: int(env.OUTLIERS_STATS_PER_DAY, 5000, 0, 10_000_000),
+    stats: int(env.OUTLIERS_STATS_PER_DAY, 2000, 0, 10_000_000),
     statsDays: int(env.OUTLIERS_STATS_DAYS, 30, 1, 1095),
     explore,
     // Never more than half of either, so the teams always keep most of it.

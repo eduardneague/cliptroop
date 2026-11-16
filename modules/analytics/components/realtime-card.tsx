@@ -7,7 +7,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { SocialPlatform } from "@/lib/social/providers";
 import type { Realtime, RealtimePlatform } from "../lib/realtime";
 import { ago } from "../lib/ago";
-import { hourRange } from "../lib/live-math";
+import { hourRange, LIVE_EVERY_WORDS } from "../lib/live-math";
 import { fmtCompact, fmtInt, StackedColumns } from "./charts";
 
 /*
@@ -210,7 +210,7 @@ export function RealtimeHeader({ updated, children }: { updated: string | null; 
     <div className="flex items-center gap-2 flex-wrap">
       <LiveDot />
       <h2 className="text-[14.5px] font-semibold">Realtime</h2>
-      <span className="text-[12px] text-ink-faint">{updated ? `Updated ${updated} · every video, every 10 minutes` : "Every video, every 10 minutes"}</span>
+      <span className="text-[12px] text-ink-faint">{updated ? `Updated ${updated} · every video, ${LIVE_EVERY_WORDS}` : `Every video, ${LIVE_EVERY_WORDS}`}</span>
       {children}
     </div>
   );
@@ -257,7 +257,7 @@ export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRea
     </section>
   );
   if (state === "failed") return shell(<p className="text-[13px] text-ink-soft mt-2">Couldn&rsquo;t load the realtime numbers just now. They&rsquo;ll be back on their own.</p>);
-  if (state === "waiting-update" || !data) return shell(<p className="text-[13px] text-ink-soft mt-2">Every video&rsquo;s numbers, refreshed every 10 minutes, start right after the latest database update has run.</p>);
+  if (state === "waiting-update" || !data) return shell(<p className="text-[13px] text-ink-soft mt-2">Every video&rsquo;s numbers, read {LIVE_EVERY_WORDS}, start after the next read.</p>);
   const platforms = RT_ORDER.filter((p) => data.platforms.some((x) => x.platform === p) && (!only || only === p));
   const sum = (m: Partial<Record<SocialPlatform, number>>) => platforms.reduce((t, p) => t + (m[p] ?? 0), 0);
   const values = data.hours.map((h) => Math.round(platforms.reduce((t, p) => t + (h.per[p] ?? 0), 0)));
@@ -317,7 +317,7 @@ export function RealtimePanel({ rt, href, only }: { rt: ReturnType<typeof useRea
           {note && <p className="mt-1.5 text-[11px] text-ink-faint leading-snug">{note}</p>}
         </div>
       ) : (
-        <p className="mt-3 text-[12.5px] text-ink-faint">{waiting ? "Counting starts within 10 minutes." : "No views in the last 48 hours yet."}</p>
+        <p className="mt-3 text-[12.5px] text-ink-faint">{waiting ? `Counting starts at the next read (${LIVE_EVERY_WORDS}).` : "No views in the last 48 hours yet."}</p>
       )}
       {top.length > 0 && (
         <div className="mt-3 pt-3 border-t border-line/10">

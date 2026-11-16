@@ -368,7 +368,7 @@ export const FEATURES: SiteFeature[] = [
     dept: "measure",
     title: "Every platform’s numbers, side by side",
     line: "Views, watch time, followers and revenue from all four platforms, every video counted.",
-    lead: "Views, watch time, followers and revenue from YouTube, TikTok, Instagram and Facebook, one total or each on its own, next to what your team made. Every video counts, and the newest are read every few minutes.",
+    lead: "Views, watch time, followers and revenue from YouTube, TikTok, Instagram and Facebook, one total or each on its own, next to what your team made. Every video counts, and every video's numbers are read twice a day.",
     visual: "measure",
     who: ["Masters", "Everyone they let see it"],
     where: "Analytics, in the menu",
@@ -387,7 +387,7 @@ export const FEATURES: SiteFeature[] = [
       },
     ],
     details: [
-      ["Realtime", "The last 48 hours, hour by hour, and the videos getting views right now."],
+      ["The last 48 hours", "Views hour by hour, and the videos getting the most."],
       ["Impressions and CTR", "How often each thumbnail was shown on YouTube, and how many became views."],
       ["Audience", "Where your viewers are, by country, and the channels they also watch."],
       ["What works", "Your best videos, and what they have in common."],

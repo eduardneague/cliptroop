@@ -306,7 +306,7 @@ export function OverviewTab({
               <Mascot mood="idle" size={88} />
               <p className="text-[15px] font-semibold mt-3">{o.hourly ? "No counts in the last 48 hours yet" : "No numbers for these days yet"}</p>
               <p className="text-[13px] text-ink-soft mt-1 max-w-md">
-                {o.hourly ? "Counts come every 10 minutes once the accounts are connected and the first morning copy has run." : "They come with each morning's copy. Pick a longer range, or press Sync now."}
+                {o.hourly ? "Counts come every 12 hours once the accounts are connected and the first morning copy has run. Sync now reads them at once." : "They come with each morning's copy. Pick a longer range, or press Sync now."}
               </p>
             </div>
           )}

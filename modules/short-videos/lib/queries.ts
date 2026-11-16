@@ -510,5 +510,5 @@ export async function getQueueStart(teamId: string): Promise<QueueStart> {
         number: row.entry_number as number,
         date: row.planned_date as string,
       }
-    : null;
+    : null; 
 }

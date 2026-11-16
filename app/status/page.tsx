@@ -24,7 +24,7 @@ const BANNER: Record<Level, { title: string; box: string; icon: string }> = {
 
 /**
  * The public status page: is the app working, and how it went the last
- * 3 days, hour by hour (recorded every 10 minutes, migration 0067). Only
+ * 3 days, hour by hour (recorded every 30 minutes since 0129; every 10 before). Only
  * levels, never details: errors and every check in full are on
  * /developer. One team's problems (a post that failed, an account to
  * reconnect) are on that team's Posting page.

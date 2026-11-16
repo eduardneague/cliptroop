@@ -7,7 +7,7 @@ import { PlatformIcon } from "@/modules/short-videos/components/platform-icon";
 import type { SocialPlatform } from "@/lib/social/providers";
 import type { PlatformStatus } from "../../lib/queries";
 import { ago } from "../../lib/ago";
-import { hourRange } from "../../lib/live-math";
+import { hourRange, LIVE_EVERY_WORDS, LIVE_MINUTE_VIEW } from "../../lib/live-math";
 import { KIND_LABEL } from "../../lib/kinds";
 import { ChartCard, fmtCompact, fmtInt, Legend, StackedColumns } from "../charts";
 import { Big, fainterNote, fmt3, liftedWords, RealtimeHeader, RealtimeSkeleton, realtimeState, RT_ORDER, RT_PLATFORM, soft, Thumb, useRealtime } from "../realtime-card";
@@ -18,7 +18,8 @@ import { StatusRow, SetupCard } from "./shared";
  * 48 hours hour by hour or (1.21.0: a switch) the last 60 minutes in
  * 10-minute slots, the videos getting views in that time, each account's
  * totals now (on top). Live: it updates itself whenever new counts come in
- * (every 10 minutes).
+ * (every 12 hours since 1.52.1, LIVE_EVERY_HOURS; the 60-minute view and the
+ * last hour show only when they come every 10 minutes).
  */
 
 type Span = "48h" | "60m";
@@ -61,7 +62,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
         <p className="text-[13px] text-ink-soft mt-2">
           {state === "failed"
             ? "Couldn’t load the realtime numbers just now. They’ll be back on their own."
-            : "Every video’s numbers, refreshed every 10 minutes, start right after the latest database update has run."}
+            : `Every video’s numbers, read ${LIVE_EVERY_WORDS}, start after the next read.`}
         </p>
       </section>
     );
@@ -69,7 +70,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
   const connected = RT_ORDER.filter((p) => data.platforms.some((x) => x.platform === p));
   const platforms = only === "all" ? connected : connected.filter((p) => p === only);
   const sum = (m: Partial<Record<SocialPlatform, number>>) => platforms.reduce((t, p) => t + (m[p] ?? 0), 0);
-  const hourly = span === "48h";
+  const hourly = !LIVE_MINUTE_VIEW || span === "48h";
   const slots = hourly ? data.hours : data.minutes;
   const withViews = platforms.filter((p) => slots.some((h) => (h.per[p] ?? 0) > 0));
   const shownSeries = withViews.length ? withViews : platforms.slice(0, 1);
@@ -101,15 +102,17 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
       <div className="flex items-center gap-3 flex-wrap">
         <RealtimeHeader updated={data.updatedAt ? ago(data.updatedAt, now) : null} />
         <span className="flex-1" />
-        <Segmented<Span>
-          value={span}
-          onChange={setSpan}
-          ariaLabel="How far back"
-          options={[
-            { value: "48h", label: "48 hours" },
-            { value: "60m", label: "60 minutes" },
-          ]}
-        />
+        {LIVE_MINUTE_VIEW && (
+          <Segmented<Span>
+            value={span}
+            onChange={setSpan}
+            ariaLabel="How far back"
+            options={[
+              { value: "48h", label: "48 hours" },
+              { value: "60m", label: "60 minutes" },
+            ]}
+          />
+        )}
         {connected.length > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap" role="radiogroup" aria-label="Platform">
             {(["all", ...connected] as const).map((p) => (
@@ -187,7 +190,13 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
 
       <ChartCard
         title={hourly ? "Last 48 hours" : "Last 60 minutes"}
-        sub={hourly ? "Views per hour (the last bar: the hour going on now)" : "Views per 10 minutes, ending now (counts are read every 10 minutes)"}
+        sub={
+          !LIVE_MINUTE_VIEW
+            ? `Views per hour (counts are read ${LIVE_EVERY_WORDS}; what a video gained in between is spread over those hours)`
+            : hourly
+              ? "Views per hour (the last bar: the hour going on now)"
+              : "Views per 10 minutes, ending now (counts are read every 10 minutes)"
+        }
         right={series.length > 1 ? <Legend shape="rect" items={series.map((x) => ({ key: x.key, label: x.label, color: x.color }))} /> : undefined}
       >
         {hourly ? (
@@ -217,7 +226,10 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
         {hourly && !note && young && views > 0 && <p className="text-[11.5px] text-ink-faint mt-1">Realtime started {ago(data.since, now)}: the 48 hours fill in as it goes.</p>}
       </ChartCard>
 
-      <ChartCard title="Getting views now" sub={hourly ? "The videos with the most views in the last 48 hours, and their last 60 minutes" : "The videos with the most views in the last 60 minutes"}>
+      <ChartCard
+        title={LIVE_MINUTE_VIEW ? "Getting views now" : "Getting views"}
+        sub={!LIVE_MINUTE_VIEW ? "The videos with the most views in the last 48 hours" : hourly ? "The videos with the most views in the last 48 hours, and their last 60 minutes" : "The videos with the most views in the last 60 minutes"}
+      >
         {top.length ? (
           <div className="relative overflow-x-auto overscroll-x-contain styled-scroll -mx-1">
             <table className="w-full sm:min-w-[560px] text-[13px]">
@@ -225,7 +237,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
                 <tr className="text-[10.5px] font-bold uppercase tracking-wide text-ink-faint text-left">
                   <th className="px-1 pb-2 w-8 text-right">#</th>
                   <th className="px-2 pb-2">Video</th>
-                  <th className={`px-2 pb-2 text-right ${hourly ? "hidden sm:table-cell" : ""}`}>Last 60 min</th>
+                  {LIVE_MINUTE_VIEW && <th className={`px-2 pb-2 text-right ${hourly ? "hidden sm:table-cell" : ""}`}>Last 60 min</th>}
                   <th className={`px-2 pb-2 text-right ${hourly ? "" : "hidden sm:table-cell"}`}>Last 48 h</th>
                   <th className="px-2 pb-2 text-right hidden sm:table-cell">Posted</th>
                 </tr>
@@ -245,7 +257,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
                             {/* Phones: the other window and when it was posted, here. */}
                             <span className="sm:hidden">
                               {hourly ? (
-                                v.views60 > 0 ? (
+                                LIVE_MINUTE_VIEW && v.views60 > 0 ? (
                                   <>
                                     {" · "}
                                     <span className="text-green font-semibold">+{fmtInt(v.views60)}</span> last hour
@@ -263,9 +275,11 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
                         </span>
                       </Link>
                     </td>
-                    <td className={`px-2 py-2 text-right tabular-nums ${hourly ? "hidden sm:table-cell" : "font-semibold"}`}>
-                      {v.views60 > 0 ? <span className="font-semibold text-green">+{fmtInt(v.views60)}</span> : <span className="text-ink-faint">–</span>}
-                    </td>
+                    {LIVE_MINUTE_VIEW && (
+                      <td className={`px-2 py-2 text-right tabular-nums ${hourly ? "hidden sm:table-cell" : "font-semibold"}`}>
+                        {v.views60 > 0 ? <span className="font-semibold text-green">+{fmtInt(v.views60)}</span> : <span className="text-ink-faint">–</span>}
+                      </td>
+                    )}
                     <td className={`px-2 py-2 text-right tabular-nums ${hourly ? "font-semibold" : "hidden sm:table-cell text-ink-soft"}`}>{fmtInt(v.views48)}</td>
                     <td className="px-2 py-2 text-right text-ink-soft whitespace-nowrap hidden sm:table-cell">{v.publishedAt ? ago(v.publishedAt, now) : "–"}</td>
                   </tr>
@@ -297,7 +311,7 @@ export function RealtimeTab({ teamId, status }: { teamId: string; status: Platfo
         </div>
       )}
       <p className="text-[12px] text-ink-faint max-w-3xl">
-        Views here come from reading every video&rsquo;s count every 10 minutes (the newest and the ones getting views) and every few hours (all the others), so a burst shows up within minutes. The
+        Views here come from reading every video&rsquo;s count {LIVE_EVERY_WORDS}; what a video gained between two reads is spread over those hours. The
         platforms&rsquo; own daily totals arrive each morning and can differ a little.
       </p>
     </div>
@@ -312,9 +326,9 @@ function Empty({ waiting, young }: { waiting: boolean; young: boolean }) {
   return (
     <p className="rounded-xl border border-dashed border-line/20 px-4 py-12 text-center text-[13px] text-ink-soft">
       {waiting
-        ? "Counting starts within 10 minutes: every video is read, then the views show up here from the next read on."
+        ? `Counting starts at the next read (${LIVE_EVERY_WORDS}): every video is read, then the views show up here from the read after.`
         : young
-          ? "The first counts are in: views show up here from the next read (every 10 minutes)."
+          ? `The first counts are in: views show up here from the next read (${LIVE_EVERY_WORDS}).`
           : "No views in the last 48 hours."}
     </p>
   );

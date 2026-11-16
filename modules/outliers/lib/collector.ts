@@ -20,7 +20,7 @@ import { hash, type CorpusVideo } from "./corpus";
 /*
  * The collector (1.27.0, reworked in 1.29.0): keeps every niche full of
  * scored videos from channels that really belong in it, within YouTube's
- * budget. Called every 30 minutes by the timer, once per team that follows a
+ * budget. Called once a day by the timer (05:17 UTC since 1.52.1, migration 0130), once per team that follows a
  * niche or tracks a channel and once for the explore niches ({"job":
  * "outliers"} → /api/cron/posting), right after a niche is added or changed,
  * and when someone opens an explore niche that's still empty.
@@ -183,7 +183,7 @@ export async function runOutliersJob(opts: { team?: unknown; explore?: unknown; 
   const explore = opts.explore === true && !team;
   if (!team && !explore) return emptyReport(team, explore, "Nothing to collect for.", started);
   const budgets = readBudgets();
-  if (explore && !budgets.explore) return emptyReport(team, explore, "The explore niches are off (OUTLIERS_EXPLORE=0).", started);
+  if (explore && !budgets.explore) return emptyReport(team, explore, "The explore niches are off (OUTLIERS_EXPLORE=1 turns them on).", started);
   const admin = createAdminClient();
   const lockKey = team ? `team:${team}` : "explore";
   const budgetMs = Math.min(Math.max(opts.budgetMs ?? 44_000, 5_000), 52_000);

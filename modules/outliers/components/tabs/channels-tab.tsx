@@ -564,7 +564,7 @@ function AddChannelsDialog({ open, onClose, niche, have }: { open: boolean; onCl
       open={open}
       onClose={onClose}
       title={niche ? `Add channels to ${niche.name}` : "Track a channel"}
-      description={niche ? "The channels this niche is about. They always count, and their videos are read right away." : "Its new videos are read every few hours, and you hear when one takes off."}
+      description={niche ? "The channels this niche is about. They always count, and their videos are read right away." : "Its new videos are read once a day, and you hear when one takes off."}
       width="sm:max-w-xl"
       footer={
         <>
