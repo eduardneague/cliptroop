@@ -95,8 +95,10 @@ export type NotificationItem = {
     unit?: string;
     color?: string;
     winner?: { kind?: string; number?: number; title?: string; people?: string[] } | null;
-    /** projection_reached / projection_ended (1.15.0). */
+    /** projection_reached / projection_ended (1.15.0); todo_reminder (1.53.0): the to-do. */
     title?: string;
+    /** todo_reminder (1.53.0): its list. */
+    list?: string;
     early?: number;
     made?: boolean;
     /** outlier_alert / outlier_digest (1.27.0): the video, its channel and how far past its usual. */

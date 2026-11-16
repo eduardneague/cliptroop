@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-provider";
 import { NotificationBell } from "@/components/ui/notification-bell";
+import { QuickTodo } from "@/modules/todo/components/quick-todo";
 import { GlobalSearch } from "@/components/search/global-search";
 import { APP_CHANNEL, APP_VERSION, APP_VERSION_LABEL } from "@/lib/version";
 import { whatsNewFacts } from "@/lib/changelog";
@@ -203,6 +204,8 @@ async function DashboardShell({ children }: { children: React.ReactNode }) {
                 />
               </div>
               <div className="flex items-center justify-end gap-2 sm:gap-4">
+                {/* 1.53.0: To Do from any page (or T). */}
+                <QuickTodo />
                 <NotificationBell notifications={notifications ?? []} userId={user!.id} />
                 <ThemeToggle />
                 {/* On phones, Log out lives in Settings — keeps the header uncluttered. */}

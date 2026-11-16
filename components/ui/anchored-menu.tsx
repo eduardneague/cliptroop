@@ -79,14 +79,15 @@ export function AnchoredMenu({
     const onDown = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node;
       if (panel.current?.contains(t) || anchor.current?.contains(t)) return;
-      // A dropdown opened from inside the panel lives in its own portal.
-      if (t instanceof Element && t.closest("[data-floating-menu]")) return;
+      // A dropdown opened from inside the panel lives in its own portal; a question it asked (1.53.0: To Do's quick
+      // panel, "Mark it done?") is answered with it still open.
+      if (t instanceof Element && t.closest("[data-floating-menu], [data-confirm]")) return;
       onClose();
     };
     // First (capturing), and marked as handled: Escape closes this menu, not the popup or panel it was opened from.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      if (document.activeElement instanceof Element && document.activeElement.closest("[data-floating-menu]")) return;
+      if (document.activeElement instanceof Element && document.activeElement.closest("[data-floating-menu], [data-confirm]")) return;
       e.preventDefault();
       onClose();
     };

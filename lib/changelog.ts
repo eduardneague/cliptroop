@@ -22,6 +22,19 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.0",
+    date: "2026-11-16",
+    title: "To Do",
+    changes: [
+      { kind: "new", text: "To Do: a page of its own for your own to-dos, like Microsoft To Do. My Day starts fresh every morning, Important collects what you starred, Planned shows everything with a date day by day, and Tasks plus lists of your own (with an emoji and a colour) hold the rest." },
+      { kind: "new", text: "Assigned to me is the work the team gives you: the same tasks as My tasks, from scripts to edits and action items. Put one in My Day with the sun; it ticks off by itself when the video moves on." },
+      { kind: "new", text: "Every to-do has steps, a reminder (in the bell and as a notification), a due date, a repeat (daily, weekdays, every 2 weeks on Monday…), categories, a priority and a note. A repeating one brings the next one when you tick it off." },
+      { kind: "new", text: "My Day's Suggestions offer what's overdue, due today, coming up, left from yesterday or due from the team. Search finds to-dos in every list, steps and notes included. Drag to reorder, or drop a to-do on a list, My Day or Important." },
+      { kind: "new", text: "Faster to reach: To Do in the menu, the To Do button in the top bar (or press T on any page) for a quick My Day, \"Add a to-do\" in search, and To Do on the installed app's icon." },
+      { kind: "better", text: "The To-do list widget shows Everything, My Day, Important, Planned, Tasks or one of your lists, stars the important ones, and opens the whole to-do in To Do." },
+    ],
+  },
+  {
     version: "1.52.1",
     date: "2026-11-16",
     title: "Numbers twice a day, Outliers daily",

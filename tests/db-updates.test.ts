@@ -31,9 +31,11 @@ ok(/column\(a, "script_comments", "edited_at"\)/.test(src), "0127: changing comm
 ok(/await admin\.rpc\("plans_required"\)/.test(src) && /error\.code === "PGRST202"/.test(src), "0128: its switch (a missing function is PGRST202)");
 ok(/await admin\.rpc\("timer_plan"\)/.test(src), "0129: the timers' plan");
 ok(/return \/12 hours\/\.test\(JSON\.stringify\(data\)\);/.test(src), "0130: the plan says 12 hours");
+ok(/column\(a, "todo_lists", "id, sort_by, hide_done"\)/.test(src), "0131: To Do's lists");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0131": /create table if not exists todo_lists \([\s\S]*sort_by text,[\s\S]*hide_done boolean/,
   "0130": /'live', 'every 12 hours \(06:05 and 18:05 UTC\)'/,
   "0129": /create or replace function public\.timer_plan\(\)/,
   "0128": /create or replace function public\.plans_required\(\)/,

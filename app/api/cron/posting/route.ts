@@ -2,6 +2,7 @@ import { cronAuthorized } from "@/lib/cron-auth";
 import { NextResponse } from "next/server";
 import { runDuePosts } from "@/lib/social/worker";
 import { runMeetingReminders } from "@/modules/meetings/lib/reminders";
+import { runTodoReminders } from "@/modules/todo/lib/reminders";
 import { watchHealth } from "@/lib/health-watch";
 import { recordStatus } from "@/lib/status";
 import { runAnalyticsJob, runCleanupJob } from "@/lib/daily-jobs";
@@ -12,7 +13,7 @@ import { runOutliersJob } from "@/modules/outliers/lib/collector";
 /**
  * Called by the Supabase timers (pg_cron → pg_net), protected by
  * CRON_SECRET ("Authorization: Bearer …"):
- *   - every minute when a post or a meeting reminder is due;
+ *   - every minute when a post, a meeting reminder or a to-do's reminder (0131) is due;
  *   - every 30 minutes with {"status": true} (0067; 10 until 0129): check everything,
  *     record it for the status page's hourly bars, alert the developers
  *     about anything app-wide that's down, and count every team's
@@ -55,10 +56,11 @@ async function handle(request: Request) {
     const objectives = await syncAllObjectives(15_000).catch((e) => ({ teams: 0, wins: 0, error: e instanceof Error ? e.message : String(e) }));
     return NextResponse.json({ ok: true, recorded: s.recorded, problems, objectives, ...(s.error ? { error: s.error } : {}) });
   }
-  // Meeting reminders first (quick), then the posts.
+  // Reminders first (quick: meetings, then to-dos, 1.53.0), then the posts.
   const meetings = await runMeetingReminders();
+  const todos = await runTodoReminders();
   const result = await runDuePosts(40_000);
-  return NextResponse.json({ ok: true, ...result, meetingReminders: meetings.sent });
+  return NextResponse.json({ ok: true, ...result, meetingReminders: meetings.sent, todoReminders: todos.sent });
 }
 
 export const POST = handle;

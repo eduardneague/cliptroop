@@ -27,6 +27,8 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Dashboard", url: "/dashboard?source=app", icons: [{ src: "/app-icons/icon-192.png", sizes: "192x192" }] },
+      // 1.53.0: To Do's My Day, from the app icon (press and hold it).
+      { name: "To Do", url: "/todo?list=myday&source=app", icons: [{ src: "/app-icons/icon-192.png", sizes: "192x192" }] },
       { name: "Short videos", url: "/shorts?source=app", icons: [{ src: "/app-icons/icon-192.png", sizes: "192x192" }] },
       { name: "Calendar", url: "/calendar?source=app", icons: [{ src: "/app-icons/icon-192.png", sizes: "192x192" }] },
       { name: "Meetings", url: "/meetings?source=app", icons: [{ src: "/app-icons/icon-192.png", sizes: "192x192" }] },
