@@ -54,10 +54,10 @@ export default function PricingPage() {
       <PageHead
         title="One price a person, every feature"
         lead={
-          // 1.51.0: free while plans are off (PLANS_REQUIRED, lib/plans.ts); the plans themselves stay as they are.
+          // 1.51.0: free while plans are off (PLANS_REQUIRED, lib/plans.ts); the plans themselves stay as they are. 1.52.2: "for now" (TikTok's review).
           PLANS_REQUIRED
             ? "No free plan and no trial. Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up."
-            : `Free while ${APP_NAME} is in early access: create an account and your team opens right away. After it, Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up.`
+            : `Free for now: create an account and your team opens right away. When the plans start, Studio is for one team making its own videos; Network is for agencies and networks running several. Both have every feature: they differ in teams, storage and how we set you up.`
         }
       />
 

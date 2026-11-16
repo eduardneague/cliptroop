@@ -16,7 +16,7 @@ export const CURRENCY = "$";
  * free accounts for now, and thne we can add this back and connect it to stripe or something".
  *
  * Off: every team opens without one (no plan page in place of the app, accounts connect, files upload), and the website
- * says ClipTroop is free while in early access. The plans themselves stay: their prices on Pricing, Developer → Plans
+ * says ClipTroop is free for now (1.52.2's words, for TikTok's review). The plans themselves stay: their prices on Pricing, Developer → Plans
  * (a plan still sets a team's storage), and a master can still ask for one on /plan once the team has a plan.
  * To turn plans back on: set this to true AND make the database's public.plans_required() say true (migration 0128).
  */

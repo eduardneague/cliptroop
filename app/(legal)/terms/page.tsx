@@ -41,8 +41,8 @@ export default function TermsPage() {
         ) : (
           // 1.51.0: while plans are off (PLANS_REQUIRED, lib/plans.ts).
           <li>
-            While {APP_NAME} is in early access, every team can use it free of charge, without a plan. The plans on{" "}
-            <Link href="/pricing" className="underline">Pricing</Link> come after it: nothing is charged unless a team&rsquo;s Master agrees to one with us by email, and we
+            For now, every team can use {APP_NAME} free of charge, without a plan. The plans on{" "}
+            <Link href="/pricing" className="underline">Pricing</Link> come later: nothing is charged unless a team&rsquo;s Master agrees to one with us by email, and we
             invoice for it, monthly or yearly.
           </li>
         )}

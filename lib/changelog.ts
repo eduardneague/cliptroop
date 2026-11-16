@@ -35,6 +35,14 @@ export const CHANGELOG: Release[] = [
     ],
   },
   {
+    version: "1.52.2",
+    date: "2026-11-16",
+    title: "Free for now",
+    changes: [
+      { kind: "better", text: "Pricing, the home page and the Terms say it simply: ClipTroop is free for every team for now, and the plans on Pricing come later." },
+    ],
+  },
+  {
     version: "1.52.1",
     date: "2026-11-16",
     title: "Numbers twice a day, Outliers daily",
@@ -55,9 +63,9 @@ export const CHANGELOG: Release[] = [
   {
     version: "1.51.0",
     date: "2026-11-04",
-    title: "Free while in early access",
+    title: "Free for now",
     changes: [
-      { kind: "new", text: "ClipTroop is free while it's in early access. A new team opens right away, with no plan to choose first: every page, uploading files and connecting your accounts work from the start. The plans on Pricing come later." },
+      { kind: "new", text: "ClipTroop is free for now. A new team opens right away, with no plan to choose first: every page, uploading files and connecting your accounts work from the start. The plans on Pricing come later." },
       { kind: "fixed", text: "A new account always gets its first steps (About you, then two-step sign-in). If the confirm-your-email link ends on the sign-in page, signing in opens them." },
       { kind: "fixed", text: "Behind the scenes: building the app no longer fails when Google Fonts answers in an unusual way." },
     ],

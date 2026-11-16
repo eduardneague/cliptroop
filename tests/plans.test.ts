@@ -41,10 +41,12 @@ ok(!/invitation|Crew|\bFree\b/.test(faq) && /no free plan or a free trial\?/i.te
 // back and connect it to stripe"). One switch in the app, one in the database; everything else of the plans stays.
 ok(PLANS_REQUIRED === false, "plans are off for now");
 const answer = (q: string) => PRICING_FAQ.find((f) => f.q === q)?.a ?? "";
-ok(/free for every team while it’s in early access/.test(answer("Is there a free plan or a free trial?")) && /it opens right away, free of charge/.test(answer("How do we start?")), "the FAQ says it's free while in early access");
-ok(/PLANS_REQUIRED\s+\? "No free plan and no trial\./.test(read("app/(site)/pricing/page.tsx")) && /Free while \$\{APP_NAME\} is in early access: create an account and your team opens right away\./.test(read("app/(site)/pricing/page.tsx")), "Pricing: both ways, by the switch");
-ok(/\{PLANS_REQUIRED \? <>There&rsquo;s no free plan and no trial\.<\/> : <>Free while \{APP_NAME\} is in early access\.<\/>\}/.test(read("components/landing/landing.tsx")), "the home page too");
-ok(/\{PLANS_REQUIRED \? \(/.test(read("app/(legal)/terms/page.tsx")) && /every team can use it free of charge, without a plan/.test(read("app/(legal)/terms/page.tsx")), "and the terms");
+ok(/for now, ClipTroop is free for every team/.test(answer("Is there a free plan or a free trial?")) && /it opens right away, free of charge/.test(answer("How do we start?")), "the FAQ says it's free for now");
+ok(/PLANS_REQUIRED\s+\? "No free plan and no trial\./.test(read("app/(site)/pricing/page.tsx")) && /Free for now: create an account and your team opens right away\./.test(read("app/(site)/pricing/page.tsx")), "Pricing: both ways, by the switch");
+ok(/\{PLANS_REQUIRED \? <>There&rsquo;s no free plan and no trial\.<\/> : <>For now it&rsquo;s free for every team\.<\/>\}/.test(read("components/landing/landing.tsx")), "the home page too");
+// 1.52.2: TikTok approves no app "still in development or testing", so nothing a visitor reads says "early access".
+ok(!/early access/i.test([read("app/(site)/pricing/page.tsx"), read("components/landing/landing.tsx"), read("app/(legal)/terms/page.tsx"), read("lib/changelog.ts"), ...PRICING_FAQ.map((f) => f.a)].join("\n")), "no page says \"early access\"");
+ok(/\{PLANS_REQUIRED \? \(/.test(read("app/(legal)/terms/page.tsx")) && /For now, every team can use \{APP_NAME\} free of charge, without a plan/.test(read("app/(legal)/terms/page.tsx")), "and the terms");
 
 // The gate: which pages a team without a plan still opens.
 ok(openWithoutPlan("/plan") && openWithoutPlan("/settings") && openWithoutPlan("/settings/x") && openWithoutPlan("/teams/new"), "the Plan page, Settings, making a team");
