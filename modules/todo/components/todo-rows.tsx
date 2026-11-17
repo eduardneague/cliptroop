@@ -9,7 +9,8 @@ import type { Done, Task } from "@/modules/dashboard/lib/queries";
 import { dayWord, dayWordAfter, type TodoItem, type TodoList, type ViewId } from "../lib/model";
 import { MetaLine, PRIORITY, StarToggle, TodoCheck } from "./todo-bits";
 
-export type RowState = { popped: boolean; out: boolean; entering: boolean };
+/** popped: just ticked off; out: zipping away (ticked off); gone: puffing away (deleted); entering: sliding in. */
+export type RowState = { popped: boolean; out: boolean; gone: boolean; entering: boolean };
 
 /**
  * One to-do: the tick, its title and the line under it, the star. Click it for its details; right-click for its menu;
@@ -51,7 +52,7 @@ export function TodoRow({
       ref={setNodeRef}
       data-todo={t.id}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={`todo-fold ${state.entering ? "is-in" : ""} ${state.out ? "is-out" : ""} ${isDragging ? "relative z-10 opacity-40" : ""}`}
+      className={`todo-fold ${state.entering ? "is-in" : ""} ${state.out ? "is-out" : ""} ${state.gone ? "is-gone" : ""} ${isDragging ? "relative z-10 opacity-40" : ""}`}
     >
       <div>
         <div

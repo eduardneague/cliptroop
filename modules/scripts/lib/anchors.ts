@@ -2,9 +2,9 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { MAX_QUOTE } from "./comment-limits";
+import { LEAF, MAX_QUOTE, toLeaf } from "./comment-limits";
 
-export { MAX_QUOTE };
+export { LEAF, MAX_QUOTE, toLeaf };
 
 /**
  * Comments are anchored to quoted text (the n-th occurrence), never stored
@@ -13,6 +13,8 @@ export { MAX_QUOTE };
  * lines and paragraphs.
  */
 type Block = { text: string; map: number[] };
+
+// LEAF (U+FFFC since 1.53.3) and toLeaf: comment-limits.ts, with the server.
 
 function blocks(doc: PMNode): Block[] {
   const out: Block[] = [];
@@ -28,7 +30,7 @@ function blocks(doc: PMNode): Block[] {
         }
       } else {
         // Line breaks and other inline nodes: a separator nobody can quote across.
-        text += "\u0000";
+        text += LEAF;
         map.push(pos + 1 + offset);
       }
     });
@@ -41,7 +43,7 @@ function blocks(doc: PMNode): Block[] {
 /*
  * 1.50.0: a comment may cover several lines and paragraphs (the owner: "i want to be able to select multiple lines for
  * a comment or an editing idea"). The whole document is read as one text: paragraphs joined by "\n", line breaks and
- * other things inside a paragraph as "\u0000" (as before), each character mapped to its place. A quote from inside one
+ * other things inside a paragraph as LEAF (U+FFFC since 1.53.3), each character mapped to its place. A quote from inside one
  * paragraph is found exactly as before (the same matches, in the same order, so the same occurrence numbers); one over
  * several is found the same way. An empty quote is a general comment: on no words.
  */
@@ -70,7 +72,7 @@ function flatten(doc: PMNode): Flat {
           map.push(pos + 1 + offset + i);
         }
       } else {
-        text += "\u0000";
+        text += LEAF;
         map.push(pos + 1 + offset);
       }
     });
@@ -84,11 +86,12 @@ function flatten(doc: PMNode): Flat {
 }
 
 /** The separators a quote never starts or ends with. */
-const EDGE = /^[\n\u0000]+|[\n\u0000]+$/g;
+const EDGE = /^[\n\uFFFC]+|[\n\uFFFC]+$/g;
 
 
 export function findQuote(doc: PMNode, quote: string, occurrence: number): { from: number; to: number } | null {
   if (!quote) return null;
+  quote = toLeaf(quote);
   const f = flatten(doc);
   let seen = 0;
   let i = f.text.indexOf(quote);
@@ -111,8 +114,8 @@ export function quoteAt(doc: PMNode, from: number, to: number, max = MAX_QUOTE):
   let b = a;
   while (b < f.map.length && f.map[b] < to) b++;
   // Not starting or ending on a paragraph's end or a line break.
-  while (a < b && (f.text[a] === "\n" || f.text[a] === "\u0000")) a++;
-  while (b > a && (f.text[b - 1] === "\n" || f.text[b - 1] === "\u0000")) b--;
+  while (a < b && (f.text[a] === "\n" || f.text[a] === LEAF)) a++;
+  while (b > a && (f.text[b - 1] === "\n" || f.text[b - 1] === LEAF)) b--;
   if (b - a > max) b = a + max;
   const quote = f.text.slice(a, b).replace(EDGE, "");
   if (!quote.trim()) return null;
@@ -127,7 +130,7 @@ export function quoteAt(doc: PMNode, from: number, to: number, max = MAX_QUOTE):
 
 /** A quote as it's shown: its line breaks as new lines. */
 export function quoteText(quote: string): string {
-  return quote.replace(/\u0000/g, "\n");
+  return quote.replace(/[\u0000\uFFFC]/g, "\n");
 }
 
 /**
@@ -147,7 +150,7 @@ export function findText(doc: PMNode, query: string): { from: number; to: number
   for (const t of tries) {
     for (const b of all) {
       // Line breaks inside a paragraph read as spaces here.
-      const i = lower(b.text.replace(/\u0000/g, " ")).indexOf(t);
+      const i = lower(b.text.replace(/\uFFFC/g, " ")).indexOf(t);
       if (i >= 0) return { from: b.map[i], to: b.map[i + t.length - 1] + 1 };
     }
   }
@@ -156,6 +159,7 @@ export function findText(doc: PMNode, query: string): { from: number; to: number
 
 /** Which occurrence of `quote` starts at document position `from`. */
 export function occurrenceAt(doc: PMNode, quote: string, from: number): number {
+  quote = toLeaf(quote);
   const f = flatten(doc);
   let seen = 0;
   let i = f.text.indexOf(quote);

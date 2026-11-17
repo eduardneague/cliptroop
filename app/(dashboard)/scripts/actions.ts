@@ -8,7 +8,7 @@ import { buildMentionCatalog, resolveMentionRecipients } from "@/lib/mentions";
 import { displayName } from "@/lib/avatar";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
 import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
-import { MAX_COMMENT, MAX_QUOTE } from "@/modules/scripts/lib/comment-limits";
+import { MAX_COMMENT, MAX_QUOTE, toLeaf } from "@/modules/scripts/lib/comment-limits";
 import { commentFailure } from "@/modules/scripts/lib/comment-errors";
 import { reportError } from "@/lib/errors";
 
@@ -271,10 +271,11 @@ export async function addComment(input: {
   general?: boolean;
 }): Promise<DocResult<{ id: string }>> {
   const general = input.general === true;
-  const quote = general ? "" : String(input.quote ?? "").slice(0, MAX_QUOTE);
+  // 1.53.3: a line break in the quote is U+FFFC (an older page sends "\u0000", which the database refuses).
+  const quote = general ? "" : toLeaf(String(input.quote ?? "")).slice(0, MAX_QUOTE);
   const sketch = input.sketch && SKETCH_RX.test(input.sketch.path) ? input.sketch : null;
   // A drawing alone is fine: it gets a short caption.
-  const body = String(input.body ?? "").trim() || (sketch ? "Sketch" : "");
+  const body = String(input.body ?? "").replace(/\u0000/g, "").trim() || (sketch ? "Sketch" : "");
   if (!general && !quote.trim()) return { error: "Select some text first." };
   if (!body) return { error: "Write a comment." };
   if (body.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
@@ -387,7 +388,7 @@ async function notifyScriptMentions(a: {
  */
 export async function editComment(id: string, body: string): Promise<DocResult> {
   if (!UUID_RX.test(id)) return { error: "Comment not found." };
-  const text = String(body ?? "").trim();
+  const text = String(body ?? "").replace(/\u0000/g, "").trim();
   if (!text) return { error: "Write something, or delete it instead." };
   if (text.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
   const supabase = await createClient();

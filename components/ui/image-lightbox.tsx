@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { useLatest, useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { CloseIcon } from "./icons";
 import { Leaves } from "./leaves";
 
+/**
+ * A picture, full screen. 1.53.3: a portal (from a script it sat under the script's header and the top bar, which didn't
+ * go dark); the page holds still behind it, and Esc closes only it.
+ */
 export function ImageLightbox({
   url,
   alt,
@@ -13,18 +19,26 @@ export function ImageLightbox({
   alt: string;
   onClose: () => void;
 }) {
+  const close = useLatest(onClose);
+  useScrollLock();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      close.current();
     }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [close]);
 
-  return (
-    <Leaves>
+  return createPortal(
+    <Leaves lock>
       <div
         className="pop-fade fixed inset-0 z-[260] flex items-center justify-center bg-black/75 backdrop-blur-[2px] p-4 sm:p-10"
+        role="dialog"
+        aria-modal="true"
+        aria-label={alt || "Picture"}
         onClick={onClose}
       >
         <button
@@ -42,6 +56,7 @@ export function ImageLightbox({
           className="pop-modal max-w-full max-h-full rounded-lg object-contain"
         />
       </div>
-    </Leaves>
+    </Leaves>,
+    document.body
   );
 }

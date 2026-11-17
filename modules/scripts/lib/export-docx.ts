@@ -264,7 +264,7 @@ export type IdeaExport = { quote: string; idea: string; sketch?: string | null }
  */
 export function ideaHeading(n: number, quote: string): string[] {
   if (!quote.trim()) return [`#${n} On the whole document`];
-  const lines = quote.replace(/\u0000/g, "\n").split("\n");
+  const lines = quote.replace(/[\u0000\uFFFC]/g, "\n").split("\n");
   return lines.map((l, i) => `${i === 0 ? `#${n} "` : ""}${l}${i === lines.length - 1 ? `"` : ""}`);
 }
 

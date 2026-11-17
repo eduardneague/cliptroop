@@ -678,6 +678,25 @@ html[data-glass] [data-script-head] [data-head-row] { background-color: transpar
   Their inset colour (bg-surface-2) is the bright pane meant for a card, all but clear in dark mode, so over a white
   page they vanished. With glass on they're a floating pane of their own: at least 82 % of it, blurred.
 */
+/*
+  To Do on glass (1.53.3): its side bar and the details next to it are panes of the glass, with room around them, like
+  the app's own side bar (they were flat strips against the floating bars: "it looks a bit weird on liquid glass").
+  The blur is on the panes themselves: their menus and pickers are drawn at the top of the page (portals).
+*/
+@media (min-width: 768px) {
+  html[data-glass] .todo-app { gap: 10px; padding: 0 10px 10px; }
+  html[data-glass] [data-todo-pane] {
+    border: 1px solid rgb(var(--glass-edge));
+    border-radius: 18px;
+    background-color: rgb(var(--surface) / var(--glass-tint));
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-shadow);
+    overflow: hidden;
+  }
+  html[data-glass][data-glass-opaque] [data-todo-pane] { background-color: rgb(var(--surface)); }
+  html[data-glass-style="liquid"] [data-todo-pane] { border-radius: 22px; box-shadow: var(--liquid-rim), var(--liquid-drop); }
+}
 html[data-glass] .glass-fab.bg-surface-2 {
   background-color: rgb(var(--surface) / max(var(--glass-pop), 0.82));
   -webkit-backdrop-filter: var(--glass-blur);
@@ -2359,6 +2378,13 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 }
 .todo-check.just-checked .spark { animation: todo-spark 0.6s var(--ease-out) var(--d, 0ms); }
 .todo-row.just-checked { animation: todo-flash 0.9s ease-out; }
+/* 1.53.3: a shine of green sweeps across a just-ticked one, the way it's about to go. */
+.todo-row.just-checked::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgb(var(--green) / 0.28) 50%, transparent 70%) no-repeat;
+  background-size: 250% 100%;
+  animation: todo-shine 0.7s var(--ease-out) both;
+}
 .todo-title {
   background-image: linear-gradient(currentColor, currentColor);
   background-repeat: no-repeat;
@@ -2367,10 +2393,30 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   transition: background-size 0.35s var(--ease-out), color 0.3s ease;
 }
 .todo-row[data-done="true"] .todo-title { background-size: 100% 1.5px; color: rgb(var(--ink-faint)); }
-.todo-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.3s var(--ease-out), opacity 0.25s ease; }
-.todo-fold > * { min-height: 0; overflow: hidden; }
+/* minmax(0, 1fr): a long title ends in "…" inside its row (its place isn't clipped any more, 1.53.3). */
+.todo-fold { display: grid; grid-template-rows: 1fr; grid-template-columns: minmax(0, 1fr); transition: grid-template-rows 0.3s var(--ease-out), opacity 0.25s ease; }
+/* Clipped only while its place opens or closes (1.53.3: the rest of the time a focus ring and the tick's sparks show). */
+.todo-fold > * { min-height: 0; }
+.todo-fold.is-in > * { overflow: hidden; }
+/* While it goes, its place clips it top and bottom only: the wind-up and the puff reach a little sideways. */
+.todo-fold:is(.is-out, .is-gone) > * { clip-path: inset(0 -32px); }
 .todo-fold.is-in { animation: todo-in 0.32s var(--ease-out); }
-.todo-fold.is-out { grid-template-rows: 0fr; opacity: 0; }
+/*
+  Off it goes (1.53.3; the owner: "when you check something, i dont want the confirmation, and i want a cool outing
+  animation, and whne you delete something, i want the same thing"). Ticked off (.is-out): a little wind-up, then it
+  zips off to the right, shrinking away, and its place closes. Deleted (.is-gone): a red breath, then it puffs away
+  (shrinks, blurs, fades) and its place closes. Both stay inside their own place (nothing scrolls sideways), and with
+  motion off they're simply gone. In To Do, its quick panel and the dashboard's widget; timings in
+  modules/todo/lib/motion.ts.
+*/
+.todo-fold.is-out, .todo-fold.is-gone { grid-template-rows: 0fr; pointer-events: none; transition: none; animation: todo-close 0.3s var(--ease-out) var(--close-after) both; }
+.todo-fold.is-out { --close-after: 0.3s; }
+.todo-fold.is-gone { --close-after: 0.24s; }
+/* The widget's All keeps its place (no jump in a scrolled list): the others slide up as it lands with the finished ones. */
+.todo-fold.is-out.keeps-place { grid-template-rows: 1fr; animation: none; }
+.todo-fold.is-out .todo-row { transform-origin: left center; animation: todo-zip 0.42s both; }
+.todo-fold.is-gone .todo-row { animation: todo-puff 0.42s var(--ease-out) both; }
+.todo-fold.is-landing .todo-row { animation: todo-land 0.34s var(--ease-out) 0.18s both; }
 @keyframes todo-pop { 0% { scale: 1; } 35% { scale: 1.28; } 100% { scale: 1; } }
 @keyframes todo-burst { from { opacity: 0.7; scale: 0.7; } to { opacity: 0; scale: 1.9; } }
 @keyframes todo-spark {
@@ -2379,6 +2425,22 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 }
 @keyframes todo-flash { 0% { background: rgb(var(--green) / 0.16); } 100% { background: transparent; } }
 @keyframes todo-in { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
+@keyframes todo-close { from { grid-template-rows: 1fr; } to { grid-template-rows: 0fr; } }
+@keyframes todo-shine { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+/* A wind-up, then away to the right, shrinking (its right edge never passes its place's: nothing scrolls sideways). */
+@keyframes todo-zip {
+  0% { transform: none; opacity: 1; animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); }
+  18% { transform: translateX(-6px); opacity: 1; filter: blur(0); animation-timing-function: cubic-bezier(0.5, 0, 0.8, 0.45); }
+  60% { filter: blur(0); }
+  100% { transform: translateX(14%) scale(0.86); opacity: 0; filter: blur(2px); }
+}
+/* A red breath, then it shrinks, blurs and fades away. */
+@keyframes todo-puff {
+  0% { transform: none; opacity: 1; filter: none; }
+  25% { transform: scale(1.02); opacity: 1; background-color: rgb(var(--red) / 0.12); border-color: rgb(var(--red) / 0.55); }
+  100% { transform: scale(0.82); opacity: 0; filter: blur(8px); background-color: rgb(var(--red) / 0.06); border-color: rgb(var(--red) / 0.3); }
+}
+@keyframes todo-land { from { opacity: 0; transform: translateX(-12px); } }
 
 /* Account setup (app/set-password): each step rises in. */
 .motion-step { animation: page-in 0.4s var(--ease-out) backwards; }

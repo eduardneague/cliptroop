@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { DoneBurst } from "@/components/ui/done-burst";
 import { useRouter } from "next/navigation";
 import { Ago } from "@/components/ui/ago";
@@ -469,24 +469,49 @@ function PeopleDialog({
     setLists(Object.fromEntries(flow.steps.map((s) => [s.step, s.people])));
   }, [flow]);
   const active = (ids: string[]) => ids.filter((id) => people.some((p) => p.memberId === id));
+  // 1.53.3: each step says it's saving, then "Saved" for a moment, and waits for one change before the next (the owner:
+  // "when adding or changing people from here, i want some responsiveness, some loading").
+  const [state, setState] = useState<Record<string, "saving" | "saved">>({});
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
+  const mark = (step: string, v: "saving" | "saved" | null) => {
+    clearTimeout(timers.current[step]);
+    setState((m) => {
+      const next = { ...m };
+      if (v) next[step] = v;
+      else delete next[step];
+      return next;
+    });
+    if (v === "saved") timers.current[step] = setTimeout(() => mark(step, null), 1600);
+  };
 
   async function changeScripter(memberId: string, add: boolean) {
     const prev = lists.write ?? [];
     setLists((l) => ({ ...l, write: add ? [...prev.filter((x) => x !== memberId), memberId] : prev.filter((x) => x !== memberId) }));
+    mark("write", "saving");
     const r = (await scripterAction(videoId, memberId, add)) as { error?: string };
     if (r?.error) {
       setLists((l) => ({ ...l, write: prev }));
+      mark("write", null);
       toast.error(r.error);
-    } else router.refresh();
+    } else {
+      mark("write", "saved");
+      router.refresh();
+    }
   }
   async function save(s: FlowStepInfo, ids: string[]) {
     const prev = lists[s.step] ?? [];
     setLists((l) => ({ ...l, [s.step]: ids }));
+    mark(s.step, "saving");
     const r = await setScriptPeople({ scriptId: s.docId, memberIds: ids });
     if (r.error !== undefined) {
       setLists((l) => ({ ...l, [s.step]: prev }));
+      mark(s.step, null);
       toast.error(r.error);
-    } else router.refresh();
+    } else {
+      mark(s.step, "saved");
+      router.refresh();
+    }
   }
 
   return (
@@ -503,23 +528,40 @@ function PeopleDialog({
                 {s.step !== "write" && s.usesDefaults && value.length > 0 && (
                   <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-soft">Team default</span>
                 )}
+                <span className="ml-auto self-center min-h-[18px]" aria-live="polite">
+                  {state[s.step] === "saving" && (
+                    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-soft">
+                      <span className="w-3 h-3 rounded-full border-2 border-ink-soft/30 border-t-amber animate-spin" aria-hidden />
+                      Saving…
+                    </span>
+                  )}
+                  {state[s.step] === "saved" && (
+                    <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-green animate-[fadein_.18s_ease-out]">
+                      <CheckIcon className="w-3.5 h-3.5" />
+                      Saved
+                    </span>
+                  )}
+                </span>
               </div>
               <p className="text-[12px] text-ink-soft mb-2.5">
                 {WHAT[s.step]}
                 {s.step === "write" ? ". Only they (and masters) edit the Script." : `. They can edit the ${s.name} document.`}
               </p>
-              <ScripterPicker
-                people={people}
-                value={value}
-                kind={s.step === "write" ? "scripter" : "reviewer"}
-                noun={s.step === "write" ? "scripter" : s.step === "review" ? "reviewer" : "person"}
-                readOnly={!editable}
-                emptyHint={s.step === "write" ? undefined : "Nobody yet"}
-                onAdd={(m) => (s.step === "write" ? void changeScripter(m, true) : void save(s, [...value.filter((x) => x !== m), m]))}
-                onRemove={(m) => (s.step === "write" ? void changeScripter(m, false) : void save(s, value.filter((x) => x !== m)))}
-              />
+              {/* While a change is saving, this step waits (dimmed) so two changes never cross. */}
+              <div aria-busy={state[s.step] === "saving"} className={`transition-opacity duration-150 ${state[s.step] === "saving" ? "opacity-60 pointer-events-none" : ""}`}>
+                <ScripterPicker
+                  people={people}
+                  value={value}
+                  kind={s.step === "write" ? "scripter" : "reviewer"}
+                  noun={s.step === "write" ? "scripter" : s.step === "review" ? "reviewer" : "person"}
+                  readOnly={!editable}
+                  emptyHint={s.step === "write" ? undefined : "Nobody yet"}
+                  onAdd={(m) => (s.step === "write" ? void changeScripter(m, true) : void save(s, [...value.filter((x) => x !== m), m]))}
+                  onRemove={(m) => (s.step === "write" ? void changeScripter(m, false) : void save(s, value.filter((x) => x !== m)))}
+                />
+              </div>
               {s.step !== "write" && editable && !s.usesDefaults && (
-                <button type="button" onClick={() => void save(s, [])} className="mt-2 text-[12px] font-semibold text-ink-soft hover:text-ink">
+                <button type="button" disabled={state[s.step] === "saving"} onClick={() => void save(s, [])} className="mt-2 text-[12px] font-semibold text-ink-soft hover:text-ink disabled:opacity-50">
                   Use the team&rsquo;s defaults{flow.defaults[s.step as "review" | "staging"].length ? "" : " (none set)"}
                 </button>
               )}

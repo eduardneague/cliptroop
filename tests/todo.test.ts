@@ -2,9 +2,10 @@
 // want a separate page for it, the to do widget to be better and a way to get to the to do faster ... The assigned to
 // me tab will be the actual tasks that we get in the tasks widget." What has to stay true: everything is the person's
 // own (the database's rules, no service key), Assigned to me reads the My tasks widget's tasks, reminders go out once,
-// and the quick ways in (the menu, the top bar, T, search, the app icon) stay.
+// and the quick ways in (the menu, the top bar, Alt+T since 1.53.3, search, the app icon) stay.
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { isQuickTodoKey } from "../modules/todo/lib/quick-key";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -67,12 +68,16 @@ const list = read("modules/todo/components/todo-list-view.tsx");
 for (const s of ['view === "assigned"', 'view === "planned"', "Suggestions", "Completed"]) ok(list.includes(s), `the list view handles ${s}`);
 
 // --- Faster ways in -----------------------------------------------------------------------------------------------------
-ok(/const TODO = \{ href: "\/todo", label: "To Do"/.test(read("lib/nav-items.ts")) && /items: \[DASHBOARD, TODO\]/.test(read("lib/nav-items.ts")), "the menu: To Do under Dashboard");
-ok(/MORE_ITEMS: NavItem\[\] = \[TODO,/.test(read("lib/nav-items.ts")), "phones: first in More");
+const nav = read("lib/nav-items.ts");
+ok(/const TODO = \{ href: "\/todo", label: "To Do"/.test(nav) && /label: "Schedule", items: \[CALENDAR, MEETINGS, POSTING, TODO\]/.test(nav) && /\{ label: null, items: \[DASHBOARD\] \}/.test(nav), "the menu: To Do under Schedule (1.53.3)");
+ok(/MORE_ITEMS: NavItem\[\] = \[OUTLIERS, MEETINGS, POSTING, TODO, ANALYTICS/.test(nav), "phones: in More, in the menu's order");
 ok(/<QuickTodo \/>/.test(read("app/(dashboard)/layout.tsx")), "the top bar's To Do button, on every page");
 const quick = read("modules/todo/components/quick-todo.tsx");
-ok(/e\.key\.toLowerCase\(\) !== "t" \|\| typing\(e\.target\)/.test(quick), "T opens it (not while typing)");
-ok(/queueMicrotask\(\(\) => \{\s*if \(!e\.defaultPrevented\) setOpen/.test(quick) && /else if \(\(e\.key === "t" \|\| e\.key === "T"\) && variants\.length\) toggleCompare\("titles"\);/.test(read("modules/studio/components/studio.tsx")), "a page that uses T itself keeps it (Thumbnail Studio's titles)");
+ok(/!isQuickTodoKey\(e\) \|\| \(typing\(e\.target\) && e\.key\.toLowerCase\(\) !== "t"\)/.test(quick) && /e\.preventDefault\(\);\s*setOpen\(\(o\) => !o\);/.test(quick), "Alt+T (⌥T) opens it (1.53.3: it was T alone)");
+const key = (o: Partial<KeyboardEvent>) => isQuickTodoKey({ altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, code: "", key: "", ...o } as KeyboardEvent);
+ok(key({ altKey: true, code: "KeyT", key: "t" }) && key({ altKey: true, code: "KeyT", key: "†" }), "Alt+T, and ⌥T on a Mac (where it types †)");
+ok(!key({ code: "KeyT", key: "t" }) && !key({ ctrlKey: true, code: "KeyT", key: "t" }) && !key({ altKey: true, ctrlKey: true, code: "KeyT", key: "ț" }) && !key({ altKey: true, shiftKey: true, code: "KeyT", key: "T" }), "not T alone, Ctrl+T (the browser's new tab), AltGr+T (ț) or Alt+Shift+T");
+ok(/aria-label=\{`To Do \(\$\{keys\}\)`\}/.test(quick) && read("modules/todo/components/quick-todo-panel.tsx").includes("{keys}</kbd> opens this on any page") && read("modules/todo/components/todo-list-view.tsx").includes("{quickKeys}</b> To Do anywhere"), "the button, the panel and To Do's keys say Alt+T (⌥T on a Mac)");
 ok(/dynamic\(\(\) => import\("\.\/quick-todo-panel"\)/.test(quick) && /readTodoBoard\(\)/.test(read("modules/todo/components/quick-todo-panel.tsx")), "it reads To Do when it opens (its inside loads then too), not with every page");
 const cat = read("lib/search/catalog.ts");
 ok(/id: "todo", kind: "page", title: "To Do"/.test(cat) && /id: "new-todo", kind: "action", title: "Add a to-do"/.test(cat), "search: To Do and Add a to-do");

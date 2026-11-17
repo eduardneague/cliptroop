@@ -7,7 +7,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { DatePicker } from "@/components/ui/date-picker";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CLEAR_DATE_CONFIRM, markDoneConfirm, useConfirmSafe } from "@/components/ui/confirm-provider";
+import { CLEAR_DATE_CONFIRM, useConfirmSafe } from "@/components/ui/confirm-provider";
 import { BellIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ExternalIcon, FlagIcon, GripIcon, HomeIcon, ListBulletIcon, PlusIcon, StarIcon, SunIcon } from "@/components/ui/icons";
 import { RepeatIcon } from "@/modules/todo/components/todo-icons";
 import { useToast } from "@/components/ui/toast-provider";
@@ -15,6 +15,7 @@ import { sounds } from "@/lib/sounds";
 import { Mascot } from "@/components/ui/mascot";
 import { createTodo, deleteTodo, reorderTodos, saveTodo, setTodoDone, type TodoPatch } from "@/modules/todo/actions";
 import { belongs, dayWord, isSmart, listColor, nextOccurrence, reminderWord, todoHref, type TodoBoard, type TodoItem, type ViewId } from "@/modules/todo/lib/model";
+import { GONE_MS, HOLD_MS, OUT_MS, ZIP_MS } from "@/modules/todo/lib/motion";
 import { DueChip, localDay } from "./tasks-widget";
 import { useBox } from "./widget-box";
 
@@ -27,9 +28,7 @@ const PRIORITY = [
 
 type Filter = "all" | "active" | "done";
 const FILTER_KEY = "vp-todo-filter";
-/** How long a just-checked item stays where it was before moving or folding away. */
-const HOLD_MS = 750;
-const FOLD_MS = 280;
+// A just-checked one's moment and its way out (1.53.3): HOLD_MS, OUT_MS, GONE_MS, the same as To Do's.
 
 /** What the widget shows (1.53.0): every list ("all", as before), a smart list of To Do's, or one of your lists. */
 type Shows = "all" | ViewId;
@@ -37,9 +36,9 @@ const SMART_NAMES: Record<string, string> = { all: "Everything", myday: "My Day"
 const showsName = (s: Shows, board: TodoBoard) => SMART_NAMES[s] ?? board.lists.find((l) => l.id === s)?.name ?? "Everything";
 
 /**
- * Your own to-do list. Checking one off: a pop, a chime, it turns green and
- * stays (All), then slides down to the finished ones. In Active it folds
- * away after a moment instead of vanishing.
+ * Your own to-do list. Checking one off: a pop, a chime, a green shine and
+ * its line struck, then it zips away (1.53.3, no question first) and, in All,
+ * lands with the finished ones. A deleted one puffs away.
  *
  * 1.53.0 (To Do): it shows Everything, My Day, Important, Planned, Tasks or one of your lists (the menu at the top
  * left, kept with the widget); a star marks the important ones; a new one goes where you're looking (My Day, the
@@ -47,7 +46,6 @@ const showsName = (s: Shows, board: TodoBoard) => SMART_NAMES[s] ?? board.lists.
  */
 export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; settings?: Record<string, unknown>; onSettings?: (s: Record<string, unknown>) => void }) {
   const toast = useToast();
-  const confirmDone = useConfirmSafe();
   const [todos, setTodos] = useState(board.todos);
   const [filter, setFilterState] = useState<Filter>("all");
   const savedShows = typeof settings?.list === "string" ? (settings.list as Shows) : "all";
@@ -56,8 +54,12 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState(0);
   const [due, setDue] = useState<string | null>(null);
-  /** Just checked/unchecked: stays put (hold), then folds out of filtered views (out). */
-  const [settling, setSettling] = useState<Map<string, "hold" | "out">>(new Map());
+  /**
+   * Just checked/unchecked: stays put (hold), then zips away (out: its place closes; zip, 1.53.3: in All, its place kept
+   * while it goes, then it lands with the finished ones, `landing`).
+   */
+  const [settling, setSettling] = useState<Map<string, "hold" | "out" | "zip">>(new Map());
+  const [landing, setLanding] = useState<Set<string>>(new Set());
   const [popped, setPopped] = useState<Set<string>>(new Set());
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
@@ -108,7 +110,7 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
       else n.delete(v);
       return n;
     });
-  const settle = (id: string, phase: "hold" | "out" | null) =>
+  const settle = (id: string, phase: "hold" | "out" | "zip" | null) =>
     setSettling((s) => {
       const n = new Map(s);
       if (phase) n.set(id, phase);
@@ -125,7 +127,6 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
 
   async function toggle(t: TodoItem) {
     if (t.id.startsWith("tmp-")) return;
-    if (!t.doneAt && board.prefs.confirmDone && !(await confirmDone(markDoneConfirm(t.title)))) return;
     const doneAt = t.doneAt ? null : new Date().toISOString();
     clearLater(t.id);
     patch(t.id, { doneAt });
@@ -144,12 +145,24 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
       setIn(setPopped, t.id, true);
       later(t.id, 700, () => setIn(setPopped, t.id, false));
     } else sounds.uncheck();
-    // Stay in place for a moment, then move (All) or fold away (Active / Done).
+    // Stay in place for a moment. Ticked off, it zips away (1.53.3) and, in All, lands with the finished ones; opened
+    // again, it moves back up among the open ones (All) or goes (Done).
     settle(t.id, "hold");
     later(t.id, doneAt ? HOLD_MS : 250, () => {
-      if (filterRef.current === "all") return settle(t.id, null);
-      settle(t.id, "out");
-      later(t.id, FOLD_MS, () => settle(t.id, null));
+      const all = filterRef.current === "all";
+      if (all && !doneAt) return settle(t.id, null);
+      // In All its place stays while it zips (nothing jumps in a scrolled list); elsewhere its place closes after it.
+      settle(t.id, all ? "zip" : "out");
+      later(t.id, all ? ZIP_MS : OUT_MS, () => {
+        if (all) {
+          // Where everything is right now, so the others slide up from there; it lands where it goes (no slide of its own).
+          list.current?.querySelectorAll<HTMLElement>("[data-todo]").forEach((el) => tops.current.set(el.dataset.todo!, el.offsetTop));
+          tops.current.delete(t.id);
+          setIn(setLanding, t.id, true);
+          later(t.id, 600, () => setIn(setLanding, t.id, false));
+        }
+        settle(t.id, null);
+      });
     });
   }
 
@@ -197,8 +210,9 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
   }
 
   function remove(t: TodoItem) {
+    sounds.remove();
     setIn(setLeaving, t.id, true);
-    later(t.id, FOLD_MS, () => {
+    later(t.id, GONE_MS, () => {
       setTodos((all) => all.filter((x) => x.id !== t.id));
       setIn(setLeaving, t.id, false);
     });
@@ -329,7 +343,10 @@ export function TodoWidget({ board, settings, onSettings }: { board: TodoBoard; 
                   listColor={t.listId ? listColor(lists.get(t.listId)?.color ?? "blue").fill : null}
                   popped={popped.has(t.id)}
                   entering={fresh.has(t.id)}
-                  out={settling.get(t.id) === "out" || leaving.has(t.id)}
+                  out={settling.get(t.id) === "out" || settling.get(t.id) === "zip"}
+                  keepsPlace={settling.get(t.id) === "zip"}
+                  landing={landing.has(t.id)}
+                  gone={leaving.has(t.id)}
                   onToggle={() => toggle(t)}
                   onSave={(p) => save(t, p)}
                   onDelete={() => remove(t)}
@@ -450,6 +467,9 @@ function TodoItemRow({
   popped,
   entering,
   out,
+  keepsPlace,
+  landing,
+  gone,
   onToggle,
   onSave,
   onDelete,
@@ -463,6 +483,9 @@ function TodoItemRow({
   popped: boolean;
   entering: boolean;
   out: boolean;
+  keepsPlace: boolean;
+  landing: boolean;
+  gone: boolean;
   onToggle: () => void;
   onSave: (p: TodoPatch) => void;
   onDelete: () => void;
@@ -481,12 +504,12 @@ function TodoItemRow({
       ref={setNodeRef}
       data-todo={t.id}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`todo-fold ${entering ? "is-in" : ""} ${out ? "is-out" : ""} ${isDragging ? "relative z-10" : ""}`}
+      className={`todo-fold ${entering ? "is-in" : ""} ${out ? "is-out" : ""} ${keepsPlace ? "keeps-place" : ""} ${landing ? "is-landing" : ""} ${gone ? "is-gone" : ""} ${isDragging ? "relative z-10" : ""}`}
     >
       <div>
         <div
           data-done={done}
-          className={`todo-row group rounded-md border transition-colors ${popped ? "just-checked" : ""} ${isDragging ? "border-amber/50 bg-surface shadow-xl" : "border-transparent hover:bg-surface-2/50"}`}
+          className={`todo-row group relative rounded-md border transition-colors ${popped ? "just-checked" : ""} ${isDragging ? "border-amber/50 bg-surface shadow-xl" : "border-transparent hover:bg-surface-2/50"}`}
         >
           <div className="flex items-start gap-1.5 px-1 py-1">
             <button

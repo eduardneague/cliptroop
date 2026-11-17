@@ -203,10 +203,9 @@ function Workspace({
       roleColors={roleColors}
       me={me}
       posting={posting}
-      onPosting={(p) => {
-        setPosting(p);
-        if (p) setChatOpen(true);
-      }}
+      // 1.53.3: posting shows only "Posting…" on the words; the comments stay as they were (the owner: "i dont want
+      // the comments to pop up automatically, just the indicator that its posting").
+      onPosting={setPosting}
       onAddComment={
         canComment
           ? async (quote, occurrence, body, kind, sketch) => {
@@ -215,10 +214,8 @@ function Workspace({
                 setPosting(null);
                 return r.error;
               }
-              // Stays as "Posting…" until the saved one is on the page.
+              // Stays as "Posting…" until the saved one is on the page (and nothing else opens: 1.53.3).
               setPosting((p) => (p ? { ...p, id: r.id } : p));
-              setChatOpen(true);
-              setActive(r.id);
               router.refresh();
               return null;
             }

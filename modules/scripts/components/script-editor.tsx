@@ -1141,7 +1141,7 @@ export function ScriptEditor({
                     </button>
                   ))}
                   {/* Several lines: say how many, so it's clear what the comment covers. */}
-                  {/[\n\u0000]/.test(sel.quote) && <span className="pl-1.5 pr-2 text-[11.5px] text-ink-faint whitespace-nowrap">{sel.quote.split(/[\n\u0000]/).length} lines</span>}
+                  {/[\n\u0000\uFFFC]/.test(sel.quote) && <span className="pl-1.5 pr-2 text-[11.5px] text-ink-faint whitespace-nowrap">{sel.quote.split(/[\n\u0000\uFFFC]/).length} lines</span>}
                 </div>
               </div>
             </Leaves>

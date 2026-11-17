@@ -101,8 +101,10 @@ ok(isLoadError(Object.assign(new Error("x"), { name: "ChunkLoadError" })) && !is
 // A budget for the frame's own code (source, comments and all: about 3 times its minified size). 1.32.1 was 814 KB of
 // source in 98 files; 1.32.2 about 300 KB in 60. More than this: something heavy is on every page again (the list above
 // says what), or the frame has grown: then measure it (the size of what a page downloads) before raising the budget.
+// 1.53.3: 380 → 384 KB. Alt+T for the quick To Do and menus opening under the top bar: +664 bytes minified on every page,
+// measured with esbuild on the changed files (the comments added were cut back first).
 const bytes = [...frame].reduce((n, f) => n + Buffer.byteLength(read(f)), 0);
-ok(bytes < 380 * 1024, `the frame's code: ${(bytes / 1024).toFixed(0)} KB of source (at most 380 KB)`);
+ok(bytes < 384 * 1024, `the frame's code: ${(bytes / 1024).toFixed(0)} KB of source (at most 384 KB)`);
 
 // --- The changelog: only the server and the notes read it ------------------------------------------------------------------
 const importers: string[] = [];

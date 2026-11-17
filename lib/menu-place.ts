@@ -11,6 +11,13 @@ export type MenuPlace = { top?: number; bottom?: number; left: number; width: nu
 /** The gap to the button, and the least room kept to the screen's edge. */
 const GAP = 6;
 const EDGE = 12;
+/** A menu's button box; in the top bar, down to the bar's edge plus 10px (1.53.3: the quick To Do sat on it). */
+export function anchorBox(el: Element) {
+  const r = el.getBoundingClientRect();
+  const bar = el.closest('[data-shell="header"], [data-shell="topbar"]');
+  return bar ? { top: r.top, bottom: Math.max(r.bottom, bar.getBoundingClientRect().bottom + 10 - GAP), left: r.left, right: r.right, width: r.width, height: r.height } : r;
+}
+export const dropTop = (el: Element) => anchorBox(el).bottom + GAP;
 
 export function placeMenu(o: {
   /** The button's box on screen. */

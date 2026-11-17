@@ -22,6 +22,24 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.3",
+    date: "2026-11-17",
+    title: "Ideas that save, to-dos that zip away",
+    changes: [
+      { kind: "better", text: "To Do: ticking a to-do off no longer asks first. It pops, shines, gets its line struck and zips away into Completed. A deleted one puffs away, and Undo in the message brings it back. The same in the quick panel and the dashboard's To Do widget." },
+      { kind: "better", text: "The quick My Day opens with Alt+T (⌥T on a Mac) instead of T alone. Ctrl+T stays the browser's new tab." },
+      { kind: "fixed", text: "The quick My Day and the notifications open a little under the top bar instead of on its edge." },
+      { kind: "better", text: "To Do is in the menu under Schedule, after Posting." },
+      { kind: "fixed", text: "Scripts: a comment or an editing idea on words that run over a line break (Shift+Enter) couldn't be saved (\"unsupported Unicode escape sequence\"), with a sketch or without. It saves now, and the ones from before still find their words." },
+      { kind: "better", text: "Adding a comment or an editing idea no longer opens the comments panel: the words just say \"Posting…\" until it's saved." },
+      { kind: "fixed", text: "With the glass look on, the box that opens on a comment's or an idea's words let the page show through it. It's solid enough to read again." },
+      { kind: "fixed", text: "A picture opened from a script now covers the whole screen and dims everything behind it, the top bar and the script's header too, instead of opening under them." },
+      { kind: "better", text: "Who does what: changing who writes the script or does a step shows \"Saving…\" on that step, then \"Saved\", and the step waits, dimmed, until it's done." },
+      { kind: "fixed", text: "To Do fits the window with the glass look on (the whole page no longer scrolls a little), and on glass its side bar and the details are glass panes, with the rim on Liquid." },
+      { kind: "better", text: "The dashboard's To-do list widget is now called To Do, and it's first in Add a widget, marked New." },
+    ],
+  },
+  {
     version: "1.53.2",
     date: "2026-11-17",
     title: "Readable corner buttons",

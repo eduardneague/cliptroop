@@ -308,7 +308,9 @@ export function CommentCard({
   if (pop) {
     return (
       <div
-        className="pop-menu origin-top-left rounded-2xl border border-line/15 bg-surface text-ink p-3"
+        // 1.53.3: the shadow class marks it as floating (like the composer), so with glass on it keeps nearly all its
+        // pane over the page; as a card it let the words under it through (the style draws the real shadow).
+        className="pop-menu origin-top-left rounded-2xl border border-line/15 bg-surface text-ink p-3 shadow-[0_24px_60px_-20px_rgb(0_0_0/0.55)]"
         style={{ boxShadow: `inset 0 3px 0 ${color}, 0 24px 60px -20px rgb(0 0 0 / 0.55)` }}
         // Inside the box: nothing closes it (the page around it closes it on a click).
         onClick={(e) => e.stopPropagation()}

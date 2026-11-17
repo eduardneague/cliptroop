@@ -26,6 +26,7 @@ import { motionReduced } from "./count-up";
 import { whenIdle } from "@/lib/idle";
 import { LaterBoundary, LaterFailed } from "./later-boundary";
 import { Leaves } from "./leaves";
+import { dropTop } from "@/lib/menu-place";
 
 type Actor = { name: string; avatarUrl: string | null };
 type Team = { name: string; logoUrl: string | null; color: string };
@@ -132,6 +133,9 @@ const ENTER_MS = 460;
 /** After the server agreed, what you did is kept on top of the list a little longer (a fresh list may already be on its way). */
 const SETTLE_MS = 10_000;
 
+/** Under the top bar, lined up with the bell's right edge (1.53.3). */
+const bellPlace = (bell: Element) => ({ top: dropTop(bell), right: Math.max(8, window.innerWidth - bell.getBoundingClientRect().right) });
+
 export function NotificationBell({
   notifications,
   userId,
@@ -175,8 +179,7 @@ export function NotificationBell({
       if (u.searchParams.get("notifications") !== "1") return;
       u.searchParams.delete("notifications");
       window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
-      const rect = bellRef.current?.getBoundingClientRect();
-      if (rect) setAnchor({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) });
+      if (bellRef.current) setAnchor(bellPlace(bellRef.current));
       setOpen(true);
     } catch {}
   }, []);
@@ -510,8 +513,7 @@ export function NotificationBell({
         onFocus={warmCards}
         onPointerDown={warmCards}
         onClick={() => {
-          const rect = bellRef.current?.getBoundingClientRect();
-          if (rect) setAnchor({ top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) });
+          if (bellRef.current) setAnchor(bellPlace(bellRef.current));
           setOpen((o) => !o);
         }}
         className="relative w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:bg-surface-2 hover:text-ink transition-colors"

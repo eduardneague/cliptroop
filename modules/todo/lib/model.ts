@@ -62,9 +62,6 @@ export type TodoPrefs = {
   sorts: Partial<Record<SmartId, Sort>>;
   /** Smart lists whose finished to-dos are hidden. */
   hideDone: Partial<Record<SmartId, boolean>>;
-  /** Ask before ticking one off (the app asks everywhere, 1.9.10), and before deleting one. */
-  confirmDone: boolean;
-  confirmDelete: boolean;
   /** New ones go on top (else at the bottom). */
   addOnTop: boolean;
   /** Starred ones first in a list kept in your own order. */
@@ -73,7 +70,12 @@ export type TodoPrefs = {
   dueToday: boolean;
 };
 
-export const DEFAULT_PREFS: TodoPrefs = { sorts: {}, hideDone: {}, confirmDone: true, confirmDelete: true, addOnTop: true, starredOnTop: true, dueToday: false };
+/**
+ * 1.53.3: no more "Ask before ticking off" / "Ask before deleting" (the owner: "when you check something, i dont want the
+ * confirmation ... and whne you delete something, i want the same thing"): To Do ticks off and deletes at once, with an
+ * Undo for a delete. What was saved for them is left out from now on.
+ */
+export const DEFAULT_PREFS: TodoPrefs = { sorts: {}, hideDone: {}, addOnTop: true, starredOnTop: true, dueToday: false };
 
 export type TodoBoard = { lists: TodoList[]; todos: TodoItem[]; pins: DayPin[]; prefs: TodoPrefs; ready: boolean };
 
@@ -444,7 +446,7 @@ export function cleanPrefs(v: unknown): TodoPrefs {
     if (rawHide && typeof rawHide === "object" && rawHide[k] === true) hideDone[k] = true;
   }
   const flag = (k: keyof TodoPrefs) => (typeof p[k] === "boolean" ? (p[k] as boolean) : (DEFAULT_PREFS[k] as boolean));
-  return { sorts, hideDone, confirmDone: flag("confirmDone"), confirmDelete: flag("confirmDelete"), addOnTop: flag("addOnTop"), starredOnTop: flag("starredOnTop"), dueToday: flag("dueToday") };
+  return { sorts, hideDone, addOnTop: flag("addOnTop"), starredOnTop: flag("starredOnTop"), dueToday: flag("dueToday") };
 }
 
 /** A list's colour as CSS: fills, borders and icons (`fill`), words (`text`, the shade that reads on cards). */

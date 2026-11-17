@@ -81,6 +81,8 @@ ok(!!r && text(r) === "The cheapest one\u0000tasted the best.\n\nSlow zoom on th
 ok(text(findQuote(doc, "Follow for part two.\nThree stalls", 0)) === "Follow for part two.\nThree stalls", "from one list item into the next");
 ok(text(findQuote(doc, "the beginning.\" That's what everyone told me.\nThree stalls", 0)) === "the beginning.\" That's what everyone told me.\nThree stalls", "from the end of one paragraph into the next");
 ok(quoteText("a\u0000b\nc") === "a\nb\nc", "shown: line breaks as new lines");
+ok(quoteText("a\uFFFCb\nc") === "a\nb\nc", "the same with 1.53.3's line break");
+ok(same(findQuote(doc, "The cheapest one\uFFFCtasted", 0), findQuote(doc, "The cheapest one\u0000tasted", 0)) && !!findQuote(doc, "The cheapest one\uFFFCtasted", 0), "an old page's quote (\\u0000) is found as the new one");
 
 // The selection → its quote, which occurrence, and back.
 const at = (needle: string, n = 0) => findQuote(doc, needle, n)!;
@@ -88,7 +90,9 @@ const at = (needle: string, n = 0) => findQuote(doc, needle, n)!;
   const a = at("cheapest").from;
   const b = at("the grill").to;
   const q = quoteAt(doc, a, b)!;
-  ok(q.quote === "cheapest one\u0000tasted the best.\n\nSlow zoom on the grill" && q.occurrence === 0 && q.from === a, `selecting over three lines (${JSON.stringify(q.quote)})`);
+  // 1.53.3: a line break in a quote is U+FFFC ("\u0000" before: the database refused it, "unsupported Unicode escape sequence").
+  ok(!q.quote.includes("\u0000"), "a quote the database can store");
+  ok(q.quote === "cheapest one\uFFFCtasted the best.\n\nSlow zoom on the grill" && q.occurrence === 0 && q.from === a, `selecting over three lines (${JSON.stringify(q.quote)})`);
   ok(same(findQuote(doc, q.quote, q.occurrence), { from: a, to: b }), "and it's found again exactly there");
 }
 {
@@ -123,7 +127,7 @@ ok(/notify pgrst, 'reload schema';/.test(mig), "the API sees the new column at o
 
 // ---- the server ------------------------------------------------------------------------------------------------------
 const actions = read("app/(dashboard)/scripts/actions.ts");
-ok(/const quote = general \? "" : String\(input\.quote \?\? ""\)\.slice\(0, MAX_QUOTE\);/.test(actions) && /if \(!general && !quote\.trim\(\)\) return \{ error: "Select some text first\." \};/.test(actions), "addComment: a general one has no quote; any other needs one");
+ok(/const quote = general \? "" : toLeaf\(String\(input\.quote \?\? ""\)\)\.slice\(0, MAX_QUOTE\);/.test(actions) && /if \(!general && !quote\.trim\(\)\) return \{ error: "Select some text first\." \};/.test(actions), "addComment: a general one has no quote; any other needs one");
 ok(/occurrence: general \? 0 : /.test(actions), "and occurrence 0");
 ok(/error\?\.code === "23514"/.test(actions), "a database without 0127 says so (not just \"couldn't add\")");
 const edit = actions.slice(actions.indexOf("export async function editComment"), actions.indexOf("export async function resolveComment"));

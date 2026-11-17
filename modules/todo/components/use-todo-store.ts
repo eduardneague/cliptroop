@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast-provider";
-import { markDoneConfirm, useConfirmSafe } from "@/components/ui/confirm-provider";
+import { useConfirmSafe } from "@/components/ui/confirm-provider";
 import { sounds } from "@/lib/sounds";
 import * as A from "../actions";
 import {
@@ -22,6 +22,7 @@ import {
   type TodoStep,
   type ViewId,
 } from "../lib/model";
+import { GONE_MS } from "../lib/motion";
 
 /** Today in the person's own time, moving on at midnight (and when the tab comes back after a night away). */
 export function useToday() {
@@ -43,6 +44,10 @@ export function useToday() {
 
 const NEEDS_UPDATE = "To Do needs a database update first (App setup lists it).";
 type Res = { error?: string };
+
+/** How long Undo can bring a deleted one back: a little longer than its toast stays (6.5 s with Undo). */
+const UNDO_MS = 7000;
+const short = (s: string) => (s.length > 60 ? `${s.slice(0, 59)}…` : s);
 
 /**
  * The page's (and the quick panel's) copy of your To Do, changed at once on screen and saved behind it. A new to-do,
@@ -66,6 +71,13 @@ export function useTodoStore(initial: TodoBoard) {
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
 
+  /**
+   * Deleted, Undo still possible (1.53.3): out of the lists after their puff (`leaving`), deleted for good when Undo's
+   * time is up, or at once when you leave (the page closes, To Do goes). `returning`: brought back by Undo, sliding in.
+   */
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(() => new Set());
+  const [returning, setReturning] = useState<ReadonlySet<string>>(() => new Set());
+  const doomed = useRef(new Map<string, { t: TodoItem; out: ReturnType<typeof setTimeout>; commit: ReturnType<typeof setTimeout> }>());
   const pending = useRef(new Map<string, Promise<string | null>>());
   /** A real id → the stand-in it replaced (rows keep their key, so nothing slides in twice). */
   const aliases = useRef(new Map<string, string>());
@@ -156,14 +168,13 @@ export function useTodoStore(initial: TodoBoard) {
   }
 
   /**
-   * Ticks a to-do off (asking first when you want that) or opens it again. A repeating one brings its next one at once.
-   * Returns whether it changed.
+   * Ticks a to-do off or opens it again, at once (1.53.3: no question first; the owner: "when you check something, i
+   * dont want the confirmation"). A repeating one brings its next one at once. Returns whether it changed.
    */
-  async function toggleDone(id: string, opts: { skipConfirm?: boolean } = {}): Promise<boolean> {
+  async function toggleDone(id: string): Promise<boolean> {
     const t = todosRef.current.find((x) => x.id === id);
-    if (!t) return false;
+    if (!t || doomed.current.has(id)) return false;
     const done = !t.doneAt;
-    if (done && prefsRef.current.confirmDone && !opts.skipConfirm && !(await confirm(markDoneConfirm(t.title)))) return false;
     local(id, { doneAt: done ? new Date().toISOString() : null });
     if (done) sounds.check();
     else sounds.uncheck();
@@ -185,21 +196,70 @@ export function useTodoStore(initial: TodoBoard) {
     return true;
   }
 
+  const inSet = (set: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>, id: string, on: boolean) =>
+    set((a) => {
+      if (a.has(id) === on) return a;
+      const n = new Set(a);
+      if (on) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+
+  /**
+   * Deletes a to-do (1.53.3: no question first; the owner, of ticking off: "i dont want the confirmation, and i want a
+   * cool outing animation, and whne you delete something, i want the same thing"). It puffs away in every list it's in,
+   * and the toast's Undo brings it back: it's deleted for good only when Undo's time is up (or when you leave).
+   */
   async function remove(id: string): Promise<boolean> {
     const t = todosRef.current.find((x) => x.id === id);
-    if (!t) return false;
-    if (
-      prefsRef.current.confirmDelete &&
-      !(await confirm({ title: "Delete this to-do?", description: `“${t.title.length > 80 ? `${t.title.slice(0, 79)}…` : t.title}” is deleted for good, with its steps.`, confirmLabel: "Delete", danger: true }))
-    )
-      return false;
-    setTodos((a) => a.filter((x) => x.id !== id));
+    if (!t || doomed.current.has(id)) return false;
     sounds.remove();
-    const rid = await real(id);
-    if (!rid) return true;
-    if (fail(await A.deleteTodo(rid))) setTodos((a) => [t, ...a]);
+    inSet(setLeaving, id, true);
+    const out = setTimeout(() => {
+      setTodos((a) => a.filter((x) => x.id !== id));
+      inSet(setLeaving, id, false);
+    }, GONE_MS);
+    const commit = setTimeout(() => void deleteNow(id), UNDO_MS);
+    doomed.current.set(id, { t, out, commit });
+    toast.success(`Deleted “${short(t.title)}”.`, { sound: false, action: { label: "Undo", onClick: () => undoRemove(id) } });
     return true;
   }
+
+  /** Undo: back where it was, sliding in. Too late once it's deleted for good (the toast has gone by then). */
+  function undoRemove(id: string) {
+    const d = doomed.current.get(id);
+    if (!d) return;
+    clearTimeout(d.out);
+    clearTimeout(d.commit);
+    doomed.current.delete(id);
+    inSet(setLeaving, id, false);
+    setTodos((a) => (a.some((x) => x.id === id) ? a : [d.t, ...a]));
+    inSet(setReturning, id, true);
+    setTimeout(() => inSet(setReturning, id, false), 450);
+    sounds.pop();
+  }
+
+  async function deleteNow(id: string) {
+    const d = doomed.current.get(id);
+    if (!d) return;
+    clearTimeout(d.commit);
+    doomed.current.delete(id);
+    const rid = await real(id);
+    if (!rid) return;
+    if (fail(await A.deleteTodo(rid))) setTodos((a) => (a.some((x) => x.id === d.t.id) ? a : [d.t, ...a]));
+  }
+
+  // Leaving (the tab closes, or To Do or the quick panel goes): what's waiting for Undo is deleted now.
+  const deleteNowRef = useRef(deleteNow);
+  deleteNowRef.current = deleteNow;
+  useEffect(() => {
+    const flush = () => [...doomed.current.keys()].forEach((id) => void deleteNowRef.current(id));
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
 
   /** Your order after a drag: these to-dos take the positions they had among themselves, in the new order. */
   async function reorder(ids: string[]) {
@@ -383,6 +443,8 @@ export function useTodoStore(initial: TodoBoard) {
     patch,
     toggleDone,
     remove,
+    leaving,
+    returning,
     reorder,
     addStep,
     patchStep,

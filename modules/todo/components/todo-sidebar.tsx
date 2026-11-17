@@ -182,8 +182,6 @@ function ListItem({ store, l, on, count, onClick, dragging }: { store: TodoStore
 }
 
 const PREF_ROWS: { k: keyof TodoPrefs; label: string; hint: string }[] = [
-  { k: "confirmDone", label: "Ask before ticking off", hint: "Like everywhere else in the app" },
-  { k: "confirmDelete", label: "Ask before deleting", hint: "A to-do, with its steps" },
   { k: "addOnTop", label: "New to-dos on top", hint: "Off: at the bottom" },
   { k: "starredOnTop", label: "Starred ones first", hint: "In lists kept in your order" },
   { k: "dueToday", label: "Due today in My Day", hint: "They join My Day by themselves" },

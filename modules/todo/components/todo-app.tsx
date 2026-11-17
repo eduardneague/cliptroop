@@ -272,15 +272,16 @@ export default function TodoApp({ board, team }: { board: TodoBoard; team: TeamD
   const right = selected ? "details" : suggestions && shown === "myday" ? "suggestions" : null;
   const panel =
     right === "details" && selected ? (
-      <TodoDetails key={store.keyOf(selected.id)} store={store} todo={selected} onClose={closeDetails} onToggle={() => void store.toggleDone(selected.id)} />
+      <TodoDetails key={store.keyOf(selected.id)} store={store} todo={selected} onClose={closeDetails} onToggle={() => (rowsInfo.current.toggle ? rowsInfo.current.toggle(selected.id) : void store.toggleDone(selected.id))} />
     ) : right === "suggestions" ? (
       <Suggestions store={store} team={team.tasks} onClose={() => setSuggestions(false)} />
     ) : null;
 
   return (
     <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDrag(null)}>
-      <div className="todo-app flex md:h-[calc(100dvh-3.5rem)] md:overflow-hidden">
-        <aside className={`${phoneList ? "hidden md:flex" : "flex"} w-full md:w-[272px] flex-shrink-0 flex-col md:border-r border-line/10 bg-paper-2/40 min-h-[calc(100dvh-8rem)] md:min-h-0`}>
+      {/* 1.53.3: the page is the window under the top bar, whatever the bar's height (glass floats it: 72 px, not 56). */}
+      <div className="todo-app flex md:h-[calc(100dvh-var(--shell-top,3.5rem))] md:overflow-hidden">
+        <aside data-todo-pane="" className={`${phoneList ? "hidden md:flex" : "flex"} w-full md:w-[272px] flex-shrink-0 flex-col md:border-r border-line/10 bg-paper-2/40 min-h-[calc(100dvh-8rem)] md:min-h-0`}>
           <TodoSidebar
             store={store}
             view={shown}
@@ -324,7 +325,7 @@ export default function TodoApp({ board, team }: { board: TodoBoard; team: TeamD
             renameTick={renameTick}
           />
         </main>
-        {wide && panel && <aside className="w-[380px] xl:w-[400px] flex-shrink-0 border-l border-line/10 bg-paper-2/40 animate-[fadein_.18s_ease-out]">{panel}</aside>}
+        {wide && panel && <aside data-todo-pane="" className="w-[380px] xl:w-[400px] flex-shrink-0 border-l border-line/10 bg-paper-2/40 animate-[fadein_.18s_ease-out]">{panel}</aside>}
       </div>
       {!wide && panel && <Sheet onClose={right === "details" ? closeDetails : () => setSuggestions(false)}>{panel}</Sheet>}
       {typeof document !== "undefined" &&

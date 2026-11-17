@@ -2,14 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { placeMenu, type MenuPlace } from "@/lib/menu-place";
+import { anchorBox, placeMenu, type MenuPlace } from "@/lib/menu-place";
 import { Leaves } from "./leaves";
 
 /**
  * A dropdown that opens from its button, rendered at the top of the page (a
  * portal), so blurred / sticky bars can never trap it.
  *   Phones: full width with 12px on each side, scrolls if tall.
- *   Larger: under the button, aligned to its left or right edge.
+ *   Larger: under the button (the top bar's: under the bar, 1.53.3), aligned
+ *   to its left or right edge.
  * It opens up instead when it doesn't fit below and there's more room above
  * (a button at the bottom of a popup: the idea window's Start, 1.29.9), and
  * sits above popups, so one opened from inside a popup is never hidden
@@ -55,7 +56,7 @@ export function AnchoredMenu({
       return setPos(null);
     }
     const place = () => {
-      const r = anchor.current?.getBoundingClientRect();
+      const r = anchor.current ? anchorBox(anchor.current) : null;
       if (r) setPos(placeMenu({ anchor: r, vw: window.innerWidth, vh: window.innerHeight, width, align, natural: natural.current, maxHeight }));
     };
     place();
@@ -68,7 +69,7 @@ export function AnchoredMenu({
     const el = panel.current;
     if (!el || !pos || natural.current !== null) return;
     natural.current = el.scrollHeight;
-    const r = anchor.current?.getBoundingClientRect();
+    const r = anchor.current ? anchorBox(anchor.current) : null;
     if (!r || el.scrollHeight <= el.clientHeight + 1) return;
     const next = placeMenu({ anchor: r, vw: window.innerWidth, vh: window.innerHeight, width, align, natural: el.scrollHeight, maxHeight });
     if (next.up !== pos.up) setPos(next);
@@ -100,7 +101,7 @@ export function AnchoredMenu({
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        const r = anchor.current?.getBoundingClientRect();
+        const r = anchor.current ? anchorBox(anchor.current) : null;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         if (!r || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw || (r.width === 0 && r.height === 0)) return onClose();

@@ -147,10 +147,10 @@ ok(matches(item({ title: "x", categories: ["Filming"] }), "film"), "search finds
 
 // --- Checks ------------------------------------------------------------------------------------------------------------
 eq(cleanCategories([" Filming ", "filming", "", "A".repeat(40), 3, "x", "y", "z", "w", "v", "u", "t"]), ["Filming", "A".repeat(30), "3", "x", "y", "z", "w", "v"], "categories: trimmed, each once, 30 characters, 8 at most");
-const p = cleanPrefs({ sorts: { myday: { by: "due", dir: "desc" }, tasks: { by: "custom" }, nope: { by: "alpha" } }, hideDone: { planned: true, myday: "yes" }, confirmDone: false, addOnTop: "no" });
+const p = cleanPrefs({ sorts: { myday: { by: "due", dir: "desc" }, tasks: { by: "custom" }, nope: { by: "alpha" } }, hideDone: { planned: true, myday: "yes" }, confirmDone: true, starredOnTop: false, addOnTop: "no" });
 eq(p.sorts, { myday: { by: "due", dir: "desc" } }, "settings: real sorts only (your order is the default, not stored)");
 eq(p.hideDone, { planned: true }, "settings: hide finished only when true");
-ok(p.confirmDone === false && p.addOnTop === true && p.confirmDelete === true, "settings: flags, or the defaults");
+ok(p.starredOnTop === false && p.addOnTop === true && !("confirmDone" in p) && !("confirmDelete" in p), "settings: flags, or the defaults; the old ask-first ones are left out (1.53.3)");
 eq(cleanPrefs("junk"), DEFAULT_PREFS, "settings that aren't settings: the defaults");
 eq(todoHref("myday", "abc"), "/todo?list=myday&task=abc", "an address for a list and a to-do");
 eq(todoHref(null), "/todo", "To Do itself");

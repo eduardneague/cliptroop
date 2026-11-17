@@ -8,6 +8,8 @@ import { ArrowRightIcon, PlusIcon } from "@/components/ui/icons";
 import { readTodoBoard } from "../actions";
 import { belongs, cleanTitle, dayWordAfter, localDay, longDay, sortTodos, todoHref, type SmartId, type TodoBoard, type TodoItem } from "../lib/model";
 import { useTodoStore } from "./use-todo-store";
+import { useQuickTodoKeys } from "../lib/quick-key";
+import { HOLD_MS, OUT_MS } from "../lib/motion";
 import { SMART_META, StarToggle, TodoCheck } from "./todo-bits";
 
 const TABS: SmartId[] = ["myday", "important", "planned", "tasks"];
@@ -49,9 +51,18 @@ export function QuickTodoLoading() {
 function Panel({ board, onClose }: { board: TodoBoard; onClose: () => void }) {
   const store = useTodoStore(board);
   const { today, prefs } = store;
+  const keys = useQuickTodoKeys();
   const [tab, setTab] = useState<SmartId>("myday");
   const [title, setTitle] = useState("");
-  const [popped, setPopped] = useState<Set<string>>(new Set());
+  /** Just ticked off (1.53.3): "pop" (its tick pops, a shine, its line struck), then "out" (it zips away), then gone from here. */
+  const [ticked, setTicked] = useState<ReadonlyMap<string, "pop" | "out">>(() => new Map());
+  const phase = (id: string, p: "pop" | "out" | null) =>
+    setTicked((m) => {
+      const n = new Map(m);
+      if (p) n.set(id, p);
+      else n.delete(id);
+      return n;
+    });
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const t = setTimeout(() => input.current?.focus(), 60);
@@ -59,10 +70,10 @@ function Panel({ board, onClose }: { board: TodoBoard; onClose: () => void }) {
   }, []);
   const counts = useMemo(() => Object.fromEntries(TABS.map((t) => [t, store.todos.filter((x) => !x.doneAt && belongs(x, t, today, prefs)).length])) as Record<SmartId, number>, [store.todos, today, prefs]);
   const open = useMemo(
-    () => sortTodos(store.todos.filter((t) => (!t.doneAt || popped.has(t.id)) && belongs(t, tab, today, prefs)), tab === "planned" ? { by: "due", dir: "asc" } : store.sortOf(tab), prefs.starredOnTop).slice(0, 40),
-    [store, tab, today, prefs, popped]
+    () => sortTodos(store.todos.filter((t) => (!t.doneAt || ticked.has(t.id)) && belongs(t, tab, today, prefs)), tab === "planned" ? { by: "due", dir: "asc" } : store.sortOf(tab), prefs.starredOnTop).slice(0, 40),
+    [store, tab, today, prefs, ticked]
   );
-  const doneToday = store.todos.filter((t) => t.doneAt && !popped.has(t.id) && belongs(t, tab, today, prefs) && localDay(new Date(t.doneAt)) === today).length;
+  const doneToday = store.todos.filter((t) => t.doneAt && !ticked.has(t.id) && belongs(t, tab, today, prefs) && localDay(new Date(t.doneAt)) === today).length;
 
   const add = () => {
     const text = cleanTitle(title);
@@ -72,15 +83,10 @@ function Panel({ board, onClose }: { board: TodoBoard; onClose: () => void }) {
   };
   const toggle = async (t: TodoItem) => {
     const was = !t.doneAt;
-    if (!(await store.toggleDone(t.id))) return;
-    if (was) {
-      setPopped((s) => new Set(s).add(t.id));
-      setTimeout(() => setPopped((s) => {
-        const n = new Set(s);
-        n.delete(t.id);
-        return n;
-      }), 900);
-    }
+    if (!(await store.toggleDone(t.id)) || !was) return;
+    phase(t.id, "pop");
+    setTimeout(() => phase(t.id, "out"), HOLD_MS);
+    setTimeout(() => phase(t.id, null), HOLD_MS + OUT_MS);
   };
 
   return (
@@ -141,19 +147,23 @@ function Panel({ board, onClose }: { board: TodoBoard; onClose: () => void }) {
       </div>
       <ul className="px-2 pb-2 space-y-0.5 max-h-[340px] overflow-y-auto overflow-x-hidden styled-scroll">
         {open.map((t) => (
-          <li key={store.keyOf(t.id)} className={`todo-row group flex items-center gap-2.5 rounded-xl pl-2.5 pr-1 min-h-[44px] hover:bg-surface-2/60 ${popped.has(t.id) ? "just-checked" : ""}`} data-done={!!t.doneAt}>
-            <TodoCheck done={!!t.doneAt} popped={popped.has(t.id)} onToggle={() => void toggle(t)} size={18} />
-            <Link href={todoHref(t.listId ?? "tasks", t.id.startsWith("tmp-") ? null : t.id)} onClick={onClose} className="min-w-0 flex-1 py-1.5">
-              <span className="block text-[13.5px] leading-snug truncate">
-                <span className="todo-title">{t.title}</span>
-              </span>
-              {t.dueDate && (
-                <span className={`block text-[11px] ${t.dueDate < today ? "text-red font-semibold" : t.dueDate === today ? "text-amber font-semibold" : "text-ink-faint"}`}>
-                  {t.dueDate < today ? `Overdue, ${dayWordAfter(t.dueDate, today)}` : `Due ${dayWordAfter(t.dueDate, today)}`}
-                </span>
-              )}
-            </Link>
-            <StarToggle on={t.important} onToggle={() => void store.patch(t.id, { important: !t.important })} className={t.important ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} />
+          <li key={store.keyOf(t.id)} data-todo={t.id} className={`todo-fold ${ticked.get(t.id) === "out" ? "is-out" : ""}`}>
+            <div>
+              <div className={`todo-row group relative flex items-center gap-2.5 rounded-xl pl-2.5 pr-1 min-h-[44px] hover:bg-surface-2/60 ${ticked.has(t.id) ? "just-checked" : ""}`} data-done={!!t.doneAt}>
+                <TodoCheck done={!!t.doneAt} popped={ticked.has(t.id)} onToggle={() => void toggle(t)} size={18} />
+                <Link href={todoHref(t.listId ?? "tasks", t.id.startsWith("tmp-") ? null : t.id)} onClick={onClose} className="min-w-0 flex-1 py-1.5">
+                  <span className="block text-[13.5px] leading-snug truncate">
+                    <span className="todo-title">{t.title}</span>
+                  </span>
+                  {t.dueDate && (
+                    <span className={`block text-[11px] ${t.dueDate < today ? "text-red font-semibold" : t.dueDate === today ? "text-amber font-semibold" : "text-ink-faint"}`}>
+                      {t.dueDate < today ? `Overdue, ${dayWordAfter(t.dueDate, today)}` : `Due ${dayWordAfter(t.dueDate, today)}`}
+                    </span>
+                  )}
+                </Link>
+                <StarToggle on={t.important} onToggle={() => void store.patch(t.id, { important: !t.important })} className={t.important ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} />
+              </div>
+            </div>
           </li>
         ))}
       </ul>
@@ -165,7 +175,7 @@ function Panel({ board, onClose }: { board: TodoBoard; onClose: () => void }) {
         </div>
       )}
       <div className="border-t border-line/10 px-4 py-2 text-[11.5px] text-ink-faint flex items-center gap-1.5">
-        <kbd className="rounded-[5px] border border-line/20 px-1.5 text-[10.5px] font-bold text-ink-soft">T</kbd> opens this on any page
+        <kbd className="rounded-[5px] border border-line/20 px-1.5 text-[10.5px] font-bold text-ink-soft">{keys}</kbd> opens this on any page
       </div>
     </div>
   );

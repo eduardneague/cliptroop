@@ -37,13 +37,15 @@ import type { TodoStore } from "./use-todo-store";
 import { SMART_META, ViewGlyph, viewName, viewTextTone, viewVar } from "./todo-bits";
 import { DueMenu, Menu, MenuItem, Divider, PointMenu, RemindMenu, RepeatMenu, SortMenu, dueForRepeat, useMenuButton } from "./todo-menus";
 import { TeamDoneRow, TeamRow, TodoRow, type RowState } from "./todo-rows";
+import { useQuickTodoKeys } from "../lib/quick-key";
+import { HOLD_MS, OUT_MS } from "../lib/motion";
 
 export type TeamData = { hasTeam: boolean; teamName: string | null; tasks: Task[]; done: Done[] };
 /** What the page's drag and drop needs from the list on screen. */
-export type RowsInfo = { keys: string[]; ids: string[]; sortable: boolean };
+/** What the page needs of the open rows (keys, moving, dropping); `toggle`: ticking one off with its animation (the details' tick). */
+export type RowsInfo = { keys: string[]; ids: string[]; sortable: boolean; toggle?: (id: string) => void };
 
-const HOLD_MS = 700;
-const FOLD_MS = 280;
+
 const NO_MOVE = () => null;
 const EMOJI_ICONS = ["📝", "✅", "🎬", "🎥", "📷", "💡", "📅", "🎯", "🚀", "⭐", "🔥", "💰", "📈", "🛒", "🏠", "💼", "📚", "🎨", "🎵", "🎮", "🏋️", "✈️", "🍳", "🧹", "📦", "🧠", "🛠️", "🌱", "☕", "🎁", "❤️", "🗂️"];
 /** An emoji at the start of a list's name becomes its icon (Microsoft To Do does the same). */
@@ -88,7 +90,7 @@ export function ListView({
   const searching = query.trim().length > 0;
   const list = isSmart(view) ? null : (listById.get(view) ?? null);
 
-  // ---- the tick's moment: it stays put, pops, then folds away into Completed ----------------------------------------
+  // ---- the tick's moment: it stays put, pops and shines, then zips away into Completed (1.53.3) -----------------------
   const [settling, setSettling] = useState<Map<string, "hold" | "out">>(new Map());
   const [popped, setPopped] = useState<Set<string>>(new Set());
   const [arrived, setArrived] = useState<Set<string>>(new Set());
@@ -126,7 +128,15 @@ export function ListView({
   const showList = searching || (isSmart(view) && view !== "tasks");
   // Your own order is kept per list: drag to reorder in Tasks and your lists (the smart lists mix several).
   const sortable = !searching && sort.by === "custom" && (!isSmart(view) || view === "tasks");
-  rowsInfo.current = { keys: open.map((t) => store.keyOf(t.id)), ids: open.map((t) => t.id), sortable };
+  rowsInfo.current = {
+    keys: open.map((t) => store.keyOf(t.id)),
+    ids: open.map((t) => t.id),
+    sortable,
+    toggle: (id) => {
+      const t = todos.find((x) => x.id === id);
+      if (t) void toggle(t);
+    },
+  };
 
   async function toggle(t: TodoItem) {
     const wasOpen = !t.doneAt;
@@ -147,7 +157,7 @@ export function ListView({
       settle(t.id, "hold");
       later(HOLD_MS, () => {
         settle(t.id, "out");
-        later(FOLD_MS, () => {
+        later(OUT_MS, () => {
           settle(t.id, null);
           inSet(setArrived, t.id, true);
           later(420, () => inSet(setArrived, t.id, false));
@@ -162,7 +172,12 @@ export function ListView({
   const [menu, setMenu] = useState<{ id: string; at: { x: number; y: number } } | null>(null);
   const menuTodo = menu ? todos.find((t) => t.id === menu.id) : null;
 
-  const rowState = (t: TodoItem): RowState => ({ popped: popped.has(t.id), out: settling.get(t.id) === "out", entering: arrived.has(t.id) });
+  const rowState = (t: TodoItem): RowState => ({
+    popped: popped.has(t.id),
+    out: settling.get(t.id) === "out",
+    gone: store.leaving.has(t.id),
+    entering: arrived.has(t.id) || store.returning.has(t.id),
+  });
   const row = (t: TodoItem) => (
     <TodoRow
       key={store.keyOf(t.id)}
@@ -383,6 +398,7 @@ function Header({
   const list = isSmart(view) ? null : (listById.get(view) ?? null);
   const sortBtn = useMenuButton();
   const moreBtn = useMenuButton();
+  const quickKeys = useQuickTodoKeys();
   const [renaming, setRenaming] = useState(false);
   const [mode, setMode] = useState<"main" | "icon" | "color">("main");
   useEffect(() => {
@@ -578,7 +594,7 @@ function Header({
                       <b className="text-ink-soft">N</b> new to-do · <b className="text-ink-soft">↑↓</b> move · <b className="text-ink-soft">I</b> star
                     </div>
                     <div>
-                      <b className="text-ink-soft">M</b> My Day · <b className="text-ink-soft">Del</b> delete · <b className="text-ink-soft">T</b> To Do anywhere
+                      <b className="text-ink-soft">M</b> My Day · <b className="text-ink-soft">Del</b> delete · <b className="text-ink-soft">{quickKeys}</b> To Do anywhere
                     </div>
                   </div>
                 </>

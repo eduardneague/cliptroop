@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TodoIcon } from "@/components/ui/icons";
+import { isQuickTodoKey, useQuickTodoKeys } from "../lib/quick-key";
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
@@ -22,24 +23,23 @@ const QuickTodoPanel = dynamic(() => import("./quick-todo-panel"), {
 });
 
 /**
- * To Do from anywhere (1.53.0, the owner: "a way to get to the to do faster"): the button in the top bar, or T on any
- * page. A small panel with My Day, Important, Planned and Tasks: add one, tick one off, star one; a to-do opens in To
- * Do. It reads your To Do when it opens (nothing on the page's own load).
+ * To Do from anywhere (1.53.0): the top bar's button, or Alt+T. My Day, Important, Planned and Tasks: add, tick off,
+ * star; a to-do opens in To Do. It reads your To Do when it opens.
  */
 export function QuickTodo() {
   const btn = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const onTodo = pathname === "/todo" || pathname.startsWith("/todo/");
+  const keys = useQuickTodoKeys();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== "t" || typing(e.target)) return;
+      // In a text box, ⌥T on a Mac types a letter (†): it stays a letter there.
+      if (e.defaultPrevented || e.repeat || !isQuickTodoKey(e) || (typing(e.target) && e.key.toLowerCase() !== "t")) return;
       if (onTodo || document.querySelector('[role="dialog"][aria-modal="true"], [data-confirm]')) return;
-      // A page that uses T itself (Thumbnail Studio's titles) says so by taking the key: then it's that page's.
-      queueMicrotask(() => {
-        if (!e.defaultPrevented) setOpen((o) => !o);
-      });
+      e.preventDefault();
+      setOpen((o) => !o);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -54,8 +54,8 @@ export function QuickTodo() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="To Do (T)"
-        title="To Do (T)"
+        aria-label={`To Do (${keys})`}
+        title={`To Do (${keys})`}
         data-tour="quick-todo"
         className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${open ? "bg-surface-2 text-teal" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
