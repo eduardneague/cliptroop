@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { confetti } from "@/components/ui/confetti";
 import { Mascot } from "@/components/ui/mascot";
 import { sounds } from "@/lib/sounds";
-import { BellIcon, CalendarIcon, ChevronDownIcon, ChevronLeftIcon, CloseIcon, EditIcon, EyeIcon, LightbulbIcon, MoreIcon, PaletteIcon, PlusIcon, SmileIcon, TrashIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, BellIcon, CalendarIcon, ChevronDownIcon, ChevronLeftIcon, CloseIcon, EditIcon, EyeIcon, LightbulbIcon, MoreIcon, PaletteIcon, PlusIcon, SmileIcon, TrashIcon } from "@/components/ui/icons";
 import { RepeatIcon, SortIcon } from "./todo-icons";
 import type { Done, Task } from "@/modules/dashboard/lib/queries";
 import {
@@ -27,7 +28,9 @@ import {
   SORT_LABEL,
   sortDone,
   sortTodos,
+  todoHref,
   type DayGroup,
+  type SmartId,
   type Repeat,
   type TodoItem,
   type TodoList,
@@ -44,6 +47,11 @@ export type TeamData = { hasTeam: boolean; teamName: string | null; tasks: Task[
 /** What the page's drag and drop needs from the list on screen. */
 /** What the page needs of the open rows (keys, moving, dropping); `toggle`: ticking one off with its animation (the details' tick). */
 export type RowsInfo = { keys: string[]; ids: string[]; sortable: boolean; toggle?: (id: string) => void };
+/**
+ * The dashboard's To Do widget (1.53.4: "the to do widget has to be the same as the to do that we just implemented"):
+ * this same list in a widget. Its own top (which list, with their counts, and Open), its own scroll, a little tighter.
+ */
+export type Compact = { counts: Record<string, number>; onView: (v: ViewId) => void };
 
 
 const NO_MOVE = () => null;
@@ -70,6 +78,7 @@ export function ListView({
   rowsInfo,
   onListGone,
   renameTick = 0,
+  compact,
 }: {
   store: TodoStore;
   view: ViewId;
@@ -85,8 +94,12 @@ export function ListView({
   onListGone: () => void;
   /** Goes up when a new list is made: its name opens for typing. */
   renameTick?: number;
+  compact?: Compact;
 }) {
   const { today, prefs, listById, todos } = store;
+  const tight = !!compact;
+  const rowsGap = tight ? "space-y-1" : "space-y-1.5";
+  const groupsGap = tight ? "space-y-3" : "space-y-5";
   const searching = query.trim().length > 0;
   const list = isSmart(view) ? null : (listById.get(view) ?? null);
 
@@ -196,6 +209,7 @@ export function ListView({
         if (!t.important) sounds.pop();
       }}
       onMenu={(at) => setMenu({ id: t.id, at })}
+      dense={tight}
     />
   );
   const teamRow = (t: Task, showDay = true) => <TeamRow key={t.id} t={t} today={today} inMyDay={pinned.has(t.id)} showDay={showDay} onMyDay={() => void store.pin(t.id, !pinned.has(t.id))} />;
@@ -205,24 +219,24 @@ export function ListView({
   const openList = (rows: TodoItem[]) =>
     rows.length ? (
       <SortableContext items={rows.map((t) => store.keyOf(t.id))} strategy={sortable ? verticalListSortingStrategy : NO_MOVE}>
-        <ul className="space-y-1.5">{rows.map(row)}</ul>
+        <ul className={rowsGap}>{rows.map(row)}</ul>
       </SortableContext>
     ) : null;
 
   if (searching) {
     const found = open.length + done.length + teamFound.length;
     body = found ? (
-      <div className="space-y-5">
+      <div className={groupsGap}>
         {open.length > 0 && <Group label="To-dos" count={open.length}>{openList(open)}</Group>}
         {teamFound.length > 0 && (
           <Group label="Assigned to me" count={teamFound.length}>
-            <ul className="space-y-1.5">{teamFound.map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{teamFound.map((t) => teamRow(t))}</ul>
           </Group>
         )}
         {done.length > 0 && <Completed view="search" items={done} row={row} />}
       </div>
     ) : (
-      <Empty art="search" title={`Nothing found for “${query.trim()}”`} text="Search looks in titles, notes, steps and categories, in every list." />
+      <Empty compact={tight} art="search" title={`Nothing found for “${query.trim()}”`} text="Search looks in titles, notes, steps and categories, in every list." />
     );
   } else if (view === "assigned") {
     const active = teamOpen.filter((t) => t.state === "active");
@@ -234,33 +248,33 @@ export function ListView({
     };
     const byDue = (a: Task, b: Task) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || a.number - b.number;
     body = !team.hasTeam ? (
-      <Empty art="team" title="No team yet" text="Join or create a team: the work it gives you (scripts to write, edits, reviews, action items) shows up here." />
+      <Empty compact={tight} art="team" title="No team yet" text="Join or create a team: the work it gives you (scripts to write, edits, reviews, action items) shows up here." />
     ) : teamOpen.length + team.done.length === 0 ? (
-      <Empty art="team" title="Nothing assigned to you" text="When the team gives you a step on a video or an action item from a meeting, it shows up here, and ticks off by itself when the work moves on." />
+      <Empty compact={tight} art="team" title="Nothing assigned to you" text="When the team gives you a step on a video or an action item from a meeting, it shows up here, and ticks off by itself when the work moves on." />
     ) : (
-      <div className="space-y-5">
+      <div className={groupsGap}>
         {g.overdue.length > 0 && (
           <Group label="Overdue" count={g.overdue.length} tone="text-red">
-            <ul className="space-y-1.5">{g.overdue.sort(byDue).map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{g.overdue.sort(byDue).map((t) => teamRow(t))}</ul>
           </Group>
         )}
         {g.today.length > 0 && (
           <Group label="Now" count={g.today.length}>
-            <ul className="space-y-1.5">{g.today.sort(byDue).map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{g.today.sort(byDue).map((t) => teamRow(t))}</ul>
           </Group>
         )}
         {g.later.length > 0 && (
           <Group label="Coming up" count={g.later.length}>
-            <ul className="space-y-1.5">{g.later.sort(byDue).map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{g.later.sort(byDue).map((t) => teamRow(t))}</ul>
           </Group>
         )}
         {g.waiting.length > 0 && (
           <Group label="Waiting on earlier steps" count={g.waiting.length}>
-            <ul className="space-y-1.5">{g.waiting.sort(byDue).map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{g.waiting.sort(byDue).map((t) => teamRow(t))}</ul>
           </Group>
         )}
         {team.done.length > 0 && !hideDone && <TeamCompleted items={team.done} today={today} />}
-        <p className="text-[12px] text-ink-faint px-1">These come from the team&rsquo;s work and tick off by themselves when the video moves on. The sun puts one in My Day.</p>
+        {!tight && <p className="text-[12px] text-ink-faint px-1">These come from the team&rsquo;s work and tick off by themselves when the video moves on. The sun puts one in My Day.</p>}
       </div>
     );
   } else if (view === "planned") {
@@ -276,9 +290,9 @@ export function ListView({
     const order: DayGroup[] = ["earlier", "today", "tomorrow", "week", "later"];
     body =
       groups.size === 0 && !done.length ? (
-        <Empty art="planned" title="Nothing planned" text="To-dos with a due date or a reminder show up here, day by day, with the team's deadlines for you." />
+        <Empty compact={tight} art="planned" title="Nothing planned" text="To-dos with a due date or a reminder show up here, day by day, with the team's deadlines for you." />
       ) : (
-        <div className="space-y-5">
+        <div className={groupsGap}>
           {order
             .filter((g) => groups.has(g))
             .map((g) => {
@@ -286,7 +300,7 @@ export function ListView({
               return (
                 <Group key={g} label={g === "earlier" ? "Overdue" : DAY_GROUP_LABEL[g]} count={x.todos.length + x.team.length} tone={g === "earlier" ? "text-red" : undefined}>
                   {openList(x.todos)}
-                  {x.team.length > 0 && <ul className={`space-y-1.5 ${x.todos.length ? "mt-1.5" : ""}`}>{x.team.map((t) => teamRow(t))}</ul>}
+                  {x.team.length > 0 && <ul className={`${rowsGap} ${x.todos.length ? "mt-1.5" : ""}`}>{x.team.map((t) => teamRow(t))}</ul>}
                 </Group>
               );
             })}
@@ -297,21 +311,21 @@ export function ListView({
     const nothing = !open.length && !done.length && !teamToday.length && !teamTodayDone.length;
     const allDone = !open.length && !teamToday.length && (done.length > 0 || teamTodayDone.length > 0);
     body = (
-      <div className="space-y-5">
+      <div className={groupsGap}>
         {openList(open)}
         {teamToday.length > 0 && (
           <Group label="From your team" count={teamToday.length}>
-            <ul className="space-y-1.5">{teamToday.map((t) => teamRow(t))}</ul>
+            <ul className={rowsGap}>{teamToday.map((t) => teamRow(t))}</ul>
           </Group>
         )}
-        {view === "myday" && allDone && <AllDoneToday />}
+        {view === "myday" && allDone && <AllDoneToday compact={tight} />}
         {nothing &&
           (view === "myday" ? (
-            <Empty art="myday" title="Focus on your day" text="Get things done with My Day, a list that starts fresh every morning." action={{ label: "Suggestions", onClick: onSuggestions }} />
+            <Empty compact={tight} art="myday" title="Focus on your day" text="Get things done with My Day, a list that starts fresh every morning." action={tight ? undefined : { label: "Suggestions", onClick: onSuggestions }} />
           ) : view === "important" ? (
-            <Empty art="important" title="Nothing starred yet" text="Star the to-dos that matter most: they show up here, from every list." />
+            <Empty compact={tight} art="important" title="Nothing starred yet" text="Star the to-dos that matter most: they show up here, from every list." />
           ) : (
-            <Empty art="list" view={view} lists={listById} title="All clear" text="Add a to-do above. Drag to-dos here from any list, or onto My Day." />
+            <Empty compact={tight} art="list" view={view} lists={listById} title="All clear" text="Add a to-do above. Drag to-dos here from any list, or onto My Day." />
           ))}
         {!hideDone && (done.length > 0 || teamTodayDone.length > 0) && <Completed view={view} items={done} row={row} team={teamTodayDone} today={today} />}
       </div>
@@ -321,25 +335,29 @@ export function ListView({
   const suggestCount = view === "myday" ? store.todos.filter((t) => !t.doneAt && !inMyDay(t, today, prefs) && ((t.dueDate && t.dueDate <= today) || (t.myDay && t.myDay < today))).length : 0;
 
   return (
-    <section className="flex flex-col md:h-full md:min-h-0" aria-label={searching ? "Search" : viewName(view, listById)}>
-      <Header
-        store={store}
-        view={view}
-        searching={searching}
-        query={query}
-        openCount={open.length + teamToday.length}
-        teamName={team.teamName}
-        suggestionsOpen={suggestionsOpen}
-        suggestCount={suggestCount}
-        onSuggestions={onSuggestions}
-        onBack={onBack}
-        onListGone={onListGone}
-        renameTick={renameTick}
-      />
-      {/* Phones: the page itself scrolls (the add box sticks under the top bar); larger: this column does. */}
-      <div className="md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden styled-scroll px-3 sm:px-6 pb-8 md:pb-10">
-        {!searching && view !== "assigned" && <AddBox key={view} store={store} view={view} inputRef={addInput} />}
-        <div className="mt-3">{body}</div>
+    <section className={tight ? "flex flex-col h-full min-h-0" : "flex flex-col md:h-full md:min-h-0"} aria-label={searching ? "Search" : viewName(view, listById)}>
+      {compact ? (
+        <CompactHeader store={store} view={view} openCount={open.length + teamToday.length} teamName={team.teamName} hasTeam={team.hasTeam} compact={compact} />
+      ) : (
+        <Header
+          store={store}
+          view={view}
+          searching={searching}
+          query={query}
+          openCount={open.length + teamToday.length}
+          teamName={team.teamName}
+          suggestionsOpen={suggestionsOpen}
+          suggestCount={suggestCount}
+          onSuggestions={onSuggestions}
+          onBack={onBack}
+          onListGone={onListGone}
+          renameTick={renameTick}
+        />
+      )}
+      {/* Phones: the page itself scrolls (the add box sticks under the top bar); larger: this column does. The widget: its own. */}
+      <div className={tight ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden widget-scroll -mx-3 px-3 pb-1" : "md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden styled-scroll px-3 sm:px-6 pb-8 md:pb-10"}>
+        {!searching && view !== "assigned" && <AddBox key={view} store={store} view={view} inputRef={addInput} compact={tight} />}
+        <div className={tight ? "mt-2" : "mt-3"}>{body}</div>
       </div>
       {menu && menuTodo && (
         <PointMenu
@@ -623,11 +641,55 @@ function Header({
   );
 }
 
+/** The widget's top (1.53.4): the list's icon and name in its colour (tap it for another list), its day or count, Open. */
+function CompactHeader({ store, view, openCount, teamName, hasTeam, compact }: { store: TodoStore; view: ViewId; openCount: number; teamName: string | null; hasTeam: boolean; compact: Compact }) {
+  const { listById, lists, today } = store;
+  const pick = useMenuButton();
+  const sub = view === "myday" ? longDay(today) : view === "assigned" ? (teamName ? `From ${teamName}` : "From your team") : view === "planned" ? "Everything with a date" : openCount ? `${openCount} to do` : "Nothing to do";
+  const smart: SmartId[] = ["myday", "important", "planned", ...(hasTeam ? (["assigned"] as const) : []), "tasks"];
+  const go = (to: ViewId) => {
+    pick.close();
+    if (to !== view) compact.onView(to);
+  };
+  return (
+    <header className="relative -mx-3 -mt-3 px-3 pt-2.5 pb-2 flex-shrink-0" style={{ background: `radial-gradient(130% 150% at 0% 0%, rgb(var(${viewVar(view, listById)}) / 0.16), transparent 62%)` }}>
+      <div className="flex items-center gap-1">
+        <button ref={pick.ref} type="button" onClick={pick.toggle} aria-haspopup="menu" aria-expanded={pick.open} title="Show another list" className="min-w-0 flex-1 flex items-center gap-2 rounded-lg -ml-1 pl-1 pr-1.5 py-1 text-left hover:bg-surface-2/60 transition-colors">
+          <ViewGlyph view={view} lists={listById} className="w-[22px] h-[22px]" />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1 min-w-0">
+              <span className="font-display text-[19px] leading-tight font-semibold truncate" style={{ color: viewTextTone(view, listById) }}>
+                {viewName(view, listById)}
+              </span>
+              <ChevronDownIcon className={`w-4 h-4 text-ink-faint flex-shrink-0 transition-transform ${pick.open ? "rotate-180" : ""}`} />
+            </span>
+            <span className="block text-[12px] text-ink-soft truncate" suppressHydrationWarning>
+              {sub}
+            </span>
+          </span>
+        </button>
+        <Link href={todoHref(view)} title="Open in To Do" aria-label="Open in To Do" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
+          <ArrowRightIcon className="w-4 h-4" />
+        </Link>
+      </div>
+      <Menu open={pick.open} onClose={pick.close} anchor={pick.ref} width={250} label="Lists">
+        {smart.map((v) => (
+          <MenuItem key={v} icon={<ViewGlyph view={v} lists={listById} className="w-4 h-4" />} label={SMART_META[v].name} hint={compact.counts[v] || undefined} checked={view === v} onClick={() => go(v)} />
+        ))}
+        {lists.length > 0 && <Divider />}
+        {lists.map((l) => (
+          <MenuItem key={l.id} icon={<ViewGlyph view={l.id} lists={listById} className="w-4 h-4" />} label={l.name} hint={compact.counts[l.id] || undefined} checked={view === l.id} onClick={() => go(l.id)} />
+        ))}
+      </Menu>
+    </header>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // "Add a to-do": with its due day, reminder and repeat, in this list's way
 // ---------------------------------------------------------------------------
 
-function AddBox({ store, view, inputRef }: { store: TodoStore; view: ViewId; inputRef: React.RefObject<HTMLInputElement | null> }) {
+function AddBox({ store, view, inputRef, compact = false }: { store: TodoStore; view: ViewId; inputRef: React.RefObject<HTMLInputElement | null>; compact?: boolean }) {
   const { today } = store;
   const [title, setTitle] = useState("");
   const [focus, setFocus] = useState(false);
@@ -662,9 +724,9 @@ function AddBox({ store, view, inputRef }: { store: TodoStore; view: ViewId; inp
 
   const chip = (on: boolean) => `inline-flex items-center gap-1.5 rounded-lg h-8 text-[12px] font-semibold transition-colors ${on ? "px-2 bg-amber/12 text-amber" : "w-8 justify-center text-ink-soft hover:text-ink hover:bg-surface-2"}`;
   return (
-    <div className="sticky top-14 md:top-0 z-[2] pt-1 pb-0.5">
+    <div className={`sticky z-[2] pb-0.5 ${compact ? "top-0 pt-0.5" : "top-14 md:top-0 pt-1"}`}>
       <div className={`rounded-xl border bg-surface shadow-[0_6px_24px_-16px_rgb(0_0_0/0.35)] transition-colors ${active ? "border-amber/50" : "border-line/15"}`}>
-        <div className="flex items-center gap-3 pl-3 pr-2 min-h-[52px]">
+        <div className={`flex items-center pr-2 ${compact ? "gap-2.5 pl-2.5 min-h-[44px]" : "gap-3 pl-3 min-h-[52px]"}`}>
           <button type="button" onClick={() => (title.trim() ? void add() : inputRef.current?.focus())} aria-label="Add" className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${title.trim() ? "bg-amber text-white" : "text-amber"}`}>
             <PlusIcon className="w-[18px] h-[18px]" strokeWidth={2.2} />
           </button>
@@ -684,7 +746,7 @@ function AddBox({ store, view, inputRef }: { store: TodoStore; view: ViewId; inp
             maxLength={300}
             placeholder={`Add a to-do${view === "myday" ? " to My Day" : ""}`}
             aria-label={`Add a to-do to ${where}`}
-            className="min-w-0 flex-1 bg-transparent text-[14.5px] outline-none placeholder:text-ink-faint"
+            className={`min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-faint ${compact ? "text-[13.5px]" : "text-[14.5px]"}`}
             enterKeyHint="done"
           />
         </div>
@@ -791,12 +853,12 @@ function TeamCompleted({ items, today }: { items: Done[]; today: string }) {
   );
 }
 
-function AllDoneToday() {
+function AllDoneToday({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex flex-col items-center text-center py-6">
-      <Mascot mood="celebrate" size={120} />
-      <p className="font-display text-[22px] font-semibold mt-2">All done for today!</p>
-      <p className="text-[13.5px] text-ink-soft mt-1">Everything in My Day is ticked off.</p>
+    <div className={`flex flex-col items-center text-center ${compact ? "py-3" : "py-6"}`}>
+      <Mascot mood="celebrate" size={compact ? 72 : 120} />
+      <p className={`font-display font-semibold mt-2 ${compact ? "text-[16px]" : "text-[22px]"}`}>All done for today!</p>
+      <p className={`text-ink-soft mt-1 ${compact ? "text-[12.5px]" : "text-[13.5px]"}`}>Everything in My Day is ticked off.</p>
     </div>
   );
 }
@@ -808,6 +870,7 @@ function Empty({
   title,
   text,
   action,
+  compact = false,
 }: {
   art: "myday" | "important" | "planned" | "team" | "list" | "search";
   /** A list's own empty screen: its own icon. */
@@ -816,18 +879,20 @@ function Empty({
   title: string;
   text: string;
   action?: { label: string; onClick: () => void };
+  /** The widget's: smaller. */
+  compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center text-center px-6 py-10 sm:py-14">
+    <div className={`flex flex-col items-center text-center ${compact ? "px-3 py-4" : "px-6 py-10 sm:py-14"}`}>
       {art === "myday" ? (
-        <Mascot mood="idle" size={128} />
+        <Mascot mood="idle" size={compact ? 72 : 128} />
       ) : (
-        <span className="w-16 h-16 rounded-2xl flex items-center justify-center bg-surface border border-line/10 shadow-sm">
-          <ViewGlyph view={view ?? (art === "team" ? "assigned" : art === "list" || art === "search" ? "tasks" : art)} lists={lists ?? new Map()} className="w-8 h-8" big />
+        <span className={`flex items-center justify-center bg-surface border border-line/10 shadow-sm ${compact ? "w-11 h-11 rounded-xl" : "w-16 h-16 rounded-2xl"}`}>
+          <ViewGlyph view={view ?? (art === "team" ? "assigned" : art === "list" || art === "search" ? "tasks" : art)} lists={lists ?? new Map()} className={compact ? "w-6 h-6" : "w-8 h-8"} big={!compact} />
         </span>
       )}
-      <p className="font-display text-[22px] font-semibold mt-3">{title}</p>
-      <p className="text-[13.5px] text-ink-soft mt-1 max-w-[380px]">{text}</p>
+      <p className={`font-display font-semibold ${compact ? "text-[16px] mt-2" : "text-[22px] mt-3"}`}>{title}</p>
+      <p className={`text-ink-soft mt-1 max-w-[380px] ${compact ? "text-[12.5px]" : "text-[13.5px]"}`}>{text}</p>
       {action && (
         <button type="button" onClick={action.onClick} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-4 h-10 text-[13.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all">
           <LightbulbIcon className="w-4 h-4" /> {action.label}

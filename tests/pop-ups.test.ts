@@ -118,7 +118,6 @@ const IN_PAGE: Record<string, string> = {
   "components/search/invite-panel.tsx": "a view inside the search window",
   "components/ui/not-found-content.tsx": "the page itself",
   "modules/dashboard/components/studio.tsx": "the dashboard's edit bar in place",
-  "modules/dashboard/components/todo-widget.tsx": "a to-do's details opening in place",
   "modules/profile/components/profile-view.tsx": "the profile's edit bar in place",
   "modules/review/components/compare.tsx": "the compare view in place",
   "modules/review/components/player.tsx": "the player's own button",

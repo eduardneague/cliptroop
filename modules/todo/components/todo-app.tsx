@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   DndContext,
-  DragOverlay,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
@@ -15,14 +13,10 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
-  type Modifier,
 } from "@dnd-kit/core";
-import { getEventCoordinates } from "@dnd-kit/utilities";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Leaves } from "@/components/ui/leaves";
 import { useToast } from "@/components/ui/toast-provider";
 import { sounds } from "@/lib/sounds";
-import { useScrollLock } from "@/lib/hooks/use-scroll-lock";
 import { isSmart, openCounts, todoHref, type TodoBoard, type TodoItem, type ViewId } from "../lib/model";
 import { useTodoStore } from "./use-todo-store";
 import { TodoSidebar } from "./todo-sidebar";
@@ -30,6 +24,7 @@ import { ListView, type RowsInfo, type TeamData } from "./todo-list-view";
 import { TodoDetails } from "./todo-details";
 import { Suggestions } from "./todo-suggestions";
 import { ViewGlyph, viewName } from "./todo-bits";
+import { DraggedTodo, Sheet } from "./todo-overlays";
 
 /** Wide enough for the details beside the list (else they slide over it). */
 function useWide() {
@@ -42,13 +37,6 @@ function useWide() {
   }, []);
   return wide;
 }
-
-/** The dragged card under the pointer (not where the row started: a row is wider than the side bar it's dropped on). */
-const underPointer: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
-  const p = activatorEvent ? getEventCoordinates(activatorEvent) : null;
-  if (!p || !draggingNodeRect) return transform;
-  return { ...transform, x: transform.x + p.x - draggingNodeRect.left - 28, y: transform.y + p.y - draggingNodeRect.top - 22 };
-};
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
@@ -328,39 +316,16 @@ export default function TodoApp({ board, team }: { board: TodoBoard; team: TeamD
         {wide && panel && <aside data-todo-pane="" className="w-[380px] xl:w-[400px] flex-shrink-0 border-l border-line/10 bg-paper-2/40 animate-[fadein_.18s_ease-out]">{panel}</aside>}
       </div>
       {!wide && panel && <Sheet onClose={right === "details" ? closeDetails : () => setSuggestions(false)}>{panel}</Sheet>}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <DragOverlay modifiers={[underPointer]} dropAnimation={null}>
-            {dragged ? (
-              <div className="rounded-xl border border-amber/50 bg-surface shadow-2xl px-3.5 py-2.5 text-[14px] font-semibold max-w-[360px] truncate rotate-[1.5deg]">{dragged.title}</div>
-            ) : draggedList ? (
-              <div className="rounded-xl border border-amber/50 bg-surface shadow-2xl px-3 h-10 flex items-center gap-2.5 text-[13.5px] font-semibold w-[240px]">
-                <ViewGlyph view={draggedList.id} lists={listById} />
-                <span className="truncate">{draggedList.name}</span>
-              </div>
-            ) : null}
-          </DragOverlay>,
-          document.body
-        )}
+      <DraggedTodo title={dragged?.title}>
+        {draggedList ? (
+          <div className="rounded-xl border border-amber/50 bg-surface shadow-2xl px-3 h-10 flex items-center gap-2.5 text-[13.5px] font-semibold w-[240px]">
+            <ViewGlyph view={draggedList.id} lists={listById} />
+            <span className="truncate">{draggedList.name}</span>
+          </div>
+        ) : null}
+      </DraggedTodo>
     </DndContext>
   );
 }
 
 const short = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
-
-/** Phones and tablets: the details (or suggestions) slide up over the list. */
-function Sheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
-  useScrollLock();
-  return createPortal(
-    <Leaves lock>
-      <div className="fixed inset-0 z-[95]" role="dialog" aria-modal="true" aria-label="To-do">
-        <div className="pop-dim absolute inset-0 bg-black/40" onClick={onClose} aria-hidden />
-        <div className="pop-sheet glass-pane absolute inset-x-0 bottom-0 top-10 md:top-14 md:left-auto md:w-[420px] md:rounded-tl-3xl rounded-t-3xl md:rounded-tr-none border-t md:border-l border-line/15 bg-surface shadow-2xl overflow-hidden flex flex-col pb-[env(safe-area-inset-bottom)]">
-          <div className="md:hidden mx-auto mt-2 mb-1 h-1.5 w-10 rounded-[3px] bg-line/25 flex-shrink-0" aria-hidden />
-          <div className="flex-1 min-h-0 bg-paper-2/40">{children}</div>
-        </div>
-      </div>
-    </Leaves>,
-    document.body
-  );
-}

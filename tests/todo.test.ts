@@ -85,8 +85,8 @@ ok(/name: "To Do", url: "\/todo\?list=myday&source=app"/.test(read("app/manifest
 
 // --- The widget ---------------------------------------------------------------------------------------------------------
 const widget = read("modules/dashboard/components/todo-widget.tsx");
-ok(/from "@\/modules\/todo\/actions"/.test(widget) && /function ShowsPicker/.test(widget), "the widget saves through To Do and picks which list it shows");
-ok(/onSettings\?\.\(\{ list: s \}\)/.test(widget), "its list is kept with the widget");
+ok(/const store = useTodoStore\(board\);/.test(widget) && /<ListView\s+compact=\{\{ counts, onView: pick \}\}/.test(widget), "the widget is To Do's own list (1.53.4), saving through To Do's store");
+ok(/onSettings\?\.\(\{ list: v \}\)/.test(widget), "its list is kept with the widget");
 ok(/\.\.\.\(w\.type === "todo" \? \{ link: \{ href: todoWidgetHref\(w\.settings\), label: "Open" \} \} : \{\}\)/.test(read("modules/dashboard/components/studio.tsx")), "its Open goes to To Do");
 ok(!/export async function (addTodo|updateTodo|deleteTodo|reorderTodos)/.test(read("modules/dashboard/actions.ts")), "the widget's old actions are gone (one way to save a to-do)");
 ok(/return loadTodoBoard\(\{ done: 50 \}\);/.test(read("modules/dashboard/lib/queries.ts")), "the dashboard reads open to-dos and the 50 finished last (not every one ever)");

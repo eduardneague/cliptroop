@@ -339,8 +339,8 @@ export async function listDone(sinceIso: string, teamId = ""): Promise<Done[]> {
 }
 
 /**
- * The To-do list widget's copy of To Do (1.53.0): every open to-do, the 50 finished last, your lists and settings. It
- * used to read every to-do ever made.
+ * The To Do widget's copy of To Do (1.53.0): every open to-do, the 50 finished last, your lists and settings. It used to
+ * read every to-do ever made.
  */
 export async function listTodos(): Promise<TodoBoard> {
   return loadTodoBoard({ done: 50 });

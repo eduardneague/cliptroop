@@ -2406,17 +2406,14 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   animation, and whne you delete something, i want the same thing"). Ticked off (.is-out): a little wind-up, then it
   zips off to the right, shrinking away, and its place closes. Deleted (.is-gone): a red breath, then it puffs away
   (shrinks, blurs, fades) and its place closes. Both stay inside their own place (nothing scrolls sideways), and with
-  motion off they're simply gone. In To Do, its quick panel and the dashboard's widget; timings in
-  modules/todo/lib/motion.ts.
+  motion off they're simply gone. In To Do, its quick panel and the dashboard's widget (To Do's own list since 1.53.4);
+  timings in modules/todo/lib/motion.ts.
 */
 .todo-fold.is-out, .todo-fold.is-gone { grid-template-rows: 0fr; pointer-events: none; transition: none; animation: todo-close 0.3s var(--ease-out) var(--close-after) both; }
 .todo-fold.is-out { --close-after: 0.3s; }
 .todo-fold.is-gone { --close-after: 0.24s; }
-/* The widget's All keeps its place (no jump in a scrolled list): the others slide up as it lands with the finished ones. */
-.todo-fold.is-out.keeps-place { grid-template-rows: 1fr; animation: none; }
 .todo-fold.is-out .todo-row { transform-origin: left center; animation: todo-zip 0.42s both; }
 .todo-fold.is-gone .todo-row { animation: todo-puff 0.42s var(--ease-out) both; }
-.todo-fold.is-landing .todo-row { animation: todo-land 0.34s var(--ease-out) 0.18s both; }
 @keyframes todo-pop { 0% { scale: 1; } 35% { scale: 1.28; } 100% { scale: 1; } }
 @keyframes todo-burst { from { opacity: 0.7; scale: 0.7; } to { opacity: 0; scale: 1.9; } }
 @keyframes todo-spark {
@@ -2440,7 +2437,6 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   25% { transform: scale(1.02); opacity: 1; background-color: rgb(var(--red) / 0.12); border-color: rgb(var(--red) / 0.55); }
   100% { transform: scale(0.82); opacity: 0; filter: blur(8px); background-color: rgb(var(--red) / 0.06); border-color: rgb(var(--red) / 0.3); }
 }
-@keyframes todo-land { from { opacity: 0; transform: translateX(-12px); } }
 
 /* Account setup (app/set-password): each step rises in. */
 .motion-step { animation: page-in 0.4s var(--ease-out) backwards; }

@@ -15,7 +15,7 @@ export type RowState = { popped: boolean; out: boolean; gone: boolean; entering:
 /**
  * One to-do: the tick, its title and the line under it, the star. Click it for its details; right-click for its menu;
  * drag it to reorder (in your own order) or onto a list in the side bar. `sortable` off: it still drags onto the side
- * bar, but the others don't make room.
+ * bar, but the others don't make room. `dense`: the same row, a little tighter (the dashboard's To Do widget, 1.53.4).
  */
 export function TodoRow({
   t,
@@ -30,6 +30,7 @@ export function TodoRow({
   onToggle,
   onStar,
   onMenu,
+  dense = false,
 }: {
   t: TodoItem;
   rowKey: string;
@@ -43,6 +44,7 @@ export function TodoRow({
   onToggle: () => void;
   onStar: () => void;
   onMenu: (at: { x: number; y: number }) => void;
+  dense?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rowKey, data: { type: "todo", id: t.id } });
   const done = !!t.doneAt;
@@ -76,13 +78,13 @@ export function TodoRow({
             e.preventDefault();
             onMenu({ x: e.clientX, y: e.clientY });
           }}
-          className={`todo-row group relative flex items-center gap-3 rounded-xl border pl-3 pr-1.5 py-2 min-h-[52px] cursor-pointer select-none transition-[background-color,border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+          className={`todo-row group relative flex items-center rounded-xl border cursor-pointer ${dense ? "gap-2.5 pl-2.5 pr-1 py-1.5 min-h-[44px]" : "gap-3 pl-3 pr-1.5 py-2 min-h-[52px]"} select-none transition-[background-color,border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
             state.popped ? "just-checked" : ""
           } ${selected ? "bg-amber/[0.07] border-amber/45 shadow-[0_1px_0_0_rgb(var(--amber)/0.15)]" : "bg-surface border-line/10 hover:bg-surface-2/60 hover:border-line/20"}`}
         >
-          <TodoCheck done={done} popped={state.popped} tone={tone} onToggle={onToggle} />
+          <TodoCheck done={done} popped={state.popped} tone={tone} onToggle={onToggle} size={dense ? 18 : 20} />
           <span className="min-w-0 flex-1 py-0.5">
-            <span className={`block text-[14px] leading-snug break-words ${done ? "" : "text-ink"}`}>
+            <span className={`block leading-snug break-words ${dense ? "text-[13.5px]" : "text-[14px]"} ${done ? "" : "text-ink"}`}>
               <span className="todo-title">{t.title}</span>
             </span>
             <MetaLine t={t} today={today} view={view} lists={lists} showList={showList} />

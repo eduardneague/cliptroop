@@ -371,7 +371,7 @@ export function renderWidget(w: Pick<WidgetInstance, "type" | "settings">, data:
     case "contributions":
       return <ContributionsWidget done={data.done} teamId={data.teamId} settings={w.settings} />;
     case "todo":
-      return <TodoWidget board={data.todo} settings={w.settings} onSettings={update} />;
+      return <TodoWidget board={data.todo} tasks={data.tasks} done={data.done} teamId={data.teamId} teamName={data.teams.find((t) => t.id === data.teamId)?.name ?? null} settings={w.settings} onSettings={update} />;
     case "teams":
       return <TeamsWidget teams={data.teams} currentTeamId={data.teamId} />;
     case "clock":

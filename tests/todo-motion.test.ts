@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_PREFS, cleanPrefs } from "../modules/todo/lib/model";
-import { GONE_MS, HOLD_MS, OUT_MS, ZIP_MS } from "../modules/todo/lib/motion";
+import { GONE_MS, HOLD_MS, OUT_MS } from "../modules/todo/lib/motion";
 import { anchorBox, dropTop } from "../lib/menu-place";
 
 let fails = 0;
@@ -47,23 +47,22 @@ ok(/import \{ HOLD_MS, OUT_MS \} from "\.\.\/lib\/motion";/.test(view) && /later
 ok(/onToggle=\{\(\) => \(rowsInfo\.current\.toggle \? rowsInfo\.current\.toggle\(selected\.id\) : void store\.toggleDone\(selected\.id\)\)\}/.test(read("modules/todo/components/todo-app.tsx")), "ticking it off in its details goes out the same way");
 const quick = read("modules/todo/components/quick-todo-panel.tsx");
 ok(/setTimeout\(\(\) => phase\(t\.id, "out"\), HOLD_MS\);\s*setTimeout\(\(\) => phase\(t\.id, null\), HOLD_MS \+ OUT_MS\);/.test(quick) && quick.includes('className={`todo-fold ${ticked.get(t.id) === "out" ? "is-out" : ""}`}'), "the quick panel: the same");
-ok(/settle\(t\.id, all \? "zip" : "out"\);/.test(widget) && /later\(t\.id, all \? ZIP_MS : OUT_MS,/.test(widget) && /\$\{keepsPlace \? "keeps-place" : ""\} \$\{landing \? "is-landing" : ""\} \$\{gone \? "is-gone" : ""\}/.test(widget), "the widget: in All its place stays while it zips (no jump in a scrolled list), then it lands with the finished ones");
-ok(/sounds\.remove\(\);\s*setIn\(setLeaving, t\.id, true\);\s*later\(t\.id, GONE_MS,/.test(widget), "the widget's delete puffs away too");
-ok((read("modules/todo/components/todo-rows.tsx") + widget + quick).match(/todo-row group relative/g)?.length === 3, "every row holds its shine (position: relative)");
+ok(/<ListView\s+compact=\{\{ counts, onView: pick \}\}/.test(widget), "the widget (1.53.4): To Do's own list, so the same tick, delete and Undo");
+ok((read("modules/todo/components/todo-rows.tsx") + quick).match(/todo-row group relative/g)?.length === 2, "every row holds its shine (position: relative)");
 
 // --- The animations ------------------------------------------------------------------------------------------------------
-for (const k of ["todo-zip", "todo-puff", "todo-shine", "todo-close", "todo-land"]) ok(flat.includes(`@keyframes ${k} {`), `@keyframes ${k}`);
+for (const k of ["todo-zip", "todo-puff", "todo-shine", "todo-close"]) ok(flat.includes(`@keyframes ${k} {`), `@keyframes ${k}`);
+ok(!/keeps-place|is-landing|todo-land/.test(flat.replace(/\.dash-item\.is-landing/g, "")), "the old widget's own ways are gone (1.53.4)");
 ok(flat.includes(".todo-row.just-checked::after { content: \"\"; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;"), "a green shine across a just-ticked one");
 ok(flat.includes(".todo-fold.is-out, .todo-fold.is-gone { grid-template-rows: 0fr; pointer-events: none; transition: none; animation: todo-close 0.3s var(--ease-out) var(--close-after) both; }"), "its place closes after it's mostly gone (an animation: with motion off it's simply gone)");
 ok(flat.includes(".todo-fold.is-out .todo-row { transform-origin: left center; animation: todo-zip 0.42s both; }") && flat.includes(".todo-fold.is-gone .todo-row { animation: todo-puff 0.42s var(--ease-out) both; }"), "zip and puff");
 ok(/100% \{ transform: translateX\(14%\) scale\(0\.86\); opacity: 0;/.test(flat), "the zip's right edge never passes its place's (14% + 86%): nothing scrolls sideways");
 ok(flat.includes(".todo-fold:is(.is-out, .is-gone) > * { clip-path: inset(0 -32px); }") && flat.includes(".todo-fold.is-in > * { overflow: hidden; }"), "clipped top and bottom only while it goes (the wind-up reaches a little left)");
 ok(flat.includes(".todo-fold { display: grid; grid-template-rows: 1fr; grid-template-columns: minmax(0, 1fr);"), "a long title still ends in … inside its row");
-ok(flat.includes(".todo-fold.is-out.keeps-place { grid-template-rows: 1fr; animation: none; }"), "the widget's All keeps the place");
 const sec = (re: RegExp) => Number((flat.match(re) ?? [])[1] ?? NaN) * 1000;
 const outClose = sec(/\.todo-fold\.is-out \{ --close-after: ([\d.]+)s; \}/);
 const goneClose = sec(/\.todo-fold\.is-gone \{ --close-after: ([\d.]+)s; \}/);
-ok(OUT_MS >= outClose + 300 && GONE_MS >= goneClose + 300 && ZIP_MS >= 420, `the timings cover the animations (out ${OUT_MS} ≥ ${outClose}+300, gone ${GONE_MS} ≥ ${goneClose}+300, zip ${ZIP_MS} ≥ 420)`);
+ok(OUT_MS >= outClose + 300 && GONE_MS >= goneClose + 300, `the timings cover the animations (out ${OUT_MS} ≥ ${outClose}+300, gone ${GONE_MS} ≥ ${goneClose}+300)`);
 ok(HOLD_MS >= 400 && HOLD_MS <= 500, "a moment for the pop and the struck line, not a wait");
 
 // --- Under the top bar ---------------------------------------------------------------------------------------------------

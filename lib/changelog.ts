@@ -22,6 +22,17 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.4",
+    date: "2026-11-17",
+    title: "The To Do widget is To Do",
+    changes: [
+      { kind: "better", text: "The dashboard's To Do widget is now To Do itself. It has the same rows, the same add box with a due day, reminder and repeat, Completed, stars, the right-click menu, and the same tick and delete with Undo. Click a to-do to open its details right on the dashboard." },
+      { kind: "better", text: "Its top shows the list's name in its colour (My Day with today's date). Tap it to switch to Important, Planned, Assigned to me, Tasks or one of your lists, with how many are open in each; the arrow opens that list in To Do." },
+      { kind: "better", text: "Drag to-dos into your own order in the widget, the same as in To Do (in Tasks and your own lists)." },
+      { kind: "better", text: "A widget that showed every list now starts on My Day. The old All, Active and Done buttons are gone (finished ones are under Completed), and a to-do's priority is in its details." },
+    ],
+  },
+  {
     version: "1.53.3",
     date: "2026-11-17",
     title: "Ideas that save, to-dos that zip away",
