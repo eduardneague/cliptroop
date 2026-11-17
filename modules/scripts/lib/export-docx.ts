@@ -3,6 +3,7 @@
 import type * as DocxLib from "docx";
 import type { IParagraphOptions, ParagraphChild, Paragraph as ParagraphT } from "docx";
 import { shownType, type ListType } from "./list-markers";
+import { textColor } from "./text-color";
 
 type Docx = typeof DocxLib;
 
@@ -62,6 +63,8 @@ function runs(D: Docx, nodes: Node[] | undefined): ParagraphChild[] {
     const has = (t: string) => marks.some((m) => m.type === t);
     const hl = marks.find((m) => m.type === "highlight");
     const link = marks.find((m) => m.type === "link");
+    // The words' own colour (1.53.1): the light paper's, as Word's page is white. It wins over a link's blue, as on screen.
+    const tc = textColor(marks.find((m) => m.type === "textColor")?.attrs?.color);
     // A tab typed in the script (1.27.5) is Word's own tab.
     const parts = n.text.split("\t");
     const run = new TextRun({
@@ -70,7 +73,7 @@ function runs(D: Docx, nodes: Node[] | undefined): ParagraphChild[] {
       italics: has("italic"),
       underline: has("underline") || link ? {} : undefined,
       strike: has("strike"),
-      color: link ? "2563EB" : undefined,
+      color: tc ? tc.light.slice(1) : link ? "2563EB" : undefined,
       shading: hl ? { fill: hex(hl.attrs?.color), type: "clear", color: "auto" } : undefined,
     });
     const href = link?.attrs?.href;

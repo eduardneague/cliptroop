@@ -648,6 +648,43 @@ html[data-glass-style="liquid"]:has([data-shell="subbar"]) [data-shell="header"]
   mask-image: none;
   background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.6)), rgb(var(--paper) / calc(var(--glass-tint) * 0.25)));
 }
+/*
+  The script page's header (1.53.1): its bar, the steps and the formatting bar stay on screen as you scroll, as one
+  pane of the same glass as a page's bar (it was solid paper). The blur is drawn on a layer behind it, not on the
+  header itself: a blur there would make the header the frame of the menus that hang from it (Page width, Export),
+  and their own glass would have nothing to blur. The paper scrolls under it, so when the paper is the other way
+  round from the app (a white page in dark mode, a dark page in light mode) it keeps at least 82 % of its pane, and
+  its words and buttons stay readable.
+*/
+html[data-glass] [data-script-head] { background-color: transparent; }
+html[data-glass] [data-script-head]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: rgb(var(--surface) / calc(var(--glass-tint) * 0.9));
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+html.dark[data-glass] [data-script-head][data-paper="light"]::before,
+html[data-glass]:not(.dark) [data-script-head][data-paper="dark"]::before {
+  background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), 0.82));
+}
+html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--paper)); }
+html[data-glass] [data-script-head] [data-head-row] { background-color: transparent; }
+/* The app's top bar above it does the same over that paper (its search box read as a white band), so the two match. */
+html.dark[data-glass]:not([data-glass-opaque]):has([data-script-head][data-paper="light"]) [data-shell="header"],
+html[data-glass]:not(.dark):not([data-glass-opaque]):has([data-script-head][data-paper="dark"]) [data-shell="header"] {
+  background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.75), 0.82));
+}
+/* Liquid: the top bar's soft band stops at its own edge above it, as above Outliers' bar. */
+html[data-glass-style="liquid"]:has([data-script-head]) [data-shell="header"]::before {
+  inset: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: linear-gradient(rgb(var(--paper) / calc(var(--glass-tint) * 0.6)), rgb(var(--paper) / calc(var(--glass-tint) * 0.25)));
+}
 
 @media (min-width: 768px) {
   /* The side bar floats, its corners round like the window's (iPadOS 26's). */
@@ -1347,6 +1384,28 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
 /* Highlights keep dark text so they're readable on both papers. */
 /* !important: the editor writes "color: inherit" inline on highlights. */
 .script-doc mark { color: #1c1a16 !important; border-radius: 3px; padding: 0.05em 0.15em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+/*
+  Text colour (1.53.1, modules/scripts/lib/text-color.ts): each name in a colour that reads on the paper, darker on
+  light paper and lighter on dark paper. On a highlight (always a light one) the darker one, whichever of the two
+  is drawn outside the other. The print is light paper.
+*/
+.script-doc [data-text-color] { color: var(--tc); }
+.script-doc [data-text-color="red"] { --tc: #D32F2F; --tc-mark: #D32F2F; }
+.script-doc [data-text-color="orange"] { --tc: #C2410C; --tc-mark: #C2410C; }
+.script-doc [data-text-color="green"] { --tc: #15803D; --tc-mark: #15803D; }
+.script-doc [data-text-color="blue"] { --tc: #1D4ED8; --tc-mark: #1D4ED8; }
+.script-doc [data-text-color="purple"] { --tc: #7E22CE; --tc-mark: #7E22CE; }
+.script-doc [data-text-color="pink"] { --tc: #BE185D; --tc-mark: #BE185D; }
+.script-doc [data-text-color="gray"] { --tc: #6B7280; --tc-mark: #6B7280; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="red"] { --tc: #F87171; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="orange"] { --tc: #FB923C; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="green"] { --tc: #4ADE80; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="blue"] { --tc: #60A5FA; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="purple"] { --tc: #C084FC; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="pink"] { --tc: #F472B6; }
+.script-paper[data-paper="dark"] .script-doc [data-text-color="gray"] { --tc: #A8A29E; }
+.script-doc mark [data-text-color],
+.script-doc [data-text-color] mark { color: var(--tc-mark) !important; }
 .script-doc ul[data-type="taskList"] { list-style: none; padding-left: 0.2em; }
 .script-doc ul[data-type="taskList"] li { display: flex; gap: 0.6em; align-items: flex-start; }
 .script-doc ul[data-type="taskList"] li > label { margin-top: 0.35em; flex-shrink: 0; }
@@ -1408,7 +1467,8 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
   #script-print-root .print-image img { display: inline-block; max-width: 100%; height: auto; border-radius: 4px; }
   #script-print-root .pm-page-break { break-after: page; height: 0; margin: 0; border: 0; background: none; }
   #script-print-root .pm-page-break::after { content: none; display: none; }
-  #script-print-root mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #script-print-root mark,
+  #script-print-root [data-text-color] { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
 }
 

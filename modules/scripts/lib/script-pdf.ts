@@ -3,6 +3,7 @@
 import type { PDFDocument, PDFFont, PDFImage, PDFPage } from "pdf-lib";
 import { fetchJpeg, loadPdfLib, embedPdfFonts, type PdfFonts, type PdfLib } from "@/lib/pdf-kit";
 import { markerLabel, shownType } from "./list-markers";
+import { textColor } from "./text-color";
 
 /*
  * A script as a real PDF file (1.38.0), made in the browser, so the shorts list can export one, or many at once,
@@ -142,6 +143,8 @@ class Writer {
       const has = (t: string) => (n.marks ?? []).some((m) => m.type === t);
       const link = (n.marks ?? []).find((m) => m.type === "link")?.attrs?.href;
       const mark = (n.marks ?? []).find((m) => m.type === "highlight");
+      // The words' own colour (1.53.1), the light paper's: over a highlight's ink and a link's blue, as on screen.
+      const tc = textColor((n.marks ?? []).find((m) => m.type === "textColor")?.attrs?.color);
       const href = typeof link === "string" && /^(https?:|mailto:)/i.test(link) ? link : null;
       const style: Style = {
         bold: base.bold || has("bold") || heading,
@@ -150,7 +153,7 @@ class Writer {
         strike: base.strike || has("strike"),
         link: href ?? base.link,
         mark: mark ? hexColor(mark.attrs?.color, MARK_DEFAULT) : base.mark,
-        color: mark ? MARK_INK : href ? LINK : base.color,
+        color: tc ? hexColor(tc.light, INK) : mark ? MARK_INK : href ? LINK : base.color,
         opacity: base.opacity,
       };
       const font = this.font(style);

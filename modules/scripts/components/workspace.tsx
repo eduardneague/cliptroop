@@ -14,6 +14,7 @@ import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/u
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
 import { PageBreak } from "../lib/page-break";
+import { TextColor } from "../lib/text-color";
 import { HeadingKeys } from "../lib/heading-keys";
 import { ScriptKeys, ScriptOrderedList } from "../lib/script-keys";
 import { imageFiles, pastePlan } from "../lib/paste-images";
@@ -761,6 +762,7 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
         ScriptOrderedList,
         ScriptKeys,
         Highlight.configure({ multicolor: true }),
+        TextColor,
         TextAlign.configure({ types: ["heading", "paragraph"] }),
         TaskList,
         TaskItem.configure({ nested: true }),
@@ -912,12 +914,12 @@ export function CommentsChat({
   // Which quotes can no longer be found (the text was rewritten). Null until the text is read.
   const [missing, setMissing] = useState<Set<string> | null>(null);
   // Every node and mark a script can have (1.23.1: highlights, nested checklists and page
-  // breaks too): one this copy didn't know made it empty, and every comment looked rewritten.
+  // breaks too; 1.53.1: text colour): one this copy didn't know made it empty, and every comment looked rewritten.
   const ed = useEditor(
     {
       immediatelyRender: false,
       editable: false,
-      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }), ScriptOrderedList, Highlight.configure({ multicolor: true }), TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
+      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }), ScriptOrderedList, Highlight.configure({ multicolor: true }), TextColor, TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
       content: docContent,
     },
     [docContent]

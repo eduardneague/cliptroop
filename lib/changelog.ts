@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.1",
+    date: "2026-11-17",
+    title: "Coloured words, glass script bar",
+    changes: [
+      { kind: "new", text: "Scripts: colour the words themselves, not only highlight them. Text color, next to Highlight, has seven colours that read on light and dark paper and on a highlight, and Word, the PDF and printing keep them. On a phone it's under More." },
+      { kind: "better", text: "With the glass look on, the script page's header (its bar, the steps and the formatting bar) is glass like the rest of the app instead of solid paper. Over a white page in dark mode, it and the top bar keep enough of their pane to stay easy to read." },
+    ],
+  },
+  {
     version: "1.53.0",
     date: "2026-11-16",
     title: "To Do",

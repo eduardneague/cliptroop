@@ -56,6 +56,7 @@ import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
 import { HeadingKeys } from "../lib/heading-keys";
 import { PageBreak } from "../lib/page-break";
+import { TEXT_COLORS, TextColor, textColor } from "../lib/text-color";
 import { ScriptKeys, ScriptOrderedList } from "../lib/script-keys";
 import { printScript, watchPrinting } from "../lib/print-script";
 import { imageFiles, pastePlan } from "../lib/paste-images";
@@ -329,6 +330,8 @@ export function ScriptEditor({
       // Tab in the text, lists from "1." / "a." (1.27.5).
       ScriptKeys,
       Highlight.configure({ multicolor: true }),
+      // The words' own colour (1.53.1).
+      TextColor,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -860,10 +863,11 @@ export function ScriptEditor({
     };
   }, [hasTools]);
   // Phones: only the formatting bar stays (the rest slides up under the app's bar, which is drawn above it).
+  // (Relative, not static, when it scrolls away: its glass layer is drawn inside it.)
   const headStyle: React.CSSProperties = head.phone
     ? hasTools
       ? { top: APP_BAR - Math.max(0, head.h - head.tool), zIndex: 15 }
-      : { position: "static" }
+      : { position: "relative" }
     : { top: UNDER_BAR, zIndex: 15 };
 
   const statusText: Record<Status, string> = {
@@ -879,8 +883,11 @@ export function ScriptEditor({
       {/* The header stays while you scroll (1.23.1): the top bar, the steps
           (Script → Review, Ready for review) and the formatting bar, as one
           solid block under the app's own bar. Phones keep just the
-          formatting bar (it slides up under the app's bar, see headStyle). */}
-      <div ref={headRef} className="no-print sticky bg-paper" style={headStyle}>
+          formatting bar (it slides up under the app's bar, see headStyle).
+          1.53.1: with the glass look on, one pane of glass like the app's bars
+          (globals.css, [data-script-head]); data-paper tells it which paper
+          goes under it. */}
+      <div ref={headRef} data-script-head="" data-paper={paper} className="no-print sticky isolate bg-paper" style={headStyle}>
       {/* Top bar */}
       <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b border-line/10">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink flex-shrink-0">
@@ -1338,6 +1345,7 @@ function Toolbar({
       underline: e.isActive("underline"),
       strike: e.isActive("strike"),
       highlight: e.isActive("highlight"),
+      color: textColor(e.getAttributes("textColor").color)?.key ?? null,
       bullet: e.isActive("bulletList"),
       ordered: e.isActive("orderedList"),
       task: e.isActive("taskList"),
@@ -1395,6 +1403,7 @@ function Toolbar({
     <div
       role="toolbar"
       aria-label="Formatting"
+      data-head-row=""
       className="no-print border-b border-line/10 bg-paper"
     >
       <div className="mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
@@ -1433,6 +1442,7 @@ function Toolbar({
           <StrikeIcon className="w-4 h-4" />
         </B>
         <HighlightMenu editor={editor} active={s!.highlight} />
+        <TextColorMenu editor={editor} current={s!.color} />
         <Sep />
         <B label="Bullet list" on={s!.bullet} onClick={() => c().toggleBulletList().run()}>
           <ListBulletIcon className="w-4 h-4" />
@@ -1537,6 +1547,32 @@ function Toolbar({
               <B label="Redo" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
                 <RedoIcon className="w-4 h-4" />
               </B>
+            </div>
+            {/* The words' own colour (1.53.1): the paper's, or one of the seven. */}
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mt-4 mb-2">Text color</div>
+            <div className="grid grid-cols-8 gap-1.5" role="group" aria-label="Text color">
+              <button
+                type="button"
+                aria-label="Default text color"
+                aria-pressed={!s!.color}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => c().unsetTextColor().run()}
+                className={`aspect-square w-full rounded-full flex items-center justify-center border border-line/30 text-ink ${!s!.color ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`}
+              >
+                <TextColorIcon color={null} className="w-4 h-4" />
+              </button>
+              {TEXT_COLORS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-label={`Text color: ${t.name}`}
+                  aria-pressed={s!.color === t.key}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => c().setTextColor(t.key).run()}
+                  className={`aspect-square w-full rounded-full border border-black/10 ${s!.color === t.key ? "ring-2 ring-amber ring-offset-2 ring-offset-surface" : ""}`}
+                  style={{ background: t.swatch }}
+                />
+              ))}
             </div>
         </div>
       </AnchoredMenu>
@@ -1647,6 +1683,87 @@ function HighlightMenu({ editor, active }: { editor: Editor; active: boolean }) 
         document.body
       )}
     </div>
+  );
+}
+
+/**
+ * The words' own colour (1.53.1), beside Highlight: seven colours that read on light and dark paper (lib/text-color.ts),
+ * or the paper's own. The bar under the A shows the colour where the cursor is.
+ */
+function TextColorMenu({ editor, current }: { editor: Editor; current: string | null }) {
+  const { open, setOpen, btn, box, style } = usePopover(176);
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  useMenuKeyboard(open, box, btn, close);
+  const now = textColor(current);
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        ref={btn}
+        type="button"
+        aria-label={now ? `Text color: ${now.name}` : "Text color"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Text color"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+        className="h-9 px-2 rounded-lg flex items-center gap-0.5 transition-colors text-ink-soft hover:text-ink hover:bg-surface-2"
+      >
+        <TextColorIcon color={now?.swatch ?? null} className="w-4 h-4" />
+        <ChevronDownIcon className="w-3 h-3" />
+      </button>
+      {open && createPortal(
+        <Leaves>
+          <div ref={box} role="menu" aria-label="Text color" style={style} className="pop-menu z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+            {TEXT_COLORS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="menuitemradio"
+                aria-checked={current === t.key}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  editor.chain().focus().setTextColor(t.key).run();
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+              >
+                <span className="w-5 h-5 rounded-md border border-black/10" style={{ background: t.swatch }} />
+                <span className="flex-1 text-left">{t.name}</span>
+                {current === t.key && <CheckIcon className="w-3.5 h-3.5 text-ink-soft" />}
+              </button>
+            ))}
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={!current}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                editor.chain().focus().unsetTextColor().run();
+                setOpen(false);
+              }}
+              className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink-soft hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+            >
+              <span className="w-5 h-5 rounded-md border border-line/30 flex items-center justify-center text-ink">
+                <TextColorIcon color={null} className="w-3.5 h-3.5" />
+              </span>
+              <span className="flex-1 text-left">Default</span>
+              {!current && <CheckIcon className="w-3.5 h-3.5 text-ink-soft" />}
+            </button>
+          </div>
+        </Leaves>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+/** An A over a bar: the bar in the colour (none: the ink, faded). Drawn like the app's icons (components/ui/icons.tsx). */
+function TextColorIcon({ color, className }: { color: string | null; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
+      <path d="m6.5 15.5 5.5-12 5.5 12M8.8 10.5h6.4" />
+      <rect x="4" y="18" width="16" height="3.5" rx="1.2" stroke="none" fill={color ?? "currentColor"} opacity={color ? 1 : 0.35} />
+    </svg>
   );
 }
 
