@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.2",
+    date: "2026-11-17",
+    title: "Readable corner buttons",
+    changes: [
+      { kind: "fixed", text: "Scripts with the glass look on: the Suggestions and Comments buttons in the corner had become all but clear over a white page. They're a pane of their own again, easy to see." },
+      { kind: "better", text: "When a comment or an editing idea can't be added, the message now says why instead of only \"Couldn't add the idea with its sketch.\", and the problem is counted for the developer." },
+    ],
+  },
+  {
     version: "1.53.1",
     date: "2026-11-17",
     title: "Coloured words, glass script bar",

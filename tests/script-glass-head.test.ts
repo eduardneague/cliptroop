@@ -34,6 +34,11 @@ ok(flat.includes("html[data-glass] [data-script-head] [data-head-row] { backgrou
 ok(flat.includes(`html.dark[data-glass]:not([data-glass-opaque]):has([data-script-head][data-paper="light"]) [data-shell="header"], html[data-glass]:not(.dark):not([data-glass-opaque]):has([data-script-head][data-paper="dark"]) [data-shell="header"] { background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.75), 0.82)); }`), "the app's top bar above it does the same over that paper (its search read as a white band)");
 ok(/html\[data-glass-style="liquid"\]:has\(\[data-script-head\]\) \[data-shell="header"\]::before \{ inset: 0; -webkit-mask-image: none; mask-image: none;/.test(flat), "Liquid: the top bar's soft band stops at its edge above it");
 
+// --- 1.53.2: the buttons in the corner -----------------------------------------------------------------------------------------
+ok(flat.includes("html[data-glass] .glass-fab.bg-surface-2 { background-color: rgb(var(--surface) / max(var(--glass-pop), 0.82)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }"), "Suggestions and Comments float as a pane of their own (the inset colour all but vanished over a white page)");
+ok(read("modules/scripts/components/workspace.tsx").includes(`className="no-print glass-fab fixed z-30 right-4`), "Comments is one");
+ok(read("modules/scripts/grammar/grammar-ui.tsx").includes(`className="no-print glass-fab fixed z-30 right-4`), "Suggestions is one");
+
 if (fails) {
   console.log(`${fails} failed`);
   process.exit(1);

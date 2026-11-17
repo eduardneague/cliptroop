@@ -9,6 +9,8 @@ import { displayName } from "@/lib/avatar";
 import { ROLES, type RoleId } from "@/lib/permissions/roles";
 import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
 import { MAX_COMMENT, MAX_QUOTE } from "@/modules/scripts/lib/comment-limits";
+import { commentFailure } from "@/modules/scripts/lib/comment-errors";
+import { reportError } from "@/lib/errors";
 
 type SaveResult =
   | { ok: true; version: number; updatedAt: string }
@@ -300,7 +302,17 @@ export async function addComment(input: {
     .single();
   // 23514: a database from before 0127 (a quote of one paragraph, 1 to 500 characters), so no general ones yet.
   if (error?.code === "23514") return { error: "This database is missing an update (0127) for this. App setup shows how to run it." };
-  if (error || !data) return { error: sketch ? "Couldn't add the idea with its sketch." : "Couldn't add the comment." };
+  if (error || !data) {
+    // 1.53.2: say why, and count it in Developer → Problems (the owner, Nov 17: "i cant add sketch ideas", and all
+    // the page said was "Couldn't add the idea with its sketch.").
+    void reportError({
+      source: "server",
+      message: `addComment${sketch ? " (with a sketch)" : ""}: ${error ? `${error.code ?? "?"} ${error.message}` : "no row came back"}`,
+      route: "scripts/addComment",
+      userId: user.id,
+    });
+    return { error: commentFailure(error, kind, !!sketch) };
+  }
   const s = (Array.isArray(data.scripts) ? data.scripts[0] : data.scripts) as { name: string; short_video_id: string | null; long_video_id: string | null } | null;
   refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
   if (body.includes("@") && s) await notifyScriptMentions({ supabase, userId: user.id, teamId: data.team_id as string, commentId: data.id as string, scriptId: input.scriptId, docName: s.name, short: s.short_video_id, long: s.long_video_id, body, quote, kind });

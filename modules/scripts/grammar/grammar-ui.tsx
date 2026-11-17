@@ -643,7 +643,7 @@ function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
       onClick={onOpen}
       aria-label={g.live ? `Writing suggestions: ${n}` : "Writing suggestions are off"}
       title={g.live ? (n ? `${n} suggestion${n === 1 ? "" : "s"}` : "No suggestions") : "Suggestions are off"}
-      className="no-print fixed z-30 right-4 bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] lg:bottom-[4.75rem] w-11 h-11 rounded-full bg-surface-2 text-ink border border-line/20 shadow-[0_12px_30px_-10px_rgb(0_0_0/0.6)] flex items-center justify-center hover:border-line/40 hover:scale-[1.05] transition-transform"
+      className="no-print glass-fab fixed z-30 right-4 bottom-[calc(env(safe-area-inset-bottom)+8.5rem)] lg:bottom-[4.75rem] w-11 h-11 rounded-full bg-surface-2 text-ink border border-line/20 shadow-[0_12px_30px_-10px_rgb(0_0_0/0.6)] flex items-center justify-center hover:border-line/40 hover:scale-[1.05] transition-transform"
     >
       <SpellCheckIcon className={`w-5 h-5 ${g.live ? "" : "opacity-40"}`} />
       {g.status === "checking" && <span aria-hidden className="absolute inset-[-3px] rounded-full border-2 border-transparent border-t-amber animate-spin" />}

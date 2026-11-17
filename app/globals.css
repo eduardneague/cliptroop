@@ -673,6 +673,16 @@ html[data-glass]:not(.dark) [data-script-head][data-paper="dark"]::before {
 }
 html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--paper)); }
 html[data-glass] [data-script-head] [data-head-row] { background-color: transparent; }
+/*
+  1.53.2: the script page's two round-cornered buttons in the corner (Suggestions and Comments) float over the paper.
+  Their inset colour (bg-surface-2) is the bright pane meant for a card, all but clear in dark mode, so over a white
+  page they vanished. With glass on they're a floating pane of their own: at least 82 % of it, blurred.
+*/
+html[data-glass] .glass-fab.bg-surface-2 {
+  background-color: rgb(var(--surface) / max(var(--glass-pop), 0.82));
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
 /* The app's top bar above it does the same over that paper (its search box read as a white band), so the two match. */
 html.dark[data-glass]:not([data-glass-opaque]):has([data-script-head][data-paper="light"]) [data-shell="header"],
 html[data-glass]:not(.dark):not([data-glass-opaque]):has([data-script-head][data-paper="dark"]) [data-shell="header"] {
