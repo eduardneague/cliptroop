@@ -22,6 +22,14 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.6",
+    date: "2026-11-18",
+    title: "Back to building",
+    changes: [
+      { kind: "fixed", text: "1.53.5 couldn't go live: the security check before every build stopped on a new warning about a tool used only while building the app, never on the site. It's let through for a month, until a fixed version is out, so 1.53.5 (seeing who's in a script with you) goes live with this." },
+    ],
+  },
+  {
     version: "1.53.5",
     date: "2026-11-18",
     title: "See who's in a script with you",
