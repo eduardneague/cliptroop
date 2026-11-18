@@ -24,10 +24,17 @@ export function mentionPeople(
 /**
  * Who to suggest first depends on what you're writing:
  *   editing idea → this video's editor, other editors, schedulers, master
+ *   frame guide  → this video's filmer, other filmers, master, the rest of this video's people (1.54.0)
  *   comment      → this video's scripters, master, the rest of this video's people
  */
-export function rankPeople(list: MentionPerson[], kind: "comment" | "edit_idea"): MentionPerson[] {
+export function rankPeople(list: MentionPerson[], kind: "comment" | "edit_idea" | "frame"): MentionPerson[] {
   const score = (p: MentionPerson) => {
+    if (kind === "frame") {
+      if (p.onVideo.includes("Filmer")) return 0;
+      if (p.roles.includes("filmer")) return 1;
+      if (p.roles.includes("master")) return 2;
+      return p.onVideo.length ? 3 : 4;
+    }
     if (kind === "edit_idea") {
       if (p.onVideo.includes("Editor")) return 0;
       if (p.roles.includes("editor")) return 1;
@@ -45,6 +52,7 @@ export function rankPeople(list: MentionPerson[], kind: "comment" | "edit_idea")
 }
 
 /** Role mentions in the same spirit (@Editor, @Scheduler …). */
-export function rankRoles(kind: "comment" | "edit_idea"): RoleId[] {
+export function rankRoles(kind: "comment" | "edit_idea" | "frame"): RoleId[] {
+  if (kind === "frame") return ["filmer", "master", "scripter", "editor", "publisher", "researcher", "packager"];
   return kind === "edit_idea" ? ["editor", "publisher", "master", "scripter", "filmer", "packager", "researcher"] : ["scripter", "master", "editor", "publisher", "researcher", "filmer", "packager"];
 }

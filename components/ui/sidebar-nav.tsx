@@ -23,6 +23,7 @@ const ACCENT: Record<string, { on: string; hover: string }> = {
   "/videos": { on: "text-long", hover: "group-hover:text-long" },
   "/meetings": { on: "text-violet", hover: "group-hover:text-violet" },
   "/todo": { on: "text-teal", hover: "group-hover:text-teal" },
+  "/frame-guides": { on: "text-frame", hover: "group-hover:text-frame" },
 };
 const accent = (href: string) => ACCENT[href] ?? { on: "text-amber", hover: "group-hover:text-amber" };
 
@@ -30,6 +31,7 @@ const accent = (href: string) => ACCENT[href] ?? { on: "text-amber", hover: "gro
 const HINT: Record<string, string> = {
   "/todo": "My Day, your lists, reminders",
   "/outliers": "What's taking off in your niche",
+  "/frame-guides": "Reference shots, for scripts",
   "/meetings": "Plan them, answer, follow up",
   "/posting": "What's going out, and what went out",
   "/analytics": "Every platform's numbers",

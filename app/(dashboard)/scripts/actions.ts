@@ -266,21 +266,25 @@ export async function addComment(input: {
   quote: string;
   occurrence: number;
   body: string;
-  kind?: "comment" | "edit_idea";
+  kind?: "comment" | "edit_idea" | "frame";
   sketch?: { path: string; w: number; h: number } | null;
   general?: boolean;
+  /** 1.54.0: a frame guide's frame (Frame Guides, this team's). */
+  frameId?: string | null;
 }): Promise<DocResult<{ id: string }>> {
   const general = input.general === true;
+  const kind = input.kind === "edit_idea" ? "edit_idea" : input.kind === "frame" ? "frame" : "comment";
   // 1.53.3: a line break in the quote is U+FFFC (an older page sends "\u0000", which the database refuses).
   const quote = general ? "" : toLeaf(String(input.quote ?? "")).slice(0, MAX_QUOTE);
-  const sketch = input.sketch && SKETCH_RX.test(input.sketch.path) ? input.sketch : null;
-  // A drawing alone is fine: it gets a short caption.
+  const sketch = kind !== "frame" && input.sketch && SKETCH_RX.test(input.sketch.path) ? input.sketch : null;
+  const frameId = kind === "frame" && typeof input.frameId === "string" && UUID_RX.test(input.frameId) ? input.frameId : null;
+  // A drawing alone is fine: it gets a short caption. A frame guide's words are its own choice (the frame says it).
   const body = String(input.body ?? "").replace(/\u0000/g, "").trim() || (sketch ? "Sketch" : "");
   if (!general && !quote.trim()) return { error: "Select some text first." };
-  if (!body) return { error: "Write a comment." };
+  if (kind === "frame" && !frameId) return { error: "Pick a frame first." };
+  if (!body && kind !== "frame") return { error: "Write a comment." };
   if (body.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
   if (!UUID_RX.test(input.scriptId)) return { error: "Document not found." };
-  const kind = input.kind === "edit_idea" ? "edit_idea" : "comment";
   const supabase = await createClient();
   const {
     data: { user },
@@ -298,11 +302,14 @@ export async function addComment(input: {
       sketch_path: sketch?.path ?? null,
       sketch_w: sketch ? Math.max(1, Math.min(8000, Math.round(sketch.w))) : null,
       sketch_h: sketch ? Math.max(1, Math.min(8000, Math.round(sketch.h))) : null,
+      ...(frameId ? { frame_id: frameId } : {}),
     })
     .select("id, team_id, scripts(name, short_video_id, long_video_id)")
     .single();
+  // A frame guide on a database from before 0133 (no third kind, no frame_id yet).
+  if (kind === "frame" && (error?.code === "42703" || error?.code === "PGRST204" || (error?.code === "23514" && /kind/i.test(error.message ?? "")))) return { error: "This database is missing an update (0133) for frame guides. App setup shows how to run it." };
   // 23514: a database from before 0127 (a quote of one paragraph, 1 to 500 characters), so no general ones yet.
-  if (error?.code === "23514") return { error: "This database is missing an update (0127) for this. App setup shows how to run it." };
+  if (error?.code === "23514" && !/frame guide/i.test(error.message ?? "")) return { error: "This database is missing an update (0127) for this. App setup shows how to run it." };
   if (error || !data) {
     // 1.53.2: say why, and count it in Developer → Problems (the owner, Nov 17: "i cant add sketch ideas", and all
     // the page said was "Couldn't add the idea with its sketch.").
@@ -332,7 +339,7 @@ async function notifyScriptMentions(a: {
   long: string | null;
   body: string;
   quote: string;
-  kind: "comment" | "edit_idea";
+  kind: "comment" | "edit_idea" | "frame";
   /** 1.50.0: the words before an edit: whoever they mentioned was told already. */
   before?: string;
 }) {
@@ -357,7 +364,18 @@ async function notifyScriptMentions(a: {
   if (!to.size) return;
   const number = (video.data?.entry_number as number | undefined) ?? 0;
   const title = (video.data?.title as string | undefined) ?? "a video";
-  const what = a.kind === "edit_idea" ? (a.quote ? "an editing idea" : "an editing idea for the whole document") : a.quote ? "a comment" : "a comment on the whole document";
+  const what =
+    a.kind === "edit_idea"
+      ? a.quote
+        ? "an editing idea"
+        : "an editing idea for the whole document"
+      : a.kind === "frame"
+        ? a.quote
+          ? "a frame guide"
+          : "a frame guide for the whole document"
+        : a.quote
+          ? "a comment"
+          : "a comment on the whole document";
   const snippet = a.body.length > 100 ? `${a.body.slice(0, 100)}…` : a.body;
   const base = a.short ? `/shorts/${a.short}/script` : `/videos/${a.long}/script`;
   await sendNotifications(
@@ -389,7 +407,6 @@ async function notifyScriptMentions(a: {
 export async function editComment(id: string, body: string): Promise<DocResult> {
   if (!UUID_RX.test(id)) return { error: "Comment not found." };
   const text = String(body ?? "").replace(/\u0000/g, "").trim();
-  if (!text) return { error: "Write something, or delete it instead." };
   if (text.length > MAX_COMMENT) return { error: "Keep comments under 2,000 characters." };
   const supabase = await createClient();
   const {
@@ -398,6 +415,8 @@ export async function editComment(id: string, body: string): Promise<DocResult> 
   if (!user) return { error: "Your session expired. Sign in again." };
   const { data: old } = await supabase.from("script_comments").select("id, body, author_id, kind, quote, script_id, team_id, scripts(name, short_video_id, long_video_id)").eq("id", id).maybeSingle();
   if (!old) return { error: "Comment not found." };
+  // A frame guide may go without words of its own (1.54.0); the others need some.
+  if (!text && old.kind !== "frame") return { error: "Write something, or delete it instead." };
   if (old.author_id !== user.id) return { error: "Only the person who wrote it can change it." };
   if ((old.body as string) === text) return {};
   const { data, error } = await supabase.from("script_comments").update({ body: text }).eq("id", id).select("id");
@@ -416,7 +435,7 @@ export async function editComment(id: string, body: string): Promise<DocResult> 
       long: s.long_video_id,
       body: text,
       quote: (old.quote as string) ?? "",
-      kind: old.kind === "edit_idea" ? "edit_idea" : "comment",
+      kind: old.kind === "edit_idea" ? "edit_idea" : old.kind === "frame" ? "frame" : "comment",
       before: old.body as string,
     });
   }

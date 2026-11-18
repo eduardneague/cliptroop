@@ -13,6 +13,7 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   ExpandIcon,
+  FrameIcon,
   TrashIcon,
 } from "@/components/ui/icons";
 
@@ -47,8 +48,20 @@ export async function downloadImage(raw: string, name = "script-image") {
   }
 }
 
+/** A frame guide's picture (1.54.0): opening it is the script's (it knows the frame library). */
+export const FRAME_OPEN_EVENT = "vp-frame-open";
+
 function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPos }: ReactNodeViewProps) {
-  const { src: raw, alt, align, width } = node.attrs as { src: string; alt: string | null; align: Align; width: number | null };
+  const { src: raw, alt, align, width, frame, frameN, frameTitle } = node.attrs as { src: string; alt: string | null; align: Align; width: number | null; frame: string | null; frameN: number | null; frameTitle: string | null };
+  // What the picture knows of its frame shows at once (the rest comes with the library).
+  const openFrame = () =>
+    frame &&
+    editor.view.dom.dispatchEvent(
+      new CustomEvent(FRAME_OPEN_EVENT, {
+        detail: { id: frame, ref: { id: frame, number: Number(frameN) || 0, title: frameTitle ?? "", url: src, thumb: src, w: 1920, h: 1080, tint: null, collection: null } },
+        bubbles: true,
+      })
+    );
   // Only a web address or this device's upload is shown (1.31.15); anything else stays a blank frame.
   const src = pictureSrc(raw) ?? "";
   const [viewing, setViewing] = useState(false);
@@ -116,7 +129,7 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
     >
       <div
         ref={boxRef}
-        className={`group relative inline-block max-w-full rounded-lg ${selected && editable ? "ring-2 ring-amber ring-offset-2 ring-offset-transparent" : ""}`}
+        className={`group relative inline-block max-w-full rounded-lg ${selected && editable ? `ring-2 ${frame ? "ring-frame" : "ring-amber"} ring-offset-2 ring-offset-transparent` : ""}`}
         style={{ width: width ? `${width}%` : undefined }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -126,9 +139,24 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           draggable={false}
           loading="lazy"
           decoding="async"
-          className={`block w-full h-auto rounded-lg transition-opacity ${uploading ? "opacity-70" : ""}`}
-          onDoubleClick={() => setViewing(true)}
+          className={`block w-full h-auto rounded-lg transition-opacity ${uploading ? "opacity-70" : ""} ${frame ? "script-frame-pic" : ""}`}
+          onDoubleClick={() => (frame ? openFrame() : setViewing(true))}
         />
+        {/* A frame guide's picture says which one it is (fixed colours: it sits on the picture). */}
+        {frame && (
+          <button
+            type="button"
+            contentEditable={false}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openFrame}
+            title="Open the frame guide"
+            className="script-frame-tag absolute left-2 bottom-2 max-w-[calc(100%-1rem)] inline-flex items-center gap-1.5 rounded-md bg-black/70 text-white pl-1.5 pr-2 h-7 text-[12px] font-semibold shadow-lg backdrop-blur-[2px] hover:bg-black/85"
+          >
+            <FrameIcon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="font-bold tabular-nums">#{frameN ?? "?"}</span>
+            {frameTitle ? <span className="truncate opacity-90">{frameTitle}</span> : null}
+          </button>
+        )}
         {uploading && (
           <span contentEditable={false} className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-live="polite">
             <span className="inline-flex items-center gap-2 rounded-lg bg-black/70 text-white px-2.5 h-8 text-[12.5px] font-semibold shadow-lg">
@@ -187,6 +215,11 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           )}
           {src && (
             <>
+              {frame && (
+                <button type="button" title="Open the frame guide" aria-label="Open the frame guide" className={btn} onClick={openFrame}>
+                  <FrameIcon className="w-4 h-4" />
+                </button>
+              )}
               <button type="button" title="View full size" aria-label="View full size" className={btn} onClick={() => setViewing(true)}>
                 <ExpandIcon className="w-4 h-4" />
               </button>
@@ -234,6 +267,26 @@ export const ScriptImage = Image.extend({
           return w ? Number(w) : null;
         },
         renderHTML: (attrs) => (attrs.width ? { "data-width": attrs.width } : {}),
+      },
+      // 1.54.0: a frame guide's picture: the frame's id, its number and name (as when it was put in). An older page
+      // that doesn't know these keeps the picture and drops them.
+      frame: {
+        default: null,
+        parseHTML: (el) => (/^[0-9a-f-]{36}$/i.test(el.getAttribute("data-frame") ?? "") ? el.getAttribute("data-frame") : null),
+        renderHTML: (attrs) => (attrs.frame ? { "data-frame": attrs.frame } : {}),
+      },
+      frameN: {
+        default: null,
+        parseHTML: (el) => {
+          const n = Number(el.getAttribute("data-frame-n"));
+          return n > 0 ? n : null;
+        },
+        renderHTML: (attrs) => (attrs.frameN ? { "data-frame-n": attrs.frameN } : {}),
+      },
+      frameTitle: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-frame-title"),
+        renderHTML: (attrs) => (attrs.frameTitle ? { "data-frame-title": attrs.frameTitle } : {}),
       },
     };
   },

@@ -13,7 +13,7 @@ import { wordColor } from "@/lib/word-color";
 import type { ScriptComment } from "../lib/queries";
 import type { PostingComment } from "../lib/anchors";
 import type { MentionPerson } from "../lib/mention-people";
-import { CommentComposer, KIND_COLOR, KIND_LABEL, KindMark, MentionText, QuoteBlock, WholeDocTag } from "./comment-composer";
+import { CommentComposer, FrameAttachment, KIND_COLOR, KIND_LABEL, KindMark, MentionText, QuoteBlock, WholeDocTag } from "./comment-composer";
 
 /*
  * One comment or editing idea (1.50.0): the same card in the comments panel and in the small box that opens on its
@@ -28,7 +28,7 @@ type Me = { userId: string; master: boolean } | null;
 export function confirmResolve(confirm: ReturnType<typeof useConfirm>, c: ScriptComment) {
   const idea = c.kind === "edit_idea";
   return confirm({
-    title: idea ? "Resolve this editing idea?" : "Resolve this comment?",
+    title: idea ? "Resolve this editing idea?" : c.kind === "frame" ? "Resolve this frame guide?" : "Resolve this comment?",
     description: `It's marked as done and hidden from the list (Show resolved brings it back). You can reopen it any time.`,
     confirmLabel: "Resolve",
   });
@@ -38,8 +38,8 @@ export function confirmResolve(confirm: ReturnType<typeof useConfirm>, c: Script
 export function confirmDelete(confirm: ReturnType<typeof useConfirm>, c: ScriptComment) {
   const idea = c.kind === "edit_idea";
   return confirm({
-    title: idea ? "Delete this editing idea?" : "Delete this comment?",
-    description: c.sketch ? "Its drawing is deleted too. This can't be undone." : "This can't be undone.",
+    title: idea ? "Delete this editing idea?" : c.kind === "frame" ? "Delete this frame guide?" : "Delete this comment?",
+    description: c.sketch ? "Its drawing is deleted too. This can't be undone." : c.kind === "frame" ? "The frame stays in Frame Guides. This can't be undone." : "This can't be undone.",
     confirmLabel: "Delete",
     danger: true,
   });
@@ -48,11 +48,16 @@ export function confirmDelete(confirm: ReturnType<typeof useConfirm>, c: ScriptC
 /** A drawing alone has a caption of "Sketch": that's not words to show. */
 const onlySketch = (c: ScriptComment) => !!c.sketch && c.body.trim() === "Sketch";
 
-/** A comment's text (mentions highlighted) and its sketch, if it has one. */
-export function CommentBody({ c, people, roleColors, onSketch }: { c: ScriptComment; people: MentionPerson[]; roleColors: Record<string, string>; onSketch: () => void }) {
+/** A comment's text (mentions highlighted), its sketch or (1.54.0) its frame, if it has one. */
+export function CommentBody({ c, people, roleColors, onSketch, onFrame }: { c: ScriptComment; people: MentionPerson[]; roleColors: Record<string, string>; onSketch: () => void; onFrame?: () => void }) {
   return (
     <>
-      {!onlySketch(c) && (
+      {c.kind === "frame" && (
+        <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+          <FrameAttachment frame={c.frame} onOpen={c.frame ? onFrame : undefined} />
+        </div>
+      )}
+      {!onlySketch(c) && c.body.trim() && (
         <p className="text-[13.5px] leading-relaxed text-ink whitespace-pre-wrap break-words">
           <MentionText text={c.body} people={people} roleColors={roleColors} />
         </p>
@@ -100,6 +105,7 @@ export function CommentCard({
   variant,
   onPick,
   onSketch,
+  onFrame,
   onDone,
   onAll,
   onClose,
@@ -119,6 +125,8 @@ export function CommentCard({
   variant: "list" | "popover";
   onPick?: () => void;
   onSketch: () => void;
+  /** A frame guide's frame, big (1.54.0). */
+  onFrame?: () => void;
   /** Resolved, reopened or deleted (the small box closes). */
   onDone?: () => void;
   /** The small box: open the panel on it, and close. */
@@ -159,7 +167,7 @@ export function CommentCard({
   }
   async function save() {
     const body = text.trim() || (c.sketch ? "Sketch" : "");
-    if (!body) return toast.error("Write something, or delete it instead.");
+    if (!body && c.kind !== "frame") return toast.error("Write something, or delete it instead.");
     if (body === c.body) return setEditing(false);
     setBusy("save");
     const r = await editComment(c.id, body);
@@ -240,6 +248,7 @@ export function CommentCard({
         text={text}
         setText={setText}
         sketchUrl={c.sketch?.url ?? null}
+        frame={c.frame}
         notifyBefore={c.body}
         busy={busy === "save"}
         onSubmit={() => void save()}
@@ -248,7 +257,7 @@ export function CommentCard({
     </div>
   ) : (
     <div className={`mt-2 ${pop ? "max-h-[38vh] overflow-y-auto overflow-x-hidden styled-scroll pr-0.5" : ""}`}>
-      <CommentBody c={shown} people={people} roleColors={roleColors} onSketch={onSketch} />
+      <CommentBody c={shown} people={people} roleColors={roleColors} onSketch={onSketch} onFrame={onFrame} />
     </div>
   );
 
@@ -350,7 +359,7 @@ export function PostingCard({ p, meAs }: { p: PostingComment; meAs: MentionPerso
   return (
     <article
       aria-busy="true"
-      aria-label={p.kind === "edit_idea" ? "Posting your editing idea" : "Posting your comment"}
+      aria-label={p.kind === "edit_idea" ? "Posting your editing idea" : p.kind === "frame" ? "Posting your frame guide" : "Posting your comment"}
       className="rounded-xl border border-line/10 bg-surface p-3 animate-[rise-in_.3s_var(--ease-out)]"
       style={{ boxShadow: `inset 3px 0 0 ${color}` }}
     >
@@ -368,6 +377,11 @@ export function PostingCard({ p, meAs }: { p: PostingComment; meAs: MentionPerso
         </div>
       </div>
       <div className="mt-2">{p.quote ? <QuoteBlock quote={p.quote} color={color} /> : <WholeDocTag color={color} />}</div>
+      {p.kind === "frame" && p.frame && (
+        <div className="mt-2 opacity-80">
+          <FrameAttachment frame={p.frame} />
+        </div>
+      )}
       {p.body && p.body !== "Sketch" && <p className="mt-2 text-[13.5px] leading-relaxed text-ink/70 whitespace-pre-wrap break-words">{p.body}</p>}
       {p.sketchUrl && <Skeleton className="mt-2 h-20 w-full rounded-lg" />}
     </article>

@@ -8,13 +8,14 @@ import { rankPeople, rankRoles, ROLE_LABEL, type MentionPerson } from "../lib/me
 import { quoteText } from "../lib/anchors";
 import { MAX_COMMENT } from "../lib/comment-limits";
 import { Leaves } from "@/components/ui/leaves";
-import { CommentIcon, DocumentIcon, ScissorsIcon } from "@/components/ui/icons";
+import { CommentIcon, DocumentIcon, FrameIcon, ScissorsIcon } from "@/components/ui/icons";
 import { wordColor } from "@/lib/word-color";
+import { KIND_COLOR, KIND_LABEL, frameRefName, type CommentKind, type FrameRef } from "../lib/kinds";
 
-export const KIND_COLOR = { comment: "rgb(var(--amber))", edit_idea: "rgb(59 130 246)" } as const;
-export const KIND_LABEL = { comment: "Comment", edit_idea: "Editing idea" } as const;
+// One colour and name per kind, everywhere (lib/kinds.ts; 1.54.0: frame guides, the third).
+export { KIND_COLOR, KIND_LABEL };
 
-type Kind = "comment" | "edit_idea";
+type Kind = CommentKind;
 type Suggestion = { key: string; label: string; person?: MentionPerson; role?: RoleId; all?: boolean };
 
 /*
@@ -295,8 +296,58 @@ export function WholeDocTag({ color }: { color: string }) {
 export function KindMark({ kind, className = "w-3.5 h-3.5" }: { kind: Kind; className?: string }) {
   return (
     <span className="inline-flex flex-shrink-0" style={{ color: KIND_COLOR[kind] }} aria-hidden>
-      {kind === "edit_idea" ? <ScissorsIcon className={className} /> : <CommentIcon className={className} />}
+      {kind === "edit_idea" ? <ScissorsIcon className={className} /> : kind === "frame" ? <FrameIcon className={className} /> : <CommentIcon className={className} />}
     </span>
+  );
+}
+
+/**
+ * A frame guide's frame (1.54.0): its picture, number and name, on a card in Frame Guides' colour; Change opens the
+ * picker again. Deleted from Frame Guides: said so.
+ */
+export function FrameAttachment({ frame, onChange, onOpen, compact = false }: { frame: FrameRef | null; onChange?: () => void; onOpen?: () => void; compact?: boolean }) {
+  const color = KIND_COLOR.frame;
+  if (!frame)
+    return (
+      <div className="rounded-lg border border-dashed border-line/25 px-3 py-2.5 flex items-center gap-2.5 text-[12.5px] text-ink-soft">
+        <FrameIcon className="w-4 h-4 flex-shrink-0" />
+        <span className="flex-1 min-w-0">{onChange ? "No frame picked yet." : "Its frame was deleted from Frame Guides."}</span>
+        {onChange && (
+          <button type="button" onClick={onChange} className="rounded-md px-2.5 h-7 text-[12px] font-bold text-white flex-shrink-0" style={{ background: color }}>
+            Pick a frame
+          </button>
+        )}
+      </div>
+    );
+  return (
+    <div className="rounded-lg overflow-hidden ring-1 ring-inset" style={{ ["--tw-ring-color" as string]: `color-mix(in srgb, ${color} 35%, transparent)`, background: `color-mix(in srgb, ${color} 7%, transparent)` }}>
+      <div className={`flex items-center gap-2.5 ${compact ? "p-1.5" : "p-2"}`}>
+        <button
+          type="button"
+          onClick={onOpen}
+          disabled={!onOpen}
+          aria-label={`Open ${frameRefName(frame)}`}
+          className={`relative flex-shrink-0 ${compact ? "w-[84px]" : "w-[112px]"} aspect-video rounded-md overflow-hidden ring-1 ring-black/10 enabled:hover:brightness-110 transition`}
+          style={{ background: frame.tint ?? "rgb(var(--surface-2))" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={frame.thumb || frame.url} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
+          <span className="absolute top-1 left-1 rounded bg-black/65 text-white px-1 h-4 inline-flex items-center text-[10px] font-bold tabular-nums">#{frame.number}</span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: wordColor(color) }}>
+            Frame guide #{frame.number}
+          </div>
+          <div className="text-[13px] font-semibold text-ink truncate">{frame.title || "Untitled shot"}</div>
+          {frame.collection && <div className="text-[11.5px] text-ink-soft truncate">{frame.collection.name}</div>}
+        </div>
+        {onChange && (
+          <button type="button" onClick={onChange} className="rounded-md px-2 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
+            Change
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -316,6 +367,9 @@ export function CommentComposer({
   variant,
   setKind,
   notifyBefore,
+  frame = null,
+  onPickFrame,
+  onOpenFrame,
 }: {
   kind: Kind;
   /** The words it's on; "" for a general comment (the whole document). */
@@ -333,23 +387,33 @@ export function CommentComposer({
   onCancel: () => void;
   /** popover: by the words; sheet: phones; panel: the comments panel's own (general); edit: changing one. */
   variant: "popover" | "sheet" | "panel" | "edit";
-  /** The panel's: Comment or Editing idea. */
+  /** The panel's: Comment, Editing idea or Frame guide. */
   setKind?: (k: Kind) => void;
   /** Changing one: its words until now (who they mention was notified already). */
   notifyBefore?: string;
+  /** A frame guide's frame (1.54.0), and picking (another) one; null: none picked yet. */
+  frame?: FrameRef | null;
+  onPickFrame?: () => void;
+  onOpenFrame?: () => void;
 }) {
   const color = KIND_COLOR[kind];
-  const canSend = (!!text.trim() || !!sketchUrl) && !busy;
+  const isFrame = kind === "frame";
+  // A frame guide's words are optional (the frame says it); changing one may leave it without.
+  const canSend = (isFrame ? variant === "edit" || !!frame : !!text.trim() || !!sketchUrl) && !busy;
   const send = () => canSend && onSubmit();
-  const label = variant === "edit" ? "Change the words" : kind === "edit_idea" ? "Your editing idea" : "Your comment";
+  const label = variant === "edit" ? "Change the words" : kind === "edit_idea" ? "Your editing idea" : isFrame ? "About this frame" : "Your comment";
   const placeholder =
     variant === "panel"
       ? kind === "edit_idea"
         ? "An editing idea for the whole video…"
-        : "A comment on the whole document…"
+        : isFrame
+          ? "What this frame is for (optional)…"
+          : "A comment on the whole document…"
       : kind === "edit_idea"
         ? "Your editing idea… (@ to mention)"
-        : "Your comment… (@ to mention)";
+        : isFrame
+          ? "How to shoot it, or why this one (optional, @ to mention)"
+          : "Your comment… (@ to mention)";
 
   const input = (
     <MentionInput
@@ -388,8 +452,8 @@ export function CommentComposer({
   if (variant === "panel") {
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-1" role="radiogroup" aria-label="What it is">
-          {(["comment", "edit_idea"] as const).map((k) => (
+        <div className="flex items-center gap-1 flex-wrap" role="radiogroup" aria-label="What it is">
+          {(onPickFrame ? (["comment", "edit_idea", "frame"] as const) : (["comment", "edit_idea"] as const)).map((k) => (
             <button
               key={k}
               type="button"
@@ -402,8 +466,9 @@ export function CommentComposer({
               {KIND_LABEL[k]}
             </button>
           ))}
-          <span className="ml-auto text-[11px] text-ink-faint">@ to mention · Enter sends</span>
+          <span className="ml-auto text-[11px] text-ink-faint hidden sm:inline">@ to mention · Enter sends</span>
         </div>
+        {isFrame && <FrameAttachment frame={frame} onChange={onPickFrame} onOpen={onOpenFrame} compact />}
         <div className="flex items-end gap-2">
           <div className="flex-1 min-w-0">{input}</div>
           <button
@@ -414,7 +479,7 @@ export function CommentComposer({
             className="rounded-xl text-white font-bold px-3.5 h-11 text-[13px] disabled:opacity-45 transition-opacity flex-shrink-0"
             style={{ background: color }}
           >
-            {busy ? "Adding…" : kind === "edit_idea" ? "Add idea" : "Comment"}
+            {busy ? "Adding…" : kind === "edit_idea" ? "Add idea" : isFrame ? "Add" : "Comment"}
           </button>
         </div>
         <Notifies text={text} people={people} roleColors={roleColors} />
@@ -437,6 +502,7 @@ export function CommentComposer({
         <span className="ml-auto text-[11px] text-ink-faint">Enter sends · Shift+Enter new line</span>
       </div>
       {quote ? <QuoteBlock quote={quote} color={color} /> : <WholeDocTag color={color} />}
+      {isFrame && <FrameAttachment frame={frame} onChange={onPickFrame} onOpen={onOpenFrame} />}
       {input}
       <Notifies text={text} people={people} roleColors={roleColors} />
       {sketchUrl && (
@@ -468,7 +534,7 @@ export function CommentComposer({
           Cancel
         </button>
         <button type="button" disabled={!canSend} onClick={send} data-sound="none" className="rounded-lg text-white font-bold px-3.5 h-9 sm:h-8 text-[12.5px] disabled:opacity-50" style={{ background: color }}>
-          {busy ? "Adding…" : kind === "edit_idea" ? "Add idea" : "Comment"}
+          {busy ? "Adding…" : kind === "edit_idea" ? "Add idea" : isFrame ? "Add frame guide" : "Comment"}
         </button>
       </div>
     </div>

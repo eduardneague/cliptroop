@@ -22,6 +22,19 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.54.0",
+    date: "2026-11-18",
+    title: "Frame Guides",
+    changes: [
+      { kind: "new", text: "Frame Guides, a new page under Research: your team's reference shots from other creators, in collections you make. Each frame gets its own number (#1, #2…) and keeps its picture, a name, keywords, who made it, a link to the video and notes on how to shoot it." },
+      { kind: "new", text: "Adding frames is quick: paste a screenshot anywhere on the page (Ctrl+V), drop pictures on it, or pick them. The first one opens straight away to be named and tagged, and → goes on to the next." },
+      { kind: "new", text: "Find a frame fast: search by any word, keyword, who made it or its number (#12), and filter by collection and by category: A-roll or B-roll, the shot (close-up, medium, wide, overhead, POV, product), and categories your team adds." },
+      { kind: "new", text: "In a script, select words and choose Frame guide, next to Comment and Editing idea. Pick a frame in the window that opens, then add it on the words like a comment, link the words to it (its picture shows right under them), or put its picture in the script. The toolbar's Frame guide button puts a frame's picture where the cursor is." },
+      { kind: "new", text: "Frame guides show in the comments panel with their pictures, under their own Frames tab. The panel also exports the script's shot list (Word or PDF): every frame guide in the script's order, for whoever films it." },
+      { kind: "better", text: "Frame guides have a colour of their own: teal, or violet with the themes whose colour is teal or green, so they never look like a comment. They work in every theme, light or dark, with glass or without, and on phones." },
+    ],
+  },
+  {
     version: "1.53.6",
     date: "2026-11-18",
     title: "Back to building",

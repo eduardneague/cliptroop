@@ -341,7 +341,7 @@ function RichBody({ n }: { n: NotificationItem }) {
     case "script_mention":
       return (
         <>
-          <b>{m.actor?.name}</b> mentioned you in {m.commentKind === "edit_idea" ? "an editing idea" : "a comment"} on <ShortRef m={m} />
+          <b>{m.actor?.name}</b> mentioned you in {m.commentKind === "edit_idea" ? "an editing idea" : m.commentKind === "frame" ? "a frame guide" : "a comment"} on <ShortRef m={m} />
           {m.docName ? <span className="text-ink-faint"> · {m.docName}</span> : null}: &ldquo;{m.snippet}&rdquo;
         </>
       );

@@ -8,10 +8,10 @@
  * --word-mix), so it reads in both (tests/light-contrast.test.ts checks the
  * app's palettes with it).
  */
-const OWN = /rgb\(var\(--(amber|teal|blue|violet|short|long|pink|gold|green|red|coral)\)/g;
+const OWN = /rgb\(var\(--(amber|teal|blue|violet|short|long|pink|gold|green|red|coral|frame)\)/g;
 
 export function wordColor(c: string): string {
   if (/var\(--ink/.test(c)) return c; // the page's own greys are word colours already
-  if (/var\(--(amber|teal|blue|violet|short|long|pink|gold|green|red|coral)\)/.test(c)) return c.replace(OWN, "rgb(var(--$1-text)");
+  if (/var\(--(amber|teal|blue|violet|short|long|pink|gold|green|red|coral|frame)\)/.test(c)) return c.replace(OWN, "rgb(var(--$1-text)");
   return `color-mix(in srgb, ${c} var(--word-mix, 65%), rgb(var(--ink)))`;
 }

@@ -132,7 +132,7 @@ ok(/occurrence: general \? 0 : /.test(actions), "and occurrence 0");
 ok(/error\?\.code === "23514"/.test(actions), "a database without 0127 says so (not just \"couldn't add\")");
 const edit = actions.slice(actions.indexOf("export async function editComment"), actions.indexOf("export async function resolveComment"));
 ok(/if \(old\.author_id !== user\.id\) return \{ error: "Only the person who wrote it can change it\." \};/.test(edit), "editComment: its author only (the database says the same)");
-ok(/if \(!text\) return \{ error: "Write something, or delete it instead\." \};/.test(edit) && /text\.length > MAX_COMMENT/.test(edit), "not empty, not too long");
+ok(/if \(!text && old\.kind !== "frame"\) return \{ error: "Write something, or delete it instead\." \};/.test(edit) && /text\.length > MAX_COMMENT/.test(edit), "not empty (a frame guide's words are optional, 1.54.0), not too long");
 ok(/before: old\.body as string/.test(edit), "mentions: only people new to it are notified");
 
 // ---- the screens -----------------------------------------------------------------------------------------------------
@@ -151,7 +151,7 @@ ok(/\{c\.quote \? <QuoteBlock/.test(card) && /<WholeDocTag/.test(card), "on its 
 ok(/ · edited/.test(card), "\"edited\" once changed");
 const ws = read("modules/scripts/components/workspace.tsx");
 ok(/<CommentCard[\s\S]*?variant="popover"/.test(ws) && /<CommentCard[\s\S]*?variant="list"/.test(ws), "the same card in the small box and the panel");
-ok(/addComment\(\{ scriptId: doc\.id, quote: "", occurrence: 0, body, kind, general: true \}\)/.test(ws) && /variant="panel"/.test(ws), "the panel writes general ones");
+ok(/addComment\(\{ scriptId: doc\.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame\?\.id \?\? null \}\)/.test(ws) && /variant="panel"/.test(ws), "the panel writes general ones (1.54.0: a frame guide too)");
 ok(/c\.quote && !findQuote\(ed\.state\.doc, c\.quote, c\.occurrence\)/.test(ws), "a general one is never \"on text that changed\"");
 const editor = read("modules/scripts/components/script-editor.tsx");
 ok(/const q = quoteAt\(editor\.state\.doc, from, to\);/.test(editor) && !/sameParent/.test(editor), "any selection, over any number of lines (it was one paragraph)");

@@ -15,6 +15,7 @@ import {
   FillIcon,
   FlagIcon,
   FlameIcon,
+  FrameIcon,
   GridIcon,
   HistoryIcon,
   HomeIcon,
@@ -95,6 +96,7 @@ const ICONS: Record<IconKey, IconComponent> = {
   image: ImageIcon,
   flame: FlameIcon,
   business: BusinessIcon,
+  frame: FrameIcon,
 };
 
 /** The icon for a page, setting or action of the search catalog. */

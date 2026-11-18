@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEditor, EditorContent, useEditorState, type Editor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import { PaperLines } from "./script-skeleton";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
@@ -48,6 +49,7 @@ import {
   WidthIcon,
   CommentIcon,
   ScissorsIcon,
+  FrameIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { CommentHighlights, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
@@ -71,9 +73,31 @@ import { GrammarLayer, GrammarToolbarButton } from "../grammar/grammar-ui";
 import { CATEGORY_COLOR, type GrammarCategory } from "../grammar/types";
 import { dock, useDock } from "../lib/dock";
 import { CommentComposer, KIND_COLOR } from "./comment-composer";
+import type { CommentKind, FrameRef } from "../lib/kinds";
+import { FrameLinkPictures, frameLinkKey, framesInDoc, withFramePictures, type FrameLook, type Json as FrameJson } from "../lib/frame-links";
+import { FRAME_OPEN_EVENT } from "./script-image";
+import { blockRange } from "./use-script-images";
+import { FrameLinkCard } from "./frame-link-card";
+import { frameById, useFrameLibrary, useLibraryVersion } from "@/modules/frames/components/frame-store";
+import { frameHref, frameIdOfHref, type FrameGuide, type FrameLibrary } from "@/modules/frames/lib/model";
+import type { PickHow, PickPurpose } from "@/modules/frames/components/frame-picker";
 import type { MentionPerson } from "../lib/mention-people";
 import type { Scene } from "../sketch/engine";
 import { Leaves } from "@/components/ui/leaves";
+
+// Frame guides (1.54.0): the picker and the big view load when they're first opened.
+const FramePicker = dynamic(() => import("@/modules/frames/components/frame-picker").then((m) => m.FramePicker), { ssr: false });
+const FrameViewer = dynamic(() => import("@/modules/frames/components/frame-details").then((m) => m.FrameViewer), { ssr: false });
+/** Open a frame guide big, from anywhere on the script's page (a frame guide's card in the comments, say). */
+export const FRAME_VIEW_EVENT = "vp-frame-view";
+export function viewFrame(id: string, ref?: FrameRef | null) {
+  window.dispatchEvent(new CustomEvent(FRAME_VIEW_EVENT, { detail: { id, ref: ref ?? null } }));
+}
+/** A frame of the library, as a script shows it. */
+export function frameRefOf(f: FrameGuide, lib: Pick<FrameLibrary, "collections"> | null): FrameRef {
+  const c = lib?.collections.find((x) => x.id === f.collectionId);
+  return { id: f.id, number: f.number, title: f.title, url: f.url, thumb: f.thumb, w: f.w, h: f.h, tint: f.tint, collection: c ? { name: c.name, color: c.color } : null };
+}
 
 // The Sketch Studio is only loaded when someone presses Draw.
 const SketchStudio = dynamic(() => import("../sketch/sketch-studio").then((m) => m.SketchStudio), {
@@ -198,7 +222,7 @@ export function ScriptEditor({
   /** Inline comments (anyone on the team can add them). */
   comments?: CommentMark[];
   activeCommentId?: string | null;
-  onAddComment?: (quote: string, occurrence: number, body: string, kind: "comment" | "edit_idea", sketch?: { path: string; w: number; h: number } | null) => Promise<string | null>;
+  onAddComment?: (quote: string, occurrence: number, body: string, kind: CommentKind, sketch?: { path: string; w: number; h: number } | null, frameId?: string | null) => Promise<string | null>;
   onCommentClick?: (id: string) => void;
   /** "Copy from…" when this document is empty. */
   copySources?: { id: string; name: string }[];
@@ -320,6 +344,11 @@ export function ScriptEditor({
   imagesRef.current = images;
   const uploading = images.uploading;
 
+  // ---- frame guides (1.54.0) ------------------------------------------------------
+  // What the script knows about each frame (the team's library, read only once the script uses frames or the picker
+  // opens) and what a click on one does: the pictures under linked words (frame-links.ts).
+  const frameLookRef = useRef<{ look: (id: string) => FrameLook; onOpen: (id: string) => void }>({ look: () => undefined, onOpen: () => {} });
+
   // ---- editor -------------------------------------------------------------------
 
   const editor = useEditor({
@@ -357,6 +386,8 @@ export function ScriptEditor({
       SearchHit,
       // The others in this script: their cursors (1.53.5).
       LiveCursors,
+      // Words linked to a frame guide: its picture right under them (1.54.0).
+      FrameLinkPictures(() => frameLookRef.current),
     ],
     content: isEmptyDoc(initialContent) ? EMPTY_DOC : repairDoc(initialContent),
     editorProps: {
@@ -426,10 +457,89 @@ export function ScriptEditor({
   liveRef.current = live;
   const newerName = newer ? (people.find((p) => p.userId === newer)?.name ?? "Someone") : null;
 
+  // ---- frame guides (1.54.0): the frames this script uses, the picker, a frame big ------------------------------
+  const [frameIds, setFrameIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!editor) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const read = () => {
+      t = null;
+      if (editor.isDestroyed) return;
+      // Linked words only: their pictures need the library (a frame's picture carries its own address).
+      const ids = framesInDoc(editor.getJSON() as FrameJson, "links");
+      setFrameIds((old) => (old.join() === ids.join() ? old : ids));
+    };
+    read();
+    const onUpdate = () => {
+      if (!t) t = setTimeout(read, 600);
+    };
+    editor.on("update", onUpdate);
+    return () => {
+      editor.off("update", onUpdate);
+      if (t) clearTimeout(t);
+    };
+  }, [editor]);
+  const [picker, setPicker] = useState<{ purpose: PickPurpose; words?: string; range?: { from: number; to: number }; linkAt?: number } | null>(null);
+  const [viewing, setViewing] = useState<{ id: string; ref: FrameRef | null } | null>(null);
+  // A frame guide being written: its frame.
+  const [draftFrame, setDraftFrame] = useState<FrameRef | null>(null);
+  // The library is read only when it's needed: linked words to draw, the picker, a frame opened big.
+  const frameLib = useFrameLibrary(teamId, frameIds.length > 0 || !!picker || !!viewing);
+  const libVersion = useLibraryVersion(teamId);
+  const look = useCallback(
+    (id: string): FrameLook => {
+      const f = frameById(teamId, id);
+      if (f) return { id: f.id, number: f.number, title: f.title, url: f.url, thumb: f.thumb, w: f.w, h: f.h, tint: f.tint };
+      return frameLib.lib && !frameLib.lib.missing ? null : undefined;
+    },
+    [teamId, frameLib.lib]
+  );
+  frameLookRef.current = { look, onOpen: (id) => setViewing({ id, ref: null }) };
+  // The library arrived (or changed): the pictures under linked words, drawn again.
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(frameLinkKey, true).setMeta("addToHistory", false));
+  }, [editor, libVersion, frameLib.lib]);
+  // A frame's picture in the text (its tag), a frame guide's card in the comments: the frame, big.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const onPicture = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; ref: FrameRef | null }>).detail;
+      if (d && typeof d.id === "string") setViewing({ id: d.id, ref: d.ref ?? null });
+    };
+    const onView = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; ref: FrameRef | null }>).detail;
+      if (d && typeof d.id === "string") setViewing({ id: d.id, ref: d.ref ?? null });
+    };
+    dom.addEventListener(FRAME_OPEN_EVENT, onPicture);
+    window.addEventListener(FRAME_VIEW_EVENT, onView);
+    return () => {
+      dom.removeEventListener(FRAME_OPEN_EVENT, onPicture);
+      window.removeEventListener(FRAME_VIEW_EVENT, onView);
+    };
+  }, [editor]);
+  // A frame that isn't in the library (deleted, another team's): said so.
+  useEffect(() => {
+    if (viewing && !viewing.ref && frameLib.lib && !frameById(teamId, viewing.id)) {
+      setViewing(null);
+      toast.error("That frame guide isn't in your team's Frame Guides any more.");
+    }
+  }, [viewing, frameLib.lib, teamId, toast]);
+  const viewed: FrameGuide | null = viewing
+    ? frameById(teamId, viewing.id) ??
+      (viewing.ref
+        ? { ...viewing.ref, collectionId: "", notes: "", creator: "", sourceUrl: null, keywords: [], categories: [], createdBy: null, createdAt: "" }
+        : null)
+    : null;
+  /** The document as it's exported and printed: linked frames' pictures under their words, with captions. */
+  const forExport = useCallback((json: Record<string, unknown>) => withFramePictures(json as FrameJson, look) as unknown as Record<string, unknown>, [look]);
+  const forExportRef = useRef(forExport);
+  forExportRef.current = forExport;
+
   // ---- printing (1.27.5): Ctrl+P prints the same plain copy as Export → PDF ----
   const printTitle = useRef("");
   printTitle.current = `#${number} ${title}`;
-  useEffect(() => watchPrinting(() => ({ editor: editorRef.current, title: printTitle.current })), []);
+  useEffect(() => watchPrinting(() => ({ editor: editorRef.current, title: printTitle.current, prepare: (json) => forExportRef.current(json) })), []);
 
   // ---- opened from the search bar: the words found, marked and in view (1.26.0) ----
   const foundRef = useRef<string | null>(null);
@@ -538,7 +648,7 @@ export function ScriptEditor({
   // Selecting text shows a floating "Comment" button (even when view-only).
   const [sel, setSel] = useState<{ quote: string; occurrence: number; top: number; left: number } | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
-  const [draftKind, setDraftKind] = useState<"comment" | "edit_idea">("comment");
+  const [draftKind, setDraftKind] = useState<CommentKind>("comment");
   // The comment open at its words; `suggestion`: a writing suggestion on the same words (1.27.5).
   const [pop, setPop] = useState<{ id: string; top: number; left: number; suggestion?: string | null } | null>(null);
   // A writing suggestion's card asked for from a comment ("Suggestion here").
@@ -548,7 +658,7 @@ export function ScriptEditor({
   const [studio, setStudio] = useState(false);
   const [sending, setSending] = useState(false);
   const [isPhone, setIsPhone] = useState(false);
-  const [backup, setBackup] = useState<{ quote: string; occurrence: number; kind: "comment" | "edit_idea"; text: string; scene: Scene | null } | null>(null);
+  const [backup, setBackup] = useState<{ quote: string; occurrence: number; kind: CommentKind; text: string; scene: Scene | null; frame?: FrameRef | null } | null>(null);
   // "Copy from…" a document with comments: bring them too? (1.27.5)
   const [copyAsk, setCopyAsk] = useState<{ id: string; name: string; content: Record<string, unknown>; comments: number } | null>(null);
   const [copying, setCopying] = useState(false);
@@ -669,6 +779,7 @@ export function ScriptEditor({
   const clearDraft = useCallback(() => {
     setDraft(null);
     setSel(null);
+    setDraftFrame(null);
     setSketch((sk) => {
       if (sk) URL.revokeObjectURL(sk.url);
       return null;
@@ -680,9 +791,9 @@ export function ScriptEditor({
     } catch {}
   }, [scriptId]);
   async function requestDiscard() {
-    if ((draft ?? "").trim() || sketch) {
+    if ((draft ?? "").trim() || sketch || (draftKind === "frame" && draftFrame)) {
       const ok = await confirm({
-        title: draftKind === "edit_idea" ? "Discard this editing idea?" : "Discard this comment?",
+        title: draftKind === "edit_idea" ? "Discard this editing idea?" : draftKind === "frame" ? "Discard this frame guide?" : "Discard this comment?",
         description: sketch ? "What you wrote and your drawing will be lost." : "What you wrote will be lost.",
         confirmLabel: "Discard",
         danger: true,
@@ -693,17 +804,19 @@ export function ScriptEditor({
   }
   async function submitDraft() {
     if (!sel || draft === null || !onAddComment || sending) return;
-    const was = { sel, text: draft, kind: draftKind, sketch };
+    if (draftKind === "frame" && !draftFrame) return setPicker({ purpose: "note", words: sel.quote });
+    const was = { sel, text: draft, kind: draftKind, sketch, frame: draftKind === "frame" ? draftFrame : null };
     const body = draft;
     setSending(true);
     // It shows at once: the composer closes, the words say "Posting…" and the
     // comments list shows it loading. If it fails, everything comes back.
-    onPosting?.({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, body: body.trim() || (sketch ? "Sketch" : ""), sketchUrl: sketch?.url ?? null });
+    onPosting?.({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, body: body.trim() || (sketch ? "Sketch" : ""), sketchUrl: sketch?.url ?? null, frame: was.frame });
     setDraft(null);
     setSel(null);
     const restore = () => {
       setSel(was.sel);
       setDraftKind(was.kind);
+      setDraftFrame(was.frame);
       setDraft(was.text);
       onPosting?.(null);
     };
@@ -734,7 +847,7 @@ export function ScriptEditor({
       }
       sk = { path: target.png.path, w: was.sketch.w, h: was.sketch.h };
     }
-    const err = await onAddComment(was.sel.quote, was.sel.occurrence, body, was.kind, sk);
+    const err = await onAddComment(was.sel.quote, was.sel.occurrence, body, was.kind, sk, was.frame?.id ?? null);
     setSending(false);
     if (err) {
       restore();
@@ -744,20 +857,69 @@ export function ScriptEditor({
       clearDraft();
     }
   }
+  // ---- a frame picked (1.54.0): a frame guide on the words, the words linked to it, or its picture in the script ----
+  function onFramePicked(f: FrameGuide, how: PickHow) {
+    const p = picker;
+    setPicker(null);
+    const ed = editorRef.current;
+    if (!p || !ed || ed.isDestroyed) return;
+    const ref = frameRefOf(f, frameLib.lib);
+    // The frame guide being written: this frame instead.
+    if (p.purpose === "note") return setDraftFrame(ref);
+    const href = frameHref(f.id, window.location.origin);
+    // Linked words: to this frame instead.
+    if (p.purpose === "relink") {
+      if (typeof p.linkAt === "number") ed.chain().focus().setTextSelection(p.linkAt).extendMarkRange("link").setLink({ href }).run();
+      return;
+    }
+    if (how === "note") {
+      if (!sel) return toast.error("Select the words again, then Frame guide.");
+      setDraftKind("frame");
+      setDraftFrame(ref);
+      setDraft("");
+      setBackup(null);
+      return;
+    }
+    const range = p.range ?? { from: ed.state.selection.from, to: ed.state.selection.to };
+    if (how === "link") {
+      if (range.from === range.to) return toast.error("Select the words to link first.");
+      ed.chain().focus().setTextSelection(range).setLink({ href }).setTextSelection(range.to).run();
+      return;
+    }
+    // Its picture: under the words (or where the cursor is), like a picture put in.
+    const node = { type: "image", attrs: { src: f.url, alt: f.title || `Frame #${f.number}`, align: "center", width: f.h > f.w ? 33 : 60, frame: f.id, frameN: f.number, frameTitle: f.title || null } };
+    const at = blockRange(ed, range.to);
+    ed.chain()
+      .focus()
+      .insertContentAt(at, node)
+      .command(({ tr }) => {
+        const img = tr.doc.nodeAt(at.from);
+        if (!img || img.type.name !== "image") return true;
+        const end = at.from + img.nodeSize;
+        const next = tr.doc.nodeAt(end);
+        if (!next || !next.isTextblock) tr.insert(end, ed.schema.nodes.paragraph.create());
+        tr.setSelection(TextSelection.create(tr.doc, end + 1));
+        return true;
+      })
+      .scrollIntoView()
+      .run();
+  }
+
   // A copy of the unsent comment on this device (a reload or a closed tab can't lose it).
   useEffect(() => {
     if (draft === null || !sel) return;
     const t = setTimeout(() => {
       try {
         const scene = sketch && JSON.stringify(sketch.scene).length < 1_500_000 ? sketch.scene : null;
-        if (!draft.trim() && !scene) return localStorage.removeItem(DRAFT_KEY(scriptId));
-        localStorage.setItem(DRAFT_KEY(scriptId), JSON.stringify({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, text: draft, scene, at: Date.now() }));
+        const frame = draftKind === "frame" ? draftFrame : null;
+        if (!draft.trim() && !scene && !frame) return localStorage.removeItem(DRAFT_KEY(scriptId));
+        localStorage.setItem(DRAFT_KEY(scriptId), JSON.stringify({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, text: draft, scene, frame, at: Date.now() }));
       } catch {
         /* full or private: the warnings still protect it */
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [draft, draftKind, sel, sketch, scriptId]);
+  }, [draft, draftKind, sel, sketch, scriptId, draftFrame]);
   // Found one from last time? Offer it back: once, when the script opens
   // (1.23.2: it looked again every time the page around it redrew, so it
   // found the comment being written, or one just posted or drawn, and kept
@@ -774,7 +936,8 @@ export function ScriptEditor({
       if (!raw) return;
       const b = JSON.parse(raw);
       if (Date.now() - (b.at ?? 0) > 14 * 86_400_000 || !findQuote(editor.state.doc, b.quote, b.occurrence)) return localStorage.removeItem(DRAFT_KEY(scriptId));
-      setBackup({ quote: b.quote, occurrence: b.occurrence ?? 0, kind: b.kind === "edit_idea" ? "edit_idea" : "comment", text: String(b.text ?? ""), scene: b.scene ?? null });
+      const frame = b.kind === "frame" && b.frame && typeof b.frame.id === "string" && typeof b.frame.url === "string" ? (b.frame as FrameRef) : null;
+      setBackup({ quote: b.quote, occurrence: b.occurrence ?? 0, kind: b.kind === "edit_idea" ? "edit_idea" : frame ? "frame" : "comment", text: String(b.text ?? ""), scene: b.scene ?? null, frame });
     } catch {}
   }, [editor, canComment, scriptId]);
   async function restoreBackup() {
@@ -787,6 +950,7 @@ export function ScriptEditor({
     // The selection listener places the composer; then fill it in.
     requestAnimationFrame(async () => {
       setDraftKind(b.kind);
+      setDraftFrame(b.kind === "frame" ? b.frame ?? null : null);
       setDraft(b.text);
       if (b.scene?.els?.length) {
         const { exportPng } = await import("../sketch/engine");
@@ -962,9 +1126,9 @@ export function ScriptEditor({
           onDocx={async () => {
             if (!editor) return;
             const { exportScriptDocx } = await import("../lib/export-docx");
-            await exportScriptDocx(editor.getJSON() as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
+            await exportScriptDocx(forExport(editor.getJSON() as Record<string, unknown>) as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
           }}
-          onPdf={() => editor && void printScript(editor, `#${number} ${title}`)}
+          onPdf={() => editor && void printScript(editor, `#${number} ${title}`, forExport)}
         />
         <button
           type="button"
@@ -982,9 +1146,9 @@ export function ScriptEditor({
             toast.success("Preparing the Word file…");
             // The Word library is big: load it only when someone exports.
             const { exportScriptDocx } = await import("../lib/export-docx");
-            await exportScriptDocx(editor.getJSON() as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
+            await exportScriptDocx(forExport(editor.getJSON() as Record<string, unknown>) as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
           }}
-          onPdf={() => editor && void printScript(editor, `#${number} ${title}`)}
+          onPdf={() => editor && void printScript(editor, `#${number} ${title}`, forExport)}
         />
         </span>
       </div>
@@ -995,6 +1159,11 @@ export function ScriptEditor({
           <Toolbar
             editor={editor}
             onImage={() => fileRef.current?.click()}
+            onFrame={() => {
+              const { from, to, empty } = editor.state.selection;
+              const q = empty ? null : quoteAt(editor.state.doc, from, to);
+              setPicker(q ? { purpose: "words", words: q.quote, range: { from, to } } : { purpose: "insert", range: { from, to } });
+            }}
             uploading={uploading}
             grammar={grammar}
             grammarOpen={grammarOpen}
@@ -1122,8 +1291,8 @@ export function ScriptEditor({
                         e.stopPropagation();
                         openFace(c.id, row.top);
                       }}
-                      title={`${c.author?.name ?? "Someone"}: ${c.kind === "edit_idea" ? "editing idea" : "comment"}`}
-                      aria-label={`${c.kind === "edit_idea" ? "Editing idea" : "Comment"} by ${c.author?.name ?? "someone"}`}
+                      title={`${c.author?.name ?? "Someone"}: ${c.kind === "edit_idea" ? "editing idea" : c.kind === "frame" ? "frame guide" : "comment"}`}
+                      aria-label={`${c.kind === "edit_idea" ? "Editing idea" : c.kind === "frame" ? "Frame guide" : "Comment"} by ${c.author?.name ?? "someone"}`}
                       className="relative rounded-full transition-transform hover:z-10 hover:scale-110"
                       style={{ boxShadow: `0 0 0 2px rgb(var(--sp-bg)), 0 0 0 3.5px ${KIND_COLOR[c.kind ?? "comment"]}` }}
                     >
@@ -1151,31 +1320,42 @@ export function ScriptEditor({
               />
             </div>
           )}
-          {sel && onAddComment && draft === null && (
+          {sel && onAddComment && draft === null && !picker && (
             <Leaves>
-              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, sel.left) }}>
+              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - (isPhone ? 262 : 372))) }}>
                 {/* 1.50.0: the app's own colours (text-ink: on the white page the words went dark on a dark box), the kind's colour on its icon. */}
                 <div className="pop-menu origin-top-left flex items-center gap-0.5 rounded-xl bg-surface text-ink border border-line/15 shadow-[0_14px_36px_-12px_rgb(0_0_0/0.45)] p-1">
                   {([
-                    ["comment", "Comment"],
-                    ["edit_idea", "Editing idea"],
-                  ] as const).map(([k, label]) => (
+                    ["comment", "Comment", "Comment"],
+                    ["edit_idea", "Editing idea", "Idea"],
+                    ["frame", "Frame guide", "Frame"],
+                  ] as const).map(([k, label, short]) => (
                     <button
                       key={k}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
+                        // 1.54.0: a frame guide starts with its frame (the picker: a frame guide on the words, the
+                        // words linked to it, or its picture under them).
+                        if (k === "frame") {
+                          const ed = editorRef.current;
+                          if (!ed) return;
+                          setPicker({ purpose: "words", words: sel.quote, range: { from: ed.state.selection.from, to: ed.state.selection.to } });
+                          return;
+                        }
                         setDraftKind(k);
                         setDraft("");
                         // (A new one takes the old one's place in the copy kept on this device.)
                         setBackup(null);
                       }}
+                      title={k === "frame" ? "A reference frame for these words, from Frame Guides" : undefined}
                       className="inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 sm:h-8 text-[12.5px] font-semibold whitespace-nowrap text-ink hover:bg-surface-2 transition-colors"
                     >
                       <span className="inline-flex" style={{ color: KIND_COLOR[k] }} aria-hidden>
-                        {k === "edit_idea" ? <ScissorsIcon className="w-3.5 h-3.5" /> : <CommentIcon className="w-3.5 h-3.5" />}
+                        {k === "edit_idea" ? <ScissorsIcon className="w-3.5 h-3.5" /> : k === "frame" ? <FrameIcon className="w-3.5 h-3.5" /> : <CommentIcon className="w-3.5 h-3.5" />}
                       </span>
-                      {label}
+                      <span className="sm:hidden">{short}</span>
+                      <span className="hidden sm:inline">{label}</span>
                     </button>
                   ))}
                   {/* Several lines: say how many, so it's clear what the comment covers. */}
@@ -1197,6 +1377,9 @@ export function ScriptEditor({
                   sketchUrl={sketch?.url ?? null}
                   onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
                   onRemoveSketch={() => setSketch(null)}
+                  frame={draftKind === "frame" ? draftFrame : null}
+                  onPickFrame={draftKind === "frame" ? () => setPicker({ purpose: "note", words: sel.quote }) : undefined}
+                  onOpenFrame={draftFrame ? () => setViewing({ id: draftFrame.id, ref: draftFrame }) : undefined}
                   busy={sending}
                   onSubmit={() => void submitDraft()}
                   onCancel={() => void requestDiscard()}
@@ -1230,6 +1413,9 @@ export function ScriptEditor({
                 sketchUrl={sketch?.url ?? null}
                 onDraw={draftKind === "edit_idea" ? () => setStudio(true) : undefined}
                 onRemoveSketch={() => setSketch(null)}
+                frame={draftKind === "frame" ? draftFrame : null}
+                onPickFrame={draftKind === "frame" ? () => setPicker({ purpose: "note", words: sel.quote }) : undefined}
+                onOpenFrame={draftFrame ? () => setViewing({ id: draftFrame.id, ref: draftFrame }) : undefined}
                 busy={sending}
                 onSubmit={() => void submitDraft()}
                 onCancel={() => void requestDiscard()}
@@ -1272,7 +1458,38 @@ export function ScriptEditor({
         onClose={() => dock.close("grammar")}
         fab={!panel || panel === "grammar"}
       />
-      {linkCard && editor && (
+      {/* 1.54.0: words linked to a frame guide show the frame instead of where the link goes. */}
+      {linkCard && editor && frameIdOfHref(linkCard.href) && (
+        <FrameLinkCard
+          look={look(frameIdOfHref(linkCard.href)!)}
+          anchor={linkCard.el}
+          pinned={linkCard.pinned}
+          canEdit={canEdit}
+          onEnter={() => clearTimeout(linkTimers.current.hide)}
+          onLeave={() => {
+            if (linkCard.pinned) return;
+            linkTimers.current.hide = setTimeout(() => setLinkCard((c) => (c && !c.pinned ? null : c)), 260);
+          }}
+          onClose={closeLinkCard}
+          onOpen={() => {
+            const id = frameIdOfHref(linkCard.href);
+            setLinkCard(null);
+            if (id) setViewing({ id, ref: null });
+          }}
+          onChange={() => {
+            const pos = linkAt(linkCard.el);
+            setLinkCard(null);
+            if (pos !== null) setPicker({ purpose: "relink", linkAt: pos, words: linkCard.el.textContent ?? undefined });
+          }}
+          onRemove={() => {
+            const pos = linkAt(linkCard.el);
+            setLinkCard(null);
+            if (pos === null) return;
+            editor.chain().focus().setTextSelection(pos).extendMarkRange("link").unsetLink().run();
+          }}
+        />
+      )}
+      {linkCard && editor && !frameIdOfHref(linkCard.href) && (
         <LinkCard
           href={linkCard.href}
           anchor={linkCard.el}
@@ -1313,6 +1530,24 @@ export function ScriptEditor({
           }}
         />
       )}
+      {picker && (
+        <FramePicker
+          teamId={teamId}
+          purpose={picker.purpose}
+          words={picker.words}
+          canEdit={canEdit}
+          canNote={!!onAddComment}
+          onPick={onFramePicked}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {viewed && (
+        <FrameViewer
+          f={viewed}
+          lib={frameLib.lib}
+          onClose={() => setViewing(null)}
+        />
+      )}
       {studio && (
         <SketchStudio
           initial={sketch?.scene ?? null}
@@ -1330,7 +1565,7 @@ export function ScriptEditor({
         <div className="no-print fixed z-40 left-1/2 -translate-x-1/2 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] lg:bottom-6 w-[min(30rem,calc(100vw-1.5rem))] rounded-2xl border bg-surface shadow-2xl px-4 py-3 flex items-center gap-3 animate-[toastin_.25s_ease]" style={{ borderColor: `color-mix(in srgb, ${KIND_COLOR[backup.kind]} 45%, transparent)` }}>
           <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: KIND_COLOR[backup.kind] }} />
           <p className="flex-1 min-w-0 text-[13px]">
-            You have an unsent {backup.kind === "edit_idea" ? "editing idea" : "comment"} on <span className="font-semibold">“{backup.quote.slice(0, 40)}{backup.quote.length > 40 ? "…" : ""}”</span>.
+            You have an unsent {backup.kind === "edit_idea" ? "editing idea" : backup.kind === "frame" ? "frame guide" : "comment"} on <span className="font-semibold">“{backup.quote.slice(0, 40)}{backup.quote.length > 40 ? "…" : ""}”</span>.
           </p>
           <button type="button" onClick={() => void restoreBackup()} className="rounded-lg bg-amber text-white font-bold px-3 h-8 text-[12.5px] flex-shrink-0">
             Restore
@@ -1361,6 +1596,7 @@ export function ScriptEditor({
 function Toolbar({
   editor,
   onImage,
+  onFrame,
   uploading,
   grammar,
   grammarOpen,
@@ -1368,6 +1604,8 @@ function Toolbar({
 }: {
   editor: Editor;
   onImage: () => void;
+  /** 1.54.0: a frame guide (its picture here, or on the words picked). */
+  onFrame: () => void;
   uploading: number;
   grammar: Grammar;
   grammarOpen: boolean;
@@ -1513,6 +1751,9 @@ function Toolbar({
             <ImageIcon className="w-4 h-4" />
           )}
         </B>
+        <B label="Frame guide: a reference shot from Frame Guides" onClick={onFrame}>
+          <FrameIcon className="w-4 h-4" />
+        </B>
         <B label="Page break: the rest starts a new page" shortcut={`${MOD}Enter`} onClick={() => c().setPageBreak().run()}>
           <PageBreakIcon className="w-4 h-4" />
         </B>
@@ -1565,6 +1806,9 @@ function Toolbar({
               </B>
               <B label="Add image" onClick={() => { setMore(false); onImage(); }}>
                 <ImageIcon className="w-4 h-4" />
+              </B>
+              <B label="Frame guide" onClick={() => { setMore(false); onFrame(); }}>
+                <FrameIcon className="w-4 h-4" />
               </B>
               <B label="Page break" onClick={() => { setMore(false); c().setPageBreak().run(); }}>
                 <PageBreakIcon className="w-4 h-4" />

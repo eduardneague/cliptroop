@@ -23,6 +23,9 @@
      words on it (every main button) read at 4.5:1; it was 3.4:1. Words in it use --amber-text (below). */
   --amber: 197 81 0;
   --teal: 21 130 115;
+  /* Frame guides (1.54.0): teal, their own colour in scripts and on Frame Guides (comments are the accent, editing
+     ideas blue). In the palettes whose accent is teal or green it's violet instead (below), so the three stay apart. */
+  --frame: 21 130 115;
   --blue: 47 86 194;
   --violet: 88 58 200;     /* meetings: 7.4:1 on white */
   /* Content kinds: shorts (orange) and long videos (light blue), everywhere.
@@ -104,6 +107,7 @@
   --word-mix: 65%;          /* lib/word-color.ts: any other colour, as words, this much of it and the rest ink */
   --amber-text: 156 62 0;
   --teal-text: 0 104 92;
+  --frame-text: 0 104 92;
   --blue-text: 43 81 189;
   --violet-text: 88 58 200;
   --short-text: 164 57 0;
@@ -191,6 +195,7 @@
   --word-mix: 50%;
   --amber-text: 239 119 58;
   --teal-text: 73 170 153;
+  --frame-text: 73 170 153;
   --blue-text: 104 149 255;
   --violet-text: 165 145 255;
   --short-text: 251 146 60;
@@ -261,6 +266,10 @@ html[data-palette="inkorchid"]:not(.dark) { --paper: 236 236 236; --paper-2: 228
 html.dark[data-palette="inkorchid"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 184 63 198; --amber-text: 224 104 238; }
 html[data-palette="inkcherry"]:not(.dark) { --paper: 236 236 236; --paper-2: 228 228 228; --surface: 255 255 255; --surface-2: 246 246 246; --amber: 200 30 48; --amber-text: 179 0 35; }
 html.dark[data-palette="inkcherry"] { --paper: 12 12 13; --paper-2: 17 17 18; --surface: 24 24 26; --surface-2: 31 31 34; --amber: 219 51 66; --amber-text: 255 101 105; }
+/* Frame guides (1.54.0) beside a teal or green accent (Lagoon, Forest, Sakura, Pine): violet, so a frame guide never
+   looks like a comment (the accent) or an editing idea (blue). */
+html:is([data-palette="lagoon"], [data-palette="forest"], [data-palette="sakura"], [data-palette="pine"]) { --frame: 88 58 200; --frame-text: 88 58 200; }
+html.dark:is([data-palette="lagoon"], [data-palette="forest"], [data-palette="sakura"], [data-palette="pine"]) { --frame-text: 165 145 255; }
 
 /*
   1.35.0: in light mode a filled button darkens a little when pointed at instead of brightening, so its white words
@@ -1465,6 +1474,63 @@ html[data-glass-style="liquid"] .notif-card { box-shadow: var(--liquid-rim); }
 .script-doc a { cursor: pointer; }
 /* Tab (1.27.5): a tab stop about half an inch in, like Word. */
 .script-doc { tab-size: 6; tab-size: 2.6em; }
+/* ---- Frame guides in a script (1.54.0, modules/scripts/lib/frame-links.ts) ----------------------------------------
+   Words linked to a frame guide: Frame Guides' colour (mixed toward the paper's ink, so it reads on light and dark
+   paper whatever the app's theme), a soft tint and a dotted line. The frame's picture right under them, in the
+   paragraph (it moves with it, on Pages too), never typed into, never printed (the print draws it from the frame). */
+.script-paper .script-doc a[href*="/frame-guides?frame="] {
+  color: color-mix(in srgb, rgb(var(--frame)) 74%, rgb(var(--sp-ink)));
+  background: rgb(var(--frame) / 0.1);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: rgb(var(--frame) / 0.7);
+  border-radius: 3px;
+  padding: 0 0.08em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.script-paper[data-paper="dark"] .script-doc a[href*="/frame-guides?frame="] { color: color-mix(in srgb, rgb(var(--frame)) 55%, rgb(var(--sp-ink))); background: rgb(var(--frame) / 0.18); }
+.script-paper .script-doc a[href*="/frame-guides?frame="]:hover { background: rgb(var(--frame) / 0.2); }
+.frame-below {
+  display: flex; flex-wrap: wrap; gap: 10px; margin: 0.6em 0 0.25em;
+  font-size: 13px; line-height: 1.3; font-weight: 400; font-style: normal; letter-spacing: 0; text-align: left;
+  user-select: none; -webkit-user-select: none; white-space: normal;
+}
+/* The break ProseMirror keeps after a widget at a paragraph's end would leave an empty line under the pictures (the
+   cursor at the end of the words is before them anyway). Its own stylesheet says !important for the separator. */
+.script-doc .frame-below ~ br.ProseMirror-trailingBreak,
+.script-doc .frame-below ~ img.ProseMirror-separator { display: none !important; }
+.frame-below-card {
+  display: inline-flex; flex-direction: column; width: min(260px, 100%); padding: 0; margin: 0;
+  border-radius: 10px; overflow: hidden; text-align: left; cursor: zoom-in; font: inherit; color: inherit;
+  background: rgb(var(--sp-bg));
+  border: 1px solid color-mix(in srgb, rgb(var(--frame)) 38%, rgb(var(--sp-line) / 0.12));
+  box-shadow: 0 8px 22px -14px rgb(0 0 0 / 0.55);
+  transition: transform .16s var(--ease-out, ease), box-shadow .16s var(--ease-out, ease), border-color .16s ease;
+}
+.frame-below-card:hover { transform: translateY(-1px); border-color: rgb(var(--frame) / 0.75); box-shadow: 0 14px 28px -16px rgb(0 0 0 / 0.6); }
+.frame-below-card:focus-visible { outline: 2px solid rgb(var(--frame)); outline-offset: 2px; }
+.frame-below-pic { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; background: rgb(var(--sp-line) / 0.07); overflow: hidden; }
+.frame-below-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.frame-below-cap {
+  display: block; padding: 6px 9px 7px; color: rgb(var(--sp-ink)); font-size: 12.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.frame-below-cap b { color: color-mix(in srgb, rgb(var(--frame)) 72%, rgb(var(--sp-ink))); font-weight: 800; }
+.frame-below-card.is-loading .frame-below-pic { animation: frame-below-wait 1.4s ease-in-out infinite; }
+.frame-below-card.is-loading, .frame-below-card.is-gone { cursor: default; }
+.frame-below-card.is-gone { opacity: 0.75; border-style: dashed; box-shadow: none; width: auto; max-width: 100%; }
+.frame-below-card.is-gone .frame-below-pic { display: none; }
+@keyframes frame-below-wait { 50% { background: rgb(var(--sp-line) / 0.14); } }
+/* A frame guide's picture in the text: a thin line in Frame Guides' colour round it. */
+.script-doc img.script-frame-pic { box-shadow: 0 0 0 1.5px rgb(var(--frame) / 0.55); }
+html[data-motion="off"] .frame-below-card { transition: none; }
+html[data-motion="off"] .frame-below-card.is-loading .frame-below-pic { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .frame-below-card { transition: none; }
+  .frame-below-card.is-loading .frame-below-pic { animation: none; }
+}
 /* Lists inside lists without a style of their own go 1. → a. → i. (lib/list-markers.ts). */
 .script-doc ol ol { list-style-type: lower-alpha; }
 .script-doc ol ol ol { list-style-type: lower-roman; }

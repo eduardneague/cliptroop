@@ -50,6 +50,8 @@ const pickers: [string, RegExp][] = [
   ["modules/scripts/sketch/sketch-studio.tsx", /pictureTooBig\(file\)/],
   ["app/(dashboard)/settings/dashboard-background.tsx", /!lighten && plan\.action === "image" \? pictureTooBig\(original\)/],
   ["lib/feedback.ts", /pictureTooBig\(file\)/],
+  // 1.54.0: Frame Guides' pictures (the page and a script's picker).
+  ["modules/frames/components/use-frame-uploads.ts", /pictureTooBig\(f\)/],
 ];
 for (const [f, re] of pickers) {
   const s = read(f);

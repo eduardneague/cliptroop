@@ -3,6 +3,7 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { LEAF, MAX_QUOTE, toLeaf } from "./comment-limits";
+import { KIND_COLOR, type CommentKind, type FrameRef } from "./kinds";
 
 export { LEAF, MAX_QUOTE, toLeaf };
 
@@ -177,7 +178,7 @@ export type CommentMark = {
   occurrence: number;
   resolved: boolean;
   color?: string;
-  kind?: "comment" | "edit_idea";
+  kind?: CommentKind;
   /** Who wrote it: their photo sits next to the line (1.23.0). */
   author?: { id: string; name: string; avatarUrl: string | null; color: string } | null;
 };
@@ -185,9 +186,9 @@ export const commentKey = new PluginKey("script-comments");
 
 /** Draws open comments as highlights (decorations only: the text is untouched). */
 /** The comment being written right now: its text gets a "writing…" placeholder. */
-export type PendingMark = { quote: string; occurrence: number; kind: "comment" | "edit_idea"; label?: string } | null;
+export type PendingMark = { quote: string; occurrence: number; kind: CommentKind; label?: string } | null;
 /** A comment on its way to the server (shown at once, with a "Posting…" tag). An empty quote: a general one (1.50.0). */
-export type PostingComment = { quote: string; occurrence: number; kind: "comment" | "edit_idea"; body: string; sketchUrl: string | null; id?: string };
+export type PostingComment = { quote: string; occurrence: number; kind: CommentKind; body: string; sketchUrl: string | null; id?: string; frame?: FrameRef | null };
 
 export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null; pending?: PendingMark }) {
   return Extension.create({
@@ -203,7 +204,7 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
               if (pending) {
                 const r = findQuote(state.doc, pending.quote, pending.occurrence);
                 if (r) {
-                  const color = pending.kind === "edit_idea" ? "rgb(59 130 246)" : "rgb(var(--amber))";
+                  const color = KIND_COLOR[pending.kind];
                   decos.push(Decoration.inline(r.from, r.to, { class: "script-comment-pending", style: `--comment-color: ${color}` }));
                   decos.push(
                     Decoration.widget(
@@ -212,7 +213,7 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
                         const tag = document.createElement("span");
                         tag.className = "script-pending-tag no-print";
                         tag.style.setProperty("--comment-color", color);
-                        tag.textContent = pending.label ?? (pending.kind === "edit_idea" ? "Writing an idea…" : "Writing a comment…");
+                        tag.textContent = pending.label ?? (pending.kind === "edit_idea" ? "Writing an idea…" : pending.kind === "frame" ? "Adding a frame guide…" : "Writing a comment…");
                         tag.contentEditable = "false";
                         return tag;
                       },

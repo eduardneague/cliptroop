@@ -30,6 +30,12 @@ import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
 import { CommentComposer, KindMark } from "./comment-composer";
 import { CommentCard, PostingCard } from "./comment-card";
+import { frameRefOf, viewFrame } from "./script-editor";
+import { KIND_COLOR, frameRefName, type CommentKind, type FrameRef } from "../lib/kinds";
+import { frameUses } from "../lib/frame-links";
+import { frameById, loadLibrary } from "@/modules/frames/components/frame-store";
+import type { FrameGuide } from "@/modules/frames/lib/model";
+import dynamic from "next/dynamic";
 import { sounds } from "@/lib/sounds";
 import type { MentionPerson } from "../lib/mention-people";
 import type { ScriptFlow } from "../lib/flow";
@@ -148,9 +154,9 @@ function Workspace({
   const mayDelete = (c: ScriptComment) => !!me && (me.master || c.author?.id === me.userId);
   // 1.50.0: a comment on the whole document (on no words of it), written in the comments panel.
   const onAddGeneral = canComment
-    ? async (body: string, kind: "comment" | "edit_idea") => {
-        setPosting({ quote: "", occurrence: 0, kind, body, sketchUrl: null });
-        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true });
+    ? async (body: string, kind: CommentKind, frame?: FrameRef | null) => {
+        setPosting({ quote: "", occurrence: 0, kind, body, sketchUrl: null, frame: frame ?? null });
+        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame?.id ?? null });
         if (r.error !== undefined) {
           setPosting(null);
           return r.error;
@@ -208,8 +214,8 @@ function Workspace({
       onPosting={setPosting}
       onAddComment={
         canComment
-          ? async (quote, occurrence, body, kind, sketch) => {
-              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch });
+          ? async (quote, occurrence, body, kind, sketch, frameId) => {
+              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch, frameId });
               if (r.error !== undefined) {
                 setPosting(null);
                 return r.error;
@@ -303,6 +309,7 @@ function Workspace({
               canComment={canComment}
               mayDelete={mayDelete(c)}
               onSketch={() => setZoomed(c)}
+              onFrame={c.frame ? () => viewFrame(c.frame!.id, c.frame) : undefined}
               onDone={close}
               onClose={close}
               onAll={() => {
@@ -324,6 +331,7 @@ function Workspace({
           active={active}
           onPick={setActive}
           docId={doc.id}
+          teamId={doc.teamId}
           docName={doc.name}
           number={number}
           docContent={doc.content}
@@ -832,11 +840,14 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
   );
 }
 
-/** One colour per type, everywhere: comments orange, editing ideas blue. */
-export const TYPE_COLOR = { comment: "rgb(var(--amber))", edit_idea: "rgb(59 130 246)" } as const;
+/** One colour per type, everywhere: comments the accent, editing ideas blue, frame guides teal (lib/kinds.ts). */
+export const TYPE_COLOR = KIND_COLOR;
 function commentColor(c: ScriptComment, _roleColors?: Record<string, string>) {
   return TYPE_COLOR[c.kind];
 }
+
+// The frame picker for a frame guide on the whole document (1.54.0): loaded when it's first opened.
+const FramePicker = dynamic(() => import("@/modules/frames/components/frame-picker").then((m) => m.FramePicker), { ssr: false });
 
 /**
  * Comments as a small chat: a floating button, a panel on desktop, a sheet on
@@ -857,6 +868,7 @@ export function CommentsChat({
   active,
   onPick,
   docId,
+  teamId,
   docName,
   number,
   docContent,
@@ -880,6 +892,8 @@ export function CommentsChat({
   active: string | null;
   onPick: (id: string) => void;
   docId: string;
+  /** The team's (1.54.0: its frame guides). */
+  teamId: string;
   docName: string;
   number: number;
   docContent: Record<string, unknown>;
@@ -888,18 +902,18 @@ export function CommentsChat({
   people: MentionPerson[];
   onSketch: (c: ScriptComment) => void;
   /** A comment on the whole document: null when it's posted, else what went wrong. */
-  onAddGeneral?: (body: string, kind: "comment" | "edit_idea") => Promise<string | null>;
+  onAddGeneral?: (body: string, kind: CommentKind, frame?: FrameRef | null) => Promise<string | null>;
 }) {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
-  const [filter, setFilter] = useState<"all" | "comment" | "edit_idea">("all");
+  const [filter, setFilter] = useState<"all" | CommentKind>("all");
   // The big view, like the other chats.
   const [big, setBig] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
   const openCount = comments.filter((c) => !c.resolved).length;
   const shown = comments.filter((c) => showResolved || !c.resolved);
-  const counts = { all: shown.length, comment: shown.filter((c) => c.kind === "comment").length, edit_idea: shown.filter((c) => c.kind === "edit_idea").length };
+  const counts = { all: shown.length, comment: shown.filter((c) => c.kind === "comment").length, edit_idea: shown.filter((c) => c.kind === "edit_idea").length, frame: shown.filter((c) => c.kind === "frame").length };
   const list = shown.filter((c) => filter === "all" || c.kind === filter);
   const listRef = useRef<HTMLDivElement>(null);
   const hasPosting = !!posting;
@@ -936,41 +950,49 @@ export function CommentsChat({
 
   // The box for the whole document, and a copy of what's in it on this device (a reload can't lose it).
   const generalKey = `vp:general-comment:${docId}`;
-  const [gKind, setGKind] = useState<"comment" | "edit_idea">("comment");
+  const [gKind, setGKind] = useState<CommentKind>("comment");
   const [gText, setGText] = useState("");
   const [gBusy, setGBusy] = useState(false);
+  // 1.54.0: a frame guide on the whole document, and its picker.
+  const [gFrame, setGFrame] = useState<FrameRef | null>(null);
+  const [gPicking, setGPicking] = useState(false);
   useEffect(() => {
     try {
       const b = JSON.parse(localStorage.getItem(generalKey) ?? "null");
       if (b && typeof b.text === "string" && Date.now() - (b.at ?? 0) < 14 * 86_400_000) {
         setGText(b.text);
-        setGKind(b.kind === "edit_idea" ? "edit_idea" : "comment");
+        const frame = b.kind === "frame" && b.frame && typeof b.frame.id === "string" ? (b.frame as FrameRef) : null;
+        setGKind(b.kind === "edit_idea" ? "edit_idea" : frame ? "frame" : "comment");
+        setGFrame(frame);
       }
     } catch {}
   }, [generalKey]);
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        if (!gText.trim()) localStorage.removeItem(generalKey);
-        else localStorage.setItem(generalKey, JSON.stringify({ kind: gKind, text: gText, at: Date.now() }));
+        if (!gText.trim() && !(gKind === "frame" && gFrame)) localStorage.removeItem(generalKey);
+        else localStorage.setItem(generalKey, JSON.stringify({ kind: gKind, text: gText, frame: gKind === "frame" ? gFrame : null, at: Date.now() }));
       } catch {
         /* full or private: it's still in the box */
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [gText, gKind, generalKey]);
+  }, [gText, gKind, generalKey, gFrame]);
   async function sendGeneral() {
     const body = gText.trim();
-    if (!onAddGeneral || gBusy || !body) return;
-    const was = { text: gText, kind: gKind };
+    if (!onAddGeneral || gBusy) return;
+    if (gKind === "frame" ? !gFrame : !body) return gKind === "frame" ? setGPicking(true) : undefined;
+    const was = { text: gText, kind: gKind, frame: gFrame };
     setGBusy(true);
     // It shows at once, as "Posting…"; if it fails, the words come back to the box.
     setGText("");
-    const err = await onAddGeneral(body, gKind);
+    if (gKind === "frame") setGFrame(null);
+    const err = await onAddGeneral(body, gKind, gKind === "frame" ? was.frame : null);
     setGBusy(false);
     if (err) {
       setGText(was.text);
       setGKind(was.kind);
+      setGFrame(was.frame);
       toast.error(err);
       return;
     }
@@ -980,14 +1002,41 @@ export function CommentsChat({
     } catch {}
   }
   async function discardGeneral() {
-    if (!gText.trim()) return;
+    if (!gText.trim() && !(gKind === "frame" && gFrame)) return;
     const ok = await confirm({
-      title: gKind === "edit_idea" ? "Discard this editing idea?" : "Discard this comment?",
+      title: gKind === "edit_idea" ? "Discard this editing idea?" : gKind === "frame" ? "Discard this frame guide?" : "Discard this comment?",
       description: "What you wrote will be lost.",
       confirmLabel: "Discard",
       danger: true,
     });
-    if (ok) setGText("");
+    if (ok) {
+      setGText("");
+      setGFrame(null);
+    }
+  }
+
+  // The shot list (1.54.0): every frame guide of the script in its order (on words, linked words, pictures), as Word
+  // or a PDF, for whoever films it.
+  const shotCount = comments.filter((c) => c.kind === "frame" && !c.resolved).length + (ed && !ed.isDestroyed ? frameUses(ed.state.doc).length : 0);
+  async function exportShots(f: "docx" | "pdf") {
+    const doc = ed && !ed.isDestroyed ? ed.state.doc : null;
+    const uses = doc ? frameUses(doc) : [];
+    if (uses.some((u) => !frameById(teamId, u.id))) await loadLibrary(teamId);
+    const notes = comments
+      .filter((c) => c.kind === "frame" && !c.resolved)
+      .map((c) => ({
+        at: !c.quote ? -1 : doc ? findQuote(doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity,
+        item: { quote: c.quote, idea: c.body, sketch: c.frame?.url ?? null, label: c.frame ? frameRefName(c.frame) : "Its frame was deleted from Frame Guides" },
+      }));
+    const inText = uses.flatMap((u) => {
+      const fr = frameById(teamId, u.id);
+      return fr ? [{ at: u.at, item: { quote: u.how === "picture" ? null : u.words, idea: "", sketch: fr.url, label: `${frameRefName(fr)}${u.how === "link" ? " (linked words)" : ""}` } }] : [];
+    });
+    const shots = [...notes, ...inText].sort((a, b) => a.at - b.at).map((x) => x.item);
+    if (!shots.length) return toast.error("No frame guides in this script yet.");
+    const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
+    if (f === "docx") await exportIdeasDocx(shots, exportTitle, `${exportTitle} - shot list`.replace(/[\\/:*?"<>|]+/g, ""), "Shot List");
+    else if (!exportIdeasPdf(shots, exportTitle, "Shot List")) toast.error("Allow pop-ups to print the PDF.");
   }
 
   async function resolveGone() {
@@ -1021,6 +1070,7 @@ export function CommentsChat({
       active={c.id === active}
       onPick={() => onPick(c.id)}
       onSketch={() => onSketch(c)}
+      onFrame={c.frame ? () => viewFrame(c.frame!.id, c.frame) : undefined}
     />
   );
 
@@ -1072,7 +1122,8 @@ export function CommentsChat({
                 {([
                   ["all", "All"],
                   ["comment", "Comments"],
-                  ["edit_idea", "Editing ideas"],
+                  ["edit_idea", "Ideas"],
+                  ["frame", "Frames"],
                 ] as const).map(([k, label]) => (
                   <button
                     key={k}
@@ -1080,7 +1131,8 @@ export function CommentsChat({
                     role="radio"
                     aria-checked={filter === k}
                     onClick={() => setFilter(k)}
-                    className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] px-2 h-8 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
+                    title={k === "edit_idea" ? "Editing ideas" : k === "frame" ? "Frame guides" : undefined}
+                    className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] px-1.5 sm:px-2 h-8 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
                       filter === k ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.18)] ring-1 ring-inset ring-line/10" : "text-ink-soft hover:text-ink"
                     }`}
                   >
@@ -1097,7 +1149,7 @@ export function CommentsChat({
                   <p className="text-[13.5px] font-semibold text-ink">{comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet.`}</p>
                   {!comments.length && (
                     <p className="mt-1.5 text-[12.5px] text-ink-soft leading-relaxed">
-                      Select any words in it, a line or several, then choose Comment or Editing idea{canComment && onAddGeneral ? ". Or write one below for the whole document." : "."}
+                      Select any words in it, a line or several, then choose Comment, Editing idea or Frame guide{canComment && onAddGeneral ? ". Or write one below for the whole document." : "."}
                     </p>
                   )}
                 </div>
@@ -1139,16 +1191,37 @@ export function CommentsChat({
                 <CommentComposer
                   variant="panel"
                   kind={gKind}
-                  setKind={setGKind}
+                  setKind={(k) => {
+                    setGKind(k);
+                    // A frame guide starts with its frame.
+                    if (k === "frame" && !gFrame) setGPicking(true);
+                  }}
                   quote=""
                   people={people}
                   roleColors={roleColors}
                   text={gText}
                   setText={setGText}
+                  frame={gKind === "frame" ? gFrame : null}
+                  onPickFrame={() => setGPicking(true)}
+                  onOpenFrame={gFrame ? () => viewFrame(gFrame.id, gFrame) : undefined}
                   busy={gBusy}
                   onSubmit={() => void sendGeneral()}
                   onCancel={() => void discardGeneral()}
                 />
+                {gPicking && (
+                  <FramePicker
+                    teamId={teamId}
+                    purpose="general"
+                    canEdit={false}
+                    canNote
+                    onPick={(f: FrameGuide) => {
+                      setGPicking(false);
+                      setGKind("frame");
+                      setGFrame(frameRefOf(f, null));
+                    }}
+                    onClose={() => setGPicking(false)}
+                  />
+                )}
               </div>
             )}
             <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
@@ -1174,6 +1247,16 @@ export function CommentsChat({
                       }}
                       className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
                     >
+                      {f === "docx" ? "Word" : "PDF"}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {shotCount > 0 && (
+                <span className="inline-flex items-center gap-1" title="Every frame guide of the script, in its order, for whoever films it">
+                  <span className="font-semibold">Shot list</span>
+                  {(["docx", "pdf"] as const).map((f) => (
+                    <button key={f} type="button" onClick={() => void exportShots(f)} className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40">
                       {f === "docx" ? "Word" : "PDF"}
                     </button>
                   ))}

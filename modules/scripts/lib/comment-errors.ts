@@ -4,9 +4,12 @@
  * where it's one we know, and its message otherwise, so the next failure says what to fix (addComment also counts it
  * in Developer → Problems). Pure: tests/script-comment-errors.test.ts.
  */
-export function commentFailure(error: { code?: string; message?: string } | null, kind: "comment" | "edit_idea", sketch: boolean): string {
-  const what = kind === "edit_idea" ? (sketch ? "the idea with its sketch" : "the idea") : sketch ? "the comment with its sketch" : "the comment";
+export function commentFailure(error: { code?: string; message?: string } | null, kind: "comment" | "edit_idea" | "frame", sketch: boolean): string {
+  const what = kind === "frame" ? "the frame guide" : kind === "edit_idea" ? (sketch ? "the idea with its sketch" : "the idea") : sketch ? "the comment with its sketch" : "the comment";
   const msg = String(error?.message ?? "").trim();
+  // 1.54.0: a frame guide's frame is the team's (0133).
+  if (/frame guide isn.t this team/i.test(msg)) return `Couldn't add ${what}: that frame is another team's. Pick one from this team's Frame Guides.`;
+  if (/pick a frame guide first/i.test(msg)) return `Couldn't add ${what}: pick its frame first.`;
   // The database's own check (0056, 0127): a drawing lives in its document's folder.
   if (/drawing doesn.t belong/i.test(msg)) return `Couldn't add ${what}: the drawing was saved for another document. Draw it again here.`;
   // A Supabase project that ran out of disk is put in read-only mode.

@@ -17,8 +17,14 @@ import type { Editor } from "@tiptap/core";
 const ROOT_ID = "script-print-root";
 const PRINTING = "vp-printing";
 
+/**
+ * The document as it prints (1.54.0: the linked frame guides' pictures under their words, frame-links.ts), from the
+ * saved JSON; none given: the document itself.
+ */
+export type PrintDoc = (json: Record<string, unknown>) => Record<string, unknown>;
+
 /** The script's text as the page prints it. */
-export function buildPrintCopy(editor: Editor, title: string): HTMLElement {
+export function buildPrintCopy(editor: Editor, title: string, prepare?: PrintDoc): HTMLElement {
   const root = document.createElement("div");
   root.id = ROOT_ID;
   const paper = document.createElement("div");
@@ -30,7 +36,15 @@ export function buildPrintCopy(editor: Editor, title: string): HTMLElement {
   const body = document.createElement("div");
   body.className = "script-doc";
   // The document itself (what's saved), not the editor's screen: no decorations.
-  body.appendChild(DOMSerializer.fromSchema(editor.schema).serializeFragment(editor.state.doc.content, { document }));
+  let doc = editor.state.doc;
+  if (prepare) {
+    try {
+      doc = editor.schema.nodeFromJSON(prepare(editor.getJSON() as Record<string, unknown>));
+    } catch {
+      /* the document as it is */
+    }
+  }
+  body.appendChild(DOMSerializer.fromSchema(editor.schema).serializeFragment(doc.content, { document }));
   // Pictures: their size and side, as in the script (the editor draws them with its own controls).
   body.querySelectorAll("img").forEach((img) => {
     const width = Number(img.getAttribute("data-width"));
@@ -59,9 +73,9 @@ export function removePrintCopy() {
 }
 
 /** Puts the copy on the page for printing (in place of an older one). */
-export function placePrintCopy(editor: Editor, title: string): HTMLElement {
+export function placePrintCopy(editor: Editor, title: string, prepare?: PrintDoc): HTMLElement {
   removePrintCopy();
-  const root = buildPrintCopy(editor, title);
+  const root = buildPrintCopy(editor, title, prepare);
   document.body.appendChild(root);
   document.documentElement.classList.add(PRINTING);
   return root;
@@ -73,8 +87,8 @@ const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
  * Export as PDF: the copy, its pictures loaded (a few seconds at most) and
  * the browser's print dialog ("Save as PDF").
  */
-export async function printScript(editor: Editor, title: string) {
-  const root = placePrintCopy(editor, title);
+export async function printScript(editor: Editor, title: string, prepare?: PrintDoc) {
+  const root = placePrintCopy(editor, title, prepare);
   const images = Array.from(root.querySelectorAll("img"));
   const loaded = Promise.all(
     images.map((img) =>
@@ -95,11 +109,11 @@ export async function printScript(editor: Editor, title: string) {
  * Ctrl+P and the browser's own Print: the same copy. `get` gives the editor
  * and title at that moment. Returns the clean-up.
  */
-export function watchPrinting(get: () => { editor: Editor | null; title: string }): () => void {
+export function watchPrinting(get: () => { editor: Editor | null; title: string; prepare?: PrintDoc }): () => void {
   const before = () => {
     if (document.getElementById(ROOT_ID)) return;
-    const { editor, title } = get();
-    if (editor && !editor.isDestroyed) placePrintCopy(editor, title);
+    const { editor, title, prepare } = get();
+    if (editor && !editor.isDestroyed) placePrintCopy(editor, title, prepare);
   };
   // (Firefox copies the page for printing right away; Chrome and Safari after the dialog closes.)
   const after = () => setTimeout(removePrintCopy, 0);

@@ -80,7 +80,7 @@ export type NotificationItem = {
     when?: string;
     dueDate?: string | null;
     docName?: string;
-    commentKind?: "comment" | "edit_idea";
+    commentKind?: "comment" | "edit_idea" | "frame";
     /** script_handoff: the step it was sent to. */
     toStep?: "review" | "staging";
     /** app_alert: where it happened. */

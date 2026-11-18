@@ -40,6 +40,8 @@ export const IMAGE_PRESETS = {
   logo: { maxWidth: 256, maxHeight: 256, quality: 0.86, preserveAlpha: true, cover: true },
   /** Pictures in comments, scripts and feedback: screenshots stay readable. */
   attachment: { maxWidth: 1920, maxHeight: 1920, quality: 0.8 },
+  /** A guide frame in Frame Guides' grids and pickers (1.54.0): shown 320 px wide at most, twice that on a sharp screen. */
+  frameThumb: { maxWidth: 640, maxHeight: 640, quality: 0.78 },
 } satisfies Record<string, CompressOptions>;
 
 const SKIP_TYPES = new Set(["image/gif"]);

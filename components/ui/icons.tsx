@@ -1154,3 +1154,13 @@ export function TodoIcon(p: IconProps) {
     </Svg>
   );
 }
+
+/** Frame Guides (1.54.0): a camera's viewfinder, its four corners round a frame. */
+export function FrameIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M3.75 8.25V6a2.25 2.25 0 0 1 2.25-2.25h2.25M15.75 3.75H18A2.25 2.25 0 0 1 20.25 6v2.25M20.25 15.75V18A2.25 2.25 0 0 1 18 20.25h-2.25M8.25 20.25H6A2.25 2.25 0 0 1 3.75 18v-2.25" />
+      <rect x="7.75" y="8.5" width="8.5" height="7" rx="1.5" />
+    </Svg>
+  );
+}

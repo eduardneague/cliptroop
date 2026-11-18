@@ -60,6 +60,7 @@ export function DeleteVideoDialog({
     ? [
         work.comments ? n(work.comments, "open comment", "open comments") : null,
         work.ideas ? n(work.ideas, "editing idea", "editing ideas") : null,
+        work.frames ? n(work.frames, "frame guide", "frame guides") : null,
         work.files ? n(work.files, "uploaded edit", "uploaded edits") : null,
         work.thumbnails ? n(work.thumbnails, "thumbnail", "thumbnails") : null,
         work.notes ? n(work.notes, "note", "notes") : null,

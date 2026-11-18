@@ -81,6 +81,8 @@ export default async function ShortScriptPage({
   };
   short.scripterIds.forEach((m) => job(m, "Scripter"));
   job(short.editor?.memberId, "Editor");
+  // 1.54.0: the filmer comes first when you @mention in a frame guide.
+  job(short.filmer?.memberId, "Filmer");
   job(short.reviewer?.memberId, "Reviewer");
   job(short.scheduler?.memberId, "Scheduler");
 

@@ -70,7 +70,7 @@ for (const s of ['view === "assigned"', 'view === "planned"', "Suggestions", "Co
 // --- Faster ways in -----------------------------------------------------------------------------------------------------
 const nav = read("lib/nav-items.ts");
 ok(/const TODO = \{ href: "\/todo", label: "To Do"/.test(nav) && /label: "Schedule", items: \[CALENDAR, MEETINGS, POSTING, TODO\]/.test(nav) && /\{ label: null, items: \[DASHBOARD\] \}/.test(nav), "the menu: To Do under Schedule (1.53.3)");
-ok(/MORE_ITEMS: NavItem\[\] = \[OUTLIERS, MEETINGS, POSTING, TODO, ANALYTICS/.test(nav), "phones: in More, in the menu's order");
+ok(/MORE_ITEMS: NavItem\[\] = \[OUTLIERS, FRAME_GUIDES, MEETINGS, POSTING, TODO, ANALYTICS/.test(nav), "phones: in More, in the menu's order");
 ok(/<QuickTodo \/>/.test(read("app/(dashboard)/layout.tsx")), "the top bar's To Do button, on every page");
 const quick = read("modules/todo/components/quick-todo.tsx");
 ok(/!isQuickTodoKey\(e\) \|\| \(typing\(e\.target\) && e\.key\.toLowerCase\(\) !== "t"\)/.test(quick) && /e\.preventDefault\(\);\s*setOpen\(\(o\) => !o\);/.test(quick), "Alt+T (⌥T) opens it (1.53.3: it was T alone)");

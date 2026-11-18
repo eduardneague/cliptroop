@@ -91,6 +91,8 @@ export type VideoWork = {
   docs: { name: string; research: boolean; words: number; updatedAt: string | null; by: string | null }[];
   comments: number;
   ideas: number;
+  /** Frame guides on its scripts' words (1.54.0). */
+  frames: number;
   /** Uploaded edits, thumbnails (ideas and Thumbnail Studio), notes. */
   files: number;
   thumbnails: number;
@@ -139,8 +141,9 @@ export async function getVideoWork(projectId: string): Promise<({ error?: undefi
           by: e ? displayName(e.username, e.full_name, e.email) : null,
         };
       }),
-    comments: (cm ?? []).filter((c) => c.kind !== "edit_idea").length,
+    comments: (cm ?? []).filter((c) => c.kind !== "edit_idea" && c.kind !== "frame").length,
     ideas: (cm ?? []).filter((c) => c.kind === "edit_idea").length,
+    frames: (cm ?? []).filter((c) => c.kind === "frame").length,
     files: files.count ?? 0,
     thumbnails: (thumbs.count ?? 0) + (entries.count ?? 0),
     notes: notes.count ?? 0,

@@ -33,9 +33,11 @@ ok(/await admin\.rpc\("timer_plan"\)/.test(src), "0129: the timers' plan");
 ok(/return \/12 hours\/\.test\(JSON\.stringify\(data\)\);/.test(src), "0130: the plan says 12 hours");
 ok(/column\(a, "todo_lists", "id, sort_by, hide_done"\)/.test(src), "0131: To Do's lists");
 ok(/await admin\.rpc\("script_live_ready"\)/.test(src) && /return data === true;/.test(src), "0132: the live rules are in place (not only the function)");
+ok(/await admin\.rpc\("frame_guides_ready"\)/.test(src), "0133: Frame Guides (its tables and the comments' third kind)");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0133": /create or replace function public\.frame_guides_ready\(\)[\s\S]*to_regclass\('public\.frame_guides'\)[\s\S]*like '%frame%'/,
   "0132": /create or replace function public\.script_live_ready\(\)[\s\S]*'script live: teammates receive', 'script live: teammates send'/,
   "0131": /create table if not exists todo_lists \([\s\S]*sort_by text,[\s\S]*hide_done boolean/,
   "0130": /'live', 'every 12 hours \(06:05 and 18:05 UTC\)'/,

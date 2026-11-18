@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { colorForId, displayName } from "@/lib/avatar";
+import { asKind, type CommentKind, type FrameRef } from "./kinds";
 
 export type DocKind = "script" | "research";
 export type ScriptRow = {
@@ -21,8 +22,8 @@ export type FlowStep = "write" | "review" | "staging";
 export type DocListItem = { id: string; kind: DocKind; name: string; position: number; wordCount: number; updatedAt: string; step: FlowStep | null };
 export type ScriptComment = {
   id: string;
-  /** "comment" or "edit_idea" (Editing idea). */
-  kind: "comment" | "edit_idea";
+  /** "comment", "edit_idea" (Editing idea) or "frame" (a frame guide, 1.54.0). */
+  kind: CommentKind;
   /** The author's roles in the team (for the colour). */
   authorRoles: string[];
   /** The words it's on; "" for a general comment, on the whole document (1.50.0). May run over several lines. */
@@ -36,6 +37,8 @@ export type ScriptComment = {
   author: { id: string; name: string; avatarUrl: string | null; color: string } | null;
   /** A drawing attached to the idea (Sketch Studio), public URL + size. */
   sketch: { url: string; w: number; h: number } | null;
+  /** A frame guide's frame (1.54.0); null for the other kinds, and for a frame guide whose frame was deleted. */
+  frame: FrameRef | null;
 };
 /** A short or a long video. */
 export type DocOwner = { short: string } | { long: string };
@@ -129,20 +132,26 @@ export async function listComments(scriptId: string, teamId: string): Promise<Sc
   const supabase = await createClient();
   const base = "id, kind, quote, occurrence, body, created_at, resolved_at, author_id, author:profiles!script_comments_author_id_fkey(username, full_name, email, avatar_url)";
   const read = (cols: string) => supabase.from("script_comments").select(cols).eq("script_id", scriptId).order("created_at");
-  const [newest, { data: members }] = await Promise.all([
-    read(`${base}, sketch_path, sketch_w, sketch_h, edited_at`),
+  const [withFrames, { data: members }] = await Promise.all([
+    read(`${base}, sketch_path, sketch_w, sketch_h, edited_at, frame_id, frame:frame_guides(id, number, title, image_path, thumb_path, width, height, tint, collection:frame_collections(name, color))`),
     supabase.from("team_members").select("user_id, member_roles(role)").eq("team_id", teamId).eq("status", "active"),
   ]);
-  // Before migration 0127 there's no edited_at, before 0056 no sketch columns: read without them.
+  // Before migration 0133 there are no frame guides, before 0127 no edited_at, before 0056 no sketch columns: read
+  // without them.
+  const newest = withFrames.error ? await read(`${base}, sketch_path, sketch_w, sketch_h, edited_at`) : withFrames;
   const first = newest.error ? await read(`${base}, sketch_path, sketch_w, sketch_h`) : newest;
   const data = (first.error ? (await read(base)).data : first.data) as unknown as Record<string, unknown>[] | null;
+  const frames = supabase.storage.from("frame-guides");
   const rolesOf = new Map((members ?? []).map((m) => [m.user_id as string, ((m.member_roles as { role: string }[]) ?? []).map((r) => r.role)]));
   return (data ?? []).map((c) => {
     const p = (Array.isArray(c.author) ? c.author[0] : c.author) as Profile;
     const id = c.author_id as string | null;
+    const fr = (Array.isArray(c.frame) ? c.frame[0] : c.frame) as Record<string, unknown> | null | undefined;
+    const coll = (fr ? (Array.isArray(fr.collection) ? fr.collection[0] : fr.collection) : null) as { name: string; color: string } | null | undefined;
+    const frameUrl = fr?.image_path ? frames.getPublicUrl(fr.image_path as string).data.publicUrl : "";
     return {
       id: c.id as string,
-      kind: ((c.kind as "comment" | "edit_idea") ?? "comment"),
+      kind: asKind(c.kind),
       authorRoles: id ? rolesOf.get(id) ?? [] : [],
       quote: c.quote as string,
       occurrence: (c.occurrence as number) ?? 0,
@@ -154,6 +163,20 @@ export async function listComments(scriptId: string, teamId: string): Promise<Sc
       sketch: c.sketch_path
         ? { url: supabase.storage.from("script-sketches").getPublicUrl(c.sketch_path as string).data.publicUrl, w: (c.sketch_w as number) ?? 800, h: (c.sketch_h as number) ?? 600 }
         : null,
+      frame:
+        fr && frameUrl
+          ? {
+              id: String(fr.id),
+              number: Number(fr.number) || 0,
+              title: String(fr.title ?? ""),
+              url: frameUrl,
+              thumb: fr.thumb_path ? frames.getPublicUrl(fr.thumb_path as string).data.publicUrl : frameUrl,
+              w: Number(fr.width) || 1920,
+              h: Number(fr.height) || 1080,
+              tint: typeof fr.tint === "string" && /^#[0-9a-f]{6}$/i.test(fr.tint) ? fr.tint : null,
+              collection: coll ? { name: String(coll.name ?? ""), color: String(coll.color ?? "teal") } : null,
+            }
+          : null,
     };
   });
 }

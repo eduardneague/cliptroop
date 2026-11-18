@@ -255,14 +255,19 @@ export async function exportScriptDocx(doc: Node, title: string, fileName: strin
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-/** One editing idea: the quoted script text ("" for one on the whole document, 1.50.0), the idea, and its drawing (if any). */
-export type IdeaExport = { quote: string; idea: string; sketch?: string | null };
+/**
+ * One editing idea: the quoted script text ("" for one on the whole document, 1.50.0), the idea, and its drawing (if
+ * any). 1.54.0, a shot of the shot list: the words it's on (null: a frame's picture in the script), what's said about
+ * it, the frame's picture and its name.
+ */
+export type IdeaExport = { quote: string | null; idea: string; sketch?: string | null; label?: string };
 
 /**
  * An idea's heading, line by line (1.50.0): its words in quote marks, one line per line they run over (line breaks
  * inside a paragraph too), or "On the whole document" for a general one.
  */
-export function ideaHeading(n: number, quote: string): string[] {
+export function ideaHeading(n: number, quote: string | null): string[] {
+  if (quote === null) return [`#${n} A picture in the script`];
   if (!quote.trim()) return [`#${n} On the whole document`];
   const lines = quote.replace(/[\u0000\uFFFC]/g, "\n").split("\n");
   return lines.map((l, i) => `${i === 0 ? `#${n} "` : ""}${l}${i === lines.length - 1 ? `"` : ""}`);
@@ -272,16 +277,17 @@ export function ideaHeading(n: number, quote: string): string[] {
  * Editing ideas as Word:
  *   TITLE / Editing Ideas / #1 "quote" (bold) / (idea) (italic) …
  */
-export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileName: string) {
+export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileName: string, heading = "Editing Ideas") {
   const D = await loadDocx();
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun, AlignmentType } = D;
   // Drawings: fetched and turned into PNGs (all at once), placed right under their idea.
   const pictures = await Promise.all(ideas.map((x) => (x.sketch ? imageData(x.sketch) : Promise.resolve(null))));
   const children = [
     new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(title)] }),
-    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("Editing Ideas")] }),
+    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(heading)] }),
     ...ideas.flatMap((x, i) => {
       const out = [new Paragraph({ spacing: { before: 280 }, children: ideaHeading(i + 1, x.quote).map((text, j) => new TextRun({ text, bold: true, ...(j ? { break: 1 } : {}) })) })];
+      if (x.label) out.push(new Paragraph({ children: [new TextRun({ text: x.label, bold: true, color: "0F766E" })] }));
       if (x.idea.trim()) out.push(new Paragraph({ children: [new TextRun({ text: `(${x.idea})`, italics: true })] }));
       const img = pictures[i];
       if (img) {
@@ -292,7 +298,7 @@ export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileNa
       return out;
     }),
   ];
-  const blob = await Packer.toBlob(new Document({ title: `${title} · Editing Ideas`, sections: [{ children }] }));
+  const blob = await Packer.toBlob(new Document({ title: `${title} · ${heading}`, sections: [{ children }] }));
   const url = URL.createObjectURL(blob);
   const a = window.document.createElement("a");
   a.href = url;
@@ -304,14 +310,14 @@ export async function exportIdeasDocx(ideas: IdeaExport[], title: string, fileNa
 }
 
 /** Editing ideas as PDF: a clean page in a new window, printed to PDF. */
-export function exportIdeasPdf(ideas: IdeaExport[], title: string) {
+export function exportIdeasPdf(ideas: IdeaExport[], title: string, heading = "Editing Ideas") {
   const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} · Editing Ideas</title>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} · ${esc(heading)}</title>
 <style>body{font-family:Georgia,'Times New Roman',serif;max-width:680px;margin:48px auto;padding:0 24px;color:#111;line-height:1.5}
 h1{font-size:28px;margin:0 0 4px}h2{font-size:18px;font-weight:600;color:#555;margin:0 0 28px}
-.q{font-weight:700;margin:22px 0 2px}.i{font-style:italic;margin:0}.s{display:block;max-width:80%;max-height:420px;margin:10px 0 4px;border:1px solid #ddd;border-radius:6px;break-inside:avoid}@page{margin:18mm}</style></head><body>
-<h1>${esc(title)}</h1><h2>Editing Ideas</h2>
-${ideas.map((x, i) => `<p class="q">${ideaHeading(i + 1, x.quote).map(esc).join("<br>")}</p>${x.idea.trim() ? `<p class="i">(${esc(x.idea)})</p>` : ""}${x.sketch ? `<img class="s" src="${esc(x.sketch)}" alt="Sketch">` : ""}`).join("\n")}
+.q{font-weight:700;margin:22px 0 2px}.l{font-weight:700;color:#0f766e;margin:0 0 2px}.i{font-style:italic;margin:0}.s{display:block;max-width:80%;max-height:420px;margin:10px 0 4px;border:1px solid #ddd;border-radius:6px;break-inside:avoid}@page{margin:18mm}</style></head><body>
+<h1>${esc(title)}</h1><h2>${esc(heading)}</h2>
+${ideas.map((x, i) => `<p class="q">${ideaHeading(i + 1, x.quote).map(esc).join("<br>")}</p>${x.label ? `<p class="l">${esc(x.label)}</p>` : ""}${x.idea.trim() ? `<p class="i">(${esc(x.idea)})</p>` : ""}${x.sketch ? `<img class="s" src="${esc(x.sketch)}" alt="${x.label ? esc(x.label) : "Sketch"}">` : ""}`).join("\n")}
 <script>window.onload=()=>{const imgs=[...document.images];Promise.all(imgs.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r}))).then(()=>window.print())}</script></body></html>`;
   const w = window.open("", "_blank");
   if (!w) return false;

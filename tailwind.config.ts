@@ -36,6 +36,8 @@ const config: Config = {
         green: "rgb(var(--green) / <alpha-value>)",
         red: "rgb(var(--red) / <alpha-value>)",
         coral: "rgb(var(--coral) / <alpha-value>)",
+        // Frame guides (1.54.0): teal, or violet beside a teal or green accent (globals.css).
+        frame: "rgb(var(--frame) / <alpha-value>)",
       },
       // 1.35.0: words in a colour use its text shade (globals.css, --*-text): in light mode a deeper one, so they read
       // at 4.5:1 on cards, paper and their own tinted chips; in dark mode the colour itself. Fills, borders, rings and
@@ -52,6 +54,7 @@ const config: Config = {
         green: "rgb(var(--green-text) / <alpha-value>)",
         red: "rgb(var(--red-text) / <alpha-value>)",
         coral: "rgb(var(--coral-text) / <alpha-value>)",
+        frame: "rgb(var(--frame-text) / <alpha-value>)",
       },
       // 12% tints (badges, chips, tiles) are used across the app; Tailwind's
       // scale only has steps of 5, so without this they rendered with no tint.
