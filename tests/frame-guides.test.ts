@@ -3,13 +3,14 @@
 // scripting … another option to add a frame guide … a popup … select a reference frame … search for one, filter by
 // categories … put the frame guide like a comment or an editing idea, or … add the image … anywhere … and also … link
 // the text to the frame guide, but also show the image right below the text". Then: "2 of the categories have to be
-// a-roll and b-roll … keep it simple, dont overcomplicate it too much".
+// a-roll and b-roll … keep it simple, dont overcomplicate it too much". 1.54.1: "remove this feature with teams in
+// frame guides entirely" (a team's own categories are gone).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import { BUILT_IN, CATEGORY_GROUPS, ROLL_KEYS, categoryInfo, cleanCategories, customKey, isCategoryKey, toggleCategory } from "../modules/frames/lib/categories";
+import { BUILT_IN, CATEGORY_GROUPS, ROLL_KEYS, categoryInfo, cleanCategories, isCategoryKey, toggleCategory } from "../modules/frames/lib/categories";
 import {
   categoryCounts,
   cleanSourceUrl,
@@ -47,11 +48,12 @@ ok(new Set(keys).size === keys.length, "no key twice");
 ok(JSON.stringify(toggleCategory(["a-roll", "wide"], "b-roll")) === JSON.stringify(["wide", "b-roll"]), "a frame is A-roll or B-roll: picking one takes the other off");
 ok(JSON.stringify(toggleCategory(["b-roll", "wide"], "b-roll")) === JSON.stringify(["wide"]) && JSON.stringify(toggleCategory(["b-roll"], "close-up")) === JSON.stringify(["b-roll", "close-up"]), "the others just go on and off");
 ok(ROLL_KEYS.join() === "a-roll,b-roll", "the pair");
-const team = [{ id: "d0000000-0000-4000-8000-000000000001", name: "Hero shot", color: "pink" as const }];
-ok(categoryInfo(customKey(team[0].id), team)?.name === "Hero shot" && categoryInfo("c:d0000000-0000-4000-8000-00000000ffff", team) === null, "a team's own category by its key; a deleted one is nothing");
-ok(JSON.stringify(cleanCategories(["b-roll", "b-roll", "made-up", customKey(team[0].id), 4, "c:nope"], team)) === JSON.stringify(["b-roll", customKey(team[0].id)]), "kept: known ones, once each");
-const groups = filterGroups(team);
-ok(groups[0].items.map((i) => i.key).join() === "a-roll,b-roll" && groups[groups.length - 1].id === "yours" && groups[groups.length - 1].items[0].name === "Hero shot", "the filters: the pair, the shots, then the team's own");
+const OLD_TEAM_KEY = "c:d0000000-0000-4000-8000-000000000001";
+ok(categoryInfo("close-up")?.name === "Close-up" && categoryInfo(OLD_TEAM_KEY) === null && !isCategoryKey(OLD_TEAM_KEY), "1.54.1: a team's own category (from 1.54.0) is nothing now");
+ok(JSON.stringify(cleanCategories(["b-roll", "b-roll", "made-up", OLD_TEAM_KEY, 4, "wide"])) === JSON.stringify(["b-roll", "wide"]), "kept: the built-in ones, once each");
+ok(JSON.stringify(cleanCategories(["a-roll", "wide", "b-roll"])) === JSON.stringify(["wide", "b-roll"]), "A-roll or B-roll, never both (the last one wins)");
+const groups = filterGroups();
+ok(groups.map((g) => g.id).join() === "roll,shot" && groups[0].items.map((i) => i.key).join() === "a-roll,b-roll", "the filters: the pair, then the shots, nothing else");
 ok(groups[0].items[0].color !== groups[0].items[1].color, "A-roll and B-roll look different");
 
 // --- Words people type ----------------------------------------------------------------------------------------------------
@@ -94,14 +96,13 @@ const lib: FrameLibrary = {
   teamId: "t",
   me: { userId: "me", master: false },
   people: {},
-  categories: team,
   collections: [
     { id: C1, name: "Talking heads", color: "teal", about: "", createdBy: "me", createdAt: "" },
     { id: C2, name: "Golden hour", color: "amber", about: "", createdBy: "ana", createdAt: "" },
   ],
   frames: [
     fr(4, C2, "Dunes at sunset", ["b-roll", "wide"], ["sunset", "desert"]),
-    fr(3, C1, "Close-up, blue rim light", ["a-roll", "close-up", customKey(team[0].id)], ["rim light"]),
+    fr(3, C1, "Close-up, blue rim light", ["a-roll", "close-up"], ["rim light"]),
     fr(2, C2, "Product on a sweep", ["b-roll", "product"], ["bottle"], { creator: "Café Studio" }),
     fr(1, C1, "Desk talk, window light", ["a-roll", "medium"], ["window light", "desk"]),
   ],
@@ -114,7 +115,7 @@ ok(ids({ q: "light desk", collection: null, categories: [] }) === "1", "every wo
 ok(ids({ q: "#2", collection: null, categories: [] }) === "2" && ids({ q: "3", collection: null, categories: [] }).startsWith("3"), "#2 is frame 2; a plain number finds it first");
 ok(ids({ q: "golden", collection: null, categories: [] }) === "4,2", "by its collection's name");
 ok(ids({ q: "cafe", collection: null, categories: [] }) === "2", "by who made it, accents or not");
-ok(ids({ q: "hero", collection: null, categories: [] }) === "3", "by a category's name");
+ok(ids({ q: "close-up", collection: null, categories: [] }) === "3", "by a category's name");
 ok(ids({ q: "", collection: C1, categories: [] }) === "3,1", "in a collection");
 ok(ids({ q: "", collection: null, categories: ["b-roll"] }) === "4,2", "B-roll only");
 ok(ids({ q: "", collection: null, categories: ["a-roll", "b-roll"] }) === "4,3,2,1", "A-roll and B-roll picked: either");

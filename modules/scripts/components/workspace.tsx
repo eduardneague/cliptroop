@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -20,11 +20,15 @@ import { ScriptKeys, ScriptOrderedList } from "../lib/script-keys";
 import { imageFiles, pastePlan } from "../lib/paste-images";
 import { useScriptImages } from "./use-script-images";
 import { smallHeadingsToH3 } from "../lib/headings";
-import { repairDoc } from "../lib/repair";
+import { newClientId } from "../lib/collab";
+import { docText, LiveSteps, openable } from "../lib/live-doc";
+import { LiveCursors } from "../lib/live-cursors";
+import { useLiveCursors, type StepsMessage } from "./use-live-cursors";
+import { useLiveEdits, type LiveStatus } from "./use-live-edits";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
 import { findQuote, type PostingComment } from "../lib/anchors";
 import { dock, useDock } from "../lib/dock";
-import { addComment, copyCommentsFrom, createDoc, deleteDoc, getDocContent, renameDoc, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
+import { addComment, copyCommentsFrom, createDoc, deleteDoc, getDocContent, listScriptComments, renameDoc, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
@@ -43,6 +47,10 @@ import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import { FlowStrip, type FlowPermissions } from "./script-flow";
 import { PendingLink, PendingNav, usePendingNav } from "@/components/ui/pending-nav";
 import { Leaves } from "@/components/ui/leaves";
+import { createClient } from "@/lib/supabase/client";
+import { colorForId } from "@/lib/avatar";
+import { MAX_QUOTE, toLeaf } from "../lib/comment-limits";
+import { COMMENTS_EVENT, commentsChanged } from "../lib/comment-events";
 
 type Owner = { short: string } | { long: string };
 
@@ -69,7 +77,7 @@ function Workspace({
   canComment = canEdit,
   canCreate,
   side,
-  comments,
+  comments: pageComments,
   title,
   number,
   backHref,
@@ -119,6 +127,48 @@ function Workspace({
   const params = useSearchParams();
   const toast = useToast();
   const confirm = useConfirm();
+  // The comments (1.55.0): the page's list, then fetched on their own whenever they change (yours: right away;
+  // someone else's: when their page says so), never by drawing the whole page again (that sent people back to the top
+  // of the script: "de fiecare dată când adaug un comentariu ... mă duce sus de tot").
+  const [fetched, setFetched] = useState<{ doc: string; list: ScriptComment[] } | null>(null);
+  useEffect(() => setFetched(null), [pageComments]);
+  const serverComments = fetched?.doc === doc.id ? fetched.list : pageComments;
+  const docIdNow = useRef(doc.id);
+  docIdNow.current = doc.id;
+  const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reloadComments = useCallback(() => {
+    if (fetchTimer.current) clearTimeout(fetchTimer.current);
+    fetchTimer.current = setTimeout(async () => {
+      const id = docIdNow.current;
+      const r = await listScriptComments(id).catch(() => null);
+      if (r && r.error === undefined && docIdNow.current === id) setFetched({ doc: id, list: r.comments });
+    }, 250);
+  }, []);
+  useEffect(() => () => {
+    if (fetchTimer.current) clearTimeout(fetchTimer.current);
+  }, []);
+  // 1.54.1: a comment added here is on the page as soon as it's saved (built from what was sent), until the fetched
+  // list has it. One deleted meanwhile goes too.
+  const [added, setAdded] = useState<ScriptComment[]>([]);
+  const comments = useMemo(() => {
+    if (!added.length) return serverComments;
+    const known = new Set(serverComments.map((c) => c.id));
+    const extra = added.filter((c) => !known.has(c.id));
+    return extra.length ? [...serverComments, ...extra] : serverComments;
+  }, [serverComments, added]);
+  useEffect(() => {
+    setAdded((xs) => (xs.some((a) => serverComments.some((c) => c.id === a.id)) ? xs.filter((a) => !serverComments.some((c) => c.id === a.id)) : xs));
+  }, [serverComments]);
+  // Any change here (added, edited, resolved, deleted: comment-card.tsx says so): the comments fetched again.
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const gone = (e as CustomEvent<{ deleted?: string } | null>).detail?.deleted;
+      if (gone) setAdded((xs) => xs.filter((x) => x.id !== gone));
+      reloadComments();
+    };
+    window.addEventListener(COMMENTS_EVENT, onChange);
+    return () => window.removeEventListener(COMMENTS_EVENT, onChange);
+  }, [reloadComments]);
   // Another document is on its way (clicked in the list, the steps or the menu).
   const pendingDoc = usePendingNav().pending;
   const switching = pendingDoc !== null && pendingDoc !== doc.id;
@@ -146,24 +196,45 @@ function Workspace({
     if (panel && panel !== "comments") setChatOpen(false);
   }, [panel]);
   useEffect(() => () => dock.close("comments"), []);
-  // A comment on its way: shown at once, until the saved one arrives.
+  // A comment on its way: "Posting…" on its words until it's saved, then "Posted" for a moment (1.54.1).
   const [posting, setPosting] = useState<PostingComment | null>(null);
-  useEffect(() => {
-    if (posting?.id && comments.some((c) => c.id === posting.id)) setPosting(null);
-  }, [comments, posting]);
+  const postingRef = useRef(posting);
+  postingRef.current = posting;
+  const me1 = me ? people.find((p) => p.userId === me.userId) : undefined;
+  /** The comment just saved, as the server will list it. */
+  const savedHere = (id: string, a: { quote: string; occurrence: number; body: string; kind: CommentKind; sketch?: { path: string; w: number; h: number } | null; frame?: FrameRef | null }): ScriptComment => ({
+    id,
+    kind: a.kind,
+    authorRoles: me1?.roles ?? [],
+    quote: a.quote ? toLeaf(a.quote).slice(0, MAX_QUOTE) : "",
+    occurrence: a.quote ? Math.max(0, Math.floor(a.occurrence) || 0) : 0,
+    body: a.body.replace(/\u0000/g, "").trim() || (a.sketch ? "Sketch" : ""),
+    createdAt: new Date().toISOString(),
+    editedAt: null,
+    resolved: false,
+    author: me ? { id: me.userId, name: me1?.name ?? "You", avatarUrl: me1?.avatarUrl ?? null, color: colorForId(me.userId) } : null,
+    sketch: a.sketch ? { url: createClient().storage.from("script-sketches").getPublicUrl(a.sketch.path).data.publicUrl, w: a.sketch.w, h: a.sketch.h } : null,
+    frame: a.kind === "frame" ? a.frame ?? null : null,
+  });
+  const posted = (c: ScriptComment) => {
+    setAdded((xs) => [...xs.filter((x) => x.id !== c.id), c]);
+    setPosting((p) => (p ? { ...p, id: c.id } : p));
+    setTimeout(() => setPosting((p) => (p?.id === c.id ? null : p)), 1600);
+    // (The others hear about it; the list here is fetched again: the COMMENTS_EVENT listener above.)
+    commentsChanged();
+  };
   const mayDelete = (c: ScriptComment) => !!me && (me.master || c.author?.id === me.userId);
   // 1.50.0: a comment on the whole document (on no words of it), written in the comments panel.
   const onAddGeneral = canComment
     ? async (body: string, kind: CommentKind, frame?: FrameRef | null) => {
         setPosting({ quote: "", occurrence: 0, kind, body, sketchUrl: null, frame: frame ?? null });
-        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame?.id ?? null });
+        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame?.id ?? null }).catch(() => ({ error: "Couldn't reach ClipTroop. Check your connection and try again." }) as const);
         if (r.error !== undefined) {
           setPosting(null);
           return r.error;
         }
-        setPosting((p) => (p ? { ...p, id: r.id } : p));
+        posted(savedHere(r.id, { quote: "", occurrence: 0, body, kind, frame: frame ?? null }));
         setActive(r.id);
-        router.refresh();
         return null;
       }
     : undefined;
@@ -192,6 +263,7 @@ function Workspace({
       teamId={doc.teamId}
       initialContent={doc.content}
       initialVersion={doc.version}
+      liveStart={doc.live ?? null}
       canEdit={canEdit}
       title={title}
       number={number}
@@ -212,17 +284,18 @@ function Workspace({
       // 1.53.3: posting shows only "Posting…" on the words; the comments stay as they were (the owner: "i dont want
       // the comments to pop up automatically, just the indicator that its posting").
       onPosting={setPosting}
+      onRemoteComments={reloadComments}
       onAddComment={
         canComment
           ? async (quote, occurrence, body, kind, sketch, frameId) => {
-              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch, frameId });
+              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch, frameId }).catch(() => ({ error: "Couldn't reach ClipTroop. Check your connection and try again." }) as const);
               if (r.error !== undefined) {
                 setPosting(null);
                 return r.error;
               }
-              // Stays as "Posting…" until the saved one is on the page (and nothing else opens: 1.53.3).
-              setPosting((p) => (p ? { ...p, id: r.id } : p));
-              router.refresh();
+              // On the page as itself at once, "Posted" on its words for a moment (and nothing else opens: 1.53.3).
+              const frame = kind === "frame" ? postingRef.current?.frame ?? null : null;
+              posted(savedHere(r.id, { quote, occurrence, body, kind, sketch, frame: frame && frame.id === frameId ? frame : null }));
               return null;
             }
           : undefined
@@ -240,7 +313,7 @@ function Workspace({
         const r = await copyCommentsFrom(from, doc.id);
         if (r.error !== undefined) return void toast.error(r.error);
         if (r.copied) toast.success(r.copied === 1 ? "Copied, with its comment." : `Copied, with ${r.copied} comments and editing ideas.`);
-        router.refresh();
+        if (r.copied) commentsChanged();
       }}
       subBar={
         flow?.data.ready && doc.kind === "script" ? (
@@ -282,7 +355,10 @@ function Workspace({
       sideBySide={
         sideOpen && side ? (
           <SidePage
+            key={side.id}
             side={side}
+            me={me?.userId ?? null}
+            people={people}
             canEdit={side.kind === "research" ? canCreate.research : canCreate.script}
             swap={href({ doc: side.id, side: doc.id })}
             close={() => {
@@ -341,7 +417,8 @@ function Workspace({
           onSketch={setZoomed}
           canComment={canComment}
           mayDelete={mayDelete}
-          posting={posting}
+          // (Saved: it's in the list as itself.)
+          posting={posting?.id ? null : posting}
           me={me}
           onAddGeneral={onAddGeneral}
         />
@@ -706,9 +783,27 @@ function MobileDocs({
  * title row lines up with the main page's; it's editable (with its own
  * autosave) for people who may edit it.
  */
-function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: boolean; swap: string; close: () => void }) {
+function SidePage({
+  side,
+  canEdit,
+  swap,
+  close,
+  me = null,
+  people = [],
+}: {
+  side: ScriptRow;
+  canEdit: boolean;
+  swap: string;
+  close: () => void;
+  me?: string | null;
+  people?: MentionPerson[];
+}) {
   const toast = useToast();
   const version = useRef(side.version);
+  // Written live with everyone (1.55.0), like the page on the left: this tab's id, and where the text starts.
+  const [liveAt] = useState(side.live ?? null);
+  const liveMode = !!liveAt;
+  const [clientId] = useState(newClientId);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<"saved" | "saving" | "unsaved" | "conflict">("saved");
   // Dark / light paper and the page width follow the main page.
@@ -774,8 +869,9 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
         ScriptImage,
         HeadingKeys,
         PageBreak,
+        ...(liveAt ? [LiveCursors, LiveSteps.configure({ version: liveAt.docVersion, client: clientId })] : []),
       ],
-      content: repairDoc(side.content),
+      content: openable(side.content),
       editorProps: {
         attributes: { class: "script-doc outline-none" },
         transformPastedHTML: (html) => imagesRef.current.fromHtml(smallHeadingsToH3(html)),
@@ -803,6 +899,8 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
       onUpdate: ({ editor: e }) => {
         if (!canEdit) return;
         queueMicrotask(() => imagesRef.current.settle());
+        // Live: the changes go in by themselves.
+        if (liveMode) return;
         setStatus("unsaved");
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => void save(e), 1200);
@@ -814,6 +912,51 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
   }, []);
+  // Live: the others in this document (their cursors here too), and everyone's changes as they're made.
+  const editsRef = useRef<{ onSteps: (m: StepsMessage) => void; onJoined: () => void } | null>(null);
+  const live = useLiveCursors({
+    editor: liveMode ? editor : null,
+    scriptId: side.id,
+    me,
+    people,
+    onSaved: () => editsRef.current?.onJoined(),
+    onSteps: (m) => editsRef.current?.onSteps(m),
+    onJoined: () => editsRef.current?.onJoined(),
+    // (The comments here are the page on the left's.)
+    shareComments: false,
+  });
+  const edits = useLiveEdits({
+    editor: liveMode ? editor : null,
+    scriptId: side.id,
+    client: clientId,
+    start: liveAt,
+    canEdit,
+    me,
+    broadcast: (m) => live.sendSteps(m),
+    connected: live.connected,
+    textOf: docText,
+    prepare: openable,
+    uploading: () => imagesRef.current.pending(),
+    onError: (m) => toast.error(m),
+  });
+  editsRef.current = edits;
+  const liveStuck = liveMode && (edits.status === "stale" || edits.status === "newer");
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && liveStuck) editor.setEditable(false);
+  }, [editor, liveStuck]);
+  const label = !canEdit
+    ? "View only"
+    : liveMode
+      ? SIDE_LIVE[edits.status]
+      : status === "saved"
+        ? "Saved"
+        : status === "saving"
+          ? "Saving…"
+          : status === "conflict"
+            ? "Not saved"
+            : "Unsaved";
+  const bad = liveMode ? edits.status === "offline" || liveStuck : status === "conflict";
+  const good = liveMode ? edits.status === "saved" : status === "saved";
   return (
     <div className="min-w-0">
       {/* Same height as the main page's title row, so both pages line up. */}
@@ -822,9 +965,13 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
           {side.kind === "research" ? "Research · " : ""}
           {side.name}
         </span>
-        <span className={`text-[11.5px] font-semibold ${status === "conflict" ? "text-red" : status === "saved" ? "text-green" : "text-ink-soft"}`}>
-          {!canEdit ? "View only" : status === "saved" ? "Saved" : status === "saving" ? "Saving…" : status === "conflict" ? "Not saved" : "Unsaved"}
-        </span>
+        {liveStuck ? (
+          <button type="button" onClick={() => window.location.reload()} className="text-[11.5px] font-semibold text-red hover:underline">
+            {label}
+          </button>
+        ) : (
+          <span className={`text-[11.5px] font-semibold ${bad ? "text-red" : good ? "text-green" : "text-ink-soft"}`}>{label}</span>
+        )}
         <span className="flex-1" />
         <Link href={swap} scroll={false} prefetch={false} className="rounded-md px-2 h-7 inline-flex items-center text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
           Open here
@@ -839,6 +986,16 @@ function SidePage({ side, canEdit, swap, close }: { side: ScriptRow; canEdit: bo
     </div>
   );
 }
+
+/** The document next to another, written live (1.55.0): what its title row says. */
+const SIDE_LIVE: Record<LiveStatus, string> = {
+  saved: "Saved",
+  saving: "Saving…",
+  offline: "Offline",
+  stale: "Reload to keep writing",
+  newer: "Reload to keep writing",
+  readonly: "View only",
+};
 
 /** One colour per type, everywhere: comments the accent, editing ideas blue, frame guides teal (lib/kinds.ts). */
 export const TYPE_COLOR = KIND_COLOR;
@@ -1053,7 +1210,7 @@ export function CommentsChat({
     setResolvingGone(false);
     if (r.error !== undefined) return toast.error(r.error);
     toast.success(r.resolved === 1 ? "Resolved." : `Resolved ${r.resolved}.`);
-    router.refresh();
+    commentsChanged();
   }
 
   const card = (c: ScriptComment) => (

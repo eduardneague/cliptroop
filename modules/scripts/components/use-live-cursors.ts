@@ -4,11 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { createClient } from "@/lib/supabase/client";
 import { isSel, liveKey, posOf, selAt, type LiveCursor, type Sel } from "../lib/live-cursors";
+import { COMMENTS_EVENT } from "../lib/comment-events";
 
 /** At most one cursor message every 150 ms (about six a second while you type), and only when it moved. */
 export const EVERY_MS = 150;
 
 export type LivePerson = { userId: string; name: string; avatarUrl: string | null; color: string };
+
+/**
+ * Steps someone's page had taken by the database (1.55.0, use-live-edits.ts): made on version v, n of them, by page c
+ * (person u). The steps themselves (s) when they're small; else the pages fetch them (big).
+ */
+export type StepsMessage = { u: string; c: string; v: number; n: number; s?: unknown; big?: true };
+const isStepsMessage = (m: unknown): m is StepsMessage => {
+  const x = m as StepsMessage;
+  return !!x && typeof x.u === "string" && typeof x.c === "string" && Number.isInteger(x.v) && x.v >= 0 && Number.isInteger(x.n) && x.n > 0 && (x.big === true || Array.isArray(x.s));
+};
 
 /**
  * A script's live channel (1.53.5): who's here, their cursors, and when one of them saves. Supabase Realtime on the
@@ -23,6 +34,10 @@ export function useLiveCursors({
   me,
   people,
   onSaved,
+  onComments,
+  onSteps,
+  onJoined,
+  shareComments = true,
 }: {
   editor: Editor | null;
   scriptId: string;
@@ -31,13 +46,29 @@ export function useLiveCursors({
   people: LivePerson[];
   /** Someone else saved this script: their user id and the script's new version. */
   onSaved?: (by: string, version: number) => void;
+  /** Someone else added, changed or resolved a comment (1.54.1): fetch them again. */
+  onComments?: () => void;
+  /** Steps from another page (1.55.0): someone else's, or yours in another tab. */
+  onSteps?: (m: StepsMessage) => void;
+  /** Joined the channel (again, after a drop): anything missed meanwhile is fetched. */
+  onJoined?: () => void;
+  /** Tell the others here when this page's comments change (not for a document only shown next to another). */
+  shareComments?: boolean;
 }) {
   const [here, setHere] = useState<string[]>([]);
+  /** In the channel now (1.55.0: else the live writing fetches more often). */
+  const [connected, setConnected] = useState(false);
   const peopleRef = useRef(people);
   peopleRef.current = people;
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
-  const api = useRef<{ saved: (version: number) => void; jump: (userId: string) => void } | null>(null);
+  const onCommentsRef = useRef(onComments);
+  onCommentsRef.current = onComments;
+  const onStepsRef = useRef(onSteps);
+  onStepsRef.current = onSteps;
+  const onJoinedRef = useRef(onJoined);
+  onJoinedRef.current = onJoined;
+  const api = useRef<{ saved: (version: number) => void; jump: (userId: string) => void; steps: (m: StepsMessage) => void } | null>(null);
 
   useEffect(() => {
     if (!editor || !me) return;
@@ -49,6 +80,8 @@ export function useLiveCursors({
     const remote = new Map<string, { u: string; sel: Sel; n: number }>();
     let present = new Set<string>();
     let others: string[] = [];
+    /** Your other tabs on this script (steps go to them too). */
+    let myTabs = 0;
     let joined = false;
 
     const paint = () => {
@@ -97,6 +130,7 @@ export function useLiveCursors({
       for (const id of ids) for (const meta of state[id] ?? []) keys.add(`${id}:${meta.t ?? ""}`);
       const arrived = ids.some((id) => !others.includes(id));
       others = ids;
+      myTabs = Math.max(0, (state[me]?.length ?? 1) - 1);
       present = keys;
       setHere(ids);
       for (const key of [...remote.keys()]) if (!keys.has(key)) remote.delete(key);
@@ -110,6 +144,19 @@ export function useLiveCursors({
       remote.set(key, { u: m.u, sel: m.s, n: (remote.get(key)?.n ?? 0) + 1 });
       if (present.has(key)) paint();
     });
+    // Comments (1.54.1): yours, said to the others in one small message; theirs, fetched again here.
+    const onLocalComments = () => {
+      if (joined && others.length) void ch.send({ type: "broadcast", event: "comments", payload: { u: me } });
+    };
+    if (shareComments) window.addEventListener(COMMENTS_EVENT, onLocalComments);
+    ch.on("broadcast", { event: "comments" }, ({ payload }) => {
+      const m = payload as { u?: unknown };
+      if (typeof m?.u === "string" && m.u !== me) onCommentsRef.current?.();
+    });
+    // Steps (1.55.0): from any other page, yours in another tab included.
+    ch.on("broadcast", { event: "steps" }, ({ payload }) => {
+      if (isStepsMessage(payload)) onStepsRef.current?.(payload);
+    });
     ch.on("broadcast", { event: "saved" }, ({ payload }) => {
       const m = payload as { u?: unknown; v?: unknown };
       if (typeof m?.u !== "string" || m.u === me || typeof m.v !== "number") return;
@@ -119,18 +166,30 @@ export function useLiveCursors({
       // Turned away (0132 not run on this database yet): off for this visit, no joining again and again.
       if (status === "CHANNEL_ERROR") {
         joined = false;
+        setConnected(false);
         void supabase.removeChannel(ch);
         return;
       }
-      if (status !== "SUBSCRIBED") return;
+      if (status !== "SUBSCRIBED") {
+        // (Dropped: Realtime joins again by itself, and says SUBSCRIBED when it has.)
+        joined = false;
+        setConnected(false);
+        return;
+      }
       joined = true;
+      setConnected(true);
       void ch.track({ t: tab });
+      onJoinedRef.current?.();
     });
 
     api.current = {
       // After your save, when someone else is here: one small message.
       saved: (version) => {
         if (joined && others.length) void ch.send({ type: "broadcast", event: "saved", payload: { u: me, v: version } });
+      },
+      // Steps the database took from this page: to the others here (nobody here: nothing sent).
+      steps: (m) => {
+        if (joined && (others.length || myTabs)) void ch.send({ type: "broadcast", event: "steps", payload: m });
       },
       // Their face in the top bar: to their cursor.
       jump: (userId) => {
@@ -150,13 +209,15 @@ export function useLiveCursors({
       editor.off("selectionUpdate", soon);
       editor.off("focus", soon);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(COMMENTS_EVENT, onLocalComments);
       void supabase.removeChannel(ch);
       remote.clear();
       present = new Set();
       setHere([]);
+      setConnected(false);
       if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(liveKey, []).setMeta("addToHistory", false));
     };
-  }, [editor, scriptId, me]);
+  }, [editor, scriptId, me, shareComments]);
 
   return {
     /** The others here now (user ids, once each). */
@@ -165,5 +226,9 @@ export function useLiveCursors({
     announceSaved: (version: number) => api.current?.saved(version),
     /** Scroll to someone's cursor. */
     jumpTo: (userId: string) => api.current?.jump(userId),
+    /** Send steps the database took from this page to the others here (1.55.0). */
+    sendSteps: (m: StepsMessage) => api.current?.steps(m),
+    /** In the script's live channel now. */
+    connected,
   };
 }

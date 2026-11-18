@@ -91,9 +91,12 @@ export function SearchPalette({
   roles = NO_ROLES,
   developer = false,
   business = false,
+  instant = false,
 }: {
   /** Close it (the header's GlobalSearch unmounts it). */
   onClose: () => void;
+  /** 1.54.1: it takes the place of the stand-in that already came in: no coming in again. */
+  instant?: boolean;
   userId: string;
   username: string | null;
   teams: TeamSummary[];
@@ -497,7 +500,7 @@ export function SearchPalette({
         createPortal(
           // It leaves the way it came in, the dimmed page too (1.34.0).
           <Leaves lock>
-            <div className="fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4" onKeyDown={onKeyDown}>
+            <div className={`fixed inset-0 z-[70] flex sm:items-start sm:justify-center sm:pt-[10vh] sm:px-4${instant ? " pop-instant" : ""}`} onKeyDown={onKeyDown}>
               <div className="pop-dim absolute inset-0 bg-black/45 backdrop-blur-[2px]" onClick={close} aria-hidden />
               <div
                 role="dialog"

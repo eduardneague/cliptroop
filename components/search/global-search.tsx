@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { SearchIcon } from "@/components/ui/icons";
 import { whenIdle } from "@/lib/idle";
@@ -16,8 +16,15 @@ import type { TeamSummary } from "@/lib/teams";
  * it without every page downloading it first.
  */
 
-const loadPalette = () => import("./search-palette");
-const SearchPalette = lazy(() => loadPalette().then((m) => ({ default: m.SearchPalette })));
+/*
+ * 1.54.1: it opens once (the owner: "when opening the search bar with ctrl k ... it loads like twice"). It came through
+ * React.lazy, which waits a moment even for code already here, so the stand-in window came in first and the real one
+ * came in again over it. Now the code, once here, is used straight away; and when the window is opened before it
+ * arrived, the stand-in turns into the real window without coming in a second time.
+ */
+type PaletteComponent = typeof import("./search-palette").SearchPalette;
+let Palette: PaletteComponent | null = null;
+const loadPalette = () => import("./search-palette").then((m) => (Palette = m.SearchPalette));
 
 function isTypingTarget(el: EventTarget | null) {
   if (!(el instanceof HTMLElement)) return false;
@@ -38,6 +45,26 @@ type Props = {
 
 export function GlobalSearch(props: Props) {
   const [open, setOpen] = useState(false);
+  // The window's code: here (a component), on its way (null), or it couldn't come (false).
+  const [Win, setWin] = useState<PaletteComponent | null | false>(null);
+  /** It was opened before its code was here: the stand-in came in, the real one takes its place without coming in again. */
+  const [cameIn, setCameIn] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setCameIn(false);
+      return;
+    }
+    if (Palette) return setWin(() => Palette);
+    let live = true;
+    setCameIn(true);
+    loadPalette()
+      .then((C) => live && setWin(() => C))
+      .catch(() => live && setWin(false));
+    return () => {
+      live = false;
+    };
+  }, [open]);
+  const Shown = open ? (Palette ?? Win) : null;
   // Mac shows ⌘ first, everyone else Ctrl first: both always shown.
   const [isMac, setIsMac] = useState(false);
 
@@ -112,20 +139,25 @@ export function GlobalSearch(props: Props) {
         <SearchIcon className="w-[19px] h-[19px]" />
       </button>
 
-      {open && (
-        <LaterBoundary
-          name="Search"
-          fallback={({ load }) => (
-            <PaletteStandIn onClose={close}>
-              <LaterFailed load={load} what="Search" className="border-t border-line/10" />
-            </PaletteStandIn>
-          )}
-        >
-          <Suspense fallback={<PaletteStandIn onClose={close} busy />}>
-            <SearchPalette {...props} onClose={close} />
-          </Suspense>
-        </LaterBoundary>
-      )}
+      {open &&
+        (Shown ? (
+          <LaterBoundary
+            name="Search"
+            fallback={({ load }) => (
+              <PaletteStandIn onClose={close}>
+                <LaterFailed load={load} what="Search" className="border-t border-line/10" />
+              </PaletteStandIn>
+            )}
+          >
+            <Shown {...props} onClose={close} instant={cameIn} />
+          </LaterBoundary>
+        ) : Win === false ? (
+          <PaletteStandIn onClose={close}>
+            <LaterFailed load what="Search" className="border-t border-line/10" />
+          </PaletteStandIn>
+        ) : (
+          <PaletteStandIn onClose={close} busy />
+        ))}
     </>
   );
 }

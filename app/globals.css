@@ -683,6 +683,14 @@ html[data-glass]:not(.dark) [data-script-head][data-paper="dark"]::before {
 html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--paper)); }
 html[data-glass] [data-script-head] [data-head-row] { background-color: transparent; }
 /*
+  1.54.1: no gap above it. Where the top bar floats (a computer), the header's pane goes on up behind it to the top of the
+  window: the page used to show between the two, and round the bar (the owner: "i really dont like this gap for
+  scripting, its really odd, especially on liquid glass").
+*/
+@media (min-width: 900px) {
+  html[data-glass] [data-script-head]::before { top: calc(-1 * var(--shell-top, 72px)); }
+}
+/*
   1.53.2: the script page's two round-cornered buttons in the corner (Suggestions and Comments) float over the paper.
   Their inset colour (bg-surface-2) is the bright pane meant for a card, all but clear in dark mode, so over a white
   page they vanished. With glass on they're a floating pane of their own: at least 82 % of it, blurred.
@@ -705,6 +713,14 @@ html[data-glass] [data-script-head] [data-head-row] { background-color: transpar
   }
   html[data-glass][data-glass-opaque] [data-todo-pane] { background-color: rgb(var(--surface)); }
   html[data-glass-style="liquid"] [data-todo-pane] { border-radius: 22px; box-shadow: var(--liquid-rim), var(--liquid-drop); }
+}
+/* 1.54.1: where the top bar floats, To Do's panes line up with the bar's edges (they started 10 px further out: the
+   owner's "not aligned properly with the page"). */
+@media (min-width: 900px) {
+  html[data-glass] .todo-app { padding: 10px 20px 0; }
+}
+@media (min-width: 1400px) {
+  html[data-glass] .todo-app { padding: 10px 24px 0; }
 }
 html[data-glass] .glass-fab.bg-surface-2 {
   background-color: rgb(var(--surface) / max(var(--glass-pop), 0.82));
@@ -1603,6 +1619,21 @@ html[data-motion="off"] .frame-below-card.is-loading .frame-below-pic { animatio
 }
 .pop-dim, .pop-fade { animation: pop-dim var(--pop) var(--ease-out) backwards; }
 .pop-modal { animation: pop-modal var(--pop) var(--ease-out) backwards; }
+/* Frame Guides' chips and keywords (1.54.1): a tick that pops in, a dot that comes back, keywords that pop in and
+   shrink away (the owner: "we need animations to see stuff happening, not just popping in"). */
+@keyframes fg-tick { 0% { transform: scale(0.3) rotate(-25deg); opacity: 0; } 60% { transform: scale(1.25) rotate(0); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes fg-kw-in { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes fg-kw-out { to { transform: scale(0.6); opacity: 0; margin-right: -40px; } }
+@keyframes fg-saved { 0% { opacity: 0; transform: translateY(2px); } 15%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+.fg-tick { animation: fg-tick 0.32s cubic-bezier(.2,.8,.2,1.2) both; }
+.fg-kw-new { animation: fg-kw-in 0.26s cubic-bezier(.2,.8,.2,1.2) both; }
+.fg-kw-out { animation: fg-kw-out 0.18s ease-in forwards; pointer-events: none; }
+.fg-saved { animation: fg-saved 1.6s ease forwards; }
+html[data-motion="off"] :is(.fg-tick, .fg-kw-new, .fg-kw-out) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.fg-tick, .fg-kw-new, .fg-kw-out) { animation: none; } }
+
+/* A pop-up taking the place of its stand-in that already came in (1.54.1, the search window): it doesn't come in again. */
+.pop-instant .pop-dim, .pop-instant .pop-modal { animation: none; }
 .pop-menu { --pop-y: -6px; animation: pop-menu var(--pop-fast) var(--ease-out) backwards; }
 .pop-menu.origin-bottom, .pop-menu[data-up] { --pop-y: 6px; }
 .pop-drop { animation: pop-drop var(--pop) var(--ease-out) backwards; }
@@ -1841,8 +1872,10 @@ html.dark { --gr-correctness: #FF6B6B; --gr-clarity: #8C9EFF; --gr-engagement: #
 .gr-delivery { --g: var(--gr-delivery); }
 .gr-mark:hover,
 .gr-mark.gr-active { background-color: color-mix(in srgb, var(--g) 18%, transparent); }
+/* 1.54.1: on a comment's words the comment wins: no suggestion line through its highlight (the owner: "the
+   suggestions and stuff are getting like overlapped"). Its suggestion is a button on the comment ("Suggestion here"). */
 .script-comment.gr-mark,
-.script-comment.gr-mark:hover { background-image: linear-gradient(var(--g), var(--g)); }
+.script-comment.gr-mark:hover { background-image: none; }
 /* A long sentence: a light dotted line under all of it. */
 .gr-wide {
   text-decoration-line: underline;
@@ -2631,6 +2664,17 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
   pointer-events: none;
   animation: fadein 0.25s ease;
 }
+/* A change to a comment's words turned down (1.55.0): its words flash twice in its colour (they stay on their line). */
+@keyframes comment-locked { 0%, 100% { background-color: color-mix(in srgb, var(--comment-color) 22%, transparent); } 25%, 70% { background-color: color-mix(in srgb, var(--comment-color) 60%, transparent); } 48% { background-color: color-mix(in srgb, var(--comment-color) 28%, transparent); } }
+.script-comment.is-locked { animation: comment-locked 0.6s ease; }
+html[data-motion="off"] .script-comment.is-locked { animation: none; background-color: color-mix(in srgb, var(--comment-color) 55%, transparent); }
+/* Saved (1.54.1): "Posted" for a moment in green, then gone. */
+.script-pending-tag.is-done {
+  background: rgb(var(--green));
+  animation: pending-done 1.6s ease forwards;
+}
+.script-pending-tag.is-done::before { content: "✓ "; }
+@keyframes pending-done { 0% { opacity: 0; transform: translateY(2px); } 12%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 
 /* ---------------------------------------------------------------------------
    Someone else in the script (1.53.5, modules/scripts/lib/live-cursors.ts):

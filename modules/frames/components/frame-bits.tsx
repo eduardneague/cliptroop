@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckIcon, FrameIcon } from "@/components/ui/icons";
 import { wordColor } from "@/lib/word-color";
-import { COLOR_CSS, COLOR_NAME, FRAME_COLORS, type FrameColor } from "../lib/categories";
+import { chipCss, COLOR_CSS, COLOR_NAME, FRAME_COLORS, type ChipColor, type FrameColor } from "../lib/categories";
 import { fillsTile, type FrameGuide } from "../lib/model";
 
 /*
@@ -79,23 +79,30 @@ export function CategoryChip({
   onClick,
   size = "md",
   title,
+  pop = false,
 }: {
   name: string;
-  color: FrameColor;
+  color: ChipColor;
+  /** Just turned on by a click: its tick pops in (not when it's simply drawn on). */
+  pop?: boolean;
   on?: boolean;
   count?: number;
   onClick?: () => void;
   size?: "sm" | "md";
   title?: string;
 }) {
-  const c = COLOR_CSS[color];
-  const cls = `inline-flex items-center gap-1.5 rounded-lg ${size === "sm" ? "px-1.5 h-6 text-[11.5px]" : "px-2.5 h-8 text-[12.5px]"} font-semibold whitespace-nowrap transition-colors`;
+  const c = chipCss(color);
+  // 1.54.1: the same size on or off (the dot and the tick share one slot: the owner, "clicking these changes the
+  // layout"), and it shows it was pressed (it gives a little, the tick pops in).
+  const cls = `fg-chip inline-flex items-center gap-1.5 rounded-lg ${size === "sm" ? "px-1.5 h-6 text-[11.5px]" : "px-2.5 h-8 text-[12.5px]"} font-semibold whitespace-nowrap transition-[color,background-color,box-shadow,transform] duration-200 ease-out`;
   const style = on
     ? { color: wordColor(c), background: `color-mix(in srgb, ${c} 16%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 45%, transparent)` }
     : undefined;
   const inner = (
     <>
-      {on ? <CheckIcon className="w-3 h-3 flex-shrink-0" /> : <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: c }} aria-hidden />}
+      <span className="relative w-3 h-3 flex-shrink-0 flex items-center justify-center" aria-hidden>
+        {on ? <CheckIcon key="on" className={`w-3 h-3 ${pop ? "fg-tick" : ""}`} /> : <span key="off" className="w-2 h-2 rounded-[3px]" style={{ background: c }} />}
+      </span>
       <span className="truncate">{name}</span>
       {count !== undefined && <span className={`tabular-nums text-[11px] ${on ? "" : "text-ink-faint"}`}>{count}</span>}
     </>
@@ -112,7 +119,7 @@ export function CategoryChip({
       aria-pressed={on}
       onClick={onClick}
       title={title}
-      className={`${cls} ${on ? "" : "bg-surface-2 text-ink-soft hover:text-ink ring-1 ring-inset ring-line/10 hover:ring-line/25"}`}
+      className={`${cls} active:scale-[0.94] ${on ? "" : "bg-surface-2 text-ink-soft hover:text-ink ring-1 ring-inset ring-line/10 hover:ring-line/25"}`}
       style={style}
     >
       {inner}
@@ -151,7 +158,7 @@ export function ColorChoice({ value, onChange, label = "Colour" }: { value: Fram
 /** The frame-guide mark in Frame Guides' colour (an icon on a soft tile). */
 export function FrameMark({ className = "w-9 h-9", icon = "w-[18px] h-[18px]" }: { className?: string; icon?: string }) {
   return (
-    <span className={`inline-flex items-center justify-center rounded-xl flex-shrink-0 bg-frame/12 text-frame ${className}`} aria-hidden>
+    <span className={`inline-flex items-center justify-center rounded-xl flex-shrink-0 bg-amber/12 text-amber ${className}`} aria-hidden>
       <FrameIcon className={icon} />
     </span>
   );

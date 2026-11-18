@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Ago } from "@/components/ui/ago";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
@@ -14,6 +13,7 @@ import type { ScriptComment } from "../lib/queries";
 import type { PostingComment } from "../lib/anchors";
 import type { MentionPerson } from "../lib/mention-people";
 import { CommentComposer, FrameAttachment, KIND_COLOR, KIND_LABEL, KindMark, MentionText, QuoteBlock, WholeDocTag } from "./comment-composer";
+import { commentsChanged } from "../lib/comment-events";
 
 /*
  * One comment or editing idea (1.50.0): the same card in the comments panel and in the small box that opens on its
@@ -133,7 +133,6 @@ export function CommentCard({
   onAll?: () => void;
   onClose?: () => void;
 }) {
-  const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
   const color = KIND_COLOR[c.kind];
@@ -175,7 +174,7 @@ export function CommentCard({
     if (r.error) return toast.error(r.error);
     setSaved(body);
     setEditing(false);
-    router.refresh();
+    commentsChanged();
   }
   async function resolve() {
     if (!c.resolved && !(await confirmResolve(confirm, c))) return;
@@ -184,7 +183,7 @@ export function CommentCard({
     setBusy(null);
     if (r.error) return toast.error(r.error);
     onDone?.();
-    router.refresh();
+    commentsChanged();
   }
   async function remove() {
     if (!(await confirmDelete(confirm, c))) return;
@@ -193,7 +192,7 @@ export function CommentCard({
     setBusy(null);
     if (r.error) return toast.error(r.error);
     onDone?.();
-    router.refresh();
+    commentsChanged({ deleted: c.id });
   }
 
   const pop = variant === "popover";

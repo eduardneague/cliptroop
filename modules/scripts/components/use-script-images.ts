@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { compressImage, IMAGE_PRESETS, isPictureType, safeFileName, UPLOAD_CACHE_CONTROL } from "@/lib/image/compress";
 import { pictureTooBig } from "@/lib/image/limits";
 import { decodeDataImage, pictureSrc, readyToSave, unkeepableSrc } from "../lib/paste-images";
+import { ANY_EDIT } from "../lib/anchors";
 
 /**
  * Where a block (like an image) can go near `pos`: right after the
@@ -61,7 +62,8 @@ export function useScriptImages(
         if (to) tr.setNodeMarkup(h.pos, undefined, { ...h.attrs, src: to });
         else tr.delete(h.pos, h.pos + h.size);
       }
-      editor.view.dispatch(tr.setMeta("addToHistory", false));
+      // (Not your edit: allowed on commented words too, anchors.ts.)
+      editor.view.dispatch(tr.setMeta("addToHistory", false).setMeta(ANY_EDIT, true));
     },
     [editorRef]
   );
@@ -113,7 +115,7 @@ export function useScriptImages(
       for (const f of files) {
         const src = start(f);
         if (!src) continue;
-        const node = { type: "image", attrs: { src, alt: f.name && f.name !== "image.png" ? f.name : "", align: "center", width: 60 } };
+        const node = { type: "image", attrs: { src, alt: f.name && f.name !== "image.png" ? f.name : "", align: "left", width: 60 } };
         const range = blockRange(editor, at);
         editor
           .chain()

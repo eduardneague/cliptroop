@@ -17,14 +17,6 @@ import {
   TrashIcon,
 } from "@/components/ui/icons";
 
-function GripIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
-      {[7, 12, 17].flatMap((y) => [9, 15].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" />))}
-    </svg>
-  );
-}
-
 type Align = "left" | "center" | "right";
 
 /** Download a (cross-origin) image as a file. Only a picture's web address (1.31.15: never javascript: or the like). */
@@ -69,6 +61,9 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
   const editable = editor.isEditable;
   // Shown from the device while it uploads (1.27.5: pasted and dropped pictures).
   const uploading = typeof src === "string" && src.startsWith("blob:");
+  // Someone else's, still on its way up from their device (1.55.0, writing live): a blank frame until it's up.
+  const [unseen, setUnseen] = useState<string | null>(null);
+  const away = uploading && unseen === src;
 
   /** Swap this image with the block above (-1) or below (+1). */
   function move(dir: -1 | 1) {
@@ -129,6 +124,9 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
     >
       <div
         ref={boxRef}
+        // 1.54.1: a picture is never dragged (dragging one dropped a copy of it: the owner, "i dont want to be able to do
+        // this"). It moves with the arrows on its bar.
+        onDragStart={(e) => e.preventDefault()}
         className={`group relative inline-block max-w-full rounded-lg ${selected && editable ? `ring-2 ${frame ? "ring-frame" : "ring-amber"} ring-offset-2 ring-offset-transparent` : ""}`}
         style={{ width: width ? `${width}%` : undefined }}
       >
@@ -139,9 +137,11 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           draggable={false}
           loading="lazy"
           decoding="async"
-          className={`block w-full h-auto rounded-lg transition-opacity ${uploading ? "opacity-70" : ""} ${frame ? "script-frame-pic" : ""}`}
+          className={`block w-full h-auto rounded-lg transition-opacity ${uploading ? "opacity-70" : ""} ${frame ? "script-frame-pic" : ""} ${away ? "hidden" : ""}`}
+          onError={() => uploading && setUnseen(src)}
           onDoubleClick={() => (frame ? openFrame() : setViewing(true))}
         />
+        {away && <span aria-hidden className="block w-full aspect-[16/10] rounded-lg bg-surface-2" />}
         {/* A frame guide's picture says which one it is (fixed colours: it sits on the picture). */}
         {frame && (
           <button
@@ -175,15 +175,6 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
         >
           {editable && (
             <>
-              <span
-                data-drag-handle
-                draggable
-                title="Drag to move"
-                aria-label="Drag to move"
-                className={`${btn} cursor-grab active:cursor-grabbing`}
-              >
-                <GripIcon className="w-4 h-4" />
-              </span>
               <button type="button" title="Move up" aria-label="Move image up" disabled={index.first} className={`${btn} disabled:opacity-30`} onClick={() => move(-1)}>
                 <ChevronDownIcon className="w-4 h-4 rotate-180" />
               </button>
@@ -249,15 +240,15 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
   );
 }
 
-/** Image block with alignment and width (percent of the page). */
+/** Image block with alignment and width (percent of the page). 1.54.1: on the left unless moved; never dragged. */
 export const ScriptImage = Image.extend({
-  draggable: true,
+  draggable: false,
   addAttributes() {
     return {
       ...this.parent?.(),
       align: {
-        default: "center",
-        parseHTML: (el) => (el.getAttribute("data-align") as Align) || "center",
+        default: "left",
+        parseHTML: (el) => (el.getAttribute("data-align") as Align) || "left",
         renderHTML: (attrs) => ({ "data-align": attrs.align }),
       },
       width: {

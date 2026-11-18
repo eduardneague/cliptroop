@@ -50,12 +50,17 @@ import {
   CommentIcon,
   ScissorsIcon,
   FrameIcon,
+  PanelLeftIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CommentHighlights, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
+import { ANY_EDIT, CommentHighlights, commentAt, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
 import { SearchHit, searchHitKey } from "../lib/search-hit";
 import { LiveCursors } from "../lib/live-cursors";
-import { useLiveCursors } from "./use-live-cursors";
+import { useLiveCursors, type StepsMessage } from "./use-live-cursors";
+import { useLiveEdits, type LiveStatus } from "./use-live-edits";
+import { newClientId } from "../lib/collab";
+import { docText, LiveSteps, openable } from "../lib/live-doc";
+import type { LiveStart } from "../lib/queries";
 import { LiveFaces } from "./live-faces";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
@@ -84,6 +89,7 @@ import type { PickHow, PickPurpose } from "@/modules/frames/components/frame-pic
 import type { MentionPerson } from "../lib/mention-people";
 import type { Scene } from "../sketch/engine";
 import { Leaves } from "@/components/ui/leaves";
+import { SAVE_NOW_EVENT, type SaveNow } from "../lib/save-now";
 
 // Frame guides (1.54.0): the picker and the big view load when they're first opened.
 const FramePicker = dynamic(() => import("@/modules/frames/components/frame-picker").then((m) => m.FramePicker), { ssr: false });
@@ -110,7 +116,7 @@ const DRAFT_KEY = (id: string) => `vp:comment-draft:${id}`;
 type SketchDraft = { scene: Scene; blob: Blob; w: number; h: number; url: string };
 import { ScriptImage } from "./script-image";
 import { useScriptImages } from "./use-script-images";
-import { countWords, EMPTY_DOC, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
+import { countWords, SCRIPT_TEMPLATE, spokenLength } from "../lib/text";
 import { sounds } from "@/lib/sounds";
 
 const HIGHLIGHTS = [
@@ -124,6 +130,8 @@ const HIGHLIGHTS = [
 type Status = "saved" | "unsaved" | "saving" | "error" | "conflict";
 const PAPER_KEY = "vp:script-paper";
 const WIDTH_KEY = "vp:script-width";
+/** The documents column on the left, open or closed (1.54.1): this browser remembers it. */
+const RAIL_KEY = "vp:script-rail";
 /** "Ctrl+" (or "⌘" on a Mac) in the shortcuts shown. */
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 /** The app's own bar at the top of every page (h-14). */
@@ -152,10 +160,15 @@ function normalized(doc: Json): Json {
   return { ...doc, content };
 }
 
-function isEmptyDoc(doc: unknown) {
-  const d = doc as { content?: { type: string; content?: unknown[] }[] } | null;
-  return !d?.content?.length || (d.content.length === 1 && d.content[0].type === "paragraph" && !d.content[0].content?.length);
-}
+/** What the top bar says while writing live. */
+const LIVE_TEXT: Record<LiveStatus, string> = {
+  saved: "Saved",
+  saving: "Saving…",
+  offline: "Offline: saving when you're back",
+  stale: "Reload to keep writing",
+  newer: "ClipTroop was updated: reload",
+  readonly: "View only",
+};
 
 export function ScriptEditor({
   scriptId,
@@ -189,7 +202,9 @@ export function ScriptEditor({
   me = null,
   posting = null,
   onPosting,
+  onRemoteComments,
   find = null,
+  liveStart = null,
 }: {
   /** Words to show (a search result, ?find=): marked for a moment, scrolled to. */
   find?: string | null;
@@ -240,13 +255,32 @@ export function ScriptEditor({
   /** A comment being sent: the text shows "Posting…" on its words until it's saved. */
   posting?: PostingComment | null;
   onPosting?: (p: PostingComment | null) => void;
+  /** Someone else in the script changed the comments (1.54.1): fetch them again. */
+  onRemoteComments?: () => void;
+  /**
+   * Writing together, live (1.55.0, 0134): where the text above is (which steps it has) and the steps after it. Null:
+   * the old way (one person's save at a time), before 0134 runs.
+   */
+  liveStart?: LiveStart | null;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [status, setStatus] = useState<Status>("saved");
+  const statusRef = useRef(status);
+  statusRef.current = status;
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [width, setWidth] = useState<Width>("normal");
+  const [railOpen, setRailOpen] = useState(true);
+  /**
+   * Live (1.55.0): everyone's changes go in as they're made (no saves of the whole script, no "saved a newer version").
+   * Fixed for the page's life: the editor is made for one way or the other.
+   */
+  const [liveAt] = useState(liveStart);
+  const liveMode = !!liveAt;
+  const liveModeRef = useRef(liveMode);
+  /** This tab's id among the pages writing the script. */
+  const [clientId] = useState(newClientId);
   /** Someone else saved a newer version while you're here (1.53.5): who. */
   const [newer, setNewer] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -265,7 +299,9 @@ export function ScriptEditor({
   const fileRef = useRef<HTMLInputElement>(null);
   /** The script's live channel (1.53.5): a save tells the others. */
   const liveRef = useRef<{ announceSaved: (version: number) => void } | null>(null);
-  const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null; pending: PendingMark }>({ comments, active: activeCommentId, pending: null });
+  const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null; pending: PendingMark; onBlocked?: (id: string) => void }>({ comments, active: activeCommentId, pending: null });
+  /** A change to a comment's words was turned down (anchors.ts): what to do about it (set below). */
+  const blockedRef = useRef<(id: string) => void>(() => {});
 
   useEffect(() => {
     try {
@@ -273,6 +309,7 @@ export function ScriptEditor({
       if (v === "light" || v === "dark") setPaper(v);
       const wd = localStorage.getItem(WIDTH_KEY);
       if (wd === "normal" || wd === "wide" || wd === "full") setWidth(wd);
+      if (localStorage.getItem(RAIL_KEY) === "closed") setRailOpen(false);
     } catch {
       /* private mode: stay light */
     }
@@ -388,8 +425,10 @@ export function ScriptEditor({
       LiveCursors,
       // Words linked to a frame guide: its picture right under them (1.54.0).
       FrameLinkPictures(() => frameLookRef.current),
+      // Everyone's changes as they're made (1.55.0).
+      ...(liveAt ? [LiveSteps.configure({ version: liveAt.docVersion, client: clientId })] : []),
     ],
-    content: isEmptyDoc(initialContent) ? EMPTY_DOC : repairDoc(initialContent),
+    content: openable(initialContent),
     editorProps: {
       attributes: { class: "script-doc outline-none", spellcheck: "true" },
       // Pictures inside pasted text (Word, Google Docs, Firefox): uploaded like files (1.27.5).
@@ -427,6 +466,8 @@ export function ScriptEditor({
       if (!canEdit) return;
       // (Undo / redo can bring back a picture's device link: its real one again.)
       queueMicrotask(() => imagesRef.current.settle());
+      // Live: the changes go in by themselves (use-live-edits.ts).
+      if (liveMode) return;
       if (JSON.stringify(normalized(editor.getJSON() as Json)) === savedJsonRef.current) {
         // Back to exactly what's saved (e.g. undo, or a no-op edit).
         if (!inflightRef.current) {
@@ -445,16 +486,48 @@ export function ScriptEditor({
   // The owner: "if theres any way to add the cursor thing without adding strain on aynthing, we shoiuld do it".
   // Their faces in the top bar, their cursors in the text, and when one of them saves a newer version, a word about it
   // (theirs isn't in your copy until you reload). use-live-cursors.ts says what it costs: next to nothing.
+  const editsRef = useRef<{ onSteps: (m: StepsMessage) => void; onJoined: () => void; saveNow: () => Promise<boolean> } | null>(null);
   const live = useLiveCursors({
     editor,
     scriptId,
     me: me?.userId ?? null,
     people,
     onSaved: (by, version) => {
-      if (version > versionRef.current) setNewer(by);
+      // Live: an older page saved the whole script (its text starts again from theirs): fetched at once.
+      if (liveMode) editsRef.current?.onJoined();
+      else if (version > versionRef.current) setNewer(by);
     },
+    onComments: onRemoteComments,
+    onSteps: (m) => editsRef.current?.onSteps(m),
+    onJoined: () => editsRef.current?.onJoined(),
   });
   liveRef.current = live;
+
+  // ---- writing together, live (1.55.0) --------------------------------------------
+  // The owner: "we need to make it so that two or three or however many people can write at once and the page reloads
+  // quickly and updates automatically for everyone at the same time". Every change goes in as it's made, everyone
+  // else's comes in as they make it (use-live-edits.ts, lib/collab.ts, 0134).
+  const edits = useLiveEdits({
+    editor: liveMode ? editor : null,
+    scriptId,
+    client: clientId,
+    start: liveAt,
+    canEdit,
+    me: me?.userId ?? null,
+    broadcast: (m) => live.sendSteps(m),
+    connected: live.connected,
+    textOf: docText,
+    prepare: openable,
+    uploading: () => imagesRef.current.pending(),
+    onReplaced: () => toast.success("This document's text was replaced (sent on from the step before, say): you're seeing the new text.", { sound: false }),
+    onError: (m) => toast.error(m),
+  });
+  editsRef.current = edits;
+  const liveStuck = liveMode && (edits.status === "stale" || edits.status === "newer");
+  // Stuck (the text replaced under changes of yours, or a newer ClipTroop): nothing more is typed that can't be saved.
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && liveStuck) editor.setEditable(false);
+  }, [editor, liveStuck]);
   const newerName = newer ? (people.find((p) => p.userId === newer)?.name ?? "Someone") : null;
 
   // ---- frame guides (1.54.0): the frames this script uses, the picker, a frame big ------------------------------
@@ -575,10 +648,12 @@ export function ScriptEditor({
   const grammar = useGrammar(canEdit ? editor : null, { enabled: canEdit, scriptId, teamId, me });
   const panel = useDock();
   const grammarOpen = panel === "grammar";
-  // The browser's own spell check steps aside while ours is on (no double red lines).
+  // The browser's own spell check steps aside while ours is on (no double red lines), and stays off when you've turned
+  // suggestions off (1.54.1: "completely": no red lines at all).
+  const browserSpell = !grammar.live && grammar.settings.on;
   useEffect(() => {
-    if (editor && !editor.isDestroyed) editor.view.dom.setAttribute("spellcheck", grammar.live ? "false" : "true");
-  }, [grammar.live, editor]);
+    if (editor && !editor.isDestroyed) editor.view.dom.setAttribute("spellcheck", browserSpell ? "true" : "false");
+  }, [browserSpell, editor]);
   // Leaving the script closes the panel (the next page starts fresh).
   useEffect(() => () => dock.close("grammar"), []);
 
@@ -667,9 +742,10 @@ export function ScriptEditor({
     const editor = editorRef.current;
     if (!ask || !editor || copying) return;
     setCopying(true);
-    editor.commands.setContent(repairDoc(ask.content), { emitUpdate: true });
+    editor.chain().setMeta(ANY_EDIT, true).setContent(repairDoc(ask.content), { emitUpdate: true }).run();
     // Saved first, so the comments land on text that's there.
-    await flushRef.current();
+    if (liveMode) await editsRef.current?.saveNow();
+    else await flushRef.current();
     if (withComments && onCopyComments) await onCopyComments(ask.id);
     setCopying(false);
     setCopyAsk(null);
@@ -691,9 +767,10 @@ export function ScriptEditor({
       drafting && sel
         ? { quote: sel.quote, occurrence: sel.occurrence, kind: draftKind }
         : posting
-          ? { quote: posting.quote, occurrence: posting.occurrence, kind: posting.kind, label: "Posting…" }
+          ? // 1.54.1: once it's saved (it has its id) it's on the page as itself: just a "Posted" tag for a moment.
+            { quote: posting.quote, occurrence: posting.occurrence, kind: posting.kind, label: posting.id ? "Posted" : "Posting…", done: !!posting.id }
           : null;
-    commentStateRef.current = { comments, active: activeCommentId, pending };
+    commentStateRef.current = { comments, active: activeCommentId, pending, onBlocked: (id) => blockedRef.current(id) };
     if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(commentKey, true));
   }, [comments, activeCommentId, editor, drafting, sel, draftKind, posting]);
   // The commenters' photos next to the lines they commented on (1.23.0), in
@@ -887,7 +964,7 @@ export function ScriptEditor({
       return;
     }
     // Its picture: under the words (or where the cursor is), like a picture put in.
-    const node = { type: "image", attrs: { src: f.url, alt: f.title || `Frame #${f.number}`, align: "center", width: f.h > f.w ? 33 : 60, frame: f.id, frameN: f.number, frameTitle: f.title || null } };
+    const node = { type: "image", attrs: { src: f.url, alt: f.title || `Frame #${f.number}`, align: "left", width: f.h > f.w ? 33 : 60, frame: f.id, frameN: f.number, frameTitle: f.title || null } };
     const at = blockRange(ed, range.to);
     ed.chain()
       .focus()
@@ -960,12 +1037,40 @@ export function ScriptEditor({
     });
   }
 
+  // Asked to save now (1.54.1: before it's handed on, so the next step gets the last words and pictures): saved, then
+  // the answer. Pictures still uploading are waited for.
+  useEffect(() => {
+    const onSaveNow = (e: Event) => {
+      const d = (e as CustomEvent<SaveNow>).detail;
+      if (!d || d.scriptId !== scriptId || !canEdit) return;
+      d.claim();
+      // Live: everything in, and the text saved at the version now.
+      if (liveMode) {
+        void (editsRef.current?.saveNow() ?? Promise.resolve(false)).then((ok) => d.done(ok));
+        return;
+      }
+      void (async () => {
+        const until = Date.now() + 15_000;
+        while (Date.now() < until) {
+          if (statusRef.current === "conflict") return d.done(false);
+          if (!pendingRef.current && !inflightRef.current && !imagesRef.current.pending()) return d.done(statusRef.current !== "error");
+          if (pendingRef.current && !inflightRef.current) void flushRef.current();
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        d.done(false);
+      })();
+    };
+    window.addEventListener(SAVE_NOW_EVENT, onSaveNow);
+    return () => window.removeEventListener(SAVE_NOW_EVENT, onSaveNow);
+  }, [scriptId, canEdit, liveMode]);
+
   // Save shortcut, unsaved-changes warning, and a final save when leaving.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void flushRef.current();
+        if (editsRef.current && liveModeRef.current) void editsRef.current.saveNow();
+        else void flushRef.current();
       }
     };
     const onLeave = (e: BeforeUnloadEvent) => {
@@ -986,6 +1091,33 @@ export function ScriptEditor({
   /** How wide the paper is, in pixels (the popovers stay on it). */
   const frameW = () => paperRef.current?.clientWidth ?? 600;
 
+  // A change to a comment's words was turned down (1.55.0, anchors.ts): its words give a little shake, and a word says
+  // why, with the comment one click away (to resolve or delete it). Once every few seconds, not on every key.
+  const blockedAt = useRef(0);
+  const openComment = (id: string) => {
+    const el = paperRef.current?.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(id)}"]`);
+    const box = paperRef.current?.getBoundingClientRect();
+    if (el && box && renderCommentPopover) {
+      const r = el.getBoundingClientRect();
+      setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 348)), suggestion: null });
+    } else onCommentClick?.(id);
+  };
+  blockedRef.current = (id: string) => {
+    const spans = paperRef.current?.querySelectorAll<HTMLElement>(`[data-comment-id="${CSS.escape(id)}"]`) ?? [];
+    spans.forEach((sp) => {
+      sp.classList.remove("is-locked");
+      void sp.offsetWidth;
+      sp.classList.add("is-locked");
+      setTimeout(() => sp.classList.remove("is-locked"), 650);
+    });
+    const now = Date.now();
+    if (now - blockedAt.current < 3000) return;
+    blockedAt.current = now;
+    const c = commentStateRef.current.comments.find((x) => x.id === id);
+    const what = c?.kind === "edit_idea" ? "an editing idea" : c?.kind === "frame" ? "a frame guide" : "a comment";
+    toast.error(`These words have ${what} on them. Resolve or delete it first, then change them.`, { action: { label: "Show it", onClick: () => openComment(id) }, sound: false });
+  };
+
   const remember = (key: string, v: string) => {
     try {
       localStorage.setItem(key, v);
@@ -998,6 +1130,13 @@ export function ScriptEditor({
     remember(WIDTH_KEY, v);
     // The side-by-side page follows.
     window.dispatchEvent(new CustomEvent("vp-width", { detail: v }));
+  }
+
+  function toggleRail() {
+    setRailOpen((open) => {
+      remember(RAIL_KEY, open ? "closed" : "open");
+      return !open;
+    });
   }
 
   function togglePaper() {
@@ -1088,9 +1227,10 @@ export function ScriptEditor({
         <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
           <span className="font-mono text-ink-soft mr-1.5">#{number}</span>
           {title}
-          {docName && <span className={`ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft ${mobileDocs ? "hidden lg:inline" : ""}`}>{docName}</span>}
+          {docName && <span className={`ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft ${mobileDocs ? (leftRail && !railOpen ? "hidden" : "hidden lg:inline") : ""}`}>{docName}</span>}
         </div>
-        {mobileDocs && <div className="lg:hidden flex-shrink-0">{mobileDocs}</div>}
+        {/* (A computer with the documents column closed: the same dropdown, so another document is one click away.) */}
+        {mobileDocs && <div className={`flex-shrink-0 ${leftRail && !railOpen ? "" : "lg:hidden"}`}>{mobileDocs}</div>}
         <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
           {words} words · about {spokenLength(words)}
         </span>
@@ -1106,7 +1246,28 @@ export function ScriptEditor({
             {newerName} saved · Reload
           </button>
         )}
-        {canEdit ? (
+        {canEdit && liveMode ? (
+          liveStuck ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              title={edits.status === "newer" ? "ClipTroop was updated while this page was open. Reload to keep writing." : "This document's text was replaced while you were writing. Reload to keep writing."}
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red px-2.5 h-7 text-[12px] font-semibold hover:bg-red/15 flex-shrink-0"
+            >
+              {LIVE_TEXT[edits.status]}
+            </button>
+          ) : (
+            <span
+              className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${
+                edits.status === "saved" ? "text-green" : edits.status === "offline" ? "text-red" : "text-ink-soft"
+              }`}
+              aria-live="polite"
+            >
+              {edits.status === "saved" && <CheckIcon className="w-3.5 h-3.5" />}
+              {LIVE_TEXT[edits.status]}
+            </span>
+          )
+        ) : canEdit ? (
           <span
             className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${
               status === "error" || status === "conflict" ? "text-red" : status === "saved" ? "text-green" : "text-ink-soft"
@@ -1173,6 +1334,21 @@ export function ScriptEditor({
       )}
       </div>
 
+      {liveStuck && (
+        <div className="no-print mx-auto mt-4 w-full max-w-3xl px-4">
+          <div className="rounded-xl border border-amber/40 bg-amber/[0.06] px-4 py-3 flex items-center gap-3 flex-wrap">
+            <p className="text-[13.5px] text-ink flex-1 min-w-[200px]">
+              {edits.status === "newer"
+                ? "ClipTroop was updated while this page was open. Reload to keep writing with everyone."
+                : "This document’s text was replaced while you were writing (sent on from the step before, say), so your last changes can’t go on top of it. Copy anything you need, then reload."}
+            </p>
+            <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-amber text-white font-bold px-4 h-9 text-[13px]">
+              Reload
+            </button>
+          </div>
+        </div>
+      )}
+
       {status === "conflict" && (
         <div className="no-print mx-auto mt-4 w-full max-w-3xl px-4">
           <div className="rounded-xl border border-amber/40 bg-amber/[0.06] px-4 py-3 flex items-center gap-3 flex-wrap">
@@ -1205,7 +1381,29 @@ export function ScriptEditor({
       />
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-      {leftRail && <div className="no-print hidden lg:block lg:w-60 flex-shrink-0 lg:border-r border-line/10">{leftRail}</div>}
+      {leftRail && (
+        // 1.54.1: it closes to a thin strip (the button at its top) and opens again; this browser remembers which.
+        <div
+          data-rail={railOpen ? "open" : "closed"}
+          className={`script-rail no-print hidden lg:block flex-shrink-0 lg:border-r border-line/10 relative lg:overflow-x-clip transition-[width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] ${railOpen ? "lg:w-60" : "lg:w-12"}`}
+        >
+          <div className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] z-10 h-0">
+            <button
+              type="button"
+              onClick={toggleRail}
+              aria-expanded={railOpen}
+              aria-label={railOpen ? "Close the documents column" : "Open the documents column"}
+              title={railOpen ? "Hide documents" : "Show documents"}
+              className={`absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 transition-[left,transform] duration-300 ${railOpen ? "left-[calc(15rem-2.75rem)]" : "left-2"}`}
+            >
+              <PanelLeftIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <div className={`transition-opacity duration-200 ${railOpen ? "opacity-100" : "opacity-0 pointer-events-none invisible"}`} aria-hidden={!railOpen}>
+            {leftRail}
+          </div>
+        </div>
+      )}
       {/* Paper */}
       <div
         ref={areaRef}
@@ -1218,8 +1416,16 @@ export function ScriptEditor({
           data-paper={paper}
           onClick={(e) => {
             const target = e.target as HTMLElement;
+            // Inside the open comment's own box: it handles its clicks.
+            if (target.closest("[data-comment-pop]")) return;
             const el = target.closest<HTMLElement>("[data-comment-id]");
-            const id = el?.dataset.commentId;
+            let id = el?.dataset.commentId;
+            // 1.54.1: else by where the click landed in the text (the element under the pointer can be redrawn between
+            // press and release: a suggestion's underline, someone else's cursor), so a comment's words always open it.
+            if (!id && editor && !editor.isDestroyed && target.closest(".ProseMirror") && !target.closest(".frame-below, .script-image")) {
+              const hit = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+              id = (hit && commentAt(editor.state.doc, commentStateRef.current.comments, hit.pos)) ?? undefined;
+            }
             // No comment here: a writing suggestion (if any) opens its own card (GrammarLayer).
             if (!id) return setPop(null);
             // A comment wins (1.27.5): it opens right where you clicked; a suggestion on the
@@ -1227,7 +1433,7 @@ export function ScriptEditor({
             const gr = target.closest<HTMLElement>("[data-gr], [data-gr-wide]");
             const suggestion = gr ? (gr.dataset.gr ?? gr.dataset.grWide ?? null) : null;
             const box = paperRef.current?.getBoundingClientRect();
-            const r = el!.getBoundingClientRect();
+            const r = el ? el.getBoundingClientRect() : { bottom: e.clientY + 10, left: e.clientX - 24 };
             if (box && renderCommentPopover) {
               setPop({ id, top: r.bottom - box.top + 6, left: Math.max(8, Math.min(r.left - box.left, frameW() - 348)), suggestion });
             } else onCommentClick?.(id);
@@ -1245,7 +1451,7 @@ export function ScriptEditor({
               <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => editor?.commands.setContent(SCRIPT_TEMPLATE, { emitUpdate: true })}
+                onClick={() => editor?.chain().setMeta(ANY_EDIT, true).setContent(SCRIPT_TEMPLATE, { emitUpdate: true }).run()}
                 className="rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px] whitespace-nowrap"
               >
                 Use template
@@ -1268,7 +1474,7 @@ export function ScriptEditor({
                       setCopyAsk({ id, name: copySources.find((d) => d.id === id)?.name ?? "that document", content: got.content, comments: got.comments });
                       return;
                     }
-                    editor.commands.setContent(repairDoc(got.content), { emitUpdate: true });
+                    editor.chain().setMeta(ANY_EDIT, true).setContent(repairDoc(got.content), { emitUpdate: true }).run();
                   }}
                 />
               )}
@@ -1309,7 +1515,7 @@ export function ScriptEditor({
             </div>
           )}
           {pop && renderCommentPopover && (
-            <div className="no-print absolute z-30 w-[340px] max-w-[calc(100%-16px)]" style={{ top: pop.top, left: pop.left }}>
+            <div data-comment-pop="" className="no-print absolute z-30 w-[340px] max-w-[calc(100%-16px)]" style={{ top: pop.top, left: pop.left }}>
               {renderCommentPopover(pop.id, () => setPop(null))}
               <SuggestionHere
                 s={pop.suggestion ? grammar.items.find((x) => x.id === pop.suggestion) ?? null : null}

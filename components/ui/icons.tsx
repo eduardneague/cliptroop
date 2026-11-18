@@ -647,6 +647,16 @@ export function FlagIcon({ filled, ...p }: IconProps & { filled?: boolean }) {
   );
 }
 
+/** A page with a column down its left: show or hide a side column (1.54.1, the script's documents). */
+export function PanelLeftIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M9.5 4v16" />
+    </Svg>
+  );
+}
+
 export function ChevronLeftIcon(p: IconProps) {
   return (
     <Svg {...p}>

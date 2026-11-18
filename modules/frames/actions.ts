@@ -15,9 +15,8 @@ import { getMembership } from "@/lib/permissions/membership";
 import { overLimit } from "@/lib/rate-limit";
 import { PICTURE_MAX_BYTES } from "@/lib/image/limits";
 import { PICTURE_TYPES } from "@/lib/image/compress";
-import { cleanColor, isCategoryKey } from "./lib/categories";
-import { cleanNotes, cleanSourceUrl, cleanText, cleanTint, parseKeywords, toCategory, toCollection, UUID_RX, type FrameCollection, type FrameGuide, type FrameLibrary } from "./lib/model";
-import type { CustomCategory } from "./lib/categories";
+import { cleanCategories, cleanColor } from "./lib/categories";
+import { cleanNotes, cleanSourceUrl, cleanText, cleanTint, parseKeywords, toCollection, UUID_RX, type FrameCollection, type FrameGuide, type FrameLibrary } from "./lib/model";
 import { FRAME_BUCKET, FRAME_COLS, loadFrameLibrary, notSetUp, toFrame } from "./lib/queries";
 
 type R<T = object> = ({ error?: undefined } & T) | { error: string };
@@ -158,7 +157,7 @@ export async function updateFrame(id: string, patch: FramePatch): Promise<R<{ fr
   if (patch.keywords !== undefined) row.keywords = parseKeywords(patch.keywords);
   if (patch.categories !== undefined) {
     if (!Array.isArray(patch.categories)) return { error: "Those categories can't be used." };
-    row.categories = [...new Set(patch.categories.filter((k) => typeof k === "string" && isCategoryKey(k)))].slice(0, 30);
+    row.categories = cleanCategories(patch.categories);
   }
   if (patch.collectionId !== undefined) {
     if (!UUID_RX.test(patch.collectionId)) return { error: "Collection not found." };
@@ -270,51 +269,4 @@ export async function deleteCollection(id: string, moveTo: string | null): Promi
   const files = ((left ?? []) as { image_path: string; thumb_path: string | null }[]).flatMap((r) => [r.image_path, ...(r.thumb_path ? [r.thumb_path] : [])]);
   if (files.length) await createAdminClient().storage.from(FRAME_BUCKET).remove(files);
   return { moved, deleted: left?.length ?? 0 };
-}
-
-// ---------------------------------------------------------------------------
-// The team's own categories
-// ---------------------------------------------------------------------------
-
-export async function createCategory(teamId: string, input: { name: string; color?: string }): Promise<R<{ category: CustomCategory }>> {
-  if (!UUID_RX.test(teamId)) return { error: "Team not found." };
-  const name = cleanText(input?.name, 40);
-  if (!name) return { error: "Give the category a name." };
-  const s = await session();
-  if (!s) return SIGNED_OUT;
-  const { data, error } = await s.supabase.from("frame_categories").insert({ team_id: teamId, name, color: cleanColor(input.color, "slate") }).select("id, name, color").single();
-  if (error || !data) {
-    if (notSetUp(error)) return NOT_SET_UP;
-    return { error: dbWords(error, "category") ?? "Couldn't make the category. Try again." };
-  }
-  return { category: toCategory(data as Record<string, unknown>) };
-}
-
-export async function updateCategory(id: string, patch: { name?: string; color?: string }): Promise<R<{ category: CustomCategory }>> {
-  if (!UUID_RX.test(id)) return { error: "Category not found." };
-  const row: Record<string, unknown> = {};
-  if (patch.name !== undefined) {
-    const name = cleanText(patch.name, 40);
-    if (!name) return { error: "Give the category a name." };
-    row.name = name;
-  }
-  if (patch.color !== undefined) row.color = cleanColor(patch.color, "slate");
-  if (!Object.keys(row).length) return { error: "Nothing to change." };
-  const s = await session();
-  if (!s) return SIGNED_OUT;
-  const { data, error } = await s.supabase.from("frame_categories").update(row).eq("id", id).select("id, name, color").maybeSingle();
-  if (error) return { error: dbWords(error, "category") ?? "Couldn't save the change. Try again." };
-  if (!data) return { error: "That category was deleted meanwhile." };
-  return { category: toCategory(data as Record<string, unknown>) };
-}
-
-/** Deleting one of the team's own categories (whoever made it, or a master): it comes off every frame. */
-export async function deleteCategory(id: string): Promise<R> {
-  if (!UUID_RX.test(id)) return { error: "Category not found." };
-  const s = await session();
-  if (!s) return SIGNED_OUT;
-  const { data, error } = await s.supabase.from("frame_categories").delete().eq("id", id).select("id");
-  if (error) return { error: "Couldn't delete the category. Try again." };
-  if (!data?.length) return { error: "Only whoever made a category, or a master, can delete it." };
-  return {};
 }

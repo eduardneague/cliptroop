@@ -8,10 +8,10 @@ import { Leaves } from "@/components/ui/leaves";
 import { Ago } from "@/components/ui/ago";
 import { Select } from "@/components/ui/select";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ExpandIcon, ExternalIcon, LinkIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, CopyIcon, DownloadIcon, ExpandIcon, ExternalIcon, LinkIcon, TrashIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { wordColor } from "@/lib/word-color";
-import { COLOR_CSS, categoryInfo, customKey, toggleCategory, type CustomCategory } from "../lib/categories";
+import { COLOR_CSS, categoryInfo, toggleCategory } from "../lib/categories";
 import { cleanSourceUrl, filterGroups, frameHref, frameName, parseKeywords, sourceHost, type FrameCollection, type FrameGuide, type FrameLibrary } from "../lib/model";
 import { CategoryChip, ColorDot, FrameNumber } from "./frame-bits";
 
@@ -158,8 +158,8 @@ function FrameWindow({
 }
 
 /** Categories on a frame, as chips (read only). */
-function CategoryList({ f, custom }: { f: FrameGuide; custom: CustomCategory[] }) {
-  const infos = f.categories.map((k) => categoryInfo(k, custom)).filter((x): x is NonNullable<typeof x> => !!x);
+function CategoryList({ f }: { f: FrameGuide }) {
+  const infos = f.categories.map((k) => categoryInfo(k)).filter((x): x is NonNullable<typeof x> => !!x);
   if (!infos.length) return null;
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -171,22 +171,40 @@ function CategoryList({ f, custom }: { f: FrameGuide; custom: CustomCategory[] }
 }
 
 const LABEL = "block text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-1.5";
-const FIELD = "w-full rounded-lg border border-line/15 bg-surface-2/60 px-3 h-10 text-[13.5px] text-ink placeholder:text-ink-faint outline-none focus:border-frame/60 focus:ring-2 focus:ring-frame/20 transition-colors";
+/** A section's name with its saving word beside it. */
+const LABEL_ROW = "flex items-center justify-between gap-2 min-h-[18px] mb-1.5";
+const LABEL_TEXT = "text-[11px] font-bold uppercase tracking-wide text-ink-soft";
+const FIELD = "w-full rounded-lg border border-line/15 bg-surface-2/60 px-3 h-10 text-[13.5px] text-ink placeholder:text-ink-faint outline-none focus:border-amber/60 focus:ring-2 focus:ring-amber/20 transition-colors";
 
-/** Keywords as chips you type: Enter or a comma adds one, Backspace on an empty box takes the last one off. */
+/**
+ * Keywords as chips you type: Enter or a comma adds one, Backspace on an empty box takes the last one off. 1.54.1: a new
+ * one pops in, one taken off shrinks away first (the owner: "animations to see stuff happening, not just popping in").
+ */
 function KeywordInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [text, setText] = useState("");
+  // The ones there when the frame opened don't pop in; the ones added since do.
+  const first = useRef(new Set(value));
+  const [leaving, setLeaving] = useState<string[]>([]);
+  const now = useLatest(value);
   const commit = (t = text) => {
     const add = parseKeywords(t);
     setText("");
     if (add.length) onChange(parseKeywords([...value, ...add]));
   };
+  const remove = (k: string) => {
+    if (leaving.includes(k)) return;
+    setLeaving((l) => [...l, k]);
+    setTimeout(() => {
+      setLeaving((l) => l.filter((x) => x !== k));
+      onChange(now.current.filter((x) => x !== k));
+    }, 170);
+  };
   return (
-    <div className="rounded-lg border border-line/15 bg-surface-2/60 px-2 py-1.5 flex flex-wrap gap-1.5 focus-within:border-frame/60 focus-within:ring-2 focus-within:ring-frame/20 transition-colors">
+    <div className="rounded-lg border border-line/15 bg-surface-2/60 px-2 py-1.5 flex flex-wrap gap-1.5 focus-within:border-amber/60 focus-within:ring-2 focus-within:ring-amber/20 transition-colors">
       {value.map((k) => (
-        <span key={k} className="inline-flex items-center gap-1 rounded-md bg-surface text-ink pl-2 pr-1 h-7 text-[12.5px] font-semibold ring-1 ring-inset ring-line/15">
+        <span key={k} className={`inline-flex items-center gap-1 rounded-md bg-surface text-ink pl-2 pr-1 h-7 text-[12.5px] font-semibold ring-1 ring-inset ring-line/15 ${first.current.has(k) ? "" : "fg-kw-new"} ${leaving.includes(k) ? "fg-kw-out" : ""}`}>
           {k}
-          <button type="button" onClick={() => onChange(value.filter((x) => x !== k))} aria-label={`Remove ${k}`} className="w-5 h-5 rounded flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2">
+          <button type="button" onClick={() => remove(k)} aria-label={`Remove ${k}`} className="w-5 h-5 rounded flex items-center justify-center text-ink-faint hover:text-ink hover:bg-surface-2 active:scale-90 transition-transform">
             <CloseIcon className="w-3 h-3" />
           </button>
         </span>
@@ -202,7 +220,7 @@ function KeywordInput({ value, onChange }: { value: string[]; onChange: (v: stri
           if (e.key === "Enter") {
             e.preventDefault();
             commit();
-          } else if (e.key === "Backspace" && !text && value.length) onChange(value.slice(0, -1));
+          } else if (e.key === "Backspace" && !text && value.length) remove(value[value.length - 1]);
         }}
         onBlur={() => commit()}
         placeholder={value.length ? "Add more…" : "desk, window light, slow-mo…"}
@@ -214,90 +232,54 @@ function KeywordInput({ value, onChange }: { value: string[]; onChange: (v: stri
 }
 
 /**
- * Picking a frame's categories (a short list, 1.54.0): A-roll or B-roll, the shot, the team's own (and a new one of
- * those right there).
+ * Picking a frame's categories (a short list, 1.54.0): A-roll or B-roll, then the shot. 1.54.1: nothing else (a team's
+ * own are gone); a chip keeps its size on and off, and the one clicked on has its tick pop in.
  */
-export function CategoryPicker({
-  value,
-  onChange,
-  custom,
-  onCreate,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-  custom: CustomCategory[];
-  /** A new category of the team's own (its key, or null when it couldn't be made). */
-  onCreate?: (name: string) => Promise<string | null>;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [making, setMaking] = useState(false);
-  const groups = useMemo(() => filterGroups(custom), [custom]);
-  const toggle = (k: string) => onChange(toggleCategory(value, k));
-  async function create() {
-    const n = name.trim();
-    if (!n || !onCreate || making) return;
-    const existing = custom.find((c) => c.name.toLowerCase() === n.toLowerCase());
-    if (existing) {
-      if (!value.includes(customKey(existing.id))) onChange([...value, customKey(existing.id)]);
-      setName("");
-      setAdding(false);
-      return;
-    }
-    setMaking(true);
-    const key = await onCreate(n);
-    setMaking(false);
-    if (key) {
-      setName("");
-      setAdding(false);
-      onChange([...value, key]);
-    }
-  }
+export function CategoryPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [popped, setPopped] = useState<string | null>(null);
+  const groups = useMemo(() => filterGroups(), []);
+  const toggle = (k: string) => {
+    setPopped(value.includes(k) ? null : k);
+    onChange(toggleCategory(value, k));
+  };
   return (
     <div className="space-y-3">
       {groups.map((g) => (
         <div key={g.id}>
-          <div className="text-[11px] font-semibold text-ink-faint mb-1.5">{g.name}</div>
+          <div className="text-[11px] font-semibold text-ink-faint mb-1.5">
+            {g.name}
+            {g.id === "roll" && <span className="font-normal"> · one or the other</span>}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {g.items.map((it) => (
-              <CategoryChip key={it.key} name={it.name} color={it.color} on={value.includes(it.key)} onClick={() => toggle(it.key)} size={g.id === "roll" ? "md" : "sm"} title={it.hint} />
+              <CategoryChip key={it.key} name={it.name} color={it.color} on={value.includes(it.key)} pop={popped === it.key} onClick={() => toggle(it.key)} size={g.id === "roll" ? "md" : "sm"} title={it.hint} />
             ))}
-            {g.id === "yours" &&
-              onCreate &&
-              (adding ? (
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void create();
-                    }
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setAdding(false);
-                      setName("");
-                    }
-                  }}
-                  onBlur={() => (name.trim() ? void create() : setAdding(false))}
-                  maxLength={40}
-                  disabled={making}
-                  placeholder="Its name, then Enter"
-                  aria-label="A new category"
-                  className="h-6 w-40 rounded-lg border border-frame/50 bg-surface px-2 text-[12px] text-ink outline-none focus:ring-2 focus:ring-frame/20"
-                />
-              ) : (
-                <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-line/30 px-2 h-6 text-[11.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/50">
-                  <PlusIcon className="w-3 h-3" />
-                  New
-                </button>
-              ))}
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+type FieldSave = { field: "categories" | "keywords" | "collection"; state: "saving" | "saved" | "error"; n: number };
+
+/** Next to a section's name: saving (a spinner), then saved (a tick that fades), or not saved. */
+function SaveTag({ s, field }: { s: FieldSave | null; field: FieldSave["field"] }) {
+  if (!s || s.field !== field) return null;
+  const cls = "inline-flex items-center gap-1 text-[11px] font-semibold normal-case tracking-normal";
+  if (s.state === "saving")
+    return (
+      <span className={`${cls} text-ink-faint`} aria-live="polite">
+        <span className="w-3 h-3 rounded-full border-2 border-ink-faint/30 border-t-amber animate-spin" aria-hidden />
+        Saving…
+      </span>
+    );
+  if (s.state === "error") return <span className={`${cls} text-red`}>Not saved</span>;
+  return (
+    <span key={s.n} className={`${cls} text-green fg-saved`} aria-live="polite">
+      <CheckIcon className="w-3 h-3" />
+      Saved
+    </span>
   );
 }
 
@@ -313,7 +295,6 @@ export function FrameDetails({
   onClose,
   onSave,
   onDelete,
-  onCreateCategory,
   onCopyLink,
 }: {
   lib: FrameLibrary;
@@ -324,12 +305,11 @@ export function FrameDetails({
   /** Saves; null when it's saved, else what went wrong. */
   onSave: (id: string, patch: FramePatch) => Promise<string | null>;
   onDelete?: (f: FrameGuide) => void;
-  onCreateCategory: (name: string) => Promise<string | null>;
   onCopyLink: (f: FrameGuide) => void;
 }) {
   return (
     <FrameWindow f={f} list={list} onPick={onPick} onClose={onClose} label={frameName(f)}>
-      <Editor key={f.id} lib={lib} f={f} onClose={onClose} onSave={onSave} onDelete={onDelete} onCreateCategory={onCreateCategory} onCopyLink={onCopyLink} />
+      <Editor key={f.id} lib={lib} f={f} onClose={onClose} onSave={onSave} onDelete={onDelete} onCopyLink={onCopyLink} />
     </FrameWindow>
   );
 }
@@ -340,7 +320,6 @@ function Editor({
   onClose,
   onSave,
   onDelete,
-  onCreateCategory,
   onCopyLink,
 }: {
   lib: FrameLibrary;
@@ -348,7 +327,6 @@ function Editor({
   onClose: () => void;
   onSave: (id: string, patch: FramePatch) => Promise<string | null>;
   onDelete?: (f: FrameGuide) => void;
-  onCreateCategory: (name: string) => Promise<string | null>;
   onCopyLink: (f: FrameGuide) => void;
 }) {
   const [title, setTitle] = useState(f.title);
@@ -370,12 +348,16 @@ function Editor({
     if (!f.title && !f.keywords.length && !f.categories.length && Date.now() - new Date(f.createdAt).getTime() < 10 * 60_000) titleRef.current?.focus({ preventScroll: true });
   }, [f.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function save(patch: FramePatch) {
+  // 1.54.1: a choice says it's saving right by it (categories, keywords, collection), then that it's saved.
+  const [fieldSave, setFieldSave] = useState<FieldSave | null>(null);
+  async function save(patch: FramePatch, field?: FieldSave["field"]) {
     const n = ++saving.current;
     setStatus("saving");
+    if (field) setFieldSave({ field, state: "saving", n });
     const err = await onSave(f.id, patch);
     if (n !== saving.current) return;
     setStatus(err ? "error" : "saved");
+    if (field) setFieldSave({ field, state: err ? "error" : "saved", n });
   }
   // Words: saved a moment after you stop typing (and when you leave the box).
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -417,7 +399,7 @@ function Editor({
       <div className="px-5 pt-4 pb-3 border-b border-line/10 flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-[12px] text-ink-soft mb-1">
-            <span className="font-bold text-frame tabular-nums">#{f.number}</span>
+            <span className="font-bold text-amber tabular-nums">#{f.number}</span>
             {collection && (
               <span className="inline-flex items-center gap-1.5 min-w-0">
                 <ColorDot color={collection.color} className="w-2 h-2" />
@@ -455,22 +437,31 @@ function Editor({
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll px-5 py-4 space-y-5">
         <div>
-          <span className={LABEL}>Collection</span>
+          <div className={LABEL_ROW}>
+            <span className={LABEL_TEXT}>Collection</span>
+            <SaveTag s={fieldSave} field="collection" />
+          </div>
           <Select
             value={f.collectionId}
-            onChange={(v) => v && v !== f.collectionId && void save({ collectionId: v })}
+            onChange={(v) => v && v !== f.collectionId && void save({ collectionId: v }, "collection")}
             options={lib.collections.map((c) => ({ value: c.id, label: c.name, icon: <ColorDot color={c.color} /> }))}
             ariaLabel="Collection"
             size="bar"
           />
         </div>
         <div>
-          <span className={LABEL}>Categories</span>
-          <CategoryPicker value={f.categories} onChange={(v) => void save({ categories: v })} custom={lib.categories} onCreate={onCreateCategory} />
+          <div className={LABEL_ROW}>
+            <span className={LABEL_TEXT}>Categories</span>
+            <SaveTag s={fieldSave} field="categories" />
+          </div>
+          <CategoryPicker value={f.categories} onChange={(v) => void save({ categories: v }, "categories")} />
         </div>
         <div>
-          <span className={LABEL}>Keywords</span>
-          <KeywordInput value={f.keywords} onChange={(v) => void save({ keywords: v })} />
+          <div className={LABEL_ROW}>
+            <span className={LABEL_TEXT}>Keywords</span>
+            <SaveTag s={fieldSave} field="keywords" />
+          </div>
+          <KeywordInput value={f.keywords} onChange={(v) => void save({ keywords: v }, "keywords")} />
           <p className="mt-1 text-[11.5px] text-ink-faint">Anything you&rsquo;d search for it by. Enter or a comma adds one.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
@@ -564,7 +555,7 @@ export function FrameViewer({
   actions,
 }: {
   f: FrameGuide;
-  lib: Pick<FrameLibrary, "collections" | "categories" | "people"> | null;
+  lib: Pick<FrameLibrary, "collections" | "people"> | null;
   list?: FrameGuide[];
   onPick?: (id: string) => void;
   onClose: () => void;
@@ -578,7 +569,7 @@ export function FrameViewer({
       <div className="px-5 pt-4 pb-3 border-b border-line/10 flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-[12px] text-ink-soft mb-1">
-            <span className="font-bold text-frame tabular-nums">Frame guide #{f.number}</span>
+            <span className="font-bold text-amber tabular-nums">Frame guide #{f.number}</span>
             {collection && (
               <span className="inline-flex items-center gap-1.5 min-w-0">
                 <ColorDot color={collection.color} className="w-2 h-2" />
@@ -593,7 +584,7 @@ export function FrameViewer({
         </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden styled-scroll px-5 py-4 space-y-4">
-        <CategoryList f={f} custom={lib?.categories ?? []} />
+        <CategoryList f={f} />
         {f.keywords.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {f.keywords.map((k) => (
@@ -611,7 +602,7 @@ export function FrameViewer({
               </>
             )}
             {host && (
-              <a href={f.sourceUrl!} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 font-semibold text-frame hover:underline ${f.creator ? "ml-2" : ""}`}>
+              <a href={f.sourceUrl!} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 font-semibold text-amber hover:underline ${f.creator ? "ml-2" : ""}`}>
                 {host}
                 <ExternalIcon className="w-3 h-3" />
               </a>
@@ -643,7 +634,7 @@ export function FrameViewer({
           <CopyIcon className="w-3.5 h-3.5" />
           {copied ? "Copied" : "Copy link"}
         </button>
-        <Link href={frameHref(f.id)} target="_blank" className="inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-bold text-white bg-frame hover:brightness-110" style={{ color: "#fff" }}>
+        <Link href={frameHref(f.id)} target="_blank" className="inline-flex items-center gap-1.5 rounded-lg px-3 h-9 text-[12.5px] font-bold text-white bg-amber hover:brightness-110" style={{ color: "#fff" }}>
           Open in Frame Guides
           <ExternalIcon className="w-3.5 h-3.5" />
         </Link>
@@ -661,7 +652,7 @@ export function FrameCardLine({ f, collection, onOpen, size = "md" }: { f: Frame
         <FramePictureLite f={f} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[12.5px] font-bold text-frame tabular-nums">#{f.number}</div>
+        <div className="text-[12.5px] font-bold text-amber tabular-nums">#{f.number}</div>
         <div className="text-[13px] font-semibold text-ink truncate">{f.title || "Untitled shot"}</div>
         {collection && (
           <div className="text-[11.5px] truncate" style={{ color: c ? wordColor(c) : undefined }}>

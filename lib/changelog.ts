@@ -22,6 +22,36 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.0",
+    date: "2026-11-18",
+    title: "Write a script together, live",
+    changes: [
+      { kind: "new", text: "Several people can write the same script at once. Everyone's words show on everyone's page as they're typed, wherever each person is writing, with nothing to reload. No more \"saved · Reload\" or \"Someone else saved a newer version\"." },
+      { kind: "better", text: "Undo takes back only your own changes, never what a teammate just wrote. Offline for a moment? The top bar says so, and everything you wrote goes in as soon as you're back." },
+      { kind: "better", text: "When a script is sent on from the step before, anyone who has that step open sees the new text by itself." },
+      { kind: "better", text: "The document shown next to another (side by side) is written live too." },
+      { kind: "new", text: "Words with a comment, an editing idea or a frame guide on them are kept as they are: typing inside them, deleting them or splitting them does nothing, and a note says why, with the comment one click away. Resolve or delete it first, then change the words. (Changing a word used to make the highlight vanish while the comment stayed in the list.)" },
+      { kind: "fixed", text: "Adding a comment, an editing idea or a frame guide no longer sends you back to the top of the script: the comments are fetched on their own, without drawing the whole page again." },
+    ],
+  },
+  {
+    version: "1.54.1",
+    date: "2026-11-18",
+    title: "Smoother scripts, Frame Guides redone",
+    changes: [
+      { kind: "fixed", text: "A comment you just posted opens as soon as it's saved: it no longer pulses \"Posting…\" with nothing to open until the page caught up. Its words say \"Posted\" for a moment, and clicking anywhere on them opens it, even where a writing suggestion underlines them." },
+      { kind: "better", text: "Comments arrive by themselves: when someone in the same script adds, edits, resolves or deletes one, everyone else's page shows it without reloading." },
+      { kind: "new", text: "Writing suggestions can be turned off completely: a switch at the top of the Suggestions panel. Off means no checks and no underlines (the browser's spell check included), on this browser, in every script." },
+      { kind: "new", text: "In a script, the documents column on the left (Script, Review, Staging, Research) closes to a thin strip and opens again; your browser remembers which. Closed, the documents are in the dropdown next to the title." },
+      { kind: "fixed", text: "No more gap above a script's header with the glass look: the page no longer shows between the top bar and the script's bars." },
+      { kind: "better", text: "Pictures in a script go on the left, have a Remove button on their bar, and can't be dragged into a copy by accident (the arrows move them). Before a script is sent to the next step, its last words and pictures are saved, so the copy has them." },
+      { kind: "fixed", text: "To Do lines up with the top bar, and loads with one loading screen instead of two." },
+      { kind: "fixed", text: "The search window (Ctrl+K) opens in one go, instead of a stand-in first and the real one over it." },
+      { kind: "better", text: "Frame Guides, redone: the collection, the search, A-roll or B-roll and the shot are in one bar on top, like Outliers; the frames use the whole width; the buttons follow your theme's colour." },
+      { kind: "better", text: "Tagging a frame shows what's happening: the categories keep their place when you click them, the tick pops in, keywords pop in and shrink away, and \"Saving…\" then \"Saved\" shows right by what you changed. The team's own categories are gone: A-roll or B-roll, and the shot." },
+    ],
+  },
+  {
     version: "1.54.0",
     date: "2026-11-18",
     title: "Frame Guides",

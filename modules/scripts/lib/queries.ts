@@ -16,7 +16,13 @@ export type ScriptRow = {
   version: number;
   updatedAt: string;
   updatedBy: { name: string; avatarUrl: string | null; color: string } | null;
+  /** Writing together, live (1.55.0): which steps the text above has, and the steps after it. Null before 0134. */
+  live?: LiveStart | null;
 };
+/** A batch of steps as the database keeps them (0134): made on version v, n of them, by page c. */
+export type LiveBatch = { v: number; n: number; c: string; s: unknown };
+/** Where a page starts: the saved text is at docVersion; these steps come after it. */
+export type LiveStart = { docVersion: number; steps: LiveBatch[] };
 /** The three default documents are steps of one flow: Script (write) → Review → Staging. */
 export type FlowStep = "write" | "review" | "staging";
 export type DocListItem = { id: string; kind: DocKind; name: string; position: number; wordCount: number; updatedAt: string; step: FlowStep | null };
@@ -90,8 +96,23 @@ export const listDocs = cache(async (owner: DocOwner): Promise<DocListItem[]> =>
 
 export const getDoc = cache(async (id: string): Promise<ScriptRow | null> => {
   const supabase = await createClient();
-  const { data } = await supabase.from("scripts").select(SELECT).eq("id", id).maybeSingle();
-  return data ? toRow(data as unknown as Record<string, unknown>) : null;
+  // 1.55.0: the text and which steps it has in one read (the same moment: a save can't fall between them), then the
+  // steps after it. Before 0134 (no script_live), the text alone: the page saves the old way.
+  const withLive = await supabase.from("scripts").select(`${SELECT}, live:script_live(version, doc_version)`).eq("id", id).maybeSingle();
+  if (withLive.error) {
+    const { data } = await supabase.from("scripts").select(SELECT).eq("id", id).maybeSingle();
+    return data ? { ...toRow(data as unknown as Record<string, unknown>), live: null } : null;
+  }
+  const row = withLive.data as unknown as (Record<string, unknown> & { live?: unknown }) | null;
+  if (!row) return null;
+  const l = (Array.isArray(row.live) ? row.live[0] : row.live) as { version?: number; doc_version?: number } | null | undefined;
+  const docVersion = Number(l?.doc_version ?? 0);
+  let steps: LiveBatch[] = [];
+  if (l && Number(l.version) > docVersion) {
+    const { data: rows } = await supabase.from("script_steps").select("version, n, client, steps").eq("script_id", id).gte("version", docVersion).order("version").limit(500);
+    steps = ((rows ?? []) as Record<string, unknown>[]).map((r) => ({ v: Number(r.version), n: Number(r.n), c: String(r.client), s: r.steps }));
+  }
+  return { ...toRow(row), live: { docVersion, steps } };
 });
 
 /** The video's main Script version (what the Script card shows). */

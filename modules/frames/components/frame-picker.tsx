@@ -97,7 +97,7 @@ export function FramePicker({
   const used = useMemo(() => {
     if (!lib || !lib.frames.length) return [];
     const has = new Set(lib.frames.flatMap((f) => f.categories));
-    return filterGroups(lib.categories).flatMap((g) => g.items.filter((it) => g.id === "roll" || has.has(it.key)));
+    return filterGroups().flatMap((g) => g.items.filter((it) => g.id === "roll" || has.has(it.key)));
   }, [lib]);
   const recentFrames = useMemo(() => (lib && !q.trim() && !cats.length && !collection ? recent.map((id) => lib.frames.find((f) => f.id === id)).filter((f): f is FrameGuide => !!f).slice(0, 6) : []), [lib, recent, q, cats, collection]);
   const pickedFrame = picked ? lib?.frames.find((f) => f.id === picked) ?? null : null;
@@ -175,9 +175,9 @@ export function FramePicker({
         onDoubleClick={() => choose(f, primary)}
         aria-pressed={on}
         aria-label={frameName(f)}
-        className="group text-left min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-frame focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        className="group text-left min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
-        <div className={`relative rounded-xl transition-[transform,box-shadow] duration-150 ${on ? "ring-[3px] ring-frame ring-offset-2 ring-offset-surface" : "group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_26px_-14px_rgb(0_0_0/0.55)]"}`}>
+        <div className={`relative rounded-xl transition-[transform,box-shadow] duration-150 ${on ? "ring-[3px] ring-amber ring-offset-2 ring-offset-surface" : "group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_26px_-14px_rgb(0_0_0/0.55)]"}`}>
           <FramePicture f={f} className="aspect-video" />
           <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-black/10" aria-hidden />
           <FrameNumber n={f.number} className="absolute top-1.5 left-1.5" />
@@ -251,7 +251,7 @@ export function FramePicker({
                   }}
                   placeholder="Search: words, keywords, who made it, #12…"
                   aria-label="Search frame guides"
-                  className="w-full h-10 rounded-xl border border-line/15 bg-surface-2/60 pl-9 pr-3 text-[14px] text-ink placeholder:text-ink-faint outline-none focus:border-frame/60 focus:ring-2 focus:ring-frame/20"
+                  className="w-full h-10 rounded-xl border border-line/15 bg-surface-2/60 pl-9 pr-3 text-[14px] text-ink placeholder:text-ink-faint outline-none focus:border-amber/60 focus:ring-2 focus:ring-amber/20"
                 />
               </div>
               <button
@@ -311,7 +311,7 @@ export function FramePicker({
                   <p className="mt-1 text-[13px] text-ink-soft leading-relaxed">
                     {lib?.collections.length ? "Paste a screenshot here (Ctrl+V), or Add one, and it's ready to use." : "Frame Guides is where the team keeps reference shots, in collections. Make one there first."}
                   </p>
-                  <Link href="/frame-guides" target="_blank" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-frame text-white font-bold px-3.5 h-9 text-[13px]" style={{ color: "#fff" }}>
+                  <Link href="/frame-guides" target="_blank" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-bold px-3.5 h-9 text-[13px]" style={{ color: "#fff" }}>
                     Open Frame Guides
                     <ExternalIcon className="w-3.5 h-3.5" />
                   </Link>
@@ -365,7 +365,7 @@ export function FramePicker({
               <div className="flex items-center gap-3 mb-2.5">
                 <FramePicture f={pickedFrame} className="w-[88px] aspect-video flex-shrink-0" rounded="rounded-lg" />
                 <div className="min-w-0">
-                  <div className="text-[12px] font-bold text-frame tabular-nums">#{pickedFrame.number}</div>
+                  <div className="text-[12px] font-bold text-amber tabular-nums">#{pickedFrame.number}</div>
                   <div className="text-[13.5px] font-semibold truncate">{pickedFrame.title || "Untitled shot"}</div>
                 </div>
               </div>
@@ -405,7 +405,7 @@ function HowButton({ how, main, onClick, purpose }: { how: PickHow; main: boolea
     <button
       type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 rounded-xl px-3.5 h-12 text-left transition-colors ${main ? "bg-frame text-white hover:brightness-110" : "border border-line/15 text-ink hover:border-line/35 hover:bg-surface-2/60"}`}
+      className={`w-full flex items-center gap-3 rounded-xl px-3.5 h-12 text-left transition-colors ${main ? "bg-amber text-white hover:brightness-110" : "border border-line/15 text-ink hover:border-line/35 hover:bg-surface-2/60"}`}
     >
       <H.Icon className="w-4 h-4 flex-shrink-0" />
       <span className="min-w-0 flex-1">
@@ -418,7 +418,7 @@ function HowButton({ how, main, onClick, purpose }: { how: PickHow; main: boolea
 
 function Preview({ f, lib, hows, primary, purpose, onChoose }: { f: FrameGuide; lib: ReturnType<typeof useFrameLibrary>["lib"]; hows: PickHow[]; primary: PickHow; purpose: PickPurpose; onChoose: (how: PickHow) => void }) {
   const collection = lib?.collections.find((c) => c.id === f.collectionId) ?? null;
-  const infos = f.categories.map((k) => (lib ? categoryInfo(k, lib.categories) : null)).filter((x): x is NonNullable<typeof x> => !!x);
+  const infos = f.categories.map((k) => (lib ? categoryInfo(k) : null)).filter((x): x is NonNullable<typeof x> => !!x);
   return (
     <>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden styled-scroll p-4 space-y-3.5">

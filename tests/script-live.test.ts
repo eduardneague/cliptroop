@@ -125,7 +125,7 @@ ok(/supabase\.channel\(`script:\$\{scriptId\}`, \{ config: \{ private: true, pre
 ok(/saved: \(version\) => \{\s*if \(joined && others\.length\) void ch\.send/.test(hook), "a save says so only when someone else is here");
 ok(!/from\("|\.rpc\(|fetch\(|"use server"|actions"/.test(hook), "no table, no server call: browser to browser");
 ok(/void supabase\.removeChannel\(ch\);/.test(hook), "and it leaves when the script closes");
-ok(/if \(status === "CHANNEL_ERROR"\) \{\s*joined = false;\s*void supabase\.removeChannel\(ch\);\s*return;/.test(hook), "turned away (0132 not run yet): off, not joining again and again");
+ok(/if \(status === "CHANNEL_ERROR"\) \{\s*joined = false;\s*setConnected\(false\);\s*void supabase\.removeChannel\(ch\);\s*return;/.test(hook), "turned away (0132 not run yet): off, not joining again and again");
 ok(/import \{ createClient \} from "@\/lib\/supabase\/client";/.test(hook) && /notifications:\$\{userId\}/.test(read("components/ui/notification-bell.tsx")), "the app's one Realtime connection (the bell keeps it open on every page)");
 
 // ---- in the editor ------------------------------------------------------------------------------------------------------

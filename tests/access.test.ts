@@ -80,6 +80,7 @@ const LEFT_TO_THE_DATABASE: Record<string, string> = {
   "app/(dashboard)/scripts/actions.ts#renameDoc": "the person's own client: RLS (the video's team)",
   "app/(dashboard)/scripts/actions.ts#deleteDoc": "the person's own client: RLS (the video's team)",
   "app/(dashboard)/scripts/actions.ts#getDocContent": "the person's own client: RLS (the video's team)",
+  "app/(dashboard)/scripts/actions.ts#listScriptComments": "the person's own client: RLS (the script's team: its row, then its comments)",
   "app/(dashboard)/scripts/actions.ts#resolveComment": "the person's own client: RLS",
   "app/(dashboard)/scripts/actions.ts#resolveComments": "the person's own client: RLS",
   "app/(dashboard)/scripts/actions.ts#deleteComment": "admin: RLS deletes the comment (its author or a master); the service key only removes that row's own drawing",

@@ -2,8 +2,9 @@
  * Frame Guides' categories (1.54.0). The owner (Nov 18 2026): "2 of the categories have to be a-roll and b-roll …
  * keep it simple, dont overcomplicate it too much". So: a short list. First what the shot is (A-roll: the main
  * footage, the person talking; B-roll: what's cut in over it), then the shot itself (close-up, medium, wide, overhead,
- * POV, product), then each team's own (frame_categories, "c:<id>" on a frame). Picking two of the first kind shows
- * either; picking one of each shows the frames that are both (A-roll close-ups).
+ * POV, product). Picking two of the first kind shows either; picking one of each shows the frames that are both
+ * (A-roll close-ups). 1.54.1: these and no others (the owner: "remove this feature with teams in frame guides
+ * entirely"): a team's own categories are gone (0133's frame_categories stays, unused; "c:<id>" keys are dropped).
  * The keys are what the database keeps on a frame (0133 checks their shape: lowercase words joined by "-"); the names
  * can change, the keys never do. Pure: tests/frame-guides.test.ts.
  */
@@ -29,7 +30,11 @@ export const cleanColor = (c: unknown, fallback: FrameColor = "teal"): FrameColo
 /** Frame guides' own colour, everywhere (comments are the accent, editing ideas blue): globals.css --frame. */
 export const FRAME_COLOR = "rgb(var(--frame))";
 
-export type CategoryGroup = { id: string; name: string; color: FrameColor; items: { key: string; name: string; hint?: string; color?: FrameColor }[] };
+/** A category's colour: one of the above, or the theme's own ("accent", 1.54.1: the shots follow the theme). */
+export type ChipColor = FrameColor | "accent";
+export const chipCss = (c: ChipColor) => (c === "accent" ? "rgb(var(--amber))" : COLOR_CSS[c]);
+
+export type CategoryGroup = { id: string; name: string; color: ChipColor; items: { key: string; name: string; hint?: string; color?: ChipColor }[] };
 
 export const CATEGORY_GROUPS: CategoryGroup[] = [
   {
@@ -44,7 +49,7 @@ export const CATEGORY_GROUPS: CategoryGroup[] = [
   {
     id: "shot",
     name: "Shot",
-    color: "teal",
+    color: "accent",
     items: [
       { key: "close-up", name: "Close-up" },
       { key: "medium", name: "Medium" },
@@ -66,37 +71,24 @@ export function toggleCategory(value: string[], key: string): string[] {
 /** Every built-in key: its name, group and colour. */
 export const BUILT_IN = new Map(CATEGORY_GROUPS.flatMap((g) => g.items.map((it) => [it.key, { key: it.key, name: it.name, hint: it.hint, group: g.id, color: it.color ?? g.color }] as const)));
 
-/** A team's own category, as a frame keeps it. */
-export const customKey = (id: string) => `c:${id}`;
-export const isCustomKey = (k: string) => /^c:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k);
-/** The shape 0133 lets in (frame_category_keys_ok). */
-export const isCategoryKey = (k: string) => k.length <= 40 && (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(k) || isCustomKey(k));
+/** One of the categories above. */
+export const isCategoryKey = (k: string) => BUILT_IN.has(k);
 
-export type CustomCategory = { id: string; name: string; color: FrameColor };
-
-/** A category's name and colour (a built-in one, or the team's own; null when it's gone). */
-export function categoryInfo(key: string, custom: CustomCategory[]): { key: string; name: string; color: FrameColor; group: string } | null {
+/** A category's name and colour (null: not one of them, like a team category from 1.54.0). */
+export function categoryInfo(key: string): { key: string; name: string; color: ChipColor; group: string } | null {
   const b = BUILT_IN.get(key);
-  if (b) return { key, name: b.name, color: b.color, group: b.group };
-  if (isCustomKey(key)) {
-    const c = custom.find((x) => customKey(x.id) === key);
-    return c ? { key, name: c.name, color: c.color, group: "yours" } : null;
-  }
-  return null;
+  return b ? { key, name: b.name, color: b.color, group: b.group } : null;
 }
 
-/**
- * Categories as a frame keeps them: known ones only (built in, or the team's), once each, at most 30. Unknown keys
- * (a category deleted meanwhile) are dropped.
- */
-export function cleanCategories(keys: unknown, custom: CustomCategory[]): string[] {
+/** Categories as a frame keeps them: these ones only, once each, A-roll or B-roll (not both). Anything else is dropped. */
+export function cleanCategories(keys: unknown): string[] {
   if (!Array.isArray(keys)) return [];
-  const out: string[] = [];
+  let out: string[] = [];
   for (const k of keys) {
-    if (typeof k !== "string" || out.includes(k) || !isCategoryKey(k)) continue;
-    if (!BUILT_IN.has(k) && !custom.some((c) => customKey(c.id) === k)) continue;
+    if (typeof k !== "string" || !BUILT_IN.has(k) || out.includes(k)) continue;
+    // (One kind of footage: the last one given wins, as toggleCategory does.)
+    if (ROLL_KEYS.includes(k)) out = out.filter((x) => !ROLL_KEYS.includes(x));
     out.push(k);
-    if (out.length >= 30) break;
   }
   return out;
 }

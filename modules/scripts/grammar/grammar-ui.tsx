@@ -370,15 +370,6 @@ function Goals({ g, onBack }: { g: Grammar; onBack: () => void }) {
           <p className="text-[12px] text-ink-soft">No words yet. Use Add to dictionary on a spelling suggestion.</p>
         )}
       </section>
-      <section className="pt-1 border-t border-line/10">
-        <button
-          type="button"
-          onClick={() => setSettings({ on: !st.on })}
-          className="mt-3 rounded-lg border border-line/20 px-3 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:border-line/40"
-        >
-          {st.on ? "Turn suggestions off" : "Turn suggestions on"}
-        </button>
-      </section>
     </div>
   );
 }
@@ -439,14 +430,16 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
       >
         <header className="px-4 pt-3.5 pb-3 border-b border-line/10">
           <div className="flex items-center gap-3">
-            <ScoreRing score={g.score} />
+            {g.live ? <ScoreRing score={g.score} /> : <span className="w-[38px] h-[38px] rounded-full bg-surface-2 flex items-center justify-center text-ink-faint flex-shrink-0"><SpellCheckIcon className="w-5 h-5" /></span>}
             <div className="min-w-0 flex-1">
               <h2 className="text-[15px] font-bold leading-tight">Suggestions</h2>
               <p className="text-[12px] text-ink-soft">
                 {!g.live ? "Off" : g.counts.all ? `${g.counts.all} to look at · ${g.words} words` : `All clear · ${g.words} words`}
               </p>
             </div>
-            <button
+            {/* 1.54.1: on or off in one place, right here (the owner: "turn off grammar suggestions completely"). */}
+            <OnOff on={g.settings.on} onChange={(on) => g.setSettings({ on })} />
+            {g.settings.on && <button
               type="button"
               onClick={() => setGoals((v) => !v)}
               aria-pressed={goals}
@@ -455,12 +448,12 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
             >
               <TargetIcon className="w-4 h-4" />
               Goals
-            </button>
+            </button>}
             <button type="button" onClick={onClose} aria-label="Close suggestions" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
               <CloseIcon className="w-4 h-4" />
             </button>
           </div>
-          {!goals && (
+          {!goals && g.live && (
             <div role="radiogroup" aria-label="Show" className="mt-3 grid grid-cols-4 gap-1.5">
               {CATEGORIES.map((c) => {
                 const on = filter === c;
@@ -485,7 +478,18 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
           )}
         </header>
 
-        {goals ? (
+        {!g.settings.on ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-8 gap-3">
+            <span className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center text-ink-faint">
+              <SpellCheckIcon className="w-6 h-6" />
+            </span>
+            <p className="text-[14px] font-semibold">Suggestions are off</p>
+            <p className="text-[12.5px] text-ink-soft leading-snug max-w-[260px]">Nothing is checked and nothing is underlined, the browser&rsquo;s own spell check included. On this browser, in every script.</p>
+            <button type="button" onClick={() => g.setSettings({ on: true })} className="mt-1 rounded-lg bg-amber text-white font-bold px-4 h-9 text-[13px]">
+              Turn them on
+            </button>
+          </div>
+        ) : goals ? (
           <Goals g={g} onBack={() => setGoals(false)} />
         ) : (
           <>
@@ -634,9 +638,28 @@ function GrammarPanel({ g, onClose }: { g: Grammar; onClose: () => void }) {
 /** The count's badge (1.23.1): the score's colour, red to green as the script gets better. */
 const badge = (g: Grammar) => ({ background: scoreColor(g.score), color: scoreInk(g.score) });
 
+/** On or off, as a switch (1.54.1). */
+function OnOff({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label="Writing suggestions"
+      title={on ? "Turn suggestions off" : "Turn suggestions on"}
+      onClick={() => onChange(!on)}
+      className={`relative w-10 h-6 rounded-full flex-shrink-0 transition-colors duration-200 ${on ? "bg-amber" : "bg-line/25"}`}
+    >
+      <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.35)] transition-transform duration-200 ${on ? "translate-x-4" : ""}`} />
+    </button>
+  );
+}
+
 /** The round button in the corner, with how many suggestions there are. */
 function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
   const n = g.counts.all;
+  // Off (1.54.1): nothing in the corner either (the formatting bar's button turns them on again).
+  if (!g.settings.on) return null;
   return (
     <button
       type="button"
@@ -672,11 +695,11 @@ export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: 
         onMouseDown={(e) => e.preventDefault()}
         onClick={onToggle}
         aria-pressed={open}
-        title="Writing suggestions"
+        title={g.settings.on ? "Writing suggestions" : "Writing suggestions are off: click to turn them on"}
         className={`h-9 pl-2 pr-2.5 rounded-lg flex items-center gap-1.5 transition-colors ${open ? "bg-ink text-paper" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
-        <SpellCheckIcon className="w-4 h-4" />
-        <span className="hidden xl:inline text-[12.5px] font-semibold">Suggestions</span>
+        <SpellCheckIcon className={`w-4 h-4 ${g.settings.on ? "" : "opacity-50"}`} />
+        <span className="hidden xl:inline text-[12.5px] font-semibold">{g.settings.on ? "Suggestions" : "Suggestions off"}</span>
         {g.live && n > 0 && (
           <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold flex items-center justify-center tabular-nums" style={badge(g)}>
             {n > 99 ? "99+" : n}

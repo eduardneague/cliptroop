@@ -11,6 +11,7 @@ import { handOffLocked, LOCK_WAIT } from "@/modules/scripts/lib/flow-lock";
 import { MAX_COMMENT, MAX_QUOTE, toLeaf } from "@/modules/scripts/lib/comment-limits";
 import { commentFailure } from "@/modules/scripts/lib/comment-errors";
 import { reportError } from "@/lib/errors";
+import { listComments, type ScriptComment } from "@/modules/scripts/lib/queries";
 
 type SaveResult =
   | { ok: true; version: number; updatedAt: string }
@@ -41,6 +42,12 @@ export async function saveScript(input: {
   if (json.length > MAX_JSON) return { ok: false, error: "This script is too big to save. Remove some images or text." };
   const text = String(input.text ?? "").slice(0, 500_000);
   const words = Math.max(0, Math.min(1_000_000, Math.round(Number(input.wordCount) || 0)));
+
+  // Written live (1.55.0, 0134): its changes go in as they're made, never as the whole script. A page open since before
+  // that (the old way) is told someone saved first, and reloads into writing live, instead of replacing everyone's
+  // text with its own copy.
+  const { data: live, error: liveError } = await supabase.from("script_live").select("script_id").eq("script_id", input.scriptId).maybeSingle();
+  if (!liveError && live) return { ok: false, conflict: true };
 
   const { data, error } = await supabase
     .from("scripts")
@@ -189,12 +196,8 @@ export async function copyCommentsFrom(from: string, to: string): Promise<DocRes
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Sign in again." };
-  const r = await copyComments(supabase, from, to);
-  if (r.error === undefined) {
-    const { data } = await supabase.from("scripts").select("short_video_id, long_video_id").eq("id", to).maybeSingle();
-    refreshDocs({ short: data?.short_video_id as string | null, long: data?.long_video_id as string | null });
-  }
-  return r;
+  // (1.55.0: the page fetches its comments itself: listScriptComments.)
+  return copyComments(supabase, from, to);
 }
 
 const SKETCH_RX = /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.png$/i;
@@ -322,7 +325,9 @@ export async function addComment(input: {
     return { error: commentFailure(error, kind, !!sketch) };
   }
   const s = (Array.isArray(data.scripts) ? data.scripts[0] : data.scripts) as { name: string; short_video_id: string | null; long_video_id: string | null } | null;
-  refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
+  // 1.55.0: the script's page isn't drawn again for a comment (it fetches its comments itself: listScriptComments);
+  // drawing it again sent people back to the top of the script (the team: "every time I add a comment … it takes me
+  // to the very top").
   if (body.includes("@") && s) await notifyScriptMentions({ supabase, userId: user.id, teamId: data.team_id as string, commentId: data.id as string, scriptId: input.scriptId, docName: s.name, short: s.short_video_id, long: s.long_video_id, body, quote, kind });
   return { id: data.id as string };
 }
@@ -422,7 +427,6 @@ export async function editComment(id: string, body: string): Promise<DocResult> 
   const { data, error } = await supabase.from("script_comments").update({ body: text }).eq("id", id).select("id");
   if (error || !data?.length) return { error: "Couldn't save the change. Try again." };
   const s = (Array.isArray(old.scripts) ? old.scripts[0] : old.scripts) as { name: string; short_video_id: string | null; long_video_id: string | null } | null;
-  refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
   if (text.includes("@") && s) {
     await notifyScriptMentions({
       supabase,
@@ -450,8 +454,6 @@ export async function resolveComment(id: string, resolved: boolean): Promise<Doc
     .eq("id", id)
     .select("scripts(short_video_id, long_video_id)");
   if (error || !data?.length) return { error: "Couldn't update the comment. Only this video's scripters and its Review and Staging people can resolve comments." };
-  const s = (Array.isArray(data[0].scripts) ? data[0].scripts[0] : data[0].scripts) as { short_video_id: string | null; long_video_id: string | null } | null;
-  refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
   return {};
 }
 
@@ -472,11 +474,6 @@ export async function resolveComments(scriptId: string, ids: string[]): Promise<
     .is("resolved_at", null)
     .select("id, scripts(short_video_id, long_video_id)");
   if (error) return { error: "Couldn't resolve them. Only this video's scripters and its Review and Staging people can resolve comments." };
-  const first = data?.[0];
-  if (first) {
-    const s = (Array.isArray(first.scripts) ? first.scripts[0] : first.scripts) as { short_video_id: string | null; long_video_id: string | null } | null;
-    refreshDocs({ short: s?.short_video_id, long: s?.long_video_id });
-  }
   return { resolved: data?.length ?? 0 };
 }
 
@@ -492,6 +489,18 @@ export async function deleteComment(id: string): Promise<DocResult> {
   const path = ((data[0] as { sketch_path?: string | null }).sketch_path ?? null) as string | null;
   if (path) await createAdminClient().storage.from("script-sketches").remove([path, path.replace(/\.png$/, ".json")]);
   return {};
+}
+
+/**
+ * A document's comments, as its page lists them (1.55.0). The page fetches them itself when they change (its own or
+ * someone else's), instead of drawing the whole page again.
+ */
+export async function listScriptComments(scriptId: string): Promise<DocResult<{ comments: ScriptComment[] }>> {
+  if (!UUID_RX.test(scriptId)) return { error: "Script not found." };
+  const supabase = await createClient();
+  const { data } = await supabase.from("scripts").select("team_id").eq("id", scriptId).maybeSingle();
+  if (!data) return { error: "Script not found." };
+  return { comments: await listComments(scriptId, data.team_id as string) };
 }
 
 // ---------------------------------------------------------------------------

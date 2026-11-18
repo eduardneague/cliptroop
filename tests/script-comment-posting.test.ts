@@ -17,9 +17,15 @@ const ws = read("modules/scripts/components/workspace.tsx");
 
 ok(ws.includes("      onPosting={setPosting}"), "posting only marks the words");
 const add = ws.slice(ws.indexOf("onAddComment={"), ws.indexOf("copySources="));
-ok(add.includes("setPosting((p) => (p ? { ...p, id: r.id } : p));") && add.includes("router.refresh();"), "it still waits for the saved one");
+// 1.54.1: once saved it's on the page as itself at once (built from what was sent: the page's refresh used to be what
+// brought it, and until then its words only pulsed "Posting…" with nothing to open: the owner's "it just flickers and
+// nothing appears"), "Posted" for a moment, the others in the script told.
+const posted = ws.slice(ws.indexOf("const posted = (c: ScriptComment) => {"), ws.indexOf("const href = (next"));
+// 1.55.0: the server's copy comes by itself (listScriptComments), never by drawing the whole page again, which sent
+// people back to the top of the script ("de fiecare dată când adaug un comentariu ... mă duce sus de tot").
+ok(add.includes("posted(savedHere(r.id, {") && posted.includes("setAdded((xs) => [...xs.filter((x) => x.id !== c.id), c]);") && posted.includes("commentsChanged();") && !posted.includes("router.refresh()"), "it shows the saved one at once, and the server's copy is fetched on its own (no refresh of the page)");
 ok(!add.includes("setChatOpen(true)") && !add.includes("setActive(r.id)"), "and opens nothing, scrolls nowhere");
-ok(/if \(posting\?\.id && comments\.some\(\(c\) => c\.id === posting\.id\)\) setPosting\(null\);/.test(ws), "\"Posting…\" goes once the saved one is on the page, panel open or not");
+ok(posted.includes("setPosting((p) => (p ? { ...p, id: c.id } : p));") && posted.includes("setTimeout(() => setPosting((p) => (p?.id === c.id ? null : p)), 1600);") && posted.includes("commentsChanged();"), "\"Posting…\" turns into \"Posted\" for a moment, then goes; the others hear about it");
 ok(/onCommentClick=\{\(id\) => \{\s*setActive\(id\);\s*setChatOpen\(true\);/.test(ws), "clicking a comment still opens it in the list");
 
 const card = read("modules/scripts/components/comment-card.tsx");

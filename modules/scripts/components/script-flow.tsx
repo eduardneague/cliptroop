@@ -12,6 +12,7 @@ import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScripterPicker } from "@/modules/short-videos/components/scripter-picker";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import { finishScript, handOffScript, setScriptPeople } from "@/app/(dashboard)/scripts/actions";
+import { saveScriptNow } from "../lib/save-now";
 import { sounds } from "@/lib/sounds";
 import type { FlowStepInfo, ScriptFlow } from "../lib/flow";
 import type { FlowStep } from "../lib/queries";
@@ -383,6 +384,8 @@ function HandOffDialog({
             disabled={pending || !next || crew.length === 0}
             onClick={() =>
               start(async () => {
+                // 1.54.1: what's on the page is saved first (the copy takes the last words and pictures).
+                if (!(await saveScriptNow(step.docId))) return toast.error("The latest changes aren't saved yet. Wait for “Saved”, then send it.");
                 const r = await handOffScript(step.docId, nextEmpty && copy);
                 if (r.error !== undefined) return toast.error(r.error);
                 const brought = r.comments ? ` Its ${r.comments === 1 ? "comment came" : `${r.comments} comments and editing ideas came`} along.` : "";

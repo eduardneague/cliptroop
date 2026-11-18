@@ -34,9 +34,11 @@ ok(/return \/12 hours\/\.test\(JSON\.stringify\(data\)\);/.test(src), "0130: the
 ok(/column\(a, "todo_lists", "id, sort_by, hide_done"\)/.test(src), "0131: To Do's lists");
 ok(/await admin\.rpc\("script_live_ready"\)/.test(src) && /return data === true;/.test(src), "0132: the live rules are in place (not only the function)");
 ok(/await admin\.rpc\("frame_guides_ready"\)/.test(src), "0133: Frame Guides (its tables and the comments' third kind)");
+ok(/await admin\.rpc\("script_edits_ready"\)/.test(src), "0134: writing a script together, live (its tables and functions)");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0134": /create or replace function public\.script_edits_ready\(\)[\s\S]*to_regclass\('public\.script_steps'\)[\s\S]*proname = 'script_live_push'/,
   "0133": /create or replace function public\.frame_guides_ready\(\)[\s\S]*to_regclass\('public\.frame_guides'\)[\s\S]*like '%frame%'/,
   "0132": /create or replace function public\.script_live_ready\(\)[\s\S]*'script live: teammates receive', 'script live: teammates send'/,
   "0131": /create table if not exists todo_lists \([\s\S]*sort_by text,[\s\S]*hide_done boolean/,

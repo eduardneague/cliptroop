@@ -1,6 +1,6 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { LEAF, MAX_QUOTE, toLeaf } from "./comment-limits";
 import { KIND_COLOR, type CommentKind, type FrameRef } from "./kinds";
@@ -184,19 +184,86 @@ export type CommentMark = {
 };
 export const commentKey = new PluginKey("script-comments");
 
+/**
+ * The open comment whose words are at `pos` (1.54.1): a click finds its comment by where it landed in the text, not only
+ * by the element under the pointer (which the text's other marks can redraw between press and release).
+ */
+export function commentAt(doc: PMNode, comments: CommentMark[], pos: number): string | null {
+  for (const c of comments) {
+    if (c.resolved || !c.quote) continue;
+    const r = findQuote(doc, c.quote, c.occurrence);
+    if (r && pos > r.from && pos < r.to) return c.id;
+  }
+  return null;
+}
+
 /** Draws open comments as highlights (decorations only: the text is untouched). */
-/** The comment being written right now: its text gets a "writing…" placeholder. */
-export type PendingMark = { quote: string; occurrence: number; kind: CommentKind; label?: string } | null;
+/**
+ * The comment being written right now: its text gets a "writing…" placeholder. `done` (1.54.1): it's saved and on the
+ * page as itself; only a "Posted" tag shows for a moment (no second highlight).
+ */
+export type PendingMark = { quote: string; occurrence: number; kind: CommentKind; label?: string; done?: boolean } | null;
 /** A comment on its way to the server (shown at once, with a "Posting…" tag). An empty quote: a general one (1.50.0). */
 export type PostingComment = { quote: string; occurrence: number; kind: CommentKind; body: string; sketchUrl: string | null; id?: string; frame?: FrameRef | null };
 
-export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null; pending?: PendingMark }) {
+/*
+ * Words with a comment on them are kept as they are (1.55.0). A comment holds on to its exact words: change one of them
+ * and it can't find them any more, so its highlight went while the comment stayed in the list (the team: "if I remove a
+ * word ... the whole highlight disappears but it still appears in comments"). The owner: "come up with a way where you
+ * cant delete something thats already commented ... you first need to delete it and then backspace over it". So an
+ * edit that would change an open comment's words (typing inside them, deleting them, pasting or cutting over them,
+ * splitting them onto two lines, deleting the line they're on) doesn't happen, and says why (onBlocked). Typing right
+ * before or after them, and making them bold or a colour, are fine. Resolve or delete the comment, and they're free.
+ *
+ * Changes that aren't someone typing here pass: what comes in from the others writing at the same time (their pages
+ * kept the same rule), and the page's own whole-document changes (Copy from, a template): ANY_EDIT on them.
+ */
+export const ANY_EDIT = "vp-any-edit";
+
+/** The open comment whose words this transaction would change, else null. */
+export function editHitsComment(tr: Transaction, doc: PMNode, comments: CommentMark[]): string | null {
+  if (!tr.docChanged || tr.getMeta(ANY_EDIT)) return null;
+  let ranges: { id: string; from: number; to: number }[] = [];
+  for (const c of comments) {
+    if (c.resolved || !c.quote) continue;
+    const r = findQuote(doc, c.quote, c.occurrence);
+    if (r && r.to > r.from) ranges.push({ id: c.id, from: r.from, to: r.to });
+  }
+  if (!ranges.length) return null;
+  for (const map of tr.mapping.maps) {
+    let hit: string | null = null;
+    map.forEach((start, end) => {
+      if (hit) return;
+      for (const r of ranges) {
+        // A deletion that reaches into the words, or an insertion strictly inside them.
+        if (end > start ? start < r.to && end > r.from : start > r.from && start < r.to) {
+          hit = r.id;
+          return;
+        }
+      }
+    });
+    if (hit) return hit;
+    ranges = ranges.map((r) => ({ id: r.id, from: map.map(r.from, 1), to: map.map(r.to, -1) })).filter((r) => r.to > r.from);
+  }
+  return null;
+}
+
+export function CommentHighlights(get: () => { comments: CommentMark[]; active: string | null; pending?: PendingMark; onBlocked?: (id: string) => void }) {
   return Extension.create({
     name: "commentHighlights",
     addProseMirrorPlugins() {
       return [
         new Plugin({
           key: commentKey,
+          filterTransaction: (tr, state) => {
+            if (!tr.docChanged) return true;
+            const { comments, onBlocked } = get();
+            const hit = editHitsComment(tr, state.doc, comments);
+            if (!hit) return true;
+            // (Said after this transaction is turned down, never from inside it.)
+            if (onBlocked) queueMicrotask(() => onBlocked(hit));
+            return false;
+          },
           props: {
             decorations(state) {
               const { comments, active, pending } = get();
@@ -205,19 +272,19 @@ export function CommentHighlights(get: () => { comments: CommentMark[]; active: 
                 const r = findQuote(state.doc, pending.quote, pending.occurrence);
                 if (r) {
                   const color = KIND_COLOR[pending.kind];
-                  decos.push(Decoration.inline(r.from, r.to, { class: "script-comment-pending", style: `--comment-color: ${color}` }));
+                  if (!pending.done) decos.push(Decoration.inline(r.from, r.to, { class: "script-comment-pending", style: `--comment-color: ${color}` }));
                   decos.push(
                     Decoration.widget(
                       r.to,
                       () => {
                         const tag = document.createElement("span");
-                        tag.className = "script-pending-tag no-print";
+                        tag.className = `script-pending-tag no-print${pending.done ? " is-done" : ""}`;
                         tag.style.setProperty("--comment-color", color);
                         tag.textContent = pending.label ?? (pending.kind === "edit_idea" ? "Writing an idea…" : pending.kind === "frame" ? "Adding a frame guide…" : "Writing a comment…");
                         tag.contentEditable = "false";
                         return tag;
                       },
-                      { side: 1, key: `pending-${pending.kind}-${pending.label ?? ""}`, ignoreSelection: true }
+                      { side: 1, key: `pending-${pending.kind}-${pending.label ?? ""}-${pending.done ? 1 : 0}`, ignoreSelection: true }
                     )
                   );
                 }

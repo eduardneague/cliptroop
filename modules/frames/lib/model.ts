@@ -1,4 +1,4 @@
-import { BUILT_IN, CATEGORY_GROUPS, categoryInfo, cleanColor, customKey, type CustomCategory, type FrameColor } from "./categories";
+import { BUILT_IN, CATEGORY_GROUPS, categoryInfo, cleanColor, type ChipColor, type FrameColor } from "./categories";
 
 /*
  * Frame Guides (1.54.0): what a team's library is, and finding a frame in it fast. Pure: tests/frame-guides.test.ts.
@@ -44,7 +44,6 @@ export type FrameLibrary = {
   teamId: string;
   collections: FrameCollection[];
   frames: FrameGuide[];
-  categories: CustomCategory[];
   /** Who's looking: what they may delete (theirs, or anything as a master). */
   me: { userId: string; master: boolean } | null;
   /** Who added what. */
@@ -53,7 +52,7 @@ export type FrameLibrary = {
   missing?: boolean;
 };
 
-export const EMPTY_LIBRARY = (teamId: string): FrameLibrary => ({ teamId, collections: [], frames: [], categories: [], me: null, people: {} });
+export const EMPTY_LIBRARY = (teamId: string): FrameLibrary => ({ teamId, collections: [], frames: [], me: null, people: {} });
 
 /** "#12 · Over the shoulder", or "Frame #12" when it has no title. */
 export const frameName = (f: { number: number; title: string }) => (f.title.trim() ? `#${f.number} · ${f.title.trim()}` : `Frame #${f.number}`);
@@ -135,9 +134,9 @@ export function queryTerms(q: string): { words: string[]; number: number | null 
 }
 
 /** Everything a frame can be found by, folded (no accents, lowercase). */
-export function haystack(f: FrameGuide, lib: Pick<FrameLibrary, "collections" | "categories">): { title: string; keywords: string; rest: string } {
+export function haystack(f: FrameGuide, lib: Pick<FrameLibrary, "collections">): { title: string; keywords: string; rest: string } {
   const coll = lib.collections.find((c) => c.id === f.collectionId)?.name ?? "";
-  const cats = f.categories.map((k) => categoryInfo(k, lib.categories)?.name ?? "").join(" ");
+  const cats = f.categories.map((k) => categoryInfo(k)?.name ?? "").join(" ");
   return { title: fold(f.title), keywords: fold(f.keywords.join(" | ")), rest: fold([f.creator, f.notes, coll, cats, f.sourceUrl ?? ""].join(" | ")) };
 }
 
@@ -160,8 +159,8 @@ export function matchScore(f: FrameGuide, terms: ReturnType<typeof queryTerms>, 
   return score;
 }
 
-/** Which group a category key is in (the team's own: "yours"). */
-export const groupOf = (key: string) => BUILT_IN.get(key)?.group ?? "yours";
+/** Which group a category key is in. */
+export const groupOf = (key: string) => BUILT_IN.get(key)?.group ?? "other";
 
 /** The picked categories, by group. */
 function byGroup(keys: string[]): Map<string, Set<string>> {
@@ -182,7 +181,7 @@ const passes = (f: FrameGuide, groups: Map<string, Set<string>>, skip?: string) 
 };
 
 /** The frames to show: in the collection, with the categories, matching the words; best first. */
-export function findFrames(lib: Pick<FrameLibrary, "frames" | "collections" | "categories">, query: FrameQuery): FrameGuide[] {
+export function findFrames(lib: Pick<FrameLibrary, "frames" | "collections">, query: FrameQuery): FrameGuide[] {
   const terms = queryTerms(query.q);
   const groups = byGroup(query.categories);
   const scored: { f: FrameGuide; s: number }[] = [];
@@ -203,7 +202,7 @@ export function findFrames(lib: Pick<FrameLibrary, "frames" | "collections" | "c
  * How many frames each category would show, with everything else as it is (the collection, the words, the other
  * groups' picks): the numbers next to the filters.
  */
-export function categoryCounts(lib: Pick<FrameLibrary, "frames" | "collections" | "categories">, query: FrameQuery): Map<string, number> {
+export function categoryCounts(lib: Pick<FrameLibrary, "frames" | "collections">, query: FrameQuery): Map<string, number> {
   const terms = queryTerms(query.q);
   const groups = byGroup(query.categories);
   const counts = new Map<string, number>();
@@ -218,14 +217,11 @@ export function categoryCounts(lib: Pick<FrameLibrary, "frames" | "collections" 
   return counts;
 }
 
-export type FilterGroup = { id: string; name: string; items: { key: string; name: string; color: FrameColor; hint?: string }[] };
+export type FilterGroup = { id: string; name: string; items: { key: string; name: string; color: ChipColor; hint?: string }[] };
 
-/** The categories as filters and choices: A-roll and B-roll, the shots, then the team's own. */
-export function filterGroups(custom: CustomCategory[]): FilterGroup[] {
-  return [
-    ...CATEGORY_GROUPS.map((g) => ({ id: g.id, name: g.name, items: g.items.map((it) => ({ key: it.key, name: it.name, color: it.color ?? g.color, hint: it.hint })) })),
-    { id: "yours", name: "Your team's", items: [...custom].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ key: customKey(c.id), name: c.name, color: c.color })) },
-  ];
+/** The categories as filters and choices: A-roll and B-roll, then the shots. */
+export function filterGroups(): FilterGroup[] {
+  return CATEGORY_GROUPS.map((g) => ({ id: g.id, name: g.name, items: g.items.map((it) => ({ key: it.key, name: it.name, color: it.color ?? g.color, hint: it.hint })) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -271,4 +267,4 @@ export const toCollection = (r: Record<string, unknown>): FrameCollection => ({
   createdBy: (r.created_by as string | null) ?? null,
   createdAt: String(r.created_at ?? ""),
 });
-export const toCategory = (r: Record<string, unknown>): CustomCategory => ({ id: String(r.id), name: String(r.name ?? ""), color: cleanColor(r.color, "slate") });
+
