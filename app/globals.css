@@ -2567,6 +2567,60 @@ html[data-motion="off"] .digital-colon { opacity: 1 !important; }
 }
 
 /* ---------------------------------------------------------------------------
+   Someone else in the script (1.53.5, modules/scripts/lib/live-cursors.ts):
+   their cursor, a thin line in their colour with their name on a flag as they
+   move (it fades after a few seconds, leaving a dot), and what they've
+   selected, lightly tinted. Drawn over the text, never part of it, and no
+   wider than nothing (the words don't move); never printed. */
+.rc-caret {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1.2em;
+  margin: 0 -1px;
+  vertical-align: text-bottom;
+  border-left: 2px solid var(--rc);
+  pointer-events: none;
+  user-select: none;
+}
+.rc-caret::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rc);
+  animation: rc-dot 3s ease forwards;
+}
+.rc-name {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  margin-bottom: 1px;
+  padding: 0 6px;
+  border-radius: 5px 5px 5px 0;
+  font: 600 10.5px/17px var(--font-body, system-ui), sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--rc);
+  animation: rc-name 3s ease forwards;
+}
+@keyframes rc-name { 0%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(3px); } }
+@keyframes rc-dot { 0%, 80% { opacity: 0; } 100% { opacity: 1; } }
+.rc-sel { background-color: color-mix(in srgb, var(--rc) 24%, transparent); border-radius: 2px; }
+@media print { .rc-caret { display: none; } .rc-sel { background: none; } }
+/* With motion off, the names simply stay. */
+html[data-motion="off"] .rc-name { animation: none !important; }
+html[data-motion="off"] .rc-caret::before { animation: none !important; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) .rc-name { animation: none !important; }
+  html:not([data-motion="on"]) .rc-caret::before { animation: none !important; opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
    What's new (components/ui/whats-new.tsx): the update card rises in from
    below and sinks back the same way (pop-card, 1.34.0); the sidebar dot
    breathes until you've looked. */

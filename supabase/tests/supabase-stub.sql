@@ -6,6 +6,7 @@
 --   auth.users + auth.uid()/role()/jwt()     storage.buckets/objects
 --   vault.secrets (+ decrypted view)         cron.job, cron.schedule()
 --   net.http_post()                          the realtime publication
+--   realtime.messages + realtime.topic()     (private channels' rules, 0132)
 --
 -- Requests are simulated with:
 --   select set_config('request.jwt.claim.sub', '<user id>', true);
@@ -213,3 +214,23 @@ begin
   end if;
 end;
 $$;
+-- Private channels (1.53.5, 0132): Realtime asks a channel's rules on this table, with the channel's name in
+-- realtime.topic() and "broadcast" or "presence" in extension. Only what the rules read.
+create schema if not exists realtime;
+create table if not exists realtime.messages (
+  id uuid primary key default gen_random_uuid(),
+  topic text not null,
+  extension text not null,
+  payload jsonb,
+  event text,
+  private boolean default false,
+  inserted_at timestamp not null default now(),
+  updated_at timestamp not null default now()
+);
+alter table realtime.messages enable row level security;
+create or replace function realtime.topic() returns text language sql stable as
+$$ select nullif(current_setting('realtime.topic', true), '')::text $$;
+grant usage on schema realtime to anon, authenticated, service_role;
+grant select, insert on realtime.messages to anon, authenticated;
+grant all on realtime.messages to service_role;
+grant execute on function realtime.topic() to anon, authenticated, service_role;

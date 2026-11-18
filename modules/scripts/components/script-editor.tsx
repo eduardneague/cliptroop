@@ -52,6 +52,9 @@ import {
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { CommentHighlights, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
 import { SearchHit, searchHitKey } from "../lib/search-hit";
+import { LiveCursors } from "../lib/live-cursors";
+import { useLiveCursors } from "./use-live-cursors";
+import { LiveFaces } from "./live-faces";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { GrammarMarks } from "../grammar/plugin";
 import { HeadingKeys } from "../lib/heading-keys";
@@ -220,6 +223,8 @@ export function ScriptEditor({
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [width, setWidth] = useState<Width>("normal");
+  /** Someone else saved a newer version while you're here (1.53.5): who. */
+  const [newer, setNewer] = useState<string | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
 
   const paperRef = useRef<HTMLDivElement>(null);
@@ -234,6 +239,8 @@ export function ScriptEditor({
   // from this, so clicks and no-op edits never trigger a save.
   const savedJsonRef = useRef<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The script's live channel (1.53.5): a save tells the others. */
+  const liveRef = useRef<{ announceSaved: (version: number) => void } | null>(null);
   const commentStateRef = useRef<{ comments: CommentMark[]; active: string | null; pending: PendingMark }>({ comments, active: activeCommentId, pending: null });
 
   useEffect(() => {
@@ -281,6 +288,8 @@ export function ScriptEditor({
     if (res.ok) {
       versionRef.current = res.version;
       savedJsonRef.current = jsonText;
+      liveRef.current?.announceSaved(res.version);
+      setNewer(null);
       if (pendingRef.current) {
         setStatus("unsaved");
         timerRef.current = setTimeout(() => void flushRef.current(), 400);
@@ -346,6 +355,8 @@ export function ScriptEditor({
       ...(canEdit ? [GrammarMarks] : []),
       // What the search bar found, marked for a moment (1.26.0).
       SearchHit,
+      // The others in this script: their cursors (1.53.5).
+      LiveCursors,
     ],
     content: isEmptyDoc(initialContent) ? EMPTY_DOC : repairDoc(initialContent),
     editorProps: {
@@ -398,6 +409,22 @@ export function ScriptEditor({
     },
   });
   editorRef.current = editor;
+
+  // ---- who else is here (1.53.5) ------------------------------------------------
+  // The owner: "if theres any way to add the cursor thing without adding strain on aynthing, we shoiuld do it".
+  // Their faces in the top bar, their cursors in the text, and when one of them saves a newer version, a word about it
+  // (theirs isn't in your copy until you reload). use-live-cursors.ts says what it costs: next to nothing.
+  const live = useLiveCursors({
+    editor,
+    scriptId,
+    me: me?.userId ?? null,
+    people,
+    onSaved: (by, version) => {
+      if (version > versionRef.current) setNewer(by);
+    },
+  });
+  liveRef.current = live;
+  const newerName = newer ? (people.find((p) => p.userId === newer)?.name ?? "Someone") : null;
 
   // ---- printing (1.27.5): Ctrl+P prints the same plain copy as Export → PDF ----
   const printTitle = useRef("");
@@ -904,6 +931,17 @@ export function ScriptEditor({
           {words} words · about {spokenLength(words)}
         </span>
         <WidthMenu value={width} onChange={chooseWidth} />
+        <LiveFaces here={live.here} people={people} onJump={live.jumpTo} />
+        {newerName && status !== "conflict" && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            title={`${newerName} saved changes to this script. Reload to see them (anything you haven't saved yet can't be saved over theirs).`}
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-blue/10 text-blue px-2.5 h-7 text-[12px] font-semibold hover:bg-blue/15 flex-shrink-0"
+          >
+            {newerName} saved · Reload
+          </button>
+        )}
         {canEdit ? (
           <span
             className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${

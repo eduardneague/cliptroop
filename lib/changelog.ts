@@ -22,6 +22,16 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.53.5",
+    date: "2026-11-18",
+    title: "See who's in a script with you",
+    changes: [
+      { kind: "new", text: "When a teammate has the same script open, their face shows in the top bar and their cursor in the text: a line in their colour, with their name as they move and what they select. Click a face to jump to where they are." },
+      { kind: "new", text: "When one of them saves, the top bar says so, with Reload: their new words aren't in your copy until you reload." },
+      { kind: "better", text: "It runs straight between your browsers, so it adds no load anywhere, and nothing is sent while you're alone in a script or it's in a background tab." },
+    ],
+  },
+  {
     version: "1.53.4",
     date: "2026-11-17",
     title: "The To Do widget is To Do",
