@@ -51,6 +51,7 @@ import {
   ScissorsIcon,
   FrameIcon,
   PanelLeftIcon,
+  PanelTopIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { ANY_EDIT, CommentHighlights, commentAt, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
@@ -132,12 +133,17 @@ const PAPER_KEY = "vp:script-paper";
 const WIDTH_KEY = "vp:script-width";
 /** The documents column on the left, open or closed (1.54.1): this browser remembers it. */
 const RAIL_KEY = "vp:script-rail";
+/** The header's top part (the title and the steps), shown or folded away (1.55.1): this browser remembers it. */
+const HEAD_KEY = "vp:script-head";
 /** "Ctrl+" (or "⌘" on a Mac) in the shortcuts shown. */
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 /** The app's own bar at the top of every page (h-14). */
 const APP_BAR = 56;
-/** Where the header sticks on a computer: under the app's bar, which floats a little lower with the glass look (1.31.9, --shell-top). */
-const UNDER_BAR = `var(--shell-top, ${APP_BAR}px)`;
+/**
+ * Where the header sticks on a computer: under the app's bar, which floats a little lower with the glass look (1.31.9,
+ * --shell-top). 1.55.1: with the bar floating, right against it (--script-head-top, globals.css): the two are one card.
+ */
+const UNDER_BAR = `var(--script-head-top, var(--shell-top, ${APP_BAR}px))`;
 type Width = "normal" | "wide" | "full";
 /** How wide the long page gets (1.23.0): Normal, Wide or the whole width. */
 const STRIP_W: Record<Width, string> = { normal: "max-w-3xl", wide: "max-w-[1080px]", full: "max-w-none" };
@@ -272,6 +278,11 @@ export function ScriptEditor({
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [width, setWidth] = useState<Width>("normal");
   const [railOpen, setRailOpen] = useState(true);
+  /** The title and the steps folded away, the formatting bar left (1.55.1); moving: on its way (clipped meanwhile). */
+  const [compact, setCompact] = useState(false);
+  const [headMoving, setHeadMoving] = useState(false);
+  /** Only a click folds it with a slide (as the page opens, it's just as it was left). */
+  const [headSlides, setHeadSlides] = useState(false);
   /**
    * Live (1.55.0): everyone's changes go in as they're made (no saves of the whole script, no "saved a newer version").
    * Fixed for the page's life: the editor is made for one way or the other.
@@ -310,6 +321,7 @@ export function ScriptEditor({
       const wd = localStorage.getItem(WIDTH_KEY);
       if (wd === "normal" || wd === "wide" || wd === "full") setWidth(wd);
       if (localStorage.getItem(RAIL_KEY) === "closed") setRailOpen(false);
+      if (localStorage.getItem(HEAD_KEY) === "compact") setCompact(true);
     } catch {
       /* private mode: stay light */
     }
@@ -1139,6 +1151,21 @@ export function ScriptEditor({
     });
   }
 
+  function toggleHead() {
+    setHeadSlides(true);
+    setHeadMoving(true);
+    setCompact((c) => {
+      remember(HEAD_KEY, c ? "full" : "compact");
+      return !c;
+    });
+  }
+  // (Clipped only while it moves: the menus hanging from the top bar, Page width and Export, need room below it.)
+  useEffect(() => {
+    if (!headMoving) return;
+    const t = setTimeout(() => setHeadMoving(false), 340);
+    return () => clearTimeout(t);
+  }, [headMoving, compact]);
+
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
     setPaper(next);
@@ -1207,6 +1234,66 @@ export function ScriptEditor({
     error: "Not saved. Press Ctrl+S to retry.",
     conflict: "Someone else saved a newer version.",
   };
+  const statusShort: Record<Status, string> = { saved: "Saved", unsaved: "Unsaved", saving: "Saving…", error: "Not saved", conflict: "Not saved" };
+
+  // Folded (1.55.1): only the formatting bar, so only where there is one, and not on phones (theirs scrolls away by
+  // itself, the formatting bar staying).
+  const folded = compact && hasTools && !head.phone;
+
+  // What the top bar says about saving, worked out once: it's on the formatting bar while the top part is folded away.
+  const save: { text: string; short: string; tone: "good" | "busy" | "bad" | "quiet"; reload?: string } =
+    canEdit && liveMode
+      ? liveStuck
+        ? {
+            text: LIVE_TEXT[edits.status],
+            short: "Reload",
+            tone: "bad",
+            reload: edits.status === "newer" ? "ClipTroop was updated while this page was open. Reload to keep writing." : "This document's text was replaced while you were writing. Reload to keep writing.",
+          }
+        : {
+            text: LIVE_TEXT[edits.status],
+            short: edits.status === "offline" ? "Offline" : LIVE_TEXT[edits.status],
+            tone: edits.status === "saved" ? "good" : edits.status === "offline" ? "bad" : edits.status === "readonly" ? "quiet" : "busy",
+          }
+      : canEdit
+        ? { text: statusText[status], short: statusShort[status], tone: status === "error" || status === "conflict" ? "bad" : status === "saved" ? "good" : "busy" }
+        : { text: "View only", short: "View only", tone: "quiet" };
+  const saveState = (short: boolean) =>
+    save.reload ? (
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        title={save.reload}
+        className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red px-2.5 h-7 text-[12px] font-semibold hover:bg-red/15 flex-shrink-0"
+      >
+        {short ? save.short : save.text}
+      </button>
+    ) : (
+      <span
+        className={`${canEdit ? "hidden sm:inline-flex" : "inline-flex"} items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${
+          save.tone === "good" ? "text-green" : save.tone === "bad" ? "text-red" : "text-ink-soft"
+        }`}
+        title={short && save.short !== save.text ? save.text : undefined}
+        aria-live={canEdit ? "polite" : undefined}
+      >
+        {save.tone === "good" && <CheckIcon className="w-3.5 h-3.5" />}
+        {short ? save.short : save.text}
+      </span>
+    );
+  const hereFaces = <LiveFaces here={live.here} people={people} onJump={live.jumpTo} />;
+  // Folds the title and the steps away, or brings them back (at the formatting bar's end, where it stays either way).
+  const foldButton = (
+    <button
+      type="button"
+      onClick={toggleHead}
+      aria-expanded={!folded}
+      aria-label={folded ? "Show the title and the steps" : "Hide the title and the steps"}
+      title={folded ? "Show the title and the steps" : "Hide the title and the steps"}
+      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${folded ? "text-ink bg-surface-2" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
+    >
+      <PanelTopIcon className="w-4 h-4" />
+    </button>
+  );
 
   return (
     <div className="script-print-root min-h-[calc(100dvh-3.5rem)] flex flex-col">
@@ -1217,9 +1304,13 @@ export function ScriptEditor({
           1.53.1: with the glass look on, one pane of glass like the app's bars
           (globals.css, [data-script-head]); data-paper tells it which paper
           goes under it. */}
-      <div ref={headRef} data-script-head="" data-paper={paper} className="no-print sticky isolate bg-paper" style={headStyle}>
+      <div ref={headRef} data-script-head="" data-paper={paper} data-folded={folded ? "" : undefined} className="no-print sticky isolate bg-paper" style={headStyle}>
+      {/* 1.55.1: the title and the steps fold away, leaving the formatting bar (the owner: "i also want to collapse the
+          top part as well … make it more compact"); this browser remembers which. */}
+      <div className={`grid ${headSlides ? "transition-[grid-template-rows] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none" : ""} ${folded ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
+      <div className={`min-h-0 ${folded || headMoving ? "overflow-hidden" : ""}`} inert={folded}>
       {/* Top bar */}
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b border-line/10">
+      <div data-head-row="" className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-12 border-b border-line/10">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink flex-shrink-0">
           <ArrowLeftIcon className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{backLabel}</span>
@@ -1235,7 +1326,7 @@ export function ScriptEditor({
           {words} words · about {spokenLength(words)}
         </span>
         <WidthMenu value={width} onChange={chooseWidth} />
-        <LiveFaces here={live.here} people={people} onJump={live.jumpTo} />
+        {!folded && hereFaces}
         {newerName && status !== "conflict" && (
           <button
             type="button"
@@ -1246,40 +1337,7 @@ export function ScriptEditor({
             {newerName} saved · Reload
           </button>
         )}
-        {canEdit && liveMode ? (
-          liveStuck ? (
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              title={edits.status === "newer" ? "ClipTroop was updated while this page was open. Reload to keep writing." : "This document's text was replaced while you were writing. Reload to keep writing."}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red px-2.5 h-7 text-[12px] font-semibold hover:bg-red/15 flex-shrink-0"
-            >
-              {LIVE_TEXT[edits.status]}
-            </button>
-          ) : (
-            <span
-              className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${
-                edits.status === "saved" ? "text-green" : edits.status === "offline" ? "text-red" : "text-ink-soft"
-              }`}
-              aria-live="polite"
-            >
-              {edits.status === "saved" && <CheckIcon className="w-3.5 h-3.5" />}
-              {LIVE_TEXT[edits.status]}
-            </span>
-          )
-        ) : canEdit ? (
-          <span
-            className={`hidden sm:inline-flex items-center gap-1.5 text-[12px] font-semibold ${
-              status === "error" || status === "conflict" ? "text-red" : status === "saved" ? "text-green" : "text-ink-soft"
-            }`}
-            aria-live="polite"
-          >
-            {status === "saved" && <CheckIcon className="w-3.5 h-3.5" />}
-            {statusText[status]}
-          </span>
-        ) : (
-          <span className="text-[12px] font-semibold text-ink-soft">View only</span>
-        )}
+        {!folded && saveState(false)}
         <span className="hidden sm:contents">{topBarExtra}</span>
         <MobileMenu
           paper={paper}
@@ -1314,11 +1372,31 @@ export function ScriptEditor({
         </span>
       </div>
       {subBar}
+      </div>
+      </div>
       {/* Toolbar */}
       {canEdit && editor && (
         <div ref={toolRef}>
           <Toolbar
             editor={editor}
+            lead={
+              folded ? (
+                <>
+                  <Link href={backHref} aria-label={backLabel} title={backLabel} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                  </Link>
+                  {/* (The documents, as in the top bar: where the column on the left is closed, or not there.) */}
+                  {mobileDocs ? <div className={`flex-shrink-0 ${leftRail && railOpen ? "lg:hidden" : ""}`}>{mobileDocs}</div> : null}
+                </>
+              ) : null
+            }
+            tail={
+              <>
+                {folded && <span className="hidden 2xl:contents">{hereFaces}</span>}
+                {folded && saveState(true)}
+                {foldButton}
+              </>
+            }
             onImage={() => fileRef.current?.click()}
             onFrame={() => {
               const { from, to, empty } = editor.state.selection;
@@ -1383,24 +1461,32 @@ export function ScriptEditor({
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       {leftRail && (
         // 1.54.1: it closes to a thin strip (the button at its top) and opens again; this browser remembers which.
+        // 1.55.1: the button and the list are one block that stays under the header as the script scrolls (the list had
+        // come loose from it and scrolled away with the script, the button staying: "the left bar is scrolling by
+        // itself"); a list too long for the window scrolls on its own, inside it.
         <div
           data-rail={railOpen ? "open" : "closed"}
           className={`script-rail no-print hidden lg:block flex-shrink-0 lg:border-r border-line/10 relative lg:overflow-x-clip transition-[width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] ${railOpen ? "lg:w-60" : "lg:w-12"}`}
         >
-          <div className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] z-10 h-0">
-            <button
-              type="button"
-              onClick={toggleRail}
-              aria-expanded={railOpen}
-              aria-label={railOpen ? "Close the documents column" : "Open the documents column"}
-              title={railOpen ? "Hide documents" : "Show documents"}
-              className={`absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 transition-[left,transform] duration-300 ${railOpen ? "left-[calc(15rem-2.75rem)]" : "left-2"}`}
+          <div className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] flex flex-col">
+            <div className="relative z-10 h-0 flex-shrink-0">
+              <button
+                type="button"
+                onClick={toggleRail}
+                aria-expanded={railOpen}
+                aria-label={railOpen ? "Close the documents column" : "Open the documents column"}
+                title={railOpen ? "Hide documents" : "Show documents"}
+                className={`absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 transition-[left,transform] duration-300 ${railOpen ? "left-[calc(15rem-2.75rem)]" : "left-2"}`}
+              >
+                <PanelLeftIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <div
+              className={`min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll transition-opacity duration-200 ${railOpen ? "opacity-100" : "opacity-0 pointer-events-none invisible"}`}
+              aria-hidden={!railOpen}
             >
-              <PanelLeftIcon className="w-4 h-4" />
-            </button>
-          </div>
-          <div className={`transition-opacity duration-200 ${railOpen ? "opacity-100" : "opacity-0 pointer-events-none invisible"}`} aria-hidden={!railOpen}>
-            {leftRail}
+              {leftRail}
+            </div>
           </div>
         </div>
       )}
@@ -1807,8 +1893,14 @@ function Toolbar({
   grammar,
   grammarOpen,
   onGrammar,
+  lead,
+  tail,
 }: {
   editor: Editor;
+  /** 1.55.1: before the formatting buttons (the way back and the documents, with the top part folded away). */
+  lead?: React.ReactNode;
+  /** After them: the fold button (and, folded, who's here and the save state). */
+  tail?: React.ReactNode;
   onImage: () => void;
   /** 1.54.0: a frame guide (its picture here, or on the words picked). */
   onFrame: () => void;
@@ -1882,13 +1974,9 @@ function Toolbar({
   const c = () => editor.chain().focus();
 
   return (
-    <div
-      role="toolbar"
-      aria-label="Formatting"
-      data-head-row=""
-      className="no-print border-b border-line/10 bg-paper"
-    >
-      <div className="mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
+    <div data-head-row="" className="no-print border-b border-line/10 bg-paper sm:flex sm:items-center">
+      {lead && <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 pl-2 lg:pl-4">{lead}</div>}
+      <div role="toolbar" aria-label="Formatting" className="sm:flex-1 min-w-0 mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
         <div className="w-28 sm:w-36 flex-shrink-0 mr-1">
           <Select
             value={s!.block}
@@ -1991,6 +2079,7 @@ function Toolbar({
           More
         </button>
       </div>
+      {tail && <div className="hidden sm:flex items-center gap-2 flex-shrink-0 pl-1 pr-2 lg:pr-4">{tail}</div>}
       <AnchoredMenu open={more} onClose={() => setMore(false)} anchor={moreBtn} label="Format">
         <div className="p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-3">Format</div>

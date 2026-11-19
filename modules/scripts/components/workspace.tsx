@@ -473,7 +473,8 @@ function DocRail({
   const add = (kind: "script" | "research") => setAdding(kind);
 
   return (
-    <nav className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] lg:overflow-y-auto lg:overflow-x-hidden px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
+    // (Kept under the header, and scrolled when it's long, by the documents column it's in: script-editor.tsx.)
+    <nav className="px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
       <div className="flex lg:flex-col gap-3 lg:gap-5 p-1">
         {groups.map((g) => (
           <div key={g.kind} className="flex lg:flex-col gap-1 flex-shrink-0">

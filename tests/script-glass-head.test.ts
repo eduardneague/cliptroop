@@ -17,9 +17,9 @@ const flat = read("app/globals.css").replace(/\s+/g, " ");
 const editor = read("modules/scripts/components/script-editor.tsx");
 
 // --- The header ---------------------------------------------------------------------------------------------------------------
-ok(editor.includes(`<div ref={headRef} data-script-head="" data-paper={paper} className="no-print sticky isolate bg-paper" style={headStyle}>`), "the header says it's the script's header and which paper is under it");
+ok(editor.includes(`<div ref={headRef} data-script-head="" data-paper={paper} data-folded={folded ? "" : undefined} className="no-print sticky isolate bg-paper" style={headStyle}>`), "the header says it's the script's header and which paper is under it");
 ok(editor.includes(`      : { position: "relative" }`) && !editor.includes(`{ position: "static" }`), "when it scrolls away on a phone it's still the frame of its glass layer");
-ok(/role="toolbar"\s+aria-label="Formatting"\s+data-head-row=""/.test(editor), "the formatting bar is one of its rows");
+ok(/<div data-head-row="" className="no-print border-b border-line\/10 bg-paper sm:flex sm:items-center">[\s\S]{0,200}<div role="toolbar" aria-label="Formatting"/.test(editor), "the formatting bar is one of its rows");
 ok(read("modules/scripts/components/script-flow.tsx").includes(`<div data-head-row="" className="no-print border-b border-line/10 bg-paper/60">`), "so are the steps");
 
 // --- The glass ------------------------------------------------------------------------------------------------------------------

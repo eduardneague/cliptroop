@@ -170,7 +170,7 @@ for (const [f, how] of [
 }
 ok(/max-h-\[calc\(100dvh-var\(--shell-top,3\.5rem\)-var\(--ol-bar,104px\)-1\.5rem\)\]/.test(read("modules/outliers/components/tabs/formats-tab.tsx")), "and is never taller than the room left");
 const script = read("modules/scripts/components/script-editor.tsx");
-ok(/const UNDER_BAR = `var\(--shell-top, \$\{APP_BAR\}px\)`;/.test(script) && /: \{ top: UNDER_BAR, zIndex: 15 \};/.test(script), "the script editor's header sticks under the floating bar");
+ok(/const UNDER_BAR = `var\(--script-head-top, var\(--shell-top, \$\{APP_BAR\}px\)\)`;/.test(script) && /: \{ top: UNDER_BAR, zIndex: 15 \};/.test(script), "the script editor's header sticks under the floating bar (1.55.1: right against it, --script-head-top)");
 ok(/"--script-head-bottom", phone \? `\$\{APP_BAR \+ tool\}px` : `calc\(\$\{UNDER_BAR\} \+ \$\{h\}px\)`/.test(script), "and what sits under that header follows");
 for (const f of ["app/(dashboard)/dashboard/page.tsx", "app/(dashboard)/teams/new/page.tsx", "app/(dashboard)/teams/new/loading.tsx"]) {
   ok(read(f).includes("min-h-[calc(100vh-64px)]"), `${f}: a page centred in the screen leaves the floating bar room (no 5 px scroll)`);

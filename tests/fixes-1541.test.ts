@@ -46,7 +46,8 @@ ok(editor.includes("const browserSpell = !grammar.live && grammar.settings.on;")
 ok(editor.includes('const RAIL_KEY = "vp:script-rail";') && editor.includes('remember(RAIL_KEY, open ? "closed" : "open")') && editor.includes('localStorage.getItem(RAIL_KEY) === "closed"'), "the documents column closes, and the browser remembers it");
 ok(editor.includes('aria-label={railOpen ? "Close the documents column" : "Open the documents column"}') && editor.includes("lg:overflow-x-clip"), "its button; closed, it's a thin strip (clip, not hidden: its list still sticks)");
 ok(editor.includes('${leftRail && !railOpen ? "" : "lg:hidden"}'), "closed: the documents dropdown is by the title on a computer too");
-ok(css.includes("@media (min-width: 900px) { html[data-glass] [data-script-head]::before { top: calc(-1 * var(--shell-top, 72px)); } }"), "on glass the header's pane goes on up behind the floating bar: nothing shows between them");
+// (1.55.1: still nothing between them, now by the header hanging from the floating bar as one card: fixes-1551.)
+ok(css.includes("html[data-glass] { --script-head-top: calc(var(--shell-top) - 10px); }") && css.includes(`html[data-glass]:has([data-script-head]) [data-shell="header"] { border-bottom-color: transparent; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }`), "on glass nothing shows between the floating bar and the header");
 
 // --- Pictures in scripts ---------------------------------------------------------------------------------------------------
 const img = read("modules/scripts/components/script-image.tsx");

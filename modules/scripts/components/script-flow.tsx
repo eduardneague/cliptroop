@@ -88,7 +88,7 @@ export function FlowStrip({
 
   return (
     <div data-head-row="" className="no-print border-b border-line/10 bg-paper/60">
-      <div className="flex items-center gap-2 px-3 sm:px-6 py-2 flex-wrap">
+      <div className="flex items-center gap-2 px-3 sm:px-6 py-1.5 flex-wrap">
         <ol className="flex items-center gap-1 min-w-0 overflow-x-auto no-scrollbar -my-1 py-1" aria-label="Script steps">
           {flow.steps.map((s, i) => {
             const on = s.docId === (openingDoc ?? currentDocId);

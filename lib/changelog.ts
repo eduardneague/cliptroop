@@ -22,6 +22,16 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.1",
+    date: "2026-11-19",
+    title: "A tidier script header",
+    changes: [
+      { kind: "fixed", text: "The documents column on the left of a script stays where it is while you scroll the script. It had started scrolling away with it, its button left behind." },
+      { kind: "better", text: "With the glass look, a script's header hangs from the top bar as one floating card, lined up with it, instead of a dark block across the whole page. A white page no longer shows through it as a pale band." },
+      { kind: "new", text: "The title and the steps at the top of a script fold away with the button at the end of the formatting bar, leaving only the formatting bar, with the way back, the documents and \"Saved\" on it. Your browser remembers it. The header's rows are slimmer too." },
+    ],
+  },
+  {
     version: "1.55.0",
     date: "2026-11-18",
     title: "Write a script together, live",

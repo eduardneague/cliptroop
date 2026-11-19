@@ -682,14 +682,8 @@ html[data-glass]:not(.dark) [data-script-head][data-paper="dark"]::before {
 }
 html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--paper)); }
 html[data-glass] [data-script-head] [data-head-row] { background-color: transparent; }
-/*
-  1.54.1: no gap above it. Where the top bar floats (a computer), the header's pane goes on up behind it to the top of the
-  window: the page used to show between the two, and round the bar (the owner: "i really dont like this gap for
-  scripting, its really odd, especially on liquid glass").
-*/
-@media (min-width: 900px) {
-  html[data-glass] [data-script-head]::before { top: calc(-1 * var(--shell-top, 72px)); }
-}
+/* (1.54.1's pane, run up behind the top bar to the window's edge, is gone: the header now hangs from the bar as one card,
+   "The script page's header on a computer" below.) */
 /*
   1.53.2: the script page's two round-cornered buttons in the corner (Suggestions and Comments) float over the paper.
   Their inset colour (bg-surface-2) is the bright pane meant for a card, all but clear in dark mode, so over a white
@@ -1112,6 +1106,64 @@ html[data-glass][data-glass-opaque] [data-shell="header"]::before { display: non
 }
 @media (min-width: 1400px) {
   html[data-glass] [data-shell="subbar"] { margin-left: -16px; margin-right: -16px; }
+}
+/*
+  The script page's header on a computer with the glass look (1.55.1): it hangs from the floating top bar, the two one
+  card. The owner: "the entire header for scripting looks off when its on liquid glass, not good, its like a rectangle"
+  (1.54.1 ran its pane edge to edge and on up behind the top bar, so the bar floated inside a dark block). The bar's
+  lower corners square off and the header goes on from its edge, lined up with it, its own lower corners round: no gap
+  between them (1.54.1's ask) and nothing edge to edge. The bar's tint, blur and edge; the card's shadow is the header's.
+*/
+@media (min-width: 900px) {
+  html[data-glass] { --script-head-top: calc(var(--shell-top) - 10px); }
+  html[data-glass]:has([data-script-head]) [data-shell="header"] {
+    border-bottom-color: transparent;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  html[data-glass] [data-script-head] {
+    margin: 0 20px;
+    border: 1px solid rgb(var(--glass-edge));
+    border-top: 0;
+    border-radius: 0 0 18px 18px;
+    box-shadow: var(--glass-shadow);
+  }
+  html[data-glass] [data-script-head]::before { border-radius: inherit; }
+  /* Its last row has the card's edge under it, not a line of its own as well. */
+  html[data-glass] [data-script-head] > :last-child > [data-head-row]:last-child,
+  html[data-glass] [data-script-head] > :last-child > div > [data-head-row]:last-child { border-bottom-color: transparent; }
+  /* Solid glass: the bar's solid pane. */
+  html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--surface)); }
+  /* A white page in dark mode (a dark one in light mode): the card all but solid, both halves alike (at 82 % the page
+     showed through as a pale band down its middle, a rectangle on the card). */
+  html.dark[data-glass]:not([data-glass-opaque]) [data-script-head][data-paper="light"]::before,
+  html[data-glass]:not(.dark):not([data-glass-opaque]) [data-script-head][data-paper="dark"]::before,
+  html.dark[data-glass]:not([data-glass-opaque]):has([data-script-head][data-paper="light"]) [data-shell="header"],
+  html[data-glass]:not(.dark):not([data-glass-opaque]):has([data-script-head][data-paper="dark"]) [data-shell="header"] {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), 0.95));
+  }
+  /* Over a wallpaper: the bar's floor and lift. */
+  html[data-glass]:not([data-glass-opaque]):has([data-dash-bg]) [data-script-head]::before {
+    background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), var(--wall-floor)));
+    -webkit-backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+    backdrop-filter: var(--glass-blur) brightness(var(--wall-lift));
+  }
+  /* Liquid: the bar keeps its rim, not its shadow (it would fall on the header); its light at the pointer stays off (it
+     would draw a ring across the card's middle). */
+  html[data-glass-style="liquid"]:has([data-script-head]) [data-shell="header"] { box-shadow: var(--liquid-rim); }
+  html[data-glass-style="liquid"]:has([data-script-head]) [data-shell="header"]::after { display: none; }
+  html[data-glass-style="liquid"] [data-script-head] { border-radius: 0 0 20px 20px; box-shadow: var(--liquid-drop); }
+  html[data-glass-style="halo"] [data-script-head] {
+    border-color: color-mix(in srgb, var(--halo-a) 32%, transparent);
+    box-shadow: 0 0 30px -10px color-mix(in srgb, var(--halo-a) var(--halo-glow), transparent), 0 14px 32px -22px rgb(0 0 0 / 0.5);
+  }
+  /* What scrolls up beside the card blurs away right down to it (as above Outliers' bar). */
+  html[data-glass]:has([data-script-head]) [data-shell="edge"]::before {
+    --edge-down: linear-gradient(#000 calc(100% - 10px), transparent);
+  }
+}
+@media (min-width: 1400px) {
+  html[data-glass] [data-script-head] { margin-left: 24px; margin-right: 24px; }
 }
 @keyframes shell-edge-in {
   from { opacity: 0; }

@@ -657,6 +657,16 @@ export function PanelLeftIcon(p: IconProps) {
   );
 }
 
+/** 1.55.1: the script page's top part, folded away or back (like PanelLeftIcon for the documents column). */
+export function PanelTopIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M3 9.5h18" />
+    </Svg>
+  );
+}
+
 export function ChevronLeftIcon(p: IconProps) {
   return (
     <Svg {...p}>
