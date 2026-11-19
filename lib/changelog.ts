@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.6",
+    date: "2026-11-19",
+    title: "One colour in the sidebar, and the script page loading in its own shape",
+    changes: [
+      { kind: "better", text: "To Do and Frame Guides in the sidebar light up in the same accent colour as the rest (they had a teal and a green of their own), on a phone too." },
+      { kind: "better", text: "While a script opens, its placeholder now has the page's real shape: one bar with the documents, the formatting and the page's buttons, no documents column, and the page centred, as wide as you keep it. On a phone: the title, the steps and the formatting bar. Nothing moves when the script arrives." },
+    ],
+  },
+  {
     version: "1.55.5",
     date: "2026-11-19",
     title: "The page stays put after a comment",

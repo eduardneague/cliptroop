@@ -16,14 +16,14 @@ import { Leaves } from "./leaves";
 /**
  * Icons are quiet grey at rest (one consistent menu), and light up in their
  * own colour when you point at them or you're there: shorts orange, long
- * videos blue, meetings violet, everything else the amber accent.
+ * videos blue, meetings violet, everything else the amber accent (1.55.6: To Do
+ * and Frame Guides too, no teal and green of their own: the owner, "i dont want
+ * them to have different colors").
  */
 const ACCENT: Record<string, { on: string; hover: string }> = {
   "/shorts": { on: "text-short", hover: "group-hover:text-short" },
   "/videos": { on: "text-long", hover: "group-hover:text-long" },
   "/meetings": { on: "text-violet", hover: "group-hover:text-violet" },
-  "/todo": { on: "text-teal", hover: "group-hover:text-teal" },
-  "/frame-guides": { on: "text-frame", hover: "group-hover:text-frame" },
 };
 const accent = (href: string) => ACCENT[href] ?? { on: "text-amber", hover: "group-hover:text-amber" };
 
