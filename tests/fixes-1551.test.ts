@@ -3,7 +3,8 @@
 // rectangle, i also want to collapse the top part as well or redesign it entirely to make it more compact".
 //   * The documents column: 1.54.1 wrapped its list in a box as tall as the list itself, so the list's sticking had no
 //     room and it scrolled away with the script while its button stayed put. Now the button and the list are one block
-//     that sticks under the header; a list longer than the room scrolls on its own, inside it.
+//     that sticks under the header; a list longer than the room scrolls on its own, inside it. (1.55.4: the column is
+//     gone, the documents dropdown has them all.)
 //   * The header on glass hangs from the floating top bar as one card (it ran edge to edge and on up behind the bar).
 //   * Its top part (the title and the steps) folded away, leaving the formatting bar (1.55.2 put everything in that one
 //     bar instead: fixes-1552.test.ts).
@@ -22,17 +23,8 @@ const css = read("app/globals.css").replace(/\s+/g, " ");
 const editor = read("modules/scripts/components/script-editor.tsx");
 const ws = read("modules/scripts/components/workspace.tsx");
 
-// ---- the documents column ---------------------------------------------------------------------------------------------------
-const rail = editor.slice(editor.indexOf("{leftRail && ("), editor.indexOf("{/* Paper */}"));
-ok(rail.length > 200, "the column is there");
-ok(
-  /<div className="lg:sticky lg:top-\[var\(--script-head-bottom,10\.5rem\)\] lg:max-h-\[calc\(100dvh-var\(--script-head-bottom,10\.5rem\)\)\] flex flex-col">/.test(rail),
-  "one block sticks under the header, never taller than the room below it"
-);
-ok(rail.indexOf("<PanelLeftIcon") > 0 && rail.indexOf("{leftRail}") > rail.indexOf("<PanelLeftIcon"), "the button and the list are in it together (they can't come apart)");
-ok(/className=\{`min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll transition-opacity/.test(rail), "a long list scrolls inside it, and only when you scroll over it");
-ok((rail.match(/lg:sticky/g) ?? []).length === 1, "nothing else in the column sticks on its own");
-ok(/<nav className="px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">/.test(ws) && !/<nav className="lg:sticky/.test(ws), "the list itself no longer sticks (inside a box its own size it couldn't, so it scrolled away)");
+// ---- the documents column: gone in 1.55.4 (the documents dropdown has them all: fixes-1554.test.ts) ----------------------------
+ok(!editor.includes("{leftRail && (") && !editor.includes("leftRail") && !ws.includes("<DocRail"), "no documents column (the owner, 1.55.4: \"its redundant at this point\")");
 
 // ---- the header: one card with the floating top bar --------------------------------------------------------------------------
 ok(/const UNDER_BAR = `var\(--script-head-top, var\(--shell-top, \$\{APP_BAR\}px\)\)`;/.test(editor), "it sticks where the page says (right under the floating bar on glass)");

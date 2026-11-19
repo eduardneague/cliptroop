@@ -10,7 +10,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { CheckIcon, ChevronDownIcon, CloseIcon, ColumnsIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, ColumnsIcon, EditIcon, ExpandIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
@@ -46,7 +46,7 @@ import type { MentionPerson } from "../lib/mention-people";
 import type { ScriptFlow } from "../lib/flow";
 import type { TeamPerson } from "@/modules/short-videos/lib/queries";
 import { FlowStrip, type FlowPermissions } from "./script-flow";
-import { PendingLink, PendingNav, usePendingNav } from "@/components/ui/pending-nav";
+import { PendingNav, usePendingNav } from "@/components/ui/pending-nav";
 import { Leaves } from "@/components/ui/leaves";
 import { createClient } from "@/lib/supabase/client";
 import { colorForId } from "@/lib/avatar";
@@ -373,7 +373,6 @@ function Workspace({
           />
         </>
       }
-      leftRail={<DocRail owner={owner} docs={docs} current={doc.id} sideId={sideOpen ? side?.id ?? null : null} canCreate={canCreate} canEdit={canEdit} href={(id) => href({ doc: id })} roleColors={roleColors} />}
       sideBySide={
         sideOpen && side ? (
           <SidePage
@@ -391,11 +390,12 @@ function Workspace({
         ) : undefined
       }
       mobileDocs={
-        <MobileDocs
+        <DocsMenu
           owner={owner}
           docs={docs}
           current={doc}
           canCreate={canCreate}
+          canEdit={canEdit}
           href={(id) => href({ doc: id })}
           roleColors={roleColors}
           sideId={sideOpen ? side?.id ?? null : null}
@@ -409,6 +409,19 @@ function Workspace({
                 }))
               : undefined
           }
+          onDeleted={(id) => {
+            // The one open: to another version (never the one beside it); the one beside it: that side closes.
+            const beside = sideOpen ? side?.id ?? null : null;
+            if (id === doc.id) {
+              const next = docs.find((d) => d.kind === "script" && d.id !== id && d.id !== beside) ?? docs.find((d) => d.kind === "script" && d.id !== id);
+              if (next) return router.push(href({ doc: next.id, side: next.id === beside ? null : undefined }), { scroll: false });
+            }
+            if (id === beside) {
+              setSideOpen(false);
+              return router.push(href({ side: null }), { scroll: false });
+            }
+            router.refresh();
+          }}
         />
       }
       renderCommentPopover={(id, close) => {
@@ -468,155 +481,6 @@ function Workspace({
     />
     {zoomed?.sketch && <Lightbox src={zoomed.sketch.url} alt={`Sketch: ${zoomed.body}`} download={`sketch-${zoomed.id.slice(0, 8)}.png`} onClose={() => setZoomed(null)} />}
     </>
-  );
-}
-
-function DocRail({
-  owner,
-  docs,
-  current,
-  canCreate,
-  canEdit,
-  href,
-  roleColors,
-  sideId,
-}: {
-  owner: Owner;
-  docs: DocListItem[];
-  current: string;
-  /** Open on the right: shown, but not openable on the left too. */
-  sideId: string | null;
-  canCreate: { script: boolean; research: boolean };
-  canEdit: boolean;
-  href: (id: string) => string;
-  roleColors: Record<string, string>;
-}) {
-  const router = useRouter();
-  const toast = useToast();
-  const confirm = useConfirm();
-  const nav = usePendingNav();
-  // The document on its way counts as open already.
-  const shown = nav.pending ?? current;
-  const [renaming, setRenaming] = useState<string | null>(null);
-  // The main documents carry the colour of the role that works on them.
-  const DOT: Record<string, string | undefined> = {
-    Script: roleColors.scripter,
-    Review: roleColors.master,
-    Staging: roleColors.editor,
-    Research: roleColors.researcher,
-  };
-  const groups = [
-    { kind: "script" as const, label: "Versions", add: "Add version", can: canCreate.script },
-    ...("long" in owner ? [{ kind: "research" as const, label: "Research", add: "Add research", can: canCreate.research }] : []),
-  ];
-  const DEFAULTS = ["Script", "Review", "Staging", "Research"];
-
-  const [adding, setAdding] = useState<"script" | "research" | null>(null);
-  const add = (kind: "script" | "research") => setAdding(kind);
-
-  return (
-    // (Kept under the header, and scrolled when it's long, by the documents column it's in: script-editor.tsx.)
-    <nav className="px-3 lg:px-4 pt-3 lg:py-6" aria-label="Documents">
-      <div className="flex lg:flex-col gap-3 lg:gap-5 p-1">
-        {groups.map((g) => (
-          <div key={g.kind} className="flex lg:flex-col gap-1 flex-shrink-0">
-            <div className="hidden lg:block px-2.5 pb-1.5 pt-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">{g.label}</div>
-            {docs
-              .filter((d) => d.kind === g.kind)
-              .map((d) => (
-                <div key={d.id} className="group relative flex-shrink-0">
-                  {d.id === sideId ? (
-                    <div className="flex items-center gap-2.5 rounded-lg pl-3 pr-3 h-9 lg:h-10 text-[13.5px] whitespace-nowrap text-ink-faint cursor-default" title="Open on the right">
-                      <span aria-hidden className="w-2 h-2 rounded-[3px] flex-shrink-0 opacity-60" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
-                      <span className="truncate">{d.name}</span>
-                      <span className="hidden lg:inline ml-auto text-[10.5px] font-bold uppercase">On the right</span>
-                    </div>
-                  ) : renaming === d.id ? (
-                    <input
-                      autoFocus
-                      defaultValue={d.name}
-                      maxLength={60}
-                      onBlur={async (e) => {
-                        setRenaming(null);
-                        const name = e.target.value.trim();
-                        if (name && name !== d.name) {
-                          const r = await renameDoc(d.id, name);
-                          if (r.error !== undefined) toast.error(r.error);
-                          else router.refresh();
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        if (e.key === "Escape") setRenaming(null);
-                      }}
-                      className="w-36 lg:w-full rounded-lg border border-amber bg-surface px-2.5 h-9 text-[13px] font-semibold outline-none"
-                    />
-                  ) : (
-                    <PendingLink
-                      href={href(d.id)}
-                      navKey={d.id}
-                      prefetch={false}
-                      onDoubleClick={(e) => {
-                        if (!canEdit) return;
-                        e.preventDefault();
-                        setRenaming(d.id);
-                      }}
-                      title={canEdit ? "Double-click to rename" : undefined}
-                      aria-current={d.id === shown ? "page" : undefined}
-                      className={`flex items-center gap-2.5 rounded-lg pl-3 pr-8 h-9 lg:h-10 text-[13.5px] whitespace-nowrap transition-colors ${
-                        d.id === shown ? "bg-amber/12 text-ink font-bold ring-1 ring-amber/40" : "text-ink-soft hover:text-ink hover:bg-surface-2"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className="w-2 h-2 rounded-[3px] flex-shrink-0"
-                        style={{ background: DOT[d.name] ?? "transparent", boxShadow: DOT[d.name] ? undefined : "inset 0 0 0 1.5px rgb(var(--line) / 0.35)" }}
-                      />
-                      <span className="truncate">{d.name}</span>
-                      <span className="hidden lg:inline ml-auto text-[11px] font-normal text-ink-faint tabular-nums">{d.wordCount}w</span>
-                    </PendingLink>
-                  )}
-                  {canEdit && !DEFAULTS.includes(d.name) && renaming !== d.id && (
-                    <button
-                      type="button"
-                      aria-label={`Delete ${d.name}`}
-                      onClick={async () => {
-                        if (!(await confirm({ title: `Delete “${d.name}”?`, description: "Its text and comments are deleted.", confirmLabel: "Delete", danger: true }))) return;
-                        const r = await deleteDoc(d.id);
-                        if (r.error !== undefined) toast.error(r.error);
-                        else router.push(href(docs.find((x) => x.kind === "script" && x.id !== d.id)?.id ?? current), { scroll: false });
-                      }}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center text-ink-faint hover:text-red opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    >
-                      <CloseIcon className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            {g.can && (
-              <button
-                type="button"
-                onClick={() => add(g.kind)}
-                className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-[12.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 border border-dashed border-line/25"
-              >
-                <PlusIcon className="w-3.5 h-3.5" />
-                {g.add}
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-      <AddDocDialog
-        kind={adding}
-        owner={owner}
-        suggested={adding === "research" ? `Research ${docs.filter((d) => d.kind === "research").length + 1}` : `Version ${docs.filter((d) => d.kind === "script").length + 1}`}
-        onClose={() => setAdding(null)}
-        onCreated={(id) => {
-          setAdding(null);
-          nav.go(href(id), id);
-        }}
-      />
-    </nav>
   );
 }
 
@@ -739,45 +603,137 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
   );
 }
 
-/** Phones / tablets: the current document as a dropdown (a sheet with all of them). */
-function MobileDocs({
+type CrewPerson = { memberId: string; name: string; avatarUrl: string | null; color: string };
+
+/** Who's on a step: their faces (three, then "+2"), their names read out and on hover. */
+function Crew({ people, ring }: { people: CrewPerson[]; ring: string }) {
+  if (!people.length) return null;
+  const names = people.map((p) => p.name).join(", ");
+  return (
+    <span className="flex items-center -space-x-1.5 flex-shrink-0" title={names}>
+      {people.slice(0, 3).map((p) => (
+        <span key={p.memberId} aria-hidden className={`rounded-full ring-2 ${ring}`}>
+          <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} className="w-5 h-5 text-[8.5px]" />
+        </span>
+      ))}
+      {people.length > 3 && (
+        <span aria-hidden className={`w-5 h-5 rounded-full ring-2 ${ring} bg-surface-2 text-ink-soft text-[8.5px] font-bold flex items-center justify-center`}>
+          +{people.length - 3}
+        </span>
+      )}
+      <span className="sr-only">{names}</span>
+    </span>
+  );
+}
+
+/** The default documents, and any a step is on: never deleted from here (the video's steps are on them). */
+const DEFAULT_DOCS = ["Script", "Review", "Staging", "Research"];
+const deletable = (d: DocListItem) => !d.step && !DEFAULT_DOCS.includes(d.name);
+
+/**
+ * The documents, as a dropdown: the one open, with who's on its step (1.55.4: the owner, "i want the icons to be in the
+ * selected dropdown too of the profile pictures"); all of them in it, with the steps (sent on, who's on each), and, for
+ * those who may edit, renaming and deleting them (on hover; always on a touch screen) and adding one. 1.55.4: the only
+ * list of them: the documents column on the left is gone ("its redundant at this point").
+ */
+function DocsMenu({
   owner,
   docs,
   current,
   canCreate,
+  canEdit,
   href,
   roleColors,
   sideId,
   heading,
   steps,
+  onDeleted,
 }: {
   owner: Owner;
   docs: DocListItem[];
   current: ScriptRow;
   canCreate: { script: boolean; research: boolean };
+  /** Renaming and deleting documents. */
+  canEdit: boolean;
   href: (id: string) => string;
   roleColors: Record<string, string>;
+  /** Open on the right: shown, but not opened here too. */
   sideId: string | null;
   /** 1.55.2: the video's number and title, at the top (the one bar has no room for it). */
   heading?: string;
   /** 1.55.2: the steps (sent on, who's on each), on their documents: the bar has no strip of steps any more. */
-  steps?: { docId: string; ticked: boolean; crew: { memberId: string; name: string; avatarUrl: string | null; color: string }[] }[];
+  steps?: { docId: string; ticked: boolean; crew: CrewPerson[] }[];
+  /** One was deleted here: where the page goes (the workspace knows what's open beside it). */
+  onDeleted: (id: string) => void;
 }) {
+  const router = useRouter();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   // It opens toward the free side: from the left end of the bar, rightwards (1.55.2: "this menu opens on the wrong
   // side", over the app's sidebar).
   const [align, setAlign] = useState<"left" | "right">("right");
   const btn = useRef<HTMLButtonElement>(null);
   const nav = usePendingNav();
+  // Renamed or deleted here: shown so at once, until the page's list has it.
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [gone, setGone] = useState<string[]>([]);
+  useEffect(() => {
+    setNames((n) => (Object.keys(n).some((id) => docs.find((d) => d.id === id)?.name === n[id] || !docs.some((d) => d.id === id)) ? Object.fromEntries(Object.entries(n).filter(([id, v]) => docs.some((d) => d.id === id && d.name !== v))) : n));
+    setGone((g) => (g.some((id) => !docs.some((d) => d.id === id)) ? g.filter((id) => docs.some((d) => d.id === id)) : g));
+  }, [docs]);
+  const list = docs.filter((d) => !gone.includes(d.id)).map((d) => (names[d.id] ? { ...d, name: names[d.id] } : d));
   // The document on its way counts as open already.
-  const shownDoc = (nav.pending && docs.find((d) => d.id === nav.pending)) || current;
+  const shownDoc = (nav.pending && list.find((d) => d.id === nav.pending)) || { ...current, name: names[current.id] ?? current.name };
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const renamingRef = useRef<string | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState<"script" | "research" | null>(null);
   const DOT: Record<string, string | undefined> = { Script: roleColors.scripter, Review: roleColors.master, Staging: roleColors.editor, Research: roleColors.researcher };
   const stepOf = (id: string) => steps?.find((x) => x.docId === id) ?? null;
+  const now = stepOf(shownDoc.id);
   const groups = [
     { kind: "script" as const, label: "Versions", can: canCreate.script },
     ...("long" in owner ? [{ kind: "research" as const, label: "Research", can: canCreate.research }] : []),
   ];
+
+  const startRename = (id: string) => {
+    renamingRef.current = id;
+    setRenaming(id);
+  };
+  /** The new name, once: Enter, leaving the box, or the menu closing (Escape gives it up). */
+  const finishRename = async (keep: boolean) => {
+    const id = renamingRef.current;
+    const raw = renameInput.current?.value ?? "";
+    renamingRef.current = null;
+    setRenaming(null);
+    const d = list.find((x) => x.id === id);
+    const name = raw.trim();
+    if (!keep || !d || !name || name === d.name) return;
+    setNames((n) => ({ ...n, [d.id]: name }));
+    const r = await renameDoc(d.id, name);
+    if (r.error !== undefined) {
+      setNames((n) => Object.fromEntries(Object.entries(n).filter(([k]) => k !== d.id)));
+      return void toast.error(r.error);
+    }
+    router.refresh();
+  };
+  const remove = async (d: DocListItem) => {
+    if (!(await confirm({ title: `Delete “${d.name}”?`, description: "Its text and comments are deleted.", confirmLabel: "Delete", danger: true }))) return;
+    setGone((g) => [...g, d.id]);
+    const r = await deleteDoc(d.id);
+    if (r.error !== undefined) {
+      setGone((g) => g.filter((x) => x !== d.id));
+      return void toast.error(r.error);
+    }
+    if (d.id === shownDoc.id) setOpen(false);
+    onDeleted(d.id);
+  };
+  const close = () => {
+    if (renamingRef.current) void finishRename(true);
+    setOpen(false);
+  };
+
   return (
     <>
       <button
@@ -786,50 +742,102 @@ function MobileDocs({
         onClick={() => {
           const r = btn.current?.getBoundingClientRect();
           if (r) setAlign(r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right");
-          setOpen((o) => !o);
+          if (open) close();
+          else setOpen(true);
         }}
         aria-expanded={open}
+        aria-haspopup="menu"
         title="Documents"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-8 text-[13px] font-bold max-w-[9.5rem] hover:border-line/35"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-8 text-[13px] font-bold max-w-[14rem] hover:border-line/35"
       >
         <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
         <span className="truncate">{shownDoc.name}</span>
+        {now?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
+        {now && now.crew.length > 0 && (
+          <span className="pl-0.5 flex-shrink-0">
+            <Crew people={now.crew} ring="ring-paper" />
+          </span>
+        )}
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="Documents" align={align} width={300}>
+      <AnchoredMenu open={open} onClose={close} anchor={btn} label="Documents" align={align} width={300}>
           {heading && <div className="px-4 pt-3.5 pb-1 text-[12.5px] font-semibold text-ink-soft leading-snug line-clamp-2">{heading}</div>}
           <div className="p-2">
             {groups.map((g) => (
               <div key={g.kind} className="mb-2">
                 <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-soft">{g.label}</div>
-                {docs
+                {list
                   .filter((d) => d.kind === g.kind)
-                  .map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      disabled={d.id === sideId}
-                      onClick={() => {
-                        setOpen(false);
-                        nav.go(href(d.id), d.id);
-                      }}
-                      className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
-                      <span className="truncate">{d.name}</span>
-                      {stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
-                      {(stepOf(d.id)?.crew.length ?? 0) > 0 && (
-                        <span className="flex -space-x-1.5 flex-shrink-0" title={stepOf(d.id)!.crew.map((p) => p.name).join(", ")}>
-                          {stepOf(d.id)!.crew.slice(0, 3).map((p) => (
-                            <span key={p.memberId} className="rounded-full ring-2 ring-surface">
-                              <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} className="w-5 h-5 text-[8.5px]" />
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                      <span className="ml-auto text-[12px] text-ink-faint whitespace-nowrap">{d.wordCount} words</span>
-                    </button>
-                  ))}
+                  .map((d) =>
+                    renaming === d.id ? (
+                      <div key={d.id} className="flex items-center gap-3 rounded-xl pl-3 pr-1.5 h-12 bg-surface-2">
+                        <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
+                        <input
+                          ref={renameInput}
+                          autoFocus
+                          defaultValue={d.name}
+                          maxLength={60}
+                          aria-label={`New name for ${d.name}`}
+                          // (Escape here gives up the new name and leaves the menu open: the menu leaves the key to
+                          // what's focused inside one of these.)
+                          data-floating-menu=""
+                          onFocus={(e) => e.currentTarget.select()}
+                          onBlur={() => void finishRename(true)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void finishRename(true);
+                            if (e.key === "Escape") void finishRename(false);
+                          }}
+                          className="flex-1 min-w-0 rounded-lg border border-amber bg-surface px-2.5 h-9 text-[14px] font-semibold outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <div key={d.id} className="group/doc relative">
+                        <button
+                          type="button"
+                          disabled={d.id === sideId}
+                          onClick={() => {
+                            setOpen(false);
+                            nav.go(href(d.id), d.id);
+                          }}
+                          className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "group-hover/doc:bg-surface-2"}`}
+                        >
+                          <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
+                          <span className="truncate">{d.name}</span>
+                          {stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
+                          <Crew people={stepOf(d.id)?.crew ?? []} ring="ring-surface" />
+                          <span
+                            className={`ml-auto text-[12px] text-ink-faint whitespace-nowrap ${canEdit ? "transition-opacity group-hover/doc:opacity-0 group-focus-within/doc:opacity-0 [@media(hover:none)]:opacity-0" : ""}`}
+                          >
+                            {d.id === sideId ? "On the right" : `${d.wordCount} words`}
+                          </span>
+                        </button>
+                        {canEdit && (
+                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-opacity opacity-0 group-hover/doc:opacity-100 group-focus-within/doc:opacity-100 [@media(hover:none)]:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => startRename(d.id)}
+                              aria-label={`Rename ${d.name}`}
+                              title="Rename"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-line/15"
+                            >
+                              <EditIcon className="w-3.5 h-3.5" />
+                            </button>
+                            {deletable(d) && (
+                              <button
+                                type="button"
+                                onClick={() => void remove(d)}
+                                aria-label={`Delete ${d.name}`}
+                                title="Delete"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-red hover:bg-red/10"
+                              >
+                                <TrashIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  )}
                 {g.can && (
                   <button type="button" onClick={() => setAdding(g.kind)} className="w-full flex items-center gap-2 rounded-xl px-3 h-11 text-[14px] font-semibold text-ink-soft hover:bg-surface-2">
                     <PlusIcon className="w-4 h-4" />

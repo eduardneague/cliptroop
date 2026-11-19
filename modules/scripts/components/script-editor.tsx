@@ -50,7 +50,6 @@ import {
   CommentIcon,
   ScissorsIcon,
   FrameIcon,
-  PanelLeftIcon,
   CloudCheckIcon,
   CloudOffIcon,
   CloudUpIcon,
@@ -135,8 +134,6 @@ const HIGHLIGHTS = [
 type Status = "saved" | "unsaved" | "saving" | "error" | "conflict";
 const PAPER_KEY = "vp:script-paper";
 const WIDTH_KEY = "vp:script-width";
-/** The documents column on the left, open or closed (1.54.1): this browser remembers it. */
-const RAIL_KEY = "vp:script-rail";
 /** "Ctrl+" (or "⌘" on a Mac) in the shortcuts shown. */
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 /** The app's own bar at the top of every page (h-14). */
@@ -192,7 +189,6 @@ export function ScriptEditor({
   topBarExtra,
   subBar,
   docName,
-  leftRail,
   rightPanel,
   sideBySide,
   mobileDocs,
@@ -233,13 +229,12 @@ export function ScriptEditor({
   subBar?: React.ReactNode;
   /** The document's name (e.g. "Review"), shown in the top bar. */
   docName?: string;
-  /** Left: the documents list (a strip on phones). */
-  leftRail?: React.ReactNode;
   /** Right: extra panel (a sheet on phones). */
   rightPanel?: React.ReactNode;
   /** Another document shown as an equal page next to this one (desktop). */
   sideBySide?: React.ReactNode;
-  /** Phones / tablets: the documents dropdown next to the title. */
+  /** The documents dropdown: by the title on phones, at the start of the bar on a computer (1.55.4: the only list of
+   * the documents; the column on the left is gone). */
   mobileDocs?: React.ReactNode;
   /** The popover shown when a highlighted comment is clicked. */
   renderCommentPopover?: (id: string, close: () => void) => React.ReactNode;
@@ -282,7 +277,6 @@ export function ScriptEditor({
   const [words, setWords] = useState(0);
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [width, setWidth] = useState<Width>("normal");
-  const [railOpen, setRailOpen] = useState(true);
   /**
    * Live (1.55.0): everyone's changes go in as they're made (no saves of the whole script, no "saved a newer version").
    * Fixed for the page's life: the editor is made for one way or the other.
@@ -320,7 +314,6 @@ export function ScriptEditor({
       if (v === "light" || v === "dark") setPaper(v);
       const wd = localStorage.getItem(WIDTH_KEY);
       if (wd === "normal" || wd === "wide" || wd === "full") setWidth(wd);
-      if (localStorage.getItem(RAIL_KEY) === "closed") setRailOpen(false);
     } catch {
       /* private mode: stay light */
     }
@@ -1143,14 +1136,6 @@ export function ScriptEditor({
     window.dispatchEvent(new CustomEvent("vp-width", { detail: v }));
   }
 
-  function toggleRail() {
-    setRailOpen((open) => {
-      remember(RAIL_KEY, open ? "closed" : "open");
-      return !open;
-    });
-  }
-
-
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
     setPaper(next);
@@ -1177,7 +1162,7 @@ export function ScriptEditor({
   });
 
   // The header's size (1.23.1): it stays on screen as you scroll, so the link
-  // window, the documents list and a page scrolled to sit under it.
+  // window and a page scrolled to sit under it.
   const headRef = useRef<HTMLDivElement>(null);
   const toolRef = useRef<HTMLDivElement>(null);
   // (w: the bar's width, 1.55.2; as the page opens, as wide as most screens: then it fits itself.)
@@ -1467,37 +1452,8 @@ export function ScriptEditor({
       />
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-      {leftRail && (
-        // 1.54.1: it closes to a thin strip (the button at its top) and opens again; this browser remembers which.
-        // 1.55.1: the button and the list are one block that stays under the header as the script scrolls (the list had
-        // come loose from it and scrolled away with the script, the button staying: "the left bar is scrolling by
-        // itself"); a list too long for the window scrolls on its own, inside it.
-        <div
-          data-rail={railOpen ? "open" : "closed"}
-          className={`script-rail no-print hidden lg:block flex-shrink-0 lg:border-r border-line/10 relative lg:overflow-x-clip transition-[width] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] ${railOpen ? "lg:w-60" : "lg:w-12"}`}
-        >
-          <div className="lg:sticky lg:top-[var(--script-head-bottom,10.5rem)] lg:max-h-[calc(100dvh-var(--script-head-bottom,10.5rem))] flex flex-col">
-            <div className="relative z-10 h-0 flex-shrink-0">
-              <button
-                type="button"
-                onClick={toggleRail}
-                aria-expanded={railOpen}
-                aria-label={railOpen ? "Close the documents column" : "Open the documents column"}
-                title={railOpen ? "Hide documents" : "Show documents"}
-                className={`absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 transition-[left,transform] duration-300 ${railOpen ? "left-[calc(15rem-2.75rem)]" : "left-2"}`}
-              >
-                <PanelLeftIcon className="w-4 h-4" />
-              </button>
-            </div>
-            <div
-              className={`min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll transition-opacity duration-200 ${railOpen ? "opacity-100" : "opacity-0 pointer-events-none invisible"}`}
-              aria-hidden={!railOpen}
-            >
-              {leftRail}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 1.55.4: no documents column on the left any more (the documents dropdown has them all: the owner, "its
+          redundant at this point"). */}
       {/* Paper */}
       <div
         ref={areaRef}

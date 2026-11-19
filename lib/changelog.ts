@@ -22,6 +22,27 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.4",
+    date: "2026-11-19",
+    title: "One place for a video's documents",
+    changes: [
+      { kind: "better", text: "The documents dropdown at the top of a script shows who's on the open document's step (their profile pictures), with a ✓ once it was sent on, as its list does." },
+      { kind: "better", text: "The documents column on the left of a script is gone: the dropdown has all of them, and the script gets the room (two documents side by side get it too)." },
+      { kind: "new", text: "Rename a document or delete one of your own versions right in the dropdown: point at it for the pencil and the bin (on a phone or tablet they're always there). The default documents and the steps' documents can't be deleted, as before. The one open on the right says so." },
+    ],
+  },
+  {
+    version: "1.55.3",
+    date: "2026-11-19",
+    title: "Resizing pictures by their sides",
+    changes: [
+      { kind: "better", text: "A picture in a script is resized from its side instead of the square in its corner. Hover over the picture (or select it) and a handle shows on the side that moves: the right side of a picture on the left, the left side of one on the right, both sides of one in the middle. Its edge follows your pointer and the height follows along." },
+      { kind: "new", text: "While you drag, the picture shows how wide it is and settles on a quarter, a third, a half, two thirds, three quarters or the whole page when you come close (the handle turns amber). Escape puts it back as it was, and a double-click on a side makes it the whole width. The handle also works from the keyboard." },
+      { kind: "better", text: "A resize is saved once, when you let go: one Ctrl+Z undoes it, and the people writing with you get one change instead of many." },
+      { kind: "fixed", text: "A small picture's bar sits above it, lined up with its side, instead of hanging off the page and covering the handle. On a phone the handle is wider for a finger." },
+    ],
+  },
+  {
     version: "1.55.2",
     date: "2026-11-19",
     title: "One bar for a script",

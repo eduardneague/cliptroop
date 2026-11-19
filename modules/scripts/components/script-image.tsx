@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { pictureSrc } from "../lib/paste-images";
+import { draggedWidth, growth, keyedWidth, movingSides, narrowest, type PictureSide } from "../lib/picture-width";
 import {
   AlignCenterIcon,
   AlignLeftIcon,
@@ -58,7 +59,37 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
   const src = pictureSrc(raw) ?? "";
   const [viewing, setViewing] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  // Its width while a side is dragged (shown at once, saved once, as it's let go: 1.55.3).
+  const [drag, setDrag] = useState<{ pct: number; snapped: boolean; side: PictureSide } | null>(null);
   const editable = editor.isEditable;
+  // How it sits on the page now: how wide it shows (one never resized shows as it came), the narrowest it can go, and
+  // whether it's narrower than its bar (then the bar sits above it, from its side, not over it and its handles, and
+  // no wider than the room from there to the screen's edge).
+  const [fit, setFit] = useState({ pct: null as number | null, floor: narrowest(0), narrow: false, room: 0 });
+  useEffect(() => {
+    const box = boxRef.current;
+    const page = box?.parentElement;
+    if (!box || !page || typeof ResizeObserver === "undefined") return;
+    const check = () => {
+      const r = box.getBoundingClientRect();
+      const full = page.getBoundingClientRect().width;
+      const screen = document.documentElement.clientWidth;
+      const next = {
+        pct: r.width > 0 && full > 0 ? Math.round((r.width / full) * 100) : null,
+        floor: narrowest(full),
+        narrow: r.width > 0 && r.width < (barRef.current?.scrollWidth ?? 0) + 24,
+        room: Math.max(160, Math.round(align === "right" ? r.right - 16 : align === "center" ? screen - 32 : screen - 16 - r.left)),
+      };
+      setFit((f) => (f.pct === next.pct && f.floor === next.floor && f.narrow === next.narrow && f.room === next.room ? f : next));
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(box);
+    ro.observe(page);
+    return () => ro.disconnect();
+  }, [editable, frame, src, align]);
+  const shown = drag?.pct ?? width ?? fit.pct ?? 100;
   // Shown from the device while it uploads (1.27.5: pasted and dropped pictures).
   const uploading = typeof src === "string" && src.startsWith("blob:");
   // Someone else's, still on its way up from their device (1.55.0, writing live): a blank frame until it's up.
@@ -91,26 +122,77 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
     return { first: $pos.index() === 0, last: $pos.index() === $pos.parent.childCount - 1 };
   })();
 
-  function startResize(e: React.PointerEvent) {
+  /**
+   * Resizing (1.55.3; the owner: "its not great the way it is right now with that corner thing, i want to make it more
+   * natural"): a handle on each side that moves (the right one of a picture on the left, the left one of a picture on
+   * the right, both of one in the middle), the edge following the pointer and the height with it. It settles on a
+   * quarter, a third, a half, two thirds, three quarters or the whole page when it's close, says how wide it is, and
+   * is saved once, as it's let go (one undo, one change for the others writing with you).
+   */
+  function startResize(e: React.PointerEvent, side: PictureSide) {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const box = boxRef.current;
     const container = box?.parentElement;
     if (!box || !container) return;
+    selectMe();
     const startX = e.clientX;
     const startW = box.getBoundingClientRect().width;
     const full = container.getBoundingClientRect().width;
-    const sign = align === "right" ? -1 : 1;
+    const grow = growth(side, align);
+    let last: { pct: number; snapped: boolean } | null = null;
+    const html = document.documentElement;
+    const was = { cursor: html.style.cursor, select: html.style.userSelect };
+    html.style.cursor = "ew-resize";
+    html.style.userSelect = "none";
     const move = (ev: PointerEvent) => {
-      const w = Math.min(full, Math.max(full * 0.15, startW + sign * (ev.clientX - startX) * (align === "center" ? 2 : 1)));
-      updateAttributes({ width: Math.round((w / full) * 100) });
+      const next = draggedWidth(startW, ev.clientX - startX, full, grow);
+      if (last?.pct === next.pct && last.snapped === next.snapped) return;
+      last = next;
+      setDrag({ ...next, side });
     };
-    const up = () => {
+    const done = (keep: boolean) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", esc, true);
+      html.style.cursor = was.cursor;
+      html.style.userSelect = was.select;
+      setDrag(null);
+      if (keep && last && last.pct !== width) updateAttributes({ width: last.pct });
+    };
+    const up = () => done(true);
+    const cancel = () => done(false);
+    // Escape: back to how it was.
+    const esc = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      done(false);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", esc, true);
+  }
+
+  /** The picture selected (its bar shows) and the script focused (Ctrl+Z undoes the resize), as a click on it does. */
+  function selectMe() {
+    const at = typeof getPos === "function" ? getPos() : undefined;
+    if (typeof at !== "number") return;
+    const { state, view } = editor;
+    if (!(state.selection instanceof NodeSelection && state.selection.from === at)) view.dispatch(state.tr.setSelection(NodeSelection.create(state.doc, at)));
+    if (!view.hasFocus()) view.focus();
+  }
+
+  /** A handle from the keyboard (lib/picture-width.ts), from the width it shows. */
+  function keyResize(e: React.KeyboardEvent, side: PictureSide) {
+    const next = keyedWidth(width ?? fit.pct ?? 100, e.key, e.shiftKey, side, fit.floor);
+    if (next === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (next !== width) updateAttributes({ width: next });
   }
 
   const btn =
@@ -127,8 +209,8 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
         // 1.54.1: a picture is never dragged (dragging one dropped a copy of it: the owner, "i dont want to be able to do
         // this"). It moves with the arrows on its bar.
         onDragStart={(e) => e.preventDefault()}
-        className={`group relative inline-block max-w-full rounded-lg ${selected && editable ? `ring-2 ${frame ? "ring-frame" : "ring-amber"} ring-offset-2 ring-offset-transparent` : ""}`}
-        style={{ width: width ? `${width}%` : undefined }}
+        className={`group relative inline-block max-w-full rounded-lg ${(selected || drag) && editable ? `ring-2 ${frame ? "ring-frame" : "ring-amber"} ring-offset-2 ring-offset-transparent` : ""}`}
+        style={{ width: drag ? `${drag.pct}%` : width ? `${width}%` : undefined }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -166,73 +248,116 @@ function ImageView({ node, updateAttributes, deleteNode, selected, editor, getPo
           </span>
         )}
 
-        {/* Toolbar: always for editors when selected; view/download on hover for readers. */}
+        {/* Toolbar: always for editors when selected; view/download on hover for readers. Over the picture's top; above
+            it, from its side, when the picture is narrower than the bar (1.55.3: it hung off the page and over the
+            handle), its gap below counting as the bar so the pointer can cross it. */}
         <div
           contentEditable={false}
-          className={`absolute left-1/2 -translate-x-1/2 top-2 z-10 flex flex-nowrap max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar items-center gap-0.5 rounded-lg bg-black/80 backdrop-blur px-1 py-1 shadow-lg transition-opacity ${
-            selected && editable ? "opacity-100" : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
-          }`}
+          className={`absolute z-10 ${
+            fit.narrow ? `bottom-full pb-2 ${align === "right" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"}` : "top-2 left-1/2 -translate-x-1/2"
+          } ${drag ? "pointer-events-none" : selected && editable ? "" : "pointer-events-none group-hover:pointer-events-auto"}`}
         >
-          {editable && (
-            <>
-              <button type="button" title="Move up" aria-label="Move image up" disabled={index.first} className={`${btn} disabled:opacity-30`} onClick={() => move(-1)}>
-                <ChevronDownIcon className="w-4 h-4 rotate-180" />
-              </button>
-              <button type="button" title="Move down" aria-label="Move image down" disabled={index.last} className={`${btn} disabled:opacity-30`} onClick={() => move(1)}>
-                <ChevronDownIcon className="w-4 h-4" />
-              </button>
-              <span className="w-px h-5 bg-white/20 mx-0.5" />
-              {([
-                ["left", AlignLeftIcon, "Align left"],
-                ["center", AlignCenterIcon, "Center"],
-                ["right", AlignRightIcon, "Align right"],
-              ] as const).map(([a, Icon, label]) => (
-                <button key={a} type="button" title={label} aria-label={label} className={`${btn} ${align === a ? on : ""}`} onClick={() => updateAttributes({ align: a })}>
-                  <Icon className="w-4 h-4" />
+          <div
+            ref={barRef}
+            style={fit.narrow ? { maxWidth: fit.room } : undefined}
+            className={`flex flex-nowrap max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar items-center gap-0.5 rounded-lg bg-black/80 backdrop-blur px-1 py-1 shadow-lg transition-opacity ${
+              drag ? "opacity-0" : selected && editable ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            {editable && (
+              <>
+                <button type="button" title="Move up" aria-label="Move image up" disabled={index.first} className={`${btn} disabled:opacity-30`} onClick={() => move(-1)}>
+                  <ChevronDownIcon className="w-4 h-4 rotate-180" />
                 </button>
-              ))}
-              <span className="w-px h-5 bg-white/20 mx-0.5" />
-              {([
-                [33, "S"],
-                [60, "M"],
-                [100, "L"],
-              ] as const).map(([w, label]) => (
-                <button key={w} type="button" title={`${w}% wide`} className={`${btn} text-[12px] font-bold ${width === w ? on : ""}`} onClick={() => updateAttributes({ width: w })}>
-                  {label}
+                <button type="button" title="Move down" aria-label="Move image down" disabled={index.last} className={`${btn} disabled:opacity-30`} onClick={() => move(1)}>
+                  <ChevronDownIcon className="w-4 h-4" />
                 </button>
-              ))}
-              <span className="w-px h-5 bg-white/20 mx-0.5" />
-            </>
-          )}
-          {src && (
-            <>
-              {frame && (
-                <button type="button" title="Open the frame guide" aria-label="Open the frame guide" className={btn} onClick={openFrame}>
-                  <FrameIcon className="w-4 h-4" />
+                <span className="w-px h-5 bg-white/20 mx-0.5" />
+                {([
+                  ["left", AlignLeftIcon, "Align left"],
+                  ["center", AlignCenterIcon, "Center"],
+                  ["right", AlignRightIcon, "Align right"],
+                ] as const).map(([a, Icon, label]) => (
+                  <button key={a} type="button" title={label} aria-label={label} className={`${btn} ${align === a ? on : ""}`} onClick={() => updateAttributes({ align: a })}>
+                    <Icon className="w-4 h-4" />
+                  </button>
+                ))}
+                <span className="w-px h-5 bg-white/20 mx-0.5" />
+                {([
+                  [33, "S"],
+                  [60, "M"],
+                  [100, "L"],
+                ] as const).map(([w, label]) => (
+                  <button key={w} type="button" title={`${w}% wide`} className={`${btn} text-[12px] font-bold ${width === w ? on : ""}`} onClick={() => updateAttributes({ width: w })}>
+                    {label}
+                  </button>
+                ))}
+                <span className="w-px h-5 bg-white/20 mx-0.5" />
+              </>
+            )}
+            {src && (
+              <>
+                {frame && (
+                  <button type="button" title="Open the frame guide" aria-label="Open the frame guide" className={btn} onClick={openFrame}>
+                    <FrameIcon className="w-4 h-4" />
+                  </button>
+                )}
+                <button type="button" title="View full size" aria-label="View full size" className={btn} onClick={() => setViewing(true)}>
+                  <ExpandIcon className="w-4 h-4" />
                 </button>
-              )}
-              <button type="button" title="View full size" aria-label="View full size" className={btn} onClick={() => setViewing(true)}>
-                <ExpandIcon className="w-4 h-4" />
+                <button type="button" title="Download" aria-label="Download image" className={btn} onClick={() => downloadImage(src)}>
+                  <DownloadIcon className="w-4 h-4" />
+                </button>
+              </>
+            )}
+            {editable && (
+              <button type="button" title="Remove" aria-label="Remove image" className={`${btn} hover:!bg-red/70`} onClick={() => deleteNode()}>
+                <TrashIcon className="w-4 h-4" />
               </button>
-              <button type="button" title="Download" aria-label="Download image" className={btn} onClick={() => downloadImage(src)}>
-                <DownloadIcon className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          {editable && (
-            <button type="button" title="Remove" aria-label="Remove image" className={`${btn} hover:!bg-red/70`} onClick={() => deleteNode()}>
-              <TrashIcon className="w-4 h-4" />
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
-        {editable && selected && (
-          <span
-            contentEditable={false}
-            onPointerDown={startResize}
-            title="Drag to resize"
-            className={`absolute bottom-1.5 ${align === "right" ? "left-1.5 cursor-nesw-resize" : "right-1.5 cursor-nwse-resize"} w-4 h-4 rounded-sm bg-amber border-2 border-white shadow`}
-          />
+        {/* The sides that move: a slim handle on each, on hover and while it's selected (on a touch screen: selected,
+            and wider to the finger). */}
+        {editable &&
+          movingSides(align).map((side) => (
+            <span
+              key={side}
+              contentEditable={false}
+              role="slider"
+              tabIndex={0}
+              aria-label={`Picture width (drag the ${side} side)`}
+              aria-orientation="horizontal"
+              aria-valuemin={fit.floor}
+              aria-valuemax={100}
+              aria-valuenow={shown}
+              aria-valuetext={`${shown}% of the page`}
+              title="Drag to resize · double-click: the whole width"
+              onPointerDown={(e) => startResize(e, side)}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (width !== 100) updateAttributes({ width: 100 });
+              }}
+              onKeyDown={(e) => keyResize(e, side)}
+              className={`script-image-handle absolute top-0 bottom-0 ${side === "left" ? "-left-2 [@media(pointer:coarse)]:-left-4" : "-right-2 [@media(pointer:coarse)]:-right-4"} z-[5] w-4 [@media(pointer:coarse)]:w-8 flex items-center justify-center cursor-ew-resize touch-none outline-none transition-opacity ${
+                drag?.side === side ? "opacity-100" : selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`block w-1.5 [@media(pointer:coarse)]:w-2 h-[min(3rem,40%)] min-h-[1.25rem] rounded-full shadow-[0_1px_4px_rgb(0_0_0/0.45)] ring-1 transition-colors ${
+                  drag?.side === side && drag.snapped ? "bg-amber ring-white/80" : "bg-white ring-black/25"
+                }`}
+              />
+            </span>
+          ))}
+        {/* How wide, while it's dragged. */}
+        {drag && (
+          <span contentEditable={false} className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 z-10 rounded-md bg-black/80 text-white px-2 h-7 inline-flex items-center text-[12px] font-bold tabular-nums shadow-lg" aria-hidden>
+            {drag.pct === 100 ? "Whole width" : `${drag.pct}%`}
+          </span>
         )}
       </div>
       {viewing && src && <ImageLightbox url={src} alt={alt ?? ""} onClose={() => setViewing(false)} />}
