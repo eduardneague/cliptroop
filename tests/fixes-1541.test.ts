@@ -45,7 +45,8 @@ ok(editor.includes("const browserSpell = !grammar.live && grammar.settings.on;")
 // --- The script page: the documents column closes, no gap on glass ------------------------------------------------------------
 ok(editor.includes('const RAIL_KEY = "vp:script-rail";') && editor.includes('remember(RAIL_KEY, open ? "closed" : "open")') && editor.includes('localStorage.getItem(RAIL_KEY) === "closed"'), "the documents column closes, and the browser remembers it");
 ok(editor.includes('aria-label={railOpen ? "Close the documents column" : "Open the documents column"}') && editor.includes("lg:overflow-x-clip"), "its button; closed, it's a thin strip (clip, not hidden: its list still sticks)");
-ok(editor.includes('${leftRail && !railOpen ? "" : "lg:hidden"}'), "closed: the documents dropdown is by the title on a computer too");
+// (1.55.2: on a computer the documents dropdown is always in the one bar, the column open or closed.)
+ok(/\{mobileDocs \? \(\s*<div ref=\{docsRef\} className="flex-shrink-0">\s*\{mobileDocs\}/.test(editor), "closed: the documents dropdown is by the title on a computer too");
 // (1.55.1: still nothing between them, now by the header hanging from the floating bar as one card: fixes-1551.)
 ok(css.includes("html[data-glass] { --script-head-top: calc(var(--shell-top) - 10px); }") && css.includes(`html[data-glass]:has([data-script-head]) [data-shell="header"] { border-bottom-color: transparent; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }`), "on glass nothing shows between the floating bar and the header");
 

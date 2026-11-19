@@ -133,7 +133,7 @@ const ed = read("modules/scripts/components/script-editor.tsx");
 ok(/\/\/ The others in this script: their cursors \(1\.53\.5\)\.\s*LiveCursors,/.test(ed), "the editor draws them");
 ok(/const live = useLiveCursors\(\{\s*editor,\s*scriptId,\s*me: me\?\.userId \?\? null,\s*people,/.test(ed), "with the team's names, photos and colours it already has");
 ok(/<LiveFaces here=\{live\.here\} people=\{people\} onJump=\{live\.jumpTo\} \/>/.test(ed), "their faces in the top bar (click: to where they are)");
-ok(/liveRef\.current\?\.announceSaved\(res\.version\);\s*setNewer\(null\);/.test(ed) && /if \(version > versionRef\.current\) setNewer\(by\);/.test(ed) && /\{newerName\} saved · Reload/.test(ed), "someone saved a newer version: a word about it, with Reload");
+ok(/liveRef\.current\?\.announceSaved\(res\.version\);\s*setNewer\(null\);/.test(ed) && /if \(version > versionRef\.current\) setNewer\(by\);/.test(ed) && ed.includes("title={`${newerName} saved changes to this script. Reload to see them") && /<RetryIcon className="w-3\.5 h-3\.5" \/>\s*\{newerName\}/.test(ed), "someone saved a newer version: a word about it, with Reload (1.55.2: their name on a Reload pill)");
 const plugin = read("modules/scripts/lib/live-cursors.ts");
 ok(/el\.className = "rc-caret no-print";/.test(plugin) && /contentEditable = "false"/.test(plugin) && /ignoreSelection: true/.test(plugin), "drawn over the text, never in it, never printed");
 ok(/return tr\.docChanged \? set\.map\(tr\.mapping, tr\.doc\) : set;/.test(plugin), "between their moves, their cursors follow your typing");

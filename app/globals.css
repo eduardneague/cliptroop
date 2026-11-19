@@ -521,8 +521,9 @@ html[data-glass-style="liquid"] [data-shell="bottom-nav"] {
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--liquid-rim), var(--liquid-drop);
 }
 html[data-glass-style="liquid"] .dash-item:not(.dash-ghost) { border-radius: 20px; }
-html[data-glass-style="liquid"] .bg-surface.rounded-xl { border-radius: 16px; }
-html[data-glass-style="liquid"] .bg-surface.rounded-2xl { border-radius: 22px; }
+/* (Menus keep their own corners, 1.55.2: at 22 px a short one read as a pill, "too round".) */
+html[data-glass-style="liquid"] .bg-surface.rounded-xl:not(.pop-menu) { border-radius: 16px; }
+html[data-glass-style="liquid"] .bg-surface.rounded-2xl:not(.pop-menu) { border-radius: 22px; }
 
 /* The light on the rim of the pane under the pointer, where the pointer is, in your colours. Nothing elsewhere, nothing on touch. */
 html[data-glass] { --glint-rgb: var(--wash-base); }
@@ -1129,9 +1130,8 @@ html[data-glass][data-glass-opaque] [data-shell="header"]::before { display: non
     box-shadow: var(--glass-shadow);
   }
   html[data-glass] [data-script-head]::before { border-radius: inherit; }
-  /* Its last row has the card's edge under it, not a line of its own as well. */
-  html[data-glass] [data-script-head] > :last-child > [data-head-row]:last-child,
-  html[data-glass] [data-script-head] > :last-child > div > [data-head-row]:last-child { border-bottom-color: transparent; }
+  /* Its last row (1.55.2: its one bar) has the card's edge under it, not a line of its own as well. */
+  html[data-glass] [data-script-head] > [data-head-row]:last-child { border-bottom-color: transparent; }
   /* Solid glass: the bar's solid pane. */
   html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--surface)); }
   /* A white page in dark mode (a dark one in light mode): the card all but solid, both halves alike (at 82 % the page
@@ -1255,6 +1255,13 @@ html[data-bars="classic"]::-webkit-scrollbar-corner, html[data-bars="classic"] :
 html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:vertical { margin-top: 10px; margin-bottom: 10px; }
 html[data-bars="classic"] .styled-scroll::-webkit-scrollbar-track:horizontal { margin-left: 10px; margin-right: 10px; }
 .widget-scroll { overflow-y: auto; scrollbar-gutter: stable; padding-right: 4px; }
+/*
+  The To Do widget's list (1.55.2): as far from the right edge as from the left, like its header. Its 4 px plus the
+  lane the scroll bar keeps made 12 where scroll bars take room; where they float over the page instead (Windows 11's,
+  a Mac's), nothing is kept for them, so its rows ran to 4 px from the edge, past the header's arrow ("not aligned
+  properly").
+*/
+html:not([data-bars="classic"]) .widget-scroll.todo-widget-scroll { padding-right: 12px; }
 html[data-bars="classic"] .widget-scroll::-webkit-scrollbar { width: 8px; }
 html[data-bars="classic"] .widget-scroll::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.1); border-width: 2px; }
 html[data-bars="classic"] .widget-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(var(--ink) / 0.26); }

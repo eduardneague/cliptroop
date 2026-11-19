@@ -51,7 +51,10 @@ import {
   ScissorsIcon,
   FrameIcon,
   PanelLeftIcon,
-  PanelTopIcon,
+  CloudCheckIcon,
+  CloudOffIcon,
+  CloudUpIcon,
+  RetryIcon,
 } from "@/components/ui/icons";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { ANY_EDIT, CommentHighlights, commentAt, commentKey, findQuote, findText, quoteAt, type CommentMark, type PendingMark, type PostingComment } from "../lib/anchors";
@@ -61,6 +64,7 @@ import { useLiveCursors, type StepsMessage } from "./use-live-cursors";
 import { useLiveEdits, type LiveStatus } from "./use-live-edits";
 import { newClientId } from "../lib/collab";
 import { docText, LiveSteps, openable } from "../lib/live-doc";
+import { barRoom, type BarRoom } from "../lib/bar-room";
 import type { LiveStart } from "../lib/queries";
 import { LiveFaces } from "./live-faces";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
@@ -133,8 +137,6 @@ const PAPER_KEY = "vp:script-paper";
 const WIDTH_KEY = "vp:script-width";
 /** The documents column on the left, open or closed (1.54.1): this browser remembers it. */
 const RAIL_KEY = "vp:script-rail";
-/** The header's top part (the title and the steps), shown or folded away (1.55.1): this browser remembers it. */
-const HEAD_KEY = "vp:script-head";
 /** "Ctrl+" (or "⌘" on a Mac) in the shortcuts shown. */
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 /** The app's own bar at the top of every page (h-14). */
@@ -211,6 +213,7 @@ export function ScriptEditor({
   onRemoteComments,
   find = null,
   liveStart = null,
+  barFlow,
 }: {
   /** Words to show (a search result, ?find=): marked for a moment, scrolled to. */
   find?: string | null;
@@ -268,6 +271,8 @@ export function ScriptEditor({
    * the old way (one person's save at a time), before 0134 runs.
    */
   liveStart?: LiveStart | null;
+  /** 1.55.2: People and the step's button, for the one bar (labels: room for its words). */
+  barFlow?: (o: { labels: boolean }) => React.ReactNode;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -278,11 +283,6 @@ export function ScriptEditor({
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [width, setWidth] = useState<Width>("normal");
   const [railOpen, setRailOpen] = useState(true);
-  /** The title and the steps folded away, the formatting bar left (1.55.1); moving: on its way (clipped meanwhile). */
-  const [compact, setCompact] = useState(false);
-  const [headMoving, setHeadMoving] = useState(false);
-  /** Only a click folds it with a slide (as the page opens, it's just as it was left). */
-  const [headSlides, setHeadSlides] = useState(false);
   /**
    * Live (1.55.0): everyone's changes go in as they're made (no saves of the whole script, no "saved a newer version").
    * Fixed for the page's life: the editor is made for one way or the other.
@@ -321,7 +321,6 @@ export function ScriptEditor({
       const wd = localStorage.getItem(WIDTH_KEY);
       if (wd === "normal" || wd === "wide" || wd === "full") setWidth(wd);
       if (localStorage.getItem(RAIL_KEY) === "closed") setRailOpen(false);
-      if (localStorage.getItem(HEAD_KEY) === "compact") setCompact(true);
     } catch {
       /* private mode: stay light */
     }
@@ -1151,20 +1150,6 @@ export function ScriptEditor({
     });
   }
 
-  function toggleHead() {
-    setHeadSlides(true);
-    setHeadMoving(true);
-    setCompact((c) => {
-      remember(HEAD_KEY, c ? "full" : "compact");
-      return !c;
-    });
-  }
-  // (Clipped only while it moves: the menus hanging from the top bar, Page width and Export, need room below it.)
-  useEffect(() => {
-    if (!headMoving) return;
-    const t = setTimeout(() => setHeadMoving(false), 340);
-    return () => clearTimeout(t);
-  }, [headMoving, compact]);
 
   function togglePaper() {
     const next = paper === "light" ? "dark" : "light";
@@ -1195,7 +1180,9 @@ export function ScriptEditor({
   // window, the documents list and a page scrolled to sit under it.
   const headRef = useRef<HTMLDivElement>(null);
   const toolRef = useRef<HTMLDivElement>(null);
-  const [head, setHead] = useState({ h: 0, tool: 0, phone: false });
+  // (w: the bar's width, 1.55.2; as the page opens, as wide as most screens: then it fits itself.)
+  const [head, setHead] = useState({ h: 0, tool: 0, phone: false, w: 1600, docs: 100 });
+  const docsRef = useRef<HTMLDivElement>(null);
   const hasTools = canEdit && !!editor;
   useEffect(() => {
     const el = headRef.current;
@@ -1205,13 +1192,16 @@ export function ScriptEditor({
       const h = el.offsetHeight;
       const tool = toolRef.current?.offsetHeight ?? 0;
       const phone = !mq.matches;
-      setHead((x) => (x.h === h && x.tool === tool && x.phone === phone ? x : { h, tool, phone }));
+      const w = Math.round(el.offsetWidth);
+      const docs = Math.round(docsRef.current?.offsetWidth || 100);
+      setHead((x) => (x.h === h && x.tool === tool && x.phone === phone && x.w === w && x.docs === docs ? x : { h, tool, phone, w, docs }));
       document.documentElement.style.setProperty("--script-head-bottom", phone ? `${APP_BAR + tool}px` : `calc(${UNDER_BAR} + ${h}px)`);
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     if (toolRef.current) ro.observe(toolRef.current);
+    if (docsRef.current) ro.observe(docsRef.current);
     mq.addEventListener("change", measure);
     return () => {
       ro.disconnect();
@@ -1236,180 +1226,198 @@ export function ScriptEditor({
   };
   const statusShort: Record<Status, string> = { saved: "Saved", unsaved: "Unsaved", saving: "Saving…", error: "Not saved", conflict: "Not saved" };
 
-  // Folded (1.55.1): only the formatting bar, so only where there is one, and not on phones (theirs scrolls away by
-  // itself, the formatting bar staying).
-  const folded = compact && hasTools && !head.phone;
+  // What the one bar holds at its width (1.55.2).
+  const others = live.here.length;
+  const room = barRoom(head.w, { faces: others ? 34 + 20 * (Math.min(others, 3) - 1) + (others > 3 ? 20 : 0) : 0, flow: !!barFlow, docs: head.docs });
 
-  // What the top bar says about saving, worked out once: it's on the formatting bar while the top part is folded away.
-  const save: { text: string; short: string; tone: "good" | "busy" | "bad" | "quiet"; reload?: string } =
+  // The save state, as a sign (1.55.2): a cloud with a tick, one on its way, a dot for changes not saved yet; in words
+  // only when something needs you (offline, not saved, reload). The whole sentence: its tooltip, and read out.
+  const save: { text: string; short: string; sign: "saved" | "saving" | "unsaved" | "bad" | "reload" | "quiet"; reload?: string } =
     canEdit && liveMode
       ? liveStuck
         ? {
             text: LIVE_TEXT[edits.status],
             short: "Reload",
-            tone: "bad",
+            sign: "reload",
             reload: edits.status === "newer" ? "ClipTroop was updated while this page was open. Reload to keep writing." : "This document's text was replaced while you were writing. Reload to keep writing.",
           }
         : {
             text: LIVE_TEXT[edits.status],
             short: edits.status === "offline" ? "Offline" : LIVE_TEXT[edits.status],
-            tone: edits.status === "saved" ? "good" : edits.status === "offline" ? "bad" : edits.status === "readonly" ? "quiet" : "busy",
+            sign: edits.status === "saved" ? "saved" : edits.status === "offline" ? "bad" : edits.status === "readonly" ? "quiet" : "saving",
           }
       : canEdit
-        ? { text: statusText[status], short: statusShort[status], tone: status === "error" || status === "conflict" ? "bad" : status === "saved" ? "good" : "busy" }
-        : { text: "View only", short: "View only", tone: "quiet" };
-  const saveState = (short: boolean) =>
-    save.reload ? (
+        ? {
+            text: statusText[status],
+            short: statusShort[status],
+            sign: status === "error" || status === "conflict" ? "bad" : status === "saved" ? "saved" : status === "saving" ? "saving" : "unsaved",
+          }
+        : { text: "View only", short: "View only", sign: "quiet" };
+  const saveMark =
+    save.sign === "reload" ? (
       <button
         type="button"
         onClick={() => window.location.reload()}
         title={save.reload}
-        className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red px-2.5 h-7 text-[12px] font-semibold hover:bg-red/15 flex-shrink-0"
+        className="inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red pl-2 pr-2.5 h-7 text-[12px] font-semibold hover:bg-red/15 flex-shrink-0"
       >
-        {short ? save.short : save.text}
+        <RetryIcon className="w-3.5 h-3.5" />
+        {save.short}
       </button>
+    ) : save.sign === "bad" ? (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-red/10 text-red pl-2 pr-2.5 h-7 text-[12px] font-semibold whitespace-nowrap flex-shrink-0" title={save.text}>
+        <CloudOffIcon className="w-4 h-4" />
+        {save.short}
+      </span>
+    ) : save.sign === "quiet" ? (
+      <span className="px-1.5 text-[12px] font-semibold text-ink-soft whitespace-nowrap flex-shrink-0">{save.text}</span>
     ) : (
-      <span
-        className={`${canEdit ? "hidden sm:inline-flex" : "inline-flex"} items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap flex-shrink-0 ${
-          save.tone === "good" ? "text-green" : save.tone === "bad" ? "text-red" : "text-ink-soft"
-        }`}
-        title={short && save.short !== save.text ? save.text : undefined}
-        aria-live={canEdit ? "polite" : undefined}
-      >
-        {save.tone === "good" && <CheckIcon className="w-3.5 h-3.5" />}
-        {short ? save.short : save.text}
+      <span className="w-8 h-8 flex items-center justify-center flex-shrink-0" title={save.text} role="img" aria-label={save.text}>
+        {save.sign === "saved" ? (
+          <CloudCheckIcon className="w-[18px] h-[18px] text-green" />
+        ) : save.sign === "saving" ? (
+          <CloudUpIcon className="w-[18px] h-[18px] text-ink-soft animate-pulse" />
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-amber" />
+        )}
       </span>
     );
   const hereFaces = <LiveFaces here={live.here} people={people} onJump={live.jumpTo} />;
-  // Folds the title and the steps away, or brings them back (at the formatting bar's end, where it stays either way).
-  const foldButton = (
-    <button
-      type="button"
-      onClick={toggleHead}
-      aria-expanded={!folded}
-      aria-label={folded ? "Show the title and the steps" : "Hide the title and the steps"}
-      title={folded ? "Show the title and the steps" : "Hide the title and the steps"}
-      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${folded ? "text-ink bg-surface-2" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
-    >
-      <PanelTopIcon className="w-4 h-4" />
-    </button>
+  const BarSep = () => <span className="w-px h-5 bg-line/15 mx-1 flex-shrink-0" aria-hidden />;
+  const exportDocx = async () => {
+    if (!editor) return;
+    toast.success("Preparing the Word file…");
+    // The Word library is big: load it only when someone exports.
+    const { exportScriptDocx } = await import("../lib/export-docx");
+    await exportScriptDocx(forExport(editor.getJSON() as Record<string, unknown>) as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
+  };
+  const exportPdf = () => editor && void printScript(editor, `#${number} ${title}`, forExport);
+
+  // The one bar's ends (bigger screens): the way back and the documents; who's here, the save state, the words, the
+  // page's buttons, and the step's.
+  const barLead = (
+    <div className="hidden sm:flex items-center gap-1 flex-shrink-0 min-w-0 pl-2 lg:pl-3">
+      <Link
+        href={backHref}
+        aria-label={backLabel}
+        title={`${backLabel}: #${number} ${title}`}
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0"
+      >
+        <ArrowLeftIcon className="w-4 h-4" />
+      </Link>
+      {mobileDocs ? (
+        <div ref={docsRef} className="flex-shrink-0">
+          {mobileDocs}
+        </div>
+      ) : docName ? (
+        <span className="rounded-md bg-surface-2 px-2 py-1 text-[12px] font-bold text-ink-soft flex-shrink-0">{docName}</span>
+      ) : null}
+      {room.title && (
+        <span className="min-w-0 max-w-[16rem] truncate pl-1.5 text-[12.5px] font-semibold text-ink-soft" title={`#${number} ${title}`}>
+          <span className="font-mono text-ink-faint mr-1">#{number}</span>
+          {title}
+        </span>
+      )}
+    </div>
+  );
+  const barTail = (
+    <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0 pl-1 pr-2 lg:pr-3">
+      {hereFaces}
+      {newerName && status !== "conflict" && (
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          title={`${newerName} saved changes to this script. Reload to see them (anything you haven't saved yet can't be saved over theirs).`}
+          className="inline-flex items-center gap-1.5 rounded-full bg-blue/10 text-blue pl-2 pr-2.5 h-7 text-[12px] font-semibold hover:bg-blue/15 flex-shrink-0"
+        >
+          <RetryIcon className="w-3.5 h-3.5" />
+          {newerName}
+        </button>
+      )}
+      {saveMark}
+      <span className="sr-only" aria-live="polite">
+        {save.text}
+      </span>
+      {room.words && (
+        <span className="px-1.5 text-[12px] text-ink-soft tabular-nums whitespace-nowrap flex-shrink-0" title={`${words} words · about ${spokenLength(words)} to say`}>
+          {words.toLocaleString("en-US")} words · {spokenLength(words)}
+        </span>
+      )}
+      <BarSep />
+      {room.tools && <WidthMenu value={width} onChange={chooseWidth} />}
+      {topBarExtra}
+      {room.tools ? (
+        <>
+          <button
+            type="button"
+            onClick={togglePaper}
+            aria-label={paper === "light" ? "Dark paper" : "Light paper"}
+            title={paper === "light" ? "Dark paper" : "Light paper"}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0"
+          >
+            {paper === "light" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
+          </button>
+          <ExportMenu onDocx={exportDocx} onPdf={exportPdf} />
+        </>
+      ) : (
+        <MobileMenu className="" label="Page" paper={paper} onPaper={togglePaper} width={width} onWidth={chooseWidth} onDocx={exportDocx} onPdf={exportPdf} />
+      )}
+      {barFlow && (
+        <>
+          <BarSep />
+          {barFlow({ labels: room.flowLabels })}
+        </>
+      )}
+    </div>
   );
 
   return (
     <div className="script-print-root min-h-[calc(100dvh-3.5rem)] flex flex-col">
-      {/* The header stays while you scroll (1.23.1): the top bar, the steps
-          (Script → Review, Ready for review) and the formatting bar, as one
-          solid block under the app's own bar. Phones keep just the
-          formatting bar (it slides up under the app's bar, see headStyle).
-          1.53.1: with the glass look on, one pane of glass like the app's bars
-          (globals.css, [data-script-head]); data-paper tells it which paper
-          goes under it. */}
-      <div ref={headRef} data-script-head="" data-paper={paper} data-folded={folded ? "" : undefined} className="no-print sticky isolate bg-paper" style={headStyle}>
-      {/* 1.55.1: the title and the steps fold away, leaving the formatting bar (the owner: "i also want to collapse the
-          top part as well … make it more compact"); this browser remembers which. */}
-      <div className={`grid ${headSlides ? "transition-[grid-template-rows] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] motion-reduce:transition-none" : ""} ${folded ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}>
-      <div className={`min-h-0 ${folded || headMoving ? "overflow-hidden" : ""}`} inert={folded}>
-      {/* Top bar */}
-      <div data-head-row="" className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-12 border-b border-line/10">
-        <Link href={backHref} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink flex-shrink-0">
-          <ArrowLeftIcon className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">{backLabel}</span>
-        </Link>
-        <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
-          <span className="font-mono text-ink-soft mr-1.5">#{number}</span>
-          {title}
-          {docName && <span className={`ml-2 rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] font-bold text-ink-soft ${mobileDocs ? (leftRail && !railOpen ? "hidden" : "hidden lg:inline") : ""}`}>{docName}</span>}
+      {/* The header stays while you scroll (1.23.1), under the app's own bar. 1.53.1: with the glass look on, one pane of
+          glass like the app's bars (globals.css, [data-script-head]; 1.55.1: hanging from the floating bar as one card);
+          data-paper tells it which paper goes under it.
+          1.55.2: on a bigger screen it's one bar: the way back and the documents, the formatting, then who's here, the
+          save state, the words, the page's buttons and the step's (the owner: "get rid of that part completely, make
+          icons basically"). Phones keep the title and the steps above the formatting bar; those slide up under the
+          app's bar, the formatting bar stays (headStyle). */}
+      <div ref={headRef} data-script-head="" data-paper={paper} className="no-print sticky isolate bg-paper" style={headStyle}>
+        <div className="sm:hidden">
+          <div data-head-row="" className="flex items-center gap-2 px-3 h-12 border-b border-line/10">
+            <Link href={backHref} aria-label={backLabel} className="w-8 h-8 -ml-1 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink flex-shrink-0">
+              <ArrowLeftIcon className="w-4 h-4" />
+            </Link>
+            <div className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
+              <span className="font-mono text-ink-soft mr-1.5">#{number}</span>
+              {title}
+            </div>
+            {mobileDocs ? <div className="flex-shrink-0">{mobileDocs}</div> : null}
+            {!canEdit && <span className="text-[12px] font-semibold text-ink-soft flex-shrink-0">View only</span>}
+            <MobileMenu paper={paper} onPaper={togglePaper} onDocx={exportDocx} onPdf={exportPdf} />
+          </div>
+          {subBar}
         </div>
-        {/* (A computer with the documents column closed: the same dropdown, so another document is one click away.) */}
-        {mobileDocs && <div className={`flex-shrink-0 ${leftRail && !railOpen ? "" : "lg:hidden"}`}>{mobileDocs}</div>}
-        <span className="hidden md:inline text-[12px] text-ink-soft tabular-nums">
-          {words} words · about {spokenLength(words)}
-        </span>
-        <WidthMenu value={width} onChange={chooseWidth} />
-        {!folded && hereFaces}
-        {newerName && status !== "conflict" && (
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            title={`${newerName} saved changes to this script. Reload to see them (anything you haven't saved yet can't be saved over theirs).`}
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-blue/10 text-blue px-2.5 h-7 text-[12px] font-semibold hover:bg-blue/15 flex-shrink-0"
-          >
-            {newerName} saved · Reload
-          </button>
-        )}
-        {!folded && saveState(false)}
-        <span className="hidden sm:contents">{topBarExtra}</span>
-        <MobileMenu
-          paper={paper}
-          onPaper={togglePaper}
-          onDocx={async () => {
-            if (!editor) return;
-            const { exportScriptDocx } = await import("../lib/export-docx");
-            await exportScriptDocx(forExport(editor.getJSON() as Record<string, unknown>) as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
-          }}
-          onPdf={() => editor && void printScript(editor, `#${number} ${title}`, forExport)}
-        />
-        <button
-          type="button"
-          onClick={togglePaper}
-          aria-label={paper === "light" ? "Dark paper" : "Light paper"}
-          title={paper === "light" ? "Dark paper" : "Light paper"}
-          className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
-        >
-          {paper === "light" ? <MoonIcon className="w-4 h-4" /> : <SunIcon className="w-4 h-4" />}
-        </button>
-        <span className="hidden sm:contents">
-        <ExportMenu
-          onDocx={async () => {
-            if (!editor) return;
-            toast.success("Preparing the Word file…");
-            // The Word library is big: load it only when someone exports.
-            const { exportScriptDocx } = await import("../lib/export-docx");
-            await exportScriptDocx(forExport(editor.getJSON() as Record<string, unknown>) as never, `#${number} ${title}`, safeFileName(`${number}-${title}`, "").replace(/\.$/, ""));
-          }}
-          onPdf={() => editor && void printScript(editor, `#${number} ${title}`, forExport)}
-        />
-        </span>
-      </div>
-      {subBar}
-      </div>
-      </div>
-      {/* Toolbar */}
-      {canEdit && editor && (
-        <div ref={toolRef}>
-          <Toolbar
-            editor={editor}
-            lead={
-              folded ? (
-                <>
-                  <Link href={backHref} aria-label={backLabel} title={backLabel} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0">
-                    <ArrowLeftIcon className="w-4 h-4" />
-                  </Link>
-                  {/* (The documents, as in the top bar: where the column on the left is closed, or not there.) */}
-                  {mobileDocs ? <div className={`flex-shrink-0 ${leftRail && railOpen ? "lg:hidden" : ""}`}>{mobileDocs}</div> : null}
-                </>
-              ) : null
-            }
-            tail={
-              <>
-                {folded && <span className="hidden 2xl:contents">{hereFaces}</span>}
-                {folded && saveState(true)}
-                {foldButton}
-              </>
-            }
-            onImage={() => fileRef.current?.click()}
-            onFrame={() => {
-              const { from, to, empty } = editor.state.selection;
-              const q = empty ? null : quoteAt(editor.state.doc, from, to);
-              setPicker(q ? { purpose: "words", words: q.quote, range: { from, to } } : { purpose: "insert", range: { from, to } });
-            }}
-            uploading={uploading}
-            grammar={grammar}
-            grammarOpen={grammarOpen}
-            onGrammar={() => (grammarOpen ? dock.close("grammar") : dock.open("grammar"))}
-          />
+        <div ref={toolRef} data-head-row="" className={`${hasTools ? "flex" : "hidden sm:flex"} items-center min-h-12 border-b border-line/10 bg-paper`}>
+          {barLead}
+          {canEdit && editor ? (
+            <Toolbar
+              editor={editor}
+              room={head.phone ? null : room}
+              onImage={() => fileRef.current?.click()}
+              onFrame={() => {
+                const { from, to, empty } = editor.state.selection;
+                const q = empty ? null : quoteAt(editor.state.doc, from, to);
+                setPicker(q ? { purpose: "words", words: q.quote, range: { from, to } } : { purpose: "insert", range: { from, to } });
+              }}
+              uploading={uploading}
+              grammar={grammar}
+              grammarOpen={grammarOpen}
+              onGrammar={() => (grammarOpen ? dock.close("grammar") : dock.open("grammar"))}
+            />
+          ) : (
+            <span className="flex-1" />
+          )}
+          {barTail}
         </div>
-      )}
       </div>
 
       {liveStuck && (
@@ -1893,14 +1901,11 @@ function Toolbar({
   grammar,
   grammarOpen,
   onGrammar,
-  lead,
-  tail,
+  room,
 }: {
   editor: Editor;
-  /** 1.55.1: before the formatting buttons (the way back and the documents, with the top part folded away). */
-  lead?: React.ReactNode;
-  /** After them: the fold button (and, folded, who's here and the save state). */
-  tail?: React.ReactNode;
+  /** 1.55.2: what the one bar holds (barRoom); null: a phone (the basics, everything else under More). */
+  room: BarRoom | null;
   onImage: () => void;
   /** 1.54.0: a frame guide (its picture here, or on the words picked). */
   onFrame: () => void;
@@ -1909,8 +1914,15 @@ function Toolbar({
   grammarOpen: boolean;
   onGrammar: () => void;
 }) {
-  const [more, setMore] = useState(false);
+  // Under More: on a phone everything but the basics; in the bar, what it has no room for (1.55.2).
+  const [more, setMoreState] = useState<"phone" | "bar" | null>(null);
+  const setMore = (v: boolean) => !v && setMoreState(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
+  const moreBarBtn = useRef<HTMLButtonElement>(null);
+  const sheet = room
+    ? { strike: !room.marks, highlight: !room.marks, colors: !room.marks, checklist: !room.lists, quote: !room.lists, pageBreak: !room.pageBreak, undo: !room.undo, basics: !room.basics }
+    : { strike: true, highlight: true, colors: true, checklist: true, quote: true, pageBreak: true, undo: true, basics: true };
+  const barMore = !!room && (sheet.strike || sheet.checklist || sheet.pageBreak || sheet.undo || sheet.basics);
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -1974,10 +1986,10 @@ function Toolbar({
   const c = () => editor.chain().focus();
 
   return (
-    <div data-head-row="" className="no-print border-b border-line/10 bg-paper sm:flex sm:items-center">
-      {lead && <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 pl-2 lg:pl-4">{lead}</div>}
-      <div role="toolbar" aria-label="Formatting" className="sm:flex-1 min-w-0 mx-auto max-w-5xl px-2 sm:px-6 py-1.5 flex items-center gap-0.5 sm:overflow-x-auto no-scrollbar">
-        <div className="w-28 sm:w-36 flex-shrink-0 mr-1">
+    <>
+      <div className="no-print flex-1 min-w-0 sm:overflow-x-auto no-scrollbar">
+      <div role="toolbar" aria-label="Formatting" className="sm:mx-auto sm:w-max px-2 py-1.5 flex items-center gap-0.5">
+        <div className={`${room && !room.score ? "w-[4.75rem]" : "w-32"} flex-shrink-0 mr-1`}>
           <Select
             value={s!.block}
             onChange={(v) => {
@@ -1993,7 +2005,10 @@ function Toolbar({
               { value: "h2", label: `Heading 2 · ${MOD}2` },
               { value: "h3", label: `Heading 3 · ${MOD}3` },
             ]}
-            renderValue={(o) => <span className="truncate">{o ? o.label.split(" · ")[0] : "Text"}</span>}
+            renderValue={(o) => (
+              // (The bar at its narrowest: H1, H2, H3.)
+              <span className="truncate">{o ? (room && !room.score && o.value !== "p" ? o.value.toUpperCase() : o.label.split(" · ")[0]) : "Text"}</span>
+            )}
             ariaLabel="Text style"
             menuMinWidth={170}
           />
@@ -2008,58 +2023,88 @@ function Toolbar({
           <UnderlineIcon className="w-4 h-4" />
         </B>
         <span className="hidden sm:contents">
-        <B label="Strikethrough" shortcut="Ctrl+Shift+S" on={s!.strike} onClick={() => c().toggleStrike().run()}>
-          <StrikeIcon className="w-4 h-4" />
-        </B>
-        <HighlightMenu editor={editor} active={s!.highlight} />
-        <TextColorMenu editor={editor} current={s!.color} />
+        {room?.marks && (
+          <>
+            <B label="Strikethrough" shortcut="Ctrl+Shift+S" on={s!.strike} onClick={() => c().toggleStrike().run()}>
+              <StrikeIcon className="w-4 h-4" />
+            </B>
+            <HighlightMenu editor={editor} active={s!.highlight} />
+            <TextColorMenu editor={editor} current={s!.color} />
+          </>
+        )}
         <Sep />
         <B label="Bullet list" on={s!.bullet} onClick={() => c().toggleBulletList().run()}>
           <ListBulletIcon className="w-4 h-4" />
         </B>
-        <B label="Numbered list" on={s!.ordered} onClick={() => c().toggleOrderedList().run()}>
-          <ListNumberIcon className="w-4 h-4" />
-        </B>
-        <B label="Checklist" on={s!.task} onClick={() => c().toggleTaskList().run()}>
-          <ListCheckIcon className="w-4 h-4" />
-        </B>
-        <B label="Quote" on={s!.quote} onClick={() => c().toggleBlockquote().run()}>
-          <QuoteIcon className="w-4 h-4" />
-        </B>
-        <Sep />
-        <B label="Align left" on={s!.left} onClick={() => c().setTextAlign("left").run()}>
-          <AlignLeftIcon className="w-4 h-4" />
-        </B>
-        <B label="Center" on={s!.center} onClick={() => c().setTextAlign("center").run()}>
-          <AlignCenterIcon className="w-4 h-4" />
-        </B>
-        <B label="Align right" on={s!.right} onClick={() => c().setTextAlign("right").run()}>
-          <AlignRightIcon className="w-4 h-4" />
-        </B>
-        <Sep />
-        <LinkButton editor={editor} active={s!.link} />
-        <B label={uploading ? `Uploading ${uploading}…` : "Add image"} onClick={onImage}>
-          {uploading ? (
-            <span className="w-4 h-4 rounded-full border-2 border-ink-soft/40 border-t-amber animate-spin" />
-          ) : (
-            <ImageIcon className="w-4 h-4" />
-          )}
-        </B>
-        <B label="Frame guide: a reference shot from Frame Guides" onClick={onFrame}>
-          <FrameIcon className="w-4 h-4" />
-        </B>
-        <B label="Page break: the rest starts a new page" shortcut={`${MOD}Enter`} onClick={() => c().setPageBreak().run()}>
-          <PageBreakIcon className="w-4 h-4" />
-        </B>
-        <Sep />
-        <B label="Undo" shortcut="Ctrl+Z" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
-          <UndoIcon className="w-4 h-4" />
-        </B>
-        <B label="Redo" shortcut="Ctrl+Shift+Z" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
-          <RedoIcon className="w-4 h-4" />
-        </B>
-        <span className="flex-1 min-w-2" />
-        <GrammarToolbarButton g={grammar} open={grammarOpen} onToggle={onGrammar} />
+        {room?.basics && (
+          <B label="Numbered list" on={s!.ordered} onClick={() => c().toggleOrderedList().run()}>
+            <ListNumberIcon className="w-4 h-4" />
+          </B>
+        )}
+        {room?.lists && (
+          <>
+            <B label="Checklist" on={s!.task} onClick={() => c().toggleTaskList().run()}>
+              <ListCheckIcon className="w-4 h-4" />
+            </B>
+            <B label="Quote" on={s!.quote} onClick={() => c().toggleBlockquote().run()}>
+              <QuoteIcon className="w-4 h-4" />
+            </B>
+          </>
+        )}
+        {room?.basics && (
+          <>
+            {/* (1.55.2: one button for the three, showing the one it is.) */}
+            <AlignMenu editor={editor} at={s!.center ? "center" : s!.right ? "right" : "left"} />
+            <Sep />
+            <LinkButton editor={editor} active={s!.link} />
+            <B label={uploading ? `Uploading ${uploading}…` : "Add image"} onClick={onImage}>
+              {uploading ? (
+                <span className="w-4 h-4 rounded-full border-2 border-ink-soft/40 border-t-amber animate-spin" />
+              ) : (
+                <ImageIcon className="w-4 h-4" />
+              )}
+            </B>
+            <B label="Frame guide: a reference shot from Frame Guides" onClick={onFrame}>
+              <FrameIcon className="w-4 h-4" />
+            </B>
+          </>
+        )}
+        {room?.pageBreak && (
+          <B label="Page break: the rest starts a new page" shortcut={`${MOD}Enter`} onClick={() => c().setPageBreak().run()}>
+            <PageBreakIcon className="w-4 h-4" />
+          </B>
+        )}
+        {room?.undo && (
+          <>
+            <Sep />
+            <B label="Undo" shortcut="Ctrl+Z" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
+              <UndoIcon className="w-4 h-4" />
+            </B>
+            <B label="Redo" shortcut="Ctrl+Shift+Z" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
+              <RedoIcon className="w-4 h-4" />
+            </B>
+          </>
+        )}
+        {barMore && (
+          <button
+            ref={moreBarBtn}
+            type="button"
+            aria-label="More formatting"
+            title="More formatting"
+            aria-expanded={more === "bar"}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setMoreState((m) => (m === "bar" ? null : "bar"))}
+            className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${more === "bar" ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
+          >
+            <MoreIcon className="w-5 h-5" />
+          </button>
+        )}
+        {(!room || room.sug) && (
+          <>
+            <Sep />
+            <GrammarToolbarButton g={grammar} open={grammarOpen} onToggle={onGrammar} label={!!room?.sugLabel} score={!room || room.score} />
+          </>
+        )}
         </span>
         {/* Phones: everything else in one sheet (no sideways scrolling). */}
         <span className="flex-1 sm:hidden" />
@@ -2071,60 +2116,86 @@ function Toolbar({
         <button
           ref={moreBtn}
           type="button"
-          aria-expanded={more}
+          aria-expanded={more === "phone"}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setMore((m) => !m)}
+          onClick={() => setMoreState((m) => (m === "phone" ? null : "phone"))}
           className="sm:hidden h-9 px-2.5 rounded-lg text-[12.5px] font-bold text-ink-soft hover:text-ink hover:bg-surface-2"
         >
           More
         </button>
       </div>
-      {tail && <div className="hidden sm:flex items-center gap-2 flex-shrink-0 pl-1 pr-2 lg:pr-4">{tail}</div>}
-      <AnchoredMenu open={more} onClose={() => setMore(false)} anchor={moreBtn} label="Format">
+      </div>
+      <AnchoredMenu open={!!more} onClose={() => setMore(false)} anchor={more === "bar" ? moreBarBtn : moreBtn} label="Format">
         <div className="p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mb-3">Format</div>
             <div className="grid grid-cols-6 gap-1.5 [&_button]:w-full [&_button]:h-11">
-              <B label="Strikethrough" on={s!.strike} onClick={() => c().toggleStrike().run()}>
-                <StrikeIcon className="w-4 h-4" />
-              </B>
-              <B label="Highlight" on={s!.highlight} onClick={() => c().toggleHighlight().run()}>
-                <HighlighterIcon className="w-4 h-4" />
-              </B>
-              <B label="Numbered list" on={s!.ordered} onClick={() => c().toggleOrderedList().run()}>
-                <ListNumberIcon className="w-4 h-4" />
-              </B>
-              <B label="Checklist" on={s!.task} onClick={() => c().toggleTaskList().run()}>
-                <ListCheckIcon className="w-4 h-4" />
-              </B>
-              <B label="Quote" on={s!.quote} onClick={() => c().toggleBlockquote().run()}>
-                <QuoteIcon className="w-4 h-4" />
-              </B>
-              <B label="Add image" onClick={() => { setMore(false); onImage(); }}>
-                <ImageIcon className="w-4 h-4" />
-              </B>
-              <B label="Frame guide" onClick={() => { setMore(false); onFrame(); }}>
-                <FrameIcon className="w-4 h-4" />
-              </B>
-              <B label="Page break" onClick={() => { setMore(false); c().setPageBreak().run(); }}>
-                <PageBreakIcon className="w-4 h-4" />
-              </B>
-              <B label="Align left" on={s!.left} onClick={() => c().setTextAlign("left").run()}>
-                <AlignLeftIcon className="w-4 h-4" />
-              </B>
-              <B label="Center" on={s!.center} onClick={() => c().setTextAlign("center").run()}>
-                <AlignCenterIcon className="w-4 h-4" />
-              </B>
-              <B label="Align right" on={s!.right} onClick={() => c().setTextAlign("right").run()}>
-                <AlignRightIcon className="w-4 h-4" />
-              </B>
-              <span className="col-span-1 flex items-center justify-center"><LinkButton editor={editor} active={s!.link} /></span>
-              <B label="Undo" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
-                <UndoIcon className="w-4 h-4" />
-              </B>
-              <B label="Redo" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
-                <RedoIcon className="w-4 h-4" />
-              </B>
+              {sheet.strike && (
+                <B label="Strikethrough" on={s!.strike} onClick={() => c().toggleStrike().run()}>
+                  <StrikeIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.highlight && (
+                <B label="Highlight" on={s!.highlight} onClick={() => c().toggleHighlight().run()}>
+                  <HighlighterIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.basics && (
+                <B label="Numbered list" on={s!.ordered} onClick={() => c().toggleOrderedList().run()}>
+                  <ListNumberIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.checklist && (
+                <B label="Checklist" on={s!.task} onClick={() => c().toggleTaskList().run()}>
+                  <ListCheckIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.quote && (
+                <B label="Quote" on={s!.quote} onClick={() => c().toggleBlockquote().run()}>
+                  <QuoteIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.basics && (
+                <>
+                  <B label="Add image" onClick={() => { setMore(false); onImage(); }}>
+                    <ImageIcon className="w-4 h-4" />
+                  </B>
+                  <B label="Frame guide" onClick={() => { setMore(false); onFrame(); }}>
+                    <FrameIcon className="w-4 h-4" />
+                  </B>
+                </>
+              )}
+              {sheet.pageBreak && (
+                <B label="Page break" onClick={() => { setMore(false); c().setPageBreak().run(); }}>
+                  <PageBreakIcon className="w-4 h-4" />
+                </B>
+              )}
+              {sheet.basics && (
+                <>
+                  <B label="Align left" on={s!.left} onClick={() => c().setTextAlign("left").run()}>
+                    <AlignLeftIcon className="w-4 h-4" />
+                  </B>
+                  <B label="Center" on={s!.center} onClick={() => c().setTextAlign("center").run()}>
+                    <AlignCenterIcon className="w-4 h-4" />
+                  </B>
+                  <B label="Align right" on={s!.right} onClick={() => c().setTextAlign("right").run()}>
+                    <AlignRightIcon className="w-4 h-4" />
+                  </B>
+                  <span className="col-span-1 flex items-center justify-center"><LinkButton editor={editor} active={s!.link} /></span>
+                </>
+              )}
+              {sheet.undo && (
+                <>
+                  <B label="Undo" disabled={!s!.canUndo} onClick={() => c().undo().run()}>
+                    <UndoIcon className="w-4 h-4" />
+                  </B>
+                  <B label="Redo" disabled={!s!.canRedo} onClick={() => c().redo().run()}>
+                    <RedoIcon className="w-4 h-4" />
+                  </B>
+                </>
+              )}
             </div>
+            {sheet.colors && (
+            <>
             {/* The words' own colour (1.53.1): the paper's, or one of the seven. */}
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-soft mt-4 mb-2">Text color</div>
             <div className="grid grid-cols-8 gap-1.5" role="group" aria-label="Text color">
@@ -2151,8 +2222,67 @@ function Toolbar({
                 />
               ))}
             </div>
+            </>
+            )}
         </div>
       </AnchoredMenu>
+    </>
+  );
+}
+
+/** Align left, centre or right (1.55.2): one button showing which, the three under it. */
+function AlignMenu({ editor, at }: { editor: Editor; at: "left" | "center" | "right" }) {
+  const { open, setOpen, btn, box, style } = usePopover(176);
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  useMenuKeyboard(open, box, btn, close);
+  const ALIGN = [
+    { key: "left" as const, name: "Align left", Icon: AlignLeftIcon },
+    { key: "center" as const, name: "Center", Icon: AlignCenterIcon },
+    { key: "right" as const, name: "Align right", Icon: AlignRightIcon },
+  ];
+  const Now = ALIGN.find((a) => a.key === at)!.Icon;
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        ref={btn}
+        type="button"
+        aria-label="Alignment"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Alignment"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+        className={`h-9 px-2 rounded-lg flex items-center gap-0.5 transition-colors ${open ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
+      >
+        <Now className="w-4 h-4" />
+        <ChevronDownIcon className="w-3 h-3" />
+      </button>
+      {open &&
+        createPortal(
+          <Leaves>
+            <div ref={box} role="menu" aria-label="Alignment" style={style} className="pop-menu z-[140] rounded-xl border border-line/15 bg-surface shadow-xl p-1">
+              {ALIGN.map(({ key, name, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={at === key}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    editor.chain().focus().setTextAlign(key).run();
+                    setOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
+                >
+                  <Icon className="w-4 h-4 text-ink-soft" />
+                  <span className="flex-1 text-left">{name}</span>
+                  {at === key && <CheckIcon className="w-4 h-4 text-amber" />}
+                </button>
+              ))}
+            </div>
+          </Leaves>,
+          document.body
+        )}
     </div>
   );
 }
@@ -2421,10 +2551,11 @@ function ExportMenu({ onDocx, onPdf }: { onDocx: () => void; onPdf: () => void }
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-3 h-9 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-line/30"
+        aria-label="Export"
+        title="Export: Word or PDF"
+        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${open ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
         <DownloadIcon className="w-4 h-4" />
-        <span className="hidden sm:inline">Export</span>
       </button>
       {open && (
         <Leaves>
@@ -2473,12 +2604,11 @@ function WidthMenu({ value, onChange }: { value: Width; onChange: (w: Width) => 
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        title="Page width"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-line/15 px-2.5 h-8 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/30"
+        aria-label="Page width"
+        title={`Page width: ${WIDTH_LABEL[value]}`}
+        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${open ? "bg-surface-2 text-ink" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
         <WidthIcon className="w-4 h-4" />
-        <span className="hidden xl:inline">{WIDTH_LABEL[value]}</span>
-        <ChevronDownIcon className="w-3 h-3" />
       </button>
       {open && (
         <Leaves>
@@ -2509,17 +2639,28 @@ function WidthMenu({ value, onChange }: { value: Width; onChange: (w: Width) => 
   );
 }
 
-/** Phones: paper and export in one menu (the top bar is narrow). */
+/**
+ * Phones: paper and export in one menu (the top bar is narrow). 1.55.2: the one bar too, where it's short of room
+ * ("Page": with the page width as well).
+ */
 function MobileMenu({
   paper,
   onPaper,
   onDocx,
   onPdf,
+  width,
+  onWidth,
+  className = "sm:hidden",
+  label = "More",
 }: {
   paper: "light" | "dark";
   onPaper: () => void;
   onDocx: () => void;
   onPdf: () => void;
+  width?: Width;
+  onWidth?: (w: Width) => void;
+  className?: string;
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -2529,12 +2670,24 @@ function MobileMenu({
     fn();
   };
   return (
-    <div className="sm:hidden">
-      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-label="More" aria-expanded={open} className="w-9 h-9 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+    <div className={`${className} flex-shrink-0`}>
+      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-label={label} title={label === "More" ? undefined : "Page width, paper and export"} aria-expanded={open} className="w-8 h-8 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
         <MoreIcon className="w-5 h-5" />
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="More">
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label={label}>
         <div className="py-1.5">
+          {width && onWidth && (
+            <>
+              <div className="px-4 pt-1.5 pb-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Page width</div>
+              {(["normal", "wide", "full"] as const).map((w) => (
+                <button key={w} type="button" role="menuitemradio" aria-checked={width === w} className={item} onClick={run(() => onWidth(w))}>
+                  {WIDTH_LABEL[w]}
+                  {width === w && <CheckIcon className="w-4 h-4 text-amber" />}
+                </button>
+              ))}
+              <div className="my-1.5 border-t border-line/10" />
+            </>
+          )}
           <button type="button" className={item} onClick={run(onPaper)}>
             {paper === "light" ? "Dark paper" : "Light paper"}
           </button>

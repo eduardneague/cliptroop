@@ -10,7 +10,8 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { ChevronDownIcon, CloseIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, ColumnsIcon, ExpandIcon, PlusIcon } from "@/components/ui/icons";
+import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
 import { PageBreak } from "../lib/page-break";
@@ -330,6 +331,27 @@ function Workspace({
           />
         ) : undefined
       }
+      // 1.55.2: in the one bar on a bigger screen, only People and the step's button (the steps are in the documents
+      // dropdown).
+      barFlow={
+        flow?.data.ready && doc.kind === "script"
+          ? ({ labels }) => (
+              <FlowStrip
+                variant="bar"
+                labels={labels}
+                flow={flow.data}
+                currentDocId={doc.id}
+                people={flow.team}
+                number={number}
+                can={flow.can}
+                scripterAction={flow.scripterAction}
+                videoId={flow.videoId}
+                href={(id) => href({ doc: id })}
+                roleColors={roleColors}
+              />
+            )
+          : undefined
+      }
       topBarExtra={
         <>
           {/* Keys: the first child is created on the server (React warns otherwise). */}
@@ -368,7 +390,27 @@ function Workspace({
           />
         ) : undefined
       }
-      mobileDocs={<MobileDocs owner={owner} docs={docs} current={doc} canCreate={canCreate} href={(id) => href({ doc: id })} roleColors={roleColors} sideId={sideOpen ? side?.id ?? null : null} />}
+      mobileDocs={
+        <MobileDocs
+          owner={owner}
+          docs={docs}
+          current={doc}
+          canCreate={canCreate}
+          href={(id) => href({ doc: id })}
+          roleColors={roleColors}
+          sideId={sideOpen ? side?.id ?? null : null}
+          heading={`#${number} ${title}`}
+          steps={
+            flow?.data.ready
+              ? flow.data.steps.map((st) => ({
+                  docId: st.docId,
+                  ticked: !!flow.data.done || !!st.sent,
+                  crew: st.people.map((id) => flow.team.find((p) => p.memberId === id)).filter((p): p is NonNullable<typeof p> => !!p),
+                }))
+              : undefined
+          }
+        />
+      }
       renderCommentPopover={(id, close) => {
         const c = comments.find((x) => x.id === id);
         if (!c) return null;
@@ -649,15 +691,17 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
     return () => document.removeEventListener("mousedown", off);
   }, [open]);
   return (
-    <div className="relative hidden lg:block" data-side-menu>
+    <div className="relative hidden lg:block flex-shrink-0" data-side-menu>
+      {/* 1.55.2: just its sign in the script's one bar. */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 h-8 text-[12px] font-semibold ${active ? "border-amber bg-amber/10 text-ink" : "border-line/20 text-ink-soft hover:text-ink"}`}
+        aria-label="Side by side"
+        title={active ? "Side by side: on" : "Side by side: another document next to this one"}
+        className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? "bg-amber/15 text-ink ring-1 ring-amber/50" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
-        Side by side
-        <ChevronDownIcon className="w-3.5 h-3.5" />
+        <ColumnsIcon className="w-4 h-4" />
       </button>
       {open && (
         <Leaves>
@@ -704,6 +748,8 @@ function MobileDocs({
   href,
   roleColors,
   sideId,
+  heading,
+  steps,
 }: {
   owner: Owner;
   docs: DocListItem[];
@@ -712,26 +758,46 @@ function MobileDocs({
   href: (id: string) => string;
   roleColors: Record<string, string>;
   sideId: string | null;
+  /** 1.55.2: the video's number and title, at the top (the one bar has no room for it). */
+  heading?: string;
+  /** 1.55.2: the steps (sent on, who's on each), on their documents: the bar has no strip of steps any more. */
+  steps?: { docId: string; ticked: boolean; crew: { memberId: string; name: string; avatarUrl: string | null; color: string }[] }[];
 }) {
   const [open, setOpen] = useState(false);
+  // It opens toward the free side: from the left end of the bar, rightwards (1.55.2: "this menu opens on the wrong
+  // side", over the app's sidebar).
+  const [align, setAlign] = useState<"left" | "right">("right");
   const btn = useRef<HTMLButtonElement>(null);
   const nav = usePendingNav();
   // The document on its way counts as open already.
   const shownDoc = (nav.pending && docs.find((d) => d.id === nav.pending)) || current;
   const [adding, setAdding] = useState<"script" | "research" | null>(null);
   const DOT: Record<string, string | undefined> = { Script: roleColors.scripter, Review: roleColors.master, Staging: roleColors.editor, Research: roleColors.researcher };
+  const stepOf = (id: string) => steps?.find((x) => x.docId === id) ?? null;
   const groups = [
     { kind: "script" as const, label: "Versions", can: canCreate.script },
     ...("long" in owner ? [{ kind: "research" as const, label: "Research", can: canCreate.research }] : []),
   ];
   return (
     <>
-      <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-9 text-[13px] font-bold max-w-[9.5rem]">
+      <button
+        ref={btn}
+        type="button"
+        onClick={() => {
+          const r = btn.current?.getBoundingClientRect();
+          if (r) setAlign(r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right");
+          setOpen((o) => !o);
+        }}
+        aria-expanded={open}
+        title="Documents"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-8 text-[13px] font-bold max-w-[9.5rem] hover:border-line/35"
+      >
         <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
         <span className="truncate">{shownDoc.name}</span>
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="Documents">
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} label="Documents" align={align} width={300}>
+          {heading && <div className="px-4 pt-3.5 pb-1 text-[12.5px] font-semibold text-ink-soft leading-snug line-clamp-2">{heading}</div>}
           <div className="p-2">
             {groups.map((g) => (
               <div key={g.kind} className="mb-2">
@@ -751,7 +817,17 @@ function MobileDocs({
                     >
                       <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
                       <span className="truncate">{d.name}</span>
-                      <span className="ml-auto text-[12px] text-ink-faint">{d.wordCount} words</span>
+                      {stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
+                      {(stepOf(d.id)?.crew.length ?? 0) > 0 && (
+                        <span className="flex -space-x-1.5 flex-shrink-0" title={stepOf(d.id)!.crew.map((p) => p.name).join(", ")}>
+                          {stepOf(d.id)!.crew.slice(0, 3).map((p) => (
+                            <span key={p.memberId} className="rounded-full ring-2 ring-surface">
+                              <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} className="w-5 h-5 text-[8.5px]" />
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                      <span className="ml-auto text-[12px] text-ink-faint whitespace-nowrap">{d.wordCount} words</span>
                     </button>
                   ))}
                 {g.can && (

@@ -22,6 +22,17 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.2",
+    date: "2026-11-19",
+    title: "One bar for a script",
+    changes: [
+      { kind: "better", text: "On a computer a script's header is one bar. On the left: the way back and the documents. In the middle: the formatting. On the right: who's here, a cloud for the save state, the words and how long they take to say, page width, side by side, paper, export, People and the step's button (\"Ready for staging\"). As the window narrows, the less used buttons move into menus." },
+      { kind: "better", text: "The documents dropdown opens toward the page (it opened over the sidebar), with the video's title and the steps: which were sent on and who's on each. Alignment is one button that shows the current one." },
+      { kind: "fixed", text: "The To Do widget's rows line up with its header on the right." },
+      { kind: "better", text: "Menus have smaller corners (they were very round with the Liquid look, the team menu too), and the To Do widget's list menu is as wide as the name it opens from." },
+    ],
+  },
+  {
     version: "1.55.1",
     date: "2026-11-19",
     title: "A tidier script header",

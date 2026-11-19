@@ -57,6 +57,8 @@ export function FlowStrip({
   videoId,
   href,
   roleColors,
+  variant = "strip",
+  labels = true,
 }: {
   flow: ScriptFlow;
   currentDocId: string;
@@ -68,6 +70,13 @@ export function FlowStrip({
   videoId: string;
   href: (docId: string) => string;
   roleColors: Record<string, string>;
+  /**
+   * "strip": the row under a phone's title (the steps, People, the step's button). "bar" (1.55.2): in the script's one
+   * bar on a bigger screen, only People and the step's button (the steps themselves are in the documents dropdown).
+   */
+  variant?: "strip" | "bar";
+  /** In the bar: the step's button with its words ("Ready for staging"), else just its sign (where room is short). */
+  labels?: boolean;
 }) {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [sending, setSending] = useState<FlowStepInfo | null>(null);
@@ -85,6 +94,78 @@ export function FlowStrip({
   const showFinish = !!current && current.step === "staging" && can.finish && !done;
   // A step's document on its way (clicked here or in the list) lights up at once.
   const openingDoc = usePendingNav().pending;
+
+  const dialogs = (
+    <>
+      {celebrate > 0 && <DoneBurst key={celebrate} subtitle="Script ✓ Review ✓ Staging ✓" />}
+      <PeopleDialog
+        open={peopleOpen}
+        onClose={() => setPeopleOpen(false)}
+        flow={flow}
+        people={people}
+        number={number}
+        can={can}
+        scripterAction={scripterAction}
+        videoId={videoId}
+      />
+      {sending && (
+        <HandOffDialog
+          step={sending}
+          next={nextOf(sending)}
+          people={people}
+          onClose={() => setSending(null)}
+          onPickPeople={() => {
+            setSending(null);
+            setPeopleOpen(true);
+          }}
+          href={href}
+        />
+      )}
+    </>
+  );
+  const action = (compact: boolean) => (
+    <>
+      {showHandOff && current && (
+        <HandOffButton
+          step={current}
+          next={nextOf(current)}
+          locked={handOffLocked({ step: current.step as "write" | "review", sentAt: current.sent?.at ?? null, nextSentAt: nextOf(current)?.sent?.at ?? null, doneAt: done?.at ?? null })}
+          onOpen={() => setSending(current)}
+          compact={compact}
+        />
+      )}
+      {current?.step === "staging" && (showFinish || done) && (
+        <FinishButton
+          docId={current.docId}
+          done={done ?? null}
+          canUndo={can.finish}
+          compact={compact}
+          onChange={(d) => {
+            setDoneNow(d);
+            if (d) setCelebrate((n) => n + 1);
+          }}
+        />
+      )}
+    </>
+  );
+
+  if (variant === "bar") {
+    return (
+      <span className="no-print inline-flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setPeopleOpen(true)}
+          aria-label="People on each step"
+          title="People on each step"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 flex-shrink-0"
+        >
+          <UsersIcon className="w-4 h-4" />
+        </button>
+        {action(!labels)}
+        {dialogs}
+      </span>
+    );
+  }
 
   return (
     <div data-head-row="" className="no-print border-b border-line/10 bg-paper/60">
@@ -154,51 +235,9 @@ export function FlowStrip({
           People
         </button>
         <span className="flex-1" />
-        {showHandOff && current && (
-          <HandOffButton
-            step={current}
-            next={nextOf(current)}
-            locked={handOffLocked({ step: current.step as "write" | "review", sentAt: current.sent?.at ?? null, nextSentAt: nextOf(current)?.sent?.at ?? null, doneAt: done?.at ?? null })}
-            onOpen={() => setSending(current)}
-          />
-        )}
-        {current?.step === "staging" && (showFinish || done) && (
-          <FinishButton
-            docId={current.docId}
-            done={done ?? null}
-            canUndo={can.finish}
-            onChange={(d) => {
-              setDoneNow(d);
-              if (d) setCelebrate((n) => n + 1);
-            }}
-          />
-        )}
+        {action(false)}
       </div>
-      {celebrate > 0 && <DoneBurst key={celebrate} subtitle="Script ✓ Review ✓ Staging ✓" />}
-
-      <PeopleDialog
-        open={peopleOpen}
-        onClose={() => setPeopleOpen(false)}
-        flow={flow}
-        people={people}
-        number={number}
-        can={can}
-        scripterAction={scripterAction}
-        videoId={videoId}
-      />
-      {sending && (
-        <HandOffDialog
-          step={sending}
-          next={nextOf(sending)}
-          people={people}
-          onClose={() => setSending(null)}
-          onPickPeople={() => {
-            setSending(null);
-            setPeopleOpen(true);
-          }}
-          href={href}
-        />
-      )}
+      {dialogs}
     </div>
   );
 }
@@ -207,8 +246,57 @@ export function FlowStrip({
  * Script's "Ready for review", Review's "Ready for staging". Once sent: what was sent and when, greyed out while the
  * next step is still at it (1.35.2, `handOffLocked`), then a way to send it again.
  */
-function HandOffButton({ step, next, locked, onOpen }: { step: FlowStepInfo; next: FlowStepInfo | null; locked: boolean; onOpen: () => void }) {
+function HandOffButton({
+  step,
+  next,
+  locked,
+  onOpen,
+  compact = false,
+}: {
+  step: FlowStepInfo;
+  next: FlowStepInfo | null;
+  locked: boolean;
+  onOpen: () => void;
+  /** Just its sign, the words in its tooltip (the script's bar, short of room: 1.55.2). */
+  compact?: boolean;
+}) {
   const word = NEXT[step.step] === "review" ? "review" : "staging";
+  if (compact) {
+    if (step.sent && locked) {
+      return (
+        <span title={`Sent to ${word}. ${LOCK_WAIT[step.step as "write" | "review"]}`} className="inline-flex flex-shrink-0 cursor-not-allowed">
+          <button type="button" disabled aria-label={`Sent to ${word}`} className="pointer-events-none w-8 h-8 rounded-lg border border-line/15 bg-surface-2 text-ink-soft flex items-center justify-center">
+            <CheckIcon className="w-4 h-4" />
+          </button>
+        </span>
+      );
+    }
+    if (step.sent) {
+      return (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Sent to ${word}: send it again`}
+          title={`Sent to ${word}. The ${word} is done: send it to ${word} again (notifies them again)`}
+          className="w-8 h-8 rounded-lg border border-green/40 bg-green/10 text-green flex items-center justify-center hover:bg-green/15 flex-shrink-0"
+        >
+          <CheckIcon className="w-4 h-4" />
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={!next}
+        aria-label={`Ready for ${word}`}
+        title={`Ready for ${word}: send it on and let ${word === "review" ? "the reviewers" : "the staging people"} know`}
+        className="w-8 h-8 rounded-lg bg-amber text-white flex items-center justify-center hover:brightness-110 disabled:opacity-50 flex-shrink-0"
+      >
+        <ArrowRightIcon className="w-4 h-4" />
+      </button>
+    );
+  }
   if (step.sent && locked) {
     // (The tooltip on a wrapper: a disabled button shows none in some browsers.)
     return (
@@ -262,11 +350,14 @@ function FinishButton({
   done,
   canUndo,
   onChange,
+  compact = false,
 }: {
   docId: string;
   done: ScriptFlow["done"];
   canUndo: boolean;
   onChange: (d: ScriptFlow["done"]) => void;
+  /** Just its tick (the script's bar, short of room: 1.55.2). */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -291,6 +382,48 @@ function FinishButton({
     });
   }
 
+  const takeBack = async () => {
+    const ok = await confirm({
+      title: "Take back “done”?",
+      description: "The ticks go away. Nobody is notified, and any Review or Staging work still in progress shows up in their tasks again.",
+      confirmLabel: "Take it back",
+      cancelLabel: "Keep it done",
+    });
+    if (ok) mark(false);
+  };
+  const markDone = async () => {
+    const ok = await confirm({
+      title: "Mark the script done?",
+      description: "Every step gets a tick and everyone on this script is notified. You can take it back.",
+      confirmLabel: "Mark done",
+    });
+    if (ok) mark(true);
+  };
+  if (compact) {
+    return done ? (
+      <button
+        type="button"
+        disabled={!canUndo || pending}
+        onClick={takeBack}
+        aria-label="Staging done"
+        title={`Staging done${done.by ? ` by ${done.by}` : ""}${canUndo ? ". Click to take it back." : ""}`}
+        className="w-8 h-8 rounded-lg bg-green/15 text-green flex items-center justify-center hover:bg-green/20 disabled:cursor-default flex-shrink-0"
+      >
+        <CheckIcon className="w-4 h-4" />
+      </button>
+    ) : (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={markDone}
+        aria-label="Staging done"
+        title="Staging done: puts a tick on every step and lets everyone on this script know (optional)"
+        className="w-8 h-8 rounded-lg bg-green text-white flex items-center justify-center hover:brightness-110 disabled:opacity-60 flex-shrink-0"
+      >
+        {pending ? <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : <CheckIcon className="w-4 h-4" />}
+      </button>
+    );
+  }
   if (done) {
     return (
       <span className="inline-flex items-center gap-1 flex-shrink-0">
@@ -305,15 +438,7 @@ function FinishButton({
           <button
             type="button"
             disabled={pending}
-            onClick={async () => {
-              const ok = await confirm({
-                title: "Take back “done”?",
-                description: "The ticks go away. Nobody is notified, and any Review or Staging work still in progress shows up in their tasks again.",
-                confirmLabel: "Take it back",
-                cancelLabel: "Keep it done",
-              });
-              if (ok) mark(false);
-            }}
+            onClick={takeBack}
             className="rounded-lg px-2 h-8 text-[12px] font-semibold text-ink-faint hover:text-ink hover:bg-surface-2 disabled:opacity-50"
           >
             {pending ? "…" : "Undo"}
@@ -326,14 +451,7 @@ function FinishButton({
     <button
       type="button"
       disabled={pending}
-      onClick={async () => {
-        const ok = await confirm({
-          title: "Mark the script done?",
-          description: "Every step gets a tick and everyone on this script is notified. You can take it back.",
-          confirmLabel: "Mark done",
-        });
-        if (ok) mark(true);
-      }}
+      onClick={markDone}
       title="Optional: puts a tick on every step and lets everyone on this script know"
       className="inline-flex items-center gap-1.5 rounded-lg bg-green text-white px-3.5 h-8 text-[12.5px] font-bold hover:brightness-110 disabled:opacity-60 flex-shrink-0"
     >

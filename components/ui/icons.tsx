@@ -657,12 +657,39 @@ export function PanelLeftIcon(p: IconProps) {
   );
 }
 
-/** 1.55.1: the script page's top part, folded away or back (like PanelLeftIcon for the documents column). */
-export function PanelTopIcon(p: IconProps) {
+/** 1.55.2: two pages next to each other (a script's "Side by side"). */
+export function ColumnsIcon(p: IconProps) {
   return (
     <Svg {...p}>
       <rect x="3" y="4" width="18" height="16" rx="3" />
-      <path d="M3 9.5h18" />
+      <path d="M12 4v16" />
+    </Svg>
+  );
+}
+
+/** 1.55.2: a script's save state, as small as it gets: saved, on its way, or not reachable. */
+const CLOUD = "M7.5 18.5h10a4 4 0 0 0 .55-7.96A6 6 0 0 0 6.55 9.2 4.7 4.7 0 0 0 7.5 18.5Z";
+export function CloudCheckIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d={CLOUD} />
+      <path d="m9.5 13.75 1.9 1.9 3.6-3.6" />
+    </Svg>
+  );
+}
+export function CloudUpIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d={CLOUD} />
+      <path d="M12 16v-4.5M9.9 13.4 12 11.3l2.1 2.1" />
+    </Svg>
+  );
+}
+export function CloudOffIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d={CLOUD} />
+      <path d="M4 4l16 16" />
     </Svg>
   );
 }

@@ -128,7 +128,9 @@ export function AnchoredMenu({
         ref={panel}
         role={role}
         aria-label={label}
-        className={`pop-menu glass-pane styled-scroll fixed z-[125] rounded-2xl border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain ${pos.up ? "origin-bottom" : "origin-top"} ${className}`}
+        // (1.55.2: 14 px corners, every look: rounder, its rows' highlight didn't sit in its corners. The owner: "the
+        // menu is too round, it doesnt fit well".)
+        className={`pop-menu glass-pane styled-scroll fixed z-[125] rounded-[14px] border border-line/15 bg-surface shadow-[0_24px_60px_-20px_rgb(0_0_0/0.6)] overflow-y-auto overflow-x-hidden overscroll-contain ${pos.up ? "origin-bottom" : "origin-top"} ${className}`}
         style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
       >
         {children}

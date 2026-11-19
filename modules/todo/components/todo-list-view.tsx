@@ -355,7 +355,7 @@ export function ListView({
         />
       )}
       {/* Phones: the page itself scrolls (the add box sticks under the top bar); larger: this column does. The widget: its own. */}
-      <div className={tight ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden widget-scroll -mx-3 px-3 pb-1" : "md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden styled-scroll px-3 sm:px-6 pb-8 md:pb-10"}>
+      <div className={tight ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden widget-scroll todo-widget-scroll -mx-3 px-3 pb-1" : "md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden styled-scroll px-3 sm:px-6 pb-8 md:pb-10"}>
         {!searching && view !== "assigned" && <AddBox key={view} store={store} view={view} inputRef={addInput} compact={tight} />}
         <div className={tight ? "mt-2" : "mt-3"}>{body}</div>
       </div>
@@ -645,6 +645,8 @@ function Header({
 function CompactHeader({ store, view, openCount, teamName, hasTeam, compact }: { store: TodoStore; view: ViewId; openCount: number; teamName: string | null; hasTeam: boolean; compact: Compact }) {
   const { listById, lists, today } = store;
   const pick = useMenuButton();
+  // The list menu as wide as the name it opens from (1.55.2: it sat narrower, half under it: "it doesn't fit well").
+  const [menuW, setMenuW] = useState(250);
   const sub = view === "myday" ? longDay(today) : view === "assigned" ? (teamName ? `From ${teamName}` : "From your team") : view === "planned" ? "Everything with a date" : openCount ? `${openCount} to do` : "Nothing to do";
   const smart: SmartId[] = ["myday", "important", "planned", ...(hasTeam ? (["assigned"] as const) : []), "tasks"];
   const go = (to: ViewId) => {
@@ -654,7 +656,16 @@ function CompactHeader({ store, view, openCount, teamName, hasTeam, compact }: {
   return (
     <header className="relative -mx-3 -mt-3 px-3 pt-2.5 pb-2 flex-shrink-0" style={{ background: `radial-gradient(130% 150% at 0% 0%, rgb(var(${viewVar(view, listById)}) / 0.16), transparent 62%)` }}>
       <div className="flex items-center gap-1">
-        <button ref={pick.ref} type="button" onClick={pick.toggle} aria-haspopup="menu" aria-expanded={pick.open} title="Show another list" className="min-w-0 flex-1 flex items-center gap-2 rounded-lg -ml-1 pl-1 pr-1.5 py-1 text-left hover:bg-surface-2/60 transition-colors">
+        <button
+          ref={pick.ref}
+          type="button"
+          onClick={() => {
+            setMenuW(Math.round(Math.min(320, Math.max(220, pick.ref.current?.offsetWidth ?? 250))));
+            pick.toggle();
+          }}
+          aria-haspopup="menu"
+          aria-expanded={pick.open}
+          title="Show another list" className="min-w-0 flex-1 flex items-center gap-2 rounded-lg -ml-1 pl-1 pr-1.5 py-1 text-left hover:bg-surface-2/60 transition-colors">
           <ViewGlyph view={view} lists={listById} className="w-[22px] h-[22px]" />
           <span className="min-w-0">
             <span className="flex items-center gap-1 min-w-0">
@@ -672,7 +683,7 @@ function CompactHeader({ store, view, openCount, teamName, hasTeam, compact }: {
           <ArrowRightIcon className="w-4 h-4" />
         </Link>
       </div>
-      <Menu open={pick.open} onClose={pick.close} anchor={pick.ref} width={250} label="Lists">
+      <Menu open={pick.open} onClose={pick.close} anchor={pick.ref} width={menuW} label="Lists">
         {smart.map((v) => (
           <MenuItem key={v} icon={<ViewGlyph view={v} lists={listById} className="w-4 h-4" />} label={SMART_META[v].name} hint={compact.counts[v] || undefined} checked={view === v} onClick={() => go(v)} />
         ))}

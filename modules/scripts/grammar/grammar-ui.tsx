@@ -686,7 +686,21 @@ function GrammarFab({ g, onOpen }: { g: Grammar; onOpen: () => void }) {
  * In the formatting bar: the count and the panel, and next to them the
  * score in its ring (1.23.1), so how the script is doing shows as you write.
  */
-export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: boolean; onToggle: () => void }) {
+export function GrammarToolbarButton({
+  g,
+  open,
+  onToggle,
+  label = true,
+  score = true,
+}: {
+  g: Grammar;
+  open: boolean;
+  onToggle: () => void;
+  /** "Suggestions" written out (1.55.2: the script's one bar says when there's room). */
+  label?: boolean;
+  /** The score in its ring next to it (1.55.2: not where the bar is at its narrowest). */
+  score?: boolean;
+}) {
   const n = g.counts.all;
   return (
     <span className="inline-flex items-center gap-1 flex-shrink-0">
@@ -699,14 +713,14 @@ export function GrammarToolbarButton({ g, open, onToggle }: { g: Grammar; open: 
         className={`h-9 pl-2 pr-2.5 rounded-lg flex items-center gap-1.5 transition-colors ${open ? "bg-ink text-paper" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
         <SpellCheckIcon className={`w-4 h-4 ${g.settings.on ? "" : "opacity-50"}`} />
-        <span className="hidden xl:inline text-[12.5px] font-semibold">{g.settings.on ? "Suggestions" : "Suggestions off"}</span>
+        {label && <span className="text-[12.5px] font-semibold whitespace-nowrap">{g.settings.on ? "Suggestions" : "Suggestions off"}</span>}
         {g.live && n > 0 && (
           <span className="min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold flex items-center justify-center tabular-nums" style={badge(g)}>
             {n > 99 ? "99+" : n}
           </span>
         )}
       </button>
-      {g.live && (
+      {g.live && score && (
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}

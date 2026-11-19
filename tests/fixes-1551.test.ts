@@ -5,8 +5,8 @@
 //     room and it scrolled away with the script while its button stayed put. Now the button and the list are one block
 //     that sticks under the header; a list longer than the room scrolls on its own, inside it.
 //   * The header on glass hangs from the floating top bar as one card (it ran edge to edge and on up behind the bar).
-//   * Its top part (the title and the steps) folds away, leaving the formatting bar; the browser remembers it. Its rows
-//     are slimmer too.
+//   * Its top part (the title and the steps) folded away, leaving the formatting bar (1.55.2 put everything in that one
+//     bar instead: fixes-1552.test.ts).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -44,7 +44,7 @@ ok(css.includes("@media (min-width: 1400px) { html[data-glass] [data-script-head
 ok(css.includes(`html[data-glass-style="liquid"] [data-script-head] { border-radius: 0 0 20px 20px; box-shadow: var(--liquid-drop); }`) && css.includes(`html[data-glass-style="liquid"]:has([data-script-head]) [data-shell="header"] { box-shadow: var(--liquid-rim); }`), "Liquid: its radius; the card's shadow is the header's (the bar's would fall on it)");
 ok(css.includes(`html[data-glass-style="liquid"]:has([data-script-head]) [data-shell="header"]::after { display: none; }`), "Liquid: the bar's pointer light doesn't draw a ring across the card");
 ok(css.includes(`html[data-glass] [data-script-head]::before { border-radius: inherit; }`), "its glass layer has its corners");
-ok(css.includes(`html[data-glass] [data-script-head] > :last-child > [data-head-row]:last-child, html[data-glass] [data-script-head] > :last-child > div > [data-head-row]:last-child { border-bottom-color: transparent; }`), "its last row's line gives way to the card's edge");
+ok(css.includes(`html[data-glass] [data-script-head] > [data-head-row]:last-child { border-bottom-color: transparent; }`), "its last row's line gives way to the card's edge (1.55.2: its one bar)");
 ok(css.includes(`html[data-glass][data-glass-opaque] [data-script-head][data-paper]::before { background-color: rgb(var(--surface)); }`), "solid glass: the bar's solid pane, both halves alike");
 ok(
   css.includes(`html.dark[data-glass]:not([data-glass-opaque]) [data-script-head][data-paper="light"]::before, html[data-glass]:not(.dark):not([data-glass-opaque]) [data-script-head][data-paper="dark"]::before, html.dark[data-glass]:not([data-glass-opaque]):has([data-script-head][data-paper="light"]) [data-shell="header"], html[data-glass]:not(.dark):not([data-glass-opaque]):has([data-script-head][data-paper="dark"]) [data-shell="header"] { background-color: rgb(var(--surface) / max(calc(var(--glass-tint) * 0.9), 0.95)); }`),
@@ -53,20 +53,8 @@ ok(
 ok(!css.includes("[data-script-head]::before { top: calc(-1 * var(--shell-top, 72px)); }"), "1.54.1's pane run up behind the bar is gone");
 ok(css.includes(`html[data-glass]:has([data-script-head]) [data-shell="edge"]::before { --edge-down: linear-gradient(#000 calc(100% - 10px), transparent); }`), "what scrolls up beside the card blurs away right down to it");
 
-// ---- folding the top part away ---------------------------------------------------------------------------------------------
-ok(editor.includes('const HEAD_KEY = "vp:script-head";') && editor.includes('remember(HEAD_KEY, c ? "full" : "compact")') && editor.includes('localStorage.getItem(HEAD_KEY) === "compact"'), "the title and the steps fold away, and the browser remembers it");
-ok(editor.includes("const folded = compact && hasTools && !head.phone;"), "only where there's a formatting bar to keep, and not on phones (theirs scrolls away by itself)");
-ok(/className=\{`grid \$\{headSlides \? "transition-\[grid-template-rows\] duration-300[^"]*" : ""\} \$\{folded \? "grid-rows-\[0fr\]" : "grid-rows-\[1fr\]"\}`\}/.test(editor), "it slides shut and open (a click; as the page opens it's just as it was left)");
-ok(editor.includes('<div className={`min-h-0 ${folded || headMoving ? "overflow-hidden" : ""}`} inert={folded}>'), "folded, its buttons can't be reached by Tab; open, Page width and Export hang from it unclipped");
-ok(editor.includes('aria-label={folded ? "Show the title and the steps" : "Hide the title and the steps"}') && editor.includes("<PanelTopIcon"), "its button, at the formatting bar's end, where it stays either way");
-ok(/lead=\{\s*folded \? \(/.test(editor) && editor.includes("{folded && saveState(true)}"), "folded: the way back and the documents on the left of the bar, the save state on the right");
-ok(editor.includes("{!folded && saveState(false)}") && editor.includes("{!folded && hereFaces}"), "open: those stay in the top bar (said once)");
-ok(/\{lead && <div className="hidden sm:flex items-center gap-1\.5 flex-shrink-0 pl-2 lg:pl-4">\{lead\}<\/div>\}/.test(editor) && /\{tail && <div className="hidden sm:flex items-center gap-2 flex-shrink-0 pl-1 pr-2 lg:pr-4">\{tail\}<\/div>\}/.test(editor), "the formatting bar takes them at its ends");
-ok(read("components/ui/icons.tsx").includes("export function PanelTopIcon("), "its icon, like the documents column's");
-
-// ---- slimmer rows ----------------------------------------------------------------------------------------------------------
-ok(editor.includes('<div data-head-row="" className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-12 border-b border-line/10">'), "the title row: 48 px (was 56)");
-ok(read("modules/scripts/components/script-flow.tsx").includes('<div className="flex items-center gap-2 px-3 sm:px-6 py-1.5 flex-wrap">'), "the steps: a little slimmer");
+// ---- folding the top part away, and slimmer rows: replaced in 1.55.2 by one bar with everything in it (fixes-1552) ----
+ok(!/HEAD_KEY|toggleHead|PanelTopIcon/.test(editor), "the fold is gone (the owner: \"so we can get rid of that part completely\")");
 
 if (fails) {
   console.log(`${fails} failed`);

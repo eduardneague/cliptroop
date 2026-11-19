@@ -38,7 +38,7 @@ ok(/<ViewGlyph view=\{view\} lists=\{listById\}/.test(head) && /style=\{\{ color
 ok(/longDay\(today\)/.test(head) && /`\$\{openCount\} to do`/.test(head), "My Day's date, a list's count, as in To Do");
 ok(/\["myday", "important", "planned", \.\.\.\(hasTeam \? \(\["assigned"\] as const\) : \[\]\), "tasks"\]/.test(head) && /lists\.map\(\(l\) =>/.test(head), "the picker: the smart lists (Assigned to me with a team) and your lists");
 ok(/<Link href=\{todoHref\(view\)\} title="Open in To Do"/.test(head), "Open: To Do, on that list");
-ok(/className=\{tight \? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden widget-scroll -mx-3 px-3 pb-1" :/.test(view), "its own scroll inside the widget");
+ok(/className=\{tight \? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden widget-scroll todo-widget-scroll -mx-3 px-3 pb-1" :/.test(view), "its own scroll inside the widget (1.55.2: lined up on the right with floating scroll bars too)");
 ok(/<AddBox key=\{view\} store=\{store\} view=\{view\} inputRef=\{addInput\} compact=\{tight\} \/>/.test(view) && /\$\{compact \? "top-0 pt-0\.5" : "top-14 md:top-0 pt-1"\}/.test(view), "the same add box, sticking at the top of the widget");
 ok(/dense=\{tight\}/.test(view) && /\$\{dense \? "gap-2\.5 pl-2\.5 pr-1 py-1\.5 min-h-\[44px\]" : "gap-3 pl-3 pr-1\.5 py-2 min-h-\[52px\]"\}/.test(read("modules/todo/components/todo-rows.tsx")), "the same rows, a little tighter");
 ok(/action=\{tight \? undefined : \{ label: "Suggestions", onClick: onSuggestions \}\}/.test(view) && /<AllDoneToday compact=\{tight\} \/>/.test(view), "smaller empty states, no Suggestions button (that's To Do's side panel)");

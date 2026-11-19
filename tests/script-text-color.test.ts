@@ -65,7 +65,7 @@ ok(/Highlight\.configure\(\{ multicolor: true \}\),\s*\/\/ The words' own colour
 eq((workspace.match(/Highlight\.configure\(\{ multicolor: true \}\),\s*TextColor,/g) ?? []).length, 2, "the side-by-side page and the copy that finds the comments' words have it too (a mark one didn't know emptied it)");
 
 // --- The toolbar ----------------------------------------------------------------------------------------------------------
-ok(editor.includes(`<HighlightMenu editor={editor} active={s!.highlight} />\n        <TextColorMenu editor={editor} current={s!.color} />`), "Text color sits right after Highlight");
+ok(editor.includes(`<HighlightMenu editor={editor} active={s!.highlight} />\n            <TextColorMenu editor={editor} current={s!.color} />`), "Text color sits right after Highlight");
 ok(editor.includes(`color: textColor(e.getAttributes("textColor").color)?.key ?? null,`), "the toolbar knows the colour where the cursor is");
 ok(/function TextColorMenu[\s\S]*?role="menu" aria-label="Text color"[\s\S]*?setTextColor\(t\.key\)[\s\S]*?unsetTextColor\(\)[\s\S]*?Default/.test(editor), "the menu: the seven, then Default");
 ok(/role="group" aria-label="Text color"[\s\S]*?Default text color[\s\S]*?TEXT_COLORS\.map/.test(editor) && editor.includes('<div className="grid grid-cols-8 gap-1.5" role="group" aria-label="Text color">'), "phones: a row of the eight in the More sheet");
