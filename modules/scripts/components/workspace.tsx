@@ -10,7 +10,16 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { useToast } from "@/components/ui/toast-provider";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { CheckIcon, ChevronDownIcon, CloseIcon, ColumnsIcon, EditIcon, ExpandIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  ColumnsIcon,
+  EditIcon,
+  ExpandIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
 import { ScriptEditor } from "./script-editor";
 import { ScriptImage } from "./script-image";
@@ -29,16 +38,34 @@ import { useLiveEdits, type LiveStatus } from "./use-live-edits";
 import type { DocListItem, ScriptComment, ScriptRow } from "../lib/queries";
 import { findQuote, type PostingComment } from "../lib/anchors";
 import { dock, useDock } from "../lib/dock";
-import { addComment, copyCommentsFrom, createDoc, deleteDoc, getDocContent, listScriptComments, renameDoc, resolveComments, saveScript } from "@/app/(dashboard)/scripts/actions";
+import {
+  addComment,
+  copyCommentsFrom,
+  createDoc,
+  deleteDoc,
+  getDocContent,
+  listScriptComments,
+  renameDoc,
+  resolveComments,
+  saveScript,
+} from "@/app/(dashboard)/scripts/actions";
 import { Dialog } from "@/components/ui/dialog";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Lightbox } from "@/components/ui/lightbox";
 import { CommentComposer, KindMark } from "./comment-composer";
 import { CommentCard, PostingCard } from "./comment-card";
 import { frameRefOf, viewFrame } from "./script-editor";
-import { KIND_COLOR, frameRefName, type CommentKind, type FrameRef } from "../lib/kinds";
+import {
+  KIND_COLOR,
+  frameRefName,
+  type CommentKind,
+  type FrameRef,
+} from "../lib/kinds";
 import { frameUses } from "../lib/frame-links";
-import { frameById, loadLibrary } from "@/modules/frames/components/frame-store";
+import {
+  frameById,
+  loadLibrary,
+} from "@/modules/frames/components/frame-store";
 import type { FrameGuide } from "@/modules/frames/lib/model";
 import dynamic from "next/dynamic";
 import { sounds } from "@/lib/sounds";
@@ -120,7 +147,11 @@ function Workspace({
     data: ScriptFlow;
     team: TeamPerson[];
     can: FlowPermissions;
-    scripterAction: (id: string, memberId: string, add: boolean) => Promise<{ error?: string } | object>;
+    scripterAction: (
+      id: string,
+      memberId: string,
+      add: boolean,
+    ) => Promise<{ error?: string } | object>;
     videoId: string;
   };
 }) {
@@ -131,7 +162,10 @@ function Workspace({
   // The comments (1.55.0): the page's list, then fetched on their own whenever they change (yours: right away;
   // someone else's: when their page says so), never by drawing the whole page again (that sent people back to the top
   // of the script: "de fiecare dată când adaug un comentariu ... mă duce sus de tot").
-  const [fetched, setFetched] = useState<{ doc: string; list: ScriptComment[] } | null>(null);
+  const [fetched, setFetched] = useState<{
+    doc: string;
+    list: ScriptComment[];
+  } | null>(null);
   useEffect(() => setFetched(null), [pageComments]);
   const serverComments = fetched?.doc === doc.id ? fetched.list : pageComments;
   const docIdNow = useRef(doc.id);
@@ -142,12 +176,16 @@ function Workspace({
     fetchTimer.current = setTimeout(async () => {
       const id = docIdNow.current;
       const r = await listScriptComments(id).catch(() => null);
-      if (r && r.error === undefined && docIdNow.current === id) setFetched({ doc: id, list: r.comments });
+      if (r && r.error === undefined && docIdNow.current === id)
+        setFetched({ doc: id, list: r.comments });
     }, 250);
   }, []);
-  useEffect(() => () => {
-    if (fetchTimer.current) clearTimeout(fetchTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (fetchTimer.current) clearTimeout(fetchTimer.current);
+    },
+    [],
+  );
   // 1.54.1: a comment added here is on the page as soon as it's saved (built from what was sent), until the fetched
   // list has it. One deleted meanwhile goes too.
   const [added, setAdded] = useState<ScriptComment[]>([]);
@@ -158,12 +196,17 @@ function Workspace({
     return extra.length ? [...serverComments, ...extra] : serverComments;
   }, [serverComments, added]);
   useEffect(() => {
-    setAdded((xs) => (xs.some((a) => serverComments.some((c) => c.id === a.id)) ? xs.filter((a) => !serverComments.some((c) => c.id === a.id)) : xs));
+    setAdded((xs) =>
+      xs.some((a) => serverComments.some((c) => c.id === a.id))
+        ? xs.filter((a) => !serverComments.some((c) => c.id === a.id))
+        : xs,
+    );
   }, [serverComments]);
   // Any change here (added, edited, resolved, deleted: comment-card.tsx says so): the comments fetched again.
   useEffect(() => {
     const onChange = (e: Event) => {
-      const gone = (e as CustomEvent<{ deleted?: string } | null>).detail?.deleted;
+      const gone = (e as CustomEvent<{ deleted?: string } | null>).detail
+        ?.deleted;
       if (gone) setAdded((xs) => xs.filter((x) => x.id !== gone));
       reloadComments();
     };
@@ -176,8 +219,12 @@ function Workspace({
   const [sideOpen, setSideOpen] = useState(!!side);
   // ?comment=<id> (from a notification): open the comments on that one.
   const linked = params.get("comment");
-  const [chatOpen, setChatOpen] = useState(!!linked && comments.some((c) => c.id === linked));
-  const [active, setActive] = useState<string | null>(linked && comments.some((c) => c.id === linked) ? linked : null);
+  const [chatOpen, setChatOpen] = useState(
+    !!linked && comments.some((c) => c.id === linked),
+  );
+  const [active, setActive] = useState<string | null>(
+    linked && comments.some((c) => c.id === linked) ? linked : null,
+  );
   const [zoomed, setZoomed] = useState<ScriptComment | null>(null);
   useEffect(() => {
     if (linked && comments.some((c) => c.id === linked)) {
@@ -203,7 +250,17 @@ function Workspace({
   postingRef.current = posting;
   const me1 = me ? people.find((p) => p.userId === me.userId) : undefined;
   /** The comment just saved, as the server will list it. */
-  const savedHere = (id: string, a: { quote: string; occurrence: number; body: string; kind: CommentKind; sketch?: { path: string; w: number; h: number } | null; frame?: FrameRef | null }): ScriptComment => ({
+  const savedHere = (
+    id: string,
+    a: {
+      quote: string;
+      occurrence: number;
+      body: string;
+      kind: CommentKind;
+      sketch?: { path: string; w: number; h: number } | null;
+      frame?: FrameRef | null;
+    },
+  ): ScriptComment => ({
     id,
     kind: a.kind,
     authorRoles: me1?.roles ?? [],
@@ -213,9 +270,24 @@ function Workspace({
     createdAt: new Date().toISOString(),
     editedAt: null,
     resolved: false,
-    author: me ? { id: me.userId, name: me1?.name ?? "You", avatarUrl: me1?.avatarUrl ?? null, color: colorForId(me.userId) } : null,
-    sketch: a.sketch ? { url: createClient().storage.from("script-sketches").getPublicUrl(a.sketch.path).data.publicUrl, w: a.sketch.w, h: a.sketch.h } : null,
-    frame: a.kind === "frame" ? a.frame ?? null : null,
+    author: me
+      ? {
+          id: me.userId,
+          name: me1?.name ?? "You",
+          avatarUrl: me1?.avatarUrl ?? null,
+          color: colorForId(me.userId),
+        }
+      : null,
+    sketch: a.sketch
+      ? {
+          url: createClient()
+            .storage.from("script-sketches")
+            .getPublicUrl(a.sketch.path).data.publicUrl,
+          w: a.sketch.w,
+          h: a.sketch.h,
+        }
+      : null,
+    frame: a.kind === "frame" ? (a.frame ?? null) : null,
   });
   const posted = (c: ScriptComment) => {
     setAdded((xs) => [...xs.filter((x) => x.id !== c.id), c]);
@@ -224,17 +296,47 @@ function Workspace({
     // (The others hear about it; the list here is fetched again: the COMMENTS_EVENT listener above.)
     commentsChanged();
   };
-  const mayDelete = (c: ScriptComment) => !!me && (me.master || c.author?.id === me.userId);
+  const mayDelete = (c: ScriptComment) =>
+    !!me && (me.master || c.author?.id === me.userId);
   // 1.50.0: a comment on the whole document (on no words of it), written in the comments panel.
   const onAddGeneral = canComment
     ? async (body: string, kind: CommentKind, frame?: FrameRef | null) => {
-        setPosting({ quote: "", occurrence: 0, kind, body, sketchUrl: null, frame: frame ?? null });
-        const r = await addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame?.id ?? null }).catch(() => ({ error: "Couldn't reach ClipTroop. Check your connection and try again." }) as const);
+        setPosting({
+          quote: "",
+          occurrence: 0,
+          kind,
+          body,
+          sketchUrl: null,
+          frame: frame ?? null,
+        });
+        const r = await addComment({
+          scriptId: doc.id,
+          quote: "",
+          occurrence: 0,
+          body,
+          kind,
+          general: true,
+          frameId: frame?.id ?? null,
+        }).catch(
+          () =>
+            ({
+              error:
+                "Couldn't reach ClipTroop. Check your connection and try again.",
+            }) as const,
+        );
         if (r.error !== undefined) {
           setPosting(null);
           return r.error;
         }
-        posted(savedHere(r.id, { quote: "", occurrence: 0, body, kind, frame: frame ?? null }));
+        posted(
+          savedHere(r.id, {
+            quote: "",
+            occurrence: 0,
+            body,
+            kind,
+            frame: frame ?? null,
+          }),
+        );
         setActive(r.id);
         return null;
       }
@@ -250,236 +352,303 @@ function Workspace({
   };
 
   const marks = useMemo(
-    () => comments.map((c) => ({ id: c.id, quote: c.quote, occurrence: c.occurrence, resolved: c.resolved, color: commentColor(c, roleColors), kind: c.kind, author: c.author })),
-    [comments, roleColors]
+    () =>
+      comments.map((c) => ({
+        id: c.id,
+        quote: c.quote,
+        occurrence: c.occurrence,
+        resolved: c.resolved,
+        color: commentColor(c, roleColors),
+        kind: c.kind,
+        author: c.author,
+      })),
+    [comments, roleColors],
   );
 
   return (
     <>
-    <ScriptEditor
-      key={doc.id}
-      find={params.get("find")}
-      switching={switching}
-      scriptId={doc.id}
-      teamId={doc.teamId}
-      initialContent={doc.content}
-      initialVersion={doc.version}
-      liveStart={doc.live ?? null}
-      canEdit={canEdit}
-      title={title}
-      number={number}
-      backHref={backHref}
-      backLabel={backLabel}
-      docName={doc.name}
-      lastEdited={lastEdited}
-      comments={marks}
-      activeCommentId={active}
-      onCommentClick={(id) => {
-        setActive(id);
-        setChatOpen(true);
-      }}
-      people={people}
-      roleColors={roleColors}
-      me={me}
-      posting={posting}
-      // 1.53.3: posting shows only "Posting…" on the words; the comments stay as they were (the owner: "i dont want
-      // the comments to pop up automatically, just the indicator that its posting").
-      onPosting={setPosting}
-      onRemoteComments={reloadComments}
-      onAddComment={
-        canComment
-          ? async (quote, occurrence, body, kind, sketch, frameId) => {
-              const r = await addComment({ scriptId: doc.id, quote, occurrence, body, kind, sketch, frameId }).catch(() => ({ error: "Couldn't reach ClipTroop. Check your connection and try again." }) as const);
-              if (r.error !== undefined) {
-                setPosting(null);
-                return r.error;
+      <ScriptEditor
+        key={doc.id}
+        find={params.get("find")}
+        switching={switching}
+        scriptId={doc.id}
+        teamId={doc.teamId}
+        initialContent={doc.content}
+        initialVersion={doc.version}
+        liveStart={doc.live ?? null}
+        canEdit={canEdit}
+        title={title}
+        number={number}
+        backHref={backHref}
+        backLabel={backLabel}
+        docName={doc.name}
+        lastEdited={lastEdited}
+        comments={marks}
+        activeCommentId={active}
+        onCommentClick={(id) => {
+          setActive(id);
+          setChatOpen(true);
+        }}
+        people={people}
+        roleColors={roleColors}
+        me={me}
+        posting={posting}
+        // 1.53.3: posting shows only "Posting…" on the words; the comments stay as they were (the owner: "i dont want
+        // the comments to pop up automatically, just the indicator that its posting").
+        onPosting={setPosting}
+        onRemoteComments={reloadComments}
+        onAddComment={
+          canComment
+            ? async (quote, occurrence, body, kind, sketch, frameId) => {
+                const r = await addComment({
+                  scriptId: doc.id,
+                  quote,
+                  occurrence,
+                  body,
+                  kind,
+                  sketch,
+                  frameId,
+                }).catch(
+                  () =>
+                    ({
+                      error:
+                        "Couldn't reach ClipTroop. Check your connection and try again.",
+                    }) as const,
+                );
+                if (r.error !== undefined) {
+                  setPosting(null);
+                  return r.error;
+                }
+                // On the page as itself at once, "Posted" on its words for a moment (and nothing else opens: 1.53.3).
+                const frame =
+                  kind === "frame" ? (postingRef.current?.frame ?? null) : null;
+                posted(
+                  savedHere(r.id, {
+                    quote,
+                    occurrence,
+                    body,
+                    kind,
+                    sketch,
+                    frame: frame && frame.id === frameId ? frame : null,
+                  }),
+                );
+                return null;
               }
-              // On the page as itself at once, "Posted" on its words for a moment (and nothing else opens: 1.53.3).
-              const frame = kind === "frame" ? postingRef.current?.frame ?? null : null;
-              posted(savedHere(r.id, { quote, occurrence, body, kind, sketch, frame: frame && frame.id === frameId ? frame : null }));
-              return null;
-            }
-          : undefined
-      }
-      copySources={docs.filter((d) => d.id !== doc.id).map((d) => ({ id: d.id, name: `${d.kind === "research" ? "Research · " : ""}${d.name}` }))}
-      onCopyFrom={async (id) => {
-        const r = await getDocContent(id);
-        if (r.error !== undefined) {
-          toast.error(r.error);
-          return null;
+            : undefined
         }
-        return { content: r.content, comments: canComment ? r.comments : 0 };
-      }}
-      onCopyComments={async (from) => {
-        const r = await copyCommentsFrom(from, doc.id);
-        if (r.error !== undefined) return void toast.error(r.error);
-        if (r.copied) toast.success(r.copied === 1 ? "Copied, with its comment." : `Copied, with ${r.copied} comments and editing ideas.`);
-        if (r.copied) commentsChanged();
-      }}
-      subBar={
-        flow?.data.ready && doc.kind === "script" ? (
-          <FlowStrip
-            flow={flow.data}
-            currentDocId={doc.id}
-            people={flow.team}
-            number={number}
-            can={flow.can}
-            scripterAction={flow.scripterAction}
-            videoId={flow.videoId}
-            href={(id) => href({ doc: id })}
-            roleColors={roleColors}
-          />
-        ) : undefined
-      }
-      // 1.55.2: in the one bar on a bigger screen, only People and the step's button (the steps are in the documents
-      // dropdown).
-      barFlow={
-        flow?.data.ready && doc.kind === "script"
-          ? ({ labels }) => (
-              <FlowStrip
-                variant="bar"
-                labels={labels}
-                flow={flow.data}
-                currentDocId={doc.id}
-                people={flow.team}
-                number={number}
-                can={flow.can}
-                scripterAction={flow.scripterAction}
-                videoId={flow.videoId}
-                href={(id) => href({ doc: id })}
-                roleColors={roleColors}
-              />
-            )
-          : undefined
-      }
-      topBarExtra={
-        <>
-          {/* Keys: the first child is created on the server (React warns otherwise). */}
-          <span key="extra" className="contents">
-            {topBarExtra}
-          </span>
-          <SideBySideMenu
-            key="side"
-            docs={docs.filter((d) => d.id !== doc.id)}
-            active={sideOpen ? side?.id ?? null : null}
-            onPick={(id) => {
-              setSideOpen(true);
-              router.push(href({ side: id }), { scroll: false });
-            }}
-            onClose={() => {
-              setSideOpen(false);
-              router.push(href({ side: null }), { scroll: false });
-            }}
-          />
-        </>
-      }
-      sideBySide={
-        sideOpen && side ? (
-          <SidePage
-            key={side.id}
-            side={side}
-            me={me?.userId ?? null}
-            people={people}
-            canEdit={side.kind === "research" ? canCreate.research : canCreate.script}
-            swap={href({ doc: side.id, side: doc.id })}
-            close={() => {
-              setSideOpen(false);
-              router.push(href({ side: null }), { scroll: false });
-            }}
-          />
-        ) : undefined
-      }
-      mobileDocs={
-        <DocsMenu
-          owner={owner}
-          docs={docs}
-          current={doc}
-          canCreate={canCreate}
-          canEdit={canEdit}
-          href={(id) => href({ doc: id })}
-          roleColors={roleColors}
-          sideId={sideOpen ? side?.id ?? null : null}
-          heading={`#${number} ${title}`}
-          steps={
-            flow?.data.ready
-              ? flow.data.steps.map((st) => ({
-                  docId: st.docId,
-                  ticked: !!flow.data.done || !!st.sent,
-                  crew: st.people.map((id) => flow.team.find((p) => p.memberId === id)).filter((p): p is NonNullable<typeof p> => !!p),
-                }))
-              : undefined
+        copySources={docs
+          .filter((d) => d.id !== doc.id)
+          .map((d) => ({
+            id: d.id,
+            name: `${d.kind === "research" ? "Research · " : ""}${d.name}`,
+          }))}
+        onCopyFrom={async (id) => {
+          const r = await getDocContent(id);
+          if (r.error !== undefined) {
+            toast.error(r.error);
+            return null;
           }
-          onDeleted={(id) => {
-            // The one open: to another version (never the one beside it); the one beside it: that side closes.
-            const beside = sideOpen ? side?.id ?? null : null;
-            if (id === doc.id) {
-              const next = docs.find((d) => d.kind === "script" && d.id !== id && d.id !== beside) ?? docs.find((d) => d.kind === "script" && d.id !== id);
-              if (next) return router.push(href({ doc: next.id, side: next.id === beside ? null : undefined }), { scroll: false });
-            }
-            if (id === beside) {
-              setSideOpen(false);
-              return router.push(href({ side: null }), { scroll: false });
-            }
-            router.refresh();
-          }}
-        />
-      }
-      renderCommentPopover={(id, close) => {
-        const c = comments.find((x) => x.id === id);
-        if (!c) return null;
-        return (
-          <Leaves>
-            <CommentCard
-              // One per comment: another one's words open a fresh box (not this one half-changed).
-              key={c.id}
-              variant="popover"
-              c={c}
-              people={people}
+          return { content: r.content, comments: canComment ? r.comments : 0 };
+        }}
+        onCopyComments={async (from) => {
+          const r = await copyCommentsFrom(from, doc.id);
+          if (r.error !== undefined) return void toast.error(r.error);
+          if (r.copied)
+            toast.success(
+              r.copied === 1
+                ? "Copied, with its comment."
+                : `Copied, with ${r.copied} comments and editing ideas.`,
+            );
+          if (r.copied) commentsChanged();
+        }}
+        subBar={
+          flow?.data.ready && doc.kind === "script" ? (
+            <FlowStrip
+              flow={flow.data}
+              currentDocId={doc.id}
+              people={flow.team}
+              number={number}
+              can={flow.can}
+              scripterAction={flow.scripterAction}
+              videoId={flow.videoId}
+              href={(id) => href({ doc: id })}
               roleColors={roleColors}
-              me={me}
-              canComment={canComment}
-              mayDelete={mayDelete(c)}
-              onSketch={() => setZoomed(c)}
-              onFrame={c.frame ? () => viewFrame(c.frame!.id, c.frame) : undefined}
-              onDone={close}
-              onClose={close}
-              onAll={() => {
-                close();
-                setActive(c.id);
-                setChatOpen(true);
+            />
+          ) : undefined
+        }
+        // 1.55.2: in the one bar on a bigger screen, only People and the step's button (the steps are in the documents
+        // dropdown).
+        barFlow={
+          flow?.data.ready && doc.kind === "script"
+            ? ({ labels }) => (
+                <FlowStrip
+                  variant="bar"
+                  labels={labels}
+                  flow={flow.data}
+                  currentDocId={doc.id}
+                  people={flow.team}
+                  number={number}
+                  can={flow.can}
+                  scripterAction={flow.scripterAction}
+                  videoId={flow.videoId}
+                  href={(id) => href({ doc: id })}
+                  roleColors={roleColors}
+                />
+              )
+            : undefined
+        }
+        topBarExtra={
+          <>
+            {/* Keys: the first child is created on the server (React warns otherwise). */}
+            <span key="extra" className="contents">
+              {topBarExtra}
+            </span>
+            <SideBySideMenu
+              key="side"
+              docs={docs.filter((d) => d.id !== doc.id)}
+              active={sideOpen ? (side?.id ?? null) : null}
+              onPick={(id) => {
+                setSideOpen(true);
+                router.push(href({ side: id }), { scroll: false });
+              }}
+              onClose={() => {
+                setSideOpen(false);
+                router.push(href({ side: null }), { scroll: false });
               }}
             />
-          </Leaves>
-        );
-      }}
-      rightPanel={
-        <CommentsChat
-          // A fresh panel per document (its own comments, its own "text changed" check).
-          key={doc.id}
-          open={chatOpen}
-          setOpen={setChatOpen}
-          comments={comments}
-          active={active}
-          onPick={setActive}
-          docId={doc.id}
-          teamId={doc.teamId}
-          docName={doc.name}
-          number={number}
-          docContent={doc.content}
-          roleColors={roleColors}
-          exportTitle={title}
-          people={people}
-          onSketch={setZoomed}
-          canComment={canComment}
-          mayDelete={mayDelete}
-          // (Saved: it's in the list as itself.)
-          posting={posting?.id ? null : posting}
-          me={me}
-          onAddGeneral={onAddGeneral}
+          </>
+        }
+        sideBySide={
+          sideOpen && side ? (
+            <SidePage
+              key={side.id}
+              side={side}
+              me={me?.userId ?? null}
+              people={people}
+              canEdit={
+                side.kind === "research" ? canCreate.research : canCreate.script
+              }
+              swap={href({ doc: side.id, side: doc.id })}
+              close={() => {
+                setSideOpen(false);
+                router.push(href({ side: null }), { scroll: false });
+              }}
+            />
+          ) : undefined
+        }
+        mobileDocs={
+          <DocsMenu
+            owner={owner}
+            docs={docs}
+            current={doc}
+            canCreate={canCreate}
+            canEdit={canEdit}
+            href={(id) => href({ doc: id })}
+            roleColors={roleColors}
+            sideId={sideOpen ? (side?.id ?? null) : null}
+            heading={`#${number} ${title}`}
+            steps={
+              flow?.data.ready
+                ? flow.data.steps.map((st) => ({
+                    docId: st.docId,
+                    ticked: !!flow.data.done || !!st.sent,
+                    crew: st.people
+                      .map((id) => flow.team.find((p) => p.memberId === id))
+                      .filter((p): p is NonNullable<typeof p> => !!p),
+                  }))
+                : undefined
+            }
+            onDeleted={(id) => {
+              // The one open: to another version (never the one beside it); the one beside it: that side closes.
+              const beside = sideOpen ? (side?.id ?? null) : null;
+              if (id === doc.id) {
+                const next =
+                  docs.find(
+                    (d) =>
+                      d.kind === "script" && d.id !== id && d.id !== beside,
+                  ) ?? docs.find((d) => d.kind === "script" && d.id !== id);
+                if (next)
+                  return router.push(
+                    href({
+                      doc: next.id,
+                      side: next.id === beside ? null : undefined,
+                    }),
+                    { scroll: false },
+                  );
+              }
+              if (id === beside) {
+                setSideOpen(false);
+                return router.push(href({ side: null }), { scroll: false });
+              }
+              router.refresh();
+            }}
+          />
+        }
+        renderCommentPopover={(id, close) => {
+          const c = comments.find((x) => x.id === id);
+          if (!c) return null;
+          return (
+            <Leaves>
+              <CommentCard
+                // One per comment: another one's words open a fresh box (not this one half-changed).
+                key={c.id}
+                variant="popover"
+                c={c}
+                people={people}
+                roleColors={roleColors}
+                me={me}
+                canComment={canComment}
+                mayDelete={mayDelete(c)}
+                onSketch={() => setZoomed(c)}
+                onFrame={
+                  c.frame ? () => viewFrame(c.frame!.id, c.frame) : undefined
+                }
+                onDone={close}
+                onClose={close}
+                onAll={() => {
+                  close();
+                  setActive(c.id);
+                  setChatOpen(true);
+                }}
+              />
+            </Leaves>
+          );
+        }}
+        rightPanel={
+          <CommentsChat
+            // A fresh panel per document (its own comments, its own "text changed" check).
+            key={doc.id}
+            open={chatOpen}
+            setOpen={setChatOpen}
+            comments={comments}
+            active={active}
+            onPick={setActive}
+            docId={doc.id}
+            teamId={doc.teamId}
+            docName={doc.name}
+            number={number}
+            docContent={doc.content}
+            roleColors={roleColors}
+            exportTitle={title}
+            people={people}
+            onSketch={setZoomed}
+            canComment={canComment}
+            mayDelete={mayDelete}
+            // (Saved: it's in the list as itself.)
+            posting={posting?.id ? null : posting}
+            me={me}
+            onAddGeneral={onAddGeneral}
+          />
+        }
+      />
+      {zoomed?.sketch && (
+        <Lightbox
+          src={zoomed.sketch.url}
+          alt={`Sketch: ${zoomed.body}`}
+          download={`sketch-${zoomed.id.slice(0, 8)}.png`}
+          onClose={() => setZoomed(null)}
         />
-      }
-    />
-    {zoomed?.sketch && <Lightbox src={zoomed.sketch.url} alt={`Sketch: ${zoomed.body}`} download={`sketch-${zoomed.id.slice(0, 8)}.png`} onClose={() => setZoomed(null)} />}
+      )}
     </>
   );
 }
@@ -504,7 +673,11 @@ function AddDocDialog({
   useEffect(() => setName(""), [kind]);
   const submit = async () => {
     setBusy(true);
-    const r = await createDoc({ ...("short" in owner ? { short: owner.short } : { long: owner.long }), kind: kind ?? "script", name: name.trim() || suggested });
+    const r = await createDoc({
+      ...("short" in owner ? { short: owner.short } : { long: owner.long }),
+      kind: kind ?? "script",
+      name: name.trim() || suggested,
+    });
     setBusy(false);
     if (r.error !== undefined) toast.error(r.error);
     else {
@@ -516,21 +689,35 @@ function AddDocDialog({
     <Dialog
       open={!!kind}
       onClose={() => !busy && onClose()}
-      title={kind === "research" ? "Add a research document" : "Add a script version"}
+      title={
+        kind === "research" ? "Add a research document" : "Add a script version"
+      }
       description="It starts empty; you can copy another document into it."
       footer={
         <>
-          <button type="button" onClick={onClose} disabled={busy} className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg px-4 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+          >
             Cancel
           </button>
-          <button type="button" onClick={() => void submit()} disabled={busy} className="rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60">
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={busy}
+            className="rounded-lg bg-amber text-white font-bold px-5 h-10 text-[13.5px] disabled:opacity-60"
+          >
             {busy ? "Adding…" : "Add"}
           </button>
         </>
       }
     >
       <label className="block">
-        <span className="block text-[12px] font-semibold text-ink-soft mb-1.5">Name</span>
+        <span className="block text-[12px] font-semibold text-ink-soft mb-1.5">
+          Name
+        </span>
         <input
           autoFocus
           value={name}
@@ -546,11 +733,22 @@ function AddDocDialog({
 }
 
 /** Side by side: pick the document right from the button. */
-function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]; active: string | null; onPick: (id: string) => void; onClose: () => void }) {
+function SideBySideMenu({
+  docs,
+  active,
+  onPick,
+  onClose,
+}: {
+  docs: DocListItem[];
+  active: string | null;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return;
-    const off = (e: MouseEvent) => !(e.target as HTMLElement).closest("[data-side-menu]") && setOpen(false);
+    const off = (e: MouseEvent) =>
+      !(e.target as HTMLElement).closest("[data-side-menu]") && setOpen(false);
     document.addEventListener("mousedown", off);
     return () => document.removeEventListener("mousedown", off);
   }, [open]);
@@ -562,7 +760,11 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label="Side by side"
-        title={active ? "Side by side: on" : "Side by side: another document next to this one"}
+        title={
+          active
+            ? "Side by side: on"
+            : "Side by side: another document next to this one"
+        }
         className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? "bg-amber/15 text-ink ring-1 ring-amber/50" : "text-ink-soft hover:text-ink hover:bg-surface-2"}`}
       >
         <ColumnsIcon className="w-4 h-4" />
@@ -570,7 +772,9 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
       {open && (
         <Leaves>
           <div className="pop-menu origin-top-right absolute right-0 top-[calc(100%+6px)] z-40 w-60 rounded-xl border border-line/15 bg-surface shadow-2xl p-1.5">
-            <div className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">Show next to this one</div>
+            <div className="px-2.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint">
+              Show next to this one
+            </div>
             {docs.map((d) => (
               <button
                 key={d.id}
@@ -581,7 +785,10 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
                 }}
                 className={`w-full text-left flex items-center gap-2 rounded-lg px-2.5 h-9 text-[13px] ${d.id === active ? "bg-amber/10 font-bold" : "hover:bg-surface-2"}`}
               >
-                <span className="truncate">{d.kind === "research" ? "Research · " : ""}{d.name}</span>
+                <span className="truncate">
+                  {d.kind === "research" ? "Research · " : ""}
+                  {d.name}
+                </span>
               </button>
             ))}
             {active && (
@@ -603,21 +810,41 @@ function SideBySideMenu({ docs, active, onPick, onClose }: { docs: DocListItem[]
   );
 }
 
-type CrewPerson = { memberId: string; name: string; avatarUrl: string | null; color: string };
+type CrewPerson = {
+  memberId: string;
+  name: string;
+  avatarUrl: string | null;
+  color: string;
+};
 
 /** Who's on a step: their faces (three, then "+2"), their names read out and on hover. */
 function Crew({ people, ring }: { people: CrewPerson[]; ring: string }) {
   if (!people.length) return null;
   const names = people.map((p) => p.name).join(", ");
   return (
-    <span className="flex items-center -space-x-1.5 flex-shrink-0" title={names}>
+    <span
+      className="flex items-center -space-x-1.5 flex-shrink-0"
+      title={names}
+    >
       {people.slice(0, 3).map((p) => (
-        <span key={p.memberId} aria-hidden className={`rounded-full ring-2 ${ring}`}>
-          <PersonAvatar name={p.name} avatarUrl={p.avatarUrl} color={p.color} className="w-5 h-5 text-[8.5px]" />
+        <span
+          key={p.memberId}
+          aria-hidden
+          className={`rounded-full ring-2 ${ring}`}
+        >
+          <PersonAvatar
+            name={p.name}
+            avatarUrl={p.avatarUrl}
+            color={p.color}
+            className="w-5 h-5 text-[8.5px]"
+          />
         </span>
       ))}
       {people.length > 3 && (
-        <span aria-hidden className={`w-5 h-5 rounded-full ring-2 ${ring} bg-surface-2 text-ink-soft text-[8.5px] font-bold flex items-center justify-center`}>
+        <span
+          aria-hidden
+          className={`w-5 h-5 rounded-full ring-2 ${ring} bg-surface-2 text-ink-soft text-[8.5px] font-bold flex items-center justify-center`}
+        >
           +{people.length - 3}
         </span>
       )}
@@ -679,22 +906,56 @@ function DocsMenu({
   const [names, setNames] = useState<Record<string, string>>({});
   const [gone, setGone] = useState<string[]>([]);
   useEffect(() => {
-    setNames((n) => (Object.keys(n).some((id) => docs.find((d) => d.id === id)?.name === n[id] || !docs.some((d) => d.id === id)) ? Object.fromEntries(Object.entries(n).filter(([id, v]) => docs.some((d) => d.id === id && d.name !== v))) : n));
-    setGone((g) => (g.some((id) => !docs.some((d) => d.id === id)) ? g.filter((id) => docs.some((d) => d.id === id)) : g));
+    setNames((n) =>
+      Object.keys(n).some(
+        (id) =>
+          docs.find((d) => d.id === id)?.name === n[id] ||
+          !docs.some((d) => d.id === id),
+      )
+        ? Object.fromEntries(
+            Object.entries(n).filter(([id, v]) =>
+              docs.some((d) => d.id === id && d.name !== v),
+            ),
+          )
+        : n,
+    );
+    setGone((g) =>
+      g.some((id) => !docs.some((d) => d.id === id))
+        ? g.filter((id) => docs.some((d) => d.id === id))
+        : g,
+    );
   }, [docs]);
-  const list = docs.filter((d) => !gone.includes(d.id)).map((d) => (names[d.id] ? { ...d, name: names[d.id] } : d));
+  const list = docs
+    .filter((d) => !gone.includes(d.id))
+    .map((d) => (names[d.id] ? { ...d, name: names[d.id] } : d));
   // The document on its way counts as open already.
-  const shownDoc = (nav.pending && list.find((d) => d.id === nav.pending)) || { ...current, name: names[current.id] ?? current.name };
+  const shownDoc = (nav.pending && list.find((d) => d.id === nav.pending)) || {
+    ...current,
+    name: names[current.id] ?? current.name,
+  };
   const [renaming, setRenaming] = useState<string | null>(null);
   const renamingRef = useRef<string | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState<"script" | "research" | null>(null);
-  const DOT: Record<string, string | undefined> = { Script: roleColors.scripter, Review: roleColors.master, Staging: roleColors.editor, Research: roleColors.researcher };
+  const DOT: Record<string, string | undefined> = {
+    Script: roleColors.scripter,
+    Review: roleColors.master,
+    Staging: roleColors.editor,
+    Research: roleColors.researcher,
+  };
   const stepOf = (id: string) => steps?.find((x) => x.docId === id) ?? null;
   const now = stepOf(shownDoc.id);
   const groups = [
     { kind: "script" as const, label: "Versions", can: canCreate.script },
-    ...("long" in owner ? [{ kind: "research" as const, label: "Research", can: canCreate.research }] : []),
+    ...("long" in owner
+      ? [
+          {
+            kind: "research" as const,
+            label: "Research",
+            can: canCreate.research,
+          },
+        ]
+      : []),
   ];
 
   const startRename = (id: string) => {
@@ -713,13 +974,23 @@ function DocsMenu({
     setNames((n) => ({ ...n, [d.id]: name }));
     const r = await renameDoc(d.id, name);
     if (r.error !== undefined) {
-      setNames((n) => Object.fromEntries(Object.entries(n).filter(([k]) => k !== d.id)));
+      setNames((n) =>
+        Object.fromEntries(Object.entries(n).filter(([k]) => k !== d.id)),
+      );
       return void toast.error(r.error);
     }
     router.refresh();
   };
   const remove = async (d: DocListItem) => {
-    if (!(await confirm({ title: `Delete “${d.name}”?`, description: "Its text and comments are deleted.", confirmLabel: "Delete", danger: true }))) return;
+    if (
+      !(await confirm({
+        title: `Delete “${d.name}”?`,
+        description: "Its text and comments are deleted.",
+        confirmLabel: "Delete",
+        danger: true,
+      }))
+    )
+      return;
     setGone((g) => [...g, d.id]);
     const r = await deleteDoc(d.id);
     if (r.error !== undefined) {
@@ -741,7 +1012,10 @@ function DocsMenu({
         type="button"
         onClick={() => {
           const r = btn.current?.getBoundingClientRect();
-          if (r) setAlign(r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right");
+          if (r)
+            setAlign(
+              r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right",
+            );
           if (open) close();
           else setOpen(true);
         }}
@@ -750,9 +1024,17 @@ function DocsMenu({
         title="Documents"
         className="inline-flex items-center gap-1.5 rounded-lg border border-line/20 pl-2.5 pr-2 h-8 text-[13px] font-bold max-w-[14rem] hover:border-line/35"
       >
-        <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }} />
+        <span
+          className="w-2 h-2 rounded-[3px] flex-shrink-0"
+          style={{ background: DOT[shownDoc.name] ?? "rgb(var(--line) / .4)" }}
+        />
         <span className="truncate">{shownDoc.name}</span>
-        {now?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
+        {now?.ticked && (
+          <CheckIcon
+            className="w-3.5 h-3.5 text-green flex-shrink-0"
+            aria-label="sent on"
+          />
+        )}
         {now && now.crew.length > 0 && (
           <span className="pl-0.5 flex-shrink-0">
             <Crew people={now.crew} ring="ring-paper" />
@@ -760,98 +1042,142 @@ function DocsMenu({
         )}
         <ChevronDownIcon className="w-3.5 h-3.5 flex-shrink-0 text-ink-soft" />
       </button>
-      <AnchoredMenu open={open} onClose={close} anchor={btn} label="Documents" align={align} width={300}>
-          {heading && <div className="px-4 pt-3.5 pb-1 text-[12.5px] font-semibold text-ink-soft leading-snug line-clamp-2">{heading}</div>}
-          <div className="p-2">
-            {groups.map((g) => (
-              <div key={g.kind} className="mb-2">
-                <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-soft">{g.label}</div>
-                {list
-                  .filter((d) => d.kind === g.kind)
-                  .map((d) =>
-                    renaming === d.id ? (
-                      <div key={d.id} className="flex items-center gap-3 rounded-xl pl-3 pr-1.5 h-12 bg-surface-2">
-                        <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
-                        <input
-                          ref={renameInput}
-                          autoFocus
-                          defaultValue={d.name}
-                          maxLength={60}
-                          aria-label={`New name for ${d.name}`}
-                          // (Escape here gives up the new name and leaves the menu open: the menu leaves the key to
-                          // what's focused inside one of these.)
-                          data-floating-menu=""
-                          onFocus={(e) => e.currentTarget.select()}
-                          onBlur={() => void finishRename(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void finishRename(true);
-                            if (e.key === "Escape") void finishRename(false);
+      <AnchoredMenu
+        open={open}
+        onClose={close}
+        anchor={btn}
+        label="Documents"
+        align={align}
+        width={300}
+      >
+        {heading && (
+          <div className="px-4 pt-3.5 pb-1 text-[12.5px] font-semibold text-ink-soft leading-snug line-clamp-2">
+            {heading}
+          </div>
+        )}
+        <div className="p-2">
+          {groups.map((g) => (
+            <div key={g.kind} className="mb-2">
+              <div className="px-2 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-soft">
+                {g.label}
+              </div>
+              {list
+                .filter((d) => d.kind === g.kind)
+                .map((d) =>
+                  renaming === d.id ? (
+                    <div
+                      key={d.id}
+                      className="flex items-center gap-3 rounded-xl pl-3 pr-1.5 h-12 bg-surface-2"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0"
+                        style={{
+                          background: DOT[d.name] ?? "rgb(var(--line) / .4)",
+                        }}
+                      />
+                      <input
+                        ref={renameInput}
+                        autoFocus
+                        defaultValue={d.name}
+                        maxLength={60}
+                        aria-label={`New name for ${d.name}`}
+                        // (Escape here gives up the new name and leaves the menu open: the menu leaves the key to
+                        // what's focused inside one of these.)
+                        data-floating-menu=""
+                        onFocus={(e) => e.currentTarget.select()}
+                        onBlur={() => void finishRename(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void finishRename(true);
+                          if (e.key === "Escape") void finishRename(false);
+                        }}
+                        className="flex-1 min-w-0 rounded-lg border border-amber bg-surface px-2.5 h-9 text-[14px] font-semibold outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <div key={d.id} className="group/doc relative">
+                      <button
+                        type="button"
+                        disabled={d.id === sideId}
+                        onClick={() => {
+                          setOpen(false);
+                          nav.go(href(d.id), d.id);
+                        }}
+                        className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "group-hover/doc:bg-surface-2"}`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0"
+                          style={{
+                            background: DOT[d.name] ?? "rgb(var(--line) / .4)",
                           }}
-                          className="flex-1 min-w-0 rounded-lg border border-amber bg-surface px-2.5 h-9 text-[14px] font-semibold outline-none"
                         />
-                      </div>
-                    ) : (
-                      <div key={d.id} className="group/doc relative">
-                        <button
-                          type="button"
-                          disabled={d.id === sideId}
-                          onClick={() => {
-                            setOpen(false);
-                            nav.go(href(d.id), d.id);
-                          }}
-                          className={`w-full flex items-center gap-3 rounded-xl px-3 h-12 text-[15px] disabled:opacity-45 ${d.id === shownDoc.id ? "bg-amber/10 font-bold" : "group-hover/doc:bg-surface-2"}`}
+                        <span className="truncate">{d.name}</span>
+                        {stepOf(d.id)?.ticked && (
+                          <CheckIcon
+                            className="w-3.5 h-3.5 text-green flex-shrink-0"
+                            aria-label="sent on"
+                          />
+                        )}
+                        <Crew
+                          people={stepOf(d.id)?.crew ?? []}
+                          ring="ring-surface"
+                        />
+                        <span
+                          className={`ml-auto text-[12px] text-ink-faint whitespace-nowrap ${canEdit ? "transition-opacity group-hover/doc:opacity-0 group-focus-within/doc:opacity-0 [@media(hover:none)]:opacity-0" : ""}`}
                         >
-                          <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0" style={{ background: DOT[d.name] ?? "rgb(var(--line) / .4)" }} />
-                          <span className="truncate">{d.name}</span>
-                          {stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}
-                          <Crew people={stepOf(d.id)?.crew ?? []} ring="ring-surface" />
-                          <span
-                            className={`ml-auto text-[12px] text-ink-faint whitespace-nowrap ${canEdit ? "transition-opacity group-hover/doc:opacity-0 group-focus-within/doc:opacity-0 [@media(hover:none)]:opacity-0" : ""}`}
+                          {d.id === sideId
+                            ? "On the right"
+                            : `${d.wordCount} words`}
+                        </span>
+                      </button>
+                      {canEdit && (
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-opacity opacity-0 group-hover/doc:opacity-100 group-focus-within/doc:opacity-100 [@media(hover:none)]:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() => startRename(d.id)}
+                            aria-label={`Rename ${d.name}`}
+                            title="Rename"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-line/15"
                           >
-                            {d.id === sideId ? "On the right" : `${d.wordCount} words`}
-                          </span>
-                        </button>
-                        {canEdit && (
-                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 transition-opacity opacity-0 group-hover/doc:opacity-100 group-focus-within/doc:opacity-100 [@media(hover:none)]:opacity-100">
+                            <EditIcon className="w-3.5 h-3.5" />
+                          </button>
+                          {deletable(d) && (
                             <button
                               type="button"
-                              onClick={() => startRename(d.id)}
-                              aria-label={`Rename ${d.name}`}
-                              title="Rename"
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-line/15"
+                              onClick={() => void remove(d)}
+                              aria-label={`Delete ${d.name}`}
+                              title="Delete"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-red hover:bg-red/10"
                             >
-                              <EditIcon className="w-3.5 h-3.5" />
+                              <TrashIcon className="w-3.5 h-3.5" />
                             </button>
-                            {deletable(d) && (
-                              <button
-                                type="button"
-                                onClick={() => void remove(d)}
-                                aria-label={`Delete ${d.name}`}
-                                title="Delete"
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-red hover:bg-red/10"
-                              >
-                                <TrashIcon className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  )}
-                {g.can && (
-                  <button type="button" onClick={() => setAdding(g.kind)} className="w-full flex items-center gap-2 rounded-xl px-3 h-11 text-[14px] font-semibold text-ink-soft hover:bg-surface-2">
-                    <PlusIcon className="w-4 h-4" />
-                    {g.kind === "research" ? "Add research" : "Add version"}
-                  </button>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  ),
                 )}
-              </div>
-            ))}
-          </div>
+              {g.can && (
+                <button
+                  type="button"
+                  onClick={() => setAdding(g.kind)}
+                  className="w-full flex items-center gap-2 rounded-xl px-3 h-11 text-[14px] font-semibold text-ink-soft hover:bg-surface-2"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  {g.kind === "research" ? "Add research" : "Add version"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </AnchoredMenu>
       <AddDocDialog
         kind={adding}
         owner={owner}
-        suggested={adding === "research" ? `Research ${docs.filter((d) => d.kind === "research").length + 1}` : `Version ${docs.filter((d) => d.kind === "script").length + 1}`}
+        suggested={
+          adding === "research"
+            ? `Research ${docs.filter((d) => d.kind === "research").length + 1}`
+            : `Version ${docs.filter((d) => d.kind === "script").length + 1}`
+        }
         onClose={() => setAdding(null)}
         onCreated={(id) => {
           setAdding(null);
@@ -890,7 +1216,9 @@ function SidePage({
   const liveMode = !!liveAt;
   const [clientId] = useState(newClientId);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [status, setStatus] = useState<"saved" | "saving" | "unsaved" | "conflict">("saved");
+  const [status, setStatus] = useState<
+    "saved" | "saving" | "unsaved" | "conflict"
+  >("saved");
   // Dark / light paper and the page width follow the main page.
   const [paper, setPaper] = useState<"light" | "dark">("light");
   const [wide, setWide] = useState(false);
@@ -903,8 +1231,10 @@ function SidePage({
     } catch {
       /* private mode */
     }
-    const on = (e: Event) => setPaper((e as CustomEvent<"light" | "dark">).detail);
-    const onWidth = (e: Event) => setWide((e as CustomEvent<string>).detail !== "normal");
+    const on = (e: Event) =>
+      setPaper((e as CustomEvent<"light" | "dark">).detail);
+    const onWidth = (e: Event) =>
+      setWide((e as CustomEvent<string>).detail !== "normal");
     window.addEventListener("vp-paper", on);
     window.addEventListener("vp-width", onWidth);
     return () => {
@@ -914,7 +1244,11 @@ function SidePage({
   }, []);
   // Pictures pasted or dropped here too (1.27.5): shown at once, saved once uploaded.
   const editorRef = useRef<Editor | null>(null);
-  const images = useScriptImages(editorRef, { teamId: side.teamId, scriptId: side.id, onError: (m) => toast.error(m) });
+  const images = useScriptImages(editorRef, {
+    teamId: side.teamId,
+    scriptId: side.id,
+    onError: (m) => toast.error(m),
+  });
   const imagesRef = useRef(images);
   imagesRef.current = images;
   const save = async (e: Editor) => {
@@ -926,13 +1260,21 @@ function SidePage({
     }
     setStatus("saving");
     const text = e.getText();
-    const r = await saveScript({ scriptId: side.id, expectedVersion: version.current, content, text, wordCount: text.trim() ? text.trim().split(/\s+/).length : 0 });
+    const r = await saveScript({
+      scriptId: side.id,
+      expectedVersion: version.current,
+      content,
+      text,
+      wordCount: text.trim() ? text.trim().split(/\s+/).length : 0,
+    });
     if (r.ok) {
       version.current = r.version;
       setStatus("saved");
     } else if ("conflict" in r) {
       setStatus("conflict");
-      toast.error(`Someone else saved “${side.name}”. Reload to see their version.`);
+      toast.error(
+        `Someone else saved “${side.name}”. Reload to see their version.`,
+      );
     } else {
       setStatus("unsaved");
       toast.error(r.error);
@@ -943,7 +1285,12 @@ function SidePage({
       immediatelyRender: false,
       editable: canEdit,
       extensions: [
-        StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }),
+        StarterKit.configure({
+          heading: { levels: [1, 2, 3] },
+          codeBlock: false,
+          code: false,
+          orderedList: false,
+        }),
         ScriptOrderedList,
         ScriptKeys,
         Highlight.configure({ multicolor: true }),
@@ -954,22 +1301,36 @@ function SidePage({
         ScriptImage,
         HeadingKeys,
         PageBreak,
-        ...(liveAt ? [LiveCursors, LiveSteps.configure({ version: liveAt.docVersion, client: clientId })] : []),
+        ...(liveAt
+          ? [
+              LiveCursors,
+              LiveSteps.configure({
+                version: liveAt.docVersion,
+                client: clientId,
+              }),
+            ]
+          : []),
       ],
       content: openable(side.content),
       editorProps: {
         attributes: { class: "script-doc outline-none" },
-        transformPastedHTML: (html) => imagesRef.current.fromHtml(smallHeadingsToH3(html)),
+        transformPastedHTML: (html) =>
+          imagesRef.current.fromHtml(smallHeadingsToH3(html)),
         handlePaste: (_view, event) => {
           if (!canEdit) return false;
           const dt = event.clipboardData;
           const files = imageFiles(dt);
-          const plan = pastePlan({ files: files.length, html: dt?.getData("text/html") ?? "", text: dt?.getData("text/plain") ?? "" });
+          const plan = pastePlan({
+            files: files.length,
+            html: dt?.getData("text/html") ?? "",
+            text: dt?.getData("text/plain") ?? "",
+          });
           if (plan === "files") {
             imagesRef.current.insert(files);
             return true;
           }
-          if (plan === "files-after") setTimeout(() => imagesRef.current.insert(files), 0);
+          if (plan === "files-after")
+            setTimeout(() => imagesRef.current.insert(files), 0);
           return false;
         },
         handleDrop: (view, event, _slice, moved) => {
@@ -977,7 +1338,10 @@ function SidePage({
           const files = imageFiles(event.dataTransfer);
           if (!files.length) return false;
           event.preventDefault();
-          imagesRef.current.insert(files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos);
+          imagesRef.current.insert(
+            files,
+            view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos,
+          );
           return true;
         },
       },
@@ -991,14 +1355,20 @@ function SidePage({
         timer.current = setTimeout(() => void save(e), 1200);
       },
     },
-    [side.id]
+    [side.id],
   );
   editorRef.current = editor;
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   // Live: the others in this document (their cursors here too), and everyone's changes as they're made.
-  const editsRef = useRef<{ onSteps: (m: StepsMessage) => void; onJoined: () => void } | null>(null);
+  const editsRef = useRef<{
+    onSteps: (m: StepsMessage) => void;
+    onJoined: () => void;
+  } | null>(null);
   const live = useLiveCursors({
     editor: liveMode ? editor : null,
     scriptId: side.id,
@@ -1025,7 +1395,8 @@ function SidePage({
     onError: (m) => toast.error(m),
   });
   editsRef.current = edits;
-  const liveStuck = liveMode && (edits.status === "stale" || edits.status === "newer");
+  const liveStuck =
+    liveMode && (edits.status === "stale" || edits.status === "newer");
   useEffect(() => {
     if (editor && !editor.isDestroyed && liveStuck) editor.setEditable(false);
   }, [editor, liveStuck]);
@@ -1040,7 +1411,9 @@ function SidePage({
           : status === "conflict"
             ? "Not saved"
             : "Unsaved";
-  const bad = liveMode ? edits.status === "offline" || liveStuck : status === "conflict";
+  const bad = liveMode
+    ? edits.status === "offline" || liveStuck
+    : status === "conflict";
   const good = liveMode ? edits.status === "saved" : status === "saved";
   return (
     <div className="min-w-0">
@@ -1051,21 +1424,42 @@ function SidePage({
           {side.name}
         </span>
         {liveStuck ? (
-          <button type="button" onClick={() => window.location.reload()} className="text-[11.5px] font-semibold text-red hover:underline">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-[11.5px] font-semibold text-red hover:underline"
+          >
             {label}
           </button>
         ) : (
-          <span className={`text-[11.5px] font-semibold ${bad ? "text-red" : good ? "text-green" : "text-ink-soft"}`}>{label}</span>
+          <span
+            className={`text-[11.5px] font-semibold ${bad ? "text-red" : good ? "text-green" : "text-ink-soft"}`}
+          >
+            {label}
+          </span>
         )}
         <span className="flex-1" />
-        <Link href={swap} scroll={false} prefetch={false} className="rounded-md px-2 h-7 inline-flex items-center text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2">
+        <Link
+          href={swap}
+          scroll={false}
+          prefetch={false}
+          className="rounded-md px-2 h-7 inline-flex items-center text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2"
+        >
           Open here
         </Link>
-        <button type="button" onClick={close} aria-label="Close side by side" className="w-7 h-7 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Close side by side"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
+        >
           <CloseIcon className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div data-paper={paper} className={`script-paper mx-auto w-full ${wide ? "max-w-none" : "max-w-[794px]"} rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] px-6 sm:px-[72px] py-10 sm:py-[72px] min-h-[60vh] transition-colors`}>
+      <div
+        data-paper={paper}
+        className={`script-paper mx-auto w-full ${wide ? "max-w-none" : "max-w-[794px]"} rounded-md border border-line/10 shadow-[0_10px_40px_-20px_rgb(0_0_0/0.35)] px-6 sm:px-[72px] py-10 sm:py-[72px] min-h-[60vh] transition-colors`}
+      >
         <EditorContent editor={editor} />
       </div>
     </div>
@@ -1089,7 +1483,13 @@ function commentColor(c: ScriptComment, _roleColors?: Record<string, string>) {
 }
 
 // The frame picker for a frame guide on the whole document (1.54.0): loaded when it's first opened.
-const FramePicker = dynamic(() => import("@/modules/frames/components/frame-picker").then((m) => m.FramePicker), { ssr: false });
+const FramePicker = dynamic(
+  () =>
+    import("@/modules/frames/components/frame-picker").then(
+      (m) => m.FramePicker,
+    ),
+  { ssr: false },
+);
 
 /**
  * Comments as a small chat: a floating button, a panel on desktop, a sheet on
@@ -1144,7 +1544,11 @@ export function CommentsChat({
   people: MentionPerson[];
   onSketch: (c: ScriptComment) => void;
   /** A comment on the whole document: null when it's posted, else what went wrong. */
-  onAddGeneral?: (body: string, kind: CommentKind, frame?: FrameRef | null) => Promise<string | null>;
+  onAddGeneral?: (
+    body: string,
+    kind: CommentKind,
+    frame?: FrameRef | null,
+  ) => Promise<string | null>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -1155,15 +1559,21 @@ export function CommentsChat({
   const [showResolved, setShowResolved] = useState(false);
   const openCount = comments.filter((c) => !c.resolved).length;
   const shown = comments.filter((c) => showResolved || !c.resolved);
-  const counts = { all: shown.length, comment: shown.filter((c) => c.kind === "comment").length, edit_idea: shown.filter((c) => c.kind === "edit_idea").length, frame: shown.filter((c) => c.kind === "frame").length };
+  const counts = {
+    all: shown.length,
+    comment: shown.filter((c) => c.kind === "comment").length,
+    edit_idea: shown.filter((c) => c.kind === "edit_idea").length,
+    frame: shown.filter((c) => c.kind === "frame").length,
+  };
   const list = shown.filter((c) => filter === "all" || c.kind === filter);
   const listRef = useRef<HTMLDivElement>(null);
   const hasPosting = !!posting;
   useEffect(() => {
     if (open) listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [open, comments.length, hasPosting]);
-  const sending = posting && !comments.some((c) => c.id === posting.id) ? posting : null;
-  const meAs = me ? people.find((p) => p.userId === me.userId) ?? null : null;
+  const sending =
+    posting && !comments.some((c) => c.id === posting.id) ? posting : null;
+  const meAs = me ? (people.find((p) => p.userId === me.userId) ?? null) : null;
   // Which quotes can no longer be found (the text was rewritten). Null until the text is read.
   const [missing, setMissing] = useState<Set<string> | null>(null);
   // Every node and mark a script can have (1.23.1: highlights, nested checklists and page
@@ -1172,15 +1582,38 @@ export function CommentsChat({
     {
       immediatelyRender: false,
       editable: false,
-      extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, orderedList: false }), ScriptOrderedList, Highlight.configure({ multicolor: true }), TextColor, TextAlign.configure({ types: ["heading", "paragraph"] }), TaskList, TaskItem.configure({ nested: true }), ScriptImage, PageBreak],
+      extensions: [
+        StarterKit.configure({
+          heading: { levels: [1, 2, 3] },
+          codeBlock: false,
+          code: false,
+          orderedList: false,
+        }),
+        ScriptOrderedList,
+        Highlight.configure({ multicolor: true }),
+        TextColor,
+        TextAlign.configure({ types: ["heading", "paragraph"] }),
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        ScriptImage,
+        PageBreak,
+      ],
       content: docContent,
     },
-    [docContent]
+    [docContent],
   );
   useEffect(() => {
     if (!ed) return;
     // A general one is on no words: it's never "on text that changed".
-    setMissing(new Set(comments.filter((c) => c.quote && !findQuote(ed.state.doc, c.quote, c.occurrence)).map((c) => c.id)));
+    setMissing(
+      new Set(
+        comments
+          .filter(
+            (c) => c.quote && !findQuote(ed.state.doc, c.quote, c.occurrence),
+          )
+          .map((c) => c.id),
+      ),
+    );
   }, [ed, comments]);
   const here = missing ? list.filter((c) => !missing.has(c.id)) : list;
   const gone = missing ? list.filter((c) => missing.has(c.id)) : [];
@@ -1201,10 +1634,19 @@ export function CommentsChat({
   useEffect(() => {
     try {
       const b = JSON.parse(localStorage.getItem(generalKey) ?? "null");
-      if (b && typeof b.text === "string" && Date.now() - (b.at ?? 0) < 14 * 86_400_000) {
+      if (
+        b &&
+        typeof b.text === "string" &&
+        Date.now() - (b.at ?? 0) < 14 * 86_400_000
+      ) {
         setGText(b.text);
-        const frame = b.kind === "frame" && b.frame && typeof b.frame.id === "string" ? (b.frame as FrameRef) : null;
-        setGKind(b.kind === "edit_idea" ? "edit_idea" : frame ? "frame" : "comment");
+        const frame =
+          b.kind === "frame" && b.frame && typeof b.frame.id === "string"
+            ? (b.frame as FrameRef)
+            : null;
+        setGKind(
+          b.kind === "edit_idea" ? "edit_idea" : frame ? "frame" : "comment",
+        );
         setGFrame(frame);
       }
     } catch {}
@@ -1212,8 +1654,18 @@ export function CommentsChat({
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        if (!gText.trim() && !(gKind === "frame" && gFrame)) localStorage.removeItem(generalKey);
-        else localStorage.setItem(generalKey, JSON.stringify({ kind: gKind, text: gText, frame: gKind === "frame" ? gFrame : null, at: Date.now() }));
+        if (!gText.trim() && !(gKind === "frame" && gFrame))
+          localStorage.removeItem(generalKey);
+        else
+          localStorage.setItem(
+            generalKey,
+            JSON.stringify({
+              kind: gKind,
+              text: gText,
+              frame: gKind === "frame" ? gFrame : null,
+              at: Date.now(),
+            }),
+          );
       } catch {
         /* full or private: it's still in the box */
       }
@@ -1223,13 +1675,18 @@ export function CommentsChat({
   async function sendGeneral() {
     const body = gText.trim();
     if (!onAddGeneral || gBusy) return;
-    if (gKind === "frame" ? !gFrame : !body) return gKind === "frame" ? setGPicking(true) : undefined;
+    if (gKind === "frame" ? !gFrame : !body)
+      return gKind === "frame" ? setGPicking(true) : undefined;
     const was = { text: gText, kind: gKind, frame: gFrame };
     setGBusy(true);
     // It shows at once, as "Posting…"; if it fails, the words come back to the box.
     setGText("");
     if (gKind === "frame") setGFrame(null);
-    const err = await onAddGeneral(body, gKind, gKind === "frame" ? was.frame : null);
+    const err = await onAddGeneral(
+      body,
+      gKind,
+      gKind === "frame" ? was.frame : null,
+    );
     setGBusy(false);
     if (err) {
       setGText(was.text);
@@ -1246,7 +1703,12 @@ export function CommentsChat({
   async function discardGeneral() {
     if (!gText.trim() && !(gKind === "frame" && gFrame)) return;
     const ok = await confirm({
-      title: gKind === "edit_idea" ? "Discard this editing idea?" : gKind === "frame" ? "Discard this frame guide?" : "Discard this comment?",
+      title:
+        gKind === "edit_idea"
+          ? "Discard this editing idea?"
+          : gKind === "frame"
+            ? "Discard this frame guide?"
+            : "Discard this comment?",
       description: "What you wrote will be lost.",
       confirmLabel: "Discard",
       danger: true,
@@ -1259,7 +1721,9 @@ export function CommentsChat({
 
   // The shot list (1.54.0): every frame guide of the script in its order (on words, linked words, pictures), as Word
   // or a PDF, for whoever films it.
-  const shotCount = comments.filter((c) => c.kind === "frame" && !c.resolved).length + (ed && !ed.isDestroyed ? frameUses(ed.state.doc).length : 0);
+  const shotCount =
+    comments.filter((c) => c.kind === "frame" && !c.resolved).length +
+    (ed && !ed.isDestroyed ? frameUses(ed.state.doc).length : 0);
   async function exportShots(f: "docx" | "pdf") {
     const doc = ed && !ed.isDestroyed ? ed.state.doc : null;
     const uses = doc ? frameUses(doc) : [];
@@ -1267,18 +1731,52 @@ export function CommentsChat({
     const notes = comments
       .filter((c) => c.kind === "frame" && !c.resolved)
       .map((c) => ({
-        at: !c.quote ? -1 : doc ? findQuote(doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity,
-        item: { quote: c.quote, idea: c.body, sketch: c.frame?.url ?? null, label: c.frame ? frameRefName(c.frame) : "Its frame was deleted from Frame Guides" },
+        at: !c.quote
+          ? -1
+          : doc
+            ? (findQuote(doc, c.quote, c.occurrence)?.from ?? Infinity)
+            : Infinity,
+        item: {
+          quote: c.quote,
+          idea: c.body,
+          sketch: c.frame?.url ?? null,
+          label: c.frame
+            ? frameRefName(c.frame)
+            : "Its frame was deleted from Frame Guides",
+        },
       }));
     const inText = uses.flatMap((u) => {
       const fr = frameById(teamId, u.id);
-      return fr ? [{ at: u.at, item: { quote: u.how === "picture" ? null : u.words, idea: "", sketch: fr.url, label: `${frameRefName(fr)}${u.how === "link" ? " (linked words)" : ""}` } }] : [];
+      return fr
+        ? [
+            {
+              at: u.at,
+              item: {
+                quote: u.how === "picture" ? null : u.words,
+                idea: "",
+                sketch: fr.url,
+                label: `${frameRefName(fr)}${u.how === "link" ? " (linked words)" : ""}`,
+              },
+            },
+          ]
+        : [];
     });
-    const shots = [...notes, ...inText].sort((a, b) => a.at - b.at).map((x) => x.item);
-    if (!shots.length) return toast.error("No frame guides in this script yet.");
-    const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
-    if (f === "docx") await exportIdeasDocx(shots, exportTitle, `${exportTitle} - shot list`.replace(/[\\/:*?"<>|]+/g, ""), "Shot List");
-    else if (!exportIdeasPdf(shots, exportTitle, "Shot List")) toast.error("Allow pop-ups to print the PDF.");
+    const shots = [...notes, ...inText]
+      .sort((a, b) => a.at - b.at)
+      .map((x) => x.item);
+    if (!shots.length)
+      return toast.error("No frame guides in this script yet.");
+    const { exportIdeasDocx, exportIdeasPdf } =
+      await import("../lib/export-docx");
+    if (f === "docx")
+      await exportIdeasDocx(
+        shots,
+        exportTitle,
+        `${exportTitle} - shot list`.replace(/[\\/:*?"<>|]+/g, ""),
+        "Shot List",
+      );
+    else if (!exportIdeasPdf(shots, exportTitle, "Shot List"))
+      toast.error("Allow pop-ups to print the PDF.");
   }
 
   async function resolveGone() {
@@ -1325,12 +1823,20 @@ export function CommentsChat({
           className="no-print glass-fab fixed z-30 right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] lg:bottom-6 inline-flex items-center gap-2 rounded-xl bg-surface-2 text-ink border border-line/20 pl-4 pr-3 h-11 text-[13.5px] font-bold shadow-[0_12px_30px_-10px_rgb(0_0_0/0.6)] hover:border-line/40 hover:scale-[1.03] transition-transform"
         >
           Comments
-          <span className={`rounded-lg px-2 h-6 inline-flex items-center text-[12px] ${openCount ? "bg-amber text-white" : "bg-line/15 text-ink-soft"}`}>{openCount}</span>
+          <span
+            className={`rounded-lg px-2 h-6 inline-flex items-center text-[12px] ${openCount ? "bg-amber text-white" : "bg-line/15 text-ink-soft"}`}
+          >
+            {openCount}
+          </span>
         </button>
       )}
       {open && big && (
         <Leaves>
-          <div className="pop-dim no-print fixed inset-0 z-[39] bg-black/55" onClick={() => setBig(false)} aria-hidden />
+          <div
+            className="pop-dim no-print fixed inset-0 z-[39] bg-black/55"
+            onClick={() => setBig(false)}
+            aria-hidden
+          />
         </Leaves>
       )}
       {open && (
@@ -1347,51 +1853,96 @@ export function CommentsChat({
             <header className="px-4 pt-3.5 pb-3 border-b border-line/10 space-y-3">
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="text-[15px] font-bold">Comments</h2>
-                <span className="text-[12.5px] text-ink-soft whitespace-nowrap">{openCount} open</span>
+                <span className="text-[12.5px] text-ink-soft whitespace-nowrap">
+                  {openCount} open
+                </span>
                 {/* Each document has its own comments: say which one these are. */}
-                <span className="min-w-0 truncate rounded-md bg-surface-2 px-1.5 h-5 inline-flex items-center text-[11px] font-semibold text-ink-soft" title={`Comments on ${docName} of #${number} only`}>
+                <span
+                  className="min-w-0 truncate rounded-md bg-surface-2 px-1.5 h-5 inline-flex items-center text-[11px] font-semibold text-ink-soft"
+                  title={`Comments on ${docName} of #${number} only`}
+                >
                   {docName} · #{number}
                 </span>
                 <span className="flex-1" />
-                <button type="button" onClick={() => setBig((b) => !b)} aria-label={big ? "Smaller" : "Bigger"} title={big ? "Smaller" : "Big view"} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                <button
+                  type="button"
+                  onClick={() => setBig((b) => !b)}
+                  aria-label={big ? "Smaller" : "Bigger"}
+                  title={big ? "Smaller" : "Big view"}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
+                >
                   <ExpandIcon className="w-4 h-4" />
                 </button>
-                <button type="button" onClick={() => setOpen(false)} aria-label="Close comments" className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close comments"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2"
+                >
                   <CloseIcon className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex rounded-xl bg-surface-2 p-0.5" role="radiogroup" aria-label="Show">
-                {([
-                  ["all", "All"],
-                  ["comment", "Comments"],
-                  ["edit_idea", "Ideas"],
-                  ["frame", "Frames"],
-                ] as const).map(([k, label]) => (
+              <div
+                className="flex rounded-xl bg-surface-2 p-0.5"
+                role="radiogroup"
+                aria-label="Show"
+              >
+                {(
+                  [
+                    ["all", "All"],
+                    ["comment", "Comments"],
+                    ["edit_idea", "Ideas"],
+                    ["frame", "Frames"],
+                  ] as const
+                ).map(([k, label]) => (
                   <button
                     key={k}
                     type="button"
                     role="radio"
                     aria-checked={filter === k}
                     onClick={() => setFilter(k)}
-                    title={k === "edit_idea" ? "Editing ideas" : k === "frame" ? "Frame guides" : undefined}
+                    title={
+                      k === "edit_idea"
+                        ? "Editing ideas"
+                        : k === "frame"
+                          ? "Frame guides"
+                          : undefined
+                    }
                     className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[10px] px-1.5 sm:px-2 h-8 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
-                      filter === k ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.18)] ring-1 ring-inset ring-line/10" : "text-ink-soft hover:text-ink"
+                      filter === k
+                        ? "bg-surface text-ink shadow-[0_1px_3px_rgb(0_0_0/0.18)] ring-1 ring-inset ring-line/10"
+                        : "text-ink-soft hover:text-ink"
                     }`}
                   >
                     {k !== "all" && <KindMark kind={k} />}
                     {label}
-                    <span className={`tabular-nums text-[11.5px] ${filter === k ? "text-ink-soft" : "text-ink-faint"}`}>{counts[k]}</span>
+                    <span
+                      className={`tabular-nums text-[11.5px] ${filter === k ? "text-ink-soft" : "text-ink-faint"}`}
+                    >
+                      {counts[k]}
+                    </span>
                   </button>
                 ))}
               </div>
             </header>
-            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden styled-scroll px-3 py-3 space-y-2.5">
+            <div
+              ref={listRef}
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden styled-scroll px-3 py-3 space-y-2.5"
+            >
               {!list.length && !sending && (
                 <div className="text-center px-6 py-10">
-                  <p className="text-[13.5px] font-semibold text-ink">{comments.length ? "Nothing here with this filter." : `No comments on ${docName} yet.`}</p>
+                  <p className="text-[13.5px] font-semibold text-ink">
+                    {comments.length
+                      ? "Nothing here with this filter."
+                      : `No comments on ${docName} yet.`}
+                  </p>
                   {!comments.length && (
                     <p className="mt-1.5 text-[12.5px] text-ink-soft leading-relaxed">
-                      Select any words in it, a line or several, then choose Comment, Editing idea or Frame guide{canComment && onAddGeneral ? ". Or write one below for the whole document." : "."}
+                      Select any words in it, a line or several, then choose
+                      Comment, Editing idea or Frame guide
+                      {canComment && onAddGeneral
+                        ? ". Or write one below for the whole document."
+                        : "."}
                     </p>
                   )}
                 </div>
@@ -1407,11 +1958,17 @@ export function CommentsChat({
                       aria-expanded={showGone}
                       className="w-full flex items-center gap-2 text-left text-[12.5px] font-semibold text-ink-soft hover:text-ink"
                     >
-                      <ChevronDownIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${showGone ? "" : "-rotate-90"}`} />
-                      <span className="flex-1">On text that changed since · {gone.length}</span>
+                      <ChevronDownIcon
+                        className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${showGone ? "" : "-rotate-90"}`}
+                      />
+                      <span className="flex-1">
+                        On text that changed since · {gone.length}
+                      </span>
                     </button>
                     <p className="mt-1 text-[11.5px] text-ink-faint leading-snug">
-                      Left on earlier words of this {docName} that were rewritten or deleted since. Nothing here comes from another script or video.
+                      Left on earlier words of this {docName} that were
+                      rewritten or deleted since. Nothing here comes from
+                      another script or video.
                     </p>
                     {canComment && goneOpenIds.length > 0 && (
                       <button
@@ -1420,11 +1977,19 @@ export function CommentsChat({
                         disabled={resolvingGone}
                         className="mt-2 rounded-md border border-line/20 px-2.5 h-7 text-[12px] font-semibold text-ink-soft hover:text-ink hover:border-line/40 disabled:opacity-60"
                       >
-                        {resolvingGone ? "Resolving…" : goneOpenIds.length === 1 ? "Resolve it" : `Resolve all ${goneOpenIds.length}`}
+                        {resolvingGone
+                          ? "Resolving…"
+                          : goneOpenIds.length === 1
+                            ? "Resolve it"
+                            : `Resolve all ${goneOpenIds.length}`}
                       </button>
                     )}
                   </div>
-                  {showGone && <div className="mt-2.5 space-y-2.5 animate-[fadein_.2s_ease]">{gone.map(card)}</div>}
+                  {showGone && (
+                    <div className="mt-2.5 space-y-2.5 animate-[fadein_.2s_ease]">
+                      {gone.map(card)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1445,7 +2010,9 @@ export function CommentsChat({
                   setText={setGText}
                   frame={gKind === "frame" ? gFrame : null}
                   onPickFrame={() => setGPicking(true)}
-                  onOpenFrame={gFrame ? () => viewFrame(gFrame.id, gFrame) : undefined}
+                  onOpenFrame={
+                    gFrame ? () => viewFrame(gFrame.id, gFrame) : undefined
+                  }
                   busy={gBusy}
                   onSubmit={() => void sendGeneral()}
                   onCancel={() => void discardGeneral()}
@@ -1467,7 +2034,11 @@ export function CommentsChat({
               </div>
             )}
             <footer className="px-4 py-2.5 border-t border-line/10 flex items-center gap-2 flex-wrap text-[12px] text-ink-soft pb-[calc(env(safe-area-inset-bottom)+0.625rem)]">
-              <span className="flex-1 min-w-[8rem]">{canComment ? "Or select words to comment on them." : "Only this video's scripters and its Review and Staging people can comment."}</span>
+              <span className="flex-1 min-w-[8rem]">
+                {canComment
+                  ? "Or select words to comment on them."
+                  : "Only this video's scripters and its Review and Staging people can comment."}
+              </span>
               {comments.some((c) => c.kind === "edit_idea") && (
                 <span className="inline-flex items-center gap-1">
                   <span className="font-semibold">Export ideas</span>
@@ -1479,13 +2050,44 @@ export function CommentsChat({
                         // Editing ideas in the order they appear in the script (the ones on the whole document first).
                         const ideas = comments
                           .filter((c) => c.kind === "edit_idea" && !c.resolved)
-                          .map((c) => ({ c, at: !c.quote ? -1 : ed ? findQuote(ed.state.doc, c.quote, c.occurrence)?.from ?? Infinity : Infinity }))
+                          .map((c) => ({
+                            c,
+                            at: !c.quote
+                              ? -1
+                              : ed
+                                ? (findQuote(
+                                    ed.state.doc,
+                                    c.quote,
+                                    c.occurrence,
+                                  )?.from ?? Infinity)
+                                : Infinity,
+                          }))
                           .sort((a, b) => a.at - b.at)
-                          .map(({ c }) => ({ quote: c.quote, idea: c.sketch && c.body.trim() === "Sketch" ? "" : c.body, sketch: c.sketch?.url ?? null }));
-                        if (!ideas.length) return toast.error("No open editing ideas to export.");
-                        const { exportIdeasDocx, exportIdeasPdf } = await import("../lib/export-docx");
-                        if (f === "docx") await exportIdeasDocx(ideas, exportTitle, `${exportTitle} - editing ideas`.replace(/[\\/:*?"<>|]+/g, ""));
-                        else if (!exportIdeasPdf(ideas, exportTitle)) toast.error("Allow pop-ups to print the PDF.");
+                          .map(({ c }) => ({
+                            quote: c.quote,
+                            idea:
+                              c.sketch && c.body.trim() === "Sketch"
+                                ? ""
+                                : c.body,
+                            sketch: c.sketch?.url ?? null,
+                          }));
+                        if (!ideas.length)
+                          return toast.error(
+                            "No open editing ideas to export.",
+                          );
+                        const { exportIdeasDocx, exportIdeasPdf } =
+                          await import("../lib/export-docx");
+                        if (f === "docx")
+                          await exportIdeasDocx(
+                            ideas,
+                            exportTitle,
+                            `${exportTitle} - editing ideas`.replace(
+                              /[\\/:*?"<>|]+/g,
+                              "",
+                            ),
+                          );
+                        else if (!exportIdeasPdf(ideas, exportTitle))
+                          toast.error("Allow pop-ups to print the PDF.");
                       }}
                       className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
                     >
@@ -1495,18 +2097,32 @@ export function CommentsChat({
                 </span>
               )}
               {shotCount > 0 && (
-                <span className="inline-flex items-center gap-1" title="Every frame guide of the script, in its order, for whoever films it">
+                <span
+                  className="inline-flex items-center gap-1"
+                  title="Every frame guide of the script, in its order, for whoever films it"
+                >
                   <span className="font-semibold">Shot list</span>
                   {(["docx", "pdf"] as const).map((f) => (
-                    <button key={f} type="button" onClick={() => void exportShots(f)} className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40">
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => void exportShots(f)}
+                      className="rounded-md border border-line/20 px-2 h-7 font-bold uppercase text-[10.5px] text-ink hover:border-line/40"
+                    >
                       {f === "docx" ? "Word" : "PDF"}
                     </button>
                   ))}
                 </span>
               )}
               {comments.some((c) => c.resolved) && (
-                <button type="button" onClick={() => setShowResolved((v) => !v)} className="font-semibold hover:text-ink">
-                  {showResolved ? "Hide resolved" : `Show resolved (${comments.filter((c) => c.resolved).length})`}
+                <button
+                  type="button"
+                  onClick={() => setShowResolved((v) => !v)}
+                  className="font-semibold hover:text-ink"
+                >
+                  {showResolved
+                    ? "Hide resolved"
+                    : `Show resolved (${comments.filter((c) => c.resolved).length})`}
                 </button>
               )}
             </footer>

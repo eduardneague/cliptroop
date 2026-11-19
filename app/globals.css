@@ -1749,6 +1749,10 @@ html[data-motion="off"] :is(.fg-tick, .fg-kw-new, .fg-kw-out) { animation: none;
 /* A page with its own wallpaper just fades in (1.29.4): while the rise ran, its transform made the
    wallpaper (position: fixed) fill only the page's box instead of the screen. */
 .motion-page > [data-dash-bg] { animation-name: fadein; }
+/* 1.55.7: a loading skeleton shows at once and stays still. A page that comes in parts shows a skeleton per level (the
+   app's, then the page's own, the same shape), and each one rose in again from nothing as it took the last one's place,
+   so skeletons appeared, vanished and appeared again, as if the page loaded twice. Only the page itself rises in. */
+.motion-page > [aria-busy="true"] { animation: none; }
 
 /* Lists and tables cascade in. */
 @keyframes rise-in {

@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.7",
+    date: "2026-11-19",
+    title: "Loading screens that load once",
+    changes: [
+      { kind: "fixed", text: "Loading screens no longer flicker (appearing, vanishing and appearing again, as if the page loaded twice). A page that arrives in parts shows a loading screen at each level, and each one used to fade in again from nothing as it took the last one's place; now they stay still and only the page itself fades in." },
+      { kind: "fixed", text: "Moving to another part of the app shows that page's own loading screen from the first moment, everywhere (only Shorts and Long videos did; elsewhere a plain placeholder came first). A video's review gets its own too." },
+    ],
+  },
+  {
     version: "1.55.6",
     date: "2026-11-19",
     title: "One colour in the sidebar, and the script page loading in its own shape",

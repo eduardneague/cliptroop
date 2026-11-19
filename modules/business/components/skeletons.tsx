@@ -1,5 +1,6 @@
-import { Skeleton, SkeletonLines } from "@/components/ui/skeleton";
-import type { BusinessTab } from "./tabs";
+import { Skeleton, SkeletonLines, SkeletonPage } from "@/components/ui/skeleton";
+import type { Lang } from "../lib/kinds";
+import { BUSINESS_TABS, type BusinessTab } from "./tabs";
 
 /* Business (1.42.0): each tab while it loads, the same shapes as the tab. */
 
@@ -112,5 +113,36 @@ export function BusinessTabSkeleton({ tab }: { tab: BusinessTab }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Business (1.42.0) while it opens: the title, the year and Export, the tabs, then the Overview's cards, in the page's
+ * language. 1.43.0: as wide as the page. 1.55.7: shared by the page's loading.tsx (the language from the request's
+ * cookie) and the app's own loading screen (from the browser's), so the two are the same.
+ */
+export function BusinessSkeleton({ lang }: { lang: Lang }) {
+  return (
+    <SkeletonPage width="max-w-none" className="px-4 sm:px-6 xl:px-8 py-6 sm:py-8 space-y-5">
+      <header className="flex items-start justify-between gap-3 flex-wrap" aria-hidden>
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-[28px] font-semibold">{lang === "ro" ? "Contabilitate" : "Business"}</h1>
+          <Skeleton className="h-3.5 w-72 max-w-full mt-1.5" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-9 w-[84px] rounded-lg" />
+          <Skeleton className="h-9 w-32 rounded-lg" />
+          <Skeleton className="h-9 w-24 rounded-lg" />
+        </div>
+      </header>
+      <nav className="flex items-center gap-1 border-b border-line/15 overflow-hidden" aria-hidden>
+        {BUSINESS_TABS.map((t) => (
+          <span key={t.id} className="px-3.5 h-11 inline-flex items-center text-[14px] font-semibold text-ink-faint whitespace-nowrap">
+            {t.label[lang]}
+          </span>
+        ))}
+      </nav>
+      <BusinessTabSkeleton tab="overview" />
+    </SkeletonPage>
   );
 }

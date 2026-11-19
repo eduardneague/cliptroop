@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import ScriptLoading from "./script/loading";
 import StudioLoading from "./studio/loading";
+import ReviewLoading from "./review/loading";
 import { Skeleton, SkeletonBack, SkeletonLines, SkeletonPage, SkeletonPersonRow, SkeletonSteps } from "@/components/ui/skeleton";
 import { STAGE_LABELS, STAGE_ORDER } from "@/modules/long-videos/lib/stages";
 
@@ -85,5 +86,6 @@ export default function Loading() {
   const path = usePathname() ?? "";
   if (/^\/videos\/[^/]+\/script(\/|$)/.test(path)) return <ScriptLoading />;
   if (/^\/videos\/[^/]+\/studio(\/|$)/.test(path)) return <StudioLoading />;
+  if (/^\/videos\/[^/]+\/review(\/|$)/.test(path)) return <ReviewLoading />;
   return <VideoSkeleton />;
 }
