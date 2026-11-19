@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.5",
+    date: "2026-11-19",
+    title: "The page stays put after a comment",
+    changes: [
+      { kind: "fixed", text: "Adding a comment or an editing idea no longer scrolls the script up or down. If a comment had been picked in the comments panel, the page jumped back to it every time the comments changed (one added, someone else's coming in). Picking a comment still takes you to its words." },
+      { kind: "fixed", text: "A comment on the last lines of a script: once it's added (or cancelled), the page doesn't jump up when you had scrolled down to its button." },
+    ],
+  },
+  {
     version: "1.55.4",
     date: "2026-11-19",
     title: "One place for a video's documents",

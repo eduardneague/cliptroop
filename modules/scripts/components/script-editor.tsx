@@ -822,12 +822,21 @@ export function ScriptEditor({
     else onCommentClick?.(id);
   };
 
-  // Jump to the comment picked in the list.
+  // Jump to the comment picked in the list: once, as it's picked. 1.55.5: it ran again whenever the comments changed (a
+  // comment or an editing idea added, someone else's coming in, the list fetched again), taking the page back to the
+  // one picked earlier, up or down (the owner: "after adding an editing idea or a comment, it sometimes scrolls either
+  // up or down"). One not on the page yet (the list still on its way): as soon as it is.
+  const jumpedTo = useRef<string | null>(null);
   useEffect(() => {
-    if (!editor || !activeCommentId) return;
+    if (!activeCommentId) {
+      jumpedTo.current = null;
+      return;
+    }
+    if (!editor || jumpedTo.current === activeCommentId) return;
     const c = comments.find((x) => x.id === activeCommentId);
     const r = c ? findQuote(editor.state.doc, c.quote, c.occurrence) : null;
     if (!r) return;
+    jumpedTo.current = activeCommentId;
     const node = editor.view.domAtPos(r.from).node as HTMLElement;
     (node.nodeType === 1 ? node : node.parentElement)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeCommentId, comments, editor]);
@@ -857,7 +866,35 @@ export function ScriptEditor({
   }, [editor, onAddComment, draft]);
 
   // ---- writing a comment: never lost by accident ---------------------------------
+  // A comment box on the last lines hangs below the page, and the page grows to hold it. 1.55.5: as it closed (posted,
+  // or let go) the page got shorter at once, and if you'd scrolled down to its Send button the page jumped up. Now the
+  // page keeps that room (in the same moment the box goes) until it's out of sight below.
+  const composerRef = useRef<HTMLDivElement>(null);
+  const holdRef = useRef<HTMLDivElement>(null);
+  const [hold, setHold] = useState(0);
+  const keepRoom = useCallback(() => {
+    const c = composerRef.current?.getBoundingClientRect();
+    const a = areaRef.current?.getBoundingClientRect();
+    if (!c || !a) return;
+    const over = Math.ceil(c.bottom - a.bottom);
+    if (over > 0) setHold((h) => h + over + 4);
+  }, []);
+  useEffect(() => {
+    if (!hold) return;
+    const check = () => {
+      const el = holdRef.current;
+      if (el && el.getBoundingClientRect().top >= window.innerHeight) setHold(0);
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [hold]);
   const clearDraft = useCallback(() => {
+    keepRoom();
     setDraft(null);
     setSel(null);
     setDraftFrame(null);
@@ -870,7 +907,7 @@ export function ScriptEditor({
     try {
       localStorage.removeItem(DRAFT_KEY(scriptId));
     } catch {}
-  }, [scriptId]);
+  }, [scriptId, keepRoom]);
   async function requestDiscard() {
     if ((draft ?? "").trim() || sketch || (draftKind === "frame" && draftFrame)) {
       const ok = await confirm({
@@ -892,6 +929,7 @@ export function ScriptEditor({
     // It shows at once: the composer closes, the words say "Posting…" and the
     // comments list shows it loading. If it fails, everything comes back.
     onPosting?.({ quote: sel.quote, occurrence: sel.occurrence, kind: draftKind, body: body.trim() || (sketch ? "Sketch" : ""), sketchUrl: sketch?.url ?? null, frame: was.frame });
+    keepRoom();
     setDraft(null);
     setSel(null);
     const restore = () => {
@@ -1622,7 +1660,7 @@ export function ScriptEditor({
           )}
           {sel && onAddComment && draft !== null && !isPhone && (
             <Leaves>
-              <div className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 348)) }}>
+              <div ref={composerRef} className="no-print absolute z-30" style={{ top: sel.top, left: Math.max(8, Math.min(sel.left, frameW() - 348)) }}>
                 <CommentComposer
                   kind={draftKind}
                   quote={sel.quote}
@@ -1649,6 +1687,8 @@ export function ScriptEditor({
           {words} words · about {spokenLength(words)}
         </p>
         {lastEdited && <p className="no-print mx-auto max-w-3xl mt-1 px-1 text-[11.5px] text-ink-soft">{lastEdited}</p>}
+        {/* The room a comment box hung into, kept until it's out of sight (1.55.5). */}
+        {hold > 0 && <div ref={holdRef} aria-hidden className="no-print" style={{ height: hold }} />}
       </div>
       {sideBySide && <div className="hidden lg:block min-w-0">{sideBySide}</div>}
       </div>
