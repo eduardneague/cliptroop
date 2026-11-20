@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.8",
+    date: "2026-11-20",
+    title: "The top bar's To Do opens at once",
+    changes: [
+      { kind: "better", text: "The To Do in the top bar opens at once, like the dashboard's My Day: it shows your to-dos as you last saw them (on the dashboard, in To Do, or in the panel itself) and quietly checks for newer ones, which appear if you haven't started on the panel yet. It used to load its own code and read everything again on every open, behind a loading placeholder." },
+      { kind: "better", text: "It gets ready before you click: as you point at the button, and once a page has settled if you use it. Its reading no longer waits behind the page's other work." },
+    ],
+  },
+  {
     version: "1.55.7",
     date: "2026-11-19",
     title: "Loading screens that load once",

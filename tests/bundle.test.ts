@@ -103,8 +103,12 @@ ok(isLoadError(Object.assign(new Error("x"), { name: "ChunkLoadError" })) && !is
 // says what), or the frame has grown: then measure it (the size of what a page downloads) before raising the budget.
 // 1.53.3: 380 → 384 KB. Alt+T for the quick To Do and menus opening under the top bar: +664 bytes minified on every page,
 // measured with esbuild on the changed files (the comments added were cut back first).
+// 1.55.8: 384 → 386 KB (it was 35 bytes short of it). The top bar's To Do opening at once (its inside and your To Do read
+// ahead, drawn without next/dynamic's placeholder; the To Do kept in lib/board-cache.ts comes with the inside, not here):
+// quick-todo.tsx 1,785 → 2,300 bytes minified (esbuild), +515 on every page (its comments cut back first).
 const bytes = [...frame].reduce((n, f) => n + Buffer.byteLength(read(f)), 0);
-ok(bytes < 384 * 1024, `the frame's code: ${(bytes / 1024).toFixed(0)} KB of source (at most 384 KB)`);
+ok(bytes < 386 * 1024, `the frame's code: ${(bytes / 1024).toFixed(0)} KB of source (at most 386 KB)`);
+ok(!frame.has("modules/todo/lib/board-cache.ts") && read("modules/todo/components/quick-todo.tsx").includes('import("./quick-todo-panel")'), "the kept To Do comes with the quick panel's inside, not on every page");
 
 // --- The changelog: only the server and the notes read it ------------------------------------------------------------------
 const importers: string[] = [];

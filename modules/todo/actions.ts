@@ -23,11 +23,10 @@ import {
   type Repeat,
   type SortBy,
   type SortDir,
-  type TodoBoard,
   type TodoItem,
   type TodoPrefs,
 } from "./lib/model";
-import { loadTodoBoard, toItem, toStep } from "./lib/queries";
+import { toItem, toStep } from "./lib/queries";
 
 type R<T = object> = ({ error?: undefined } & T) | { error: string };
 
@@ -323,9 +322,4 @@ export async function saveTodoPrefs(prefs: TodoPrefs): Promise<R> {
   return error ? { error: "Couldn't save your settings." } : {};
 }
 
-/** Everything, read now (the quick panel in the top bar opens with it). */
-export async function readTodoBoard(): Promise<R<{ board: TodoBoard }>> {
-  const s = await session();
-  if (!s) return SIGNED_OUT;
-  return { board: await loadTodoBoard({ done: 60, client: s.supabase }) };
-}
+// (1.55.8: the top bar's panel reads your To Do from GET /api/todo/board, not a server action: app/api/todo/board.)

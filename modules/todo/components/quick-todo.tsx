@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,21 +9,38 @@ import { isQuickTodoKey, useQuickTodoKeys } from "../lib/quick-key";
 
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
-/** What's inside loads when it first opens (the frame stays as light as before, 1.32.2's budget). */
-const QuickTodoPanel = dynamic(() => import("./quick-todo-panel"), {
-  ssr: false,
-  loading: () => (
+/** The inside: not in every page's code; loaded ahead, drawn at once (1.55.8: not next/dynamic, kept a placeholder up). */
+let mod: typeof import("./quick-todo-panel") | null = null;
+const loadPanel = () => import("./quick-todo-panel").then((m) => (mod = m));
+const warm = (within: number) => void loadPanel().then((m) => m.warmBoard(within));
+const USED = "vp:quick-todo-used";
+const store = (set?: boolean) => {
+  try {
+    if (set) localStorage.setItem(USED, "1");
+    return localStorage.getItem(USED) === "1";
+  } catch {
+    return false;
+  }
+};
+
+function QuickTodoPanel({ onClose }: { onClose: () => void }) {
+  const [m, setM] = useState(() => mod);
+  useEffect(() => {
+    if (!m) void loadPanel().then(setM);
+  }, [m]);
+  if (m) return <m.default onClose={onClose} />;
+  return (
     <div className="p-4 space-y-2" aria-busy="true" aria-label="Loading">
       <Skeleton className="h-6 w-32" />
       <Skeleton className="h-10 rounded-xl" />
       <Skeleton className="h-11 rounded-xl" />
     </div>
-  ),
-});
+  );
+}
 
 /**
  * To Do from anywhere (1.53.0): the top bar's button, or Alt+T. My Day, Important, Planned and Tasks: add, tick off,
- * star; a to-do opens in To Do. It reads your To Do when it opens.
+ * star; a to-do opens in To Do.
  */
 export function QuickTodo() {
   const btn = useRef<HTMLButtonElement>(null);
@@ -45,13 +61,23 @@ export function QuickTodo() {
     return () => window.removeEventListener("keydown", onKey);
   }, [onTodo]);
   useEffect(() => setOpen(false), [pathname]);
-
+  // Ahead: the page gone quiet (your To Do too if you use this), the button pointed at.
+  useEffect(() => {
+    const ahead = () => (store() ? warm(60_000) : void loadPanel());
+    const idle = typeof requestIdleCallback === "function";
+    const t = idle ? requestIdleCallback(ahead, { timeout: 5000 }) : window.setTimeout(ahead, 1500);
+    return () => (idle ? cancelIdleCallback(t) : window.clearTimeout(t));
+  }, []);
+  useEffect(() => void (open && store(true)), [open]);
+  const ahead = () => warm(15_000);
   return (
     <>
       <button
         ref={btn}
         type="button"
         onClick={() => setOpen((o) => !o)}
+        onPointerEnter={ahead}
+        onFocus={ahead}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`To Do (${keys})`}

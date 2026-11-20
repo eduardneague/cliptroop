@@ -9,6 +9,7 @@
 //   * Phones keep the title and the steps above the formatting bar.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { has } from "./flat";
 import { barRoom } from "../modules/scripts/lib/bar-room";
 
 let fails = 0;
@@ -87,9 +88,10 @@ ok(editor.includes('label={!!room?.sugLabel} score={!room || room.score}') && re
 ok(editor.includes('className="sm:mx-auto sm:w-max px-2 py-1.5 flex items-center gap-0.5"'), "centred between the ends, from the left when it can't be");
 
 // ---- the documents dropdown ---------------------------------------------------------------------------------------------------
-ok(ws.includes('if (r) setAlign(r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right");') && ws.includes('label="Documents" align={align} width={300}'), "it opens toward the free side (\"opens on the wrong side\")");
-ok(ws.includes("heading={`#${number} ${title}`}") && ws.includes("{heading && <div"), "the video's title at its top");
-ok(ws.includes("ticked: !!flow.data.done || !!st.sent") && ws.includes('{stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}') && ws.includes("<PersonAvatar name={p.name}"), "the steps on their documents: sent on, who's on each");
+// (1.55.8: workspace.tsx checked with tests/flat.ts, so they hold however the file is formatted.)
+ok(has(ws, 'if (r) setAlign(r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right");', 'label="Documents" align={align} width={300}'), "it opens toward the free side (\"opens on the wrong side\")");
+ok(has(ws, "heading={`#${number} ${title}`}", "{heading && <div"), "the video's title at its top");
+ok(has(ws, "ticked: !!flow.data.done || !!st.sent", '{stepOf(d.id)?.ticked && <CheckIcon className="w-3.5 h-3.5 text-green flex-shrink-0" aria-label="sent on" />}', "<PersonAvatar name={p.name}"), "the steps on their documents: sent on, who's on each");
 
 // ---- side by side, the steps -------------------------------------------------------------------------------------------------
 ok(ws.includes('aria-label="Side by side"') && ws.includes('<ColumnsIcon className="w-4 h-4" />'), "Side by side: its sign");

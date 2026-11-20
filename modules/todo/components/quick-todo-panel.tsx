@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Mascot } from "@/components/ui/mascot";
 import { ArrowRightIcon, PlusIcon } from "@/components/ui/icons";
-import { readTodoBoard } from "../actions";
+import { freshBoard, keptBoard, sameBoard } from "../lib/board-cache";
+export { warmBoard } from "../lib/board-cache";
 import { belongs, cleanTitle, dayWordAfter, localDay, longDay, sortTodos, todoHref, type SmartId, type TodoBoard, type TodoItem } from "../lib/model";
 import { useTodoStore } from "./use-todo-store";
 import { useQuickTodoKeys } from "../lib/quick-key";
@@ -14,27 +15,39 @@ import { SMART_META, StarToggle, TodoCheck } from "./todo-bits";
 
 const TABS: SmartId[] = ["myday", "important", "planned", "tasks"];
 
-/** The quick panel's inside (its own file: it loads the first time the panel opens, not with every page). */
+/**
+ * The quick panel's inside (its own file, loaded ahead of the first open: quick-todo.tsx). 1.55.8: it opens with your
+ * To Do as last seen in this tab (lib/board-cache.ts: the dashboard's widget, To Do, the panel itself) at once, and
+ * reads the latest meanwhile; that replaces it only if it's different and you haven't started on the panel yet. With
+ * nothing kept (the first open since the page loaded, never pointed at), it waits for the read.
+ */
 export default function QuickTodoPanel({ onClose }: { onClose: () => void }) {
-  const [board, setBoard] = useState<TodoBoard | null>(null);
+  const [shown, setShown] = useState<{ board: TodoBoard; n: number } | null>(() => {
+    const k = keptBoard();
+    return k ? { board: k.board, n: 0 } : null;
+  });
+  const hadOne = useRef(shown !== null);
+  const touched = useRef(false);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    readTodoBoard().then(
-      (r) => {
-        if (!live) return;
-        if (r.error !== undefined) setFailed(true);
-        else setBoard(r.board);
-      },
-      () => live && setFailed(true)
-    );
+    void freshBoard(5_000).then((board) => {
+      if (!live) return;
+      if (!board) return void (hadOne.current || setFailed(true));
+      setShown((s) => (s && (touched.current || sameBoard(s.board, board)) ? s : { board, n: (s?.n ?? 0) + 1 }));
+    });
     return () => {
       live = false;
     };
   }, []);
   if (failed) return <p className="p-5 text-[13px] text-ink-soft">Couldn&rsquo;t open To Do. Try again.</p>;
-  if (!board) return <QuickTodoLoading />;
-  return <Panel board={board} onClose={onClose} />;
+  if (!shown) return <QuickTodoLoading />;
+  return (
+    // (Anything done here, even a tab picked or a letter typed, keeps what's shown: a newer read isn't swapped in under you.)
+    <div onPointerDownCapture={() => (touched.current = true)} onKeyDownCapture={() => (touched.current = true)}>
+      <Panel key={shown.n} board={shown.board} onClose={onClose} />
+    </div>
+  );
 }
 
 export function QuickTodoLoading() {

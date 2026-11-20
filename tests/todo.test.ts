@@ -78,7 +78,7 @@ const key = (o: Partial<KeyboardEvent>) => isQuickTodoKey({ altKey: false, ctrlK
 ok(key({ altKey: true, code: "KeyT", key: "t" }) && key({ altKey: true, code: "KeyT", key: "†" }), "Alt+T, and ⌥T on a Mac (where it types †)");
 ok(!key({ code: "KeyT", key: "t" }) && !key({ ctrlKey: true, code: "KeyT", key: "t" }) && !key({ altKey: true, ctrlKey: true, code: "KeyT", key: "ț" }) && !key({ altKey: true, shiftKey: true, code: "KeyT", key: "T" }), "not T alone, Ctrl+T (the browser's new tab), AltGr+T (ț) or Alt+Shift+T");
 ok(/aria-label=\{`To Do \(\$\{keys\}\)`\}/.test(quick) && read("modules/todo/components/quick-todo-panel.tsx").includes("{keys}</kbd> opens this on any page") && read("modules/todo/components/todo-list-view.tsx").includes("{quickKeys}</b> To Do anywhere"), "the button, the panel and To Do's keys say Alt+T (⌥T on a Mac)");
-ok(/dynamic\(\(\) => import\("\.\/quick-todo-panel"\)/.test(quick) && /readTodoBoard\(\)/.test(read("modules/todo/components/quick-todo-panel.tsx")), "it reads To Do when it opens (its inside loads then too), not with every page");
+ok(/const loadPanel = \(\) => import\("\.\/quick-todo-panel"\)/.test(quick) && /freshBoard\(5_000\)/.test(read("modules/todo/components/quick-todo-panel.tsx")), "its inside isn't in every page's code (1.55.8: loaded ahead; it opens with your To Do as last seen and reads the latest: fixes-1558)");
 const cat = read("lib/search/catalog.ts");
 ok(/id: "todo", kind: "page", title: "To Do"/.test(cat) && /id: "new-todo", kind: "action", title: "Add a to-do"/.test(cat), "search: To Do and Add a to-do");
 ok(/name: "To Do", url: "\/todo\?list=myday&source=app"/.test(read("app/manifest.ts")), "the installed app's icon: To Do");

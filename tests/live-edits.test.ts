@@ -10,6 +10,7 @@
 // pages, the editor and the side page are wired.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { has } from "./flat";
 import { getSchema, Node as TipTapNode } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
@@ -401,7 +402,7 @@ ok(/if \(editor && !editor\.isDestroyed && liveStuck\) editor\.setEditable\(fals
 const ws = read("modules/scripts/components/workspace.tsx");
 ok(/liveStart=\{doc\.live \?\? null\}/.test(ws), "the script's page gets where the text starts");
 ok(/<SidePage\s+key=\{side\.id\}/.test(ws), "the side page starts again for another document");
-ok(/\.\.\.\(liveAt \? \[LiveCursors, LiveSteps\.configure\(\{ version: liveAt\.docVersion, client: clientId \}\)\] : \[\]\)/.test(ws) && /content: openable\(side\.content\)/.test(ws), "the side page writes live too, opening the text the same way");
+ok(has(ws, "...(liveAt ? [LiveCursors, LiveSteps.configure({ version: liveAt.docVersion, client: clientId })] : [])", "content: openable(side.content)"), "the side page writes live too, opening the text the same way (1.55.8: tests/flat.ts, whatever the file's layout)");
 ok(/shareComments: false/.test(ws), "… and doesn't speak for the comments of the page on the left");
 ok(/\/\/ Live: the changes go in by themselves\.\s*if \(liveMode\) return;\s*setStatus\("unsaved"\);/.test(ws), "no whole-script saves from it while live");
 

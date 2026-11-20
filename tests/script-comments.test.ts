@@ -3,6 +3,7 @@
 // "the menu goes down not up"). The anchors are tested on real ProseMirror documents; the rest is read from the files.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { has } from "./flat";
 import { Schema, type Node as PMNode } from "@tiptap/pm/model";
 import { findQuote, occurrenceAt, quoteAt, quoteText } from "../modules/scripts/lib/anchors";
 import { MAX_COMMENT, MAX_QUOTE } from "../modules/scripts/lib/comment-limits";
@@ -151,7 +152,7 @@ ok(/\{c\.quote \? <QuoteBlock/.test(card) && /<WholeDocTag/.test(card), "on its 
 ok(/ · edited/.test(card), "\"edited\" once changed");
 const ws = read("modules/scripts/components/workspace.tsx");
 ok(/<CommentCard[\s\S]*?variant="popover"/.test(ws) && /<CommentCard[\s\S]*?variant="list"/.test(ws), "the same card in the small box and the panel");
-ok(/addComment\(\{ scriptId: doc\.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame\?\.id \?\? null \}\)/.test(ws) && /variant="panel"/.test(ws), "the panel writes general ones (1.54.0: a frame guide too)");
+ok(has(ws, 'addComment({ scriptId: doc.id, quote: "", occurrence: 0, body, kind, general: true, frameId: frame?.id ?? null })', 'variant="panel"'), "the panel writes general ones (1.54.0: a frame guide too; 1.55.8: tests/flat.ts, whatever the file's layout)");
 ok(/c\.quote && !findQuote\(ed\.state\.doc, c\.quote, c\.occurrence\)/.test(ws), "a general one is never \"on text that changed\"");
 const editor = read("modules/scripts/components/script-editor.tsx");
 ok(/const q = quoteAt\(editor\.state\.doc, from, to\);/.test(editor) && !/sameParent/.test(editor), "any selection, over any number of lines (it was one paragraph)");

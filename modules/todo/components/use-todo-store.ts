@@ -23,6 +23,7 @@ import {
   type ViewId,
 } from "../lib/model";
 import { GONE_MS } from "../lib/motion";
+import { keepBoard, keptBoard } from "../lib/board-cache";
 
 /** Today in the person's own time, moving on at midnight (and when the tab comes back after a night away). */
 export function useToday() {
@@ -430,6 +431,20 @@ export function useTodoStore(initial: TodoBoard) {
   const keyOf = useCallback((id: string) => aliases.current.get(id) ?? id, []);
 
   const listById = useMemo(() => new Map(lists.map((l) => [l.id, l])), [lists]);
+
+  // Kept for the top bar's panel (1.55.8, lib/board-cache.ts): the board this came with when nothing's kept yet (as
+  // old, so the panel still reads the latest), then every change made here (without the ones still on their way in,
+  // or going with Undo still possible).
+  const changed = useRef(false);
+  useEffect(() => {
+    if (!changed.current) {
+      changed.current = true;
+      if (!keptBoard()) keepBoard(initial, 0);
+      return;
+    }
+    keepBoard({ lists, todos: todos.filter((t) => !t.id.startsWith("tmp-") && !leaving.has(t.id)), pins, prefs, ready }, Date.now(), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `initial` and `ready` are the first board's, for good
+  }, [lists, todos, pins, prefs, leaving]);
 
   return {
     ready,

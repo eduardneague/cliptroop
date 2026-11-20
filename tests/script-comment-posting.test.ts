@@ -4,6 +4,7 @@
 // keeps its pane over the page ("you cant see the ideas").
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { has } from "./flat";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -23,7 +24,7 @@ const add = ws.slice(ws.indexOf("onAddComment={"), ws.indexOf("copySources="));
 const posted = ws.slice(ws.indexOf("const posted = (c: ScriptComment) => {"), ws.indexOf("const href = (next"));
 // 1.55.0: the server's copy comes by itself (listScriptComments), never by drawing the whole page again, which sent
 // people back to the top of the script ("de fiecare dată când adaug un comentariu ... mă duce sus de tot").
-ok(add.includes("posted(savedHere(r.id, {") && posted.includes("setAdded((xs) => [...xs.filter((x) => x.id !== c.id), c]);") && posted.includes("commentsChanged();") && !posted.includes("router.refresh()"), "it shows the saved one at once, and the server's copy is fetched on its own (no refresh of the page)");
+ok(has(add, "posted(savedHere(r.id, {") && has(posted, "setAdded((xs) => [...xs.filter((x) => x.id !== c.id), c]);", "commentsChanged();") && !has(posted, "router.refresh()"), "it shows the saved one at once, and the server's copy is fetched on its own (no refresh of the page)");
 ok(!add.includes("setChatOpen(true)") && !add.includes("setActive(r.id)"), "and opens nothing, scrolls nowhere");
 ok(posted.includes("setPosting((p) => (p ? { ...p, id: c.id } : p));") && posted.includes("setTimeout(() => setPosting((p) => (p?.id === c.id ? null : p)), 1600);") && posted.includes("commentsChanged();"), "\"Posting…\" turns into \"Posted\" for a moment, then goes; the others hear about it");
 ok(/onCommentClick=\{\(id\) => \{\s*setActive\(id\);\s*setChatOpen\(true\);/.test(ws), "clicking a comment still opens it in the list");
