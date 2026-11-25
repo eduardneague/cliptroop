@@ -8,6 +8,7 @@ import {
   CheckIcon,
   ClockIcon,
   CodeIcon,
+  TagIcon,
   CompassIcon,
   DocumentIcon,
   DownloadIcon,
@@ -97,6 +98,7 @@ const ICONS: Record<IconKey, IconComponent> = {
   flame: FlameIcon,
   business: BusinessIcon,
   frame: FrameIcon,
+  tag: TagIcon,
 };
 
 /** The icon for a page, setting or action of the search catalog. */

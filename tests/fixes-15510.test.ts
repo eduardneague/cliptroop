@@ -55,7 +55,7 @@ const waivers = JSON.parse(read("security/audit-waivers.json")) as { waivers: { 
 ok(Array.isArray(waivers.waivers) && !waivers.waivers.some((w) => w.id === "GHSA-fc5q-39xc-vjpf"), "the picomatch waiver is out (npm no longer reports it)");
 
 // --- The version moves together --------------------------------------------------------------------------------------------
-ok(pkg.version === "1.55.10" && lock.version === pkg.version && lock.packages[""] && (lock.packages[""] as { version?: string }).version === pkg.version, "1.55.10 everywhere");
+ok(atLeast(pkg.version, "1.55.10") && lock.version === pkg.version && lock.packages[""] && (lock.packages[""] as { version?: string }).version === pkg.version, `1.55.10 or later everywhere (${pkg.version})`);
 ok(/version: "1\.55\.10"/.test(read("lib/changelog.ts")), "What's new has it");
 
 console.log(fails ? `${fails} failed` : "fixes-15510: all passed");

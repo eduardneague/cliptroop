@@ -24,6 +24,15 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 
 export const PROBES: Probe[] = [
   {
+    n: "0135",
+    what: "Affiliates (the list, who manages it, logins kept encrypted, their activity)",
+    has: async (admin) => {
+      const { data, error } = await admin.rpc("affiliates_ready");
+      if (error) return missing(error) || error.code === "PGRST202" ? false : null;
+      return data === true;
+    },
+  },
+  {
     n: "0134",
     what: "writing a script together, live (several people at once)",
     has: async (admin) => {

@@ -22,6 +22,19 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.56.0",
+    date: "2026-11-25",
+    title: "Affiliates",
+    changes: [
+      { kind: "new", text: "Affiliates, under Content in the sidebar: every brand you work with in one place. Each one has its product link, the code for viewers and what it gives them (10%, $5 off…), whether it's active, paused or ended, the long video and the Short you made about it, its affiliate platform (where you see the sales) and notes. Click a code to copy it." },
+      { kind: "new", text: "A table and cards, like Shorts: find one by name, code, link or video, filter by status or by video, and choose newest, oldest or A to Z. Select several to copy their lines for a video's description, export them to a spreadsheet, change their status or delete them." },
+      { kind: "new", text: "Paste from a sheet: copy rows from a spreadsheet (name, link, code, percentage) and paste them in. You see what will be added, and what needs fixing, before anything is." },
+      { kind: "new", text: "Each affiliate can keep the login for its platform: a username or email, a password and notes. Only masters and the people a master chooses under \"Who manages them\" can see logins, and only after typing their own password; they're also the ones who add and change affiliates (the rest of the team sees the list, without logins). Logins then stay open for 15 minutes on that device (Lock now closes them sooner), and a shown login hides itself after 30 seconds or when you leave the tab." },
+      { kind: "new", text: "Login activity, for masters: every look, copy and change of a login, who did it and when, and who was given or lost access." },
+      { kind: "better", text: "Logins are encrypted before they're saved and are never part of the page: one is fetched only when someone allowed shows or copies it, and copying takes just the part you asked for. Exports and copied lines never carry them, and password managers are told not to fill those fields with your own sign-in." },
+    ],
+  },
+  {
     version: "1.55.10",
     date: "2026-11-25",
     title: "Security: Next.js 15.5.29",

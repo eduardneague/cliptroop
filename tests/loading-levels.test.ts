@@ -43,6 +43,7 @@ const ROUTES: [string, string[]][] = [
   ["/posting", ["", "posting"]],
   ["/outliers", ["", "outliers"]],
   ["/frame-guides", ["", "frame-guides"]],
+  ["/affiliates", ["", "affiliates"]],
   ["/analytics", ["", "analytics"]],
   ["/analytics/video/youtube/v1", ["", "analytics", "analytics/video/[platform]/[id]"]],
   ["/objectives", ["", "objectives"]],

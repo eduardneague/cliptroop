@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react";
 import { Skeleton, SkeletonLines, SkeletonPage } from "@/components/ui/skeleton";
 import { BusinessSkeleton } from "@/modules/business/components/skeletons";
 import { LANG_COOKIE, langOf } from "@/modules/business/lib/i18n";
+import AffiliatesLoading from "./affiliates/loading";
 import AnalyticsLoading from "./analytics/loading";
 import CalendarLoading from "./calendar/loading";
 import DashboardLoading from "./dashboard/loading";
@@ -60,6 +61,7 @@ function BusinessLoading() {
 const PARTS: [RegExp, () => React.ReactElement][] = [
   [/^\/shorts(\/|$)/, () => <ShortsLoading />],
   [/^\/videos(\/|$)/, () => <VideosLoading />],
+  [/^\/affiliates(\/|$)/, () => <AffiliatesLoading />],
   [/^\/dashboard(\/|$)/, () => <DashboardLoading />],
   [/^\/todo(\/|$)/, () => <TodoLoading />],
   [/^\/calendar(\/|$)/, () => <CalendarLoading />],

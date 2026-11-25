@@ -20,7 +20,7 @@ export type IconKey =
   | "users" | "settings" | "word" | "user" | "code" | "flag" | "lock" | "document" | "trash" | "plus"
   | "moon" | "sun" | "sound" | "bell" | "star" | "bug" | "lightbulb" | "logout" | "link" | "download"
   | "grid" | "list" | "clock" | "money" | "compass" | "alert" | "check" | "fill" | "retry" | "history"
-  | "eye" | "trophy" | "image" | "flame" | "outliers" | "business" | "frame";
+  | "eye" | "trophy" | "image" | "flame" | "outliers" | "business" | "frame" | "tag";
 
 export type Entry = {
   id: string;
@@ -161,6 +161,7 @@ export function buildCatalog(ctx: SearchContext): Entry[] {
   add({ id: "outliers", kind: "page", title: "Outliers", trail: [], hint: "Videos beating their channel's usual, and ideas from them", words: "outlier viral trending research competitors competition ideas niche 1of10 viewstats what works spy", icon: "outliers", href: "/outliers", boost: 0.05 }, team);
   // 1.54.0: the team's reference frames (shots from other creators), for scripts.
   add({ id: "frame-guides", kind: "page", title: "Frame Guides", trail: [], hint: "Reference shots in collections, for scripts", words: "frames frame guide guides shots shot reference references screenshots camera angles framing b-roll look style collections mood board moodboard inspiration", icon: "frame", href: "/frame-guides", boost: 0.05 }, team);
+  add({ id: "affiliates", kind: "page", title: "Affiliates", trail: [], hint: "Product links, codes, the videos about them, logins", words: "affiliate affiliates partner partners sponsor sponsors deal deals code codes coupon discount percentage commission link links amazon impact referral brand brands login logins credentials password", icon: "tag", href: "/affiliates", boost: 0.05 }, team);
   add({ id: "analytics", kind: "page", title: "Analytics", trail: [], words: "stats statistics numbers views growth metrics performance", icon: "analytics", href: "/analytics", boost: 0.05 }, team);
   add({ id: "objectives", kind: "page", title: "Objectives", trail: [], words: "goals goal targets rings okr okrs", icon: "target", href: "/objectives", boost: 0.05 }, team);
   add({ id: "projections", kind: "page", title: "Projections", trail: ["Objectives"], words: "forecast forecasts targets deadline future milestone", icon: "trend", href: "/objectives?view=projections", boost: 0.03 }, team);
