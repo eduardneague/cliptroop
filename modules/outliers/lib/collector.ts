@@ -597,7 +597,16 @@ export async function scanChannel(ctx: Ctx, cid: string, kinds: ("long" | "short
 
 type StoredVideo = { id: string; kind: string; published_at: string; views: number | null; title: string; tags: string[] | null; category: number | null; lang: string | null; lang_region?: string | null; kids: boolean | null; score: number | null; stats_at: string | null };
 
-async function recomputeChannel(ctx: Ctx, cid: string, depth: number) {
+/**
+ * A channel's scores again from the videos stored, without reading YouTube
+ * (1.55.9: one of its videos was just added on its own, from a link). It
+ * isn't marked as read, so its next read comes when it would have.
+ */
+export async function rescoreChannel(ctx: Ctx, cid: string) {
+  await recomputeChannel(ctx, cid, 0, false);
+}
+
+async function recomputeChannel(ctx: Ctx, cid: string, depth: number, read = true) {
   const cols = "id, kind, published_at, views, title, tags, category, lang, kids, score, stats_at";
   const first = await ctx.admin.from("yt_videos").select(`${cols}, lang_region`).eq("channel_id", cid).order("published_at", { ascending: false }).limit(400);
   // Before 0094: no lang_region.
@@ -611,7 +620,7 @@ async function recomputeChannel(ctx: Ctx, cid: string, depth: number) {
     return { id: v.id, score, projected: projectedScore(score, v.published_at, now), vph: v.views !== null && age > 0 ? Math.round(v.views / Math.max(1, age)) : null };
   });
   for (let i = 0; i < rows.length; i += 500) await ctx.admin.rpc("outliers_set_scores", { p: rows.slice(i, i + 500) });
-  const base = { long_median: nums.longMedian === null ? null : Math.round(nums.longMedian), short_median: nums.shortMedian === null ? null : Math.round(nums.shortMedian), long_n: nums.longN, short_n: nums.shortN, uploads_week: nums.uploadsWeek, last_upload_at: nums.lastUpload, scanned_at: new Date().toISOString() };
+  const base = { long_median: nums.longMedian === null ? null : Math.round(nums.longMedian), short_median: nums.shortMedian === null ? null : Math.round(nums.shortMedian), long_n: nums.longN, short_n: nums.shortN, uploads_week: nums.uploadsWeek, last_upload_at: nums.lastUpload, ...(read ? { scanned_at: new Date().toISOString() } : {}) };
   // Its profile (1.29.0) from its latest 40 videos.
   const { data: me } = await ctx.admin.from("yt_channels").select("*").eq("id", cid).maybeSingle();
   const samples: Sample[] = vids.filter((v) => v.kind !== "live").slice(0, 40).map((v) => ({ title: v.title, tags: v.tags, category: v.category, lang: v.lang, langRegion: v.lang_region ?? null, kids: v.kids }));

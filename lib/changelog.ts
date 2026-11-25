@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.9",
+    date: "2026-11-25",
+    title: "Save a video you found yourself",
+    changes: [
+      { kind: "new", text: "Outliers → Saved: Add a video, paste a YouTube link (a video or a Short, from its Share button or the address bar) and it's saved in the folder you have open, or without a folder from Everything, with its views and its outlier score like everything else Outliers finds. A video Outliers doesn't have yet is read from YouTube first, with its channel's latest videos to compare it with; that takes a few seconds." },
+      { kind: "new", text: "A video that's already saved there says so (and from Everything, which folder it's in), and a link that isn't a YouTube video says what to paste instead." },
+    ],
+  },
+  {
     version: "1.55.8",
     date: "2026-11-20",
     title: "The top bar's To Do opens at once",

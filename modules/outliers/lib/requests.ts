@@ -2,8 +2,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readBudgets } from "./budget";
-import { addChannels, ensureChannels, ingestVideos, requestCtx, scanChannel, type Niche } from "./collector";
-import { CHANNEL_ID, channelRow, parseChannelRef, type ChannelRef } from "./ingest";
+import { addChannels, ensureChannels, ingestVideos, requestCtx, rescoreChannel, scanChannel, type Niche } from "./collector";
+import { CHANNEL_ID, channelRow, parseChannelRef, VIDEO_ID, type ChannelRef } from "./ingest";
 import { projectedScore } from "./scores";
 import { outliersAccess, QuotaError, spender, YouTube, YtError, quotaDay } from "./youtube";
 
@@ -147,6 +147,62 @@ export async function addChannelByRef(teamId: string, input: string, o: { nicheI
     }
     return { id: row.id, title: row.title };
   } catch (e) {
+    if (e instanceof QuotaError) return { error: e.message };
+    if (e instanceof YtError) return { error: `YouTube said no: ${e.message}` };
+    throw e;
+  }
+}
+
+const NO_ACCESS = "Connect the team's YouTube channel first (Team → Connected accounts), or ask the developer to add a YouTube API key.";
+const readLately = (at: string | null) => !!at && Date.parse(at) > Date.now() - 6 * 3_600_000;
+
+/** A stored video, with when its channel was last read (null when Outliers doesn't have it). */
+async function storedVideo(admin: Admin, id: string) {
+  const { data } = await admin.from("yt_videos").select("channel_id, kind, score, yt_channels(scanned_at)").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const ch = (Array.isArray(data.yt_channels) ? data.yt_channels[0] : data.yt_channels) as { scanned_at: string | null } | null;
+  return { channelId: data.channel_id as string, kind: data.kind as string, score: data.score as number | null, read: ch?.scanned_at ?? null };
+}
+
+/**
+ * A video someone found on YouTube themselves (1.55.9, a link pasted in
+ * Saved): read when Outliers doesn't have it yet, then scored against its
+ * channel's other videos (scored again from what's stored when the channel
+ * was read in the last 6 hours, else read now). Without a score (no YouTube
+ * budget left, a live stream, too few videos to compare) it's still kept.
+ */
+export async function addVideoById(teamId: string, id: string): Promise<{ id: string } | { error: string }> {
+  if (!VIDEO_ID.test(id)) return { error: "That isn't a YouTube video." };
+  const admin = createAdminClient();
+  const stored = await storedVideo(admin, id);
+  // Already scored (or a live stream, which never is): nothing to ask YouTube.
+  if (stored && (stored.score !== null || stored.kind === "live")) return { id };
+  const access = await outliersAccess(teamId);
+  if (!access) return stored ? { id } : { error: NO_ACCESS };
+  const b = readBudgets();
+  const yt = new YouTube(access, spender(admin, { search: 0, units: b.units, stats: b.stats }, { search: 0, units: 10, stats: 0 }));
+  const ctx = requestCtx(admin, yt, teamId, [], 20_000);
+  try {
+    let v = stored;
+    if (!v) {
+      const [row] = await ingestVideos(ctx, [id], { player: true });
+      if (!row) return { error: "YouTube couldn't find that video. It may be private, removed, or not out yet." };
+      v = await storedVideo(admin, id);
+      if (!v) return { error: "Couldn't keep that video. Try again." };
+    }
+    if (v.kind === "live") return { id };
+    try {
+      if (readLately(v.read)) await rescoreChannel(ctx, v.channelId);
+      // Not read lately, or read without videos like this one (a niche of long videos only): read now.
+      if (!readLately(v.read) || (await storedVideo(admin, id))?.score === null) await scanChannel(ctx, v.channelId, ["long", "short"], []);
+    } catch (e) {
+      // Kept without a score: it gets one the next time its channel is read.
+      if (!(e instanceof QuotaError || e instanceof YtError)) throw e;
+    }
+    return { id };
+  } catch (e) {
+    // One Outliers has already: saved as it is.
+    if (stored) return { id };
     if (e instanceof QuotaError) return { error: e.message };
     if (e instanceof YtError) return { error: `YouTube said no: ${e.message}` };
     throw e;

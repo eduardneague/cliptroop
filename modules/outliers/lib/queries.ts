@@ -406,11 +406,13 @@ export async function getAudience(teamId: string): Promise<AudienceData> {
 }
 
 /** Saved videos, ideas and channels (a folder, the unsorted ones, or all). */
-export async function getSaved(teamId: string, folder: string | null): Promise<SavedItem[]> {
+export async function getSaved(teamId: string, folder: string | null, o: { id?: string } = {}): Promise<SavedItem[]> {
   const supabase = await createClient();
   let q = supabase.from("outlier_saves").select("id, kind, folder_id, video_id, channel_id, idea, note, saved_at, saved_by, project_id, short_id").eq("team_id", teamId).order("saved_at", { ascending: false }).limit(500);
   if (folder === "unsorted") q = q.is("folder_id", null);
   else if (folder && /^[0-9a-f-]{36}$/i.test(folder)) q = q.eq("folder_id", folder);
+  // One save (1.55.9: the one just added from a link, for its card).
+  if (o.id) q = q.eq("id", o.id);
   const { data } = await q;
   const rows = (data ?? []) as Row[];
   const videoIds = rows.map((r) => str(r.video_id)).filter((x): x is string => !!x);

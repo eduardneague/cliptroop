@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { useConfirm } from "@/components/ui/confirm-provider";
-import { CheckIcon, EditIcon, MoreIcon, PlusIcon, ShortsIcon, TrashIcon, VideoIcon } from "@/components/ui/icons";
+import { CheckIcon, EditIcon, LinkIcon, MoreIcon, PlusIcon, ShortsIcon, TrashIcon, VideoIcon } from "@/components/ui/icons";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast-provider";
 import { startNavProgress } from "@/components/ui/nav-progress";
-import { createFolder, deleteFolder, moveSave, noteSave, removeSave, renameFolder, startFromIdea } from "@/app/(dashboard)/outliers/actions";
+import { createFolder, deleteFolder, moveSave, noteSave, removeSave, renameFolder, saveVideoLink, startFromIdea } from "@/app/(dashboard)/outliers/actions";
 import { NICHE_COLORS } from "../../lib/explore";
 import { FORMAT_BY_ID } from "../../lib/formats";
 import type { Folder, SavedItem } from "../../lib/types";
@@ -24,7 +24,8 @@ import { ShortCard, VideoCard } from "../video-card";
 /*
  * Saved (1.27.0): the team's folders of videos, ideas and channels, with a
  * note on each. Ideas start a long video or a Short from here; whatever was
- * started from one says so.
+ * started from one says so. 1.55.9: a video found on YouTube itself is added
+ * from its link (Add a video), into the folder that's open.
  */
 
 type What = "all" | "video" | "idea" | "channel";
@@ -35,11 +36,32 @@ export function SavedTab({ data }: { data: SavedData }) {
   const nav = useShellNav();
   const toast = useToast();
   const confirm = useConfirm();
+  const router = useRouter();
   const [items, setItems] = useState(data.items);
   const [what, setWhat] = useState<What>("all");
   const [naming, setNaming] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [adding, setAdding] = useState(false);
+  // The card just added from a link: lit up for a moment.
+  const [fresh, setFresh] = useState<string | null>(null);
+  // The form closed (done or not): the keyboard goes back to Add a video.
+  const addBtn = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  const closeAdd = () => {
+    refocus.current = true;
+    setAdding(false);
+  };
+  useEffect(() => {
+    if (adding || !refocus.current) return;
+    refocus.current = false;
+    addBtn.current?.focus();
+  }, [adding]);
   useEffect(() => setItems(data.items), [data.items]);
+  useEffect(() => {
+    if (!fresh) return;
+    const t = window.setTimeout(() => setFresh(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [fresh]);
 
   const folder = data.folder;
   const current = folder && folder !== "unsorted" ? saves.folders.find((f) => f.id === folder) ?? null : null;
@@ -91,6 +113,24 @@ export function SavedTab({ data }: { data: SavedData }) {
     } catch {
       toast.error("Couldn't delete the folder. Try again.");
     }
+  };
+
+  // The folder open now: an add can finish after another one was opened.
+  const viewing = useRef(folder);
+  useEffect(() => {
+    viewing.current = folder;
+  }, [folder]);
+  // A video added from its link: on the page at once, like a bookmark (counted in its folder, the bookmark filled).
+  const added = (item: SavedItem | null) => {
+    closeAdd();
+    toast.success(current ? `Saved in “${current.name}”` : "Video saved");
+    if (!item) return router.refresh();
+    const view = viewing.current;
+    if (!view || (view === "unsorted" ? !item.folderId : view === item.folderId)) setItems((xs) => [item, ...xs.filter((x) => x.id !== item.id)]);
+    if (item.video) saves.addSave({ ref: item.video.id, folderId: item.folderId, id: item.id });
+    if (item.folderId) saves.setFolders((fs) => fs.map((f) => (f.id === item.folderId ? { ...f, count: f.count + 1 } : f)));
+    if (what === "idea" || what === "channel") setWhat("all");
+    setFresh(item.id);
   };
 
   const drop = async (item: SavedItem) => {
@@ -168,7 +208,8 @@ export function SavedTab({ data }: { data: SavedData }) {
 
       <div className="min-w-0">
         <div className="flex items-center gap-3 flex-wrap mb-4">
-          <div className="min-w-0 flex-1">
+          {/* Room for the folder's name: on a phone the buttons go under it rather than squeeze it. */}
+          <div className="min-w-0 flex-1 basis-56">
             {current && naming === current.id ? (
               <FolderEditor f={current} onDone={(name, color) => (rename(current, name, color), setNaming(null))} onCancel={() => setNaming(null)} />
             ) : (
@@ -179,18 +220,27 @@ export function SavedTab({ data }: { data: SavedData }) {
             )}
             <p className="text-[12.5px] text-ink-faint mt-0.5">{folder ? `${items.length} saved here` : `${items.length} saved by the team${total ? ` · ${total} in folders` : ""}`}</p>
           </div>
-          {current && naming !== current.id && (
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => setNaming(current.id)} className={BTN}>
-                <EditIcon className="w-3.5 h-3.5" />
-                Rename
+          <div className="flex items-center gap-1.5">
+            {!adding && (
+              <button ref={addBtn} type="button" onClick={() => setAdding(true)} className={BTN}>
+                <PlusIcon className="w-3.5 h-3.5" />
+                Add a video
               </button>
-              <button type="button" onClick={() => remove(current)} className={`${BTN} hover:!text-red`} aria-label="Delete folder">
-                <TrashIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+            )}
+            {current && naming !== current.id && (
+              <>
+                <button type="button" onClick={() => setNaming(current.id)} className={BTN}>
+                  <EditIcon className="w-3.5 h-3.5" />
+                  Rename
+                </button>
+                <button type="button" onClick={() => remove(current)} className={`${BTN} hover:!text-red`} aria-label="Delete folder">
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
+        {adding && <AddVideo folder={current} onAdded={added} onClose={closeAdd} />}
         <Segmented
           ariaLabel="What"
           size="sm"
@@ -207,7 +257,7 @@ export function SavedTab({ data }: { data: SavedData }) {
         {shown.length ? (
           <ul className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {shown.map((item) => (
-              <SavedCard key={item.id} item={item} folders={saves.folders} onRemove={() => drop(item)} onMove={(to) => move(item, to)} />
+              <SavedCard key={item.id} item={item} fresh={item.id === fresh} folders={saves.folders} onRemove={() => drop(item)} onMove={(to) => move(item, to)} />
             ))}
           </ul>
         ) : (
@@ -221,7 +271,7 @@ export function SavedTab({ data }: { data: SavedData }) {
               ) : undefined
             }
           >
-            {!items.length && "Tap the bookmark on any video, idea or channel to keep it here for the team."}
+            {!items.length && "Tap the bookmark on any video, idea or channel to keep it here for the team. Found a video on YouTube yourself? Add a video, and paste its link."}
           </EmptyNote>
         )}
       </div>
@@ -256,7 +306,92 @@ function FolderEditor({ f, onDone, onCancel }: { f: Folder; onDone: (name: strin
   );
 }
 
-function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folders: Folder[]; onRemove: () => void; onMove: (to: string | null) => void }) {
+/**
+ * Add a video (1.55.9): a link to one found on YouTube, saved in the folder
+ * that's open (or none), read with its numbers and score when Outliers
+ * doesn't have it. What went wrong shows under the link, which stays to fix.
+ */
+function AddVideo({ folder, onAdded, onClose }: { folder: Folder | null; onAdded: (item: SavedItem | null) => void; onClose: () => void }) {
+  const ctx = useOutliers();
+  const input = useRef<HTMLInputElement>(null);
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Reading a video (and its channel) YouTube hasn't been asked about takes a few seconds: said after a moment.
+  useEffect(() => {
+    if (!busy) return setSlow(false);
+    const t = window.setTimeout(() => setSlow(true), 900);
+    return () => window.clearTimeout(t);
+  }, [busy]);
+  const submit = async () => {
+    const l = link.trim();
+    if (!l || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await saveVideoLink(ctx.teamId, l, folder?.id ?? null);
+      if (r.error === undefined) return onAdded(r.item);
+      setError(r.error);
+    } catch {
+      setError("Couldn't save it. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+    input.current?.select();
+  };
+  return (
+    <form
+      aria-label="Add a video from its link"
+      aria-busy={busy}
+      className="mb-5 rounded-2xl border border-line/10 bg-surface p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      {/* Phones: the link on a line of its own, the buttons under it. */}
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 basis-full sm:basis-0">
+          <LinkIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" aria-hidden />
+          <input
+            ref={input}
+            value={link}
+            onChange={(e) => {
+              setLink(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => e.key === "Escape" && !busy && onClose()}
+            readOnly={busy}
+            autoFocus
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={500}
+            placeholder="Paste a YouTube link: a video or a Short"
+            aria-label="YouTube link"
+            aria-invalid={error ? true : undefined}
+            aria-describedby="ol-add-video-note"
+            className="w-full rounded-lg border border-line/15 bg-surface pl-9 pr-3 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber"
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <button type="submit" disabled={busy || !link.trim()} className={BTN_MAIN}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onClose} disabled={busy} className={BTN}>
+            Cancel
+          </button>
+        </div>
+      </div>
+      <p id="ol-add-video-note" aria-live="polite" className={`mt-2 px-0.5 text-[12px] leading-snug ${error ? "text-red" : "text-ink-faint"}`}>
+        {error ?? (slow ? "Reading it from YouTube, with its channel's videos for the score…" : folder ? `It goes in “${folder.name}”, with its views and outlier score.` : "It's saved without a folder, with its views and outlier score.")}
+      </p>
+    </form>
+  );
+}
+
+function SavedCard({ item, fresh = false, folders, onRemove, onMove }: { item: SavedItem; fresh?: boolean; folders: Folder[]; onRemove: () => void; onMove: (to: string | null) => void }) {
   const ctx = useOutliers();
   const toast = useToast();
   const [note, setNote] = useState(item.note ?? "");
@@ -276,7 +411,7 @@ function SavedCard({ item, folders, onRemove, onMove }: { item: SavedItem; folde
   const folderName = item.folderId ? folders.find((f) => f.id === item.folderId)?.name : null;
 
   return (
-    <li className="rounded-2xl border border-line/10 bg-surface p-3 flex flex-col min-w-0">
+    <li className={`rounded-2xl border border-line/10 bg-surface p-3 flex flex-col min-w-0 transition-shadow duration-700 ${fresh ? "ring-2 ring-amber/60" : ""}`}>
       {item.kind === "video" && item.video ? (
         item.video.kind === "short" ? (
           <ShortCard v={item.video} staged />

@@ -6,13 +6,14 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
 import { runOutliersJob } from "@/modules/outliers/lib/collector";
-import { addChannelByRef, addToNiche, findChannels, liveSearch, prepareChannel, refreshVideo, searchesLeft, type FoundChannel, type LiveSearchOptions } from "@/modules/outliers/lib/requests";
-import { crossInsights, getAudience, getChannelDetail, getVideoDetail, nicheInsights, readChannels, readVideos } from "@/modules/outliers/lib/queries";
+import { addChannelByRef, addToNiche, addVideoById, findChannels, liveSearch, prepareChannel, refreshVideo, searchesLeft, type FoundChannel, type LiveSearchOptions } from "@/modules/outliers/lib/requests";
+import { crossInsights, getAudience, getChannelDetail, getSaved, getVideoDetail, nicheInsights, readChannels, readVideos } from "@/modules/outliers/lib/queries";
+import { parseVideoRef } from "@/modules/outliers/lib/ingest";
 import { forKind, toModel, type NicheModel } from "@/modules/outliers/lib/insights";
 import { NICHE_COLORS } from "@/modules/outliers/lib/explore";
 import { similarTitles } from "@/modules/outliers/lib/similar";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AudienceData, ChannelDetail, ChannelRowData, OutlierVideo, SavedIdea, VideoDetail, VideoPage } from "@/modules/outliers/lib/types";
+import type { AudienceData, ChannelDetail, ChannelRowData, OutlierVideo, SavedIdea, SavedItem, VideoDetail, VideoPage } from "@/modules/outliers/lib/types";
 
 /*
  * Outliers (1.27.0). Everyone on a team browses, searches, saves and hides
@@ -525,6 +526,43 @@ export async function saveVideo(teamId: string, videoId: string, folderId: strin
   const { data, error } = await supabase.from("outlier_saves").insert({ team_id: teamId, kind: "video", video_id: videoId, folder_id: folderId }).select("id").single();
   if (error || !data) return { error: dbError(error, "Couldn't save it. Try again.") };
   return { id: data.id as string };
+}
+
+/**
+ * A video someone found on YouTube themselves (1.55.9): its link, saved in
+ * this folder (or none). Read from YouTube first when Outliers doesn't have
+ * it, with its numbers and score. Returns the saved card for the page.
+ */
+export async function saveVideoLink(teamId: string, link: string, folderId: string | null): Promise<R<{ item: SavedItem | null }>> {
+  const { supabase, user, member } = await who(teamId);
+  if (!user || !member) return { error: "Your session expired. Sign in again." };
+  if (folderId && !UUID.test(folderId)) return { error: "That folder isn't here." };
+  const id = typeof link === "string" && link.length <= 500 ? parseVideoRef(link) : null;
+  if (!id) return { error: "That isn't a link to a YouTube video. Copy it from the video's Share button or the address bar." };
+  // Already saved here (in a folder, or anywhere when there's no folder): said before asking YouTube.
+  const { data: there } = await supabase.from("outlier_saves").select("folder_id").eq("team_id", teamId).eq("video_id", id);
+  const inFolders = ((there ?? []) as { folder_id: string | null }[]).map((r) => r.folder_id);
+  if (folderId && inFolders.includes(folderId)) return { error: "That video's already in this folder." };
+  if (!folderId && inFolders.length) {
+    const named = inFolders.filter((f): f is string => !!f);
+    const { data: fs } = !inFolders.includes(null) && named.length ? await supabase.from("outlier_folders").select("name").in("id", named).limit(3) : { data: null };
+    const names = ((fs ?? []) as { name: string }[]).map((f) => `“${f.name}”`);
+    return { error: names.length ? `That video's already saved, in ${names.join(" and ")}.` : "That video's already saved." };
+  }
+  if (overLimit("outliers-link", user.id, 40, 60 * 60_000)) return { error: "That's a lot of videos in an hour. Wait a bit, then add more." };
+  let got: { id: string } | { error: string };
+  try {
+    got = await addVideoById(teamId, id);
+  } catch {
+    return { error: "Couldn't read that video from YouTube right now. Try again in a minute." };
+  }
+  if ("error" in got) return { error: got.error };
+  const { data, error } = await supabase.from("outlier_saves").insert({ team_id: teamId, kind: "video", video_id: id, folder_id: folderId }).select("id").single();
+  if (error?.code === "23505") return { error: folderId ? "That video's already in this folder." : "That video's already saved." };
+  if (error || !data) return { error: dbError(error, "Couldn't save it. Try again.") };
+  // Its card, read like the rest of Saved (null: saved, the page reads Saved again).
+  const [item] = await getSaved(teamId, null, { id: data.id as string });
+  return { item: item ?? null };
 }
 
 export async function saveChannel(teamId: string, channelId: string, folderId: string | null): Promise<R<{ id: string }>> {
