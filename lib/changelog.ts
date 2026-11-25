@@ -22,6 +22,14 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.55.10",
+    date: "2026-11-25",
+    title: "Security: Next.js 15.5.29",
+    changes: [
+      { kind: "fixed", text: "The framework the app runs on is updated to Next.js 15.5.29, which fixes three security problems found in it this month (in how pictures are resized, in cookies on one kind of page, and in passing on other sites' answers). None of them looked reachable in ClipTroop, but the check that runs before every update stops on any known problem, so updates couldn't go out until this one." },
+    ],
+  },
+  {
     version: "1.55.9",
     date: "2026-11-25",
     title: "Save a video you found yourself",

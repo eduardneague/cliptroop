@@ -5,12 +5,5 @@
     "{ \"id\": \"GHSA-xxxx-xxxx-xxxx\", \"package\": \"its name\", \"reason\": \"why it's safe to wait\", \"until\": \"YYYY-MM-DD\" }",
     "The date is at most 90 days ahead; after it, the waiver lets nothing through. See docs/DEVELOPMENT.md → Vulnerability gate."
   ],
-  "waivers": [
-    {
-      "id": "GHSA-fc5q-39xc-vjpf",
-      "package": "picomatch",
-      "reason": "Only inside build and lint tools (tinyglobby, used by sucrase for the Tailwind config and by typescript-eslint), never in the app. They match our own file patterns, so the slowdown it allows (a crafted glob) can't be reached. npm had no fixed picomatch 4.x yet (only Tailwind 4, a new major version). Take this out when there is one (npm update picomatch).",
-      "until": "2026-12-18"
-    }
-  ]
+  "waivers": []
 }
