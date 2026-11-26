@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { LockIcon } from "@/components/ui/icons";
-import { unlockLogins } from "@/app/(dashboard)/affiliates/actions";
+import { unlockLogins } from "@/app/(dashboard)/sponsorships/actions";
 import { UNLOCK_MINUTES } from "../lib/rules";
 
 /**

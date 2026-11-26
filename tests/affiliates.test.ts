@@ -6,6 +6,8 @@
 // The rules (what's typed, pasted, exported), the sealing of logins and the unlock (for real, with a key made here;
 // they're server-only, so this file runs itself again with the react-server condition), and how it's all wired.
 // The database's own rules: supabase/tests/affiliates.test.sql.
+// 1.57.0: Sponsorships (the same page, renamed): what kind of deal, every video on the channel, the product's picture
+// (the owner, Nov 26 2026). The database's rules for them: supabase/tests/sponsorships.test.sql.
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -110,6 +112,7 @@ function walk(dir: string, out: string[] = []): string[] {
   const a = (over: Partial<import("../modules/affiliates/lib/rules").Affiliate>): import("../modules/affiliates/lib/rules").Affiliate => ({
     id: "20000000-0000-4000-8000-000000000001",
     name: "Gravastar.com",
+    kinds: ["affiliate"],
     productUrl: "https://gravastar.com/k98",
     code: "VIVERRO",
     percentage: "10%",
@@ -118,6 +121,8 @@ function walk(dir: string, out: string[] = []): string[] {
     notes: null,
     long: null,
     short: null,
+    picture: null,
+    pictureOff: false,
     createdAt: "2026-11-20T10:00:00Z",
     updatedAt: "2026-11-20T10:00:00Z",
     login: { updatedAt: "2026-11-20T10:00:00Z", by: "Edu" },
@@ -127,14 +132,14 @@ function walk(dir: string, out: string[] = []): string[] {
     "Gravastar.com: https://gravastar.com/k98\nCode VIVERRO (10% off)\n\nAbxylute.com: https://abxylute.com/p5\nCode viverroVIP ($5 USD OFF)\n\nDeepcool.com: https://gravastar.com/k98", "the lines for a video's description");
   ok(R.csvCell("=HYPERLINK(\"http://evil\")") === `"'=HYPERLINK(""http://evil"")"` && R.csvCell("+1") === "'+1" && R.csvCell("@x") === "'@x" && R.csvCell("a,b") === '"a,b"' && R.csvCell(null) === "", "a spreadsheet cell can't be a formula");
   const csv = R.affiliatesCsv([a({ notes: "=cmd" })]);
-  ok(csv.startsWith("Name,Product link,Code,Percentage,Status,Long video,Short,Affiliate platform,Notes\r\n") && /,'=cmd\r\n$/.test(csv), "the spreadsheet's columns (and the formula defused)");
+  ok(csv.startsWith("Name,Type,Product link,Code,Percentage,Status,Long video,Short,Affiliate platform,Notes\r\n") && /,Affiliate,/.test(csv) && /,'=cmd\r\n$/.test(csv), "the spreadsheet's columns, its kind (and the formula defused)");
   ok(!/login|password|username/i.test(csv), "never a login in the spreadsheet");
 
   // ---- The list -----------------------------------------------------------------------------------------------------------
   const list = [
     a({ id: "1", name: "Zeta", createdAt: "2026-11-01T00:00:00Z", status: "paused", code: null, login: null }),
-    a({ id: "2", name: "alpha", createdAt: "2026-11-03T00:00:00Z", long: { kind: "long", id: "p", number: 12, title: "Keyboard review", stageLabel: "Publish", watchUrl: null, thumb: null } }),
-    a({ id: "3", name: "Beta", createdAt: "2026-11-02T00:00:00Z", status: "ended", short: { kind: "short", id: "s", number: 45, title: "K98 in 30s", stageLabel: "Posted", watchUrl: null, thumb: null } }),
+    a({ id: "2", name: "alpha", kinds: ["affiliate", "review"], createdAt: "2026-11-03T00:00:00Z", long: { kind: "long", source: "team", id: "p", number: 12, title: "Keyboard review", stageLabel: "Publish", watchUrl: null, thumb: null } }),
+    a({ id: "3", name: "Beta", kinds: ["review"], createdAt: "2026-11-02T00:00:00Z", status: "ended", short: { kind: "short", source: "channel", id: "Short136_bb", number: null, title: "K98 in 30s", stageLabel: "On the channel", watchUrl: "https://www.youtube.com/shorts/Short136_bb", thumb: null } }),
   ];
   const f = R.readFilters({});
   ok(R.applyFilters(list, f).map((x) => x.id).join() === "2,3,1", "newest first by default");
@@ -142,10 +147,97 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(R.applyFilters(list, R.readFilters({ status: "ended" })).map((x) => x.id).join() === "3", "by status");
   ok(R.applyFilters(list, R.readFilters({ video: "long" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ video: "none" })).map((x) => x.id).join() === "1", "by video");
   ok(R.applyFilters(list, R.readFilters({ code: "1", login: "1" })).map((x) => x.id).join() === "2,3", "with a code, with a login");
-  ok(R.applyFilters(list, R.readFilters({ q: "#45" })).map((x) => x.id).join() === "3" && R.applyFilters(list, R.readFilters({ q: "keyboard" })).map((x) => x.id).join() === "2", "found by a video's number or title");
-  const weird = R.readFilters({ status: "x", video: "y", sort: "z", q: "q".repeat(500) });
-  ok(weird.status === null && weird.video === null && weird.sort === "newest" && weird.q.length === 100, "anything unknown in the address is no filter");
-  ok(R.filtersHref(R.readFilters({ status: "paused", q: "grava" }), { sort: "name" }, "grid") === "/affiliates?status=paused&sort=name&q=grava&view=grid" && R.filtersHref(f) === "/affiliates", "the address for a filter");
+  ok(R.applyFilters(list, R.readFilters({ q: "#12" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ q: "keyboard" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ q: "k98 in" })).map((x) => x.id).join() === "3", "found by a video's number or title (one on the channel too)");
+  ok(R.applyFilters(list, R.readFilters({ type: "review" })).map((x) => x.id).join() === "2,3" && R.applyFilters(list, R.readFilters({ type: "affiliate" })).map((x) => x.id).join() === "2,1" && R.applyFilters(list, R.readFilters({ type: "paid" })).length === 0, "the kind's tab: each one in all of its kinds' tabs");
+  ok(R.applyFilters(list, R.readFilters({ q: "review" })).map((x) => x.id).join() === "2,3", "found by its kind too");
+  const weird = R.readFilters({ type: "barter", status: "x", video: "y", sort: "z", q: "q".repeat(500) });
+  ok(weird.kind === null && weird.status === null && weird.video === null && weird.sort === "newest" && weird.q.length === 100, "anything unknown in the address is no filter");
+  ok(
+    R.filtersHref(R.readFilters({ status: "paused", q: "grava" }), { sort: "name" }, "grid") === "/sponsorships?status=paused&sort=name&q=grava&view=grid" &&
+      R.filtersHref(f) === "/sponsorships" &&
+      R.filtersHref(R.readFilters({ type: "review", status: "active" }), { kind: "paid" }) === "/sponsorships?type=paid&status=active",
+    "the address for a filter (the tab's kind kept with the rest)"
+  );
+
+  // ---- 1.57.0: what kind of deal --------------------------------------------------------------------------------------------
+  ok(JSON.stringify(R.cleanKinds(["paid", "affiliate", "paid"])) === '["affiliate","paid"]' && R.cleanKinds([]) === null && R.cleanKinds(["barter"]) === null && JSON.stringify(R.cleanKinds("review")) === '["review"]', "kinds: known ones, in order, no repeats; none is nothing");
+  ok(
+    JSON.stringify(R.kindsFromText("Review")) === '["review"]' &&
+      JSON.stringify(R.kindsFromText("affiliate + paid")) === '["affiliate","paid"]' &&
+      JSON.stringify(R.kindsFromText("Sponsored, gifted")) === '["review","paid"]' &&
+      R.kindsFromText("barter").length === 0,
+    "a sheet's Type cell, as people write it"
+  );
+  const k1 = R.cleanAffiliate({ name: "A", kinds: ["review", "affiliate"] });
+  ok("ok" in k1 && k1.ok.kinds.join() === "affiliate,review", "the window's kinds, in order");
+  ok("error" in R.cleanAffiliate({ name: "A", kinds: [] }) && "error" in R.cleanAffiliate({ name: "A", kinds: ["affiliate", "barter"] }), "never none, never an unknown one");
+  const k0 = R.cleanAffiliate({ name: "A" });
+  ok("ok" in k0 && k0.ok.kinds.join() === "affiliate" && k0.ok.picture === "keep", "nothing said: an affiliate (as everything was before), the picture as it is");
+  const typed = R.parsePasted("Name\tType\tCode\nDeepcool.com\tReview\t-\nGravastar.com\t\tVIVERRO", ["paid"]);
+  ok(typed.header && typed.rows[0].fields?.kinds.join() === "review" && typed.rows[1].fields?.kinds.join() === "paid", "pasted: a Type column, else the tab it's pasted on");
+  ok(R.parsePasted(sheet).rows.every((r) => r.fields?.kinds.join() === "affiliate" && r.fields?.picture === "auto"), "pasted on All: affiliates, their pictures looked for");
+
+  // ---- 1.57.0: every video on the channel ---------------------------------------------------------------------------------
+  const yt: [string, string | null][] = [
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10s", "dQw4w9WgXcQ"],
+    ["https://youtu.be/dQw4w9WgXcQ?si=abc", "dQw4w9WgXcQ"],
+    ["youtube.com/shorts/Short136_bb", "Short136_bb"],
+    ["https://m.youtube.com/live/Long136_aaa?feature=share", "Long136_aaa"],
+    ["https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ", "dQw4w9WgXcQ"],
+    ["dQw4w9WgXcQ", "dQw4w9WgXcQ"],
+    ["https://www.youtube.com/@viverro", null],
+    ["https://evil.example.com/watch?v=dQw4w9WgXcQ", null],
+    ["keyboard", null],
+  ];
+  for (const [given, want] of yt) ok(R.youtubeIdOf(given) === want, `a YouTube link: ${given} → ${R.youtubeIdOf(given)}`);
+  const ch = R.cleanAffiliate({ name: "A", longYoutubeId: "Long136_aaa", shortId: "50000000-0000-4000-8000-000000000001" });
+  ok("ok" in ch && ch.ok.longYoutubeId === "Long136_aaa" && ch.ok.projectId === null && !!ch.ok.shortId, "a long video only on the channel, a Short of the team's");
+  ok("error" in R.cleanAffiliate({ name: "A", longYoutubeId: "not an id!" }) && "error" in R.cleanAffiliate({ name: "A", projectId: "40000000-0000-4000-8000-000000000001", longYoutubeId: "Long136_aaa" }), "a channel video is an id, and one per place");
+  ok(R.choiceThumb({ thumb: null, youtubeId: "Long136_aaa" }) === "https://i.ytimg.com/vi/Long136_aaa/mqdefault.jpg" && R.choiceThumb({ thumb: "https://x.example.com/t.jpg", youtubeId: "Long136_aaa" }) === "https://x.example.com/t.jpg" && R.choiceThumb({ thumb: null, youtubeId: null }) === null, "a video's picture: its own, else YouTube's");
+
+  // ---- 1.57.0: the product's picture --------------------------------------------------------------------------------------
+  const pics: [string, string | null | false][] = [
+    ["https://cdn.shopify.com/s/files/1/k98.png?v=1", "https://cdn.shopify.com/s/files/1/k98.png?v=1"],
+    ["http://abxylute.com/cdn/shop/files/P5.png?v=2", "https://abxylute.com/cdn/shop/files/P5.png?v=2"],
+    ["//ae01.alicdn.com/kf/x.jpg", "https://ae01.alicdn.com/kf/x.jpg"],
+    ["", null],
+    ["javascript:alert(1)", false],
+    ["data:image/png;base64,AAAA", false],
+    ["https://192.168.1.1/admin.png", false],
+    ["https://127.0.0.1/x.png", false],
+    ["https://[::1]/x.png", false],
+    ["https://localhost/x.png", false],
+    ["https://router.local/x.png", false],
+    ["https://intranet/x.png", false],
+    ["https://user:pw@shop.example.com/x.png", false],
+    ["https://shop.example.com:8443/x.png", false],
+    ["https://shop.example.com/a b.png", false],
+  ];
+  for (const [given, want] of pics) ok(R.normalizePicture(given) === want, `a picture's link: ${JSON.stringify(given)} → ${JSON.stringify(R.normalizePicture(given))}`);
+  ok(R.smallPicture("https://abxylute.com/cdn/shop/files/P5.png?v=2", 64) === "https://abxylute.com/cdn/shop/files/P5.png?v=2&width=64" && R.smallPicture("https://cdn.shopify.com/s/files/1/k98.png?width=1200", 80) === "https://cdn.shopify.com/s/files/1/k98.png?width=80" && R.smallPicture("https://ae01.alicdn.com/kf/x.jpg", 64) === "https://ae01.alicdn.com/kf/x.jpg", "a smaller copy where the shop's picture server makes one");
+  const choose = R.cleanAffiliate({ name: "A", picture: { url: "http://shop.example.com/p.jpg", source: "link" } });
+  ok("ok" in choose && typeof choose.ok.picture === "object" && choose.ok.picture.url === "https://shop.example.com/p.jpg", "a pasted picture, on https");
+  ok("error" in R.cleanAffiliate({ name: "A", picture: { url: "https://10.0.0.5/p.jpg", source: "link" } }) && "error" in R.cleanAffiliate({ name: "A", picture: { url: "https://x.example.com/p.jpg", source: "elsewhere" } }) && "error" in R.cleanAffiliate({ name: "A", picture: "sometimes" }), "never a picture inside a network, never an unknown kind of change");
+  const P = await import("../modules/affiliates/lib/picture-parse");
+  const page = (head: string, body = "") => `<!doctype html><html><head><title>P5</title>${head}</head><body>${body}</body></html>`;
+  const base = "https://abxylute.com/products/p5-wireless-controller";
+  ok(P.pictureOf(page('<meta property="og:image" content="http://abxylute.com/cdn/shop/files/a.png"><meta property="og:image:secure_url" content="https://abxylute.com/cdn/shop/files/b.png">'), base) === "https://abxylute.com/cdn/shop/files/b.png", "the page's sharing picture (the https one first)");
+  ok(P.pictureOf(page('<meta property="og:image" content="/cdn/shop/files/c.png?v=1&amp;w=2">'), base) === "https://abxylute.com/cdn/shop/files/c.png?v=1&w=2", "…found where the page is");
+  ok(P.pictureOf(page('<meta name="twitter:image" content="https://cdn.example.com/t.jpg">'), base) === "https://cdn.example.com/t.jpg", "…or its Twitter one");
+  const ld = (j: unknown) => page("", `<script type="application/ld+json">${JSON.stringify(j)}</script>`);
+  ok(P.pictureOf(ld({ "@context": "https://schema.org", "@type": "Product", name: "LQ360", image: ["https://www.deepcool.com/i/lq360.png", "https://www.deepcool.com/i/2.png"] }), base) === "https://www.deepcool.com/i/lq360.png", "a product's own picture (JSON-LD)");
+  ok(P.pictureOf(ld({ "@graph": [{ "@type": "WebPage" }, { "@type": ["Product"], image: { "@type": "ImageObject", url: "https://x.example.com/p.jpg" } }] }), base) === "https://x.example.com/p.jpg", "…in a graph, as an ImageObject");
+  ok(P.pictureOf(page("", '<script type="application/ld+json">{ not json</script><link rel="image_src" href="https://x.example.com/s.jpg">'), base) === "https://x.example.com/s.jpg", "…else image_src (a broken JSON-LD is passed over)");
+  ok(P.pictureOf(page('<meta property="og:image" content="https://192.168.0.10/p.png">'), base) === null && P.pictureOf(page('<meta property="og:image" content="javascript:alert(1)">'), base) === null, "never a picture inside a network, never a script");
+  ok(P.pictureOf(page(""), base) === null, "a page without one: none");
+  ok(P.refreshOf(page('<meta http-equiv="refresh" content="0; URL=\'https://promeed.com/products/x?awc=1\'">'), "https://tidd.ly/4sQBz9e") === "https://promeed.com/products/x?awc=1" && P.refreshOf(page('<meta http-equiv="refresh" content="0;url=javascript:alert(1)">'), base) === null && P.refreshOf(page(""), base) === null, "a page that sends the browser on");
+  // The server never reads an address inside a network or the machine itself (lib/web-page.ts), whatever the link says.
+  const W = await import("../lib/web-page");
+  const pub = (u: string) => W.publicUrl(new URL(u));
+  ok(pub("https://abxylute.com/products/p5") && pub("http://shop.example.com:80/x") && !pub("http://127.0.0.1/x") && !pub("http://[::1]/x") && !pub("http://169.254.169.254/latest/meta-data/") && !pub("http://10.0.0.8/x") && !pub("http://localhost:3000/x") && !pub("http://router.local/") && !pub("https://shop.example.com:8443/x") && !pub("ftp://x.example.com/") && !pub("https://u:p@x.example.com/"), "only public pages, on the usual ports");
+  const Pic = await import("../modules/affiliates/lib/pictures");
+  const t0 = Date.now();
+  ok((await Pic.findPicture("http://127.0.0.1:3456/aff.html")) === null && (await Pic.findPicture("http://localhost:3456/")) === null && (await Pic.findPicture("http://169.254.169.254/latest/meta-data/")) === null && (await Pic.findPicture("not a link")) === null && Date.now() - t0 < 2000, "a product link inside a network: nothing is read, at once");
 
   // ---- Who, and what it says ------------------------------------------------------------------------------------------------
   ok(R.canManageAffiliates(["master"], false) && R.canManageAffiliates(["editor"], true) && !R.canManageAffiliates(["editor", "publisher"], false) && !R.canManageAffiliates(null, true), "masters, and the people they let in");
@@ -203,7 +295,7 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(V.unlockedUntil(`${until}.${"0".repeat(64)}`, U, S, 15, now) === null && V.unlockedUntil(`${until + 1}.${token.split(".")[1]}`, U, S, 15, now) === null && V.unlockedUntil("", U, S, 15, now) === null, "a forged or changed one is refused");
 
   // ---- How it's wired ---------------------------------------------------------------------------------------------------------
-  const actions = read("app/(dashboard)/affiliates/actions.ts");
+  const actions = read("app/(dashboard)/sponsorships/actions.ts");
   const fn = (name: string) => actions.slice(actions.indexOf(`export async function ${name}`), actions.indexOf("\nexport ", actions.indexOf(`export async function ${name}`) + 10));
   ok(/const rights = await affiliateRights\(supabase, teamId, user\.id, membership\.roles\);/.test(actions), "who may do what is read from the database each time");
   const opener = fn("openAffiliateLogin");
@@ -212,14 +304,29 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(/if \(how === "copied_password"\) return \{ password: login\.password, until \};/.test(opener) && /if \(how === "copied_username"\) return \{ username: login\.username, until \};/.test(opener), "copying one part hands over only that part");
   ok(/overLimit\("affiliate-login-open", c\.user\.id, 40, 60_000\)/.test(opener), "and how many a minute");
   const unlock = fn("unlockLogins");
-  ok(/await confirmPassword\(c\.user, password\)/.test(unlock) && /httpOnly: true,\s*sameSite: "strict",/.test(unlock) && /path: UNLOCK_PATH,/.test(unlock) && /maxAge: UNLOCK_MINUTES \* 60,/.test(unlock), "the unlock: the password (sign-in limits), then a cookie only the server reads, for /affiliates, 15 minutes");
-  ok(/export const UNLOCK_PATH = "\/affiliates";/.test(read("modules/affiliates/lib/vault.ts")), "…sent nowhere else");
+  ok(/await confirmPassword\(c\.user, password\)/.test(unlock) && /httpOnly: true,\s*sameSite: "strict",/.test(unlock) && /path: UNLOCK_PATH,/.test(unlock) && /maxAge: UNLOCK_MINUTES \* 60,/.test(unlock), "the unlock: the password (sign-in limits), then a cookie only the server reads, for /sponsorships, 15 minutes");
+  ok(/export const UNLOCK_PATH = "\/sponsorships";/.test(read("modules/affiliates/lib/vault.ts")) && /export const SPONSORSHIPS_PATH = "\/sponsorships";/.test(read("modules/affiliates/lib/rules.ts")), "…sent nowhere else (the page's own address)");
   const save = fn("saveAffiliate");
   ok(/if \(kept\.has\(id\) && !\(await unlockedFor\(c\.supabase, c\.user\.id\)\)\) return \{ error: LOCKED, locked: true \};/.test(save) && save.indexOf("unlockedFor") < save.indexOf('from("affiliates")'), "replacing or removing a kept login needs the unlock, checked before anything is written");
   ok(/sealLogin\(c\.teamId, savedId, sealing\)/.test(save) && /affiliate_login_save/.test(save), "a login is sealed before the database sees it");
   ok(/withLogins\(c, wanted\)\)\.size && !\(await unlockedFor/.test(fn("deleteAffiliates")), "deleting ones with a login needs the unlock");
-  ok(/if \(!c\.master\) return \{ error: "Only masters choose who manages affiliates\." \};/.test(fn("setAffiliateAccess")) && /kind: "affiliate_access"/.test(fn("setAffiliateAccess")), "only Masters let people in; they're told");
+  ok(/if \(!c\.master\) return \{ error: "Only masters choose who manages sponsorships\." \};/.test(fn("setAffiliateAccess")) && /kind: "affiliate_access"/.test(fn("setAffiliateAccess")) && /href: SPONSORSHIPS_PATH/.test(fn("setAffiliateAccess")), "only Masters let people in; they're told (and sent to the page)");
   ok(/if \(!c\.master\) return \{ error: "Only masters see who used the logins\." \};/.test(fn("affiliateLoginActivity")), "only Masters read the activity");
+  // 1.57.0: pictures and videos, only for the people who manage sponsorships; the server reads only public pages.
+  const finder = fn("findProductPicture");
+  ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(finder) && /overLimit\("affiliate-picture", c\.user\.id, 30, 60_000\)/.test(finder) && /const url = normalizeUrl\(productUrl\);/.test(finder), "a picture is looked for by the people let in, a few a minute, for a web address");
+  ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn("affiliateVideoChoices")) && /readVideoChoices\(c\.supabase, c\.teamId\)/.test(fn("affiliateVideoChoices")), "the videos to link: the people let in, read as them");
+  ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn("setAffiliatesKinds")) && /const clean = cleanKinds\(kinds\);/.test(fn("setAffiliatesKinds")), "changing the kind: the people let in, checked");
+  ok(/lookForPictures\(c\.teamId, \[savedId\]\)/.test(fn("saveAffiliate")) && /lookForPictures\(c\.teamId, /.test(fn("importAffiliates")), "saved or pasted with a product link and no picture: the server looks after answering");
+  const pictures = read("modules/affiliates/lib/pictures.ts");
+  ok(/^import "server-only";/.test(pictures) && /if \(!publicUrl\(url\)\) return null;/.test(pictures) && (pictures.match(/if \(!publicUrl\(next\)/g) ?? []).length === 2, "the server reads only public pages, each redirect checked before it's followed");
+  ok(/admin\.rpc\("affiliate_pictures_claim"/.test(pictures) && /admin\.rpc\("affiliate_picture_found"/.test(pictures) && !/from\("affiliates"\)\.update\(\{ image_url/.test(pictures), "the background look goes through the database's two functions");
+  const web = read("lib/web-page.ts");
+  ok(/lookup: safeLookup as never/.test(web) && /all\.some\(\(a\) => isPrivateAddress\(a\.address\)\)/.test(web) && /if \(u\.port && u\.port !== "80" && u\.port !== "443"\) return false;/.test(web), "checked on the address the connection uses, ports 80 and 443 only");
+  const preview = read("app/api/link-preview/route.ts");
+  ok(/from "@\/lib\/web-page"/.test(preview) && !/function safeLookup/.test(preview), "the link previews read pages the same way (one reader, not two)");
+  const sponsorPage = read("app/(dashboard)/sponsorships/page.tsx");
+  ok(/if \(data\.needPictures\) \{[\s\S]*after\(\(\) => fillPictures\(teamId/.test(sponsorPage) && /export const maxDuration = 60;/.test(sponsorPage), "opening the page: pictures still missing are looked for after it's sent");
   const queries = read("modules/affiliates/lib/queries.ts");
   ok(!/affiliate_logins/.test(queries.replace(/\/\*[\s\S]*?\*\//g, "")) && /supabase\.rpc\("affiliate_login_states", \{ p_team: teamId \}\)/.test(queries), "the page never reads a login: only which ones have one");
   // No browser code reaches the server's secrets.
@@ -238,14 +345,21 @@ function walk(dir: string, out: string[] = []): string[] {
   const picker = read("modules/affiliates/components/affiliates-picker.tsx");
   ok(/<ListPicker ids=\{items\.map\(\(i\) => i\.id\)\}/.test(picker) && /<BarDelete/.test(picker) && /affiliatesCsv\(chosen\)/.test(picker) && /descriptionText\(chosen\)/.test(picker), "several at once: copy, export, status, delete (the shorts list's picking)");
   const body = read("modules/affiliates/components/affiliates-body.tsx");
-  ok(/<AffiliatesTable list=\{list\} manage=\{manage\} \/>/.test(body) && /<AffiliateCards list=\{list\} manage=\{manage\} \/>/.test(body) && /<ViewToggle/.test(body) && /<FiltersMenu/.test(body) && /<PickAffiliatesButton \/>/.test(body), "a table and cards, Filters, Select (as the shorts list)");
+  ok(/<AffiliatesTable list=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<AffiliateCards list=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<ViewToggle/.test(body) && /<FiltersMenu/.test(body) && /<PickAffiliatesButton \/>/.test(body), "a table and cards, Filters, Select (as the shorts list)");
+  ok(/<KindTabs/.test(body) && /DEAL_KINDS\.map\(\(k\) => \(\{ key: k, label: KIND_TAB\[k\]/.test(body), "tabs for the kinds of deal, over one list");
+  ok(/setAffiliatesKinds/.test(picker) && /setAffiliatesKinds/.test(read("modules/affiliates/components/row-menu.tsx")), "the kind changed for several at once, or on one");
+  const mark = read("modules/affiliates/components/brand-mark.tsx");
+  ok(/referrerPolicy="no-referrer"/.test(mark) && /data-row-num=""/.test(mark) && /onError=\{\(\) => setFailed\(url\)\}/.test(mark), "the picture: asked for without saying where from; picking still puts the tick box there; the initial if it doesn't open");
+  ok(/findProductPicture\(ctx\.teamId, url\)/.test(dialog) && /<VideoField kind="long"/.test(dialog) && /youtubeIdOf\(raw\)/.test(dialog), "the window: the picture as soon as a link is typed; videos found by title, number or YouTube link");
   ok(/<RowPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliates-table.tsx")) && /<CardPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliate-cards.tsx")), "rows and cards are picked");
 
   // The page, in the app.
   const nav = read("lib/nav-items.ts");
-  ok(/\{ label: "Content", items: \[SHORTS, VIDEOS, AFFILIATES\] \}/.test(nav) && /href: "\/affiliates", label: "Affiliates"/.test(nav), "in the menu, under Content");
-  ok(/id: "affiliates", kind: "page", title: "Affiliates"/.test(read("lib/search/catalog.ts")), "search finds it");
-  ok(/\[\/\^\\\/affiliates\(\\\/\|\$\)\/, \(\) => <AffiliatesLoading \/>\]/.test(read("app/(dashboard)/loading.tsx")), "the app's loading screen is the page's own on the way there");
+  ok(/\{ label: "Content", items: \[SHORTS, VIDEOS, SPONSORSHIPS\] \}/.test(nav) && /href: "\/sponsorships", label: "Sponsorships"/.test(nav), "in the menu, under Content, as Sponsorships");
+  ok(/id: "sponsorships", kind: "page", title: "Sponsorships"/.test(read("lib/search/catalog.ts")), "search finds it");
+  ok(/\[\/\^\\\/\(sponsorships\|affiliates\)\(\\\/\|\$\)\/, \(\) => <SponsorshipsLoading \/>\]/.test(read("app/(dashboard)/loading.tsx")), "the app's loading screen is the page's own on the way there");
+  ok(/\{ source: "\/affiliates", destination: "\/sponsorships", permanent: false \}/.test(read("next.config.ts")) && /redirect\(`\/sponsorships/.test(read("app/(dashboard)/affiliates/page.tsx")), "an old link to Affiliates lands on Sponsorships");
+  ok(!/"use server"/.test(read("app/(dashboard)/affiliates/actions.ts")) && !/"use server"/.test(read("app/(dashboard)/affiliates/view-mode-actions.ts")), "nothing of the old address still answers");
   ok(/case "affiliate_access":/.test(read("components/ui/notification-cards.tsx")), "the notification for being let in");
   const sql = read("supabase/migrations/0135_affiliates.sql");
   ok(/revoke all on public\.affiliate_logins from anon, authenticated;/.test(sql) && !/grant [^;]* on public\.affiliate_logins to/.test(sql), "the logins table: nothing for anyone signed in");

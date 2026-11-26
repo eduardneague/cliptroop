@@ -1,22 +1,22 @@
 import { RowPick } from "@/components/ui/list-pick";
 import { chunks, LIST_CHUNK } from "@/lib/chunks";
-import { domainOf, type Affiliate } from "../lib/rules";
+import { domainOf, type Affiliate, type DealKind } from "../lib/rules";
 import { TABLE_COLS } from "../lib/table-cols";
-import { BrandBadge, OutLink, StatusPill, VideoChip } from "./bits";
+import { KindPill, OutLink, StatusPill, VideoChip } from "./bits";
+import { BrandMark } from "./brand-mark";
 import { CopyChip } from "./copy-chip";
 import { LoginCell } from "./login-cell";
 import { OpenEditor } from "./open-editor";
 import { AffiliateMenu } from "./row-menu";
 
 /*
- * The affiliates as a table (1.56.0), drawn on the server; the parts that do something are the browser's. Columns
- * come in as there's room: the name (a phone shows the rest under it), the code and the percentage, the video, the
- * product link, the login (for the people who manage affiliates), the affiliate platform. Picking several puts a tick
- * box where the brand's initial is.
+ * The sponsorships as a table (1.56.0), drawn on the server; the parts that do something are the browser's. Columns
+ * come in as there's room: the name with its kind (1.57.0; not the tab's own, it goes without saying) and status (a
+ * phone shows the rest under it), the code and the percentage, the video, the product link, the login (for the people
+ * who manage sponsorships), the affiliate platform. The product's picture (1.57.0) or the brand's initial first;
+ * picking several puts a tick box there.
  */
-
-
-export function AffiliatesTable({ list, manage }: { list: Affiliate[]; manage: boolean }) {
+export function AffiliatesTable({ list, manage, tab = null }: { list: Affiliate[]; manage: boolean; tab?: DealKind | null }) {
   const cols = manage ? TABLE_COLS.manage : TABLE_COLS.view;
   return (
     <div className="rounded-xl border border-line/10 bg-surface overflow-hidden">
@@ -41,12 +41,17 @@ export function AffiliatesTable({ list, manage }: { list: Affiliate[]; manage: b
               className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] ${cols} gap-x-3 gap-y-1.5 px-3 py-2.5 items-center border-t border-line/5 first:border-t-0 hover:bg-surface-2/70 transition-colors ${a.status === "ended" ? "opacity-70" : ""}`}
             >
               <span className="self-start md:self-center pt-0.5 md:pt-0 flex justify-center">
-                <BrandBadge id={a.id} name={a.name} />
+                <BrandMark affiliate={a} className="w-8 h-8 text-[12px]" px={32} />
               </span>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <OpenEditor affiliate={a} className="min-w-0 truncate text-[13.5px] font-semibold" />
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <OpenEditor affiliate={a} className="min-w-0 truncate text-[13.5px] font-semibold mr-0.5" />
+                  {a.kinds
+                    .filter((k) => k !== tab)
+                    .map((k) => (
+                      <KindPill key={k} kind={k} />
+                    ))}
                   {a.status !== "active" && <StatusPill status={a.status} />}
                 </div>
                 {/* What has no column yet on this screen, under the name. */}

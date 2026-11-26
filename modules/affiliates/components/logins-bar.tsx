@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/toast-provider";
 import { Ago } from "@/components/ui/ago";
 import { CopyIcon, EditIcon, EyeIcon, HistoryIcon, LockIcon, TrashIcon, UsersIcon } from "@/components/ui/icons";
 import { PersonAvatar } from "@/modules/short-videos/components/person-chip";
-import { affiliateLoginActivity, setAffiliateAccess } from "@/app/(dashboard)/affiliates/actions";
+import { affiliateLoginActivity, setAffiliateAccess } from "@/app/(dashboard)/sponsorships/actions";
 import { eventText, type AccessPerson, type LoginEvent } from "../lib/rules";
 import { useAffiliates } from "./affiliates-context";
 
@@ -55,7 +55,7 @@ export function LoginsBar({ people, me }: { people: AccessPerson[]; me: string }
         ))}
       {ctx.master && (
         <>
-          <button type="button" onClick={() => setWho(true)} aria-haspopup="dialog" aria-label={`Who manages affiliates: ${said}`} className={PILL}>
+          <button type="button" onClick={() => setWho(true)} aria-haspopup="dialog" aria-label={`Who manages sponsorships: ${said}`} className={PILL}>
             <UsersIcon className="w-4 h-4 text-ink-soft flex-shrink-0" />
             <span className="truncate">Who manages them</span>
             {inside.length ? (
@@ -93,8 +93,8 @@ function AccessDialog({ people, me, onChange, onClose }: { people: AccessPerson[
       on
         ? { title: `Take ${p.name}'s access away?`, description: "They'll still see the list (names, links, codes), but can't change it or open a login any more.", confirmLabel: "Take it away", danger: true }
         : {
-            title: `Let ${p.name} manage affiliates?`,
-            description: "They'll add, change and delete affiliates, and open their logins after typing their own password. Everything they open is written down here. They get a notification.",
+            title: `Let ${p.name} manage sponsorships?`,
+            description: "They'll add, change and delete sponsorships, and open their logins after typing their own password. Everything they open is written down here. They get a notification.",
             confirmLabel: "Let them in",
           }
     );
@@ -104,7 +104,7 @@ function AccessDialog({ people, me, onChange, onClose }: { people: AccessPerson[
       const r = await setAffiliateAccess(ctx.teamId, p.userId, !on);
       if (r.error !== undefined) return void toast.error(r.error);
       onChange(p.userId, !on);
-      toast.success(on ? `${p.name} no longer manages affiliates` : `${p.name} manages affiliates now`);
+      toast.success(on ? `${p.name} no longer manages sponsorships` : `${p.name} manages sponsorships now`);
     } catch {
       toast.error("Couldn't change it. Check your connection and try again.");
     } finally {
@@ -116,8 +116,8 @@ function AccessDialog({ people, me, onChange, onClose }: { people: AccessPerson[
     <Dialog
       open
       onClose={onClose}
-      title="Who manages affiliates"
-      description="Masters always do. Turn it on for anyone else you trust with the deals: they add and change affiliates and open their logins. Everyone on the team sees the list itself, never the logins."
+      title="Who manages sponsorships"
+      description="Masters always do. Turn it on for anyone else you trust with the deals: they add and change sponsorships and open their logins. Everyone on the team sees the list itself, never the logins."
     >
       <ul className="space-y-0.5 max-h-[min(24rem,55dvh)] overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll -mx-1 px-1">
         {people.map((p) => (
@@ -134,7 +134,7 @@ function AccessDialog({ people, me, onChange, onClose }: { people: AccessPerson[
                 type="button"
                 role="switch"
                 aria-checked={p.granted}
-                aria-label={`${p.name} manages affiliates and sees logins`}
+                aria-label={`${p.name} manages sponsorships and sees logins`}
                 disabled={busy === p.userId}
                 onClick={() => void flip(p)}
                 className={`w-10 h-6 rounded-lg relative transition-colors disabled:opacity-60 flex-shrink-0 ${p.granted ? "bg-amber" : "bg-line/20"}`}

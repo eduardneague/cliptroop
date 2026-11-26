@@ -6,14 +6,15 @@ import { useToast } from "@/components/ui/toast-provider";
 import { CopyIcon, DownloadIcon, TrashIcon } from "@/components/ui/icons";
 import { BarDelete, BarMenu, ListPicker, PickBar, PickButton, usePick, type BarBusy } from "@/components/ui/list-pick";
 import { itemsAway } from "@/lib/remove-animation";
-import { deleteAffiliates, setAffiliatesStatus } from "@/app/(dashboard)/affiliates/actions";
-import { affiliatesCsv, AFFILIATE_STATUSES, csvName, descriptionText, STATUS_COLOR, STATUS_LABEL, type Affiliate, type AffiliateStatus } from "../lib/rules";
+import { deleteAffiliates, setAffiliatesKinds, setAffiliatesStatus } from "@/app/(dashboard)/sponsorships/actions";
+import { affiliatesCsv, AFFILIATE_STATUSES, csvName, DEAL_KINDS, descriptionText, KIND_COLOR, KIND_LABEL, STATUS_COLOR, STATUS_LABEL, type Affiliate, type AffiliateStatus, type DealKind } from "../lib/rules";
 import { copyWhenReady, useAffiliates } from "./affiliates-context";
 
 /*
- * Picking several affiliates at once (1.56.0), as the shorts list's (components/ui/list-pick.tsx: Select, Shift for a
- * run, Ctrl/Cmd+A for all, Esc to stop). The bar at the foot: everyone copies the lines for a video's description and
- * exports them as a spreadsheet (never a login); Masters and the people they let in mark them Active, Paused or Ended
+ * Picking several sponsorships at once (1.56.0), as the shorts list's (components/ui/list-pick.tsx: Select, Shift for
+ * a run, Ctrl/Cmd+A for all, Esc to stop). The bar at the foot: everyone copies the lines for a video's description and
+ * exports them as a spreadsheet (never a login); Masters and the people they let in set their type (1.57.0: Affiliate,
+ * Review or Paid, that one only; both or all three on one, in its own ⋯ or window), mark them Active, Paused or Ended
  * and delete them (asked first; ones with a login need the password).
  */
 
@@ -26,7 +27,7 @@ export function AffiliatesPicker({ items, children }: { items: Affiliate[]; chil
 }
 
 export function PickAffiliatesButton() {
-  return <PickButton what="affiliates" hint="Select affiliates to copy, export, mark or delete" />;
+  return <PickButton what="sponsorships" hint="Select sponsorships to copy, export, mark or delete" />;
 }
 
 function AffiliatesBar({ items }: { items: Affiliate[] }) {
@@ -34,7 +35,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
   const ctx = useAffiliates();
   const toast = useToast();
   const confirm = useConfirm();
-  const [menu, setMenu] = useState<"status" | null>(null);
+  const [menu, setMenu] = useState<"status" | "kind" | null>(null);
   const [busy, setBusy] = useState<BarBusy>(null);
   const chosen = items.filter((i) => p.picked.has(i.id));
   const n = chosen.length;
@@ -42,7 +43,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
 
   async function copyLines() {
     if (!n) return;
-    if (await copyWhenReady(Promise.resolve(descriptionText(chosen)))) toast.success(n === 1 ? "Lines for a description copied" : `Lines for ${n} affiliates copied`);
+    if (await copyWhenReady(Promise.resolve(descriptionText(chosen)))) toast.success(n === 1 ? "Lines for a description copied" : `Lines for ${n} sponsorships copied`);
     else toast.error("Couldn't copy. Check that the page may use the clipboard.");
   }
 
@@ -58,7 +59,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    toast.success(n === 1 ? "Exported as a spreadsheet" : `${n} affiliates exported as a spreadsheet`);
+    toast.success(n === 1 ? "Exported as a spreadsheet" : `${n} sponsorships exported as a spreadsheet`);
   }
 
   async function mark(to: AffiliateStatus) {
@@ -74,7 +75,29 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
         to
       );
       if (r.error !== undefined) toast.error(r.error);
-      else toast.success(r.changed === 1 ? `${moves[0].name}: ${STATUS_LABEL[to]}` : `${r.changed} affiliates: ${STATUS_LABEL[to]}`);
+      else toast.success(r.changed === 1 ? `${moves[0].name}: ${STATUS_LABEL[to]}` : `${r.changed} sponsorships: ${STATUS_LABEL[to]}`);
+    } catch {
+      toast.error("Couldn't change them. Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** The picked ones become this kind (only this one). */
+  async function setKind(to: DealKind) {
+    setMenu(null);
+    if (!ctx || !n) return;
+    const moves = chosen.filter((c) => !(c.kinds.length === 1 && c.kinds[0] === to));
+    if (!moves.length) return void toast.success(`Already ${KIND_LABEL[to]}.`);
+    setBusy({ text: moves.length === 1 ? "Changing…" : `Changing ${moves.length}…` });
+    try {
+      const r = await setAffiliatesKinds(
+        ctx.teamId,
+        moves.map((m) => m.id),
+        [to]
+      );
+      if (r.error !== undefined) toast.error(r.error);
+      else toast.success(r.changed === 1 ? `${moves[0].name}: ${KIND_LABEL[to]}` : `${r.changed} sponsorships: ${KIND_LABEL[to]}`);
     } catch {
       toast.error("Couldn't change them. Check your connection and try again.");
     } finally {
@@ -87,7 +110,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
     const logins = chosen.filter((c) => c.login).length;
     if (again) {
       const ok = await confirm({
-        title: n === 1 ? `Delete ${chosen[0].name}?` : `Delete ${n} affiliates?`,
+        title: n === 1 ? `Delete ${chosen[0].name}?` : `Delete ${n} sponsorships?`,
         description: `${n === 1 ? "It goes" : "They go"} for good${logins ? `, with ${logins === 1 ? "a login" : `${logins} logins`} (written down for the masters)` : ""}. The videos they link stay.`,
         confirmLabel: n === 1 ? "Delete" : `Delete ${n}`,
         danger: true,
@@ -114,7 +137,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
       if (r.failed.length) anim?.restore();
       else await closing;
       if (!r.deleted.length) toast.error("Nothing was deleted. Refresh and try again.");
-      else toast.success(r.deleted.length === 1 ? `${chosen.find((c) => c.id === r.deleted[0])?.name ?? "It"} deleted` : `${r.deleted.length} affiliates deleted${r.failed.length ? `, ${r.failed.length} couldn't be` : ""}`, anim ? { sound: false } : undefined);
+      else toast.success(r.deleted.length === 1 ? `${chosen.find((c) => c.id === r.deleted[0])?.name ?? "It"} deleted` : `${r.deleted.length} sponsorships deleted${r.failed.length ? `, ${r.failed.length} couldn't be` : ""}`, anim ? { sound: false } : undefined);
     } catch {
       anim?.restore();
       toast.error("Couldn't delete them. Check your connection and try again.");
@@ -124,7 +147,7 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
   }
 
   return (
-    <PickBar total={items.length} one="affiliate" many="affiliates" busy={busy} label="Picked affiliates">
+    <PickBar total={items.length} one="sponsorship" many="sponsorships" busy={busy} label="Picked sponsorships">
       <button
         type="button"
         onClick={() => void copyLines()}
@@ -145,6 +168,25 @@ function AffiliatesBar({ items }: { items: Affiliate[] }) {
         <DownloadIcon className="w-4 h-4" />
         <span className="max-sm:hidden">Export</span>
       </button>
+      {manage && (
+        <BarMenu
+          label="Type"
+          open={menu === "kind"}
+          onOpen={(o) => setMenu(o ? "kind" : null)}
+          disabled={!n || !!busy}
+          items={DEAL_KINDS.map((k) => {
+            const go = chosen.filter((c) => !(c.kinds.length === 1 && c.kinds[0] === k)).length;
+            return {
+              key: k,
+              label: KIND_LABEL[k],
+              hint: go === n ? undefined : go ? `${go} of ${n}` : "All are",
+              icon: <span className="w-2 h-2 mx-[3px] rounded-[3px]" style={{ background: KIND_COLOR[k] }} />,
+              disabled: !go,
+              onPick: () => void setKind(k),
+            };
+          })}
+        />
+      )}
       {manage && (
         <BarMenu
           label="Status"

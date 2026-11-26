@@ -6,14 +6,15 @@ import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, EditIcon, ExternalIcon, MoreIcon, TrashIcon } from "@/components/ui/icons";
 import { itemsAway } from "@/lib/remove-animation";
-import { deleteAffiliates, setAffiliatesStatus } from "@/app/(dashboard)/affiliates/actions";
-import { AFFILIATE_STATUSES, descriptionText, STATUS_COLOR, STATUS_LABEL, type Affiliate, type AffiliateStatus } from "../lib/rules";
+import { deleteAffiliates, setAffiliatesKinds, setAffiliatesStatus } from "@/app/(dashboard)/sponsorships/actions";
+import { AFFILIATE_STATUSES, DEAL_KINDS, descriptionText, KIND_COLOR, KIND_HINT, KIND_LABEL, kindsText, STATUS_COLOR, STATUS_LABEL, type Affiliate, type AffiliateStatus, type DealKind } from "../lib/rules";
 import { copyWhenReady, useAffiliates } from "./affiliates-context";
 
 /**
- * ⋯ on an affiliate (1.56.0). Everyone: copy its code, its link, or the lines for a video's description; open the
- * product or the affiliate platform. Masters and the people they let in: edit it, mark it Active, Paused or Ended, and
- * delete it (asked first; one with a login needs the password, as changing its login does).
+ * ⋯ on a sponsorship (1.56.0). Everyone: copy its code, its link, or the lines for a video's description; open the
+ * product or the affiliate platform. Masters and the people they let in: edit it, its kind (1.57.0: tick or untick
+ * Affiliate, Review, Paid; at least one stays), mark it Active, Paused or Ended, and delete it (asked first; one with a
+ * login needs the password, as changing its login does).
  */
 export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affiliate; className?: string }) {
   const ctx = useAffiliates();
@@ -21,7 +22,7 @@ export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affili
   const confirm = useConfirm();
   const btn = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"main" | "status">("main");
+  const [view, setView] = useState<"main" | "status" | "kind">("main");
   const [busy, setBusy] = useState(false);
   const a = affiliate;
   const manage = !!ctx?.manage;
@@ -41,6 +42,25 @@ export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affili
       const r = await setAffiliatesStatus(ctx.teamId, [a.id], to);
       if (r.error !== undefined) toast.error(r.error);
       else toast.success(`${a.name}: ${STATUS_LABEL[to]}`);
+    } catch {
+      toast.error("Couldn't change it. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** A kind ticked or unticked (the last one stays: a sponsorship is at least one kind). */
+  async function toggleKind(k: DealKind) {
+    if (!ctx) return;
+    const on = a.kinds.includes(k);
+    if (on && a.kinds.length === 1) return void toast.error(`${a.name} is at least one kind. Tick another first.`);
+    const next = on ? a.kinds.filter((x) => x !== k) : DEAL_KINDS.filter((x) => x === k || a.kinds.includes(x));
+    setOpen(false);
+    setBusy(true);
+    try {
+      const r = await setAffiliatesKinds(ctx.teamId, [a.id], next);
+      if (r.error !== undefined) toast.error(r.error);
+      else toast.success(`${a.name}: ${kindsText(next)}`);
     } catch {
       toast.error("Couldn't change it. Check your connection and try again.");
     } finally {
@@ -107,8 +127,23 @@ export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affili
       >
         {busy ? <span className="w-3.5 h-3.5 rounded-full border-2 border-ink-faint/40 border-t-amber animate-spin" aria-hidden /> : <MoreIcon className="w-4 h-4" />}
       </button>
-      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={248} label={view === "status" ? `${a.name}: status` : `Actions for ${a.name}`}>
-        {view === "status" ? (
+      <AnchoredMenu open={open} onClose={() => setOpen(false)} anchor={btn} width={248} label={view === "status" ? `${a.name}: status` : view === "kind" ? `${a.name}: type` : `Actions for ${a.name}`}>
+        {view === "kind" ? (
+          <div key="kind" className="p-1 menu-slide-in">
+            <button type="button" role="menuitem" className={`${item} !text-ink-soft`} onClick={() => setView("main")}>
+              <ChevronLeftIcon className="w-3.5 h-3.5" />
+              Type
+            </button>
+            <div className="my-1 h-px bg-line/10" />
+            {DEAL_KINDS.map((k) => (
+              <button key={k} type="button" role="menuitemcheckbox" aria-checked={a.kinds.includes(k)} title={KIND_HINT[k]} className={`${item} font-medium text-ink`} onClick={() => void toggleKind(k)}>
+                <span className="w-2 h-2 rounded-[3px] flex-shrink-0" style={{ background: KIND_COLOR[k] }} aria-hidden />
+                <span className="flex-1 min-w-0">{KIND_LABEL[k]}</span>
+                {a.kinds.includes(k) && <CheckIcon className="w-3.5 h-3.5 text-ink-faint" />}
+              </button>
+            ))}
+          </div>
+        ) : view === "status" ? (
           <div key="status" className="p-1 menu-slide-in">
             <button type="button" role="menuitem" className={`${item} !text-ink-soft`} onClick={() => setView("main")}>
               <ChevronLeftIcon className="w-3.5 h-3.5" />
@@ -174,6 +209,16 @@ export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affili
             {manage && (
               <>
                 <div className="my-1 h-px bg-line/10" />
+                <button type="button" role="menuitem" aria-haspopup="menu" className={`${item} text-ink`} disabled={busy} onClick={() => setView("kind")}>
+                  <span className="w-3.5 h-3.5 flex items-center justify-center gap-px" aria-hidden>
+                    {a.kinds.map((k) => (
+                      <span key={k} className="w-1 h-2.5 rounded-[1.5px]" style={{ background: KIND_COLOR[k] }} />
+                    ))}
+                  </span>
+                  <span className="flex-1 min-w-0">Type</span>
+                  <span className="text-[11px] font-normal text-ink-faint truncate max-w-[7rem]">{kindsText(a.kinds)}</span>
+                  <ChevronRightIcon className="w-3.5 h-3.5 text-ink-faint" />
+                </button>
                 <button type="button" role="menuitem" aria-haspopup="menu" className={`${item} text-ink`} disabled={busy} onClick={() => setView("status")}>
                   <span className="w-3.5 h-3.5 flex items-center justify-center" aria-hidden>
                     <span className="w-2 h-2 rounded-[3px]" style={{ background: STATUS_COLOR[a.status] }} />

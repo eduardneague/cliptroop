@@ -56,6 +56,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // 1.57.0: Affiliates is Sponsorships (old links, a notification, a bookmark, land on the new page, with their filters).
+  async redirects() {
+    return [{ source: "/affiliates", destination: "/sponsorships", permanent: false }];
+  },
   // 1.31.1: the image resizer (/_next/image) takes pictures from this app's own Supabase only, not
   // from any *.supabase.co project (anyone's pictures, resized on this app's bill).
   images: {

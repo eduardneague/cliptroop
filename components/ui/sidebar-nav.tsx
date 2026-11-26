@@ -32,7 +32,7 @@ const HINT: Record<string, string> = {
   "/todo": "My Day, your lists, reminders",
   "/outliers": "What's taking off in your niche",
   "/frame-guides": "Reference shots, for scripts",
-  "/affiliates": "Links, codes and logins",
+  "/sponsorships": "Affiliates, reviews and paid deals",
   "/meetings": "Plan them, answer, follow up",
   "/posting": "What's going out, and what went out",
   "/analytics": "Every platform's numbers",

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAffiliates } from "./affiliates-context";
 import { PasteDialog } from "./paste-dialog";
 
-/** New affiliate, and Paste from a spreadsheet (1.56.0): for Masters and the people they let in. */
+/** New sponsorship, and Paste from a spreadsheet (1.56.0): for Masters and the people they let in. */
 export function HeaderActions() {
   const ctx = useAffiliates();
   const [pasting, setPasting] = useState(false);
@@ -30,9 +30,10 @@ export function HeaderActions() {
         className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all"
       >
         <PlusIcon className="w-4 h-4" strokeWidth={2.25} />
-        New affiliate
+        <span className="max-sm:hidden">New sponsorship</span>
+        <span className="sm:hidden">New</span>
       </button>
-      {pasting && <PasteDialog teamId={ctx.teamId} onClose={() => setPasting(false)} />}
+      {pasting && <PasteDialog teamId={ctx.teamId} kinds={ctx.newKinds} onClose={() => setPasting(false)} />}
     </div>
   );
 }
@@ -43,7 +44,7 @@ export function AddFirst() {
   if (!ctx?.manage) return null;
   return (
     <button type="button" onClick={() => ctx.openEditor("new")} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-semibold px-4 py-2 text-[13px]">
-      <PlusIcon className="w-4 h-4" /> New affiliate
+      <PlusIcon className="w-4 h-4" /> New sponsorship
     </button>
   );
 }
@@ -88,8 +89,8 @@ export function SearchField({ initial }: { initial: string }) {
             go("");
           }
         }}
-        placeholder="Find an affiliate"
-        aria-label="Find an affiliate: its name, code, a link or a video"
+        placeholder="Find a sponsorship"
+        aria-label="Find a sponsorship: its name, type, code, a link or a video"
         className="w-full rounded-lg border border-line/15 bg-surface pl-8 pr-8 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber placeholder:text-ink-faint/70 [&::-webkit-search-cancel-button]:hidden"
         autoComplete="off"
         spellCheck={false}

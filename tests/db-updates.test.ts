@@ -36,9 +36,11 @@ ok(/await admin\.rpc\("script_live_ready"\)/.test(src) && /return data === true;
 ok(/await admin\.rpc\("frame_guides_ready"\)/.test(src), "0133: Frame Guides (its tables and the comments' third kind)");
 ok(/await admin\.rpc\("script_edits_ready"\)/.test(src), "0134: writing a script together, live (its tables and functions)");
 ok(/await admin\.rpc\("affiliates_ready"\)/.test(src), "0135: Affiliates (its tables and the login functions)");
+ok(/await admin\.rpc\("sponsorships_ready"\)/.test(src), "0136: Sponsorships (the kinds, the channel's videos, the pictures and their background look)");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0136": /create or replace function public\.sponsorships_ready\(\)[\s\S]*'kinds', 'long_youtube_id', 'short_youtube_id', 'image_url', 'image_source', 'image_checked_at'[\s\S]*proname = 'affiliate_picture_found'/,
   "0135": /create or replace function public\.affiliates_ready\(\)[\s\S]*to_regclass\('public\.affiliate_logins'\)[\s\S]*proname = 'affiliate_login_open'/,
   "0134": /create or replace function public\.script_edits_ready\(\)[\s\S]*to_regclass\('public\.script_steps'\)[\s\S]*proname = 'script_live_push'/,
   "0133": /create or replace function public\.frame_guides_ready\(\)[\s\S]*to_regclass\('public\.frame_guides'\)[\s\S]*like '%frame%'/,

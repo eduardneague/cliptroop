@@ -5,7 +5,6 @@ import { useSyncExternalStore } from "react";
 import { Skeleton, SkeletonLines, SkeletonPage } from "@/components/ui/skeleton";
 import { BusinessSkeleton } from "@/modules/business/components/skeletons";
 import { LANG_COOKIE, langOf } from "@/modules/business/lib/i18n";
-import AffiliatesLoading from "./affiliates/loading";
 import AnalyticsLoading from "./analytics/loading";
 import CalendarLoading from "./calendar/loading";
 import DashboardLoading from "./dashboard/loading";
@@ -18,6 +17,7 @@ import PostingLoading from "./posting/loading";
 import SettingsLoading from "./settings/loading";
 import SetupLoading from "./setup/loading";
 import ShortsLoading from "./shorts/loading";
+import SponsorshipsLoading from "./sponsorships/loading";
 import TeamLoading from "./team/loading";
 import NewTeamLoading from "./teams/new/loading";
 import TodoLoading from "./todo/loading";
@@ -61,7 +61,7 @@ function BusinessLoading() {
 const PARTS: [RegExp, () => React.ReactElement][] = [
   [/^\/shorts(\/|$)/, () => <ShortsLoading />],
   [/^\/videos(\/|$)/, () => <VideosLoading />],
-  [/^\/affiliates(\/|$)/, () => <AffiliatesLoading />],
+  [/^\/(sponsorships|affiliates)(\/|$)/, () => <SponsorshipsLoading />],
   [/^\/dashboard(\/|$)/, () => <DashboardLoading />],
   [/^\/todo(\/|$)/, () => <TodoLoading />],
   [/^\/calendar(\/|$)/, () => <CalendarLoading />],

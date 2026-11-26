@@ -22,7 +22,7 @@ export function AffiliatesTableSkeleton({ count = 8 }: { count?: number }) {
       </div>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className={`grid grid-cols-[36px_minmax(0,1fr)_auto] ${TABLE_COLS.manage} gap-x-3 items-center px-3 py-3 border-t border-line/5 first:border-t-0`}>
-          <Skeleton className="w-7 h-7 rounded-lg justify-self-center" />
+          <Skeleton className="w-8 h-8 rounded-lg justify-self-center" />
           <div className="min-w-0 space-y-1.5">
             <Skeleton className={`h-3.5 ${["w-2/5", "w-1/3", "w-1/2", "w-[45%]"][i % 4]}`} />
             <Skeleton className="h-2.5 w-32 xl:hidden" />

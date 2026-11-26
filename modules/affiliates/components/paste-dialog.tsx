@@ -3,22 +3,24 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast-provider";
-import { importAffiliates } from "@/app/(dashboard)/affiliates/actions";
-import { LIMITS, parsePasted } from "../lib/rules";
+import { importAffiliates } from "@/app/(dashboard)/sponsorships/actions";
+import { KIND_TAB, LIMITS, parsePasted, type DealKind } from "../lib/rules";
+import { KindPill } from "./bits";
 
 /**
- * Affiliates from a spreadsheet (1.56.0): the owner keeps them in one (Name, Product Link, Code, Percentage). Its rows
- * are copied and pasted here, shown as they'll be added (with what's wrong with any), then added at once. Logins and
- * videos are added afterwards, on each one.
+ * Sponsorships from a spreadsheet (1.56.0): the owner keeps them in one (Name, Product Link, Code, Percentage). Its
+ * rows are copied and pasted here, shown as they'll be added (with what's wrong with any), then added at once. Their
+ * kind: a Type column when the sheet has one, else the tab it's pasted on (1.57.0). Logins and videos are added
+ * afterwards, on each one; the product pictures are looked for by the server once they're in.
  */
-export function PasteDialog({ teamId, onClose }: { teamId: string; onClose: () => void }) {
+export function PasteDialog({ teamId, kinds, onClose }: { teamId: string; kinds: DealKind[]; onClose: () => void }) {
   const toast = useToast();
   const id = useId();
   const box = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const parsed = useMemo(() => parsePasted(text), [text]);
+  const parsed = useMemo(() => parsePasted(text, kinds), [text, kinds]);
   const good = parsed.rows.filter((r) => r.fields);
   const bad = parsed.rows.filter((r) => !r.fields);
 
@@ -37,7 +39,7 @@ export function PasteDialog({ teamId, onClose }: { teamId: string; onClose: () =
         good.map((g) => g.fields)
       );
       if (r.error !== undefined) return void setProblem(r.error);
-      toast.success(r.added === 1 ? "1 affiliate added" : `${r.added} affiliates added`);
+      toast.success(r.added === 1 ? "1 sponsorship added" : `${r.added} sponsorships added`);
       onClose();
     } catch {
       setProblem("Couldn't add them. Check your connection and try again.");
@@ -52,7 +54,7 @@ export function PasteDialog({ teamId, onClose }: { teamId: string; onClose: () =
       onClose={() => !pending && onClose()}
       width="sm:max-w-2xl"
       title="Paste from a spreadsheet"
-      description="Select the rows in your sheet (the heading row too, if it has one), copy them, and paste them here. Columns: name, product link, code, percentage; a platform link and notes if you have them."
+      description={`Select the rows in your sheet (the heading row too, if it has one), copy them, and paste them here. Columns: name, product link, code, percentage; a type, a platform link and notes if you have them. Without a type they're added as ${kinds.map((k) => KIND_TAB[k].toLowerCase()).join(" + ")}.`}
       footer={
         <>
           <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3.5 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50">
@@ -60,7 +62,7 @@ export function PasteDialog({ teamId, onClose }: { teamId: string; onClose: () =
           </button>
           <button type="button" onClick={() => void add()} disabled={!good.length || pending} className="inline-flex items-center gap-2 rounded-lg bg-amber text-white font-bold px-4 h-10 text-[13.5px] disabled:opacity-45">
             {pending && <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden />}
-            {pending ? "Adding…" : good.length ? `Add ${good.length} affiliate${good.length === 1 ? "" : "s"}` : "Add"}
+            {pending ? "Adding…" : good.length ? `Add ${good.length} sponsorship${good.length === 1 ? "" : "s"}` : "Add"}
           </button>
         </>
       }
@@ -91,7 +93,12 @@ export function PasteDialog({ teamId, onClose }: { teamId: string; onClose: () =
             <ul className="max-h-64 overflow-y-auto overflow-x-hidden overscroll-contain styled-scroll divide-y divide-line/10" aria-label="What will be added">
               {parsed.rows.map((r) => (
                 <li key={r.line} className="px-3 py-2 text-[12.5px] grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-3 items-center">
-                  <span className="font-semibold truncate">{r.name}</span>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold truncate">{r.name}</span>
+                    {r.fields?.kinds.map((k) => (
+                      <KindPill key={k} kind={k} />
+                    ))}
+                  </span>
                   {r.fields ? (
                     <span className="truncate text-ink-faint">{r.fields.productUrl ?? "No link"}</span>
                   ) : (

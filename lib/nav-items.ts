@@ -13,7 +13,8 @@ const FRAME_GUIDES = { href: "/frame-guides", label: "Frame Guides", shortLabel:
 const SHORTS = { href: "/shorts", label: "Short videos", shortLabel: "Shorts", Icon: ShortsIcon, available: true } as const;
 const VIDEOS = { href: "/videos", label: "Long videos", shortLabel: "Long", Icon: VideoIcon, available: true } as const;
 /** Affiliates (1.56.0): the team's affiliate deals (links, codes, the videos about them, logins). Under Content. */
-const AFFILIATES = { href: "/affiliates", label: "Affiliates", shortLabel: "Affiliates", Icon: TagIcon, available: true } as const;
+// 1.57.0: Sponsorships (Affiliates in 1.56.0): affiliates, reviews and paid deals in one list.
+const SPONSORSHIPS = { href: "/sponsorships", label: "Sponsorships", shortLabel: "Sponsors", Icon: TagIcon, available: true } as const;
 const CALENDAR = { href: "/calendar", label: "Calendar", shortLabel: "Calendar", Icon: CalendarIcon, available: true } as const;
 const MEETINGS = { href: "/meetings", label: "Meetings", shortLabel: "Meetings", Icon: MeetingIcon, available: true } as const;
 const POSTING = { href: "/posting", label: "Posting", shortLabel: "Posting", Icon: PostingIcon, available: true } as const;
@@ -28,12 +29,12 @@ export const BUSINESS = { href: "/business", label: "Business", shortLabel: "Bus
 /** Developer accounts only (the layout decides; see isDeveloper in lib/errors.ts). */
 export const DEVELOPER = { href: "/developer", label: "Developer", shortLabel: "Developer", Icon: CodeIcon, available: true } as const;
 
-export type NavItem = typeof DASHBOARD | typeof TODO | typeof OUTLIERS | typeof FRAME_GUIDES | typeof SHORTS | typeof VIDEOS | typeof AFFILIATES | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof OBJECTIVES | typeof TEAM | typeof BUSINESS | typeof DEVELOPER;
+export type NavItem = typeof DASHBOARD | typeof TODO | typeof OUTLIERS | typeof FRAME_GUIDES | typeof SHORTS | typeof VIDEOS | typeof SPONSORSHIPS | typeof CALENDAR | typeof MEETINGS | typeof POSTING | typeof ANALYTICS | typeof OBJECTIVES | typeof TEAM | typeof BUSINESS | typeof DEVELOPER;
 
 export const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
   { label: null, items: [DASHBOARD] },
   { label: "Research", items: [OUTLIERS, FRAME_GUIDES] },
-  { label: "Content", items: [SHORTS, VIDEOS, AFFILIATES] },
+  { label: "Content", items: [SHORTS, VIDEOS, SPONSORSHIPS] },
   { label: "Schedule", items: [CALENDAR, MEETINGS, POSTING, TODO] },
   { label: "Insights", items: [ANALYTICS, OBJECTIVES] },
   { label: "Team", items: [TEAM] },
@@ -43,7 +44,7 @@ export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 /** The phone bar: the four you use most; the rest live under More. */
 export const BOTTOM_ITEMS: NavItem[] = [DASHBOARD, SHORTS, VIDEOS, CALENDAR];
-export const MORE_ITEMS: NavItem[] = [OUTLIERS, FRAME_GUIDES, AFFILIATES, MEETINGS, POSTING, TODO, ANALYTICS, OBJECTIVES, TEAM];
+export const MORE_ITEMS: NavItem[] = [OUTLIERS, FRAME_GUIDES, SPONSORSHIPS, MEETINGS, POSTING, TODO, ANALYTICS, OBJECTIVES, TEAM];
 
 /** The menu's groups, with Business (in its own group, after Insights) and Developer when they're the person's. */
 export function navGroups(o: { business?: boolean; developer?: boolean }): { label: string | null; items: NavItem[] }[] {

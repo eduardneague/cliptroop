@@ -1,18 +1,20 @@
 import { CardPick } from "@/components/ui/list-pick";
 import { chunks, LIST_CHUNK } from "@/lib/chunks";
-import { domainOf, type Affiliate } from "../lib/rules";
-import { BrandBadge, OutLink, StatusPill, VideoChip } from "./bits";
+import { domainOf, type Affiliate, type DealKind } from "../lib/rules";
+import { KindPill, OutLink, StatusPill, VideoChip } from "./bits";
+import { BrandMark } from "./brand-mark";
 import { CopyChip } from "./copy-chip";
 import { LoginCell } from "./login-cell";
 import { OpenEditor } from "./open-editor";
 import { AffiliateMenu } from "./row-menu";
 
 /*
- * The affiliates as cards (1.56.0): the brand, its status, the product link, the code (a click copies it) and the
- * percentage, the video made about it (its thumbnail when the long video has one), the affiliate platform, and, for
- * the people who manage affiliates, the login. Picking several puts a tick box on the brand's initial.
+ * The sponsorships as cards (1.56.0): the product's picture (1.57.0) or the brand's initial, the name, its kind
+ * (1.57.0; not the tab's own) and status, the product link, the code (a click copies it) and the percentage, the
+ * video made about it (its thumbnail when the long video has one), the affiliate platform, and, for the people who
+ * manage sponsorships, the login. Picking several puts a tick box on the picture.
  */
-export function AffiliateCards({ list, manage }: { list: Affiliate[]; manage: boolean }) {
+export function AffiliateCards({ list, manage, tab = null }: { list: Affiliate[]; manage: boolean; tab?: DealKind | null }) {
   return (
     <div className="flex flex-col gap-4">
       {chunks(list, LIST_CHUNK).map((group, g) => (
@@ -29,11 +31,20 @@ export function AffiliateCards({ list, manage }: { list: Affiliate[]; manage: bo
               >
                 <div className="flex items-start gap-2.5">
                   <span data-card-num="" className="contents">
-                    <BrandBadge id={a.id} name={a.name} className="w-9 h-9 text-[15px] rounded-xl" />
+                    <BrandMark affiliate={a} className="w-9 h-9 text-[15px] rounded-xl" px={36} />
                   </span>
                   <div className="flex-1 min-w-0 pt-0.5">
                     <OpenEditor affiliate={a} className="block w-full font-semibold text-[15px] leading-snug truncate" />
                     {a.productUrl ? <OutLink url={a.productUrl} className="!text-[12px]" /> : <span className="text-[12px] text-ink-faint">No product link</span>}
+                    {a.kinds.some((k) => k !== tab) && (
+                      <span className="flex flex-wrap gap-1 mt-1">
+                        {a.kinds
+                          .filter((k) => k !== tab)
+                          .map((k) => (
+                            <KindPill key={k} kind={k} />
+                          ))}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 -mr-1.5 -mt-1">
                     {a.status !== "active" && <StatusPill status={a.status} />}

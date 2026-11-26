@@ -71,10 +71,10 @@ export function openLogin(teamId: string, affiliateId: string, sealed: string): 
  * After typing their password (lib/auth/confirm-password.ts), someone let in sees logins for 15 minutes, on this
  * sign-in only: the cookie says until when, for whom and for which session, signed with a key of its own. Someone
  * who got hold of an open laptop, or only of the cookie, still needs the password. httpOnly, Strict, only sent to
- * /affiliates.
+ * /sponsorships (the page's address since 1.57.0; /affiliates before).
  */
 export const UNLOCK_COOKIE = "vp_aff_unlock";
-export const UNLOCK_PATH = "/affiliates";
+export const UNLOCK_PATH = "/sponsorships";
 
 const mac = (userId: string, sessionId: string, until: number) => createHmac("sha256", subkey("affiliate unlock")).update(`unlock:${userId}:${sessionId}:${until}`).digest("hex");
 

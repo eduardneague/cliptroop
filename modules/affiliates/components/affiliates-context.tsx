@@ -2,17 +2,22 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast-provider";
-import { lockLogins, openAffiliateLogin } from "@/app/(dashboard)/affiliates/actions";
-import { SHOWN_SECONDS, type Affiliate, type LoginUse, type VideoChoice } from "../lib/rules";
+import { affiliateVideoChoices, lockLogins, openAffiliateLogin } from "@/app/(dashboard)/sponsorships/actions";
+import { SHOWN_SECONDS, type Affiliate, type DealKind, type LoginUse, type VideoChoice } from "../lib/rules";
 import { AffiliateDialog } from "./affiliate-dialog";
 import { UnlockDialog } from "./unlock-dialog";
 
 /*
- * The Affiliates page's shared parts in the browser (1.56.0): the add / edit window, the password that unlocks logins
- * (15 minutes, this sign-in: the server keeps the time, this only shows it), and the one login being shown. A shown
- * login goes after 30 seconds, when the tab is left, or when another is shown; it lives only here, in memory, never in
- * the page's own data, storage or the address. Copying one asks the server for that part only.
+ * The Sponsorships page's shared parts in the browser (1.56.0, as Affiliates): the add / edit window, the password that
+ * unlocks logins (15 minutes, this sign-in: the server keeps the time, this only shows it), and the one login being
+ * shown. A shown login goes after 30 seconds, when the tab is left, or when another is shown; it lives only here, in
+ * memory, never in the page's own data, storage or the address. Copying one asks the server for that part only.
+ * 1.57.0: the videos to link (the team's and every one on the channel) are asked for the first time the window needs
+ * them, once per visit; a new one starts as the tab's kind of deal.
  */
+
+/** The videos to link, as the server gives them (see readVideoChoices). */
+export type VideoList = { videos: VideoChoice[]; channel: boolean };
 
 export type ShownLogin = { id: string; username: string; password: string; notes: string; hideAt: number };
 
@@ -22,7 +27,11 @@ type Api = {
   master: boolean;
   /** Logins can be kept on this server. */
   vault: boolean;
-  videos: VideoChoice[];
+  /** What kind a new one starts as: the tab's, else an affiliate. */
+  newKinds: DealKind[];
+  /** The videos to link, once asked for (null before, or when they couldn't come). */
+  videoList: VideoList | null;
+  loadVideos: () => Promise<VideoList | null>;
   unlockedUntil: number | null;
   now: number;
   /** The password asked for if logins are locked; true once they're open. */
@@ -76,7 +85,7 @@ export function AffiliatesProvider({
   manage,
   master,
   vault,
-  videos,
+  kind,
   unlockedUntil: fromServer,
   children,
 }: {
@@ -84,7 +93,8 @@ export function AffiliatesProvider({
   manage: boolean;
   master: boolean;
   vault: boolean;
-  videos: VideoChoice[];
+  /** The tab open now (a new one starts as that kind). */
+  kind: DealKind | null;
   unlockedUntil: number | null;
   children: React.ReactNode;
 }) {
@@ -95,6 +105,31 @@ export function AffiliatesProvider({
   const answer = useRef<((ok: boolean) => void) | null>(null);
   const [shown, setShown] = useState<ShownLogin | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [videoList, setVideoList] = useState<VideoList | null>(null);
+  const asked = useRef<Promise<VideoList | null> | null>(null);
+
+  /** The videos to link: asked for once (both windows share the answer); asked again if it didn't come. */
+  const loadVideos = useCallback(() => {
+    if (!asked.current)
+      asked.current = affiliateVideoChoices(teamId).then(
+        (r) => {
+          if (r.error !== undefined) {
+            asked.current = null;
+            toast.error(r.error);
+            return null;
+          }
+          const list = { videos: r.videos, channel: r.channel };
+          setVideoList(list);
+          return list;
+        },
+        () => {
+          asked.current = null;
+          toast.error("Couldn't get the videos. Check your connection and try again.");
+          return null;
+        }
+      );
+    return asked.current;
+  }, [teamId, toast]);
 
   // The server's word on each visit (a refresh after unlocking or locking says it again).
   useEffect(() => setUnlockedUntil(fromServer), [fromServer]);
@@ -228,9 +263,10 @@ export function AffiliatesProvider({
     find();
   }, []);
 
+  const newKinds = useMemo<DealKind[]>(() => [kind ?? "affiliate"], [kind]);
   const api = useMemo<Api>(
-    () => ({ teamId, manage, master, vault, videos, unlockedUntil, now, ensureUnlocked, lock, openEditor: setEditing, shown, show, hide: () => setShown(null), copyPart, flash }),
-    [teamId, manage, master, vault, videos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash]
+    () => ({ teamId, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, openEditor: setEditing, shown, show, hide: () => setShown(null), copyPart, flash }),
+    [teamId, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash]
   );
 
   return (

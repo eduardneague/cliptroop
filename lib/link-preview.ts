@@ -60,7 +60,8 @@ export function decodeEntities(s: string): string {
   });
 }
 
-function attrs(tag: string): Record<string, string> {
+/** A tag's attributes, names in lower case, values decoded. */
+export function attrs(tag: string): Record<string, string> {
   const out: Record<string, string> = {};
   const rx = /([a-zA-Z_:][-\w:.]*)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
   let m: RegExpExecArray | null;

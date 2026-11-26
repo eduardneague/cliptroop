@@ -370,11 +370,11 @@ function RichBody({ n }: { n: NotificationItem }) {
           <b>{m.actor?.name}</b> let you make <b>{m.team?.name}</b>&rsquo;s media kit in Analytics.
         </>
       );
-    // 1.56.0: a Master let them manage the team's affiliates (Affiliates → Who manages them).
+    // 1.56.0: a Master let them manage the team's affiliates (Sponsorships since 1.57.0 → Who manages them).
     case "affiliate_access":
       return (
         <>
-          <b>{m.actor?.name}</b> let you manage <b>{m.team?.name}</b>&rsquo;s affiliates and see their logins.
+          <b>{m.actor?.name}</b> let you manage <b>{m.team?.name}</b>&rsquo;s sponsorships and see their logins.
         </>
       );
     // 1.41.0: the owner let them delete shorts or long videos (Team → Team → Danger zone).

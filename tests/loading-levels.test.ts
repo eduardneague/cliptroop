@@ -43,6 +43,8 @@ const ROUTES: [string, string[]][] = [
   ["/posting", ["", "posting"]],
   ["/outliers", ["", "outliers"]],
   ["/frame-guides", ["", "frame-guides"]],
+  ["/sponsorships", ["", "sponsorships"]],
+  // 1.57.0: the old address (sent on to /sponsorships by next.config.ts) keeps the same loading screen.
   ["/affiliates", ["", "affiliates"]],
   ["/analytics", ["", "analytics"]],
   ["/analytics/video/youtube/v1", ["", "analytics", "analytics/video/[platform]/[id]"]],

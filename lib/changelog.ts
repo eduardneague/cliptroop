@@ -22,6 +22,17 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.57.0",
+    date: "2026-11-26",
+    title: "Sponsorships",
+    changes: [
+      { kind: "new", text: "Affiliates is now Sponsorships, with a tab for each kind of deal: Affiliates, Reviews (the product sent to review) and Paid. It's one list: a sponsorship can be more than one kind, and it shows in each of its tabs. Pick the kind in the window, change it in a row's ⋯ → Type, or select several and use Type. Pasting from a sheet reads a Type column, else uses the tab you're on." },
+      { kind: "new", text: "Link any video on the channel: the list of videos to link now has every long video and Short on the team's YouTube channel (as Analytics copies them from the connected channel), not only the ones made in ClipTroop, with their pictures. Find one by its title, its #number, or by pasting its YouTube link." },
+      { kind: "new", text: "Product pictures: type a product link and the shop's own picture of the product shows up, in the window, the list and the cards. Paste another picture's link, or remove it. The sponsorships you already have get theirs by themselves once the page is opened." },
+      { kind: "better", text: "Old links to Affiliates (a notification, a bookmark) open Sponsorships." },
+    ],
+  },
+  {
     version: "1.56.0",
     date: "2026-11-25",
     title: "Affiliates",

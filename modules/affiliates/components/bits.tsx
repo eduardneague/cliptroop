@@ -3,11 +3,12 @@ import { colorForId } from "@/lib/avatar";
 import { onFill } from "@/lib/contrast";
 import { wordColor } from "@/lib/word-color";
 import { ExternalIcon, PlayIcon, ShortsIcon, VideoIcon } from "@/components/ui/icons";
-import { domainOf, initialOf, pathOf, STATUS_COLOR, STATUS_HINT, STATUS_LABEL, type AffiliateStatus, type LinkedVideo } from "../lib/rules";
+import { domainOf, initialOf, KIND_COLOR, KIND_HINT, KIND_LABEL, pathOf, STATUS_COLOR, STATUS_HINT, STATUS_LABEL, type AffiliateStatus, type DealKind, type LinkedVideo } from "../lib/rules";
 
 /*
- * The small parts the Affiliates list is drawn with (1.56.0), on the server and in the browser alike: a brand's
- * initial, its status, a link shown as where it goes, a linked video.
+ * The small parts the Sponsorships list is drawn with (1.56.0), on the server and in the browser alike: a brand's
+ * initial, its status and kind (1.57.0), a link shown as where it goes, a linked video (the team's, or one only on the
+ * channel: 1.57.0).
  */
 
 /** The brand's initial in its own colour (where the number is on the shorts list: picking puts a tick box there). */
@@ -34,6 +35,20 @@ export function StatusPill({ status }: { status: AffiliateStatus }) {
   );
 }
 
+/** What kind of deal (1.57.0): Affiliate, Review, Paid, each in its colour. */
+export function KindPill({ kind }: { kind: DealKind }) {
+  const c = KIND_COLOR[kind];
+  return (
+    <span
+      className="inline-flex items-center rounded-md font-bold whitespace-nowrap text-[10.5px] px-1.5 py-0.5"
+      style={{ color: wordColor(c), background: `color-mix(in srgb, ${c} 14%, rgb(var(--surface)))` }}
+      title={KIND_HINT[kind]}
+    >
+      {KIND_LABEL[kind]}
+    </span>
+  );
+}
+
 /** A link shown as where it goes ("gravastar.com" and, quieter, the rest), opening in a new tab. */
 export function OutLink({ url, label, className = "" }: { url: string; label?: string; className?: string }) {
   const rest = pathOf(url);
@@ -52,9 +67,28 @@ export function OutLink({ url, label, className = "" }: { url: string; label?: s
   );
 }
 
-/** A linked long video or Short: its number and title, to its page; YouTube beside it once it's out. */
+/**
+ * A linked long video or Short: its number and title, to its page; YouTube beside it once it's out. One only on the
+ * channel (1.57.0) opens on YouTube.
+ */
 export function VideoChip({ video, wide = false }: { video: LinkedVideo; wide?: boolean }) {
   const Icon = video.kind === "short" ? ShortsIcon : VideoIcon;
+  if (video.source === "channel")
+    return (
+      <span className={`relative z-10 inline-flex items-center gap-1 min-w-0 ${wide ? "max-w-full" : "max-w-[15rem]"}`}>
+        <a
+          href={video.watchUrl ?? undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`${video.kind === "short" ? "Short" : "Video"} on the channel: ${video.title} (${video.stageLabel})`}
+          className="group/yt inline-flex items-center gap-1.5 min-w-0 rounded-md bg-surface-2 hover:bg-line/10 px-2 h-6 text-[11.5px] font-semibold text-ink-soft hover:text-ink transition-colors"
+        >
+          <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${video.kind === "short" ? "text-short" : "text-long"}`} />
+          <span className="truncate">{video.title}</span>
+          <ExternalIcon className="w-3 h-3 flex-shrink-0 text-ink-faint group-hover/yt:text-red" aria-hidden />
+        </a>
+      </span>
+    );
   return (
     <span className={`relative z-10 inline-flex items-center gap-1 min-w-0 ${wide ? "max-w-full" : "max-w-[15rem]"}`}>
       <Link
