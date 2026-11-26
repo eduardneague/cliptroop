@@ -7,7 +7,12 @@
  * i choose". And (Nov 26): "lets rename it to sponsorhips and have afiliates and products reviews or stuff like that …
  * maybe add a tag or something so we dont have 2 separate tables … and make it so you can filter through it very
  * easily"; "find every single short or long video that is already posted on the channel"; "automatically get the
- * picture from that website if possible". (The code and the tables keep the first name: affiliates.)
+ * picture from that website if possible". 1.58.0: companies with their products (the owner: "i want a group of
+ * products as the company and then i want to be able to add products, so the information like the affiliate platform
+ * will always be the same so it doesnt become redunant"): the company keeps the code and the deal, the affiliate
+ * platform, the notes and the login; each product its kind, status, link, picture, videos, verified or not, and the
+ * company's code or its own ("click a button and use the regular company one or have the option to add a custom
+ * one"). (The code and the tables keep the first name: affiliates is the companies, affiliate_products the products.)
  * Pure: tests/affiliates.test.ts.
  */
 
@@ -50,6 +55,23 @@ export function kindsFromText(raw: string): DealKind[] {
   return DEAL_KINDS.filter((k) => out.has(k));
 }
 
+// ---- Verified or not (1.58.0): someone checked the link and the code -------------------------------------------------
+
+export const CHECK_RESULTS = ["works", "broken"] as const;
+export type CheckResult = (typeof CHECK_RESULTS)[number];
+export const isCheckResult = (v: unknown): v is CheckResult => v === "works" || v === "broken";
+/** Checked and it works, checked and it doesn't, or nobody checked yet ("none"). */
+export type CheckState = CheckResult | "none";
+export const CHECK_STATES: CheckState[] = ["works", "broken", "none"];
+export const CHECK_LABEL: Record<CheckState, string> = { works: "Verified", broken: "Not working", none: "Not verified" };
+export const CHECK_HINT: Record<CheckState, string> = {
+  works: "Checked: the link and the code work",
+  broken: "Checked: the link or the code doesn't work",
+  none: "Nobody has checked the link and the code yet",
+};
+export const CHECK_COLOR: Record<CheckState, string> = { works: "rgb(var(--green))", broken: "rgb(var(--red))", none: "rgb(var(--ink-faint))" };
+export const checkState = (p: Pick<Product, "check">): CheckState => p.check?.result ?? "none";
+
 export const AFFILIATE_STATUSES = ["active", "paused", "ended"] as const;
 export type AffiliateStatus = (typeof AFFILIATE_STATUSES)[number];
 export const isAffiliateStatus = (v: unknown): v is AffiliateStatus => typeof v === "string" && (AFFILIATE_STATUSES as readonly string[]).includes(v);
@@ -65,8 +87,8 @@ export const STATUS_COLOR: Record<AffiliateStatus, string> = {
   ended: "rgb(var(--ink-faint))",
 };
 
-/** Limits, the database's own (migrations 0135, 0136). */
-export const LIMITS = { name: 120, url: 2000, code: 100, percentage: 60, notes: 2000, username: 200, password: 500, loginNotes: 2000, import: 200 } as const;
+/** Limits, the database's own (migrations 0135, 0136, 0137). */
+export const LIMITS = { name: 120, url: 2000, code: 100, percentage: 60, notes: 2000, username: 200, password: 500, loginNotes: 2000, import: 200, products: 200 } as const;
 
 export type VideoKind = "long" | "short";
 
@@ -113,27 +135,55 @@ export type VideoChoice = {
 /** The product's picture (1.57.0): found on the product's page by the server, or a picture's link someone pasted. */
 export type PictureSource = "page" | "link";
 
-export type Affiliate = {
+/** A product of a company (1.58.0): what the video was about, and the deal for it. */
+export type Product = {
   id: string;
+  companyId: string;
   name: string;
   /** What kind of deal: one or more (1.57.0). */
   kinds: DealKind[];
+  status: AffiliateStatus;
   productUrl: string | null;
+  /** Its own code and deal (true), or its company's (false: `code` and `percentage` are null then). */
+  ownCode: boolean;
   code: string | null;
   percentage: string | null;
-  status: AffiliateStatus;
-  platformUrl: string | null;
-  notes: string | null;
   long: LinkedVideo | null;
   short: LinkedVideo | null;
   picture: { url: string; source: PictureSource } | null;
   /** Someone took the picture away: the server doesn't look for one again. */
   pictureOff: boolean;
+  /** Verified or not working (1.58.0), who checked (their name) and when; null: nobody checked (Not verified). */
+  check: { result: CheckResult; by: string | null; at: string } | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A company (1.58.0; a sponsorship before): what's the same for all of its products, and the products. */
+export type Company = {
+  id: string;
+  name: string;
+  /** The code and the deal its products go by (unless one has its own). */
+  code: string | null;
+  percentage: string | null;
+  platformUrl: string | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
   /** Only for the people let in: a login is kept, when it last changed and by whom. Null for everyone else. */
   login: { updatedAt: string; by: string | null } | null;
+  products: Product[];
 };
+
+/** A product with its company (a picked one, a line of a description, a row of the spreadsheet). */
+export type Item = { product: Product; company: Company };
+export const itemsOf = (companies: Company[]): Item[] => companies.flatMap((company) => company.products.map((product) => ({ product, company })));
+
+/** The code and the deal a product goes by: its own, or its company's. */
+export function dealOf(p: Pick<Product, "ownCode" | "code" | "percentage">, c: Pick<Company, "code" | "percentage">): { code: string | null; percentage: string | null; own: boolean } {
+  return p.ownCode ? { code: p.code, percentage: p.percentage, own: true } : { code: c.code, percentage: c.percentage, own: false };
+}
 
 /** Someone on the team, as a Master sees them when choosing who manages affiliates. */
 export type AccessPerson = { userId: string; name: string; avatarUrl: string | null; color: string; master: boolean; granted: boolean };
@@ -144,22 +194,27 @@ export type AccessPerson = { userId: string; name: string; avatarUrl: string | n
  */
 export type PictureChange = "keep" | "off" | "auto" | { url: string; source: PictureSource };
 
-/** What the add / edit window sends. */
-export type AffiliateFields = {
+/** What the company's window sends. */
+export type CompanyFields = { name: string; code: string | null; percentage: string | null; platformUrl: string | null; notes: string | null };
+
+/** What the product's window sends. */
+export type ProductFields = {
+  companyId: string;
   name: string;
   kinds: DealKind[];
+  status: AffiliateStatus;
   productUrl: string | null;
+  /** Its own code and deal, or the company's (code and percentage null then). */
+  ownCode: boolean;
   code: string | null;
   percentage: string | null;
-  status: AffiliateStatus;
-  platformUrl: string | null;
-  notes: string | null;
   /** The long video: the team's own (projectId) or one only on the channel (longYoutubeId), never both. */
   projectId: string | null;
   longYoutubeId: string | null;
   /** The Short: the team's own (shortId) or one only on the channel (shortYoutubeId), never both. */
   shortId: string | null;
   shortYoutubeId: string | null;
+  notes: string | null;
   picture: PictureChange;
 };
 
@@ -295,25 +350,91 @@ export function percentNumber(p: string | null | undefined): number | null {
   return m ? Number(m[1].replace(",", ".")) : null;
 }
 
-/** The fields, checked and tidied as the database keeps them, or what's wrong (said plainly). */
-export function cleanAffiliate(raw: unknown): { ok: AffiliateFields } | { error: string } {
+/** A deal that's just a number (with or without its %). */
+const BARE_PERCENT = /^\s*(\d+(?:[.,]\d+)?)\s*%?\s*$/;
+
+/**
+ * A deal typed as a number is a percentage (1.58.0; the owner: "i shouldnt need to write % on my own, just the number
+ * and the symbol should appear there automatically"): "10" → "10%", "12,5 %" → "12,5%"; anything else ("$5 USD OFF",
+ * "$400 flat") as written. Kept so (the windows, a paste, the database: 0137), and shown so (one kept before).
+ */
+export function pctOf(v: string): string;
+export function pctOf(v: string | null): string | null;
+export function pctOf(v: string | null): string | null {
+  if (v === null) return null;
+  const m = BARE_PERCENT.exec(v);
+  return m ? `${m[1]}%` : v.trim();
+}
+
+/** What the percentage field shows of a kept deal: the number alone when it's a percentage (the field adds the %). */
+export const pctField = (v: string | null | undefined) => {
+  const m = BARE_PERCENT.exec(v ?? "");
+  return m ? m[1] : (v ?? "").trim();
+};
+
+/** Whether what's typed in the percentage field is a number (its % shows beside it). */
+export const pctTyped = (v: string) => /^\s*\d+(?:[.,]\d+)?\s*$/.test(v);
+
+/**
+ * A name's brand (1.58.0, as the database groups the rows from before: 0137 affiliates_brand_of): its first word, two
+ * after "The", "A", "My" and the like, without a ".com" and the like or a "," ":" "-" after it. "Gravastar K98 PRO" →
+ * "Gravastar", "Deepcool.com" → "Deepcool", "The Ridge Wallet" → "The Ridge". Pasted rows find their company by it.
+ */
+const ARTICLES = new Set(["the", "a", "an", "my", "mr", "mrs", "ms", "dr", "la", "le", "el", "les", "los", "las", "die", "der", "das"]);
+export function brandOf(name: string | null | undefined): string {
+  const words = String(name ?? "")
+    .replace(/[ \t\n\r\f\v]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  if (!words.length) return "";
+  const first = words.length > 1 && ARTICLES.has(words[0].toLowerCase()) ? `${words[0]} ${words[1]}` : words[0];
+  return first.replace(/[,:;|–—-]+$/, "").replace(/\.(com|net|org|io|co|shop|store|ro|eu|de|uk|us|ca|au|fr|it|es|nl|pl|tech|gg|tv|me|app)$/i, "");
+}
+
+const nameOf = (v: unknown) => text(v).replace(/\s+/g, " ");
+
+/** The code and the deal, checked (the company's, or a product's own). */
+function codeAndDeal(r: Record<string, unknown>): { code: string | null; percentage: string | null } | { error: string } {
+  const code = text(r.code);
+  if (code.length > LIMITS.code) return { error: `Keep the code under ${LIMITS.code} characters.` };
+  const percentage = pctOf(text(r.percentage));
+  if (percentage.length > LIMITS.percentage) return { error: `Keep the percentage under ${LIMITS.percentage} characters.` };
+  return { code: code || null, percentage: percentage || null };
+}
+
+/** A company, checked and tidied as the database keeps it, or what's wrong (said plainly). */
+export function cleanCompany(raw: unknown): { ok: CompanyFields } | { error: string } {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const name = text(r.name).replace(/\s+/g, " ");
+  const name = nameOf(r.name);
   if (!name) return { error: "Give it a name: the brand or the shop." };
+  if (name.length > LIMITS.name) return { error: `Keep the name under ${LIMITS.name} characters.` };
+  const deal = codeAndDeal(r);
+  if ("error" in deal) return deal;
+  const platformUrl = normalizeUrl(r.platformUrl);
+  if (platformUrl === false) return { error: "The affiliate platform's link isn't a web address." };
+  const notes = text(r.notes);
+  if (notes.length > LIMITS.notes) return { error: `Keep the notes under ${LIMITS.notes.toLocaleString("en-US")} characters.` };
+  return { ok: { name, ...deal, platformUrl, notes: notes || null } };
+}
+
+/** A product, checked and tidied as the database keeps it, or what's wrong (said plainly). */
+export function cleanProduct(raw: unknown): { ok: ProductFields } | { error: string } {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const companyId = typeof r.companyId === "string" ? r.companyId : "";
+  if (!UUID.test(companyId)) return { error: "Pick its company." };
+  const name = nameOf(r.name);
+  if (!name) return { error: "Give the product a name." };
   if (name.length > LIMITS.name) return { error: `Keep the name under ${LIMITS.name} characters.` };
   const productUrl = normalizeUrl(r.productUrl);
   if (productUrl === false) return { error: "The product link isn't a web address. Paste it as it opens in the browser." };
-  const platformUrl = normalizeUrl(r.platformUrl);
-  if (platformUrl === false) return { error: "The affiliate platform's link isn't a web address." };
-  const code = text(r.code);
-  if (code.length > LIMITS.code) return { error: `Keep the code under ${LIMITS.code} characters.` };
-  const percentage = text(r.percentage);
-  if (percentage.length > LIMITS.percentage) return { error: `Keep the percentage under ${LIMITS.percentage} characters.` };
+  const ownCode = r.ownCode === true;
+  const deal = ownCode ? codeAndDeal(r) : { code: null, percentage: null };
+  if ("error" in deal) return deal;
   const notes = text(r.notes);
   if (notes.length > LIMITS.notes) return { error: `Keep the notes under ${LIMITS.notes.toLocaleString("en-US")} characters.` };
   const status = r.status === undefined || r.status === null || r.status === "" ? "active" : r.status;
   if (!isAffiliateStatus(status)) return { error: "Pick Active, Paused or Ended." };
-  // What kind of deal; an older window (before 1.57.0) sends none: an affiliate, as everything was then.
   const kinds = r.kinds === undefined ? (["affiliate"] as DealKind[]) : cleanKinds(r.kinds);
   if (!kinds || (Array.isArray(r.kinds) && r.kinds.some((k) => !isDealKind(k)))) return { error: "Pick what kind of deal it is: affiliate, review or paid." };
   const projectId = r.projectId ? String(r.projectId) : null;
@@ -331,23 +452,7 @@ export function cleanAffiliate(raw: unknown): { ok: AffiliateFields } | { error:
     if (!url) return { error: "The picture's link isn't a picture on the web (https://…). Copy the picture's address and paste it." };
     picture = { url, source: (p as { source: PictureSource }).source };
   } else return { error: "Pick the picture again." };
-  return {
-    ok: {
-      name,
-      kinds,
-      productUrl,
-      code: code || null,
-      percentage: percentage || null,
-      status,
-      platformUrl,
-      notes: notes || null,
-      projectId,
-      longYoutubeId,
-      shortId,
-      shortYoutubeId,
-      picture,
-    },
-  };
+  return { ok: { companyId, name, kinds, status, productUrl, ownCode, ...deal, projectId, longYoutubeId, shortId, shortYoutubeId, notes: notes || null, picture } };
 }
 
 // ---- Logins ---------------------------------------------------------------------------------------------------------
@@ -408,7 +513,7 @@ export function eventText(e: Pick<LoginEvent, "action" | "who" | "whom" | "affil
     case "cleared":
       return `${e.who} removed ${of} login`;
     case "deleted":
-      return `${e.who} deleted ${e.affiliate ?? "a sponsorship"}, with its login`;
+      return `${e.who} deleted ${e.affiliate ?? "a company"}, with its login`;
     case "granted":
       return `${e.who} let ${e.whom ?? "someone"} in`;
     case "revoked":
@@ -418,15 +523,42 @@ export function eventText(e: Pick<LoginEvent, "action" | "who" | "whom" | "affil
 
 // ---- Pasting rows from a spreadsheet -------------------------------------------------------------------------------------
 
-export type PastedRow = { line: number; fields: AffiliateFields | null; error: string | null; name: string };
+/** One pasted row, checked: the product, and its company's name (the Company column, else the brand of the name). */
+export type PastedFields = {
+  company: string;
+  name: string;
+  kinds: DealKind[];
+  status: AffiliateStatus;
+  productUrl: string | null;
+  code: string | null;
+  percentage: string | null;
+  platformUrl: string | null;
+  notes: string | null;
+};
+export type PastedRow = { line: number; fields: PastedFields | null; error: string | null; name: string };
 
-const HEADERS: [keyof Pick<AffiliateFields, "name" | "kinds" | "productUrl" | "code" | "percentage" | "platformUrl" | "notes" | "status">, RegExp][] = [
-  ["name", /^(name|brand|shop|store|company|affiliate|sponsor|sponsorship)$/i],
+/** A pasted row, checked (again on the server), as the windows check a company and a product. */
+export function cleanPasted(raw: unknown): { ok: PastedFields } | { error: string } {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const name = nameOf(r.name) || nameOf(r.company);
+  const company = nameOf(r.company) || brandOf(name);
+  if (!name) return { error: "Give it a name: the product, or the brand." };
+  if (company.length > LIMITS.name) return { error: `Keep the company's name under ${LIMITS.name} characters.` };
+  const p = cleanProduct({ ...r, name, companyId: "00000000-0000-4000-8000-000000000000", ownCode: true, picture: "auto", projectId: null, shortId: null, longYoutubeId: null, shortYoutubeId: null });
+  if ("error" in p) return p;
+  const platformUrl = normalizeUrl(r.platformUrl);
+  if (platformUrl === false) return { error: "The affiliate platform's link isn't a web address." };
+  return { ok: { company: company || name, name: p.ok.name, kinds: p.ok.kinds, status: p.ok.status, productUrl: p.ok.productUrl, code: p.ok.code, percentage: p.ok.percentage, platformUrl, notes: p.ok.notes } };
+}
+
+const HEADERS: [keyof PastedFields, RegExp][] = [
+  ["company", /^(company|companies|brand|brands|shop|store|sponsor)$/i],
+  ["name", /^(name|product ?name|item|affiliate|sponsorship)$/i],
   ["kinds", /^(type|kind|tags?|deal ?type|category)$/i],
   ["productUrl", /^(product ?link|product ?url|product|link|url|affiliate ?link)$/i],
   ["code", /^(code|discount ?code|coupon|promo ?code)$/i],
   ["percentage", /^(percentage|percent|%|discount|commission|deal|offer)$/i],
-  ["platformUrl", /^(platform|platform ?link|platform ?url|dashboard|portal)$/i],
+  ["platformUrl", /^(platform|platform ?link|platform ?url|affiliate ?platform|dashboard|portal)$/i],
   ["notes", /^(notes?|comments?)$/i],
   ["status", /^(status|state)$/i],
 ];
@@ -457,10 +589,12 @@ function cells(line: string): string[] {
 }
 
 /**
- * Rows copied from a spreadsheet (the owner's: Name, Product Link, Code, Percentage), one affiliate each. A first row
- * of headings says which column is which (any order, extra columns left out); without one: name, product link, code,
- * percentage, platform link, notes. "-" is an empty cell. Each row checked as the window checks one. What kind of deal:
- * a Type column when there's one ("Review", "affiliate + paid"…), else `kinds` (the tab it's pasted on).
+ * Rows copied from a spreadsheet (the owner's: Name, Product Link, Code, Percentage), one product each. A first row of
+ * headings says which column is which (any order, extra columns left out); without one: name, product link, code,
+ * percentage, platform link, notes. "-" is an empty cell. Each row checked as the windows check one. Its company: a
+ * Company (or Brand) column, else the name's brand ("Gravastar K98 PRO" → Gravastar: planImport puts them together).
+ * What kind of deal: a Type column when there's one ("Review", "affiliate + paid"…), else `kinds` (the tab it's pasted
+ * on). The sheet this page exports pastes back in.
  */
 export function parsePasted(raw: string, kinds: DealKind[] = ["affiliate"]): { rows: PastedRow[]; header: boolean } {
   const lines = String(raw ?? "")
@@ -471,7 +605,7 @@ export function parsePasted(raw: string, kinds: DealKind[] = ["affiliate"]): { r
   if (!lines.length) return { rows: [], header: false };
   const first = cells(lines[0].l).map((c) => c.trim());
   const mapped = first.map((c) => HEADERS.find(([, re]) => re.test(c))?.[0] ?? null);
-  const header = mapped.filter(Boolean).length >= 2 && mapped.includes("name");
+  const header = mapped.filter(Boolean).length >= 2 && (mapped.includes("name") || mapped.includes("company"));
   const order: (string | null)[] = header ? mapped : ["name", "productUrl", "code", "percentage", "platformUrl", "notes"];
   const rows: PastedRow[] = [];
   for (const { l, i } of header ? lines.slice(1) : lines) {
@@ -485,31 +619,105 @@ export function parsePasted(raw: string, kinds: DealKind[] = ["affiliate"]): { r
     if (!Object.values(got).some(Boolean)) continue;
     const status = got.status ? got.status.toLowerCase() : "active";
     const said = got.kinds ? kindsFromText(got.kinds) : [];
-    const checked = cleanAffiliate({ ...got, kinds: said.length ? said : kinds, status: isAffiliateStatus(status) ? status : "active", picture: "auto" });
-    rows.push({ line: i, fields: "ok" in checked ? checked.ok : null, error: "error" in checked ? checked.error : null, name: got.name || "(no name)" });
+    const checked = cleanPasted({ ...got, kinds: said.length ? said : kinds, status: isAffiliateStatus(status) ? status : "active" });
+    rows.push({ line: i, fields: "ok" in checked ? checked.ok : null, error: "error" in checked ? checked.error : null, name: got.name || got.company || "(no name)" });
   }
   return { rows: rows.slice(0, LIMITS.import), header };
+}
+
+/** A product as it's added from a paste: the company's code, or its own. */
+export type PlannedProduct = Omit<PastedFields, "company" | "platformUrl"> & { ownCode: boolean };
+
+/** Where pasted rows go: companies here already (id), new ones (id null, with their code, deal and platform). */
+export type ImportPlan = { id: string | null; name: string; code: string | null; percentage: string | null; platformUrl: string | null; products: PlannedProduct[] }[];
+
+/**
+ * Pasted rows put with their companies (1.58.0): one here already, found by its name, else by its brand when only one
+ * company has it ("Gravastar K98" goes to Gravastar); else a new company, which takes the code and the deal most of its
+ * rows have, and the first platform link. A row goes by its company's code when it has none, or the same one; else it
+ * keeps its own. A company here already isn't changed. The window shows it before; the server does it again.
+ */
+export function planImport(rows: PastedFields[], existing: Pick<Company, "id" | "name" | "code" | "percentage">[]): ImportPlan {
+  const byName = new Map<string, (typeof existing)[number]>();
+  const byBrand = new Map<string, (typeof existing)[number] | null>();
+  for (const c of existing) {
+    const n = c.name.trim().toLowerCase();
+    if (!byName.has(n)) byName.set(n, c);
+    const b = brandOf(c.name).toLowerCase();
+    if (b) byBrand.set(b, byBrand.has(b) ? null : c);
+  }
+  const groups = new Map<string, { id: string | null; name: string; code: string | null; percentage: string | null; rows: PastedFields[] }>();
+  for (const r of rows) {
+    const key = r.company.trim().toLowerCase();
+    const brand = brandOf(r.company).toLowerCase();
+    const here = byName.get(key) ?? byBrand.get(key) ?? byName.get(brand) ?? byBrand.get(brand) ?? null;
+    const k = here ? `id:${here.id}` : `new:${key}`;
+    const g = groups.get(k) ?? { id: here?.id ?? null, name: here?.name ?? r.company.trim(), code: here?.code ?? null, percentage: here?.percentage ?? null, rows: [] };
+    g.rows.push(r);
+    groups.set(k, g);
+  }
+  return [...groups.values()].map((g) => {
+    let { code, percentage } = g;
+    let platformUrl: string | null = null;
+    if (!g.id) {
+      // A new company: the code and deal most of its rows have (a tie: the first one's).
+      const counts = new Map<string, { code: string | null; percentage: string | null; n: number; at: number }>();
+      g.rows.forEach((r, at) => {
+        if (r.code === null && r.percentage === null) return;
+        const k = JSON.stringify([r.code, r.percentage]);
+        const c = counts.get(k) ?? { code: r.code, percentage: r.percentage, n: 0, at };
+        c.n++;
+        counts.set(k, c);
+      });
+      const top = [...counts.values()].sort((a, b) => b.n - a.n || a.at - b.at)[0];
+      code = top?.code ?? null;
+      percentage = top?.percentage ?? null;
+      platformUrl = g.rows.find((r) => r.platformUrl)?.platformUrl ?? null;
+    }
+    const usesCompany = (r: PastedFields) =>
+      (r.code === null && (r.percentage === null || r.percentage === percentage)) || (r.code !== null && r.code === code && (r.percentage === null || r.percentage === percentage));
+    return {
+      id: g.id,
+      name: g.name,
+      code,
+      percentage,
+      platformUrl,
+      products: g.rows.map((r) => {
+        const own = !usesCompany(r);
+        return { name: r.name, kinds: r.kinds, status: r.status, productUrl: r.productUrl, ownCode: own, code: own ? r.code : null, percentage: own ? r.percentage : null, notes: r.notes };
+      }),
+    };
+  });
 }
 
 // ---- Out of the page: a description, a spreadsheet --------------------------------------------------------------------
 
 /** "10%" → "10% off"; anything else as it is. */
 const dealText = (p: string) => (/%$/.test(p.trim()) ? `${p.trim()} off` : p.trim());
+const codeLine = (code: string | null, percentage: string | null) => (code ? `Code ${code}${percentage ? ` (${dealText(percentage)})` : ""}` : percentage ? dealText(percentage) : null);
 
 /**
- * What goes under a video, for the affiliates picked: each one's name and link, and its code with what it gives.
- *   Gravastar.com: https://…
+ * What goes under a video, for the products picked: each one's name and link, and the code with what it gives, once
+ * for products after one another that go by the same code (a company's).
+ *   Gravastar K98 PRO: https://…
+ *   Gravastar Mercury: https://…
  *   Code VIVERRO (10% off)
  */
-export function descriptionText(list: Pick<Affiliate, "name" | "productUrl" | "code" | "percentage">[]): string {
-  return list
-    .map((a) => {
-      const first = a.productUrl ? `${a.name}: ${a.productUrl}` : a.name;
-      const code = a.code ? `Code ${a.code}${a.percentage ? ` (${dealText(a.percentage)})` : ""}` : a.percentage ? dealText(a.percentage) : null;
-      return [first, code].filter(Boolean).join("\n");
-    })
-    .join("\n\n");
+export function descriptionText(items: { product: Pick<Product, "name" | "productUrl" | "ownCode" | "code" | "percentage">; company: Pick<Company, "id" | "code" | "percentage"> }[]): string {
+  const blocks: { key: string; lines: string[]; code: string | null }[] = [];
+  for (const { product: p, company: c } of items) {
+    const d = dealOf(p, c);
+    const key = JSON.stringify([c.id, d.code, d.percentage]);
+    const line = p.productUrl ? `${p.name}: ${p.productUrl}` : p.name;
+    const last = blocks[blocks.length - 1];
+    if (last && last.key === key) last.lines.push(line);
+    else blocks.push({ key, lines: [line], code: codeLine(d.code, d.percentage) });
+  }
+  return blocks.map((b) => [...b.lines, b.code].filter(Boolean).join("\n")).join("\n\n");
 }
+
+/** A company's lines: its products', or (none yet) its name and code. */
+export const companyDescription = (c: Company) => (c.products.length ? descriptionText(c.products.map((product) => ({ product, company: c }))) : [c.name, codeLine(c.code, c.percentage)].filter(Boolean).join("\n"));
 
 /** A cell a spreadsheet won't run as a formula ("=…", "+…", "-…", "@…" get a ' first), quoted when it needs to be. */
 export function csvCell(v: string | null | undefined): string {
@@ -521,11 +729,15 @@ export function csvCell(v: string | null | undefined): string {
 /** "Affiliate + Review" */
 export const kindsText = (kinds: readonly DealKind[]) => kinds.map((k) => KIND_LABEL[k]).join(" + ");
 
-/** The sponsorships picked, as a spreadsheet (CSV). Never a login: those stay on the page. */
-export function affiliatesCsv(list: Affiliate[]): string {
-  const head = ["Name", "Type", "Product link", "Code", "Percentage", "Status", "Long video", "Short", "Affiliate platform", "Notes"];
+/** The products picked, as a spreadsheet (CSV), each with its company (the code it goes by). Never a login. */
+export function sponsorshipsCsv(items: Item[]): string {
+  const head = ["Company", "Name", "Type", "Product link", "Code", "Percentage", "Status", "Verified", "Long video", "Short", "Affiliate platform", "Notes"];
   const video = (v: LinkedVideo | null) => (v ? `${v.number !== null ? `#${v.number} ` : ""}${v.title}${v.source === "channel" && v.watchUrl ? ` (${v.watchUrl})` : ""}` : "");
-  const rows = list.map((a) => [a.name, kindsText(a.kinds), a.productUrl, a.code, a.percentage, STATUS_LABEL[a.status], video(a.long), video(a.short), a.platformUrl, a.notes]);
+  const checked = (p: Product) => (p.check ? `${CHECK_LABEL[p.check.result]} (${p.check.at.slice(0, 10)}${p.check.by ? `, ${p.check.by}` : ""})` : CHECK_LABEL.none);
+  const rows = items.map(({ product: p, company: c }) => {
+    const d = dealOf(p, c);
+    return [c.name, p.name, kindsText(p.kinds), p.productUrl, d.code, d.percentage, STATUS_LABEL[p.status], checked(p), video(p.long), video(p.short), c.platformUrl, p.notes];
+  });
   return [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
@@ -542,35 +754,56 @@ export const isSort = (v: unknown): v is AffiliateSort => typeof v === "string" 
 export type VideoFilter = "long" | "short" | "none";
 export const isVideoFilter = (v: unknown): v is VideoFilter => v === "long" || v === "short" || v === "none";
 
-/** Whether a sponsorship matches what's typed in the search: its name, kind, code, links, notes or a linked video. */
-export function matches(a: Affiliate, q: string): boolean {
+const has = (q: string) => (x: string | null | undefined) => !!x && x.toLowerCase().includes(q);
+
+/** Whether a company matches what's typed in the search: its name, code, deal, platform or notes (then all of its products show). */
+export function companyMatches(c: Company, q: string): boolean {
   const t = q.trim().toLowerCase();
-  if (!t) return true;
-  const number = (v: LinkedVideo | null) => (v && v.number !== null ? `#${v.number}` : null);
-  return [a.name, ...a.kinds.map((k) => KIND_LABEL[k]), a.code, a.percentage, a.productUrl, a.platformUrl, a.notes, a.long?.title, a.short?.title, number(a.long), number(a.short)]
-    .filter((x): x is string => !!x)
-    .some((x) => x.toLowerCase().includes(t));
+  return !t || [c.name, c.code, c.percentage, c.platformUrl, c.notes].some(has(t));
 }
 
-export function sortAffiliates(list: Affiliate[], sort: AffiliateSort): Affiliate[] {
+/** Whether a product matches it: its name, kind, the code it goes by, its link, notes or a linked video (title or #number). */
+export function productMatches(p: Product, c: Company, q: string): boolean {
+  const t = q.trim().toLowerCase();
+  if (!t) return true;
+  const d = dealOf(p, c);
+  const number = (v: LinkedVideo | null) => (v && v.number !== null ? `#${v.number}` : null);
+  return [p.name, ...p.kinds.map((k) => KIND_LABEL[k]), d.code, d.percentage, p.productUrl, p.notes, p.long?.title, p.short?.title, number(p.long), number(p.short)].some(has(t));
+}
+
+const byName = (a: { name: string; createdAt: string }, b: { name: string; createdAt: string }) => a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true }) || b.createdAt.localeCompare(a.createdAt);
+
+export function sortProducts(list: Product[], sort: AffiliateSort): Product[] {
   const out = [...list];
-  if (sort === "name") out.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true }) || b.createdAt.localeCompare(a.createdAt));
+  if (sort === "name") out.sort(byName);
   else if (sort === "oldest") out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   else out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return out;
+}
+
+/** The companies in order: by name, or by their newest (oldest) product, the company's own date when it has none. */
+export function sortCompanies<C extends Company>(list: C[], sort: AffiliateSort): C[] {
+  const newest = (c: C) => c.products.reduce((m, p) => (p.createdAt > m ? p.createdAt : m), c.createdAt);
+  const oldest = (c: C) => c.products.reduce((m, p) => (p.createdAt < m ? p.createdAt : m), c.createdAt);
+  const out = [...list];
+  if (sort === "name") out.sort(byName);
+  else if (sort === "oldest") out.sort((a, b) => oldest(a).localeCompare(oldest(b)));
+  else out.sort((a, b) => newest(b).localeCompare(newest(a)));
   return out;
 }
 
 /** A brand's initial, for its little badge. */
 export const initialOf = (name: string) => (name.replace(/^(https?:\/\/)?(www\.)?/i, "").trim()[0] ?? "?").toUpperCase();
 
-/** What the list is filtered by (the address says it: ?type=…&status=…&video=…&code=1&login=1&sort=…&q=…). */
-export type AffiliateFilters = { kind: DealKind | null; status: AffiliateStatus | null; video: VideoFilter | null; code: boolean; login: boolean; sort: AffiliateSort; q: string };
+/** What the list is filtered by (the address says it: ?type=…&status=…&checked=…&video=…&code=1&login=1&sort=…&q=…). */
+export type AffiliateFilters = { kind: DealKind | null; status: AffiliateStatus | null; checked: CheckState | null; video: VideoFilter | null; code: boolean; login: boolean; sort: AffiliateSort; q: string };
 
 /** The address's filters, read safely (anything unknown is no filter). */
 export function readFilters(p: Record<string, string | undefined>): AffiliateFilters {
   return {
     kind: isDealKind(p.type) ? p.type : null,
     status: isAffiliateStatus(p.status) ? p.status : null,
+    checked: isCheckResult(p.checked) || p.checked === "none" ? (p.checked as CheckState) : null,
     video: isVideoFilter(p.video) ? p.video : null,
     code: p.code === "1",
     login: p.login === "1",
@@ -579,19 +812,39 @@ export function readFilters(p: Record<string, string | undefined>): AffiliateFil
   };
 }
 
-/** The list as the filters leave it, in their order. */
-export function applyFilters(all: Affiliate[], f: AffiliateFilters): Affiliate[] {
-  const kept = all.filter(
-    (a) =>
-      (!f.kind || a.kinds.includes(f.kind)) &&
-      (!f.status || a.status === f.status) &&
-      (!f.video || (f.video === "long" ? !!a.long : f.video === "short" ? !!a.short : !a.long && !a.short)) &&
-      (!f.code || !!a.code) &&
-      (!f.login || !!a.login) &&
-      matches(a, f.q)
+/** A filter on the products themselves (a kind, a status, verified, a video, a code): companies without such products go. */
+export const filtersProducts = (f: AffiliateFilters) => !!(f.kind || f.status || f.checked || f.video || f.code);
+
+/** Whether a product passes the filters on products (not the search). */
+export function productPasses(p: Product, c: Company, f: Pick<AffiliateFilters, "kind" | "status" | "checked" | "video" | "code">): boolean {
+  return (
+    (!f.kind || p.kinds.includes(f.kind)) &&
+    (!f.status || p.status === f.status) &&
+    (!f.checked || checkState(p) === f.checked) &&
+    (!f.video || (f.video === "long" ? !!p.long : f.video === "short" ? !!p.short : !p.long && !p.short)) &&
+    (!f.code || !!dealOf(p, c).code)
   );
-  return sortAffiliates(kept, f.sort);
 }
+
+/**
+ * The list as the filters leave it, in their order (1.58.0: companies, each with the products that pass). A company
+ * the search finds shows all of its products (that pass the rest); else only the products it finds. A company with no
+ * products yet shows when nothing filters the products.
+ */
+export function applyFilters(all: Company[], f: AffiliateFilters): ShownCompany[] {
+  const out: ShownCompany[] = [];
+  const q = f.q.trim();
+  for (const c of all) {
+    if (f.login && !c.login) continue;
+    const whole = companyMatches(c, q);
+    const products = c.products.filter((p) => productPasses(p, c, f) && (whole || productMatches(p, c, q)));
+    if (products.length || (whole && !filtersProducts(f) && !c.products.length)) out.push({ ...c, products: sortProducts(products, f.sort), total: c.products.length });
+  }
+  return sortCompanies(out, f.sort);
+}
+
+/** A company as the list shows it: the products that pass the filters, and how many it has in all. */
+export type ShownCompany = Company & { total: number };
 
 /** The address for these filters changed (empty ones left out; the default order isn't written). */
 export function filtersHref(f: AffiliateFilters, next: Partial<AffiliateFilters> = {}, view?: "grid" | "table"): string {
@@ -599,6 +852,7 @@ export function filtersHref(f: AffiliateFilters, next: Partial<AffiliateFilters>
   const q = new URLSearchParams();
   if (m.kind) q.set("type", m.kind);
   if (m.status) q.set("status", m.status);
+  if (m.checked) q.set("checked", m.checked);
   if (m.video) q.set("video", m.video);
   if (m.code) q.set("code", "1");
   if (m.login) q.set("login", "1");
@@ -607,6 +861,15 @@ export function filtersHref(f: AffiliateFilters, next: Partial<AffiliateFilters>
   if (view) q.set("view", view);
   return `${SPONSORSHIPS_PATH}${q.toString() ? `?${q}` : ""}`;
 }
+
+/**
+ * The companies folded on the list (1.58.0, the owner: "groups in the table, dropdowns"), each viewer's own: the last
+ * 8 characters of their ids (random ones), in a cookie (lib/view-mode.ts), so the page comes folded as it was left. At
+ * most 350.
+ */
+export const closedKey = (id: string) => id.slice(-8).toLowerCase();
+export const readClosed = (raw: string | null | undefined): Set<string> => new Set(String(raw ?? "").split(".").filter((k) => /^[0-9a-f]{8}$/.test(k)).slice(-350));
+export const writeClosed = (keys: Iterable<string>): string => [...new Set(keys)].filter((k) => /^[0-9a-f]{8}$/.test(k)).slice(-350).join(".");
 
 /** The page's address (1.57.0; /affiliates before, which now leads here: next.config.ts). */
 export const SPONSORSHIPS_PATH = "/sponsorships";

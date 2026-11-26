@@ -7,7 +7,9 @@
 // they're server-only, so this file runs itself again with the react-server condition), and how it's all wired.
 // The database's own rules: supabase/tests/affiliates.test.sql.
 // 1.57.0: Sponsorships (the same page, renamed): what kind of deal, every video on the channel, the product's picture
-// (the owner, Nov 26 2026). The database's rules for them: supabase/tests/sponsorships.test.sql.
+// (the owner, Nov 26 2026). The database's rules for them: supabase/tests/sponsorships.test.sql. 1.58.0: companies
+// with their products ("i want a group of products as the company and then i want to be able to add products"), the
+// company's code or a product's own, verified on each product: supabase/tests/sponsorship-products.test.sql.
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -65,17 +67,66 @@ function walk(dir: string, out: string[] = []): string[] {
   for (const [given, want] of url) ok(R.normalizeUrl(given) === want, `a link: ${JSON.stringify(given.slice(0, 60))} → ${JSON.stringify(R.normalizeUrl(given))}`);
   ok(R.domainOf("https://www.Gravastar.com/products/x") === "gravastar.com" && R.pathOf("https://www.gravastar.com/products/x?a=1") === "/products/x?a=1" && R.pathOf("https://x.com/") === "", "where a link goes, and the rest");
   ok(R.percentNumber("10%") === 10 && R.percentNumber("12,5 %") === 12.5 && R.percentNumber("$5 USD OFF") === null && R.percentNumber(null) === null, "a percentage as a number (or not one)");
+  // 1.58.0: "i shouldnt need to write % on my own, just the number and the symbol should appear there automatically".
+  const pcts: [string, string][] = [
+    ["10", "10%"],
+    [" 12,5 ", "12,5%"],
+    ["7.5 %", "7.5%"],
+    ["15%", "15%"],
+    ["$5 USD OFF", "$5 USD OFF"],
+    [" $400 flat ", "$400 flat"],
+    ["10 off", "10 off"],
+    ["", ""],
+  ];
+  for (const [given, want] of pcts) ok(R.pctOf(given) === want, `a deal: ${JSON.stringify(given)} → ${JSON.stringify(R.pctOf(given))}`);
+  ok(R.pctOf(null) === null && R.pctField("10%") === "10" && R.pctField("12,5 %") === "12,5" && R.pctField("$5 USD OFF") === "$5 USD OFF" && R.pctField(null) === "", "the field shows the number alone (it adds the %)");
+  ok(R.pctTyped("10") && R.pctTyped(" 12.5 ") && !R.pctTyped("10%") && !R.pctTyped("$5") && !R.pctTyped(""), "…and its % beside a number");
+  ok(/affiliates_pct\(p_deal text\)/.test(read("supabase/migrations/0137_sponsorship_products.sql")) && (read("supabase/migrations/0137_sponsorship_products.sql").match(/new\.percentage := public\.affiliates_pct\(new\.percentage\);/g) ?? []).length === 2, "the database keeps it so too (companies and products)");
 
-  // ---- An affiliate, as typed ------------------------------------------------------------------------------------------
-  const good = R.cleanAffiliate({ name: "  Gravastar.com ", productUrl: "gravastar.com/k98", code: " VIVERRO ", percentage: "10%", status: "", platformUrl: "", notes: " ", projectId: "", shortId: null });
-  ok("ok" in good && good.ok.name === "Gravastar.com" && good.ok.productUrl === "https://gravastar.com/k98" && good.ok.code === "VIVERRO" && good.ok.status === "active" && good.ok.platformUrl === null && good.ok.notes === null && good.ok.projectId === null, "tidied: trimmed, https added, blanks are nothing, Active");
-  ok("error" in R.cleanAffiliate({ name: "  " }), "a name is needed");
-  ok("error" in R.cleanAffiliate({ name: "x".repeat(121) }), "a name has a limit");
-  ok("error" in R.cleanAffiliate({ name: "A", productUrl: "javascript:alert(1)" }), "a product link that isn't a web address is refused");
-  ok("error" in R.cleanAffiliate({ name: "A", status: "gone" }), "an unknown status is refused");
-  ok("error" in R.cleanAffiliate({ name: "A", projectId: "1; drop table" }), "a video is an id");
-  const both = R.cleanAffiliate({ name: "A", projectId: "40000000-0000-4000-8000-000000000001", shortId: "50000000-0000-4000-8000-000000000001" });
+  // ---- A company and a product, as typed (1.58.0) -------------------------------------------------------------------------
+  const CO = "20000000-0000-4000-8000-000000000001";
+  const good = R.cleanCompany({ name: "  Gravastar ", code: " VIVERRO ", percentage: "10%", platformUrl: "", notes: " " });
+  ok("ok" in good && good.ok.name === "Gravastar" && good.ok.code === "VIVERRO" && good.ok.percentage === "10%" && good.ok.platformUrl === null && good.ok.notes === null, "a company tidied: trimmed, blanks are nothing");
+  const typedPct = R.cleanCompany({ name: "A", percentage: " 12 " });
+  ok("ok" in typedPct && typedPct.ok.percentage === "12%", "a company's deal typed as a number: a percentage");
+  ok("error" in R.cleanCompany({ name: "  " }) && "error" in R.cleanCompany({ name: "x".repeat(121) }) && "error" in R.cleanCompany({ name: "A", platformUrl: "javascript:alert(1)" }), "a company: a name (with a limit), a platform that's a web address");
+  const prod = R.cleanProduct({ companyId: CO, name: "  K98  PRO ", productUrl: "gravastar.com/k98", code: "IGNORED", percentage: "5%", status: "", notes: " ", projectId: "", shortId: null });
+  ok("ok" in prod && prod.ok.name === "K98 PRO" && prod.ok.productUrl === "https://gravastar.com/k98" && prod.ok.status === "active" && prod.ok.notes === null && prod.ok.projectId === null && prod.ok.companyId === CO, "a product tidied: trimmed, https added, blanks are nothing, Active");
+  ok("ok" in prod && prod.ok.ownCode === false && prod.ok.code === null && prod.ok.percentage === null, "…the company's code unless it says its own (what's typed for its own isn't kept then)");
+  const own = R.cleanProduct({ companyId: CO, name: "Keycaps", ownCode: true, code: " KEYS5 ", percentage: "5" });
+  ok("ok" in own && own.ok.ownCode && own.ok.code === "KEYS5" && own.ok.percentage === "5%", "its own code and deal (a number: a percentage)");
+  const ownNone = R.cleanProduct({ companyId: CO, name: "Review unit", ownCode: true, code: "", percentage: "" });
+  ok("ok" in ownNone && ownNone.ok.ownCode && ownNone.ok.code === null, "…or its own, none (a review, say)");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", ownCode: true, code: "x".repeat(101) }), "its own code has the limit too");
+  ok("error" in R.cleanProduct({ name: "A" }) && "error" in R.cleanProduct({ companyId: "not-a-company", name: "A" }), "a product is a company's");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "  " }) && "error" in R.cleanProduct({ companyId: CO, name: "x".repeat(121) }), "a product needs a name (with a limit)");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", productUrl: "javascript:alert(1)" }), "a product link that isn't a web address is refused");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", status: "gone" }), "an unknown status is refused");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", projectId: "1; drop table" }), "a video is an id");
+  const both = R.cleanProduct({ companyId: CO, name: "A", projectId: "40000000-0000-4000-8000-000000000001", shortId: "50000000-0000-4000-8000-000000000001" });
   ok("ok" in both && !!both.ok.projectId && !!both.ok.shortId, "a long video and a Short, both");
+  ok(
+    JSON.stringify(R.dealOf({ ownCode: false, code: null, percentage: null }, { code: "VIVERRO", percentage: "10%" })) === '{"code":"VIVERRO","percentage":"10%","own":false}' &&
+      JSON.stringify(R.dealOf({ ownCode: true, code: "KEYS5", percentage: "5%" }, { code: "VIVERRO", percentage: "10%" })) === '{"code":"KEYS5","percentage":"5%","own":true}',
+    "the code a product goes by: the company's, or its own"
+  );
+  // The brand, as the database groups the rows from before (0137 affiliates_brand_of: the same cases).
+  const brands: [string, string][] = [
+    ["Gravastar K98 PRO", "Gravastar"],
+    ["Deepcool.com", "Deepcool"],
+    ["  Yunzii   M2 Mouse ", "Yunzii"],
+    ["Arzopa", "Arzopa"],
+    ["The Ridge Wallet", "The Ridge"],
+    ["the oodie", "the oodie"],
+    ["Keychron: Q1 Max", "Keychron"],
+    ["Razer - Kishi", "Razer"],
+    ["The", "The"],
+    ["", ""],
+    ["Promeed.CO Silk", "Promeed"],
+  ];
+  for (const [given, want] of brands) ok(R.brandOf(given) === want, `a name's brand: ${JSON.stringify(given)} → ${JSON.stringify(R.brandOf(given))}`);
+  const sqlBrand = read("supabase/migrations/0137_sponsorship_products.sql");
+  ok(/lower\(words\[1\]\) in \('the', 'a', 'an', 'my', 'mr', 'mrs', 'ms', 'dr', 'la', 'le', 'el', 'les', 'los', 'las', 'die', 'der', 'das'\)/.test(sqlBrand) && /\\\.\(com\|net\|org\|io\|co\|shop\|store\|ro\|eu\|de\|uk\|us\|ca\|au\|fr\|it\|es\|nl\|pl\|tech\|gg\|tv\|me\|app\)\$/.test(sqlBrand), "…the same words and endings as the database's");
 
   // ---- A login, as typed (never kept like this) -------------------------------------------------------------------------
   const none = R.cleanLogin({ username: " ", password: "", notes: "" });
@@ -101,55 +152,128 @@ function walk(dir: string, out: string[] = []): string[] {
   const deep = pasted.rows.find((r) => r.name === "Deepcool.com")?.fields;
   ok(!!deep && deep.code === null && deep.percentage === null, "“-” is an empty cell");
   ok(pasted.rows[0].fields?.percentage === "$5 USD OFF" && pasted.rows[0].fields?.code === "viverroVIP", "a deal that isn't a percentage stays as written");
+  ok(R.parsePasted("Name\tCode\tPercentage\nGravastar K98\tVIVERRO\t10").rows[0].fields?.percentage === "10%", "a pasted number: a percentage");
   const noHead = R.parsePasted("Brand A\tbrand-a.com\tCODE\t20%\tdashboard.brand-a.com\tpaid monthly");
   ok(!noHead.header && noHead.rows[0].fields?.productUrl === "https://brand-a.com" && noHead.rows[0].fields?.platformUrl === "https://dashboard.brand-a.com" && noHead.rows[0].fields?.notes === "paid monthly", "without headings: name, link, code, percentage, platform, notes");
   const csvIn = R.parsePasted('code,name,percentage\nX1,"Shop, Inc.",10%');
   ok(csvIn.header && csvIn.rows[0].fields?.name === "Shop, Inc." && csvIn.rows[0].fields?.code === "X1", "commas and quotes too, columns in any order");
   ok(R.parsePasted("Ok\tjavascript:alert(1)").rows[0].error !== null, "a bad row says what's wrong");
   ok(R.parsePasted(Array.from({ length: 250 }, (_, i) => `Brand ${i}`).join("\n")).rows.length === 200, "200 at most at once");
+  // 1.58.0: each row a product, with its company: a Company column, else its brand.
+  ok(pasted.rows.map((r) => r.fields?.company).join() === "Abxylute,Gravastar,Gravastar,Deepcool,Promeed,Arzopa,Yunzii", "the owner's sheet: each row's company is its brand");
+  const withCo = R.parsePasted("Company\tName\tCode\nGravastar\tK98 PRO\tVIVERRO\nGravastar\t\t-");
+  ok(withCo.rows[0].fields?.company === "Gravastar" && withCo.rows[0].fields?.name === "K98 PRO" && withCo.rows[1].fields?.name === "Gravastar", "a Company column: the company; a row without a name is named by it");
+  const existing = [
+    { id: "c-grava", name: "Gravastar", code: "VIVERRO", percentage: "10%" },
+    { id: "c-p1", name: "Promeed.com", code: "viverro15", percentage: "15%" },
+    { id: "c-p2", name: "Promeed Silk", code: null, percentage: null },
+  ];
+  const fields = (rows: string) => R.parsePasted(rows).rows.map((r) => r.fields!);
+  const plan = R.planImport(
+    fields(
+      [
+        "Name\tProduct Link\tCode\tPercentage",
+        "Gravastar Mercury Mouse\tgravastar.com/m\tVIVERRO\t10",
+        "Gravastar Alpha65\tgravastar.com/a\tALPHA\t12%",
+        "Gravastar Keycaps\tgravastar.com/k\t-\t-",
+        "Razer Mat\trazer.com/m\tMAT\t5%",
+        "Razer Kishi\trazer.com/k\tRZR\t8%",
+        "Razer Viper\trazer.com/v\tRZR\t8%",
+        "Promeed Pillow\tpromeed.com/p\t-\t-",
+      ].join("\n")
+    ),
+    existing
+  );
+  const grava = plan.find((g) => g.name === "Gravastar");
+  ok(plan.length === 3 && grava?.id === "c-grava" && grava.products.length === 3, "pasted rows put with a company here already, by its brand");
+  ok(grava?.products.map((p) => `${p.name}:${p.ownCode ? p.code : "company"}`).join() === "Gravastar Mercury Mouse:company,Gravastar Alpha65:ALPHA,Gravastar Keycaps:company", "the company's code, or one of its own (none: the company's)");
+  const razer = plan.find((g) => g.name === "Razer");
+  ok(razer?.id === null && razer.code === "RZR" && razer.percentage === "8%" && razer.products.filter((p) => p.ownCode).map((p) => p.code).join() === "MAT", "a new company: the code most of its rows have; the others keep their own");
+  ok(plan.some((g) => g.name === "Promeed" && g.id === null), "a brand two companies here go by (Promeed.com, Promeed Silk): a new one, not a guess");
+  ok(R.planImport(fields("Company\tName\nPromeed.com\tPillow"), existing)[0].id === "c-p1" && R.planImport(fields("Company\tName\npromeed silk\tPillow"), existing)[0].id === "c-p2", "…its exact name finds it (whatever the case)");
+
 
   // ---- Out of the page ----------------------------------------------------------------------------------------------------
-  const a = (over: Partial<import("../modules/affiliates/lib/rules").Affiliate>): import("../modules/affiliates/lib/rules").Affiliate => ({
-    id: "20000000-0000-4000-8000-000000000001",
-    name: "Gravastar.com",
+  type Co = import("../modules/affiliates/lib/rules").Company;
+  type Pr = import("../modules/affiliates/lib/rules").Product;
+  const pr = (over: Partial<Pr> & { name: string }): Pr => ({
+    id: `60000000-0000-4000-8000-${String(Math.random()).slice(2, 14).padEnd(12, "0")}`,
+    companyId: CO,
     kinds: ["affiliate"],
-    productUrl: "https://gravastar.com/k98",
-    code: "VIVERRO",
-    percentage: "10%",
     status: "active",
-    platformUrl: "https://impact.com",
-    notes: null,
+    productUrl: null,
+    ownCode: false,
+    code: null,
+    percentage: null,
     long: null,
     short: null,
     picture: null,
     pictureOff: false,
+    check: null,
+    notes: null,
     createdAt: "2026-11-20T10:00:00Z",
     updatedAt: "2026-11-20T10:00:00Z",
-    login: { updatedAt: "2026-11-20T10:00:00Z", by: "Edu" },
     ...over,
   });
-  ok(R.descriptionText([a({}), a({ name: "Abxylute.com", productUrl: "https://abxylute.com/p5", code: "viverroVIP", percentage: "$5 USD OFF" }), a({ name: "Deepcool.com", code: null, percentage: null })]) ===
-    "Gravastar.com: https://gravastar.com/k98\nCode VIVERRO (10% off)\n\nAbxylute.com: https://abxylute.com/p5\nCode viverroVIP ($5 USD OFF)\n\nDeepcool.com: https://gravastar.com/k98", "the lines for a video's description");
+  const co = (over: Partial<Co> & { name: string }, products: Pr[] = []): Co => ({
+    id: CO,
+    code: "VIVERRO",
+    percentage: "10%",
+    platformUrl: "https://impact.com",
+    notes: null,
+    createdAt: "2026-11-01T10:00:00Z",
+    updatedAt: "2026-11-01T10:00:00Z",
+    login: { updatedAt: "2026-11-20T10:00:00Z", by: "Edu" },
+    ...over,
+    products: products.map((p) => ({ ...p, companyId: over.id ?? CO })),
+  });
+  const gravastar = co({ name: "Gravastar" }, [pr({ name: "K98 PRO", productUrl: "https://gravastar.com/k98" }), pr({ name: "Mercury", productUrl: "https://gravastar.com/m" }), pr({ name: "Keycaps", productUrl: "https://gravastar.com/k", ownCode: true, code: "KEYS5", percentage: "5%" })]);
+  const abx = co({ id: "20000000-0000-4000-8000-000000000002", name: "Abxylute", code: "viverroVIP", percentage: "$5 USD OFF" }, [pr({ name: "P5", productUrl: "https://abxylute.com/p5" })]);
+  const deepco = co({ id: "20000000-0000-4000-8000-000000000003", name: "Deepcool", code: null, percentage: null }, [pr({ name: "LQ360" })]);
+  ok(
+    R.descriptionText(R.itemsOf([gravastar, abx, deepco])) ===
+      "K98 PRO: https://gravastar.com/k98\nMercury: https://gravastar.com/m\nCode VIVERRO (10% off)\n\nKeycaps: https://gravastar.com/k\nCode KEYS5 (5% off)\n\nP5: https://abxylute.com/p5\nCode viverroVIP ($5 USD OFF)\n\nLQ360",
+    "the lines for a video's description: a company's code once under its products, a product's own under it"
+  );
+  ok(R.companyDescription(co({ name: "Keychron", code: "KEY10" })) === "Keychron\nCode KEY10 (10% off)" && R.companyDescription(abx) === "P5: https://abxylute.com/p5\nCode viverroVIP ($5 USD OFF)", "a company's lines: its products', or (none yet) its name and code");
   ok(R.csvCell("=HYPERLINK(\"http://evil\")") === `"'=HYPERLINK(""http://evil"")"` && R.csvCell("+1") === "'+1" && R.csvCell("@x") === "'@x" && R.csvCell("a,b") === '"a,b"' && R.csvCell(null) === "", "a spreadsheet cell can't be a formula");
-  const csv = R.affiliatesCsv([a({ notes: "=cmd" })]);
-  ok(csv.startsWith("Name,Type,Product link,Code,Percentage,Status,Long video,Short,Affiliate platform,Notes\r\n") && /,Affiliate,/.test(csv) && /,'=cmd\r\n$/.test(csv), "the spreadsheet's columns, its kind (and the formula defused)");
-  ok(!/login|password|username/i.test(csv), "never a login in the spreadsheet");
+  const csv = R.sponsorshipsCsv(R.itemsOf([co({ name: "Gravastar" }, [pr({ name: "K98 PRO", notes: "=cmd" }), pr({ name: "Keycaps", ownCode: true, code: "KEYS5", percentage: "5%", check: { result: "works", by: "Ana", at: "2026-11-25T09:00:00Z" } })])]));
+  ok(csv.startsWith("Company,Name,Type,Product link,Code,Percentage,Status,Verified,Long video,Short,Affiliate platform,Notes\r\n"), "the spreadsheet's columns: the company first");
+  ok(/^Gravastar,K98 PRO,Affiliate,,VIVERRO,10%,Active,Not verified,,,https:\/\/impact\.com,'=cmd\r$/m.test(csv) && /^Gravastar,Keycaps,Affiliate,,KEYS5,5%,Active,"Verified \(2026-11-25, Ana\)",/m.test(csv), "a row per product: the code it goes by, verified or not and who checked it, the company's platform (the formula defused)");
+  ok(!/login|password|username|Edu/i.test(csv), "never a login in the spreadsheet");
+  ok(R.parsePasted(csv.replace(/^.*?\r\n/, "Company,Name,Type,Product link,Code,Percentage,Status,Verified,Long video,Short,Affiliate platform,Notes\r\n")).rows.every((r) => r.fields?.company === "Gravastar"), "the sheet this page exports pastes back in, with its companies");
 
-  // ---- The list -----------------------------------------------------------------------------------------------------------
-  const list = [
-    a({ id: "1", name: "Zeta", createdAt: "2026-11-01T00:00:00Z", status: "paused", code: null, login: null }),
-    a({ id: "2", name: "alpha", kinds: ["affiliate", "review"], createdAt: "2026-11-03T00:00:00Z", long: { kind: "long", source: "team", id: "p", number: 12, title: "Keyboard review", stageLabel: "Publish", watchUrl: null, thumb: null } }),
-    a({ id: "3", name: "Beta", kinds: ["review"], createdAt: "2026-11-02T00:00:00Z", status: "ended", short: { kind: "short", source: "channel", id: "Short136_bb", number: null, title: "K98 in 30s", stageLabel: "On the channel", watchUrl: "https://www.youtube.com/shorts/Short136_bb", thumb: null } }),
-  ];
+  // ---- The list (1.58.0: companies, each with the products that pass) ---------------------------------------------------
+  const long12 = { kind: "long" as const, source: "team" as const, id: "p", number: 12, title: "Keyboard review", stageLabel: "Publish", watchUrl: null, thumb: null };
+  const shortK98 = { kind: "short" as const, source: "channel" as const, id: "Short136_bb", number: null, title: "K98 in 30s", stageLabel: "On the channel", watchUrl: "https://www.youtube.com/shorts/Short136_bb", thumb: null };
+  const zeta = co({ id: "c1", name: "Zeta", code: null, login: null, createdAt: "2026-10-01T00:00:00Z" }, [pr({ id: "z1", name: "Zeta one", status: "paused", createdAt: "2026-11-01T00:00:00Z" })]);
+  const alpha = co({ id: "c2", name: "alpha", createdAt: "2026-10-02T00:00:00Z" }, [
+    pr({ id: "a1", name: "Alpha keyboard", kinds: ["affiliate", "review"], createdAt: "2026-11-03T00:00:00Z", long: long12 }),
+    pr({ id: "a2", name: "Alpha mouse", createdAt: "2026-10-20T00:00:00Z", check: { result: "works", by: "Ana", at: "2026-11-25T09:00:00Z" } }),
+  ]);
+  const beta = co({ id: "c3", name: "Beta", createdAt: "2026-10-03T00:00:00Z" }, [pr({ id: "b1", name: "Beta pad", kinds: ["review"], status: "ended", createdAt: "2026-11-02T00:00:00Z", short: shortK98, ownCode: true, check: { result: "broken", by: null, at: "2026-11-24T09:00:00Z" } })]);
+  const empty = co({ id: "c4", name: "Empty Co", login: null, createdAt: "2026-11-04T00:00:00Z" }, []);
+  const list = [zeta, alpha, beta, empty];
+  const ids = (cs: ReturnType<typeof R.applyFilters>) => cs.map((c) => `${c.id}:${c.products.map((p) => p.id).join("+")}`).join(",");
   const f = R.readFilters({});
-  ok(R.applyFilters(list, f).map((x) => x.id).join() === "2,3,1", "newest first by default");
-  ok(R.applyFilters(list, { ...f, sort: "name" }).map((x) => x.name).join() === "alpha,Beta,Zeta", "A to Z, whatever the case");
-  ok(R.applyFilters(list, R.readFilters({ status: "ended" })).map((x) => x.id).join() === "3", "by status");
-  ok(R.applyFilters(list, R.readFilters({ video: "long" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ video: "none" })).map((x) => x.id).join() === "1", "by video");
-  ok(R.applyFilters(list, R.readFilters({ code: "1", login: "1" })).map((x) => x.id).join() === "2,3", "with a code, with a login");
-  ok(R.applyFilters(list, R.readFilters({ q: "#12" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ q: "keyboard" })).map((x) => x.id).join() === "2" && R.applyFilters(list, R.readFilters({ q: "k98 in" })).map((x) => x.id).join() === "3", "found by a video's number or title (one on the channel too)");
-  ok(R.applyFilters(list, R.readFilters({ type: "review" })).map((x) => x.id).join() === "2,3" && R.applyFilters(list, R.readFilters({ type: "affiliate" })).map((x) => x.id).join() === "2,1" && R.applyFilters(list, R.readFilters({ type: "paid" })).length === 0, "the kind's tab: each one in all of its kinds' tabs");
-  ok(R.applyFilters(list, R.readFilters({ q: "review" })).map((x) => x.id).join() === "2,3", "found by its kind too");
+  ok(ids(R.applyFilters(list, f)) === "c4:,c2:a1+a2,c3:b1,c1:z1", `newest first by default: a company by its newest product, its products newest first (${ids(R.applyFilters(list, f))})`);
+  ok(ids(R.applyFilters(list, { ...f, sort: "name" })) === "c2:a1+a2,c3:b1,c4:,c1:z1", "A to Z, whatever the case");
+  ok(R.applyFilters(list, f).find((c) => c.id === "c2")?.total === 2, "each company says how many products it has in all");
+  ok(ids(R.applyFilters(list, R.readFilters({ status: "ended" }))) === "c3:b1", "by status: a product's (companies without one go)");
+  ok(ids(R.applyFilters(list, R.readFilters({ video: "long" }))) === "c2:a1" && ids(R.applyFilters(list, R.readFilters({ video: "none" }))) === "c1:z1,c2:a2", "by video (in order of what shows: alpha's newest without one is older than Zeta's)");
+  ok(ids(R.applyFilters(list, R.readFilters({ code: "1" }))) === "c2:a1+a2", "with a code: the one it goes by (Zeta has none; Beta's own is none)");
+  ok(ids(R.applyFilters(list, R.readFilters({ login: "1" }))) === "c2:a1+a2,c3:b1", "with a login: the company's");
+  ok(ids(R.applyFilters(list, R.readFilters({ q: "#12" }))) === "c2:a1" && ids(R.applyFilters(list, R.readFilters({ q: "k98 in" }))) === "c3:b1", "found by a video's number or title: only that product");
+  ok(ids(R.applyFilters(list, R.readFilters({ q: "ALPHA" }))) === "c2:a1+a2" && ids(R.applyFilters(list, R.readFilters({ q: "empty" }))) === "c4:", "a company found by its name: all of its products (none too)");
+  ok(ids(R.applyFilters(list, R.readFilters({ q: "mouse" }))) === "c2:a2" && R.applyFilters(list, R.readFilters({ q: "mouse" }))[0].total === 2, "a product found by its name: only it, with its company (which still says how many it has)");
+  ok(ids(R.applyFilters(list, R.readFilters({ q: "viverro" }))) === "c4:,c2:a1+a2,c3:b1", "…a company by its code (one without products too)");
+  ok(ids(R.applyFilters(list, R.readFilters({ type: "review" }))) === "c2:a1,c3:b1" && ids(R.applyFilters(list, R.readFilters({ type: "affiliate" }))) === "c2:a1+a2,c1:z1" && R.applyFilters(list, R.readFilters({ type: "paid" })).length === 0, "the kind's tab: each product in all of its kinds' tabs; companies without one go");
+  ok(ids(R.applyFilters(list, R.readFilters({ q: "review" }))) === "c2:a1,c3:b1", "found by its kind too");
+  ok(
+    ids(R.applyFilters(list, R.readFilters({ checked: "works" }))) === "c2:a2" && ids(R.applyFilters(list, R.readFilters({ checked: "broken" }))) === "c3:b1" && ids(R.applyFilters(list, R.readFilters({ checked: "none" }))) === "c2:a1,c1:z1" && R.readFilters({ checked: "sometimes" }).checked === null,
+    "Filters → Verified: each product's (anything else is no filter)"
+  );
+  ok(R.filtersHref(R.readFilters({ checked: "none" }), { sort: "name" }) === "/sponsorships?checked=none&sort=name" && R.checkState(pr({ name: "x" })) === "none" && R.CHECK_LABEL.none === "Not verified" && R.CHECK_LABEL.broken === "Not working", "the address and the words");
   const weird = R.readFilters({ type: "barter", status: "x", video: "y", sort: "z", q: "q".repeat(500) });
   ok(weird.kind === null && weird.status === null && weird.video === null && weird.sort === "newest" && weird.q.length === 100, "anything unknown in the address is no filter");
   ok(
@@ -158,6 +282,9 @@ function walk(dir: string, out: string[] = []): string[] {
       R.filtersHref(R.readFilters({ type: "review", status: "active" }), { kind: "paid" }) === "/sponsorships?type=paid&status=active",
     "the address for a filter (the tab's kind kept with the rest)"
   );
+  // Folded companies: the viewer's own, in a cookie.
+  ok(R.closedKey("20000000-0000-4000-8000-0000AbCd1234") === "abcd1234" && R.writeClosed(["abcd1234", "abcd1234", "<script>", "00000002"]) === "abcd1234.00000002" && [...R.readClosed("abcd1234.00000002.bad;x.0000000z")].join() === "abcd1234,00000002" && R.readClosed(undefined).size === 0, "folded companies: the ids' random end, kept tidy (nothing else read back)");
+  ok(R.writeClosed(Array.from({ length: 500 }, (_, i) => i.toString(16).padStart(8, "0"))).split(".").length === 350, "…350 at most (a cookie's room)");
 
   // ---- 1.57.0: what kind of deal --------------------------------------------------------------------------------------------
   ok(JSON.stringify(R.cleanKinds(["paid", "affiliate", "paid"])) === '["affiliate","paid"]' && R.cleanKinds([]) === null && R.cleanKinds(["barter"]) === null && JSON.stringify(R.cleanKinds("review")) === '["review"]', "kinds: known ones, in order, no repeats; none is nothing");
@@ -168,14 +295,14 @@ function walk(dir: string, out: string[] = []): string[] {
       R.kindsFromText("barter").length === 0,
     "a sheet's Type cell, as people write it"
   );
-  const k1 = R.cleanAffiliate({ name: "A", kinds: ["review", "affiliate"] });
+  const k1 = R.cleanProduct({ companyId: CO, name: "A", kinds: ["review", "affiliate"] });
   ok("ok" in k1 && k1.ok.kinds.join() === "affiliate,review", "the window's kinds, in order");
-  ok("error" in R.cleanAffiliate({ name: "A", kinds: [] }) && "error" in R.cleanAffiliate({ name: "A", kinds: ["affiliate", "barter"] }), "never none, never an unknown one");
-  const k0 = R.cleanAffiliate({ name: "A" });
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", kinds: [] }) && "error" in R.cleanProduct({ companyId: CO, name: "A", kinds: ["affiliate", "barter"] }), "never none, never an unknown one");
+  const k0 = R.cleanProduct({ companyId: CO, name: "A" });
   ok("ok" in k0 && k0.ok.kinds.join() === "affiliate" && k0.ok.picture === "keep", "nothing said: an affiliate (as everything was before), the picture as it is");
   const typed = R.parsePasted("Name\tType\tCode\nDeepcool.com\tReview\t-\nGravastar.com\t\tVIVERRO", ["paid"]);
   ok(typed.header && typed.rows[0].fields?.kinds.join() === "review" && typed.rows[1].fields?.kinds.join() === "paid", "pasted: a Type column, else the tab it's pasted on");
-  ok(R.parsePasted(sheet).rows.every((r) => r.fields?.kinds.join() === "affiliate" && r.fields?.picture === "auto"), "pasted on All: affiliates, their pictures looked for");
+  ok(R.parsePasted(sheet).rows.every((r) => r.fields?.kinds.join() === "affiliate"), "pasted on All: affiliates");
 
   // ---- 1.57.0: every video on the channel ---------------------------------------------------------------------------------
   const yt: [string, string | null][] = [
@@ -190,9 +317,9 @@ function walk(dir: string, out: string[] = []): string[] {
     ["keyboard", null],
   ];
   for (const [given, want] of yt) ok(R.youtubeIdOf(given) === want, `a YouTube link: ${given} → ${R.youtubeIdOf(given)}`);
-  const ch = R.cleanAffiliate({ name: "A", longYoutubeId: "Long136_aaa", shortId: "50000000-0000-4000-8000-000000000001" });
+  const ch = R.cleanProduct({ companyId: CO, name: "A", longYoutubeId: "Long136_aaa", shortId: "50000000-0000-4000-8000-000000000001" });
   ok("ok" in ch && ch.ok.longYoutubeId === "Long136_aaa" && ch.ok.projectId === null && !!ch.ok.shortId, "a long video only on the channel, a Short of the team's");
-  ok("error" in R.cleanAffiliate({ name: "A", longYoutubeId: "not an id!" }) && "error" in R.cleanAffiliate({ name: "A", projectId: "40000000-0000-4000-8000-000000000001", longYoutubeId: "Long136_aaa" }), "a channel video is an id, and one per place");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", longYoutubeId: "not an id!" }) && "error" in R.cleanProduct({ companyId: CO, name: "A", projectId: "40000000-0000-4000-8000-000000000001", longYoutubeId: "Long136_aaa" }), "a channel video is an id, and one per place");
   ok(R.choiceThumb({ thumb: null, youtubeId: "Long136_aaa" }) === "https://i.ytimg.com/vi/Long136_aaa/mqdefault.jpg" && R.choiceThumb({ thumb: "https://x.example.com/t.jpg", youtubeId: "Long136_aaa" }) === "https://x.example.com/t.jpg" && R.choiceThumb({ thumb: null, youtubeId: null }) === null, "a video's picture: its own, else YouTube's");
 
   // ---- 1.57.0: the product's picture --------------------------------------------------------------------------------------
@@ -215,9 +342,9 @@ function walk(dir: string, out: string[] = []): string[] {
   ];
   for (const [given, want] of pics) ok(R.normalizePicture(given) === want, `a picture's link: ${JSON.stringify(given)} → ${JSON.stringify(R.normalizePicture(given))}`);
   ok(R.smallPicture("https://abxylute.com/cdn/shop/files/P5.png?v=2", 64) === "https://abxylute.com/cdn/shop/files/P5.png?v=2&width=64" && R.smallPicture("https://cdn.shopify.com/s/files/1/k98.png?width=1200", 80) === "https://cdn.shopify.com/s/files/1/k98.png?width=80" && R.smallPicture("https://ae01.alicdn.com/kf/x.jpg", 64) === "https://ae01.alicdn.com/kf/x.jpg", "a smaller copy where the shop's picture server makes one");
-  const choose = R.cleanAffiliate({ name: "A", picture: { url: "http://shop.example.com/p.jpg", source: "link" } });
+  const choose = R.cleanProduct({ companyId: CO, name: "A", picture: { url: "http://shop.example.com/p.jpg", source: "link" } });
   ok("ok" in choose && typeof choose.ok.picture === "object" && choose.ok.picture.url === "https://shop.example.com/p.jpg", "a pasted picture, on https");
-  ok("error" in R.cleanAffiliate({ name: "A", picture: { url: "https://10.0.0.5/p.jpg", source: "link" } }) && "error" in R.cleanAffiliate({ name: "A", picture: { url: "https://x.example.com/p.jpg", source: "elsewhere" } }) && "error" in R.cleanAffiliate({ name: "A", picture: "sometimes" }), "never a picture inside a network, never an unknown kind of change");
+  ok("error" in R.cleanProduct({ companyId: CO, name: "A", picture: { url: "https://10.0.0.5/p.jpg", source: "link" } }) && "error" in R.cleanProduct({ companyId: CO, name: "A", picture: { url: "https://x.example.com/p.jpg", source: "elsewhere" } }) && "error" in R.cleanProduct({ companyId: CO, name: "A", picture: "sometimes" }), "never a picture inside a network, never an unknown kind of change");
   const P = await import("../modules/affiliates/lib/picture-parse");
   const page = (head: string, body = "") => `<!doctype html><html><head><title>P5</title>${head}</head><body>${body}</body></html>`;
   const base = "https://abxylute.com/products/p5-wireless-controller";
@@ -241,7 +368,7 @@ function walk(dir: string, out: string[] = []): string[] {
 
   // ---- Who, and what it says ------------------------------------------------------------------------------------------------
   ok(R.canManageAffiliates(["master"], false) && R.canManageAffiliates(["editor"], true) && !R.canManageAffiliates(["editor", "publisher"], false) && !R.canManageAffiliates(null, true), "masters, and the people they let in");
-  ok(R.eventText({ action: "copied_password", who: "Ana", whom: null, affiliate: "Gravastar.com" }) === "Ana copied Gravastar.com's password" && R.eventText({ action: "granted", who: "You", whom: "Mihai", affiliate: null }) === "You let Mihai in", "the activity in words");
+  ok(R.eventText({ action: "copied_password", who: "Ana", whom: null, affiliate: "Gravastar" }) === "Ana copied Gravastar's password" && R.eventText({ action: "granted", who: "You", whom: "Mihai", affiliate: null }) === "You let Mihai in" && R.eventText({ action: "deleted", who: "You", whom: null, affiliate: null }) === "You deleted a company, with its login", "the activity in words");
 
   // ---- Sealing a login, for real --------------------------------------------------------------------------------------------
   const key = "a1".repeat(32);
@@ -306,21 +433,27 @@ function walk(dir: string, out: string[] = []): string[] {
   const unlock = fn("unlockLogins");
   ok(/await confirmPassword\(c\.user, password\)/.test(unlock) && /httpOnly: true,\s*sameSite: "strict",/.test(unlock) && /path: UNLOCK_PATH,/.test(unlock) && /maxAge: UNLOCK_MINUTES \* 60,/.test(unlock), "the unlock: the password (sign-in limits), then a cookie only the server reads, for /sponsorships, 15 minutes");
   ok(/export const UNLOCK_PATH = "\/sponsorships";/.test(read("modules/affiliates/lib/vault.ts")) && /export const SPONSORSHIPS_PATH = "\/sponsorships";/.test(read("modules/affiliates/lib/rules.ts")), "…sent nowhere else (the page's own address)");
-  const save = fn("saveAffiliate");
-  ok(/if \(kept\.has\(id\) && !\(await unlockedFor\(c\.supabase, c\.user\.id\)\)\) return \{ error: LOCKED, locked: true \};/.test(save) && save.indexOf("unlockedFor") < save.indexOf('from("affiliates")'), "replacing or removing a kept login needs the unlock, checked before anything is written");
+  const save = fn("saveCompany");
+  ok(/if \(kept\.has\(id\) && !\(await unlockedFor\(c\.supabase, c\.user\.id\)\)\) return \{ error: LOCKED, locked: true \};/.test(save) && save.indexOf("unlockedFor") < save.indexOf('from("affiliates")'), "replacing or removing a company's kept login needs the unlock, checked before anything is written");
   ok(/sealLogin\(c\.teamId, savedId, sealing\)/.test(save) && /affiliate_login_save/.test(save), "a login is sealed before the database sees it");
-  ok(/withLogins\(c, wanted\)\)\.size && !\(await unlockedFor/.test(fn("deleteAffiliates")), "deleting ones with a login needs the unlock");
+  ok(/withLogins\(c, wanted\)\)\.size && !\(await unlockedFor/.test(fn("deleteCompanies")), "deleting a company with a login needs the unlock");
+  ok(!/unlockedFor|withLogins/.test(fn("deleteProducts")) && /from\("affiliate_products"\)\.delete\(\)/.test(fn("deleteProducts")), "deleting products doesn't (their company keeps the login)");
+  for (const name of ["saveCompany", "deleteCompanies", "saveProduct", "deleteProducts", "moveProducts", "setProductsStatus", "setProductsKinds", "setProductsChecked", "importSponsorships"])
+    ok(/const c = await caller\(teamId\);[\s\S]*?if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn(name)), `${name}: the people let in, read from the database`);
+  ok(/\.eq\("team_id", c\.teamId\)\.neq\("affiliate_id", companyId\)/.test(fn("moveProducts")), "moving products: this team's, to another company (the database keeps them in the team)");
+  ok(/planImport\(\s*clean,/.test(fn("importSponsorships")) && /percentage: pctOf\(c\.percentage\)/.test(fn("importSponsorships")) && /cleanPasted\(r\)/.test(fn("importSponsorships")) && /if \(made\.size\) await c\.supabase\.from\("affiliates"\)\.delete\(\)/.test(fn("importSponsorships")), "a paste: each row checked again, put with its companies as the window showed; nothing half-added");
   ok(/if \(!c\.master\) return \{ error: "Only masters choose who manages sponsorships\." \};/.test(fn("setAffiliateAccess")) && /kind: "affiliate_access"/.test(fn("setAffiliateAccess")) && /href: SPONSORSHIPS_PATH/.test(fn("setAffiliateAccess")), "only Masters let people in; they're told (and sent to the page)");
   ok(/if \(!c\.master\) return \{ error: "Only masters see who used the logins\." \};/.test(fn("affiliateLoginActivity")), "only Masters read the activity");
   // 1.57.0: pictures and videos, only for the people who manage sponsorships; the server reads only public pages.
   const finder = fn("findProductPicture");
   ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(finder) && /overLimit\("affiliate-picture", c\.user\.id, 30, 60_000\)/.test(finder) && /const url = normalizeUrl\(productUrl\);/.test(finder), "a picture is looked for by the people let in, a few a minute, for a web address");
   ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn("affiliateVideoChoices")) && /readVideoChoices\(c\.supabase, c\.teamId\)/.test(fn("affiliateVideoChoices")), "the videos to link: the people let in, read as them");
-  ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn("setAffiliatesKinds")) && /const clean = cleanKinds\(kinds\);/.test(fn("setAffiliatesKinds")), "changing the kind: the people let in, checked");
-  ok(/lookForPictures\(c\.teamId, \[savedId\]\)/.test(fn("saveAffiliate")) && /lookForPictures\(c\.teamId, /.test(fn("importAffiliates")), "saved or pasted with a product link and no picture: the server looks after answering");
+  ok(/const clean = cleanKinds\(kinds\);/.test(fn("setProductsKinds")), "changing the kind: checked");
+  ok(/if \(result !== null && !isCheckResult\(result\)\)/.test(fn("setProductsChecked")) && !/checked_by/.test(fn("setProductsChecked")) && /from\("affiliate_products"\)/.test(fn("setProductsChecked")), "marking verified: a known mark, on products; who is the database's");
+  ok(/lookForPictures\(c\.teamId, \[savedId\]\)/.test(fn("saveProduct")) && /lookForPictures\(c\.teamId, /.test(fn("importSponsorships")) && !/lookForPictures/.test(fn("saveCompany")), "a product saved or pasted with a link and no picture: the server looks after answering");
   const pictures = read("modules/affiliates/lib/pictures.ts");
   ok(/^import "server-only";/.test(pictures) && /if \(!publicUrl\(url\)\) return null;/.test(pictures) && (pictures.match(/if \(!publicUrl\(next\)/g) ?? []).length === 2, "the server reads only public pages, each redirect checked before it's followed");
-  ok(/admin\.rpc\("affiliate_pictures_claim"/.test(pictures) && /admin\.rpc\("affiliate_picture_found"/.test(pictures) && !/from\("affiliates"\)\.update\(\{ image_url/.test(pictures), "the background look goes through the database's two functions");
+  ok(/admin\.rpc\("affiliate_product_pictures_claim"/.test(pictures) && /admin\.rpc\("affiliate_product_picture_found"/.test(pictures) && !/\.update\(\{ image_url/.test(pictures), "the background look goes through the database's two functions (on products)");
   const web = read("lib/web-page.ts");
   ok(/lookup: safeLookup as never/.test(web) && /all\.some\(\(a\) => isPrivateAddress\(a\.address\)\)/.test(web) && /if \(u\.port && u\.port !== "80" && u\.port !== "443"\) return false;/.test(web), "checked on the address the connection uses, ports 80 and 443 only");
   const preview = read("app/api/link-preview/route.ts");
@@ -329,6 +462,7 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(/if \(data\.needPictures\) \{[\s\S]*after\(\(\) => fillPictures\(teamId/.test(sponsorPage) && /export const maxDuration = 60;/.test(sponsorPage), "opening the page: pictures still missing are looked for after it's sent");
   const queries = read("modules/affiliates/lib/queries.ts");
   ok(!/affiliate_logins/.test(queries.replace(/\/\*[\s\S]*?\*\//g, "")) && /supabase\.rpc\("affiliate_login_states", \{ p_team: teamId \}\)/.test(queries), "the page never reads a login: only which ones have one");
+  ok(/from\("affiliate_products"\)\.select\(PRODUCT_COLS\)/.test(queries) && /migration: error && notMigrated\(error\) \? "0136" : "0137"/.test(queries), "the products read with their companies (no products yet: which update is missing)");
   // No browser code reaches the server's secrets.
   const client = walk("modules/affiliates").filter((f) => /\.tsx?$/.test(f) && /^"use client";/.test(read(f)));
   ok(client.length >= 8, `the browser's parts (${client.length})`);
@@ -339,25 +473,41 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(!/localStorage|sessionStorage/.test(ctx), "…and is never stored");
   ok(/new ClipboardItem\(\{ "text\/plain": blob \}\)/.test(ctx), "copying works on Safari too (the clipboard gets the promise in the click)");
   const dialog = read("modules/affiliates/components/affiliate-dialog.tsx");
-  ok(/const SECRET = \{ autoComplete: "off", spellCheck: false, autoCapitalize: "off", autoCorrect: "off", "data-1p-ignore": "", "data-lpignore": "true"/.test(dialog) && (dialog.match(/\{\.\.\.SECRET\}/g) ?? []).length === 3, "the login's fields keep password managers and the spell checker out");
-  ok(!/affiliate\.login\.(username|password)/.test(dialog), "the window never shows a kept login");
+  ok(/export function CompanyDialog/.test(dialog) && /const SECRET = \{ autoComplete: "off", spellCheck: false, autoCapitalize: "off", autoCorrect: "off", "data-1p-ignore": "", "data-lpignore": "true"/.test(dialog) && (dialog.match(/\{\.\.\.SECRET\}/g) ?? []).length === 3, "the company's window: the login's fields keep password managers and the spell checker out");
+  ok(!/company\.login\.(username|password)/.test(dialog), "the window never shows a kept login");
+  ok(/if \(fresh\) setProduct\(\{ companyId: id \}\);/.test(read("modules/affiliates/components/affiliates-context.tsx")), "a new company goes on to its first product");
   ok(/role="switch"/.test(read("modules/affiliates/components/logins-bar.tsx")), "Masters choose who manages affiliates");
   const picker = read("modules/affiliates/components/affiliates-picker.tsx");
-  ok(/<ListPicker ids=\{items\.map\(\(i\) => i\.id\)\}/.test(picker) && /<BarDelete/.test(picker) && /affiliatesCsv\(chosen\)/.test(picker) && /descriptionText\(chosen\)/.test(picker), "several at once: copy, export, status, delete (the shorts list's picking)");
+  ok(/<ListPicker ids=\{items\.map\(\(i\) => i\.product\.id\)\}/.test(picker) && /<BarDelete/.test(picker) && /sponsorshipsCsv\(picked\)/.test(picker) && /descriptionText\(picked\)/.test(picker) && /deleteProducts\(ctx\.teamId, ids\)/.test(picker), "several products at once: copy, export, mark, delete (the shorts list's picking)");
+  ok((picker.match(/<BarMenu/g) ?? []).length === 1 && /section: "Verified or not"/.test(picker) && /section: "Type \(only this one\)"/.test(picker) && /section: "Status"/.test(picker), "…one Mark menu (so it all fits the bar, a phone's too)");
+  ok(/it\.section && it\.section !== items\[i - 1\]\?\.section/.test(read("components/ui/list-pick.tsx")), "a bar's menu can have sections");
   const body = read("modules/affiliates/components/affiliates-body.tsx");
-  ok(/<AffiliatesTable list=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<AffiliateCards list=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<ViewToggle/.test(body) && /<FiltersMenu/.test(body) && /<PickAffiliatesButton \/>/.test(body), "a table and cards, Filters, Select (as the shorts list)");
+  ok(/<AffiliatesTable companies=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<AffiliateCards companies=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<ViewToggle/.test(body) && /<FiltersMenu/.test(body) && /<PickAffiliatesButton \/>/.test(body) && /<FoldAll ids=\{list\.map\(\(c\) => c\.id\)\} \/>/.test(body), "a table and cards of companies, Filters, Select, fold all");
   ok(/<KindTabs/.test(body) && /DEAL_KINDS\.map\(\(k\) => \(\{ key: k, label: KIND_TAB\[k\]/.test(body), "tabs for the kinds of deal, over one list");
-  ok(/setAffiliatesKinds/.test(picker) && /setAffiliatesKinds/.test(read("modules/affiliates/components/row-menu.tsx")), "the kind changed for several at once, or on one");
+  ok(/setProductsKinds/.test(picker) && /setProductsKinds/.test(read("modules/affiliates/components/row-menu.tsx")), "the kind changed for several at once, or on one");
   const mark = read("modules/affiliates/components/brand-mark.tsx");
   ok(/referrerPolicy="no-referrer"/.test(mark) && /data-row-num=""/.test(mark) && /onError=\{\(\) => setFailed\(url\)\}/.test(mark), "the picture: asked for without saying where from; picking still puts the tick box there; the initial if it doesn't open");
-  ok(/findProductPicture\(ctx\.teamId, url\)/.test(dialog) && /<VideoField kind="long"/.test(dialog) && /youtubeIdOf\(raw\)/.test(dialog), "the window: the picture as soon as a link is typed; videos found by title, number or YouTube link");
-  ok(/<RowPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliates-table.tsx")) && /<CardPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliate-cards.tsx")), "rows and cards are picked");
+  const productWindow = read("modules/affiliates/components/product-dialog.tsx");
+  ok(/findProductPicture\(ctx\.teamId, url\)/.test(productWindow) && /<VideoField kind="long"/.test(productWindow) && /youtubeIdOf\(raw\)/.test(productWindow), "the product's window: the picture as soon as a link is typed; videos found by title, number or YouTube link");
+  ok(/ariaLabel="The code it goes by"/.test(productWindow) && /onChange=\{\(v\) => setOwnCode\(v === "own"\)\}/.test(productWindow), "…the company's code, or its own (a button)");
+  ok(/<RowPick id=\{p\.id\}/.test(read("modules/affiliates/components/affiliates-table.tsx")) && /<CardPick id=\{p\.id\}/.test(read("modules/affiliates/components/affiliate-cards.tsx")) && (read("modules/affiliates/components/company-head.tsx").match(/<GroupPick ids=\{c\.products\.map\(\(p\) => p\.id\)\}/g) ?? []).length === 2, "products are picked, a company's at once");
   // 1.57.1: the name gets the room: the product is its domain; the platform and its login, two small icons.
   const table = read("modules/affiliates/components/affiliates-table.tsx");
-  ok(/<OutLink url=\{a\.productUrl\} label=\{domainOf\(a\.productUrl\)\}/.test(table) && /<PlatformLinks affiliate=\{a\} \/>/.test(table) && !/<LoginCell/.test(table) && (table.match(/<PlatformLinks /g) ?? []).length === 1, "the table: the product's domain, one place for the platform and login icons (one login popover per row)");
-  ok(/_minmax\(0,9\.5rem\)_4\.5rem_44px\]/.test(read("modules/affiliates/lib/table-cols.ts")), "…in a narrow column");
+  const head = read("modules/affiliates/components/company-head.tsx");
+  ok(/<OutLink url=\{p\.productUrl\} label=\{domainOf\(p\.productUrl\)\}/.test(table) && !/<PlatformLinks/.test(table) && !/<LoginCell/.test(table), "the table: a product's domain; the platform and login aren't on products");
+  const companyRow = head.slice(head.indexOf("export function CompanyRow"), head.indexOf("export function CompanyHead"));
+  ok((companyRow.match(/<PlatformLinks /g) ?? []).length === 1 && /md:col-start-3 xl:col-start-7/.test(companyRow), "…they're the company's, once (one login popover), in a column of their own");
+  ok(/2xl:grid-cols-\[48px_minmax\(0,1fr\)_7rem_minmax\(0,9\.5rem\)_6rem_minmax\(0,15rem\)_minmax\(0,10rem\)_44px\]/.test(read("modules/affiliates/lib/table-cols.ts")), "a product's columns: Verified right after the name; no platform column (the company's row has it)");
+  ok((table.match(/<VerifyChip /g) ?? []).length === 2 && /<VerifyChip product=\{p\} \/>/.test(read("modules/affiliates/components/affiliate-cards.tsx")), "verified or not on each product: its column (and the icon by the name on a phone), and on the cards");
+  ok(/<FoldRow/.test(head) && /export function FoldRow/.test(read("modules/affiliates/components/company-fold.tsx")) && /closest\(OWN\)/.test(read("modules/affiliates/components/company-fold.tsx")), "a company's heading folds it (not its own controls)");
+  ok(/document\.cookie = `\$\{SPONSORSHIPS_CLOSED_COOKIE\}=\$\{writeClosed\(next\)\}; path=\/sponsorships;/.test(read("modules/affiliates/components/affiliates-context.tsx")) && /readClosed\(jar\.get\(SPONSORSHIPS_CLOSED_COOKIE\)\?\.value\)/.test(read("app/(dashboard)/sponsorships/page.tsx")), "…kept for the next visit (the page reads it)");
+  ok(/if \(!ctx\?\.manage\)\s*return \(\s*<span/.test(read("modules/affiliates/components/verify-chip.tsx")), "only the people let in can mark it; the others see it");
+  ok(/truncate flex-shrink-0 max-w-\[calc\(100%-1rem\)\]/.test(read("modules/affiliates/components/bits.tsx")) && !/truncate flex-shrink-0 max-w-full/.test(read("modules/affiliates/components/bits.tsx")), "a long link's ↗ stays inside its column (the domain leaves it room)");
+  ok(!/UserIcon/.test(read("modules/affiliates/components/login-cell.tsx")) && (read("modules/affiliates/components/login-cell.tsx").match(/<LockIcon /g) ?? []).length === 1, "the login: one small lock, on the company");
   const menu = read("modules/affiliates/components/row-menu.tsx");
-  ok(/\{manage && a\.login && \(/.test(menu) && /ctx\?\.copyPart\(a, "password"\)/.test(menu) && /ctx\?\.show\(a\)/.test(menu), "the login's show and copy, in ⋯ for the people let in");
+  const companyMenu = menu.slice(menu.indexOf("export function CompanyMenu"), menu.indexOf("export function ProductMenu"));
+  ok(/\{manage && c\.login && \(/.test(companyMenu) && /ctx\?\.copyPart\(c, "password"\)/.test(companyMenu) && /ctx\?\.show\(c\)/.test(companyMenu) && !/copyPart|show\(/.test(menu.slice(menu.indexOf("export function ProductMenu"))), "the login's show and copy, in the company's ⋯ for the people let in (not a product's)");
+  ok(/if \(c\.login && !\(await ctx\.ensureUnlocked\(\)\)\) return;/.test(companyMenu) && /deleteCompanies\(ctx\.teamId, \[c\.id\]\)/.test(companyMenu), "deleting a company with a login: the password first");
 
   // The page, in the app.
   const nav = read("lib/nav-items.ts");

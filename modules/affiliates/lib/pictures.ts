@@ -9,11 +9,11 @@ import { pictureOf, refreshOf } from "./picture-parse";
  * for itself (picture-parse.ts). Affiliate links often go through a few redirects (tidd.ly, s.click.aliexpress.com…):
  * each one is checked before it's followed, 7 at most.
  *
- * Two ways in: the add / edit window asks for one as soon as a product link is typed (actions.ts findProductPicture),
+ * Two ways in: the product's window asks for one as soon as a product link is typed (actions.ts findProductPicture),
  * and a look in the background (fillPictures) for the ones without, after someone opens the page, saves one or pastes
- * some: the database hands it the next few (affiliate_pictures_claim, 0136, a week between looks at a page without a
- * picture) and keeps what it found only if nothing changed meanwhile (affiliate_picture_found). The list updates by
- * itself (live updates on affiliates).
+ * some: the database hands it the next few (1.58.0: products, affiliate_product_pictures_claim, 0137; a week between
+ * looks at a page without a picture) and keeps what it found only if nothing changed meanwhile
+ * (affiliate_product_picture_found). The list updates by itself (live updates on affiliate_products).
  */
 
 const HOPS = 7;
@@ -57,13 +57,13 @@ export async function findPicture(productUrl: string, budgetMs = 12_000): Promis
 }
 
 /**
- * The background look: pictures for a team's sponsorships that have a product link and none yet (these `ids`, or
- * the next few), three pages at a time, within `budgetMs`. Ones it didn't get to are left to the next look. How many
- * pictures it found.
+ * The background look: pictures for a team's products that have a link and none yet (these product `ids`, or the next
+ * few), three pages at a time, within `budgetMs`. Ones it didn't get to are left to the next look. How many pictures
+ * it found.
  */
 export async function fillPictures(teamId: string, o: { ids?: string[]; max?: number; budgetMs?: number } = {}): Promise<number> {
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("affiliate_pictures_claim", { p_team: teamId, p_ids: o.ids?.length ? o.ids : null, p_max: o.max ?? 6 });
+  const { data, error } = await admin.rpc("affiliate_product_pictures_claim", { p_team: teamId, p_ids: o.ids?.length ? o.ids : null, p_max: o.max ?? 6 });
   if (error || !Array.isArray(data) || !data.length) return 0;
   const rows = data as { id: string; product_url: string }[];
   const until = Date.now() + (o.budgetMs ?? 40_000);
@@ -75,13 +75,13 @@ export async function fillPictures(teamId: string, o: { ids?: string[]; max?: nu
         looked.add(r.id);
         const image = await findPicture(r.product_url, Math.min(12_000, until - Date.now())).catch(() => null);
         if (!image) return;
-        const { data: kept } = await admin.rpc("affiliate_picture_found", { p_affiliate: r.id, p_product_url: r.product_url, p_image: image });
+        const { data: kept } = await admin.rpc("affiliate_product_picture_found", { p_product: r.id, p_product_url: r.product_url, p_image: image });
         if (kept === true) found++;
       })
     );
   }
   // Out of time: the rest are looked at next time, not a week from now.
   const left = rows.filter((r) => !looked.has(r.id)).map((r) => r.id);
-  if (left.length) await admin.from("affiliates").update({ image_checked_at: null }).in("id", left).eq("team_id", teamId);
+  if (left.length) await admin.from("affiliate_products").update({ image_checked_at: null }).in("id", left).eq("team_id", teamId);
   return found;
 }

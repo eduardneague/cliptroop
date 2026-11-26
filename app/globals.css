@@ -1841,7 +1841,8 @@ button.card-pick:not(:disabled):active { scale: none; }
 }
 .pick-box.is-on { background: rgb(var(--amber)); border-color: rgb(var(--amber)); }
 .pick-box.is-on svg { animation: pick-pop 0.24s var(--ease-spring) both; }
-.row-pick-box { position: absolute; left: 14px; top: 50%; margin-top: -9px; animation: pick-pop 0.22s var(--ease-spring) both; }
+/* (1.58.0: a row drawn further in, a company's product, says where its box goes: --pick-left.) */
+.row-pick-box { position: absolute; left: var(--pick-left, 14px); top: 50%; margin-top: -9px; animation: pick-pop 0.22s var(--ease-spring) both; }
 /* 1.40.0: cards too (shorts and long videos, components/ui/list-pick.tsx): the whole card is the tick box, its box in
    the corner where the card's number was; picked, the card is outlined. */
 [data-selecting] [data-card-num] { visibility: hidden; }

@@ -11,11 +11,14 @@ import { domainOf, initialOf, KIND_COLOR, KIND_HINT, KIND_LABEL, pathOf, STATUS_
  * channel: 1.57.0).
  */
 
-/** The brand's initial in its own colour (where the number is on the shorts list: picking puts a tick box there). */
-export function BrandBadge({ id, name, className = "w-7 h-7 text-[12px]" }: { id: string; name: string; className?: string }) {
+/**
+ * The brand's initial in its own colour (where the number is on the shorts list: picking puts a tick box there; not
+ * on a company's heading, `pick` false: its tick box goes before it).
+ */
+export function BrandBadge({ id, name, className = "w-7 h-7 text-[12px]", pick = true }: { id: string; name: string; className?: string; pick?: boolean }) {
   const c = colorForId(id);
   return (
-    <span data-row-num="" className={`${className} rounded-lg flex items-center justify-center font-bold flex-shrink-0 select-none`} style={{ background: c, color: onFill(c) }} aria-hidden>
+    <span data-row-num={pick ? "" : undefined} className={`${className} rounded-lg flex items-center justify-center font-bold flex-shrink-0 select-none`} style={{ background: c, color: onFill(c) }} aria-hidden>
       {initialOf(name)}
     </span>
   );
@@ -49,7 +52,11 @@ export function KindPill({ kind }: { kind: DealKind }) {
   );
 }
 
-/** A link shown as where it goes ("gravastar.com" and, quieter, the rest), opening in a new tab. */
+/**
+ * A link shown as where it goes ("gravastar.com" and, quieter, the rest), opening in a new tab. Short of room, the
+ * rest goes first, then the domain gets its "…": the ↗ always stays inside (1.58.0: a long shop name pushed it into
+ * the next column).
+ */
 export function OutLink({ url, label, className = "" }: { url: string; label?: string; className?: string }) {
   const rest = pathOf(url);
   return (
@@ -60,7 +67,8 @@ export function OutLink({ url, label, className = "" }: { url: string; label?: s
       title={url}
       className={`relative z-10 group/link inline-flex items-center gap-1 min-w-0 max-w-full text-[12.5px] hover:underline decoration-ink-faint/60 underline-offset-2 ${className}`}
     >
-      <span className="font-semibold text-ink truncate flex-shrink-0 max-w-full">{label ?? domainOf(url)}</span>
+      {/* The domain whole while the rest gives way; never wider than leaves room for the ↗ (a "…" then). */}
+      <span className="font-semibold text-ink truncate flex-shrink-0 max-w-[calc(100%-1rem)]">{label ?? domainOf(url)}</span>
       {!label && rest && <span className="text-ink-faint truncate min-w-0">{rest}</span>}
       <ExternalIcon className="w-3 h-3 flex-shrink-0 text-ink-faint opacity-0 group-hover/link:opacity-100 transition-opacity" aria-hidden />
     </a>

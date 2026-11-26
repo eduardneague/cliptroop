@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAffiliates } from "./affiliates-context";
 import { PasteDialog } from "./paste-dialog";
 
-/** New sponsorship, and Paste from a spreadsheet (1.56.0): for Masters and the people they let in. */
+/** New company (1.58.0; a sponsorship before), and Paste from a spreadsheet (1.56.0): for Masters and the people they let in. */
 export function HeaderActions() {
   const ctx = useAffiliates();
   const [pasting, setPasting] = useState(false);
@@ -26,14 +26,15 @@ export function HeaderActions() {
       </button>
       <button
         type="button"
-        onClick={() => ctx.openEditor("new")}
+        onClick={() => ctx.openCompany("new")}
+        title="A brand you work with: its code and affiliate platform, then its products"
         className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all"
       >
         <PlusIcon className="w-4 h-4" strokeWidth={2.25} />
-        <span className="max-sm:hidden">New sponsorship</span>
+        <span className="max-sm:hidden">New company</span>
         <span className="sm:hidden">New</span>
       </button>
-      {pasting && <PasteDialog teamId={ctx.teamId} kinds={ctx.newKinds} onClose={() => setPasting(false)} />}
+      {pasting && <PasteDialog teamId={ctx.teamId} kinds={ctx.newKinds} companies={ctx.companies} onClose={() => setPasting(false)} />}
     </div>
   );
 }
@@ -43,14 +44,15 @@ export function AddFirst() {
   const ctx = useAffiliates();
   if (!ctx?.manage) return null;
   return (
-    <button type="button" onClick={() => ctx.openEditor("new")} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-semibold px-4 py-2 text-[13px]">
-      <PlusIcon className="w-4 h-4" /> New sponsorship
+    <button type="button" onClick={() => ctx.openCompany("new")} className="inline-flex items-center gap-1.5 rounded-lg bg-amber text-white font-semibold px-4 py-2 text-[13px]">
+      <PlusIcon className="w-4 h-4" /> New company
     </button>
   );
 }
 
 /**
- * Finding one: the name, code, a link or a video's title. The address changes as you type (the list is the server's,
+ * Finding one: a company (its name, code, platform: all of its products then), or a product (its name, kind, code,
+ * link or a video's title). The address changes as you type (the list is the server's,
  * filtered), quietly: the list stays until the new one is there, no skeleton for each letter.
  */
 export function SearchField({ initial }: { initial: string }) {
@@ -73,7 +75,7 @@ export function SearchField({ initial }: { initial: string }) {
   };
 
   return (
-    <div className="relative flex-shrink-0 w-[11.5rem] sm:w-56">
+    <div className="relative flex-shrink-0 w-[11.5rem] sm:w-60">
       <SearchIcon className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 ${pending ? "text-amber animate-pulse" : "text-ink-faint"}`} aria-hidden />
       <input
         type="search"
@@ -89,8 +91,8 @@ export function SearchField({ initial }: { initial: string }) {
             go("");
           }
         }}
-        placeholder="Find a sponsorship"
-        aria-label="Find a sponsorship: its name, type, code, a link or a video"
+        placeholder="Find a company or product"
+        aria-label="Find a company or a product: its name, type, code, a link or a video"
         className="w-full rounded-lg border border-line/15 bg-surface pl-8 pr-8 h-9 text-[13px] outline-none focus:ring-2 focus:ring-amber placeholder:text-ink-faint/70 [&::-webkit-search-cancel-button]:hidden"
         autoComplete="off"
         spellCheck={false}
@@ -112,7 +114,7 @@ export function SearchField({ initial }: { initial: string }) {
   );
 }
 
-/** Live: a teammate's change shows here (one refresh for a burst). Only the list, never a login. */
+/** Live: a teammate's change shows here (one refresh for a burst): the companies and their products, never a login. */
 export function AffiliatesRealtime({ teamId }: { teamId: string }) {
   const router = useRouter();
   useEffect(() => {
@@ -125,6 +127,7 @@ export function AffiliatesRealtime({ teamId }: { teamId: string }) {
     const channel = supabase
       .channel(`affiliates:${teamId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "affiliates", filter: `team_id=eq.${teamId}` }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "affiliate_products", filter: `team_id=eq.${teamId}` }, refresh)
       .subscribe();
     return () => {
       if (timer) clearTimeout(timer);

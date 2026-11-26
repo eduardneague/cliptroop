@@ -7,21 +7,22 @@ import { getMembership } from "@/lib/permissions/membership";
 import { getCachedUser } from "@/lib/supabase/get-user";
 import { readAffiliatesPage } from "@/modules/affiliates/lib/queries";
 import { fillPictures } from "@/modules/affiliates/lib/pictures";
-import { readFilters } from "@/modules/affiliates/lib/rules";
-import { AFFILIATES_VIEW_COOKIE } from "@/modules/affiliates/lib/view-mode";
+import { readClosed, readFilters } from "@/modules/affiliates/lib/rules";
+import { AFFILIATES_VIEW_COOKIE, SPONSORSHIPS_CLOSED_COOKIE } from "@/modules/affiliates/lib/view-mode";
 import { AffiliatesBody } from "@/modules/affiliates/components/affiliates-body";
 
 export const metadata: Metadata = { title: "Sponsorships" };
 // The product pictures are looked for after the page is sent (below): time for a few shops' pages.
 export const maxDuration = 60;
 
-type Params = { type?: string; status?: string; video?: string; code?: string; login?: string; sort?: string; q?: string; view?: string };
+type Params = { type?: string; status?: string; checked?: string; video?: string; code?: string; login?: string; sort?: string; q?: string; view?: string };
 
 /*
- * Sponsorships (1.57.0; Affiliates in 1.56.0): the team's deals with brands, affiliates, reviews and paid ones. Read
- * as the person asking (the database decides who sees and changes what, migrations 0135, 0136); drawn by
- * AffiliatesBody (modules/affiliates/components). Ones with a product link and no picture yet get theirs from the
- * product's page after the page is sent (modules/affiliates/lib/pictures.ts); the list updates by itself.
+ * Sponsorships (1.57.0; Affiliates in 1.56.0): the team's deals with brands, affiliates, reviews and paid ones; since
+ * 1.58.0 companies with their products. Read as the person asking (the database decides who sees and changes what,
+ * migrations 0135, 0136, 0137); drawn by AffiliatesBody (modules/affiliates/components), the companies folded as this
+ * viewer left them (a cookie). Products with a link and no picture yet get theirs from the product's page after the
+ * page is sent (modules/affiliates/lib/pictures.ts); the list updates by itself.
  */
 export default async function SponsorshipsPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
@@ -54,7 +55,8 @@ export default async function SponsorshipsPage({ searchParams }: { searchParams:
       teamId={currentTeam.id}
       teamName={currentTeam.name}
       me={user.id}
-      affiliates={data.affiliates}
+      companies={data.companies}
+      closed={[...readClosed(jar.get(SPONSORSHIPS_CLOSED_COOKIE)?.value)]}
       master={data.master}
       manage={data.manage}
       vault={data.vault}

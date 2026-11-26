@@ -3,8 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/toast-provider";
 import { affiliateVideoChoices, lockLogins, openAffiliateLogin } from "@/app/(dashboard)/sponsorships/actions";
-import { SHOWN_SECONDS, type Affiliate, type DealKind, type LoginUse, type VideoChoice } from "../lib/rules";
-import { AffiliateDialog } from "./affiliate-dialog";
+import { closedKey, SHOWN_SECONDS, writeClosed, type Company, type DealKind, type LoginUse, type Product, type VideoChoice } from "../lib/rules";
+import { SPONSORSHIPS_CLOSED_COOKIE } from "../lib/view-mode";
+import { CompanyDialog } from "./affiliate-dialog";
+import { ProductDialog } from "./product-dialog";
 import { UnlockDialog } from "./unlock-dialog";
 
 /*
@@ -13,7 +15,9 @@ import { UnlockDialog } from "./unlock-dialog";
  * shown. A shown login goes after 30 seconds, when the tab is left, or when another is shown; it lives only here, in
  * memory, never in the page's own data, storage or the address. Copying one asks the server for that part only.
  * 1.57.0: the videos to link (the team's and every one on the channel) are asked for the first time the window needs
- * them, once per visit; a new one starts as the tab's kind of deal.
+ * them, once per visit; a new one starts as the tab's kind of deal. 1.58.0: two windows, the company's and the
+ * product's (a new company goes on to its first product), and which companies are folded on the list (this viewer's,
+ * kept in a cookie the page reads; a search shows them all open).
  */
 
 /** The videos to link, as the server gives them (see readVideoChoices). */
@@ -21,8 +25,16 @@ export type VideoList = { videos: VideoChoice[]; channel: boolean };
 
 export type ShownLogin = { id: string; username: string; password: string; notes: string; hideAt: number };
 
+/** A company as the product's window and the menus name it (to pick one, to move products to). */
+export type CompanyRef = Pick<Company, "id" | "name" | "code" | "percentage">;
+
+/** What the product's window opens: a product, or a new one for this company. */
+export type ProductEdit = Product | { companyId: string };
+
 type Api = {
   teamId: string;
+  /** The team's companies, each with all of its products (the list may show only some). */
+  companies: Company[];
   manage: boolean;
   master: boolean;
   /** Logins can be kept on this server. */
@@ -37,13 +49,19 @@ type Api = {
   /** The password asked for if logins are locked; true once they're open. */
   ensureUnlocked: () => Promise<boolean>;
   lock: () => Promise<void>;
-  openEditor: (a: Affiliate | "new") => void;
+  openCompany: (c: Company | "new") => void;
+  openProduct: (p: ProductEdit) => void;
   shown: ShownLogin | null;
-  show: (a: Pick<Affiliate, "id" | "name">) => Promise<void>;
+  show: (c: Pick<Company, "id" | "name">) => Promise<void>;
   hide: () => void;
-  copyPart: (a: Pick<Affiliate, "id" | "name">, part: "username" | "password" | "notes") => Promise<void>;
-  /** A row or card lit up for a moment (just added or changed). */
-  flash: (id: string) => void;
+  copyPart: (c: Pick<Company, "id" | "name">, part: "username" | "password" | "notes") => Promise<void>;
+  /** A row or card lit up for a moment (just added or changed; its company opened first). */
+  flash: (id: string, companyId?: string) => void;
+  /** Whether a company is open on the list (all are while searching). */
+  isOpen: (companyId: string) => boolean;
+  toggle: (companyId: string) => void;
+  /** These companies opened or folded at once. */
+  setOpen: (companyIds: string[], open: boolean) => void;
 };
 
 const Ctx = createContext<Api | null>(null);
@@ -82,25 +100,36 @@ const PART_NAME = { username: "Username", password: "Password", notes: "Login no
 
 export function AffiliatesProvider({
   teamId,
+  companies,
   manage,
   master,
   vault,
   kind,
   unlockedUntil: fromServer,
+  closed: closedFromServer,
+  searching,
   children,
 }: {
   teamId: string;
+  companies: Company[];
   manage: boolean;
   master: boolean;
   vault: boolean;
   /** The tab open now (a new one starts as that kind). */
   kind: DealKind | null;
   unlockedUntil: number | null;
+  /** The companies folded (closedKey of each), as the page read them from the cookie. */
+  closed: string[];
+  /** A search is on: every company shows open (a fold here lasts while it's on). */
+  searching: boolean;
   children: React.ReactNode;
 }) {
   const toast = useToast();
   const [unlockedUntil, setUnlockedUntil] = useState<number | null>(fromServer);
-  const [editing, setEditing] = useState<Affiliate | "new" | null>(null);
+  const [editing, setEditing] = useState<Company | "new" | null>(null);
+  const [product, setProduct] = useState<ProductEdit | null>(null);
+  const [closed, setClosed] = useState<Set<string>>(() => new Set(closedFromServer));
+  const [searchClosed, setSearchClosed] = useState<Set<string>>(() => new Set());
   const [asking, setAsking] = useState(false);
   const answer = useRef<((ok: boolean) => void) | null>(null);
   const [shown, setShown] = useState<ShownLogin | null>(null);
@@ -214,7 +243,7 @@ export function AffiliatesProvider({
   );
 
   const show = useCallback(
-    async (a: Pick<Affiliate, "id" | "name">) => {
+    async (a: Pick<Company, "id" | "name">) => {
       if (!(await ensureUnlocked())) return;
       const r = await open(a.id, "viewed");
       if (!r) return;
@@ -225,7 +254,7 @@ export function AffiliatesProvider({
   );
 
   const copyPart = useCallback(
-    async (a: Pick<Affiliate, "id" | "name">, part: "username" | "password" | "notes") => {
+    async (a: Pick<Company, "id" | "name">, part: "username" | "password" | "notes") => {
       // Shown already: copied from what's on screen (nothing asked again).
       if (shown?.id === a.id) {
         const v = shown[part];
@@ -248,38 +277,117 @@ export function AffiliatesProvider({
     [shown, ensureUnlocked, open, toast]
   );
 
-  const flash = useCallback((id: string) => {
-    let tries = 0;
-    const find = () => {
-      const el = document.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(id)}"]`);
-      if (el) {
-        el.classList.remove("aff-fresh");
-        void el.offsetWidth;
-        el.classList.add("aff-fresh");
-        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        window.setTimeout(() => el.classList.remove("aff-fresh"), 2600);
-      } else if (tries++ < 30) window.setTimeout(find, 100);
-    };
-    find();
-  }, []);
+  // A new search starts with everything open.
+  useEffect(() => setSearchClosed(new Set()), [searching]);
+
+  const isOpen = useCallback((companyId: string) => !(searching ? searchClosed : closed).has(closedKey(companyId)), [searching, searchClosed, closed]);
+  /** The folds changed: kept for the next visit (a cookie for this page alone, a year). A search's own aren't kept. */
+  const keep = useCallback(
+    (next: Set<string>) => {
+      if (searching) return setSearchClosed(next);
+      setClosed(next);
+      try {
+        document.cookie = `${SPONSORSHIPS_CLOSED_COOKIE}=${writeClosed(next)}; path=/sponsorships; max-age=${60 * 60 * 24 * 365}; samesite=lax${location.protocol === "https:" ? "; secure" : ""}`;
+      } catch {
+        /* folded for this visit only */
+      }
+    },
+    [searching]
+  );
+  const toggle = useCallback(
+    (companyId: string) => {
+      const next = new Set(searching ? searchClosed : closed);
+      const k = closedKey(companyId);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      keep(next);
+    },
+    [searching, searchClosed, closed, keep]
+  );
+  const setOpen = useCallback(
+    (companyIds: string[], open: boolean) => {
+      const next = new Set(searching ? searchClosed : closed);
+      for (const id of companyIds) open ? next.delete(closedKey(id)) : next.add(closedKey(id));
+      keep(next);
+    },
+    [searching, searchClosed, closed, keep]
+  );
+
+  const flash = useCallback(
+    (id: string, companyId?: string) => {
+      if (companyId && !isOpen(companyId)) setOpen([companyId], true);
+      let tries = 0;
+      const find = () => {
+        const el = document.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(id)}"]`);
+        // (On the list and showing: a folded company's products aren't, until it opens.)
+        if (el && el.getClientRects().length) {
+          el.classList.remove("aff-fresh");
+          void el.offsetWidth;
+          el.classList.add("aff-fresh");
+          el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          window.setTimeout(() => el.classList.remove("aff-fresh"), 2600);
+        } else if (tries++ < 30) window.setTimeout(find, 100);
+      };
+      find();
+    },
+    [isOpen, setOpen]
+  );
 
   const newKinds = useMemo<DealKind[]>(() => [kind ?? "affiliate"], [kind]);
   const api = useMemo<Api>(
-    () => ({ teamId, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, openEditor: setEditing, shown, show, hide: () => setShown(null), copyPart, flash }),
-    [teamId, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash]
+    () => ({
+      teamId,
+      companies,
+      manage,
+      master,
+      vault,
+      newKinds,
+      videoList,
+      loadVideos,
+      unlockedUntil,
+      now,
+      ensureUnlocked,
+      lock,
+      // (The whole company, whatever the list shows of it.)
+      openCompany: (c: Company | "new") => setEditing(c === "new" ? "new" : companies.find((x) => x.id === c.id) ?? c),
+      openProduct: setProduct,
+      shown,
+      show,
+      hide: () => setShown(null),
+      copyPart,
+      flash,
+      isOpen,
+      toggle,
+      setOpen,
+    }),
+    [teamId, companies, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash, isOpen, toggle, setOpen]
   );
 
   return (
     <Ctx.Provider value={api}>
       {children}
       {editing && manage && (
-        <AffiliateDialog
+        <CompanyDialog
           key={editing === "new" ? "new" : editing.id}
-          affiliate={editing === "new" ? null : editing}
+          company={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={(id) => {
+          onSaved={(id, fresh) => {
             setEditing(null);
             flash(id);
+            // A new company: on to its first product.
+            if (fresh) setProduct({ companyId: id });
+          }}
+        />
+      )}
+      {product && manage && (
+        <ProductDialog
+          key={"id" in product ? product.id : `new:${product.companyId}`}
+          product={"id" in product ? product : null}
+          companyId={product.companyId}
+          onClose={() => setProduct(null)}
+          onSaved={(id, companyId) => {
+            setProduct(null);
+            flash(id, companyId);
           }}
         />
       )}

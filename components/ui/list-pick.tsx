@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Leaves } from "@/components/ui/leaves";
 import { CheckIcon, ChevronDownIcon, CloseIcon, MinusIcon } from "@/components/ui/icons";
@@ -301,7 +301,8 @@ export function PickBar({
   );
 }
 
-export type BarItem = { key: string; label: string; hint?: string; icon: React.ReactNode; disabled?: boolean; onPick: () => void };
+/** One choice in a bar's menu; `section` (1.58.0): a small heading over the first of a group (one menu for several). */
+export type BarItem = { key: string; label: string; hint?: string; icon: React.ReactNode; disabled?: boolean; onPick: () => void; section?: string };
 
 /** A button in the bar with its menu above it. */
 export function BarMenu({ label, short, open, onOpen, disabled, items }: { label: string; short?: string; open: boolean; onOpen: (open: boolean) => void; disabled?: boolean; items: BarItem[] }) {
@@ -341,20 +342,26 @@ export function BarMenu({ label, short, open, onOpen, disabled, items }: { label
       </button>
       {open && (
         <Leaves>
-          <div ref={box} role="menu" aria-label={label} className="pop-menu origin-bottom absolute right-0 bottom-[calc(100%+8px)] z-10 w-60 rounded-xl border border-line/15 bg-surface shadow-2xl p-1">
-            {items.map((it) => (
-              <button
-                key={it.key}
-                type="button"
-                role="menuitem"
-                disabled={it.disabled}
-                onClick={it.onPick}
-                className="w-full flex items-center gap-2 text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-40 disabled:hover:bg-transparent"
-              >
-                {it.icon}
-                <span className="flex-1 min-w-0">{it.label}</span>
-                {it.hint && <span className="text-[11px] text-ink-faint whitespace-nowrap">{it.hint}</span>}
-              </button>
+          <div ref={box} role="menu" aria-label={label} className="pop-menu origin-bottom absolute right-0 bottom-[calc(100%+8px)] z-10 w-60 max-h-[min(30rem,70vh)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-line/15 bg-surface shadow-2xl p-1">
+            {items.map((it, i) => (
+              <Fragment key={it.key}>
+                {it.section && it.section !== items[i - 1]?.section && (
+                  <div role="presentation" className={`px-3 pt-2 pb-1 text-[10.5px] font-bold uppercase tracking-wide text-ink-faint ${i ? "mt-1 border-t border-line/10" : ""}`}>
+                    {it.section}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={it.disabled}
+                  onClick={it.onPick}
+                  className="w-full flex items-center gap-2 text-left rounded-lg px-3 py-2 text-[13px] text-ink hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  {it.icon}
+                  <span className="flex-1 min-w-0">{it.label}</span>
+                  {it.hint && <span className="text-[11px] text-ink-faint whitespace-nowrap">{it.hint}</span>}
+                </button>
+              </Fragment>
             ))}
           </div>
         </Leaves>

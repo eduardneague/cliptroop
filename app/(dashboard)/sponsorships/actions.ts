@@ -14,24 +14,32 @@ import { affiliateRights, currentSessionId, notMigrated, readVideoChoices, unloc
 import { fillPictures, findPicture } from "@/modules/affiliates/lib/pictures";
 import { openLogin as openSealed, sealLogin, UNLOCK_COOKIE, UNLOCK_PATH, unlockToken, vaultReady } from "@/modules/affiliates/lib/vault";
 import {
-  cleanAffiliate,
+  cleanCompany,
   cleanKinds,
   cleanLogin,
+  cleanPasted,
+  cleanProduct,
   isAffiliateStatus,
+  isCheckResult,
   isLoginUse,
   LIMITS,
   NO_LOGINS,
   NO_MANAGE,
   normalizeUrl,
+  pctOf,
+  planImport,
   SPONSORSHIPS_PATH,
   UNLOCK_MINUTES,
-  type AffiliateFields,
   type AffiliateStatus,
+  type CheckResult,
+  type CompanyFields,
   type DealKind,
   type LoginEvent,
   type LoginEventAction,
   type LoginFields,
   type LoginUse,
+  type PastedFields,
+  type ProductFields,
   type VideoChoice,
 } from "@/modules/affiliates/lib/rules";
 
@@ -43,6 +51,8 @@ import {
  * one down (migration 0135). A login is sealed here before it's sent to the database, and opened here only for the
  * part asked for. 1.57.0: what kind of deal, videos only on the channel, the product's picture (0136): a picture is
  * looked for on the product's page by the server (findProductPicture, and in the background after a save or a paste).
+ * 1.58.0 (0137): companies (the code and the deal, the platform, the notes, the login) with their products (the kind,
+ * status, link, picture, videos, verified or not, the company's code or their own).
  */
 
 type R<T = object> = (T & { error?: undefined }) | { error: string; locked?: true; password?: true };
@@ -68,45 +78,63 @@ async function caller(teamId: unknown) {
 /** What the database said, in words (a linked video that isn't the team's, a limit, a missing migration). */
 function problem(e: { code?: string; message?: string } | null, fallback: string): string {
   if (!e) return fallback;
+  const m = e.message ?? "";
   if (notMigrated(e)) return RUN_0135;
-  if (e.code === "42501") return /channel/i.test(e.message ?? "") ? "That video isn't on the channel any more. Pick it again." : /video|short/i.test(e.message ?? "") ? "That video isn't on this team any more. Pick it again." : NO_MANAGE;
-  if (e.code === "23514" && /1,000/.test(e.message ?? "")) return "A team can keep 1,000 sponsorships.";
-  if (e.code === "23514" && /kind of deal/i.test(e.message ?? "")) return "Pick what kind of deal it is: affiliate, review or paid.";
+  if (e.code === "42501") {
+    if (/channel/i.test(m)) return "That video isn't on the channel any more. Pick it again.";
+    if (/video|short/i.test(m)) return "That video isn't on this team any more. Pick it again.";
+    if (/company isn't here|stays in its team/i.test(m)) return "That company isn't here any more. Refresh and pick another.";
+    return NO_MANAGE;
+  }
+  if (e.code === "23514" && /1,000/.test(m)) return "A team can keep 1,000 companies.";
+  if (e.code === "23514" && /200 products/.test(m)) return "A company can keep 200 products.";
+  if (e.code === "23514" && /2,000/.test(m)) return "A team can keep 2,000 products.";
+  if (e.code === "23514" && /kind of deal/i.test(m)) return "Pick what kind of deal it is: affiliate, review or paid.";
   if (e.code === "23514" || e.code === "22001") return "Something in it is too long or isn't allowed. Check the links.";
+  if (e.code === "23503") return "That company isn't here any more. Refresh and pick another.";
   return fallback;
 }
 
 /** The picture's columns for a change ("keep": none, so they stay as they are). */
-function pictureCols(p: AffiliateFields["picture"]) {
+function pictureCols(p: ProductFields["picture"]) {
   if (p === "keep") return {};
   if (p === "off") return { image_url: null, image_source: "none", image_checked_at: null };
   if (p === "auto") return { image_url: null, image_source: null, image_checked_at: null };
   return { image_url: p.url, image_source: p.source };
 }
 
-const row = (f: AffiliateFields) => ({
+const companyRow = (f: CompanyFields) => ({ name: f.name, code: f.code, percentage: f.percentage, platform_url: f.platformUrl, notes: f.notes });
+
+const productRow = (f: ProductFields) => ({
+  affiliate_id: f.companyId,
   name: f.name,
   kinds: f.kinds,
+  status: f.status,
   product_url: f.productUrl,
+  own_code: f.ownCode,
   code: f.code,
   percentage: f.percentage,
-  status: f.status,
-  platform_url: f.platformUrl,
-  notes: f.notes,
   project_id: f.projectId,
   long_youtube_id: f.longYoutubeId,
   short_id: f.shortId,
   short_youtube_id: f.shortYoutubeId,
+  notes: f.notes,
   ...pictureCols(f.picture),
 });
 
-/** After the answer is sent: the server looks for these ones' pictures on their product pages (the list updates itself). */
+/** Ids from the browser: a few uuids (at most `max`), without repeats; else null. */
+function idsOf(ids: unknown, max = 1000): string[] | null {
+  if (!Array.isArray(ids) || !ids.length || ids.length > max || !ids.every((x) => typeof x === "string" && UUID.test(x))) return null;
+  return [...new Set(ids as string[])];
+}
+
+/** After the answer is sent: the server looks for these products' pictures on their pages (the list updates itself). */
 function lookForPictures(teamId: string, ids: string[]) {
   if (!ids.length) return;
   after(() => fillPictures(teamId, { ids, max: Math.min(ids.length, 30), budgetMs: 45_000 }).then(() => undefined, (e) => console.error("[sponsorships] pictures", e instanceof Error ? e.message : e)));
 }
 
-/** Which of these sponsorships have a login (the people let in learn it; nobody else does). */
+/** Which of these companies have a login (the people let in learn it; nobody else does). */
 async function withLogins(c: Exclude<Awaited<ReturnType<typeof caller>>, { error: string }>, ids: string[]): Promise<Set<string>> {
   const { data } = await c.supabase.rpc("affiliate_login_states", { p_team: c.teamId });
   const have = new Set(((data ?? []) as { affiliate_id: string }[]).map((s) => s.affiliate_id));
@@ -115,17 +143,20 @@ async function withLogins(c: Exclude<Awaited<ReturnType<typeof caller>>, { error
 
 export type LoginChange = { set: { username?: unknown; password?: unknown; notes?: unknown } } | { clear: true } | null;
 
+// ---- Companies (1.58.0) ---------------------------------------------------------------------------------------------------
+
 /**
- * An affiliate added (id null) or changed, and its login with it when asked: kept (sealed here first), replaced or
- * removed. Replacing or removing one that's kept needs the unlock; adding the first one doesn't (nothing is shown).
- * Everything's checked before anything is written.
+ * A company added (id null) or changed: its name, the code and the deal for its products, the affiliate platform, the
+ * notes, and its login with it when asked: kept (sealed here first), replaced or removed. Replacing or removing one
+ * that's kept needs the unlock; adding the first one doesn't (nothing is shown). Everything's checked before anything
+ * is written. Another code takes "Verified" off the products that go by it (the database: 0137).
  */
-export async function saveAffiliate(teamId: string, raw: unknown, id: string | null, login: LoginChange = null): Promise<R<{ id: string; loginAt: string | null | undefined }>> {
+export async function saveCompany(teamId: string, raw: unknown, id: string | null, login: LoginChange = null): Promise<R<{ id: string; loginAt: string | null | undefined }>> {
   const c = await caller(teamId);
   if ("error" in c) return { error: c.error as string };
   if (!c.manage) return { error: NO_MANAGE };
-  if (id !== null && (typeof id !== "string" || !UUID.test(id))) return { error: "That sponsorship isn't here any more." };
-  const checked = cleanAffiliate(raw);
+  if (id !== null && (typeof id !== "string" || !UUID.test(id))) return { error: "That company isn't here any more." };
+  const checked = cleanCompany(raw);
   if ("error" in checked) return { error: checked.error };
 
   let sealing: LoginFields | null = null;
@@ -144,14 +175,13 @@ export async function saveAffiliate(teamId: string, raw: unknown, id: string | n
 
   let savedId: string;
   if (id) {
-    const { data, error } = await c.supabase.from("affiliates").update(row(checked.ok)).eq("id", id).eq("team_id", c.teamId).select("id").maybeSingle();
+    const { data, error } = await c.supabase.from("affiliates").update(companyRow(checked.ok)).eq("id", id).eq("team_id", c.teamId).select("id").maybeSingle();
     if (error) return { error: problem(error, "Couldn't save it. Try again.") };
-    if (!data) return { error: "That sponsorship isn't here any more." };
+    if (!data) return { error: "That company isn't here any more." };
     savedId = id;
   } else {
-    if (overLimit("affiliate-add", c.user.id, 120, 60 * 60_000)) return { error: "That's a lot of sponsorships in an hour. Wait a bit, then add more." };
-    const fresh = row({ ...checked.ok, picture: checked.ok.picture === "keep" ? "auto" : checked.ok.picture });
-    const { data, error } = await c.supabase.from("affiliates").insert({ team_id: c.teamId, ...fresh }).select("id").single();
+    if (overLimit("affiliate-add", c.user.id, 120, 60 * 60_000)) return { error: "That's a lot added in an hour. Wait a bit, then add more." };
+    const { data, error } = await c.supabase.from("affiliates").insert({ team_id: c.teamId, ...companyRow(checked.ok) }).select("id").single();
     if (error || !data) return { error: problem(error, "Couldn't add it. Try again.") };
     savedId = data.id as string;
   }
@@ -163,65 +193,207 @@ export async function saveAffiliate(teamId: string, raw: unknown, id: string | n
     if (error) return { error: `Saved, but not the login: ${problem(error, "try it again.").replace(/^./, (x) => x.toLowerCase())}` };
     loginAt = sealing ? new Date().toISOString() : null;
   }
-  // A product link and no picture chosen: the server looks on the product's page once this is answered.
-  const p = checked.ok.picture;
-  if (checked.ok.productUrl && (p === "auto" || (p === "keep" && !id))) lookForPictures(c.teamId, [savedId]);
   revalidatePath(SPONSORSHIPS_PATH);
   return { id: savedId, loginAt };
 }
 
-/** Several added at once, from rows pasted out of a spreadsheet (each checked again here); their pictures looked for after. */
-export async function importAffiliates(teamId: string, rows: unknown): Promise<R<{ added: number }>> {
+/**
+ * Companies deleted for good, with their products. Ones with a login take it with them, so (as changing a login) that
+ * needs the unlock; the database writes each one down.
+ */
+export async function deleteCompanies(teamId: string, ids: unknown): Promise<R<{ deleted: string[]; failed: string[] }>> {
   const c = await caller(teamId);
   if ("error" in c) return { error: c.error as string };
   if (!c.manage) return { error: NO_MANAGE };
-  if (!Array.isArray(rows) || !rows.length) return { error: "Nothing to add." };
-  if (rows.length > LIMITS.import) return { error: `Add at most ${LIMITS.import} at once.` };
-  const clean = [];
-  for (const [i, r] of rows.entries()) {
-    const checked = cleanAffiliate({ ...(r && typeof r === "object" ? r : {}), projectId: null, shortId: null, longYoutubeId: null, shortYoutubeId: null, picture: "auto" });
-    if ("error" in checked) return { error: `Row ${i + 1}: ${checked.error}` };
-    clean.push({ team_id: c.teamId, ...row(checked.ok) });
-  }
-  if (overLimit("affiliate-import", c.user.id, 10, 60 * 60_000)) return { error: "That's a lot of pasting in an hour. Wait a bit." };
-  const { data, error } = await c.supabase.from("affiliates").insert(clean).select("id");
-  if (error) return { error: problem(error, "Couldn't add them. Try again.") };
-  lookForPictures(c.teamId, ((data ?? []) as { id: string }[]).map((d) => d.id));
+  const wanted = idsOf(ids);
+  if (!wanted) return { error: "Couldn't delete those. Refresh and try again." };
+  if ((await withLogins(c, wanted)).size && !(await unlockedFor(c.supabase, c.user.id)))
+    return { error: "It has a login: type your password first. Logins stay unlocked for 15 minutes on this device.", locked: true };
+  const { data, error } = await c.supabase.from("affiliates").delete().in("id", wanted).eq("team_id", c.teamId).select("id");
+  if (error) return { error: problem(error, "Couldn't delete it. Try again.") };
+  const gone = new Set(((data ?? []) as { id: string }[]).map((d) => d.id));
   revalidatePath(SPONSORSHIPS_PATH);
-  return { added: (data ?? []).length };
+  return { deleted: wanted.filter((id) => gone.has(id)), failed: wanted.filter((id) => !gone.has(id)) };
 }
 
-/** Some marked Active, Paused or Ended. */
-export async function setAffiliatesStatus(teamId: string, ids: unknown, status: AffiliateStatus): Promise<R<{ changed: number }>> {
+// ---- Products (1.58.0) ----------------------------------------------------------------------------------------------------
+
+/**
+ * A product added (id null) or changed: its company (another of the team's moves it), name, kind, status, link and
+ * picture, the company's code or its own, the videos, notes. A product link and no picture chosen: the server looks on
+ * the product's page once this is answered.
+ */
+export async function saveProduct(teamId: string, raw: unknown, id: string | null): Promise<R<{ id: string }>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  if (id !== null && (typeof id !== "string" || !UUID.test(id))) return { error: "That product isn't here any more." };
+  const checked = cleanProduct(raw);
+  if ("error" in checked) return { error: checked.error };
+  let savedId: string;
+  if (id) {
+    const { data, error } = await c.supabase.from("affiliate_products").update(productRow(checked.ok)).eq("id", id).eq("team_id", c.teamId).select("id").maybeSingle();
+    if (error) return { error: problem(error, "Couldn't save it. Try again.") };
+    if (!data) return { error: "That product isn't here any more." };
+    savedId = id;
+  } else {
+    if (overLimit("affiliate-add", c.user.id, 120, 60 * 60_000)) return { error: "That's a lot added in an hour. Wait a bit, then add more." };
+    const fresh = productRow({ ...checked.ok, picture: checked.ok.picture === "keep" ? "auto" : checked.ok.picture });
+    const { data, error } = await c.supabase.from("affiliate_products").insert({ team_id: c.teamId, ...fresh }).select("id").single();
+    if (error || !data) return { error: problem(error, "Couldn't add it. Try again.") };
+    savedId = data.id as string;
+  }
+  const p = checked.ok.picture;
+  if (checked.ok.productUrl && (p === "auto" || (p === "keep" && !id))) lookForPictures(c.teamId, [savedId]);
+  revalidatePath(SPONSORSHIPS_PATH);
+  return { id: savedId };
+}
+
+/** Products deleted for good (their company stays; the videos they link stay). */
+export async function deleteProducts(teamId: string, ids: unknown): Promise<R<{ deleted: string[]; failed: string[] }>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  const wanted = idsOf(ids, 2000);
+  if (!wanted) return { error: "Couldn't delete those. Refresh and try again." };
+  const { data, error } = await c.supabase.from("affiliate_products").delete().in("id", wanted).eq("team_id", c.teamId).select("id");
+  if (error) return { error: problem(error, "Couldn't delete them. Try again.") };
+  const gone = new Set(((data ?? []) as { id: string }[]).map((d) => d.id));
+  revalidatePath(SPONSORSHIPS_PATH);
+  return { deleted: wanted.filter((id) => gone.has(id)), failed: wanted.filter((id) => !gone.has(id)) };
+}
+
+/** Products moved to another of the team's companies (the database keeps them in the team). */
+export async function moveProducts(teamId: string, ids: unknown, companyId: unknown): Promise<R<{ moved: number }>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  const wanted = idsOf(ids, 2000);
+  if (!wanted || typeof companyId !== "string" || !UUID.test(companyId)) return { error: "Couldn't move those. Refresh and try again." };
+  const { data, error } = await c.supabase.from("affiliate_products").update({ affiliate_id: companyId }).in("id", wanted).eq("team_id", c.teamId).neq("affiliate_id", companyId).select("id");
+  if (error) return { error: problem(error, "Couldn't move them. Try again.") };
+  revalidatePath(SPONSORSHIPS_PATH);
+  return { moved: (data ?? []).length };
+}
+
+/** Some products marked Active, Paused or Ended. */
+export async function setProductsStatus(teamId: string, ids: unknown, status: AffiliateStatus): Promise<R<{ changed: number }>> {
   const c = await caller(teamId);
   if ("error" in c) return { error: c.error as string };
   if (!c.manage) return { error: NO_MANAGE };
   if (!isAffiliateStatus(status)) return { error: "Pick Active, Paused or Ended." };
-  if (!Array.isArray(ids) || !ids.length || ids.length > 1000 || !ids.every((x) => typeof x === "string" && UUID.test(x))) return { error: "Couldn't change those. Refresh and try again." };
-  const { data, error } = await c.supabase.from("affiliates").update({ status }).in("id", ids).eq("team_id", c.teamId).neq("status", status).select("id");
+  const wanted = idsOf(ids, 2000);
+  if (!wanted) return { error: "Couldn't change those. Refresh and try again." };
+  const { data, error } = await c.supabase.from("affiliate_products").update({ status }).in("id", wanted).eq("team_id", c.teamId).neq("status", status).select("id");
   if (error) return { error: problem(error, "Couldn't change them. Try again.") };
   revalidatePath(SPONSORSHIPS_PATH);
   return { changed: (data ?? []).length };
 }
 
-/** What kind of deal some are: these kinds exactly (one or more; the database keeps them in order). */
-export async function setAffiliatesKinds(teamId: string, ids: unknown, kinds: unknown): Promise<R<{ changed: number }>> {
+/** What kind of deal some products are: these kinds exactly (one or more; the database keeps them in order). */
+export async function setProductsKinds(teamId: string, ids: unknown, kinds: unknown): Promise<R<{ changed: number }>> {
   const c = await caller(teamId);
   if ("error" in c) return { error: c.error as string };
   if (!c.manage) return { error: NO_MANAGE };
   const clean = cleanKinds(kinds);
   if (!clean || (Array.isArray(kinds) && kinds.length !== clean.length)) return { error: "Pick what kind of deal it is: affiliate, review or paid." };
-  if (!Array.isArray(ids) || !ids.length || ids.length > 1000 || !ids.every((x) => typeof x === "string" && UUID.test(x))) return { error: "Couldn't change those. Refresh and try again." };
-  const { data, error } = await c.supabase.from("affiliates").update({ kinds: clean as DealKind[] }).in("id", ids).eq("team_id", c.teamId).select("id");
+  const wanted = idsOf(ids, 2000);
+  if (!wanted) return { error: "Couldn't change those. Refresh and try again." };
+  const { data, error } = await c.supabase.from("affiliate_products").update({ kinds: clean as DealKind[] }).in("id", wanted).eq("team_id", c.teamId).select("id");
   if (error) return { error: problem(error, "Couldn't change them. Try again.") };
   revalidatePath(SPONSORSHIPS_PATH);
   return { changed: (data ?? []).length };
 }
 
+/**
+ * Some products marked Verified (the link and the code work), Not working, or back to Not verified (null), after
+ * someone checked them (1.58.0). Who and when are the database's (0137).
+ */
+export async function setProductsChecked(teamId: string, ids: unknown, result: CheckResult | null): Promise<R<{ changed: number }>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  if (result !== null && !isCheckResult(result)) return { error: "Pick Verified, Not working or Not verified." };
+  const wanted = idsOf(ids, 2000);
+  if (!wanted) return { error: "Couldn't change those. Refresh and try again." };
+  // (A new time says "checked again" even when the mark stays the same; the database keeps its own time.)
+  const { data, error } = await c.supabase
+    .from("affiliate_products")
+    .update(result ? { checked_result: result, checked_at: new Date().toISOString() } : { checked_result: null })
+    .in("id", wanted)
+    .eq("team_id", c.teamId)
+    .select("id");
+  if (error) return { error: problem(error, "Couldn't mark them. Try again.") };
+  revalidatePath(SPONSORSHIPS_PATH);
+  return { changed: (data ?? []).length };
+}
+
+/**
+ * Rows pasted out of a spreadsheet (each checked again here), put with their companies as the window showed
+ * (planImport: one here already by its name or brand, else a new one with the code most of its rows have); their
+ * pictures looked for after. A company here already isn't changed.
+ */
+export async function importSponsorships(teamId: string, rows: unknown): Promise<R<{ companies: number; products: number }>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  if (!Array.isArray(rows) || !rows.length) return { error: "Nothing to add." };
+  if (rows.length > LIMITS.import) return { error: `Add at most ${LIMITS.import} at once.` };
+  const clean: PastedFields[] = [];
+  for (const [i, r] of rows.entries()) {
+    const checked = cleanPasted(r);
+    if ("error" in checked) return { error: `Row ${i + 1}: ${checked.error}` };
+    clean.push(checked.ok);
+  }
+  if (overLimit("affiliate-import", c.user.id, 10, 60 * 60_000)) return { error: "That's a lot of pasting in an hour. Wait a bit." };
+  const { data: here, error: readError } = await c.supabase.from("affiliates").select("id, name, code, percentage").eq("team_id", c.teamId).order("created_at").limit(1000);
+  if (readError) return { error: problem(readError, "Couldn't add them. Try again.") };
+  // (A deal kept as a bare number before is the percentage it is: the same as a pasted one.)
+  const plan = planImport(
+    clean,
+    ((here ?? []) as { id: string; name: string; code: string | null; percentage: string | null }[]).map((c) => ({ ...c, percentage: pctOf(c.percentage) }))
+  );
+  const fresh = plan.filter((g) => !g.id);
+  const made = new Map<string, string>();
+  if (fresh.length) {
+    const { data, error } = await c.supabase
+      .from("affiliates")
+      .insert(fresh.map((g) => ({ team_id: c.teamId, name: g.name, code: g.code, percentage: g.percentage, platform_url: g.platformUrl })))
+      .select("id, name");
+    if (error) return { error: problem(error, "Couldn't add them. Try again.") };
+    for (const d of (data ?? []) as { id: string; name: string }[]) made.set(d.name.trim().toLowerCase(), d.id);
+  }
+  const products = plan.flatMap((g) => {
+    const companyId = g.id ?? made.get(g.name.trim().toLowerCase());
+    if (!companyId) return [];
+    return g.products.map((p) => ({
+      team_id: c.teamId,
+      affiliate_id: companyId,
+      name: p.name,
+      kinds: p.kinds,
+      status: p.status,
+      product_url: p.productUrl,
+      own_code: p.ownCode,
+      code: p.code,
+      percentage: p.percentage,
+      notes: p.notes,
+    }));
+  });
+  const { data, error } = await c.supabase.from("affiliate_products").insert(products).select("id");
+  if (error) {
+    // Nothing half-added: the companies just made for them go too.
+    if (made.size) await c.supabase.from("affiliates").delete().in("id", [...made.values()]).eq("team_id", c.teamId);
+    return { error: problem(error, "Couldn't add them. Try again.") };
+  }
+  lookForPictures(c.teamId, ((data ?? []) as { id: string }[]).map((d) => d.id));
+  revalidatePath(SPONSORSHIPS_PATH);
+  return { companies: made.size, products: (data ?? []).length };
+}
+
 // ---- The product's picture, the videos to link (1.57.0) ----------------------------------------------------------------
 
 /**
- * The picture on a product's page, for the add / edit window to show as soon as a product link is typed. The server
+ * The picture on a product's page, for the product's window to show as soon as a product link is typed. The server
  * reads the page (public addresses only, a few redirects, time and size limits: modules/affiliates/lib/pictures.ts);
  * nothing is saved here.
  */
@@ -246,25 +418,6 @@ export async function affiliateVideoChoices(teamId: string): Promise<R<{ videos:
   if (!c.manage) return { error: NO_MANAGE };
   if (overLimit("affiliate-videos", c.user.id, 30, 60_000)) return { error: "Too many at once. Wait a moment." };
   return readVideoChoices(c.supabase, c.teamId);
-}
-
-/**
- * Some deleted for good. Ones with a login take it with them, so (as changing a login) that needs the unlock; the
- * database writes each one down.
- */
-export async function deleteAffiliates(teamId: string, ids: unknown): Promise<R<{ deleted: string[]; failed: string[] }>> {
-  const c = await caller(teamId);
-  if ("error" in c) return { error: c.error as string };
-  if (!c.manage) return { error: NO_MANAGE };
-  if (!Array.isArray(ids) || !ids.length || ids.length > 1000 || !ids.every((x) => typeof x === "string" && UUID.test(x))) return { error: "Couldn't delete those. Refresh and try again." };
-  const wanted = [...new Set(ids as string[])];
-  if ((await withLogins(c, wanted)).size && !(await unlockedFor(c.supabase, c.user.id)))
-    return { error: "Some of these have a login: type your password first. Logins stay unlocked for 15 minutes on this device.", locked: true };
-  const { data, error } = await c.supabase.from("affiliates").delete().in("id", wanted).eq("team_id", c.teamId).select("id");
-  if (error) return { error: problem(error, "Couldn't delete them. Try again.") };
-  const gone = new Set(((data ?? []) as { id: string }[]).map((d) => d.id));
-  revalidatePath(SPONSORSHIPS_PATH);
-  return { deleted: wanted.filter((id) => gone.has(id)), failed: wanted.filter((id) => !gone.has(id)) };
 }
 
 // ---- Logins ---------------------------------------------------------------------------------------------------------

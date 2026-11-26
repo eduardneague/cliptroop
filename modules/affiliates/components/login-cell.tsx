@@ -2,33 +2,25 @@
 
 import { useRef } from "react";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
-import { CopyIcon, EyeIcon, LockIcon, PlusIcon, UserIcon } from "@/components/ui/icons";
-import { SHOWN_SECONDS, type Affiliate } from "../lib/rules";
+import { CopyIcon, EyeIcon, LockIcon } from "@/components/ui/icons";
+import { SHOWN_SECONDS, type Company } from "../lib/rules";
 import { useAffiliates, type ShownLogin } from "./affiliates-context";
 
 /*
- * A sponsorship's login on the list (1.56.0), for the people let in: kept or not, and Show / copy the username / copy
- * the password. Each asks the server for just that part (after the password, if logins are locked); a shown login
- * stays 30 seconds. On a card, in it. On the table (1.57.1), one small lock beside the platform's icon: it opens beside
- * the row, with a copy button for each part; the row's ⋯ copies a part without showing it.
+ * A company's login on the list (1.56.0), for the people let in: kept or not, and Show / copy the username / copy the
+ * password. Each asks the server for just that part (after the password, if logins are locked); a shown login stays 30
+ * seconds. One small lock beside the platform's icon (1.57.1; on the company's heading since 1.58.0): it opens beside
+ * it, with a copy button for each part; the company's ⋯ copies a part without showing it.
  */
 
 const ICON_BTN = "w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-40";
 
-export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; variant: "icon" | "card" }) {
+export function LoginCell({ company }: { company: Company }) {
   const ctx = useAffiliates();
   const btn = useRef<HTMLButtonElement>(null);
-  if (!ctx?.manage) return null;
-  const a = affiliate;
+  if (!ctx?.manage || !company.login) return null;
+  const a = company;
   const shown = ctx.shown?.id === a.id ? ctx.shown : null;
-
-  if (!a.login)
-    return variant === "card" ? (
-      <button type="button" onClick={() => ctx.openEditor(a)} className="relative z-10 inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink-faint hover:text-ink">
-        <PlusIcon className="w-3.5 h-3.5" />
-        Add its login
-      </button>
-    ) : null;
 
   const popover = (
     <AnchoredMenu open={!!shown} onClose={ctx.hide} anchor={btn} width={300} align="right" role="dialog" label={`${a.name}'s login`}>
@@ -40,58 +32,28 @@ export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; varian
     </AnchoredMenu>
   );
 
-  if (variant === "icon")
-    return (
-      <>
-        <button
-          ref={btn}
-          type="button"
-          onClick={() => (shown ? ctx.hide() : void ctx.show(a))}
-          aria-expanded={!!shown}
-          aria-label={shown ? `Hide ${a.name}'s login` : `Show ${a.name}'s login`}
-          title={shown ? "Hide the login" : "The login for the affiliate platform: show it, copy it"}
-          className={`relative z-10 w-8 h-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
-            shown ? "bg-amber/15 text-amber" : "text-ink-soft hover:text-ink hover:bg-surface-2"
-          }`}
-        >
-          {shown ? <EyeIcon className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
-        </button>
-        {popover}
-      </>
-    );
-
-  const buttons = (
-    <span className="relative z-10 inline-flex items-center gap-0.5">
-      <button
-        ref={btn}
-        type="button"
-        onClick={() => (shown ? ctx.hide() : void ctx.show(a))}
-        aria-expanded={!!shown}
-        aria-label={shown ? `Hide ${a.name}'s login` : `Show ${a.name}'s login`}
-        className={`inline-flex items-center gap-1.5 rounded-lg px-2 h-8 text-[12px] font-semibold border transition-colors ${
-          shown ? "border-amber/50 bg-amber/10 text-amber" : "border-line/15 text-ink-soft hover:text-ink hover:bg-surface-2"
-        }`}
-      >
-        {shown ? <EyeIcon className="w-3.5 h-3.5" /> : <LockIcon className="w-3.5 h-3.5" />}
-        {shown ? "Hide" : "Show"}
-      </button>
-      <button type="button" onClick={() => void ctx.copyPart(a, "username")} aria-label={`Copy ${a.name}'s username`} title="Copy the username" className={ICON_BTN}>
-        <UserIcon className="w-3.5 h-3.5" />
-      </button>
-      <button type="button" onClick={() => void ctx.copyPart(a, "password")} aria-label={`Copy ${a.name}'s password`} title="Copy the password" className={ICON_BTN}>
-        <CopyIcon className="w-3.5 h-3.5" />
-      </button>
-    </span>
+  // One small lock (the copies are in the shown login, and in the company's ⋯).
+  const lock = (
+    <button
+      ref={btn}
+      type="button"
+      onClick={() => (shown ? ctx.hide() : void ctx.show(a))}
+      aria-expanded={!!shown}
+      aria-label={shown ? `Hide ${a.name}'s login` : `Show ${a.name}'s login`}
+      title={shown ? "Hide the login" : "The login for the affiliate platform: show it, copy it"}
+      className={`relative z-10 w-8 h-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+        shown ? "bg-amber/15 text-amber" : "text-ink-soft hover:text-ink hover:bg-surface-2"
+      }`}
+    >
+      {shown ? <EyeIcon className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
+    </button>
   );
 
   return (
-    <div className="relative z-10 space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[12px] text-ink-soft flex-1 min-w-0 truncate">Login</span>
-        {buttons}
-      </div>
-      {shown && <Shown login={shown} now={ctx.now} name={a.name} onCopy={(part) => void ctx.copyPart(a, part)} />}
-    </div>
+    <>
+      {lock}
+      {popover}
+    </>
   );
 }
 

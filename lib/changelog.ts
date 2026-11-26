@@ -22,6 +22,22 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.58.0",
+    date: "2026-11-26",
+    title: "Companies and their products",
+    changes: [
+      { kind: "new", text: "Sponsorships are now companies with their products. A company keeps what's the same for all of them, once: its code and deal, the affiliate platform, notes and the login. Each product has its own type, status, link, picture, videos and notes. In the table a company is a row with its products under it; in the cards, a box with its products' cards." },
+      { kind: "new", text: "A product goes by its company's code, or its own: one click in the product's window. Change the company's code once and every product that uses it follows (the table shows a company's code faint on its products, an own code as usual; a click copies either)." },
+      { kind: "new", text: "Verified or not, on each product: once you've checked its link and code, mark it Verified or Not working (its chip, or several at once). Who checked and when show when you point at it; another link or another code takes the mark off, and the company's window tells you before you change its code." },
+      { kind: "new", text: "Companies fold: click a company's row to fold or open it, or Fold all and Open all. They stay as you left them; a search shows everything it finds. While selecting, a company's tick box picks all of its products." },
+      { kind: "new", text: "Move a product to another company from its ⋯ or its window, or all of a company's products at once from the company's ⋯. A new company goes straight on to its first product." },
+      { kind: "better", text: "The sponsorships you had are put together by brand: the ones whose names start with the same word became one company named by that word, each one a product keeping its type, status, picture, videos and notes, and its own code where it wasn't the company's. Two with their own logins or different affiliate platforms stayed apart, with their names." },
+      { kind: "better", text: "Type just the number for a percentage: the % is added for you." },
+      { kind: "better", text: "Pasting from a sheet puts each row with its company (a Company column, or the name's first word), adding the companies you don't have yet. The lines copied for a description write a company's code once, under its products. The spreadsheet export has a Company column." },
+      { kind: "fixed", text: "A long shop name no longer pushes its ↗ into the next column, and the bar for several at once fits on a phone too: Copy and Export are icons, and Mark holds Verified, Type and Status." },
+    ],
+  },
+  {
     version: "1.57.1",
     date: "2026-11-26",
     title: "Room for the names",
