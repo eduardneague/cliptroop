@@ -7,14 +7,15 @@ import { SHOWN_SECONDS, type Affiliate } from "../lib/rules";
 import { useAffiliates, type ShownLogin } from "./affiliates-context";
 
 /*
- * An affiliate's login on the list (1.56.0), for the people let in: kept or not, and Show / copy the username / copy
+ * A sponsorship's login on the list (1.56.0), for the people let in: kept or not, and Show / copy the username / copy
  * the password. Each asks the server for just that part (after the password, if logins are locked); a shown login
- * stays 30 seconds. On the table it opens beside the row; on a card, in it.
+ * stays 30 seconds. On a card, in it. On the table (1.57.1), one small lock beside the platform's icon: it opens beside
+ * the row, with a copy button for each part; the row's ⋯ copies a part without showing it.
  */
 
 const ICON_BTN = "w-8 h-8 rounded-lg flex items-center justify-center text-ink-soft hover:text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-40";
 
-export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; variant: "cell" | "card" }) {
+export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; variant: "icon" | "card" }) {
   const ctx = useAffiliates();
   const btn = useRef<HTMLButtonElement>(null);
   if (!ctx?.manage) return null;
@@ -27,10 +28,36 @@ export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; varian
         <PlusIcon className="w-3.5 h-3.5" />
         Add its login
       </button>
-    ) : (
-      <span className="text-[12px] text-ink-faint" aria-label="No login kept">
-        —
-      </span>
+    ) : null;
+
+  const popover = (
+    <AnchoredMenu open={!!shown} onClose={ctx.hide} anchor={btn} width={300} align="right" role="dialog" label={`${a.name}'s login`}>
+      {shown && (
+        <div className="p-3">
+          <Shown login={shown} now={ctx.now} name={a.name} onCopy={(part) => void ctx.copyPart(a, part)} />
+        </div>
+      )}
+    </AnchoredMenu>
+  );
+
+  if (variant === "icon")
+    return (
+      <>
+        <button
+          ref={btn}
+          type="button"
+          onClick={() => (shown ? ctx.hide() : void ctx.show(a))}
+          aria-expanded={!!shown}
+          aria-label={shown ? `Hide ${a.name}'s login` : `Show ${a.name}'s login`}
+          title={shown ? "Hide the login" : "The login for the affiliate platform: show it, copy it"}
+          className={`relative z-10 w-8 h-8 rounded-lg flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber ${
+            shown ? "bg-amber/15 text-amber" : "text-ink-soft hover:text-ink hover:bg-surface-2"
+          }`}
+        >
+          {shown ? <EyeIcon className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
+        </button>
+        {popover}
+      </>
     );
 
   const buttons = (
@@ -57,28 +84,14 @@ export function LoginCell({ affiliate, variant }: { affiliate: Affiliate; varian
     </span>
   );
 
-  if (variant === "card")
-    return (
-      <div className="relative z-10 space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-ink-soft flex-1 min-w-0 truncate">Login</span>
-          {buttons}
-        </div>
-        {shown && <Shown login={shown} now={ctx.now} name={a.name} onCopy={(part) => void ctx.copyPart(a, part)} />}
-      </div>
-    );
-
   return (
-    <>
-      {buttons}
-      <AnchoredMenu open={!!shown} onClose={ctx.hide} anchor={btn} width={300} align="right" role="dialog" label={`${a.name}'s login`}>
-        {shown && (
-          <div className="p-3">
-            <Shown login={shown} now={ctx.now} name={a.name} onCopy={(part) => void ctx.copyPart(a, part)} />
-          </div>
-        )}
-      </AnchoredMenu>
-    </>
+    <div className="relative z-10 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] text-ink-soft flex-1 min-w-0 truncate">Login</span>
+        {buttons}
+      </div>
+      {shown && <Shown login={shown} now={ctx.now} name={a.name} onCopy={(part) => void ctx.copyPart(a, part)} />}
+    </div>
   );
 }
 

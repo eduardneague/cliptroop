@@ -5,16 +5,16 @@ import { TABLE_COLS } from "../lib/table-cols";
 import { KindPill, OutLink, StatusPill, VideoChip } from "./bits";
 import { BrandMark } from "./brand-mark";
 import { CopyChip } from "./copy-chip";
-import { LoginCell } from "./login-cell";
 import { OpenEditor } from "./open-editor";
+import { PlatformLinks } from "./platform-links";
 import { AffiliateMenu } from "./row-menu";
 
 /*
  * The sponsorships as a table (1.56.0), drawn on the server; the parts that do something are the browser's. Columns
  * come in as there's room: the name with its kind (1.57.0; not the tab's own, it goes without saying) and status (a
- * phone shows the rest under it), the code and the percentage, the video, the product link, the login (for the people
- * who manage sponsorships), the affiliate platform. The product's picture (1.57.0) or the brand's initial first;
- * picking several puts a tick box there.
+ * phone shows the rest under it), the code and the percentage, the video, the product link (its domain: 1.57.1), and
+ * the affiliate platform with its login as two small icons (1.57.1: the room went to the name). The product's picture
+ * (1.57.0) or the brand's initial first; picking several puts a tick box there.
  */
 export function AffiliatesTable({ list, manage, tab = null }: { list: Affiliate[]; manage: boolean; tab?: DealKind | null }) {
   const cols = manage ? TABLE_COLS.manage : TABLE_COLS.view;
@@ -26,9 +26,8 @@ export function AffiliatesTable({ list, manage, tab = null }: { list: Affiliate[
         <span>Code</span>
         <span>Percentage</span>
         <span className="hidden lg:block">Video</span>
-        <span className="hidden xl:block">Product link</span>
-        {manage && <span className="hidden xl:block">Login</span>}
-        <span className="hidden 2xl:block">Platform</span>
+        <span className="hidden xl:block">Product</span>
+        <span className="hidden xl:block">Platform</span>
         <span />
       </div>
       {chunks(list, LIST_CHUNK).map((group, g) => (
@@ -89,14 +88,11 @@ export function AffiliatesTable({ list, manage, tab = null }: { list: Affiliate[
                 {a.short && <VideoChip video={a.short} wide />}
                 {!a.long && !a.short && <span className="text-[12px] text-ink-faint">—</span>}
               </div>
-              <div className="hidden xl:flex min-w-0">{a.productUrl ? <OutLink url={a.productUrl} /> : <span className="text-[12px] text-ink-faint">—</span>}</div>
-              {manage && (
-                // One login cell: under the name on smaller screens, its own column on wide ones.
-                <div className={`col-start-2 row-start-2 xl:col-start-auto xl:row-start-auto min-w-0 flex items-center ${a.login ? "" : "max-xl:hidden"}`}>
-                  <LoginCell affiliate={a} variant="cell" />
-                </div>
-              )}
-              <div className="hidden 2xl:flex min-w-0">{a.platformUrl ? <OutLink url={a.platformUrl} label={domainOf(a.platformUrl)} /> : <span className="text-[12px] text-ink-faint">—</span>}</div>
+              <div className="hidden xl:flex min-w-0">{a.productUrl ? <OutLink url={a.productUrl} label={domainOf(a.productUrl)} className="!text-[12px]" /> : <span className="text-[12px] text-ink-faint">—</span>}</div>
+              {/* The platform and its login, as icons: under the name on smaller screens, their own narrow column on wide ones. */}
+              <div className={`col-start-2 row-start-2 xl:col-start-auto xl:row-start-auto min-w-0 flex items-center ${a.platformUrl || (manage && a.login) ? "" : "max-xl:hidden"}`}>
+                <PlatformLinks affiliate={a} />
+              </div>
               <div className="flex items-center justify-end self-start md:self-center">
                 <AffiliateMenu affiliate={a} />
               </div>

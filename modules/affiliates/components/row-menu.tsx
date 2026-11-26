@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { AnchoredMenu } from "@/components/ui/anchored-menu";
 import { useConfirm } from "@/components/ui/confirm-provider";
 import { useToast } from "@/components/ui/toast-provider";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, EditIcon, ExternalIcon, MoreIcon, TrashIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, EditIcon, ExternalIcon, LockIcon, MoreIcon, TrashIcon, UserIcon } from "@/components/ui/icons";
 import { itemsAway } from "@/lib/remove-animation";
 import { deleteAffiliates, setAffiliatesKinds, setAffiliatesStatus } from "@/app/(dashboard)/sponsorships/actions";
 import { AFFILIATE_STATUSES, DEAL_KINDS, descriptionText, KIND_COLOR, KIND_HINT, KIND_LABEL, kindsText, STATUS_COLOR, STATUS_LABEL, type Affiliate, type AffiliateStatus, type DealKind } from "../lib/rules";
@@ -12,7 +12,8 @@ import { copyWhenReady, useAffiliates } from "./affiliates-context";
 
 /**
  * ⋯ on a sponsorship (1.56.0). Everyone: copy its code, its link, or the lines for a video's description; open the
- * product or the affiliate platform. Masters and the people they let in: edit it, its kind (1.57.0: tick or untick
+ * product or the affiliate platform. Masters and the people they let in: its login, shown or a part copied without
+ * showing it (1.57.1: the table keeps only a small lock for it); edit it, its kind (1.57.0: tick or untick
  * Affiliate, Review, Paid; at least one stays), mark it Active, Paused or Ended, and delete it (asked first; one with a
  * login needs the password, as changing its login does).
  */
@@ -205,6 +206,47 @@ export function AffiliateMenu({ affiliate, className = "" }: { affiliate: Affili
                 <ExternalIcon className="w-3.5 h-3.5 text-ink-soft" />
                 Open the affiliate platform
               </a>
+            )}
+            {manage && a.login && (
+              <>
+                <div className="my-1 h-px bg-line/10" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${item} text-ink`}
+                  onClick={() => {
+                    setOpen(false);
+                    void ctx?.show(a);
+                  }}
+                >
+                  <LockIcon className="w-3.5 h-3.5 text-ink-soft" />
+                  Show the login
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${item} text-ink`}
+                  onClick={() => {
+                    setOpen(false);
+                    void ctx?.copyPart(a, "username");
+                  }}
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-ink-soft" />
+                  Copy the username
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`${item} text-ink`}
+                  onClick={() => {
+                    setOpen(false);
+                    void ctx?.copyPart(a, "password");
+                  }}
+                >
+                  <CopyIcon className="w-3.5 h-3.5 text-ink-soft" />
+                  Copy the password
+                </button>
+              </>
             )}
             {manage && (
               <>

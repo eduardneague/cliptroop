@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.57.1",
+    date: "2026-11-26",
+    title: "Room for the names",
+    changes: [
+      { kind: "better", text: "Sponsorships' table gives the names the room: the product link shows its site only (the whole link when you point at it), and the affiliate platform and its login are two small icons in one narrow column: a chart opens the platform, a lock shows the login beside the row." },
+      { kind: "better", text: "A row's ⋯ has the login too, for the people who manage sponsorships: show it, or copy the username or the password without showing it." },
+    ],
+  },
+  {
     version: "1.57.0",
     date: "2026-11-26",
     title: "Sponsorships",

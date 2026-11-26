@@ -2,8 +2,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TABLE_COLS } from "../lib/table-cols";
 
 /*
- * The affiliates list while it loads (1.56.0): the table or the cards, whichever is on its way (switching views, a
- * filter, the page's own loading screen), with the real columns and sizes (the login column's too).
+ * The sponsorships list while it loads (1.56.0): the table or the cards, whichever is on its way (switching views, a
+ * filter, the page's own loading screen), with the real columns and sizes (1.57.1: the platform's narrow one too).
  */
 
 export function AffiliatesTableSkeleton({ count = 8 }: { count?: number }) {
@@ -15,9 +15,8 @@ export function AffiliatesTableSkeleton({ count = 8 }: { count?: number }) {
         <span>Code</span>
         <span>Percentage</span>
         <span className="hidden lg:block">Video</span>
-        <span className="hidden xl:block">Product link</span>
-        <span className="hidden xl:block">Login</span>
-        <span className="hidden 2xl:block">Platform</span>
+        <span className="hidden xl:block">Product</span>
+        <span className="hidden xl:block">Platform</span>
         <span />
       </div>
       {Array.from({ length: count }, (_, i) => (
@@ -30,9 +29,8 @@ export function AffiliatesTableSkeleton({ count = 8 }: { count?: number }) {
           <Skeleton className="hidden md:block h-7 w-24 rounded-md" />
           <Skeleton className="hidden md:block h-3.5 w-10" />
           <Skeleton className="hidden lg:block h-6 w-40 rounded-md" />
-          <Skeleton className="hidden xl:block h-3 w-36" />
-          <Skeleton className="hidden xl:block h-8 w-36 rounded-lg" />
-          <Skeleton className="hidden 2xl:block h-3 w-24" />
+          <Skeleton className="hidden xl:block h-3 w-24" />
+          <Skeleton className="hidden xl:block h-7 w-14 rounded-lg" />
           <Skeleton className="h-8 w-8 rounded-lg justify-self-end" />
         </div>
       ))}

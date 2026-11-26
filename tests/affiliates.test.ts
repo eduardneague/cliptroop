@@ -352,6 +352,12 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(/referrerPolicy="no-referrer"/.test(mark) && /data-row-num=""/.test(mark) && /onError=\{\(\) => setFailed\(url\)\}/.test(mark), "the picture: asked for without saying where from; picking still puts the tick box there; the initial if it doesn't open");
   ok(/findProductPicture\(ctx\.teamId, url\)/.test(dialog) && /<VideoField kind="long"/.test(dialog) && /youtubeIdOf\(raw\)/.test(dialog), "the window: the picture as soon as a link is typed; videos found by title, number or YouTube link");
   ok(/<RowPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliates-table.tsx")) && /<CardPick id=\{a\.id\}/.test(read("modules/affiliates/components/affiliate-cards.tsx")), "rows and cards are picked");
+  // 1.57.1: the name gets the room: the product is its domain; the platform and its login, two small icons.
+  const table = read("modules/affiliates/components/affiliates-table.tsx");
+  ok(/<OutLink url=\{a\.productUrl\} label=\{domainOf\(a\.productUrl\)\}/.test(table) && /<PlatformLinks affiliate=\{a\} \/>/.test(table) && !/<LoginCell/.test(table) && (table.match(/<PlatformLinks /g) ?? []).length === 1, "the table: the product's domain, one place for the platform and login icons (one login popover per row)");
+  ok(/_minmax\(0,9\.5rem\)_4\.5rem_44px\]/.test(read("modules/affiliates/lib/table-cols.ts")), "…in a narrow column");
+  const menu = read("modules/affiliates/components/row-menu.tsx");
+  ok(/\{manage && a\.login && \(/.test(menu) && /ctx\?\.copyPart\(a, "password"\)/.test(menu) && /ctx\?\.show\(a\)/.test(menu), "the login's show and copy, in ⋯ for the people let in");
 
   // The page, in the app.
   const nav = read("lib/nav-items.ts");
