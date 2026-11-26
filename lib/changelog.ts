@@ -22,6 +22,15 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.60.1",
+    date: "2026-11-26",
+    title: "Full-width companies, products set in",
+    changes: [
+      { kind: "better", text: "In the cards, every company is a box as wide as the list, one under another, with its products' cards from the left (up to four to a row). Its heading fits on one line: the name, then the code, the deal and where the money goes, with the platform, the login, + and ⋯ at the end." },
+      { kind: "better", text: "In the table, a company's products start further in than the company, with a thin line from its picture down to theirs, so you can see at a glance which products belong to which company." },
+    ],
+  },
+  {
     version: "1.60.0",
     date: "2026-11-26",
     title: "Where the money goes, and company pictures",

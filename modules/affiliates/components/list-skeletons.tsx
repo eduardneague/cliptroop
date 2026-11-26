@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { PRODUCT_INDENT, TABLE_COLS } from "../lib/table-cols";
+import { PRODUCT_INDENT, PRODUCT_TREE, TABLE_COLS } from "../lib/table-cols";
 
 /*
  * The sponsorships list while it loads (1.56.0): the table or the cards, whichever is on its way (switching views, a
@@ -41,7 +41,7 @@ export function AffiliatesTableSkeleton({ count = 4 }: { count?: number }) {
         <div key={c} className={c ? "border-t border-line/10" : ""}>
           <HeadSkeleton i={c} className="px-3 py-2 bg-surface-2/60" />
           {Array.from({ length: PRODUCTS[c % PRODUCTS.length] }, (_, i) => (
-            <div key={i} className={`grid grid-cols-[36px_minmax(0,1fr)_auto] ${TABLE_COLS.product} ${PRODUCT_INDENT} gap-x-3 items-center pr-3 py-3 border-t border-line/5`}>
+            <div key={i} className={`grid grid-cols-[36px_minmax(0,1fr)_auto] ${TABLE_COLS.product} ${PRODUCT_TREE} gap-x-3 items-center pr-3 py-3 border-t border-line/5`}>
               <Skeleton className="w-8 h-8 rounded-lg justify-self-center" />
               <div className="min-w-0 space-y-1.5">
                 <Skeleton className={`h-3.5 ${["w-2/5", "w-1/3", "w-1/2", "w-[45%]"][(c + i) % 4]}`} />

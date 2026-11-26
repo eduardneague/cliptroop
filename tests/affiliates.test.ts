@@ -577,6 +577,28 @@ function walk(dir: string, out: string[] = []): string[] {
   const companyRow = head.slice(head.indexOf("export function CompanyRow"), head.indexOf("export function CompanyHead"));
   ok((companyRow.match(/<PlatformLinks /g) ?? []).length === 1 && /md:col-start-3 xl:col-start-7/.test(companyRow), "…they're the company's, once (one login popover), in a column of their own");
   ok(/2xl:grid-cols-\[48px_minmax\(0,1fr\)_7rem_minmax\(0,9\.5rem\)_6rem_minmax\(0,15rem\)_minmax\(0,10rem\)_44px\]/.test(read("modules/affiliates/lib/table-cols.ts")), "a product's columns: Verified right after the name; no platform column (the company's row has it)");
+  // 1.60.1: the table's products start further in, a line from their company's picture to theirs; the cards' boxes are the
+  // list's whole width. Where the tick box and the lines go, worked out from the columns (a picture column is 36 px on a
+  // phone, 40 md, 44 xl, 48 2xl; a picture 32 px in its middle; the tick box 18 px over its middle).
+  const cols = await import("../modules/affiliates/lib/table-cols");
+  const px = (cls: string, re: RegExp) => Number(cls.match(re)?.[1]);
+  const at = { base: 36, md: 40, xl: 44, "2xl": 48 } as const;
+  const padOf = (cls: string) => ({ base: px(cls, /(?:^| )pl-(\d+)(?: |$)/) * 4 || px(cls, /(?:^| )pl-\[(\d+)px\]/), md: px(cls, /md:pl-(\d+)(?: |$)/) * 4 || px(cls, /md:pl-\[(\d+)px\]/) });
+  const pickOf = (cls: string) => ({ base: px(cls, /(?:^| )\[--pick-left:(\d+)px\]/), md: px(cls, /md:\[--pick-left:(\d+)px\]/), xl: px(cls, /xl:\[--pick-left:(\d+)px\]/), "2xl": px(cls, /2xl:\[--pick-left:(\d+)px\]/) });
+  const headPad = padOf(cols.PRODUCT_INDENT);
+  const treePad = padOf(cols.PRODUCT_TREE);
+  ok(treePad.base - headPad.base === 24 && treePad.md - headPad.md === 32, `the products: 24 px further in on a phone, 32 px from md (${JSON.stringify({ headPad, treePad })})`);
+  const tp = pickOf(cols.PRODUCT_TREE);
+  ok(tp.base === treePad.base + at.base / 2 - 9 && tp.md === treePad.md + at.md / 2 - 9 && tp.xl === treePad.md + at.xl / 2 - 9 && tp["2xl"] === treePad.md + at["2xl"] / 2 - 9, `…their tick box still over their picture (${JSON.stringify(tp)})`);
+  const lineAt = { base: px(cols.TREE_LINES, /(?:^| )before:left-\[(\d+)px\]/), md: px(cols.TREE_LINES, /md:before:left-\[(\d+)px\]/), xl: px(cols.TREE_LINES, /xl:before:left-\[(\d+)px\]/), "2xl": px(cols.TREE_LINES, /2xl:before:left-\[(\d+)px\]/) };
+  ok(lineAt.base === headPad.base + at.base / 2 && lineAt.md === headPad.md + at.md / 2 && lineAt.xl === headPad.md + at.xl / 2 && lineAt["2xl"] === headPad.md + at["2xl"] / 2, `…the line down the middle of the company's picture (${JSON.stringify(lineAt)})`);
+  ok(lineAt.base + 8 === treePad.base + (at.base - 32) / 2 && lineAt.md + 16 === treePad.md + (at.md - 32) / 2 && lineAt.xl + 16 === treePad.md + (at.xl - 32) / 2 && lineAt["2xl"] + 16 === treePad.md + (at["2xl"] - 32) / 2 && /after:w-2 /.test(cols.TREE_LINES) && /md:after:w-4 /.test(cols.TREE_LINES), "…and a short one reaching each product's picture");
+  ok(/last:before:h-\[28px\] md:last:before:h-1\/2/.test(cols.TREE_LINES), "…the last one ending at it");
+  const tableSrc = read("modules/affiliates/components/affiliates-table.tsx");
+  ok(/\$\{TABLE_COLS\.product\} \$\{PRODUCT_TREE\} \$\{TREE_LINES\}/.test(tableSrc) && /hidden md:grid \$\{TABLE_COLS\.product\} \$\{PRODUCT_INDENT\}/.test(tableSrc), "the table: the products in (with their lines), the headings and companies where they were");
+  const cardsSrc = read("modules/affiliates/components/affiliate-cards.tsx");
+  ok(!/SPAN|col-span/.test(cardsSrc) && /open=""/.test(cardsSrc) && /const INNER = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";/.test(cardsSrc) && /list-chunk-cards motion-stagger flex flex-col gap-4/.test(cardsSrc), "the cards: each company's box the list's whole width, its cards in up to four columns");
+  ok(/sm:order-last/.test(coHead) && /order-last sm:order-none basis-full sm:basis-0 sm:flex-1/.test(coHead), "…its heading one line from sm (a phone: the deal under the name)");
   ok((table.match(/<VerifyChip /g) ?? []).length === 2 && /<VerifyChip product=\{p\} \/>/.test(read("modules/affiliates/components/affiliate-cards.tsx")), "verified or not on each product: its column (and the icon by the name on a phone), and on the cards");
   ok(/<FoldRow/.test(head) && /export function FoldRow/.test(read("modules/affiliates/components/company-fold.tsx")) && /closest\(OWN\)/.test(read("modules/affiliates/components/company-fold.tsx")), "a company's heading folds it (not its own controls)");
   ok(/document\.cookie = `\$\{SPONSORSHIPS_CLOSED_COOKIE\}=\$\{writeClosed\(next\)\}; path=\/sponsorships;/.test(read("modules/affiliates/components/affiliates-context.tsx")) && /readClosed\(jar\.get\(SPONSORSHIPS_CLOSED_COOKIE\)\?\.value\)/.test(read("app/(dashboard)/sponsorships/page.tsx")), "…kept for the next visit (the page reads it)");

@@ -1,7 +1,7 @@
 import { RowPick } from "@/components/ui/list-pick";
 import { chunks } from "@/lib/chunks";
 import { dealOf, domainOf, type DealKind, type Product, type ShownCompany } from "../lib/rules";
-import { PRODUCT_INDENT, TABLE_COLS } from "../lib/table-cols";
+import { PRODUCT_INDENT, PRODUCT_TREE, TABLE_COLS, TREE_LINES } from "../lib/table-cols";
 import { KindPill, OutLink, StatusPill, VideoChip } from "./bits";
 import { BrandMark } from "./brand-mark";
 import { CompanyRow, ProductCode, ProductDeal } from "./company-head";
@@ -16,7 +16,8 @@ import { VerifyChip } from "./verify-chip";
  * columns over its products' own) that folds, its products under it. A product's columns come in as there's room: the name with its kind (not the tab's own, it goes without saying)
  * and status (a phone shows the rest under it), verified or not (a phone: its icon by the name), the code it goes by
  * (its own, or faint the company's) and the deal, the videos, the product link (its domain). Its picture (or initial)
- * first; picking several puts a tick box there.
+ * first; picking several puts a tick box there. 1.60.1: the products start further in than their company, with a line
+ * from its picture down to theirs (table-cols.ts PRODUCT_TREE, TREE_LINES).
  */
 
 /** Companies per group: a group off screen isn't laid out or painted until it comes near (globals.css .list-chunk). */
@@ -44,7 +45,7 @@ export function AffiliatesTable({ companies, manage, tab = null }: { companies: 
                 {c.products.length ? (
                   c.products.map((p) => <ProductRow key={p.id} product={p} company={c} tab={tab} />)
                 ) : (
-                  <div className={`${PRODUCT_INDENT} pr-3 py-2.5 border-t border-line/5 flex items-center text-[12.5px] text-ink-faint`}>
+                  <div className={`relative ${PRODUCT_TREE} ${TREE_LINES} max-md:after:top-1/2 max-md:last:before:h-1/2 pr-3 py-2.5 border-t border-line/5 flex items-center text-[12.5px] text-ink-faint`}>
                     {manage ? <AddProduct companyId={c.id} name={c.name} wide /> : <span>No products yet.</span>}
                   </div>
                 )}
@@ -66,7 +67,7 @@ function ProductRow({ product: p, company: c, tab }: { product: Product; company
   return (
     <div
       data-item-id={p.id}
-      className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] ${TABLE_COLS.product} ${PRODUCT_INDENT} gap-x-3 gap-y-1.5 pr-3 py-2.5 items-center border-t border-line/5 hover:bg-surface-2/70 transition-colors ${p.status === "ended" ? "opacity-70" : ""}`}
+      className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] ${TABLE_COLS.product} ${PRODUCT_TREE} ${TREE_LINES} gap-x-3 gap-y-1.5 pr-3 py-2.5 items-center border-t border-line/5 hover:bg-surface-2/70 transition-colors ${p.status === "ended" ? "opacity-70" : ""}`}
     >
       <span className="self-start md:self-center pt-0.5 md:pt-0 flex justify-center">
         <BrandMark item={p} className="w-8 h-8 text-[12px]" px={32} />

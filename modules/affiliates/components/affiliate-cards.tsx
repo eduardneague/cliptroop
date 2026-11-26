@@ -10,46 +10,44 @@ import { ProductMenu } from "./row-menu";
 import { VerifyChip } from "./verify-chip";
 
 /*
- * The sponsorships as cards (1.56.0). 1.58.0: each company a box as wide as its products need (up to four cards; one
- * when folded, so the boxes sit side by side), its heading (company-head.tsx: the code, the platform and the login,
- * once) folding it, its products' cards in it: the product's picture (1.57.0) or initial, the
+ * The sponsorships as cards (1.56.0). 1.58.0: each company a box, its heading (company-head.tsx: the code, the platform
+ * and the login, once) folding it, its products' cards in it. 1.60.1 (the owner: "make this view better, make each as
+ * long as the entire thing"): every box the list's whole width, one under another, its heading one line (the name, then
+ * the code, the deal and where its money goes, the platform and the login at the end), its cards in up to four columns
+ * from the left. A product's card: its picture (1.57.0) or initial, the
  * name, verified or not, its kind (not the tab's own) and status, the product link, the code it goes by (its own; the
  * company's faint, a click copies either) and the deal, the video made about it (its thumbnail when the long video
  * has one). Picking several puts a tick box on the picture.
  */
 
 /** Companies per group (a group off screen isn't drawn until it comes near: globals.css .list-chunk-cards). */
-const COMPANIES = 12;
-/** A company's box, as many card columns wide as it has products (up to 4), and its cards' columns in it. */
-const SPAN = ["", "", "sm:col-span-2", "sm:col-span-2 lg:col-span-3", "sm:col-span-2 lg:col-span-3 xl:col-span-4"];
-const INNER = ["grid-cols-1", "grid-cols-1", "grid-cols-1 sm:grid-cols-2", "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3", "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"];
+const COMPANIES = 8;
+/** A box's cards: one column on a phone, up to four on a wide screen, from the left whatever their number. */
+const INNER = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 
 export function AffiliateCards({ companies, manage, tab = null }: { companies: ShownCompany[]; manage: boolean; tab?: DealKind | null }) {
   return (
     <div className="flex flex-col gap-4">
       {chunks(companies, COMPANIES).map((group, g) => (
-        <div key={g} className="list-chunk-cards motion-stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-          {group.map((c) => {
-            const n = Math.min(Math.max(c.products.length, 1), 4);
-            return (
-              <FoldBox key={c.id} id={c.id} open={SPAN[n]} label={c.name} className="rounded-2xl border-2 border-line/10 bg-surface overflow-hidden">
-                <CompanyHead company={c} manage={manage} className="px-3 sm:px-4 py-2.5 hover:bg-surface-2/60 transition-colors" />
-                <FoldBody id={c.id}>
-                  <div className="border-t border-line/10 p-3">
-                    {c.products.length ? (
-                      <div className={`grid ${INNER[n]} gap-3`}>
-                        {c.products.map((p) => (
-                          <ProductCard key={p.id} product={p} company={c} tab={tab} />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center text-[12.5px] text-ink-faint">{manage ? <AddProduct companyId={c.id} name={c.name} wide /> : <span className="py-1">No products yet.</span>}</div>
-                    )}
-                  </div>
-                </FoldBody>
-              </FoldBox>
-            );
-          })}
+        <div key={g} className="list-chunk-cards motion-stagger flex flex-col gap-4">
+          {group.map((c) => (
+            <FoldBox key={c.id} id={c.id} open="" label={c.name} className="rounded-2xl border-2 border-line/10 bg-surface overflow-hidden">
+              <CompanyHead company={c} manage={manage} className="px-3 sm:px-4 py-2.5 hover:bg-surface-2/60 transition-colors" />
+              <FoldBody id={c.id}>
+                <div className="border-t border-line/10 p-3 sm:p-4 bg-surface-2/30">
+                  {c.products.length ? (
+                    <div className={`grid ${INNER} gap-3`}>
+                      {c.products.map((p) => (
+                        <ProductCard key={p.id} product={p} company={c} tab={tab} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-[12.5px] text-ink-faint">{manage ? <AddProduct companyId={c.id} name={c.name} wide /> : <span className="py-1">No products yet.</span>}</div>
+                  )}
+                </div>
+              </FoldBody>
+            </FoldBox>
+          ))}
         </div>
       ))}
     </div>

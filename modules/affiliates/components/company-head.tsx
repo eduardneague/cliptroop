@@ -14,8 +14,8 @@ import { CompanyMenu } from "./row-menu";
  * ⋯. A click on it (not on its controls) folds it (company-fold.tsx); while picking, a tick box picks all of its
  * products here. On the table (CompanyRow) the code, the deal and the platform sit in the products' own columns, over
  * theirs; over the cards (CompanyHead), in a row. 1.60.0: its picture where its initial was (CompanyMark), and where its
- * money goes right after the deal (PayoutChip: the icon; its name too in the table's wide videos' column). Short of
- * room (a phone, a box one card wide), they wrap rather than lose the deal.
+ * money goes right after the deal (PayoutChip: the icon; its name too where there's room: the table's videos' column,
+ * a wide box). Short of room (a phone), they wrap rather than lose the deal.
  */
 
 const countOf = (c: ShownCompany) => {
@@ -95,35 +95,37 @@ export function CompanyRow({ company: c, manage }: { company: ShownCompany; mana
 export function CompanyHead({ company: c, manage, className = "" }: { company: ShownCompany; manage: boolean; className?: string }) {
   const shown = c.products.length;
   const deal = !!(c.code || c.percentage || c.platformUrl || c.payout || manage);
+  // 1.60.1: one line from sm (the box is the list's whole width): the name, then (after a rule) the code, the deal and
+  // where its money goes, the platform and the login at the end, then + and ⋯. A phone: the deal on a line of its own.
   return (
     <FoldRow id={c.id} className={`relative ${className}`}>
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
         <GroupPick ids={c.products.map((p) => p.id)} label={`All of ${c.name}'s products here`} />
         <FoldButton id={c.id} name={c.name} count={shown} className="-ml-1" />
         <CompanyMark company={{ id: c.id, name: c.name, picture: c.picture }} className="w-8 h-8 text-[13px]" px={32} />
-        <div className="flex-1 min-w-0 flex items-baseline gap-2">
+        <div className="flex-1 sm:flex-initial sm:max-w-[45%] min-w-0 flex items-baseline gap-2">
           <h2 className="min-w-0 truncate text-[14.5px] font-bold text-ink">{c.name}</h2>
           <span className="min-w-0 truncate shrink-[100] text-[12px] text-ink-faint tabular-nums">{countOf(c)}</span>
         </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0 -mr-1.5">
+        <div className="flex items-center gap-0.5 flex-shrink-0 -mr-1.5 sm:order-last">
           {manage && <AddProduct companyId={c.id} name={c.name} label="sr-only" />}
           <CompanyMenu company={c} />
         </div>
-      </div>
-      {deal && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0 pl-[3.75rem]">
-          {c.code && <CopyChip text={c.code} title={`${c.name}'s code, for its products`} className="max-w-[11rem]" />}
-          {c.percentage && (
-            <span className="text-[13px] font-bold text-ink whitespace-nowrap truncate min-w-0" title={c.percentage}>
-              {c.percentage}
+        {deal && (
+          <div className="order-last sm:order-none basis-full sm:basis-0 sm:flex-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0 pl-[3.75rem] sm:pl-3 sm:ml-1 sm:border-l sm:border-line/15">
+            {c.code && <CopyChip text={c.code} title={`${c.name}'s code, for its products`} className="max-w-[11rem]" />}
+            {c.percentage && (
+              <span className="text-[13px] font-bold text-ink whitespace-nowrap truncate min-w-0" title={c.percentage}>
+                {c.percentage}
+              </span>
+            )}
+            <PayoutChip company={{ id: c.id, name: c.name, payout: c.payout }} label="max-lg:sr-only" />
+            <span className="ml-auto flex-shrink-0 -mr-1.5 sm:mr-0">
+              <PlatformLinks company={c} />
             </span>
-          )}
-          <PayoutChip company={{ id: c.id, name: c.name, payout: c.payout }} label="sr-only" />
-          <span className="ml-auto flex-shrink-0 -mr-1.5">
-            <PlatformLinks company={c} />
-          </span>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </FoldRow>
   );
 }
