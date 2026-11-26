@@ -22,6 +22,18 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.60.0",
+    date: "2026-11-26",
+    title: "Where the money goes, and company pictures",
+    changes: [
+      { kind: "new", text: "Where each company's money goes: Bank account, PayPal, Wise, Payoneer, Revolut, Store credit or Other, as a small icon right after its deal. Click the icon to change it, or pick it in the company's window. Just the way, never account details. Searching \"paypal\" finds every company that pays there." },
+      { kind: "new", text: "Each company can have a picture (its logo): upload one, drop it on the box, or paste a picture's link in the company's window. It shows instead of the letter." },
+      { kind: "better", text: "All, Active, Paused and Ended are in Filters now, with their counts. The one you pick shows beside Filters, with an × to take it off." },
+      { kind: "better", text: "A product's company is picked from a proper dropdown: each company with its picture or letter and its code, A to Z, with a search box once there are many." },
+      { kind: "better", text: "Exported spreadsheets have a Paid to column, and pasting a sheet with one sets it for the new companies." },
+    ],
+  },
+  {
     version: "1.59.0",
     date: "2026-11-26",
     title: "Exporting takes two-step sign-in",

@@ -4,8 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast-provider";
 import { importSponsorships } from "@/app/(dashboard)/sponsorships/actions";
-import { KIND_TAB, LIMITS, parsePasted, planImport, type Company, type DealKind } from "../lib/rules";
+import { KIND_TAB, LIMITS, PAYOUT_LABEL, parsePasted, planImport, type Company, type DealKind } from "../lib/rules";
 import { KindPill } from "./bits";
+import { PayoutIcon, payoutStyle } from "./payout";
 
 /**
  * Sponsorships from a spreadsheet (1.56.0): the owner keeps them in one (Name, Product Link, Code, Percentage). Its
@@ -103,6 +104,12 @@ export function PasteDialog({ teamId, kinds, companies, onClose }: { teamId: str
                     <span className="font-bold truncate">{g.name}</span>
                     <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold ${g.id ? "bg-surface-2 text-ink-soft" : "bg-amber/15 text-amber"}`}>{g.id ? "Here already" : "New company"}</span>
                     {!g.id && (g.code || g.percentage) && <span className="ml-auto font-mono text-[11.5px] text-ink-soft whitespace-nowrap">{[g.code, g.percentage].filter(Boolean).join(" · ")}</span>}
+                    {!g.id && g.payout && (
+                      <span className={`${g.code || g.percentage ? "" : "ml-auto "}inline-flex items-center gap-1 rounded-md px-1.5 h-5 text-[10.5px] font-bold whitespace-nowrap`} style={payoutStyle(g.payout)} title="Where its money goes">
+                        <PayoutIcon payout={g.payout} className="w-3 h-3" />
+                        {PAYOUT_LABEL[g.payout]}
+                      </span>
+                    )}
                   </div>
                   <ul className="pb-1.5">
                     {g.products.map((r, i) => (

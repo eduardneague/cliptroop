@@ -87,6 +87,72 @@ export const STATUS_COLOR: Record<AffiliateStatus, string> = {
   ended: "rgb(var(--ink-faint))",
 };
 
+// ---- Where a company's money goes (1.60.0) ------------------------------------------------------------------------------
+
+/**
+ * The owner: "a setting where i can select where the money goes to, either bank account or paypal or other payments
+ * like this, not with details just like a quick icon with those thing". One word for the company (never an account's
+ * details); none: not said. The database keeps the same list (0139).
+ */
+export const PAYOUTS = ["bank", "paypal", "wise", "payoneer", "revolut", "credit", "other"] as const;
+export type Payout = (typeof PAYOUTS)[number];
+export const isPayout = (v: unknown): v is Payout => typeof v === "string" && (PAYOUTS as readonly string[]).includes(v);
+export const PAYOUT_LABEL: Record<Payout, string> = { bank: "Bank account", paypal: "PayPal", wise: "Wise", payoneer: "Payoneer", revolut: "Revolut", credit: "Store credit", other: "Other" };
+export const PAYOUT_HINT: Record<Payout, string> = {
+  bank: "A transfer to your bank account",
+  paypal: "To your PayPal",
+  wise: "To your Wise account",
+  payoneer: "To your Payoneer account",
+  revolut: "To your Revolut account",
+  credit: "Store credit or gift cards, not money",
+  other: "Another way (its notes can say which)",
+};
+export const PAYOUT_COLOR: Record<Payout, string> = {
+  bank: "rgb(var(--teal))",
+  paypal: "rgb(var(--blue))",
+  wise: "rgb(var(--green))",
+  payoneer: "rgb(var(--coral))",
+  revolut: "rgb(var(--violet))",
+  credit: "rgb(var(--pink))",
+  other: "rgb(var(--ink-soft))",
+};
+
+/** "PayPal", "bank transfer", "IBAN", "gift card"…, as a spreadsheet's cell might say it; anything else said: other. */
+export function payoutFromText(raw: unknown): Payout | null {
+  const t = (typeof raw === "string" ? raw : "").trim().toLowerCase();
+  if (!t || /^[-–—]$/.test(t)) return null;
+  if (isPayout(t)) return t;
+  if (/pay ?pal|^pp$/.test(t)) return "paypal";
+  if (/wise/.test(t)) return "wise";
+  if (/payoneer/.test(t)) return "payoneer";
+  if (/revolut/.test(t)) return "revolut";
+  if (/gift|voucher|store ?credit|^credit$|coupon/.test(t)) return "credit";
+  if (/bank|wire|iban|transfer|sepa|swift|ach|deposit/.test(t)) return "bank";
+  return "other";
+}
+
+/**
+ * A company's picture (1.60.0, the owner: "add the ability to add a picture for each company"): its logo, uploaded here
+ * (this bucket, the team's own folder, migration 0139) or a picture's link. Uploads are made this small first.
+ */
+export const COMPANY_PICTURES = "sponsor-pictures";
+export const COMPANY_PICTURE_SIZE = { maxWidth: 256, maxHeight: 256, quality: 0.86, preserveAlpha: true } as const;
+
+/** The file an uploaded company picture is (its path in the bucket) when it's one of this team's uploads; else null. */
+export function uploadedPicturePath(url: string | null | undefined, base: string | undefined, teamId: string): string | null {
+  if (!url || !base) return null;
+  try {
+    const u = new URL(url);
+    const ours = new URL(base);
+    const prefix = `/storage/v1/object/public/${COMPANY_PICTURES}/${teamId}/`;
+    if (u.protocol !== "https:" || u.host !== ours.host || !u.pathname.startsWith(prefix)) return null;
+    const file = decodeURIComponent(u.pathname.slice(prefix.length));
+    return /^[\w-][\w.-]*$/.test(file) && !file.includes("..") ? `${teamId}/${file}` : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Limits, the database's own (migrations 0135, 0136, 0137). */
 export const LIMITS = { name: 120, url: 2000, code: 100, percentage: 60, notes: 2000, username: 200, password: 500, loginNotes: 2000, import: 200, products: 200 } as const;
 
@@ -169,6 +235,10 @@ export type Company = {
   percentage: string | null;
   platformUrl: string | null;
   notes: string | null;
+  /** Where its money goes (1.60.0); null: not said. */
+  payout: Payout | null;
+  /** Its picture (1.60.0): an upload here or a picture's link; null: its initial shows. */
+  picture: string | null;
   createdAt: string;
   updatedAt: string;
   /** Only for the people let in: a login is kept, when it last changed and by whom. Null for everyone else. */
@@ -194,8 +264,8 @@ export type AccessPerson = { userId: string; name: string; avatarUrl: string | n
  */
 export type PictureChange = "keep" | "off" | "auto" | { url: string; source: PictureSource };
 
-/** What the company's window sends. */
-export type CompanyFields = { name: string; code: string | null; percentage: string | null; platformUrl: string | null; notes: string | null };
+/** What the company's window sends. Where its money goes and its picture: left as they are when not sent (before 0139). */
+export type CompanyFields = { name: string; code: string | null; percentage: string | null; platformUrl: string | null; notes: string | null; payout?: Payout | null; picture?: string | null };
 
 /** What the product's window sends. */
 export type ProductFields = {
@@ -415,7 +485,17 @@ export function cleanCompany(raw: unknown): { ok: CompanyFields } | { error: str
   if (platformUrl === false) return { error: "The affiliate platform's link isn't a web address." };
   const notes = text(r.notes);
   if (notes.length > LIMITS.notes) return { error: `Keep the notes under ${LIMITS.notes.toLocaleString("en-US")} characters.` };
-  return { ok: { name, ...deal, platformUrl, notes: notes || null } };
+  const extra: Pick<CompanyFields, "payout" | "picture"> = {};
+  if (r.payout !== undefined) {
+    if (r.payout !== null && r.payout !== "" && !isPayout(r.payout)) return { error: "Pick where its money goes from the list." };
+    extra.payout = isPayout(r.payout) ? r.payout : null;
+  }
+  if (r.picture !== undefined) {
+    const picture = normalizePicture(r.picture);
+    if (picture === false) return { error: "The picture's link isn't a picture on the web (https://…)." };
+    extra.picture = picture;
+  }
+  return { ok: { name, ...deal, platformUrl, notes: notes || null, ...extra } };
 }
 
 /** A product, checked and tidied as the database keeps it, or what's wrong (said plainly). */
@@ -533,6 +613,8 @@ export type PastedFields = {
   code: string | null;
   percentage: string | null;
   platformUrl: string | null;
+  /** Where the company's money goes (a Paid to column, 1.60.0). */
+  payout: Payout | null;
   notes: string | null;
 };
 export type PastedRow = { line: number; fields: PastedFields | null; error: string | null; name: string };
@@ -548,7 +630,8 @@ export function cleanPasted(raw: unknown): { ok: PastedFields } | { error: strin
   if ("error" in p) return p;
   const platformUrl = normalizeUrl(r.platformUrl);
   if (platformUrl === false) return { error: "The affiliate platform's link isn't a web address." };
-  return { ok: { company: company || name, name: p.ok.name, kinds: p.ok.kinds, status: p.ok.status, productUrl: p.ok.productUrl, code: p.ok.code, percentage: p.ok.percentage, platformUrl, notes: p.ok.notes } };
+  const payout = payoutFromText(r.payout);
+  return { ok: { company: company || name, name: p.ok.name, kinds: p.ok.kinds, status: p.ok.status, productUrl: p.ok.productUrl, code: p.ok.code, percentage: p.ok.percentage, platformUrl, payout, notes: p.ok.notes } };
 }
 
 const HEADERS: [keyof PastedFields, RegExp][] = [
@@ -559,6 +642,7 @@ const HEADERS: [keyof PastedFields, RegExp][] = [
   ["code", /^(code|discount ?code|coupon|promo ?code)$/i],
   ["percentage", /^(percentage|percent|%|discount|commission|deal|offer)$/i],
   ["platformUrl", /^(platform|platform ?link|platform ?url|affiliate ?platform|dashboard|portal)$/i],
+  ["payout", /^(paid ?to|paid ?via|payouts?|payments?|payment ?method|money ?goes ?to)$/i],
   ["notes", /^(notes?|comments?)$/i],
   ["status", /^(status|state)$/i],
 ];
@@ -594,7 +678,8 @@ function cells(line: string): string[] {
  * percentage, platform link, notes. "-" is an empty cell. Each row checked as the windows check one. Its company: a
  * Company (or Brand) column, else the name's brand ("Gravastar K98 PRO" → Gravastar: planImport puts them together).
  * What kind of deal: a Type column when there's one ("Review", "affiliate + paid"…), else `kinds` (the tab it's pasted
- * on). The sheet this page exports pastes back in.
+ * on). A Paid to column says where the company's money goes ("PayPal", "bank transfer"…). The sheet this page exports
+ * pastes back in.
  */
 export function parsePasted(raw: string, kinds: DealKind[] = ["affiliate"]): { rows: PastedRow[]; header: boolean } {
   const lines = String(raw ?? "")
@@ -626,15 +711,15 @@ export function parsePasted(raw: string, kinds: DealKind[] = ["affiliate"]): { r
 }
 
 /** A product as it's added from a paste: the company's code, or its own. */
-export type PlannedProduct = Omit<PastedFields, "company" | "platformUrl"> & { ownCode: boolean };
+export type PlannedProduct = Omit<PastedFields, "company" | "platformUrl" | "payout"> & { ownCode: boolean };
 
-/** Where pasted rows go: companies here already (id), new ones (id null, with their code, deal and platform). */
-export type ImportPlan = { id: string | null; name: string; code: string | null; percentage: string | null; platformUrl: string | null; products: PlannedProduct[] }[];
+/** Where pasted rows go: companies here already (id), new ones (id null, with their code, deal, platform and payout). */
+export type ImportPlan = { id: string | null; name: string; code: string | null; percentage: string | null; platformUrl: string | null; payout: Payout | null; products: PlannedProduct[] }[];
 
 /**
  * Pasted rows put with their companies (1.58.0): one here already, found by its name, else by its brand when only one
  * company has it ("Gravastar K98" goes to Gravastar); else a new company, which takes the code and the deal most of its
- * rows have, and the first platform link. A row goes by its company's code when it has none, or the same one; else it
+ * rows have, the first platform link, and where its money goes as most of them say (1.60.0). A row goes by its company's code when it has none, or the same one; else it
  * keeps its own. A company here already isn't changed. The window shows it before; the server does it again.
  */
 export function planImport(rows: PastedFields[], existing: Pick<Company, "id" | "name" | "code" | "percentage">[]): ImportPlan {
@@ -659,6 +744,7 @@ export function planImport(rows: PastedFields[], existing: Pick<Company, "id" | 
   return [...groups.values()].map((g) => {
     let { code, percentage } = g;
     let platformUrl: string | null = null;
+    let payout: Payout | null = null;
     if (!g.id) {
       // A new company: the code and deal most of its rows have (a tie: the first one's).
       const counts = new Map<string, { code: string | null; percentage: string | null; n: number; at: number }>();
@@ -673,6 +759,15 @@ export function planImport(rows: PastedFields[], existing: Pick<Company, "id" | 
       code = top?.code ?? null;
       percentage = top?.percentage ?? null;
       platformUrl = g.rows.find((r) => r.platformUrl)?.platformUrl ?? null;
+      // Where its money goes: what most of its rows say (a tie: the first one's).
+      const said = new Map<Payout, { n: number; at: number }>();
+      g.rows.forEach((r, at) => {
+        if (!r.payout) return;
+        const c = said.get(r.payout) ?? { n: 0, at };
+        c.n++;
+        said.set(r.payout, c);
+      });
+      payout = [...said.entries()].sort((a, b) => b[1].n - a[1].n || a[1].at - b[1].at)[0]?.[0] ?? null;
     }
     const usesCompany = (r: PastedFields) =>
       (r.code === null && (r.percentage === null || r.percentage === percentage)) || (r.code !== null && r.code === code && (r.percentage === null || r.percentage === percentage));
@@ -682,6 +777,7 @@ export function planImport(rows: PastedFields[], existing: Pick<Company, "id" | 
       code,
       percentage,
       platformUrl,
+      payout,
       products: g.rows.map((r) => {
         const own = !usesCompany(r);
         return { name: r.name, kinds: r.kinds, status: r.status, productUrl: r.productUrl, ownCode: own, code: own ? r.code : null, percentage: own ? r.percentage : null, notes: r.notes };
@@ -731,12 +827,12 @@ export const kindsText = (kinds: readonly DealKind[]) => kinds.map((k) => KIND_L
 
 /** The products picked, as a spreadsheet (CSV), each with its company (the code it goes by). Never a login. */
 export function sponsorshipsCsv(items: Item[]): string {
-  const head = ["Company", "Name", "Type", "Product link", "Code", "Percentage", "Status", "Verified", "Long video", "Short", "Affiliate platform", "Notes"];
+  const head = ["Company", "Name", "Type", "Product link", "Code", "Percentage", "Status", "Verified", "Long video", "Short", "Affiliate platform", "Paid to", "Notes"];
   const video = (v: LinkedVideo | null) => (v ? `${v.number !== null ? `#${v.number} ` : ""}${v.title}${v.source === "channel" && v.watchUrl ? ` (${v.watchUrl})` : ""}` : "");
   const checked = (p: Product) => (p.check ? `${CHECK_LABEL[p.check.result]} (${p.check.at.slice(0, 10)}${p.check.by ? `, ${p.check.by}` : ""})` : CHECK_LABEL.none);
   const rows = items.map(({ product: p, company: c }) => {
     const d = dealOf(p, c);
-    return [c.name, p.name, kindsText(p.kinds), p.productUrl, d.code, d.percentage, STATUS_LABEL[p.status], checked(p), video(p.long), video(p.short), c.platformUrl, p.notes];
+    return [c.name, p.name, kindsText(p.kinds), p.productUrl, d.code, d.percentage, STATUS_LABEL[p.status], checked(p), video(p.long), video(p.short), c.platformUrl, c.payout ? PAYOUT_LABEL[c.payout] : null, p.notes];
   });
   return [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
@@ -756,10 +852,13 @@ export const isVideoFilter = (v: unknown): v is VideoFilter => v === "long" || v
 
 const has = (q: string) => (x: string | null | undefined) => !!x && x.toLowerCase().includes(q);
 
-/** Whether a company matches what's typed in the search: its name, code, deal, platform or notes (then all of its products show). */
+/**
+ * Whether a company matches what's typed in the search: its name, code, deal, platform, notes or where its money goes
+ * ("paypal": every company paying there), and then all of its products show.
+ */
 export function companyMatches(c: Company, q: string): boolean {
   const t = q.trim().toLowerCase();
-  return !t || [c.name, c.code, c.percentage, c.platformUrl, c.notes].some(has(t));
+  return !t || [c.name, c.code, c.percentage, c.platformUrl, c.notes, c.payout ? PAYOUT_LABEL[c.payout] : null].some(has(t));
 }
 
 /** Whether a product matches it: its name, kind, the code it goes by, its link, notes or a linked video (title or #number). */

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Segmented } from "@/components/ui/segmented";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast-provider";
 import { wordColor } from "@/lib/word-color";
 import { CheckIcon, CloseIcon, ImageIcon, PlusIcon, RetryIcon, SearchIcon, ShortsIcon, VideoIcon } from "@/components/ui/icons";
@@ -35,6 +36,7 @@ import {
   type VideoSource,
 } from "../lib/rules";
 import { useAffiliates } from "./affiliates-context";
+import { CompanyMark } from "./brand-mark";
 import { PercentField } from "./percent-field";
 
 /*
@@ -87,6 +89,18 @@ export function ProductDialog({ product, companyId, onClose, onSaved }: { produc
   const companies = useMemo(() => [...ctx.companies].sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true })), [ctx.companies]);
   const theCompany = ctx.companies.find((c) => c.id === company) ?? null;
   const was = product ? ctx.companies.find((c) => c.id === product.companyId) ?? null : null;
+  // 1.60.0 (the owner, of the browser's own list: "this needs to be changed with a better dropdown"): the app's, each
+  // company with its picture or initial and its code and deal under its name; a search box once there are many.
+  const companyChoices: SelectOption[] = useMemo(
+    () =>
+      companies.map((c) => ({
+        value: c.id,
+        label: c.name,
+        hint: [c.code, c.percentage].filter(Boolean).join(" · ") || undefined,
+        icon: <CompanyMark company={{ id: c.id, name: c.name, picture: c.picture }} className="w-6 h-6 text-[11px]" px={24} />,
+      })),
+    [companies]
+  );
 
   useEffect(() => {
     const t = requestAnimationFrame(() => nameRef.current?.focus());
@@ -225,14 +239,16 @@ export function ProductDialog({ product, companyId, onClose, onSaved }: { produc
             <label htmlFor={`${id}-company`} className={LABEL}>
               Company
             </label>
-            <select id={`${id}-company`} value={company} onChange={(e) => setCompany(e.target.value)} className={`${INPUT} pr-8 truncate`}>
-              {!theCompany && <option value={company}>Pick its company</option>}
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              id={`${id}-company`}
+              value={theCompany ? company : null}
+              onChange={(v) => v && setCompany(v)}
+              options={companyChoices}
+              placeholder="Pick its company"
+              searchable={companies.length > 7}
+              menuMinWidth={260}
+              className="!h-11 !rounded-xl !px-3.5"
+            />
           </div>
           <div className="min-w-0">
             <label htmlFor={`${id}-name`} className={LABEL}>

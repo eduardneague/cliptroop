@@ -11,7 +11,7 @@ set client_min_messages = warning;
 do $$
 declare
   b record;
-  pictures text[] := array['avatars', 'team-logos', 'thumbnails', 'script-images'];
+  pictures text[] := array['avatars', 'team-logos', 'thumbnails', 'script-images', 'sponsor-pictures'];
 begin
   -- 1. The picture buckets: pictures only; 5 MB, thumbnails 15 MB (0104).
   for b in select * from storage.buckets where id = any (pictures) loop
@@ -21,7 +21,7 @@ begin
       raise exception 'FAIL 1: % takes %', b.id, b.allowed_mime_types;
     end if;
   end loop;
-  if (select count(*) from storage.buckets where id = any (pictures)) <> 4 then raise exception 'FAIL 1: a picture bucket is missing'; end if;
+  if (select count(*) from storage.buckets where id = any (pictures)) <> 5 then raise exception 'FAIL 1: a picture bucket is missing'; end if;
 
   -- 2. Every public bucket has a size limit; comment attachments: any kind, 25 MB.
   for b in select * from storage.buckets where public loop

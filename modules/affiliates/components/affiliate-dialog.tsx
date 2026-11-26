@@ -5,9 +5,11 @@ import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast-provider";
 import { Ago } from "@/components/ui/ago";
 import { EyeIcon, LockIcon } from "@/components/ui/icons";
-import { saveCompany, type LoginChange } from "@/app/(dashboard)/sponsorships/actions";
-import { cleanCompany, cleanLogin, LIMITS, pctField, type Company } from "../lib/rules";
+import { discardCompanyPictures, saveCompany, type LoginChange } from "@/app/(dashboard)/sponsorships/actions";
+import { cleanCompany, cleanLogin, LIMITS, pctField, type Company, type Payout } from "../lib/rules";
 import { useAffiliates } from "./affiliates-context";
+import { CompanyPicture } from "./company-picture";
+import { PayoutPicker } from "./payout";
 import { PercentField } from "./percent-field";
 
 /*
@@ -16,7 +18,8 @@ import { PercentField } from "./percent-field";
  * code and the deal its products go by (one can have its own: the product's window), the affiliate platform's link,
  * notes, and its login. A new one goes on to its first product. A login is never shown here: a new one is typed in;
  * one that's kept is replaced or removed, after the password (the unlock). The fields keep password managers out
- * (they'd offer to save it as this site's), and the spell checker (some send what's typed away).
+ * (they'd offer to save it as this site's), and the spell checker (some send what's typed away). 1.60.0 (once 0139 is
+ * in): its picture (company-picture.tsx; uploads not kept are removed when the window closes) and where its money goes.
  */
 
 const INPUT = "w-full rounded-xl border border-line/15 bg-surface px-3.5 h-11 text-[14px] outline-none focus:ring-2 focus:ring-amber placeholder:text-ink-faint/70";
@@ -34,6 +37,10 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
   const [percentage, setPercentage] = useState(pctField(company?.percentage));
   const [platformUrl, setPlatformUrl] = useState(company?.platformUrl ?? "");
   const [notes, setNotes] = useState(company?.notes ?? "");
+  const [picture, setPicture] = useState<string | null>(company?.picture ?? null);
+  const [payout, setPayout] = useState<Payout | null>(company?.payout ?? null);
+  // Pictures uploaded in this window: the ones not kept are removed when it closes.
+  const uploads = useRef<string[]>([]);
   // The login: typed in (a new one), replacing the one kept, or removing it.
   const kept = !!company?.login;
   const [loginMode, setLoginMode] = useState<"keep" | "replace" | "remove">("keep");
@@ -60,9 +67,20 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
     setLoginMode(mode);
   }
 
+  /** Closing: the uploads not kept go (all of them, unsaved; the others, saved with `kept`). */
+  function letGo(kept: string | null) {
+    const unused = uploads.current.filter((u) => u !== kept);
+    uploads.current = [];
+    if (unused.length) void discardCompanyPictures(ctx.teamId, unused).catch(() => null);
+  }
+  const close = () => {
+    letGo(null);
+    onClose();
+  };
+
   async function submit(again = true) {
     if (pending) return;
-    const sending = { name, code, percentage, platformUrl, notes };
+    const sending = { name, code, percentage, platformUrl, notes, ...(ctx.extras ? { picture, payout } : {}) };
     const checked = cleanCompany(sending);
     if ("error" in checked) return setProblem(checked.error);
     let change: LoginChange = null;
@@ -85,6 +103,7 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
         return;
       }
       setPassword("");
+      letGo(ctx.extras ? picture : null);
       toast.success(company ? `${checked.ok.name} saved` : `${checked.ok.name} added`);
       onSaved(r.id, !company);
     } catch {
@@ -97,13 +116,13 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
   return (
     <Dialog
       open
-      onClose={() => !pending && onClose()}
+      onClose={() => !pending && close()}
       width="sm:max-w-xl"
       title={company ? `Edit ${company.name}` : "New company"}
       description={company ? undefined : "A brand you work with. Its code and its affiliate platform go for all of its products: you add those next."}
       footer={
         <>
-          <button type="button" onClick={onClose} disabled={pending} className="rounded-lg px-3.5 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50">
+          <button type="button" onClick={close} disabled={pending} className="rounded-lg px-3.5 h-10 text-[13.5px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 disabled:opacity-50">
             Cancel
           </button>
           <button
@@ -132,6 +151,17 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
           </label>
           <input ref={nameRef} id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} maxLength={LIMITS.name} placeholder="Gravastar" className={INPUT} autoComplete="off" />
         </div>
+        {ctx.extras && (
+          <CompanyPicture
+            teamId={ctx.teamId}
+            value={picture}
+            input={INPUT}
+            onChange={(url, uploaded) => {
+              if (url && uploaded) uploads.current.push(url);
+              setPicture(url);
+            }}
+          />
+        )}
         <div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -155,6 +185,15 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
                 : "Its products go by it, unless one has its own."}
           </p>
         </div>
+        {ctx.extras && (
+          <div>
+            <span id={`${id}-payout`} className={LABEL}>
+              Paid to
+            </span>
+            <PayoutPicker value={payout} onChange={setPayout} labelledBy={`${id}-payout`} />
+            <p className="mt-1.5 text-[12px] text-ink-faint">Where its money goes (just the way, no account details). Click it again for none.</p>
+          </div>
+        )}
         <div>
           <label htmlFor={`${id}-platform`} className={LABEL}>
             Affiliate platform
@@ -165,7 +204,7 @@ export function CompanyDialog({ company, onClose, onSaved }: { company: Company 
           <label htmlFor={`${id}-notes`} className={LABEL}>
             Notes
           </label>
-          <textarea id={`${id}-notes`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={LIMITS.notes} rows={2} placeholder="Terms, payouts, the contact there…" className={`${INPUT} h-auto py-2.5 resize-y min-h-[3.25rem]`} />
+          <textarea id={`${id}-notes`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={LIMITS.notes} rows={2} placeholder="Terms, when it pays, the contact there…" className={`${INPUT} h-auto py-2.5 resize-y min-h-[3.25rem]`} />
         </div>
 
         {/* The login: sealed on the server, never shown here. */}

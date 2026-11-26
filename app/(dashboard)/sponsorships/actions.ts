@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getMembership } from "@/lib/permissions/membership";
 import { confirmPassword } from "@/lib/auth/confirm-password";
 import { confirmPasswordAndCode, type StepUpField } from "@/lib/auth/step-up";
@@ -21,9 +22,11 @@ import {
   cleanLogin,
   cleanPasted,
   cleanProduct,
+  COMPANY_PICTURES,
   isAffiliateStatus,
   isCheckResult,
   isLoginUse,
+  isPayout,
   itemsOf,
   LIMITS,
   NO_LOGINS,
@@ -36,6 +39,7 @@ import {
   sponsorshipsCsv,
   SPONSORSHIPS_PATH,
   UNLOCK_MINUTES,
+  uploadedPicturePath,
   type AffiliateStatus,
   type CheckResult,
   type CompanyFields,
@@ -60,7 +64,9 @@ import {
  * looked for on the product's page by the server (findProductPicture, and in the background after a save or a paste).
  * 1.58.0 (0137): companies (the code and the deal, the platform, the notes, the login) with their products (the kind,
  * status, link, picture, videos, verified or not, the company's code or their own). 1.59.0: exporting the table takes
- * two-step sign-in, the password and a code (exportSponsorships), and the spreadsheet is made here.
+ * two-step sign-in, the password and a code (exportSponsorships), and the spreadsheet is made here. 1.60.0 (0139): where
+ * a company's money goes (setCompanyPayout, or its window) and its picture (uploaded by the browser to the team's
+ * folder, or a link; an upload nothing uses any more is removed here, with the server's key).
  */
 
 type R<T = object> = (T & { error?: undefined }) | { error: string; locked?: true; password?: true };
@@ -111,7 +117,39 @@ function pictureCols(p: ProductFields["picture"]) {
   return { image_url: p.url, image_source: p.source };
 }
 
-const companyRow = (f: CompanyFields) => ({ name: f.name, code: f.code, percentage: f.percentage, platform_url: f.platformUrl, notes: f.notes });
+const companyRow = (f: CompanyFields) => ({
+  name: f.name,
+  code: f.code,
+  percentage: f.percentage,
+  platform_url: f.platformUrl,
+  notes: f.notes,
+  // (Only when sent: before 0139 the window doesn't, and the columns aren't there.)
+  ...(f.payout !== undefined ? { payout: f.payout } : {}),
+  ...(f.picture !== undefined ? { picture_url: f.picture } : {}),
+});
+
+/**
+ * Uploaded company pictures nothing uses any more (replaced, taken away, their company deleted, or a window closed
+ * without saving), removed with the server's key: nobody signed in may remove or even list them (0139, 0103). Only
+ * this team's folder, and never one a company of the team still shows. Best effort, after the answer is sent.
+ */
+function dropPictures(teamId: string, urls: (string | null | undefined)[]) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const mine = [...new Set(urls.filter((u): u is string => !!u && !!uploadedPicturePath(u, base, teamId)))];
+  if (!mine.length) return;
+  after(async () => {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.from("affiliates").select("picture_url").eq("team_id", teamId).in("picture_url", mine);
+      if (error) return;
+      const used = new Set(((data ?? []) as { picture_url: string | null }[]).map((r) => r.picture_url));
+      const gone = mine.filter((u) => !used.has(u)).map((u) => uploadedPicturePath(u, base, teamId)!);
+      if (gone.length) await admin.storage.from(COMPANY_PICTURES).remove(gone);
+    } catch (e) {
+      console.error("[sponsorships] pictures", e instanceof Error ? e.message : e);
+    }
+  });
+}
 
 const productRow = (f: ProductFields) => ({
   affiliate_id: f.companyId,
@@ -183,9 +221,13 @@ export async function saveCompany(teamId: string, raw: unknown, id: string | nul
 
   let savedId: string;
   if (id) {
+    // The picture it had, in case it was an upload this one replaces.
+    const before = checked.ok.picture !== undefined ? await c.supabase.from("affiliates").select("picture_url").eq("id", id).eq("team_id", c.teamId).maybeSingle() : null;
     const { data, error } = await c.supabase.from("affiliates").update(companyRow(checked.ok)).eq("id", id).eq("team_id", c.teamId).select("id").maybeSingle();
     if (error) return { error: problem(error, "Couldn't save it. Try again.") };
     if (!data) return { error: "That company isn't here any more." };
+    const old = (before?.data as { picture_url?: string | null } | null)?.picture_url;
+    if (old && old !== checked.ok.picture) dropPictures(c.teamId, [old]);
     savedId = id;
   } else {
     if (overLimit("affiliate-add", c.user.id, 120, 60 * 60_000)) return { error: "That's a lot added in an hour. Wait a bit, then add more." };
@@ -217,11 +259,40 @@ export async function deleteCompanies(teamId: string, ids: unknown): Promise<R<{
   if (!wanted) return { error: "Couldn't delete those. Refresh and try again." };
   if ((await withLogins(c, wanted)).size && !(await unlockedFor(c.supabase, c.user.id)))
     return { error: "It has a login: type your password first. Logins stay unlocked for 15 minutes on this device.", locked: true };
+  // Their pictures (before 0139 there are none: nothing to read).
+  const { data: pictures } = await c.supabase.from("affiliates").select("id, picture_url").in("id", wanted).eq("team_id", c.teamId);
   const { data, error } = await c.supabase.from("affiliates").delete().in("id", wanted).eq("team_id", c.teamId).select("id");
   if (error) return { error: problem(error, "Couldn't delete it. Try again.") };
   const gone = new Set(((data ?? []) as { id: string }[]).map((d) => d.id));
+  dropPictures(
+    c.teamId,
+    ((pictures ?? []) as { id: string; picture_url: string | null }[]).filter((x) => gone.has(x.id)).map((x) => x.picture_url)
+  );
   revalidatePath(SPONSORSHIPS_PATH);
   return { deleted: wanted.filter((id) => gone.has(id)), failed: wanted.filter((id) => !gone.has(id)) };
+}
+
+/** Where a company's money goes (1.60.0), from its icon on the list: one of the ways, or none (not said). */
+export async function setCompanyPayout(teamId: string, companyId: string, payout: unknown): Promise<R> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  if (typeof companyId !== "string" || !UUID.test(companyId)) return { error: "That company isn't here any more." };
+  if (payout !== null && !isPayout(payout)) return { error: "Pick where its money goes from the list." };
+  const { data, error } = await c.supabase.from("affiliates").update({ payout }).eq("id", companyId).eq("team_id", c.teamId).select("id");
+  if (error) return { error: problem(error, "Couldn't change it. Try again.") };
+  if (!data?.length) return { error: "That company isn't here any more. Refresh the page." };
+  revalidatePath(SPONSORSHIPS_PATH);
+  return {};
+}
+
+/** Pictures uploaded in a company's window that weren't kept (another one, or closed without saving): removed. */
+export async function discardCompanyPictures(teamId: string, urls: unknown): Promise<R> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  if (!c.manage) return { error: NO_MANAGE };
+  if (Array.isArray(urls)) dropPictures(c.teamId, urls.slice(0, 20).filter((u): u is string => typeof u === "string"));
+  return {};
 }
 
 // ---- Products (1.58.0) ----------------------------------------------------------------------------------------------------
@@ -366,7 +437,8 @@ export async function importSponsorships(teamId: string, rows: unknown): Promise
   if (fresh.length) {
     const { data, error } = await c.supabase
       .from("affiliates")
-      .insert(fresh.map((g) => ({ team_id: c.teamId, name: g.name, code: g.code, percentage: g.percentage, platform_url: g.platformUrl })))
+      // (Where its money goes only when a row said it: a sheet without it pastes before 0139 too.)
+      .insert(fresh.map((g) => ({ team_id: c.teamId, name: g.name, code: g.code, percentage: g.percentage, platform_url: g.platformUrl, ...(g.payout ? { payout: g.payout } : {}) })))
       .select("id, name");
     if (error) return { error: problem(error, "Couldn't add them. Try again.") };
     for (const d of (data ?? []) as { id: string; name: string }[]) made.set(d.name.trim().toLowerCase(), d.id);

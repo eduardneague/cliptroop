@@ -221,6 +221,8 @@ function walk(dir: string, out: string[] = []): string[] {
     percentage: "10%",
     platformUrl: "https://impact.com",
     notes: null,
+    payout: null,
+    picture: null,
     createdAt: "2026-11-01T10:00:00Z",
     updatedAt: "2026-11-01T10:00:00Z",
     login: { updatedAt: "2026-11-20T10:00:00Z", by: "Edu" },
@@ -237,11 +239,47 @@ function walk(dir: string, out: string[] = []): string[] {
   );
   ok(R.companyDescription(co({ name: "Keychron", code: "KEY10" })) === "Keychron\nCode KEY10 (10% off)" && R.companyDescription(abx) === "P5: https://abxylute.com/p5\nCode viverroVIP ($5 USD OFF)", "a company's lines: its products', or (none yet) its name and code");
   ok(R.csvCell("=HYPERLINK(\"http://evil\")") === `"'=HYPERLINK(""http://evil"")"` && R.csvCell("+1") === "'+1" && R.csvCell("@x") === "'@x" && R.csvCell("a,b") === '"a,b"' && R.csvCell(null) === "", "a spreadsheet cell can't be a formula");
-  const csv = R.sponsorshipsCsv(R.itemsOf([co({ name: "Gravastar" }, [pr({ name: "K98 PRO", notes: "=cmd" }), pr({ name: "Keycaps", ownCode: true, code: "KEYS5", percentage: "5%", check: { result: "works", by: "Ana", at: "2026-11-25T09:00:00Z" } })])]));
-  ok(csv.startsWith("Company,Name,Type,Product link,Code,Percentage,Status,Verified,Long video,Short,Affiliate platform,Notes\r\n"), "the spreadsheet's columns: the company first");
-  ok(/^Gravastar,K98 PRO,Affiliate,,VIVERRO,10%,Active,Not verified,,,https:\/\/impact\.com,'=cmd\r$/m.test(csv) && /^Gravastar,Keycaps,Affiliate,,KEYS5,5%,Active,"Verified \(2026-11-25, Ana\)",/m.test(csv), "a row per product: the code it goes by, verified or not and who checked it, the company's platform (the formula defused)");
+  const csv = R.sponsorshipsCsv(R.itemsOf([co({ name: "Gravastar", payout: "paypal" }, [pr({ name: "K98 PRO", notes: "=cmd" }), pr({ name: "Keycaps", ownCode: true, code: "KEYS5", percentage: "5%", check: { result: "works", by: "Ana", at: "2026-11-25T09:00:00Z" } })])]));
+  ok(csv.startsWith("Company,Name,Type,Product link,Code,Percentage,Status,Verified,Long video,Short,Affiliate platform,Paid to,Notes\r\n"), "the spreadsheet's columns: the company first (1.60.0: where its money goes)");
+  ok(/^Gravastar,K98 PRO,Affiliate,,VIVERRO,10%,Active,Not verified,,,https:\/\/impact\.com,PayPal,'=cmd\r$/m.test(csv) && /^Gravastar,Keycaps,Affiliate,,KEYS5,5%,Active,"Verified \(2026-11-25, Ana\)",/m.test(csv), "a row per product: the code it goes by, verified or not and who checked it, the company's platform and payout (the formula defused)");
   ok(!/login|password|username|Edu/i.test(csv), "never a login in the spreadsheet");
-  ok(R.parsePasted(csv.replace(/^.*?\r\n/, "Company,Name,Type,Product link,Code,Percentage,Status,Verified,Long video,Short,Affiliate platform,Notes\r\n")).rows.every((r) => r.fields?.company === "Gravastar"), "the sheet this page exports pastes back in, with its companies");
+  const csvBack = R.parsePasted(csv);
+  ok(csvBack.header && csvBack.rows.every((r) => r.fields?.company === "Gravastar" && r.fields?.payout === "paypal"), "the sheet this page exports pastes csvBack in, with its companies and where their money goes");
+
+  // ---- Where a company's money goes, its picture (1.60.0) -------------------------------------------------------------------
+  ok(R.PAYOUTS.join() === "bank,paypal,wise,payoneer,revolut,credit,other" && R.PAYOUTS.every((k) => R.PAYOUT_LABEL[k] && R.PAYOUT_HINT[k] && R.PAYOUT_COLOR[k]), "the ways money goes, each with its name, hint and colour");
+  ok(R.isPayout("paypal") && !R.isPayout("PayPal") && !R.isPayout("") && !R.isPayout(null), "only the database's words");
+  const paidAs = (t: string) => R.payoutFromText(t);
+  ok(paidAs("PayPal") === "paypal" && paidAs("paypal.me/viverro") === "paypal" && paidAs("PP") === "paypal" && paidAs("Bank transfer") === "bank" && paidAs("IBAN") === "bank" && paidAs("wire") === "bank" && paidAs("SEPA") === "bank", "a sheet's words: PayPal, a bank transfer");
+  ok(paidAs("TransferWise") === "wise" && paidAs("Wise") === "wise" && paidAs("Payoneer") === "payoneer" && paidAs("Revolut") === "revolut" && paidAs("Revolut bank") === "revolut" && paidAs("Gift card") === "credit" && paidAs("store credit") === "credit", "…Wise (not a bank transfer), Payoneer, Revolut, store credit");
+  ok(paidAs("Crypto (USDT)") === "other" && paidAs("") === null && paidAs("-") === null && R.payoutFromText(null) === null && paidAs("bank") === "bank", "anything else paidAs: Other; nothing: none");
+  const payKeep = R.cleanCompany({ name: "Gravastar" });
+  ok("ok" in payKeep && !("payout" in payKeep.ok) && !("picture" in payKeep.ok), "the window says nothing of them (before 0139): left as they are");
+  const payBoth = R.cleanCompany({ name: "Gravastar", payout: "wise", picture: "http://cdn.example.com/g.png" });
+  ok("ok" in payBoth && payBoth.ok.payout === "wise" && payBoth.ok.picture === "https://cdn.example.com/g.png", "a payout and a picture (asked for over https)");
+  const payNone = R.cleanCompany({ name: "Gravastar", payout: null, picture: "" });
+  ok("ok" in payNone && payNone.ok.payout === null && payNone.ok.picture === null, "none of either");
+  ok("error" in R.cleanCompany({ name: "G", payout: "iban RO49AAAA" }) && "error" in R.cleanCompany({ name: "G", picture: "javascript:alert(1)" }) && "error" in R.cleanCompany({ name: "G", picture: "https://192.168.1.10/x.png" }), "never account details, a script or a picture on someone's own network");
+  ok(R.companyMatches(co({ name: "Gravastar", payout: "paypal" }), "paypal") && R.companyMatches(co({ name: "Arzopa", payout: "credit" }), "store") && !R.companyMatches(co({ name: "Arzopa" }), "paypal"), "the search finds companies by where their money goes");
+  const sbBase = "https://abcd.supabase.co";
+  const sbTeam = "10000000-0000-4000-8000-000000000001";
+  const upUrl = `${sbBase}/storage/v1/object/public/sponsor-pictures/${sbTeam}/0f6c1a8e-1b2c-4d3e-8f90-123456789abc.webp`;
+  ok(R.uploadedPicturePath(upUrl, sbBase, sbTeam) === `${sbTeam}/0f6c1a8e-1b2c-4d3e-8f90-123456789abc.webp`, "an upload of this team's: its file");
+  ok(
+    R.uploadedPicturePath(upUrl, sbBase, "10000000-0000-4000-8000-000000000002") === null &&
+      R.uploadedPicturePath(upUrl.replace("abcd.supabase.co", "evil.example.com"), sbBase, sbTeam) === null &&
+      R.uploadedPicturePath(upUrl.replace("sponsor-pictures", "team-logos"), sbBase, sbTeam) === null &&
+      R.uploadedPicturePath(`${sbBase}/storage/v1/object/public/sponsor-pictures/${sbTeam}/..%2F${"x"}.webp`, sbBase, sbTeam) === null &&
+      R.uploadedPicturePath(`${sbBase}/storage/v1/object/public/sponsor-pictures/${sbTeam}/a/b.webp`, sbBase, sbTeam) === null &&
+      R.uploadedPicturePath("https://cdn.example.com/logo.png", sbBase, sbTeam) === null &&
+      R.uploadedPicturePath(null, sbBase, sbTeam) === null &&
+      R.uploadedPicturePath(upUrl, undefined, sbTeam) === null,
+    "…never another team's, another site's, another bucket's, a folder upUrl or down, or a link"
+  );
+  const payPlan = R.planImport(fields("Company\tName\tPaid to\nNewco\tA\tPayPal\nNewco\tB\tbank\nNewco\tC\tPayPal\nOther\tD\t-\nGravastar\tE\tWise"), [{ id: "c-g", name: "Gravastar", code: null, percentage: null }]);
+  ok(payPlan.find((g) => g.name === "Newco")?.payout === "paypal" && payPlan.find((g) => g.name === "Other")?.payout === null && payPlan.find((g) => g.id === "c-g")?.payout === null, "pasted: a new company takes where most of its rows say its money goes; one here already isn't changed");
+  const payTie = R.planImport(fields("Company\tName\tPayout\nTie\tA\tWise\nTie\tB\tRevolut"), []);
+  ok(payTie[0].payout === "wise" && !("payout" in payTie[0].products[0]), "…a payTie: the first one's (and the products don't carry it)");
 
   // ---- The list (1.58.0: companies, each with the products that pass) ---------------------------------------------------
   const long12 = { kind: "long" as const, source: "team" as const, id: "p", number: 12, title: "Keyboard review", stageLabel: "Publish", watchUrl: null, thumb: null };
@@ -497,7 +535,32 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(/const SETUP_HREF = `\/two-step\/setup\?next=\$\{encodeURIComponent\(SPONSORSHIPS_PATH\)\}`;/.test(exportDialog) && /href=\{SETUP_HREF\}/.test(exportDialog), "…without two-step sign-in: turn it on, and back here");
   ok(!/sponsorshipsCsv|lib\/auth\/two-step/.test(exportDialog), "the browser doesn't make the spreadsheet (nor load the server's code helpers)");
   ok(/<ExportDialog teamId=\{ctx\.teamId\} ids=\{null\} count=\{total\}/.test(read("modules/affiliates/components/header-actions.tsx")), "Export at the top: the whole table");
+  // 1.60.0: where a company's money goes, its picture, the status in Filters, the company dropdown.
+  const pay = fn("setCompanyPayout");
+  ok(pay.indexOf("if (!c.manage) return { error: NO_MANAGE };") >= 0 && pay.indexOf("NO_MANAGE") < pay.indexOf(".update({ payout })") && /if \(payout !== null && !isPayout\(payout\)\) return/.test(pay) && /\.eq\("id", companyId\)\.eq\("team_id", c\.teamId\)/.test(pay), "a payout: only the managers, only a known way, only this team's company");
+  ok(/\.\.\.\(f\.payout !== undefined \? \{ payout: f\.payout \} : \{\}\)/.test(actions) && /\.\.\.\(f\.picture !== undefined \? \{ picture_url: f\.picture \} : \{\}\)/.test(actions), "the company's row: a payout and a picture only when sent (before 0139 they aren't)");
+  const drop = actions.slice(actions.indexOf("function dropPictures"), actions.indexOf("export async function", actions.indexOf("function dropPictures")));
+  ok(/uploadedPicturePath\(u, base, teamId\)/.test(drop) && /after\(async \(\) =>/.test(drop) && /createAdminClient\(\)/.test(drop) && /\.eq\("team_id", teamId\)\.in\("picture_url", mine\)/.test(drop) && /mine\.filter\(\(u\) => !used\.has\(u\)\)/.test(drop) && /\.storage\.from\(COMPANY_PICTURES\)\.remove\(gone\)/.test(drop), "uploads nothing uses: only this team's, never one a company still shows, removed by the server after answering");
+  const saveCo = fn("saveCompany");
+  ok(/const before = checked\.ok\.picture !== undefined \? await c\.supabase\.from\("affiliates"\)\.select\("picture_url"\)/.test(saveCo) && /if \(old && old !== checked\.ok\.picture\) dropPictures\(c\.teamId, \[old\]\);/.test(saveCo), "a picture replaced: the old upload goes");
+  const delCo = fn("deleteCompanies");
+  ok(delCo.indexOf('select("id, picture_url")') < delCo.indexOf(".delete()") && /dropPictures\(\s*c\.teamId,/.test(delCo) && /filter\(\(x\) => gone\.has\(x\.id\)\)/.test(delCo), "a company deleted: its upload goes (only if it went)");
+  ok(/if \(!c\.manage\) return \{ error: NO_MANAGE \};/.test(fn("discardCompanyPictures")) && /urls\.slice\(0, 20\)/.test(fn("discardCompanyPictures")), "a window's unsaved uploads: only the managers, twenty at most");
+  const q = read("modules/affiliates/lib/queries.ts");
+  ok(/companiesWith\(`\$\{COMPANY_COLS\}, \$\{EXTRA_COLS\}`\)/.test(q) && /const list = first\.error && notMigrated\(first\.error\) \? await companiesWith\(COMPANY_COLS\) : first;/.test(q) && /extras \}/.test(q), "before 0139: the companies without a payout or picture, and the page works (no payout, no picture)");
+  const payChip = read("modules/affiliates/components/payout.tsx");
+  ok(/if \(!ctx\?\.extras\) return null;/.test(payChip) && /if \(!p && !ctx\.manage\) return null;/.test(payChip) && /if \(!ctx\.manage\)\s*return \(\s*<span/.test(payChip) && /setCompanyPayout\(ctx\.teamId, company\.id, to\)/.test(payChip), "the payout chip: a button for the managers (a menu), a plain icon for the others, nothing when it isn't set (for them) or before 0139");
+  const pic = read("modules/affiliates/components/company-picture.tsx");
+  ok(/const path = `\$\{teamId\}\/\$\{crypto\.randomUUID\(\)\}\.\$\{ext\}`;/.test(pic) && /compressImage\(original, COMPANY_PICTURE_SIZE\)/.test(pic) && /pictureTooBig\(original\)/.test(pic) && /\.upload\(path, small, \{ cacheControl: UPLOAD_CACHE_CONTROL, contentType: small\.type \}\)/.test(pic), "an upload: checked, made small, into the team's own folder under a random name");
+  ok(R.COMPANY_PICTURE_SIZE.maxWidth === 256 && !("cover" in R.COMPANY_PICTURE_SIZE) && R.COMPANY_PICTURE_SIZE.preserveAlpha, "…256 px at most, never cut to a square, its see-through parts kept (a logo)");
+  const coDialog = read("modules/affiliates/components/affiliate-dialog.tsx");
+  ok(/\.\.\.\(ctx\.extras \? \{ picture, payout \} : \{\}\)/.test(coDialog) && /letGo\(ctx\.extras \? picture : null\);/.test(coDialog) && /onClose=\{\(\) => !pending && close\(\)\}/.test(coDialog), "the company's window: sends them only after 0139; uploads not kept go when it closes (saved or not)");
+  const prodDialog = read("modules/affiliates/components/product-dialog.tsx");
+  ok(/<Select\s+id=\{`\$\{id\}-company`\}/.test(prodDialog) && !/<select/.test(prodDialog) && /icon: <CompanyMark/.test(prodDialog), "a product's company: the app's dropdown (each one's picture or initial, its code), not the browser's");
+  const coHead = read("modules/affiliates/components/company-head.tsx");
+  ok(/md:col-start-5 lg:col-end-7/.test(coHead) && !/lg:col-span-2/.test(coHead) && /<PayoutChip company=\{\{ id: c\.id, name: c\.name, payout: c\.payout \}\} label="max-lg:sr-only" \/>/.test(coHead), "the table: the deal and its payout into the videos' column (its start kept: a span alone would move it)");
   const body = read("modules/affiliates/components/affiliates-body.tsx");
+  ok(/title: "Status",/.test(body) && /\.\.\.\(f\.status \? \[\{ key: "status", label: STATUS_LABEL\[f\.status\], clearHref: href\(\{ status: null \}\) \}\] : \[\]\)/.test(body) && !/FilterChip/.test(body), "the status in Filters (All, Active, Paused, Ended), its chip beside it; no row of chips");
   ok(/<AffiliatesTable companies=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<AffiliateCards companies=\{list\} manage=\{manage\} tab=\{f\.kind\} \/>/.test(body) && /<ViewToggle/.test(body) && /<FiltersMenu/.test(body) && /<PickAffiliatesButton \/>/.test(body) && /<FoldAll ids=\{list\.map\(\(c\) => c\.id\)\} \/>/.test(body), "a table and cards of companies, Filters, Select, fold all");
   ok(/<KindTabs/.test(body) && /DEAL_KINDS\.map\(\(k\) => \(\{ key: k, label: KIND_TAB\[k\]/.test(body), "tabs for the kinds of deal, over one list");
   ok(/setProductsKinds/.test(picker) && /setProductsKinds/.test(read("modules/affiliates/components/row-menu.tsx")), "the kind changed for several at once, or on one");

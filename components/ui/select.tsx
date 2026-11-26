@@ -51,6 +51,7 @@ export function Select({
   disabled,
   searchable,
   ariaLabel,
+  id,
   variant = "field",
   renderValue,
   className = "",
@@ -68,6 +69,8 @@ export function Select({
   /** Show a filter box (defaults to on for long lists). */
   searchable?: boolean;
   ariaLabel?: string;
+  /** The button's id, for a <label htmlFor> beside it (1.60.0). */
+  id?: string;
   /** "field" = form input · "inline" = quiet, for table cells · "pill" = small dashed "+ Add" chip */
   variant?: "field" | "inline" | "pill";
   renderValue?: (option: SelectOption | null) => React.ReactNode;
@@ -292,6 +295,7 @@ export function Select({
     <>
       <button
         ref={triggerRef}
+        id={id}
         type="button"
         disabled={disabled}
         onClick={() => (open ? close() : openMenu(false))}
@@ -334,7 +338,8 @@ export function Select({
                 width: pos.width,
                 ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }),
               }}
-              className={`pop-menu glass-pane fixed z-[130] rounded-xl border border-line/15 bg-surface shadow-2xl overflow-hidden ${pos.up ? "origin-bottom" : "origin-top"}`}
+              // (glass-floor, 1.60.0: a list of words over a form's words is never clearer than 82 %.)
+              className={`pop-menu glass-pane glass-floor fixed z-[130] rounded-xl border border-line/15 bg-surface shadow-2xl overflow-hidden ${pos.up ? "origin-bottom" : "origin-top"}`}
             >
               {useSearch && (
                 <div className="flex items-center gap-2 px-3 h-10 border-b border-line/10">

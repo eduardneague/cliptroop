@@ -39,6 +39,8 @@ type Api = {
   master: boolean;
   /** Logins can be kept on this server. */
   vault: boolean;
+  /** Where a company's money goes and its picture can be set (0139 is in). */
+  extras: boolean;
   /** What kind a new one starts as: the tab's, else an affiliate. */
   newKinds: DealKind[];
   /** The videos to link, once asked for (null before, or when they couldn't come). */
@@ -104,6 +106,7 @@ export function AffiliatesProvider({
   manage,
   master,
   vault,
+  extras,
   kind,
   unlockedUntil: fromServer,
   closed: closedFromServer,
@@ -115,6 +118,7 @@ export function AffiliatesProvider({
   manage: boolean;
   master: boolean;
   vault: boolean;
+  extras: boolean;
   /** The tab open now (a new one starts as that kind). */
   kind: DealKind | null;
   unlockedUntil: number | null;
@@ -341,6 +345,7 @@ export function AffiliatesProvider({
       manage,
       master,
       vault,
+      extras,
       newKinds,
       videoList,
       loadVideos,
@@ -360,7 +365,7 @@ export function AffiliatesProvider({
       toggle,
       setOpen,
     }),
-    [teamId, companies, manage, master, vault, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash, isOpen, toggle, setOpen]
+    [teamId, companies, manage, master, vault, extras, newKinds, videoList, loadVideos, unlockedUntil, now, ensureUnlocked, lock, shown, show, copyPart, flash, isOpen, toggle, setOpen]
   );
 
   return (

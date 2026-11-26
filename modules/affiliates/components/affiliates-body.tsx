@@ -2,7 +2,6 @@ import Link from "next/link";
 import { LockIcon } from "@/components/ui/icons";
 import { PendingNav, PendingSwap } from "@/components/ui/pending-nav";
 import { ViewToggle } from "@/components/ui/view-toggle";
-import { FilterChip } from "@/components/ui/filter-chip";
 import { FiltersMenu } from "@/modules/short-videos/components/filters-menu";
 import { setAffiliatesViewMode } from "@/app/(dashboard)/sponsorships/view-mode-actions";
 import { AFFILIATES_VIEW_COOKIE } from "../lib/view-mode";
@@ -41,8 +40,9 @@ import { LoginsBar } from "./logins-bar";
  * The Sponsorships page (Affiliates in 1.56.0), drawn from what the server read (app/(dashboard)/sponsorships/page.tsx).
  * 1.57.0: tabs for the kinds of deal (all, affiliates, reviews, paid: one list, a sponsorship in each of its kinds'
  * tabs; the owner: "maybe add a tag or something so we dont have 2 separate tables … make it so you can filter through
- * it very easily"). As the shorts list: a step-like filter by status, Filters (the video, a code, a login, the order),
- * Select for several at once, and the table or the cards (the choice remembered); the counts are the tab's. The
+ * it very easily"). As the shorts list: Filters (the status, 1.60.0: All, Active, Paused, Ended, a row of chips before;
+ * verified, the video, a code, a login, the order), Select for several at once, and the table or the cards (the choice
+ * remembered); the counts are the tab's. The
  * browser's parts sit on it: the add / edit windows, the logins, the picking bar. 1.58.0: companies with their
  * products (the owner: "we should have groups in the table, dropdowns"), folding (all at once too); the tabs, the
  * status chips and the filters count products, the logins companies. Out of page.tsx so the harness draws the real
@@ -63,6 +63,8 @@ export type AffiliatesBodyProps = {
   people: AccessPerson[];
   filters: AffiliateFilters;
   isTable: boolean;
+  /** Where a company's money goes and its picture can be set (0139 is in). */
+  extras: boolean;
 };
 
 export function AffiliatesBody(p: AffiliatesBodyProps) {
@@ -86,7 +88,7 @@ export function AffiliatesBody(p: AffiliatesBodyProps) {
     <PendingNav>
       <div className="px-4 sm:px-10 py-5 sm:py-9 w-full max-w-[1500px] mx-auto">
         <AffiliatesRealtime teamId={p.teamId} />
-        <AffiliatesProvider teamId={p.teamId} companies={companies} manage={manage} master={p.master} vault={p.vault} kind={f.kind} unlockedUntil={p.unlockedUntil} closed={p.closed} searching={!!f.q.trim()}>
+        <AffiliatesProvider teamId={p.teamId} companies={companies} manage={manage} master={p.master} vault={p.vault} extras={p.extras} kind={f.kind} unlockedUntil={p.unlockedUntil} closed={p.closed} searching={!!f.q.trim()}>
           <div className="flex items-start justify-between gap-6 mb-6 flex-wrap">
             <div>
               <h1 className="font-display text-[34px] sm:text-[40px] leading-none font-semibold mb-2.5">Sponsorships</h1>
@@ -118,14 +120,71 @@ export function AffiliatesBody(p: AffiliatesBodyProps) {
           />
 
           <AffiliatesPicker companies={list}>
-            {/* One row at every screen size: status chips, the search, Select, the view. */}
+            {/* One row: Filters (1.60.0: the status in it too, the owner: "put the all active paused and ended things
+                within filters") and what's on, then the search, fold all, Select, the view. A phone: the search below. */}
             <div className="flex items-center gap-2 mb-6">
-              <div className="-ml-4 pl-4 sm:ml-0 sm:pl-0 flex-1 min-w-0 overflow-x-auto no-scrollbar">
-                <div className="flex gap-1 w-max items-center">
-                  {[{ key: "", label: "All", count: all.length, color: null as string | null }, ...AFFILIATE_STATUSES.map((s) => ({ key: s, label: STATUS_LABEL[s], count: count(s), color: STATUS_COLOR[s] as string | null }))].map((c) => (
-                    <FilterChip key={c.key || "all"} href={href({ status: (c.key || null) as AffiliateFilters["status"] })} navKey={`status:${c.key}`} active={(f.status ?? "") === c.key} label={c.label} count={c.count} color={c.color} tall />
-                  ))}
-                </div>
+              <div className="flex-1 min-w-0">
+                <FiltersMenu
+                  sections={[
+                    {
+                      title: "Status",
+                      items: [
+                        { key: "status-any", kind: "radio", label: "All", count: all.length, active: !f.status, href: href({ status: null }) },
+                        ...AFFILIATE_STATUSES.map((st) => ({
+                          key: `status-${st}`,
+                          kind: "radio" as const,
+                          label: STATUS_LABEL[st],
+                          color: STATUS_COLOR[st],
+                          count: count(st),
+                          active: f.status === st,
+                          href: href({ status: f.status === st ? null : st }),
+                        })),
+                      ],
+                    },
+                    {
+                      title: "Verified",
+                      items: [
+                        { key: "checked-any", kind: "radio", label: "Any", active: !f.checked, href: href({ checked: null }) },
+                        ...CHECK_STATES.map((s) => ({
+                          key: `checked-${s}`,
+                          kind: "radio" as const,
+                          label: CHECK_LABEL[s],
+                          count: all.filter((a) => checkState(a) === s).length,
+                          active: f.checked === s,
+                          href: href({ checked: f.checked === s ? null : s }),
+                        })),
+                      ],
+                    },
+                    {
+                      title: "Video",
+                      items: [
+                        { key: "video-any", kind: "radio", label: "Any", active: !f.video, href: href({ video: null }) },
+                        { key: "video-long", kind: "radio", label: "Has a long video", count: all.filter((a) => a.long).length, active: f.video === "long", href: href({ video: f.video === "long" ? null : "long" }) },
+                        { key: "video-short", kind: "radio", label: "Has a Short", count: all.filter((a) => a.short).length, active: f.video === "short", href: href({ video: f.video === "short" ? null : "short" }) },
+                        { key: "video-none", kind: "radio", label: "No video yet", count: all.length - withVideo, active: f.video === "none", href: href({ video: f.video === "none" ? null : "none" }) },
+                      ],
+                    },
+                    {
+                      title: "Show",
+                      items: [
+                        { key: "code", kind: "check", label: "With a code", count: tab.filter((i) => dealOf(i.product, i.company).code).length, active: f.code, href: href({ code: !f.code }) },
+                        ...(manage ? [{ key: "login", kind: "check" as const, label: "With a login", count: withLogin, active: f.login, href: href({ login: !f.login }) }] : []),
+                      ],
+                    },
+                    {
+                      title: "Order",
+                      items: SORTS.map((s) => ({ key: `sort-${s}`, kind: "radio" as const, label: SORT_LABEL[s], active: f.sort === s, href: href({ sort: s }) })),
+                    },
+                  ]}
+                  chips={[
+                    ...(f.status ? [{ key: "status", label: STATUS_LABEL[f.status], clearHref: href({ status: null }) }] : []),
+                    ...(f.checked ? [{ key: "checked", label: CHECK_LABEL[f.checked], clearHref: href({ checked: null }) }] : []),
+                    ...(f.video ? [{ key: "video", label: f.video === "long" ? "Has a long video" : f.video === "short" ? "Has a Short" : "No video yet", clearHref: href({ video: null }) }] : []),
+                    ...(f.code ? [{ key: "code", label: "With a code", clearHref: href({ code: false }) }] : []),
+                    ...(f.login ? [{ key: "login", label: "With a login", clearHref: href({ login: false }) }] : []),
+                    ...(f.sort !== "newest" ? [{ key: "sort", label: SORT_LABEL[f.sort], clearHref: href({ sort: "newest" }) }] : []),
+                  ]}
+                />
               </div>
               <span className="max-md:hidden">
                 <SearchField initial={f.q} />
@@ -134,56 +193,8 @@ export function AffiliatesBody(p: AffiliatesBodyProps) {
               {shown > 0 && <PickAffiliatesButton />}
               <ViewToggle value={p.isTable ? "table" : "grid"} cookie={AFFILIATES_VIEW_COOKIE} hrefs={{ grid: filtersHref(f, {}, "grid"), table: filtersHref(f, {}, "table") }} action={setAffiliatesViewMode} fields={{ qs }} />
             </div>
-
-            <div className="-mt-3 mb-6 flex items-center gap-2 flex-wrap">
-              <span className="md:hidden">
-                <SearchField initial={f.q} />
-              </span>
-              <FiltersMenu
-                sections={[
-                  {
-                    title: "Verified",
-                    items: [
-                      { key: "checked-any", kind: "radio", label: "Any", active: !f.checked, href: href({ checked: null }) },
-                      ...CHECK_STATES.map((s) => ({
-                        key: `checked-${s}`,
-                        kind: "radio" as const,
-                        label: CHECK_LABEL[s],
-                        count: all.filter((a) => checkState(a) === s).length,
-                        active: f.checked === s,
-                        href: href({ checked: f.checked === s ? null : s }),
-                      })),
-                    ],
-                  },
-                  {
-                    title: "Video",
-                    items: [
-                      { key: "video-any", kind: "radio", label: "Any", active: !f.video, href: href({ video: null }) },
-                      { key: "video-long", kind: "radio", label: "Has a long video", count: all.filter((a) => a.long).length, active: f.video === "long", href: href({ video: f.video === "long" ? null : "long" }) },
-                      { key: "video-short", kind: "radio", label: "Has a Short", count: all.filter((a) => a.short).length, active: f.video === "short", href: href({ video: f.video === "short" ? null : "short" }) },
-                      { key: "video-none", kind: "radio", label: "No video yet", count: all.length - withVideo, active: f.video === "none", href: href({ video: f.video === "none" ? null : "none" }) },
-                    ],
-                  },
-                  {
-                    title: "Show",
-                    items: [
-                      { key: "code", kind: "check", label: "With a code", count: tab.filter((i) => dealOf(i.product, i.company).code).length, active: f.code, href: href({ code: !f.code }) },
-                      ...(manage ? [{ key: "login", kind: "check" as const, label: "With a login", count: withLogin, active: f.login, href: href({ login: !f.login }) }] : []),
-                    ],
-                  },
-                  {
-                    title: "Order",
-                    items: SORTS.map((s) => ({ key: `sort-${s}`, kind: "radio" as const, label: SORT_LABEL[s], active: f.sort === s, href: href({ sort: s }) })),
-                  },
-                ]}
-                chips={[
-                  ...(f.checked ? [{ key: "checked", label: CHECK_LABEL[f.checked], clearHref: href({ checked: null }) }] : []),
-                  ...(f.video ? [{ key: "video", label: f.video === "long" ? "Has a long video" : f.video === "short" ? "Has a Short" : "No video yet", clearHref: href({ video: null }) }] : []),
-                  ...(f.code ? [{ key: "code", label: "With a code", clearHref: href({ code: false }) }] : []),
-                  ...(f.login ? [{ key: "login", label: "With a login", clearHref: href({ login: false }) }] : []),
-                  ...(f.sort !== "newest" ? [{ key: "sort", label: SORT_LABEL[f.sort], clearHref: href({ sort: "newest" }) }] : []),
-                ]}
-              />
+            <div className="md:hidden -mt-3 mb-6">
+              <SearchField initial={f.q} />
             </div>
 
             {/* Switching view or filter: the list's skeleton answers at once. */}

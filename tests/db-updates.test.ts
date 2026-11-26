@@ -39,9 +39,11 @@ ok(/await admin\.rpc\("affiliates_ready"\)/.test(src), "0135: Affiliates (its ta
 ok(/await admin\.rpc\("sponsorships_ready"\)/.test(src), "0136: Sponsorships (the kinds, the channel's videos, the pictures and their background look)");
 ok(/column\(a, "affiliate_products", "own_code, checked_result, checked_by, checked_at"\)/.test(src), "0137: companies with products (and verified or not)");
 ok(/await admin\.rpc\("export_codes_ready"\)/.test(src), "0138: a code by email to export");
+ok(/column\(a, "affiliates", "payout, picture_url"\)/.test(src), "0139: where a company's money goes, its picture");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0139": /alter table public\.affiliates add column if not exists payout text;\s*alter table public\.affiliates add column if not exists picture_url text;/,
   "0138": /create or replace function public\.export_codes_ready\(\)[\s\S]*conname = 'two_step_codes_purpose_check'[\s\S]*like '%''export''%'/,
   "0137": /create table if not exists public\.affiliate_products \([\s\S]*own_code boolean not null default false,[\s\S]*checked_result text,[\s\S]*checked_by uuid[\s\S]*checked_at timestamptz,/,
   "0136": /create or replace function public\.sponsorships_ready\(\)[\s\S]*'kinds', 'long_youtube_id', 'short_youtube_id', 'image_url', 'image_source', 'image_checked_at'[\s\S]*proname = 'affiliate_picture_found'/,

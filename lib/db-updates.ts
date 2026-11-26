@@ -24,6 +24,11 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 
 export const PROBES: Probe[] = [
   {
+    n: "0139",
+    what: "Sponsorships: where each company's money goes, and its picture",
+    has: (a) => column(a, "affiliates", "payout, picture_url"),
+  },
+  {
     n: "0138",
     what: "Exporting the sponsorships table with a code by email (for the people who get their two-step codes by email)",
     has: async (admin) => {

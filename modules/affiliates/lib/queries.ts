@@ -7,7 +7,7 @@ import { STAGE_LABELS } from "@/modules/long-videos/lib/stages";
 import { SHORT_STAGE_LABELS, type ShortStage } from "@/modules/short-videos/lib/constants";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
 import type { PipelineStage } from "@/lib/permissions/roles";
-import { cleanKinds, isAffiliateStatus, isCheckResult, pctOf, UNLOCK_MINUTES, YOUTUBE_ID, ytThumb, type AccessPerson, type Company, type LinkedVideo, type PictureSource, type Product, type VideoChoice, type VideoKind } from "./rules";
+import { cleanKinds, isAffiliateStatus, isCheckResult, isPayout, pctOf, UNLOCK_MINUTES, YOUTUBE_ID, ytThumb, type AccessPerson, type Company, type LinkedVideo, type PictureSource, type Product, type VideoChoice, type VideoKind } from "./rules";
 import { UNLOCK_COOKIE, unlockedUntil, vaultReady } from "./vault";
 
 /*
@@ -48,8 +48,21 @@ export async function unlockedFor(supabase: Supa, userId: string): Promise<numbe
   return unlockedUntil(jar.get(UNLOCK_COOKIE)?.value, userId, sessionId, UNLOCK_MINUTES);
 }
 
-type CompanyRow = { id: string; name: string; code: string | null; percentage: string | null; platform_url: string | null; notes: string | null; created_at: string; updated_at: string };
+type CompanyRow = {
+  id: string;
+  name: string;
+  code: string | null;
+  percentage: string | null;
+  platform_url: string | null;
+  notes: string | null;
+  payout?: string | null;
+  picture_url?: string | null;
+  created_at: string;
+  updated_at: string;
+};
 const COMPANY_COLS = "id, name, code, percentage, platform_url, notes, created_at, updated_at";
+/** 0139's (1.60.0): where the company's money goes, its picture. Read when the database has them. */
+const EXTRA_COLS = "payout, picture_url";
 
 type ProductRow = {
   id: string;
@@ -245,6 +258,8 @@ export type AffiliatesPageData =
       people: AccessPerson[];
       /** Some products have a link and no picture yet, and weren't looked at this week: the server looks (page.tsx). */
       needPictures: boolean;
+      /** Where a company's money goes and its picture can be set (0139 is in). */
+      extras: boolean;
     };
 
 /** Has a product link, no picture, wasn't taken away, and wasn't looked at in the last week (0137's claim, ahead). */
@@ -278,21 +293,25 @@ function productOf(r: ProductRow, videos: Awaited<ReturnType<typeof linkedVideos
 /** Everything the page shows, read as the person asking. */
 export async function readAffiliatesPage(teamId: string, me: { id: string; roles: readonly string[] }): Promise<AffiliatesPageData> {
   const supabase = await createClient();
-  const [list, products, rights] = await Promise.all([
-    supabase.from("affiliates").select(COMPANY_COLS).eq("team_id", teamId).order("created_at", { ascending: false }).limit(1000),
+  const companiesWith = (cols: string) => supabase.from("affiliates").select(cols).eq("team_id", teamId).order("created_at", { ascending: false }).limit(1000);
+  const [first, products, rights] = await Promise.all([
+    companiesWith(`${COMPANY_COLS}, ${EXTRA_COLS}`),
     allRowsOr<ProductRow, { code?: string; message?: string }>(
       (from, to) => supabase.from("affiliate_products").select(PRODUCT_COLS).eq("team_id", teamId).order("created_at", { ascending: false }).order("id").range(from, to),
       2000
     ),
     affiliateRights(supabase, teamId, me.id, me.roles),
   ]);
+  // Before 0139 (no payout or picture yet): the companies without them, and the page without those.
+  const extras = !first.error;
+  const list = first.error && notMigrated(first.error) ? await companiesWith(COMPANY_COLS) : first;
   if (list.error && notMigrated(list.error)) return { ready: false, migration: "0135" };
   if (products.error && notMigrated(products.error)) {
     // No products yet: 0137 is missing, and 0136 too if the kinds aren't there (0137 needs them).
     const { error } = await supabase.from("affiliates").select("kinds").limit(1);
     return { ready: false, migration: error && notMigrated(error) ? "0136" : "0137" };
   }
-  const rows = (list.data ?? []) as CompanyRow[];
+  const rows = (list.data ?? []) as unknown as CompanyRow[];
   const productRows = products.rows;
   const [videos, states, people, until] = await Promise.all([
     linkedVideos(supabase, teamId, productRows),
@@ -326,6 +345,8 @@ export async function readAffiliatesPage(teamId: string, me: { id: string; roles
       percentage: pctOf(r.percentage),
       platformUrl: r.platform_url,
       notes: r.notes,
+      payout: isPayout(r.payout) ? r.payout : null,
+      picture: typeof r.picture_url === "string" && /^https:\/\//i.test(r.picture_url) ? r.picture_url : null,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       login: login ? { updatedAt: login.updated_at, by: login.updated_by ? nameOf.get(login.updated_by) ?? null : null } : null,
@@ -333,5 +354,5 @@ export async function readAffiliatesPage(teamId: string, me: { id: string; roles
     };
   });
   const now = Date.now();
-  return { ready: true, companies, master: rights.master, manage: rights.manage, vault: vaultReady(), unlockedUntil: until, people, needPictures: productRows.some((r) => wantsPicture(r, now)) };
+  return { ready: true, companies, master: rights.master, manage: rights.manage, vault: vaultReady(), unlockedUntil: until, people, needPictures: productRows.some((r) => wantsPicture(r, now)), extras };
 }

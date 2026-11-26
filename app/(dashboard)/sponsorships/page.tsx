@@ -64,6 +64,7 @@ export default async function SponsorshipsPage({ searchParams }: { searchParams:
       people={data.people}
       filters={readFilters(params)}
       isTable={isTable}
+      extras={data.extras}
     />
   );
 }

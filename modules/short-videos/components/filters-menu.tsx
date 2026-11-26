@@ -16,6 +16,8 @@ export type FilterItem = {
   active: boolean;
   count?: number;
   platform?: Platform;
+  /** A small square in this colour before the label (a status's own, 1.60.0). */
+  color?: string;
   /** "check" = on/off · "radio" = one of a group */
   kind: "check" | "radio";
 };
@@ -127,6 +129,7 @@ export function FiltersMenu({ sections, chips }: { sections: FilterSection[]; ch
                       ) : (
                         <span className={`w-4 h-4 rounded-[4px] border-2 ${it.active ? "border-amber bg-amber shadow-[inset_0_0_0_2px_rgb(var(--surface))]" : "border-line/40"}`} />
                       )}
+                      {it.color && <span className="w-2 h-2 -mr-1 rounded-[3px] flex-shrink-0" style={{ background: it.color }} aria-hidden />}
                       <span className="flex-1">{it.label}</span>
                       {it.count !== undefined && <span className="text-[12px] text-ink-soft tabular-nums">{it.count}</span>}
                       {it.platform && it.active && <CheckIcon className="w-4 h-4 text-amber" />}
