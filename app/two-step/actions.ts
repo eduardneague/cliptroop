@@ -7,18 +7,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailConfigured, sendCodeEmail } from "@/lib/email";
 import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
-import { CODE_MINUTES, CODE_TRIES, RESEND_SECONDS, TWO_STEP_COOKIE, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, sessionIdOf } from "@/lib/auth/two-step";
+import { CODE_MINUTES, CODE_TRIES, RESEND_SECONDS, TWO_STEP_COOKIE, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, sessionIdOf, twoStepOf } from "@/lib/auth/two-step";
 
 /*
  * Two-step sign-in by email (1.46.0): a six-digit code to the account's own address, kept as a keyed hash for 10
  * minutes and 5 tries (two_step_codes, migration 0125: only the server's key touches it). The right code marks this
  * very sign-in as done, for the database (two_step_sessions) and for the app (the vp_2s cookie, lib/auth/two-step.ts).
  * Choosing email (setup) turns an authenticator app off, and choosing an app (appFromNowOn) turns email off: one
- * way at a time. Authenticator apps themselves are Supabase's (the browser talks to it directly).
+ * way at a time. Authenticator apps themselves are Supabase's (the browser talks to it directly). 1.59.0: a code to
+ * export the sponsorships table ("export", migration 0138), checked only there (lib/auth/step-up.ts) and never here.
  */
 
 type Purpose = "sign_in" | "setup";
+type SendPurpose = Purpose | "export";
 const isPurpose = (p: unknown): p is Purpose => p === "sign_in" || p === "setup";
+const isSendPurpose = (p: unknown): p is SendPurpose => isPurpose(p) || p === "export";
 
 async function me() {
   const supabase = await createClient();
@@ -35,13 +38,15 @@ async function me() {
 const usesEmail = (meta: unknown) => (meta as { two_step?: unknown } | null)?.two_step === "email";
 
 /** Sends a code (or says how long until another can go). */
-export async function sendTwoStepCode(purpose: Purpose): Promise<{ error?: string; to?: string; wait?: number }> {
-  if (!isPurpose(purpose)) return { error: "Not found." };
+export async function sendTwoStepCode(purpose: SendPurpose): Promise<{ error?: string; to?: string; wait?: number }> {
+  if (!isSendPurpose(purpose)) return { error: "Not found." };
   const who = await me();
   if (!who) return { error: "Your session expired. Sign in again." };
   const email = who.user.email ?? "";
   if (!email) return { error: "Your account has no email address: use an authenticator app." };
   if (purpose === "sign_in" && !usesEmail(who.user.app_metadata)) return { error: "This account signs in with an authenticator app." };
+  if (purpose === "export" && !usesEmail(who.user.app_metadata))
+    return { error: twoStepOf(who.user)?.method === "app" ? "Use the code your authenticator app shows." : "Turn on two-step sign-in first (Settings → Account)." };
   if (!emailConfigured()) return { error: `Email isn't set up on this copy of ${APP_NAME} yet: use an authenticator app.` };
 
   const admin = createAdminClient();
@@ -59,7 +64,8 @@ export async function sendTwoStepCode(purpose: Purpose): Promise<{ error?: strin
     attempts: 0,
     sent_at: new Date().toISOString(),
   });
-  if (error) return { error: "Couldn't send a code. Try again in a minute." };
+  // (A code to export before 0138: the table doesn't take that kind yet.)
+  if (error) return { error: error.code === "23514" && purpose === "export" ? "Exporting with an email code needs the latest database update (0138): App setup says how." : "Couldn't send a code. Try again in a minute." };
   const sent = await sendCodeEmail({ to: email, code, purpose, minutes: CODE_MINUTES });
   if (!sent.sent) return { error: "Couldn't send the email. Try again in a minute." };
   return { to: maskEmail(email), wait: RESEND_SECONDS };

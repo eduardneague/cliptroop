@@ -24,6 +24,15 @@ async function column(admin: Admin, table: string, cols: string): Promise<boolea
 
 export const PROBES: Probe[] = [
   {
+    n: "0138",
+    what: "Exporting the sponsorships table with a code by email (for the people who get their two-step codes by email)",
+    has: async (admin) => {
+      const { data, error } = await admin.rpc("export_codes_ready");
+      if (error) return missing(error) || error.code === "PGRST202" ? false : null;
+      return data === true;
+    },
+  },
+  {
     n: "0137",
     what: "Sponsorships as companies with products (each product's own code or the company's; verified or not)",
     has: (a) => column(a, "affiliate_products", "own_code, checked_result, checked_by, checked_at"),

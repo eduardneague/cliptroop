@@ -64,11 +64,16 @@ export async function sendAlertEmail(input: { to: string[]; subject: string; mes
 
 /**
  * A sign-in code (1.46.0, two-step sign-in by email): the six digits big, what it's for, how long it lasts. Not sent
- * without Resend (the page then says email isn't set up).
+ * without Resend (the page then says email isn't set up). 1.59.0: or a code to export the sponsorships table.
  */
-export async function sendCodeEmail(input: { to: string; code: string; purpose: "sign_in" | "setup"; minutes: number }) {
+export async function sendCodeEmail(input: { to: string; code: string; purpose: "sign_in" | "setup" | "export"; minutes: number }) {
   if (!emailConfigured()) return { sent: false as const };
-  const title = input.purpose === "setup" ? `Your code to turn on two-step sign-in` : `Your ${APP_NAME} sign-in code`;
+  const title = input.purpose === "setup" ? `Your code to turn on two-step sign-in` : input.purpose === "export" ? `Your code to export the sponsorships table` : `Your ${APP_NAME} sign-in code`;
+  // Whoever didn't ask for it: someone has the password (a sign-in), or is signed in as them (exporting).
+  const notYou =
+    input.purpose === "export"
+      ? "Didn't try to export? Someone is signed in as you: change your password in Settings → Account, then Sign out everywhere else. Nothing is exported without this code."
+      : "Didn't try to sign in? Someone has your password: change it in Settings → Account. Nobody gets in without this code.";
   const spaced = `${input.code.slice(0, 3)} ${input.code.slice(3)}`;
   const html = `<!doctype html><html><body style="margin:0;background:#f6f4f0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1917">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
@@ -77,7 +82,7 @@ export async function sendCodeEmail(input: { to: string; code: string; purpose: 
 <tr><td style="padding-top:14px;font-size:18px;font-weight:700;line-height:1.35">${esc(title)}</td></tr>
 <tr><td style="padding-top:18px"><div style="display:inline-block;font-family:SFMono-Regular,Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:.12em;background:#f6f4f0;border-radius:12px;padding:14px 20px">${esc(spaced)}</div></td></tr>
 <tr><td style="padding-top:18px;font-size:14.5px;line-height:1.55;color:#44403c">Type it where ${esc(APP_NAME)} asks for it. It works once, for ${input.minutes} minutes.</td></tr>
-<tr><td style="padding-top:22px;font-size:12px;color:#a8a29e">Didn't try to sign in? Someone has your password: change it in Settings → Account. Nobody gets in without this code.</td></tr>
+<tr><td style="padding-top:22px;font-size:12px;color:#a8a29e">${esc(notYou)}</td></tr>
 </table></td></tr></table></body></html>`;
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -88,7 +93,7 @@ export async function sendCodeEmail(input: { to: string; code: string; purpose: 
         to: [input.to],
         subject: `${spaced} is your ${APP_NAME} code`,
         html,
-        text: `${title}\n\n${spaced}\n\nIt works once, for ${input.minutes} minutes. Didn't try to sign in? Someone has your password: change it in Settings → Account.`,
+        text: `${title}\n\n${spaced}\n\nIt works once, for ${input.minutes} minutes. ${notYou}`,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),

@@ -38,9 +38,11 @@ ok(/await admin\.rpc\("script_edits_ready"\)/.test(src), "0134: writing a script
 ok(/await admin\.rpc\("affiliates_ready"\)/.test(src), "0135: Affiliates (its tables and the login functions)");
 ok(/await admin\.rpc\("sponsorships_ready"\)/.test(src), "0136: Sponsorships (the kinds, the channel's videos, the pictures and their background look)");
 ok(/column\(a, "affiliate_products", "own_code, checked_result, checked_by, checked_at"\)/.test(src), "0137: companies with products (and verified or not)");
+ok(/await admin\.rpc\("export_codes_ready"\)/.test(src), "0138: a code by email to export");
 
 // Each object it reads is made by its migration.
 const objects: Record<string, RegExp> = {
+  "0138": /create or replace function public\.export_codes_ready\(\)[\s\S]*conname = 'two_step_codes_purpose_check'[\s\S]*like '%''export''%'/,
   "0137": /create table if not exists public\.affiliate_products \([\s\S]*own_code boolean not null default false,[\s\S]*checked_result text,[\s\S]*checked_by uuid[\s\S]*checked_at timestamptz,/,
   "0136": /create or replace function public\.sponsorships_ready\(\)[\s\S]*'kinds', 'long_youtube_id', 'short_youtube_id', 'image_url', 'image_source', 'image_checked_at'[\s\S]*proname = 'affiliate_picture_found'/,
   "0135": /create or replace function public\.affiliates_ready\(\)[\s\S]*to_regclass\('public\.affiliate_logins'\)[\s\S]*proname = 'affiliate_login_open'/,

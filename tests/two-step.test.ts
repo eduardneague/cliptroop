@@ -3,7 +3,7 @@
 // you're not obligated to have 2fa, you should just enable it if you want to on the onboarding".
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CODE_TRIES, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, safeNext, sessionIdOf, twoStepApplies, twoStepNeed } from "../lib/auth/two-step";
+import { CODE_TRIES, cleanCode, codeHash, emailDoneCookie, emailDoneFor, maskEmail, safeNext, sessionIdOf, twoStepApplies, twoStepNeed, twoStepOf } from "../lib/auth/two-step";
 
 let fails = 0;
 const ok = (c: boolean, m: string) => {
@@ -31,6 +31,14 @@ async function main() {
   ok(maskEmail("ana@example.com") === "a**@example.com" && maskEmail("alexandra@example.com") === "a******@example.com" && maskEmail("x") === "x", "the address, half hidden");
   ok(cleanCode("123 456") === "123456" && cleanCode("123-456") === "123456" && cleanCode("12345") === null && cleanCode("12345a") === null && cleanCode("1234567") === null, "six digits, however pasted");
 
+  // 1.59.0: which way someone types their second step, from their account (exporting asks for it).
+  const app = { id: "f1", factor_type: "totp", status: "verified" };
+  ok(twoStepOf({ factors: [app] })?.method === "app" && twoStepOf({ factors: [app] })?.factorId === "f1", "an app: its verified factor");
+  ok(twoStepOf({ factors: [{ ...app, status: "unverified" }] }) === null && twoStepOf({ factors: [{ ...app, factor_type: "phone" }] }) === null, "an app not finished, or not an app: none");
+  ok(twoStepOf({ app_metadata: { two_step: "email" } })?.method === "email" && twoStepOf({ app_metadata: { two_step: "email" } })?.factorId === null, "email codes");
+  ok(twoStepOf({ factors: [app], app_metadata: { two_step: "email" } })?.method === "app", "both (never at once): the app");
+  ok(twoStepOf(null) === null && twoStepOf({}) === null && twoStepOf({ app_metadata: { two_step: "sms" } }) === null, "nothing set up");
+
   // The session's id from its token.
   const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const sid = "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b";
@@ -56,6 +64,11 @@ async function main() {
   ok(/if \(since < RESEND_SECONDS\) return/.test(act) && /attempts: tries \+ 1/.test(act) && /if \(tries >= CODE_TRIES\)/.test(act) && /expires_at as string\) < Date\.now\(\)/.test(act), "one a minute, five tries, ten minutes");
   ok(/from\("two_step_sessions"\)\.upsert\(\{ session_id: who\.sessionId, user_id: who\.user\.id \}\)/.test(act) && /\.set\(TWO_STEP_COOKIE, await emailDoneCookie\(who\.sessionId\)/.test(act), "the right code: this sign-in, for the database and the app");
   ok(/admin\.auth\.admin\.mfa\.deleteFactor/.test(act) && /two_step: null/.test(act), "one way at a time");
+  // 1.59.0: a code to export, sent only to someone with email codes, and never good for signing in.
+  const verify = act.slice(act.indexOf("export async function verifyTwoStepCode"), act.indexOf("export async function turnOffTwoStep"));
+  ok(/const isPurpose = \(p: unknown\): p is Purpose => p === "sign_in" \|\| p === "setup";/.test(act) && /if \(!isPurpose\(purpose\)\) return \{ error: "Not found\." \};/.test(verify), "an export code never signs anyone in (only sign_in and setup are checked here)");
+  ok(/if \(!isSendPurpose\(purpose\)\) return/.test(act) && /if \(purpose === "export" && !usesEmail\(who\.user\.app_metadata\)\)/.test(act), "…and goes only to accounts with email codes");
+  ok(/input\.purpose === "export" \? `Your code to export the sponsorships table`/.test(read("lib/email.ts")) && /Didn't try to export\? Someone is signed in as you/.test(read("lib/email.ts")), "its email says what it's for, and what to do if it wasn't you");
   const forms = read("components/auth/two-step-forms.tsx");
   ok(/mfa\.enroll\(\{ factorType: "totp"/.test(forms) && /challengeAndVerify/.test(forms) && /autoComplete="one-time-code"/.test(forms), "the app: Supabase's own, the code box the phone fills");
 

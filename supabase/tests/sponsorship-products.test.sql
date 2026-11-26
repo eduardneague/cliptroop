@@ -122,9 +122,10 @@ do $$ declare c record; begin
      or not exists (select 1 from affiliate_logins where affiliate_id = '20000000-0000-4000-8000-0000000137a6') then
     raise exception 'FAIL 1: Yunzii isn''t one company under the row with the login';
   end if;
-  -- Promeed: two logins; Arzopa: two platforms. Each stays two companies, with its names.
-  if (select array_agg(name order by name) from affiliates where team_id = '10000000-0000-4000-8000-0000000137a0' and name ilike 'promeed%') <> '{Promeed Silk,Promeed.com}'
-     or (select array_agg(name order by name) from affiliates where team_id = '10000000-0000-4000-8000-0000000137a0' and name ilike 'arzopa%') <> '{Arzopa Monitor,Arzopa Z1}' then
+  -- Promeed: two logins; Arzopa: two platforms. Each stays two companies, with its names. (Sorted byte by byte:
+  -- en_US, CI's collation, skips the space and the dot and so puts "Promeed.com" first.)
+  if (select array_agg(name order by name collate "C") from affiliates where team_id = '10000000-0000-4000-8000-0000000137a0' and name ilike 'promeed%') <> '{Promeed Silk,Promeed.com}'
+     or (select array_agg(name order by name collate "C") from affiliates where team_id = '10000000-0000-4000-8000-0000000137a0' and name ilike 'arzopa%') <> '{Arzopa Monitor,Arzopa Z1}' then
     raise exception 'FAIL 1: two rows with logins or platforms of their own were put together, or renamed alike';
   end if;
   if not exists (select 1 from affiliates a join affiliate_products p on p.affiliate_id = a.id where a.name = 'Deepcool' and p.name = 'Deepcool.com' and p.kinds = '{review}' and not p.own_code) then

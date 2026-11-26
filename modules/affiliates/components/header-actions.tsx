@@ -2,38 +2,61 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CloseIcon, PlusIcon, SearchIcon, UploadIcon } from "@/components/ui/icons";
+import { CloseIcon, DownloadIcon, PlusIcon, SearchIcon, UploadIcon } from "@/components/ui/icons";
 import { createClient } from "@/lib/supabase/client";
 import { useAffiliates } from "./affiliates-context";
+import { ExportDialog } from "./export-dialog";
 import { PasteDialog } from "./paste-dialog";
 
-/** New company (1.58.0; a sponsorship before), and Paste from a spreadsheet (1.56.0): for Masters and the people they let in. */
+const SECONDARY =
+  "inline-flex items-center justify-center gap-2 rounded-xl border border-line/15 bg-surface h-11 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors";
+
+/**
+ * Export (1.59.0: the whole table, with the password and a two-step code; everyone on the team, as picking some),
+ * Paste from a spreadsheet (1.56.0) and New company (1.58.0; a sponsorship before): those two for Masters and the
+ * people they let in.
+ */
 export function HeaderActions() {
   const ctx = useAffiliates();
   const [pasting, setPasting] = useState(false);
-  if (!ctx?.manage) return null;
+  const [exporting, setExporting] = useState(false);
+  if (!ctx) return null;
+  const total = ctx.companies.reduce((n, c) => n + c.products.length, 0);
+  if (!ctx.manage && !total) return null;
   return (
     <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setPasting(true)}
-        className="inline-flex items-center gap-2 rounded-xl border border-line/15 bg-surface px-4 h-11 text-[14px] font-semibold text-ink-soft hover:text-ink hover:bg-surface-2 transition-colors"
-        title="Add several at once, copied from a spreadsheet"
-      >
-        <UploadIcon className="w-4 h-4" />
-        <span className="max-sm:hidden">Paste from a sheet</span>
-        <span className="sm:hidden">Paste</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => ctx.openCompany("new")}
-        title="A brand you work with: its code and affiliate platform, then its products"
-        className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all"
-      >
-        <PlusIcon className="w-4 h-4" strokeWidth={2.25} />
-        <span className="max-sm:hidden">New company</span>
-        <span className="sm:hidden">New</span>
-      </button>
+      {total > 0 && (
+        <button
+          type="button"
+          onClick={() => setExporting(true)}
+          aria-label="Export the whole table"
+          title="The whole table as a spreadsheet (CSV), with the companies, without logins. Takes your password and a two-step code."
+          className={`${SECONDARY} w-11 sm:w-auto sm:px-4`}
+        >
+          <DownloadIcon className="w-4 h-4" />
+          <span className="max-sm:hidden">Export</span>
+        </button>
+      )}
+      {ctx.manage && (
+        <>
+          <button type="button" onClick={() => setPasting(true)} className={`${SECONDARY} px-4`} title="Add several at once, copied from a spreadsheet">
+            <UploadIcon className="w-4 h-4" />
+            <span className="max-sm:hidden">Paste from a sheet</span>
+            <span className="sm:hidden">Paste</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => ctx.openCompany("new")}
+            title="A brand you work with: its code and affiliate platform, then its products"
+            className="inline-flex items-center gap-2 rounded-xl bg-amber text-white font-bold px-5 h-11 text-[14.5px] shadow-[0_3px_0_0_rgb(var(--amber)/0.5)] hover:brightness-105 active:translate-y-[2px] active:shadow-none transition-all"
+          >
+            <PlusIcon className="w-4 h-4" strokeWidth={2.25} />
+            <span className="max-sm:hidden">New company</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </>
+      )}
+      {exporting && <ExportDialog teamId={ctx.teamId} ids={null} count={total} onClose={() => setExporting(false)} />}
       {pasting && <PasteDialog teamId={ctx.teamId} kinds={ctx.newKinds} companies={ctx.companies} onClose={() => setPasting(false)} />}
     </div>
   );

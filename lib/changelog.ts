@@ -22,6 +22,16 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.59.0",
+    date: "2026-11-26",
+    title: "Exporting takes two-step sign-in",
+    changes: [
+      { kind: "new", text: "Exporting sponsorships as a spreadsheet now takes two-step sign-in, your password and a code: the one your authenticator app shows, or one emailed just for this (Email me a code). The spreadsheet is made only once both are right, and a code sent for signing in doesn't work for it." },
+      { kind: "new", text: "Without two-step sign-in, Export takes you to turn it on first, then back to Sponsorships." },
+      { kind: "better", text: "Export the whole table from the top of the page, or just the products you picked, from the bar at the bottom as before." },
+    ],
+  },
+  {
     version: "1.58.0",
     date: "2026-11-26",
     title: "Companies and their products",

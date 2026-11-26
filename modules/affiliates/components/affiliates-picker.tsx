@@ -13,13 +13,11 @@ import {
   CHECK_LABEL,
   CHECK_STATES,
   checkState,
-  csvName,
   DEAL_KINDS,
   descriptionText,
   itemsOf,
   KIND_COLOR,
   KIND_LABEL,
-  sponsorshipsCsv,
   STATUS_COLOR,
   STATUS_LABEL,
   type AffiliateStatus,
@@ -28,15 +26,16 @@ import {
   type ShownCompany,
 } from "../lib/rules";
 import { copyWhenReady, useAffiliates } from "./affiliates-context";
+import { ExportDialog } from "./export-dialog";
 
 /*
  * Picking several products at once (1.56.0 sponsorships; 1.58.0 the products, a company's heading picks all of its
  * own here), as the shorts list's (components/ui/list-pick.tsx: Select, Shift for a run, Ctrl/Cmd+A for all, Esc to
  * stop). The bar at the foot: everyone copies the lines for a video's description and exports them as a spreadsheet
- * (never a login); Masters and the people they let in mark them (one menu: Verified, Not working or Not verified; their
- * type, 1.57.0: Affiliate, Review or Paid, that one only, both or all three on one in its own ⋯ or window; Active,
- * Paused or Ended) and delete them (asked first; their companies stay). Copy and Export are icons, so all of it fits
- * the bar, a phone's too.
+ * (never a login; 1.59.0: with the password and a two-step code, export-dialog.tsx); Masters and the people they let
+ * in mark them (one menu: Verified, Not working or Not verified; their type, 1.57.0: Affiliate, Review or Paid, that
+ * one only, both or all three on one in its own ⋯ or window; Active, Paused or Ended) and delete them (asked first;
+ * their companies stay). Copy and Export are icons, so all of it fits the bar, a phone's too.
  */
 
 export function AffiliatesPicker({ companies, children }: { companies: ShownCompany[]; children: React.ReactNode }) {
@@ -59,6 +58,7 @@ function AffiliatesBar({ companies }: { companies: ShownCompany[] }) {
   const confirm = useConfirm();
   const [menu, setMenu] = useState<"mark" | null>(null);
   const [busy, setBusy] = useState<BarBusy>(null);
+  const [exporting, setExporting] = useState<string[] | null>(null);
   const items = itemsOf(companies);
   const picked = items.filter((i) => p.picked.has(i.product.id));
   const chosen = picked.map((i) => i.product);
@@ -71,19 +71,9 @@ function AffiliatesBar({ companies }: { companies: ShownCompany[] }) {
     else toast.error("Couldn't copy. Check that the page may use the clipboard.");
   }
 
+  /** The picked ones, in the order shown: the server makes the spreadsheet once the password and a code are right. */
   function exportCsv() {
-    if (!n) return;
-    // A byte-order mark first, so Excel reads the names' accents right.
-    const blob = new Blob(["﻿", sponsorshipsCsv(picked)], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = csvName();
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    toast.success(n === 1 ? "Exported as a spreadsheet" : `${n} products exported as a spreadsheet`);
+    if (n) setExporting(chosen.map((c) => c.id));
   }
 
   async function mark(to: AffiliateStatus) {
@@ -200,7 +190,7 @@ function AffiliatesBar({ companies }: { companies: ShownCompany[] }) {
         onClick={exportCsv}
         disabled={!n || !!busy}
         aria-label="Export as a spreadsheet"
-        title="A spreadsheet (CSV) of the picked ones, with their companies, without logins"
+        title="A spreadsheet (CSV) of the picked ones, with their companies, without logins. Takes your password and a two-step code."
         className="inline-flex items-center justify-center rounded-lg w-9 h-9 border border-line/15 hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-transparent flex-shrink-0"
       >
         <DownloadIcon className="w-4 h-4" />
@@ -252,6 +242,7 @@ function AffiliatesBar({ companies }: { companies: ShownCompany[] }) {
         />
       )}
       {manage && <BarDelete onClick={() => void remove()} disabled={!n || !!busy} icon={<TrashIcon className="w-4 h-4" />} />}
+      {exporting && ctx && <ExportDialog teamId={ctx.teamId} ids={exporting} count={exporting.length} onClose={() => setExporting(null)} />}
     </PickBar>
   );
 }

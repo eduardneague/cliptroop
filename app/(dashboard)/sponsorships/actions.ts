@@ -6,11 +6,13 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/permissions/membership";
 import { confirmPassword } from "@/lib/auth/confirm-password";
+import { confirmPasswordAndCode, type StepUpField } from "@/lib/auth/step-up";
+import { CODE_MINUTES, maskEmail, twoStepOf, type TwoStepMethod } from "@/lib/auth/two-step";
 import { overLimit } from "@/lib/rate-limit";
 import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
 import { actorMeta, sendNotifications, teamMeta } from "@/lib/notify";
 import { listTeamPeople } from "@/modules/short-videos/lib/queries";
-import { affiliateRights, currentSessionId, notMigrated, readVideoChoices, unlockedFor } from "@/modules/affiliates/lib/queries";
+import { affiliateRights, currentSessionId, notMigrated, readAffiliatesPage, readVideoChoices, unlockedFor } from "@/modules/affiliates/lib/queries";
 import { fillPictures, findPicture } from "@/modules/affiliates/lib/pictures";
 import { openLogin as openSealed, sealLogin, UNLOCK_COOKIE, UNLOCK_PATH, unlockToken, vaultReady } from "@/modules/affiliates/lib/vault";
 import {
@@ -22,18 +24,23 @@ import {
   isAffiliateStatus,
   isCheckResult,
   isLoginUse,
+  itemsOf,
   LIMITS,
   NO_LOGINS,
   NO_MANAGE,
   normalizeUrl,
   pctOf,
   planImport,
+  sortCompanies,
+  sortProducts,
+  sponsorshipsCsv,
   SPONSORSHIPS_PATH,
   UNLOCK_MINUTES,
   type AffiliateStatus,
   type CheckResult,
   type CompanyFields,
   type DealKind,
+  type Item,
   type LoginEvent,
   type LoginEventAction,
   type LoginFields,
@@ -52,7 +59,8 @@ import {
  * part asked for. 1.57.0: what kind of deal, videos only on the channel, the product's picture (0136): a picture is
  * looked for on the product's page by the server (findProductPicture, and in the background after a save or a paste).
  * 1.58.0 (0137): companies (the code and the deal, the platform, the notes, the login) with their products (the kind,
- * status, link, picture, videos, verified or not, the company's code or their own).
+ * status, link, picture, videos, verified or not, the company's code or their own). 1.59.0: exporting the table takes
+ * two-step sign-in, the password and a code (exportSponsorships), and the spreadsheet is made here.
  */
 
 type R<T = object> = (T & { error?: undefined }) | { error: string; locked?: true; password?: true };
@@ -72,7 +80,7 @@ async function caller(teamId: unknown) {
   const membership = await getMembership(supabase, teamId);
   if (!membership) return { error: "You're not on this team." } as const;
   const rights = await affiliateRights(supabase, teamId, user.id, membership.roles);
-  return { supabase, user, teamId, ...rights };
+  return { supabase, user, teamId, roles: membership.roles, ...rights };
 }
 
 /** What the database said, in words (a linked video that isn't the team's, a limit, a missing migration). */
@@ -388,6 +396,47 @@ export async function importSponsorships(teamId: string, rows: unknown): Promise
   lookForPictures(c.teamId, ((data ?? []) as { id: string }[]).map((d) => d.id));
   revalidatePath(SPONSORSHIPS_PATH);
   return { companies: made.size, products: (data ?? []).length };
+}
+
+// ---- Exporting (1.59.0) -------------------------------------------------------------------------------------------------
+
+export type ExportNeeds = { method: TwoStepMethod | null; to: string | null; minutes: number };
+
+/** What exporting will ask for, before the window asks: two-step sign-in on (and which way), where codes go by email. */
+export async function exportNeeds(teamId: string): Promise<R<ExportNeeds>> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  const way = twoStepOf(c.user);
+  return { method: way?.method ?? null, to: way?.method === "email" && c.user.email ? maskEmail(c.user.email) : null, minutes: CODE_MINUTES };
+}
+
+export type ExportResult = { csv: string; count: number; error?: undefined } | { error: string; field?: StepUpField };
+
+/**
+ * The table as a spreadsheet (made in the browser before 1.59.0). The owner: "for exporting the entire table, i want
+ * mandatory 2 factor authentification to be set up and you should need to use it, both password and 2fa for it". So:
+ * only with two-step sign-in on, the password and a code typed then and there (lib/auth/step-up.ts), and only then the
+ * list is read, here, as the person asking (what they may see, never a login): everything (the companies by name, each
+ * one's products by name), or the picked products (ids) in the order given.
+ */
+export async function exportSponsorships(teamId: string, productIds: unknown, password: unknown, code: unknown): Promise<ExportResult> {
+  const c = await caller(teamId);
+  if ("error" in c) return { error: c.error as string };
+  const ids = productIds === null ? null : idsOf(productIds, 2000);
+  if (productIds !== null && !ids) return { error: "Pick the products to export again." };
+  if (overLimit("sponsorships-export", c.user.id, 10, 10 * 60_000)) return { error: "That's a lot of tries. Wait a few minutes, then try again." };
+  const checked = await confirmPasswordAndCode(c.user, password, code, "export");
+  if ("error" in checked) return { error: checked.error, field: checked.field };
+
+  const data = await readAffiliatesPage(c.teamId, { id: c.user.id, roles: c.roles });
+  if (!data.ready) return { error: RUN_0135 };
+  let items: Item[];
+  if (ids) {
+    const byId = new Map(itemsOf(data.companies).map((i) => [i.product.id, i]));
+    items = ids.map((id) => byId.get(id)).filter((i): i is Item => !!i);
+  } else items = itemsOf(sortCompanies(data.companies, "name").map((co) => ({ ...co, products: sortProducts(co.products, "name") })));
+  if (!items.length) return { error: ids ? "Those products aren't here any more. Refresh the page." : "There's nothing to export yet." };
+  return { csv: sponsorshipsCsv(items), count: items.length };
 }
 
 // ---- The product's picture, the videos to link (1.57.0) ----------------------------------------------------------------

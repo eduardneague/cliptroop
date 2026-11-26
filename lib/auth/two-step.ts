@@ -28,6 +28,19 @@ export type TwoStepState = {
   emailDone: boolean;
 };
 
+/**
+ * How this person types their second step, from their account: an authenticator app (its verified factor), email
+ * codes, or not at all. (Choosing one turns the other off; an app wins if both are ever there.)
+ */
+export function twoStepOf(
+  user: { factors?: readonly { id: string; factor_type: string; status: string }[] | null; app_metadata?: unknown } | null | undefined
+): { method: TwoStepMethod; factorId: string | null } | null {
+  const factor = (user?.factors ?? []).find((f) => f.factor_type === "totp" && f.status === "verified");
+  if (factor) return { method: "app", factorId: factor.id };
+  if ((user?.app_metadata as { two_step?: unknown } | null | undefined)?.two_step === "email") return { method: "email", factorId: null };
+  return null;
+}
+
 /** ok: carry on. verify: this sign-in owes its code. (No second step at all: carry on, it's optional since 1.49.0.) */
 export function twoStepNeed(s: TwoStepState): "ok" | "verify" {
   // The email cookie is only ever made for a session that typed its code (and the token's own copy of the person's
