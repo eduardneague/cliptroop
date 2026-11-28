@@ -22,6 +22,14 @@ export type { Audience, Change, ChangeKind, Gated, Release, ReleaseHeadline } fr
 
 export const CHANGELOG: Release[] = [
   {
+    version: "1.60.2",
+    date: "2026-11-28",
+    title: "Click a product to edit it",
+    changes: [
+      { kind: "fixed", text: "Clicking anywhere on a product's row or card opens it to edit, as the pointer said it would. Only a click right on its name did before. Its code, links and other buttons still do their own thing." },
+    ],
+  },
+  {
     version: "1.60.1",
     date: "2026-11-26",
     title: "Full-width companies, products set in",

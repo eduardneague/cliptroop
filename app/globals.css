@@ -1829,6 +1829,11 @@ button { transition-timing-function: var(--ease-out); }
    pointer (the owner: "the box on the left is unclickable because the short goes to the right when clicking"). */
 button.row-pick:not(:disabled):active,
 button.card-pick:not(:disabled):active { scale: none; }
+/* 1.60.2: nor a name stretched over its whole row or card as a button (a product on Sponsorships opens to edit,
+   modules/affiliates/components/open-editor.tsx). Pressed, the scale made the button its own overlay's box: the overlay
+   shrank to the name mid-click, the release landed on the row and nothing opened (the owner: "when clicking a row, it
+   doesnt really do anything"). Links stretched the same way (videos, shorts) never pressed in. */
+button[data-row-title]:not(:disabled):active { scale: none; }
 .row-pick:hover { background: rgb(var(--ink) / 0.03); }
 .row-pick.is-on { background: rgb(var(--amber) / 0.08); box-shadow: inset 3px 0 0 rgb(var(--amber)); }
 .row-pick:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgb(var(--amber)); }

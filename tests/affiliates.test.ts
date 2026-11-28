@@ -594,6 +594,10 @@ function walk(dir: string, out: string[] = []): string[] {
   ok(lineAt.base === headPad.base + at.base / 2 && lineAt.md === headPad.md + at.md / 2 && lineAt.xl === headPad.md + at.xl / 2 && lineAt["2xl"] === headPad.md + at["2xl"] / 2, `…the line down the middle of the company's picture (${JSON.stringify(lineAt)})`);
   ok(lineAt.base + 8 === treePad.base + (at.base - 32) / 2 && lineAt.md + 16 === treePad.md + (at.md - 32) / 2 && lineAt.xl + 16 === treePad.md + (at.xl - 32) / 2 && lineAt["2xl"] + 16 === treePad.md + (at["2xl"] - 32) / 2 && /after:w-2 /.test(cols.TREE_LINES) && /md:after:w-4 /.test(cols.TREE_LINES), "…and a short one reaching each product's picture");
   ok(/last:before:h-\[28px\] md:last:before:h-1\/2/.test(cols.TREE_LINES), "…the last one ending at it");
+  // 1.60.2: a product's row (or card) opens it anywhere on it: its name, a button stretched over it, never presses in
+  // (the app's press-in made the button its overlay's box mid-click, and the release missed it).
+  const css = read("app/globals.css");
+  ok(/button\[data-row-title\]:not\(:disabled\):active \{ scale: none; \}/.test(css) && css.indexOf("button[data-row-title]:not(:disabled):active") > css.indexOf("button:not(:disabled):active") && /data-row-title="" onClick=\{\(\) => ctx\.openProduct\(product\)\}[^>]*after:absolute after:inset-0/.test(read("modules/affiliates/components/open-editor.tsx")), "a click anywhere on a product's row or card opens it (its stretched name doesn't press in)");
   const tableSrc = read("modules/affiliates/components/affiliates-table.tsx");
   ok(/\$\{TABLE_COLS\.product\} \$\{PRODUCT_TREE\} \$\{TREE_LINES\}/.test(tableSrc) && /hidden md:grid \$\{TABLE_COLS\.product\} \$\{PRODUCT_INDENT\}/.test(tableSrc), "the table: the products in (with their lines), the headings and companies where they were");
   const cardsSrc = read("modules/affiliates/components/affiliate-cards.tsx");
